@@ -7,8 +7,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub struct LocalBroker<TPayload> {
-    storage: Box<dyn MessageStorage<TPayload>>,
-    clock: Box<dyn Clock>,
+    storage: Box<dyn MessageStorage<TPayload> + Send + Sync>,
+    clock: Box<dyn Clock + Send + Sync>,
     offsets: HashMap<String, HashMap<Partition, u64>>,
     subscriptions: HashMap<String, HashMap<Uuid, Vec<Topic>>>,
 }
@@ -33,7 +33,10 @@ impl From<TopicDoesNotExist> for BrokerError {
 }
 
 impl<TPayload> LocalBroker<TPayload> {
-    pub fn new(storage: Box<dyn MessageStorage<TPayload>>, clock: Box<dyn Clock>) -> Self {
+    pub fn new(
+        storage: Box<dyn MessageStorage<TPayload> + Send + Sync>,
+        clock: Box<dyn Clock + Send + Sync>,
+    ) -> Self {
         Self {
             storage,
             clock,
@@ -46,7 +49,7 @@ impl<TPayload> LocalBroker<TPayload> {
         self.storage.create_topic(topic, partitions)
     }
 
-    pub fn get_topic_partition_count(self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
+    pub fn get_topic_partition_count(&self, topic: &Topic) -> Result<u16, TopicDoesNotExist> {
         self.storage.partition_count(topic)
     }
 
@@ -151,6 +154,11 @@ impl<TPayload> LocalBroker<TPayload> {
 
     pub fn commit(&mut self, consumer_group: &str, offsets: HashMap<Partition, u64>) {
         self.offsets.insert(consumer_group.to_string(), offsets);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn storage_mut(&mut self) -> &mut dyn MessageStorage<TPayload> {
+        &mut *self.storage
     }
 }
 

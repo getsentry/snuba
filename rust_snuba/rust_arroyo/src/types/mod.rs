@@ -67,6 +67,18 @@ pub enum TopicOrPartition {
     Partition(Partition),
 }
 
+impl From<Topic> for TopicOrPartition {
+    fn from(value: Topic) -> Self {
+        Self::Topic(value)
+    }
+}
+
+impl From<Partition> for TopicOrPartition {
+    fn from(value: Partition) -> Self {
+        Self::Partition(value)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct BrokerMessage<T> {
     pub payload: T,

@@ -264,6 +264,7 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
+  - processor: CalculatedAverageProcessor
 
 validators:
   - validator: EntityRequiredColumnValidator

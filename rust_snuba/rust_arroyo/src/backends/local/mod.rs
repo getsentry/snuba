@@ -1,10 +1,12 @@
 pub mod broker;
 
-use super::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
-use crate::types::{BrokerMessage, Partition, Topic};
+use super::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError, Producer, ProducerError};
+use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use broker::LocalBroker;
+use rand::prelude::*;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -37,7 +39,7 @@ impl<'a, TPayload> CommitOffsets for OffsetCommitter<'a, TPayload> {
 pub struct LocalConsumer<TPayload, C: AssignmentCallbacks> {
     id: Uuid,
     group: String,
-    broker: LocalBroker<TPayload>,
+    broker: Arc<Mutex<LocalBroker<TPayload>>>,
     pending_callback: VecDeque<Callback>,
     paused: HashSet<Partition>,
     // The offset that a the last ``EndOfPartition`` exception that was
@@ -51,7 +53,7 @@ pub struct LocalConsumer<TPayload, C: AssignmentCallbacks> {
 impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
     pub fn new(
         id: Uuid,
-        broker: LocalBroker<TPayload>,
+        broker: Arc<Mutex<LocalBroker<TPayload>>>,
         group: String,
         enable_end_of_partition: bool,
         topics: &[Topic],
@@ -75,6 +77,8 @@ impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
 
         let offsets = ret
             .broker
+            .lock()
+            .unwrap()
             .subscribe(ret.id, ret.group.clone(), topics.to_vec())
             .unwrap();
 
@@ -119,7 +123,12 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             }
 
             let offset = self.subscription_state.offsets[partition];
-            let message = self.broker.consume(partition, offset).unwrap();
+            let message = self
+                .broker
+                .lock()
+                .unwrap()
+                .consume(partition, offset)
+                .unwrap();
             if let Some(msg) = message {
                 new_offset = Some((*partition, msg.offset + 1));
                 ret_message = Some(msg);
@@ -180,7 +189,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             return Err(ConsumerError::UnassignedPartition);
         }
 
-        self.broker.commit(&self.group, offsets);
+        self.broker.lock().unwrap().commit(&self.group, offsets);
         self.commit_offset_calls += 1;
 
         Ok(())
@@ -190,19 +199,61 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
 impl<TPayload, C: AssignmentCallbacks> Drop for LocalConsumer<TPayload, C> {
     fn drop(&mut self) {
         if !self.subscription_state.topics.is_empty() {
-            let partitions = self
-                .broker
-                .unsubscribe(self.id, self.group.clone())
-                .unwrap();
+            let broker: &mut LocalBroker<_> = &mut self.broker.lock().unwrap();
+            let partitions = broker.unsubscribe(self.id, self.group.clone()).unwrap();
 
             if let Some(c) = self.subscription_state.callbacks.as_mut() {
                 let offset_stage = OffsetCommitter {
                     group: &self.group,
-                    broker: &mut self.broker,
+                    broker,
                 };
                 c.on_revoke(offset_stage, partitions);
             }
         }
+    }
+}
+
+pub struct LocalProducer<TPayload> {
+    broker: Arc<Mutex<LocalBroker<TPayload>>>,
+}
+
+impl<TPayload> LocalProducer<TPayload> {
+    pub fn new(broker: Arc<Mutex<LocalBroker<TPayload>>>) -> Self {
+        Self { broker }
+    }
+}
+
+impl<TPayload> Clone for LocalProducer<TPayload> {
+    fn clone(&self) -> Self {
+        Self {
+            broker: self.broker.clone(),
+        }
+    }
+}
+
+impl<TPayload: Send + Sync + 'static> Producer<TPayload> for LocalProducer<TPayload> {
+    fn produce(
+        &self,
+        destination: &TopicOrPartition,
+        payload: TPayload,
+    ) -> Result<(), ProducerError> {
+        let mut broker = self.broker.lock().unwrap();
+        let partition = match destination {
+            TopicOrPartition::Topic(t) => {
+                let max_partitions = broker
+                    .get_topic_partition_count(t)
+                    .map_err(|_| ProducerError::ProducerErrorred)?;
+                let partition = thread_rng().gen_range(0..max_partitions);
+                Partition::new(*t, partition)
+            }
+            TopicOrPartition::Partition(p) => *p,
+        };
+
+        broker
+            .produce(&partition, payload)
+            .map_err(|_| ProducerError::ProducerErrorred)?;
+
+        Ok(())
     }
 }
 
@@ -215,6 +266,7 @@ mod tests {
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
     use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use uuid::Uuid;
 
@@ -246,7 +298,7 @@ mod tests {
 
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             true,
             &[topic1, topic2],
@@ -330,7 +382,7 @@ mod tests {
 
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             true,
             &[topic1, topic2],
@@ -369,7 +421,7 @@ mod tests {
 
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             true,
             &[topic2],
@@ -399,7 +451,7 @@ mod tests {
         let partition = Partition::new(topic2, 0);
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             false,
             &[topic2],
@@ -420,7 +472,7 @@ mod tests {
         let topic2 = Topic::new("test2");
         let mut consumer = LocalConsumer::new(
             Uuid::nil(),
-            broker,
+            Arc::new(Mutex::new(broker)),
             "test_group".to_string(),
             false,
             &[topic2],
