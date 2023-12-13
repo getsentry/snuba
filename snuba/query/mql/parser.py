@@ -208,9 +208,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -313,6 +311,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             ],
         ],
     ) -> InitialParseResult:
+        print("OOPS ACCIDENTALLY HERE")
         aggregate_name, zero_or_one = children
         _, _, target, *_ = zero_or_one
         metric_name = str(target.mri if target.mri else target.public_name)
@@ -336,6 +335,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Tuple[Any, Any, InitialParseResult, Any, Any],
         ],
     ) -> InitialParseResult:
+        print("MADE IT HERE")
         aggregate_name, agg_params, zero_or_one = children
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
@@ -350,11 +350,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 FunctionCall(
                     None,
                     aggregate_name,
-                    tuple(
-                        Literal(alias=None, value=param) for param in aggregate_params
-                    ),
+                    (Column(None, None, "value"),),
                 ),
-                (Column(None, None, "value"),),
+                tuple(Literal(alias=None, value=param) for param in aggregate_params),
             ),
         )
         target.aggregate = selected_aggregate_column
