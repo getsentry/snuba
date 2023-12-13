@@ -92,8 +92,7 @@ def test_streaming_consumer_strategy(tmpdir: LocalPath) -> None:
     )
 
     commit_function = Mock()
-    partitions = {}
-    strategy = factory.create_with_partitions(commit_function, partitions)
+    strategy = factory.create_with_partitions(commit_function, {})
 
     for i in range(3):
         strategy.poll()
