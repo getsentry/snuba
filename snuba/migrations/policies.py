@@ -1,11 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
-from snuba.migrations.groups import (
-    ReadinessState,
-    get_group_loader,
-    get_group_readiness_state,
-)
+from snuba.datasets.readiness_state import ReadinessState
+from snuba.migrations.groups import get_group_loader, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.settings import MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS

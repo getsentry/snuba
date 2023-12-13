@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from snuba.migrations.groups import MigrationGroup, ReadinessState
+from snuba.datasets.readiness_state import ReadinessState
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.policies import (
     AllMigrationsPolicy,
     MigrationPolicy,
