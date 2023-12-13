@@ -1101,7 +1101,6 @@ def test_format_expressions_from_mql(
 ) -> None:
     generic_metrics = get_dataset("generic_metrics")
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    print("SELECTED", query.get_selected_columns())
     eq, reason = query.equals(expected_query)
     assert eq, reason
 

@@ -345,27 +345,23 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 ),
                 aggregate="quantiles",
                 aggregate_params=[0.5],
-                # filters=[
-                #     Condition(Column("status_code"), Op.EQ, "500"),
-                #     Condition(Column("device"), Op.EQ, "BlackBerry"),
-                # ],
-                # groupby=[Column("transaction")],
+                groupby=[Column("status_code")],
             ),
             start=self.start_time,
             end=self.end_time,
-            rollup=Rollup(interval=60, granularity=60),
+            rollup=Rollup(interval=60, granularity=60, totals=True),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: COUNTERS.metric_id,
+                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "status_code": resolve_str("status_code"),
             },
         )
-        print(query.serialize_to_mql())
+
         response = self.app.post(
             self.mql_route,
             data=Request(
@@ -382,8 +378,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         rows = data["data"]
         assert len(rows) == 180, rows
 
-        assert rows[0]["aggregate_value"] > 0
+        assert rows[0]["aggregate_value"][0] > 0
         assert rows[0]["status_code"] == "200"
-        assert (
-            data["totals"]["aggregate_value"] > 180
-        )  # Should be more than the number of data points
+        assert data["totals"]["aggregate_value"][0] == 2.0
