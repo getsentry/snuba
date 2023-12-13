@@ -36,6 +36,12 @@
           "group:team-ingestion-pipeline@sentry.io"
       ],
       "role": "roles/CardinalityAnalyzer"
+    },
+    {
+      "members": [
+        "group:team-ops@sentry.io"
+      ],
+      "role": "roles/AllMigrationsExecutor"
     }
   ]
 }
