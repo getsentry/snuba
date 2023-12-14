@@ -152,7 +152,6 @@ pub fn consumer_impl(
                     max_invalid_ratio: Some(0.01),
                     max_consecutive_count: Some(1000),
                 },
-                // TODO: What should this actually be set to?
                 None,
             )
         }),
