@@ -315,11 +315,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> InitialParseResult:
         aggregate_name, zero_or_one = children
         _, _, target, *_ = zero_or_one
-        metric_name = str(target.mri if target.mri else target.public_name)
         selected_aggregate = SelectedExpression(
             AGGREGATE_ALIAS,
             expression=FunctionCall(
-                f"{aggregate_name}({metric_name})",
+                AGGREGATE_ALIAS,
                 function_name=aggregate_name,
                 parameters=tuple(Column(None, None, "value")),
             ),
@@ -340,13 +339,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
-        metric_name = str(target.mri if target.mri else target.public_name)
 
-        params_str = ", ".join(map(str, aggregate_params))
         selected_aggregate_column = SelectedExpression(
             AGGREGATE_ALIAS,
             CurriedFunctionCall(
-                f"{aggregate_name}({params_str})({metric_name})",
+                AGGREGATE_ALIAS,
                 FunctionCall(
                     None,
                     aggregate_name,
