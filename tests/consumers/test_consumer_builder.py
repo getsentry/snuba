@@ -164,7 +164,7 @@ def test_run_processing_strategy() -> None:
     assert get_row_count(get_writable_storage(StorageKey.ERRORS)) == 0
 
     commit = Mock()
-    partitions = Mock()
+    partitions = {}
     strategy_factory = consumer_builder.build_streaming_strategy_factory()
     strategy = strategy_factory.create_with_partitions(commit, partitions)
 
