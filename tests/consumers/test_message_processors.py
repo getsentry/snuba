@@ -69,4 +69,5 @@ def test_message_processors(
         assert [
             json.loads(line)
             for line in rust_processed_message.rstrip(b"\n").split(b"\n")
+            if line
         ] == python_processed_message.rows
