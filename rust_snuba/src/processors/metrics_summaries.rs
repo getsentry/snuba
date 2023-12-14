@@ -14,6 +14,12 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
+    if !msg._metrics_summary.is_object() {
+        return Ok(InsertBatch {
+            ..Default::default()
+        });
+    }
+
     let summaries: MetricsSummaries = msg.try_into()?;
     let mut rows: Vec<Vec<u8>> = Vec::with_capacity(summaries.metrics_summaries.len());
 
