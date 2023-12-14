@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, Union
+from typing import Callable, Mapping, MutableMapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.commit import ONCE_PER_SECOND
@@ -70,6 +70,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         output_block_size: Optional[int],
         max_insert_batch_size: Optional[int],
         max_insert_batch_time: Optional[float],
+        metrics_tags: MutableMapping[str, str],
         skip_write: bool = False,
         # Passed in the case of DLQ consumer which exits after a certain number of messages
         # is processed
@@ -106,6 +107,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             if self.__processes
             else None
         )
+        self.__metrics_tags = metrics_tags
 
     def __should_accept(self, message: Message[KafkaPayload]) -> bool:
         assert self.__prefilter is not None
@@ -116,6 +118,12 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+
+        if partitions:
+            self.__metrics_tags["min_partition"] = str(min(x.index for x in partitions))
+        else:
+            self.__metrics_tags.pop("min_partition", None)
+
         def accumulator(
             batch_writer: ProcessedMessageBatchWriter,
             message: BaseValue[ProcessedMessage],
