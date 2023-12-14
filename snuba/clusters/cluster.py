@@ -229,8 +229,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         distributed_cluster_name: Optional[str] = None,
         cache_partition_id: Optional[str] = None,
         query_settings_prefix: Optional[str] = None,
-        max_connections: Optional[int] = 1,
-        block_connections: Optional[bool] = False,
+        max_connections: int = 1,
+        block_connections: bool = False,
     ):
         super().__init__(storage_sets)
         self.__host = host
