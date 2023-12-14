@@ -10,6 +10,9 @@ import sentry_kafka_schemas
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
+from snuba.datasets.processors.metrics_summaries_processor import (
+    MetricsSummariesMessageProcessor,
+)
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
 from snuba.datasets.processors.spans_processor import SpansMessageProcessor
@@ -22,6 +25,7 @@ from snuba.processor import InsertBatch
         ("processed-profiles", ProfilesMessageProcessor),
         ("profiles-call-tree", FunctionsMessageProcessor),
         ("snuba-queries", QuerylogProcessor),
+        ("snuba-spans", MetricsSummariesMessageProcessor),
         ("snuba-spans", SpansMessageProcessor),
     ],
 )
@@ -65,4 +69,5 @@ def test_message_processors(
         assert [
             json.loads(line)
             for line in rust_processed_message.rstrip(b"\n").split(b"\n")
+            if line
         ] == python_processed_message.rows
