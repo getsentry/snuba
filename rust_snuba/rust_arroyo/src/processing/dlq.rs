@@ -365,8 +365,9 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     }
 }
 
-/// Stores messages that are pending commit. This is used to retreive raw messages
-// in case they need to be placed in the DLQ.
+/// Stores messages that are pending commit.
+///
+/// This is used to retreive raw messages in case they need to be placed in the DLQ.
 #[derive(Debug, Clone, Default)]
 pub struct BufferedMessages<TPayload> {
     max_per_partition: Option<usize>,
@@ -381,14 +382,16 @@ impl<TPayload> BufferedMessages<TPayload> {
         }
     }
 
-    // Add message to the buffer.
+    /// Add a message to the buffer.
+    ///
+    /// If the configured `max_per_partition` is `0`, this is a no-op.
     pub fn append(&mut self, message: BrokerMessage<TPayload>) {
+        if self.max_per_partition == Some(0) {
+            return;
+        }
+
         let buffered = self.buffered_messages.entry(message.partition).or_default();
         if let Some(max) = self.max_per_partition {
-            if max == 0 {
-                return;
-            }
-
             if buffered.len() >= max {
                 tracing::warn!(
                     "DLQ buffer exceeded, dropping message on partition {}",
