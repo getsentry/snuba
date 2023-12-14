@@ -1,10 +1,10 @@
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
-use crate::processors::spans::FromSpanMessage;
-use crate::processors::utils::DEFAULT_RETENTION_DAYS;
+use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
 use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
@@ -14,7 +14,7 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
-    if !msg._metrics_summary.is_object() {
+    if msg._metrics_summary.is_empty() {
         return Ok(InsertBatch {
             ..Default::default()
         });
@@ -33,6 +33,31 @@ pub fn process_message(
         origin_timestamp: None,
         sentry_received_timestamp: None,
     })
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FromSpanMessage {
+    #[serde(default)]
+    _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
+    #[serde(default)]
+    duration_ms: u32,
+    project_id: u64,
+    #[serde(default = "default_retention_days")]
+    retention_days: Option<u16>,
+    #[serde(deserialize_with = "hex_to_u64")]
+    span_id: u64,
+    start_timestamp_ms: u64,
+    trace_id: Uuid,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct FromMetricsSummary {
+    min: f64,
+    max: f64,
+    sum: f64,
+    count: u64,
+    #[serde(default)]
+    tags: BTreeMap<String, String>,
 }
 
 struct MetricsSummaries {
@@ -65,7 +90,7 @@ impl TryFrom<FromSpanMessage> for MetricsSummaries {
         let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
 
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
-        for (metric_mri, summaries) in from.metrics_summary() {
+        for (metric_mri, summaries) in from._metrics_summary {
             for summary in &summaries {
                 let (tag_keys, tag_values) = summary.tags.clone().into_iter().unzip();
 
@@ -94,11 +119,32 @@ impl TryFrom<FromSpanMessage> for MetricsSummaries {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::processors::spans::tests::valid_span;
-    use crate::processors::spans::FromMetricsSummary;
     use chrono::DateTime;
     use std::collections::BTreeMap;
     use std::time::SystemTime;
+
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    struct TestSpanMessage {
+        _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
+        duration_ms: Option<u32>,
+        project_id: Option<u64>,
+        retention_days: Option<u16>,
+        span_id: Option<String>,
+        start_timestamp_ms: Option<u64>,
+        trace_id: Option<Uuid>,
+    }
+
+    fn valid_span() -> TestSpanMessage {
+        TestSpanMessage {
+            _metrics_summary: BTreeMap::new(),
+            duration_ms: Some(1000),
+            project_id: Some(1),
+            retention_days: Some(90),
+            span_id: Some("deadbeefdeadbeef".into()),
+            start_timestamp_ms: Some(1691105878720),
+            trace_id: Some(Uuid::new_v4()),
+        }
+    }
 
     #[test]
     fn test_valid_span() {

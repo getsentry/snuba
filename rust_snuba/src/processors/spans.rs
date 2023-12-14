@@ -31,12 +31,12 @@ pub fn process_message(
 }
 
 #[derive(Debug, Default, Deserialize)]
-pub struct FromSpanMessage {
+struct FromSpanMessage {
     #[serde(default)]
-    pub _metrics_summary: Value,
+    _metrics_summary: Value,
     #[serde(default)]
     description: String,
-    pub duration_ms: u32,
+    duration_ms: u32,
     event_id: Uuid,
     exclusive_time_ms: f64,
     #[serde(deserialize_with = "hex_to_u64")]
@@ -46,41 +46,17 @@ pub struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
-    pub project_id: u64,
+    project_id: u64,
     #[serde(default = "default_retention_days")]
-    pub retention_days: Option<u16>,
+    retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
     segment_id: u64,
     sentry_tags: FromSentryTags,
     #[serde(deserialize_with = "hex_to_u64")]
-    pub span_id: u64,
-    pub start_timestamp_ms: u64,
+    span_id: u64,
+    start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
-    pub trace_id: Uuid,
-}
-
-impl FromSpanMessage {
-    pub fn metrics_summary(&self) -> BTreeMap<String, Vec<FromMetricsSummary>> {
-        match serde_json::from_value::<BTreeMap<String, Vec<FromMetricsSummary>>>(
-            self._metrics_summary.clone(),
-        ) {
-            Ok(v) => v,
-            Err(err) => {
-                println!("{:#?}", err);
-                BTreeMap::new()
-            }
-        }
-    }
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct FromMetricsSummary {
-    pub min: f64,
-    pub max: f64,
-    pub sum: f64,
-    pub count: u64,
-    #[serde(default)]
-    pub tags: BTreeMap<String, String>,
+    trace_id: Uuid,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -416,7 +392,7 @@ impl SpanStatus {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use super::*;
     use chrono::DateTime;
     use std::time::SystemTime;
@@ -441,8 +417,7 @@ pub mod tests {
     }
 
     #[derive(Debug, Default, Deserialize, Serialize)]
-    pub struct TestSpanMessage {
-        pub _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
+    struct TestSpanMessage {
         description: Option<String>,
         duration_ms: Option<u32>,
         event_id: Option<Uuid>,
@@ -461,9 +436,8 @@ pub mod tests {
         trace_id: Option<Uuid>,
     }
 
-    pub fn valid_span() -> TestSpanMessage {
+    fn valid_span() -> TestSpanMessage {
         TestSpanMessage {
-            _metrics_summary: BTreeMap::new(),
             description: Some("GET /blah".into()),
             duration_ms: Some(1000),
             event_id: Some(Uuid::new_v4()),
