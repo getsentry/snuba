@@ -5,6 +5,7 @@ use crate::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -225,19 +226,38 @@ impl DlqLimitState {
     }
 }
 
-// DLQ policy defines the DLQ configuration, and is passed to the stream processor
-// upon creation of the consumer. It consists of the DLQ producer implementation and
-// any limits that should be applied.
-//
-// TODO: Respect DLQ limits
+/// DLQ policy defines the DLQ configuration, and is passed to the stream processor
+/// upon creation of the consumer. It consists of the DLQ producer implementation and
+/// any limits that should be applied.
 pub struct DlqPolicy<TPayload> {
     producer: Box<dyn DlqProducer<TPayload>>,
     limit: DlqLimit,
+    max_buffered_messages_per_partition: Option<usize>,
 }
 
 impl<TPayload> DlqPolicy<TPayload> {
-    pub fn new(producer: Box<dyn DlqProducer<TPayload>>, limit: DlqLimit) -> Self {
-        DlqPolicy { producer, limit }
+    pub fn new(
+        producer: Box<dyn DlqProducer<TPayload>>,
+        limit: DlqLimit,
+        max_buffered_messages_per_partition: Option<usize>,
+    ) -> Self {
+        DlqPolicy {
+            producer,
+            limit,
+            max_buffered_messages_per_partition,
+        }
+    }
+}
+
+impl<TPayload> fmt::Debug for DlqPolicy<TPayload> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DlqPolicy")
+            .field("limit", &self.limit)
+            .field(
+                "max_buffered_messages_per_partition",
+                &self.max_buffered_messages_per_partition,
+            )
+            .finish_non_exhaustive()
     }
 }
 
@@ -264,6 +284,12 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             max_pending_futures: 1000,
             futures: BTreeMap::new(),
         }
+    }
+
+    pub fn max_buffered_messages_per_partition(&self) -> Option<usize> {
+        self.dlq_policy
+            .as_ref()
+            .and_then(|p| p.max_buffered_messages_per_partition)
     }
 
     /// Clears the DLQ limits.
@@ -341,39 +367,41 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
 /// Stores messages that are pending commit. This is used to retreive raw messages
 // in case they need to be placed in the DLQ.
+#[derive(Debug, Clone, Default)]
 pub struct BufferedMessages<TPayload> {
+    max_per_partition: Option<usize>,
     buffered_messages: BTreeMap<Partition, VecDeque<BrokerMessage<TPayload>>>,
 }
 
-impl<TPayload> Default for BufferedMessages<TPayload> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<TPayload> BufferedMessages<TPayload> {
-    pub fn new() -> Self {
+    pub fn new(max_per_partition: Option<usize>) -> Self {
         BufferedMessages {
+            max_per_partition,
             buffered_messages: BTreeMap::new(),
         }
     }
 
     // Add message to the buffer.
     pub fn append(&mut self, message: BrokerMessage<TPayload>) {
-        if let Some(messages) = self.buffered_messages.get_mut(&message.partition) {
-            messages.push_back(message);
-        } else {
-            self.buffered_messages
-                .insert(message.partition, VecDeque::from([message]));
-        };
+        let buffered = self.buffered_messages.entry(message.partition).or_default();
+        if let Some(max) = self.max_per_partition {
+            if buffered.len() >= max {
+                tracing::warn!(
+                    "DLQ buffer exceeded, dropping message on partition {}",
+                    message.partition.index
+                );
+                buffered.pop_front();
+            }
+        }
+
+        buffered.push_back(message);
     }
 
-    // Return the message at the given offset or None if it is not found in the buffer.
-    // Messages up to the offset for the given partition are removed.
+    /// Return the message at the given offset or None if it is not found in the buffer.
+    /// Messages up to the offset for the given partition are removed.
     pub fn pop(&mut self, partition: &Partition, offset: u64) -> Option<BrokerMessage<TPayload>> {
         if let Some(messages) = self.buffered_messages.get_mut(partition) {
-            #[allow(clippy::never_loop)]
-            while let Some(message) = messages.front_mut() {
+            while let Some(message) = messages.front() {
                 match message.offset.cmp(&offset) {
                     Ordering::Equal => {
                         return messages.pop_front();
@@ -407,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_buffered_messages() {
-        let mut buffer = BufferedMessages::new();
+        let mut buffer = BufferedMessages::new(None);
         let partition = Partition {
             topic: Topic::new("test"),
             index: 1,
@@ -424,9 +452,9 @@ mod tests {
 
         assert_eq!(buffer.pop(&partition, 0).unwrap().offset, 0);
         assert_eq!(buffer.pop(&partition, 8).unwrap().offset, 8);
-        assert_eq!(buffer.pop(&partition, 1), None); // Removed when we popped offset 8
+        assert!(buffer.pop(&partition, 1).is_none()); // Removed when we popped offset 8
         assert_eq!(buffer.pop(&partition, 9).unwrap().offset, 9);
-        assert_eq!(buffer.pop(&partition, 10), None); // Doesn't exist
+        assert!(buffer.pop(&partition, 10).is_none()); // Doesn't exist
     }
 
     #[derive(Clone)]
@@ -478,6 +506,7 @@ mod tests {
         let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
             Box::new(producer.clone()),
             DlqLimit::default(),
+            None,
         )));
 
         wrapper.reset_dlq_limits(&HashMap::from([(partition, 0)]));
@@ -507,11 +536,12 @@ mod tests {
         let producer = TestDlqProducer::new();
 
         let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
-            Box::new(producer.clone()),
+            Box::new(producer),
             DlqLimit {
-                max_invalid_ratio: None,
                 max_consecutive_count: Some(5),
+                ..Default::default()
             },
+            None,
         )));
 
         wrapper.reset_dlq_limits(&HashMap::from([(partition, 0)]));
@@ -532,8 +562,8 @@ mod tests {
     fn test_dlq_limit_state() {
         let partition = Partition::new(Topic::new("test_topic"), 0);
         let limit = DlqLimit {
-            max_invalid_ratio: None,
             max_consecutive_count: Some(5),
+            ..Default::default()
         };
 
         let mut state = DlqLimitState::new(

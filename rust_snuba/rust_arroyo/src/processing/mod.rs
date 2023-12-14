@@ -193,6 +193,12 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
         consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
     ) -> Self {
+        let max_buffered_messages_per_partition = consumer_state
+            .lock()
+            .unwrap()
+            .dlq_policy
+            .max_buffered_messages_per_partition();
+
         Self {
             consumer,
             consumer_state,
@@ -201,7 +207,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
-            buffered_messages: BufferedMessages::new(),
+            buffered_messages: BufferedMessages::new(max_buffered_messages_per_partition),
         }
     }
 
