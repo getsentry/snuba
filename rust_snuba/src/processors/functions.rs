@@ -13,7 +13,7 @@ pub fn process_message(
     _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes)?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
     let timestamp = match msg.timestamp {
         Some(timestamp) => timestamp,
