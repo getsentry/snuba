@@ -460,6 +460,49 @@ mod tests {
         assert!(buffer.pop(&partition, 10).is_none()); // Doesn't exist
     }
 
+    #[test]
+    fn test_buffered_messages_limit() {
+        let mut buffer = BufferedMessages::new(Some(2));
+        let partition = Partition {
+            topic: Topic::new("test"),
+            index: 1,
+        };
+
+        for i in 0..10 {
+            buffer.append(BrokerMessage {
+                partition,
+                offset: i,
+                payload: i,
+                timestamp: Utc::now(),
+            });
+        }
+
+        // It's gone
+        assert!(buffer.pop(&partition, 1).is_none());
+
+        assert_eq!(buffer.pop(&partition, 9).unwrap().payload, 9);
+    }
+
+    #[test]
+    fn test_no_buffered_messages() {
+        let mut buffer = BufferedMessages::new(Some(0));
+        let partition = Partition {
+            topic: Topic::new("test"),
+            index: 1,
+        };
+
+        for i in 0..10 {
+            buffer.append(BrokerMessage {
+                partition,
+                offset: i,
+                payload: i,
+                timestamp: Utc::now(),
+            });
+        }
+
+        assert!(buffer.pop(&partition, 9).is_none());
+    }
+
     #[derive(Clone)]
     struct TestDlqProducer {
         pub call_count: Arc<Mutex<usize>>,
