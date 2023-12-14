@@ -1,4 +1,5 @@
 mod functions;
+mod metrics_summaries;
 mod profiles;
 mod querylog;
 mod spans;
@@ -15,6 +16,7 @@ pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
         "ProfilesMessageProcessor" => Some(profiles::process_message),
         "QuerylogProcessor" => Some(querylog::process_message),
         "SpansMessageProcessor" => Some(spans::process_message),
+        "MetricsSummariesMessageProcessor" => Some(metrics_summaries::process_message),
         _ => None,
     }
 }
