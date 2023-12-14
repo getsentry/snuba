@@ -385,6 +385,10 @@ impl<TPayload> BufferedMessages<TPayload> {
     pub fn append(&mut self, message: BrokerMessage<TPayload>) {
         let buffered = self.buffered_messages.entry(message.partition).or_default();
         if let Some(max) = self.max_per_partition {
+            if max == 0 {
+                return;
+            }
+
             if buffered.len() >= max {
                 tracing::warn!(
                     "DLQ buffer exceeded, dropping message on partition {}",
@@ -400,20 +404,19 @@ impl<TPayload> BufferedMessages<TPayload> {
     /// Return the message at the given offset or None if it is not found in the buffer.
     /// Messages up to the offset for the given partition are removed.
     pub fn pop(&mut self, partition: &Partition, offset: u64) -> Option<BrokerMessage<TPayload>> {
-        if let Some(messages) = self.buffered_messages.get_mut(partition) {
-            while let Some(message) = messages.front() {
-                match message.offset.cmp(&offset) {
-                    Ordering::Equal => {
-                        return messages.pop_front();
-                    }
-                    Ordering::Greater => {
-                        break;
-                    }
-                    Ordering::Less => {
-                        messages.pop_front();
-                    }
-                };
-            }
+        let messages = self.buffered_messages.get_mut(partition)?;
+        while let Some(message) = messages.front() {
+            match message.offset.cmp(&offset) {
+                Ordering::Equal => {
+                    return messages.pop_front();
+                }
+                Ordering::Greater => {
+                    return None;
+                }
+                Ordering::Less => {
+                    messages.pop_front();
+                }
+            };
         }
 
         None
