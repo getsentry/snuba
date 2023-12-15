@@ -265,6 +265,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         };
         let poll_start = Instant::now();
 
+        // In case the strategy panics, we attempt to catch it and return an error.
+        // This enables the consumer to crash rather than hang indedinitely.
         let result = panic::catch_unwind(AssertUnwindSafe(|| strategy.poll()));
 
         let commit_request = result.map_err(|_| RunError::StrategyPanic)?;
