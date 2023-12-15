@@ -168,7 +168,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.METRICS_SUMMARIES: _MigrationGroup(
         loader=MetricsSummariesLoader(),
         storage_sets_keys={StorageSetKey.METRICS_SUMMARIES},
-        readiness_state=ReadinessState.EXPERIMENTAL,
+        readiness_state=ReadinessState.PARTIAL,
     ),
 }
 
