@@ -244,45 +244,137 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
 
 #[cfg(test)]
 mod tests {
+    use crate::types::{Partition, Topic};
+
     use super::*;
     use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
+
+    struct IdentityTaskRunner {}
+
+    impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
+        fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
+            Box::pin(async move { Ok(message) })
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+    struct Counts {
+        submit: u8,
+        polled: bool,
+    }
+
+    struct Mock(Arc<Mutex<Counts>>);
+
+    impl Mock {
+        fn new() -> Self {
+            Self(Arc::new(Mutex::new(Default::default())))
+        }
+
+        fn counts(&self) -> Arc<Mutex<Counts>> {
+            self.0.clone()
+        }
+    }
+
+    impl ProcessingStrategy<String> for Mock {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            self.0.lock().unwrap().polled = true;
+            Ok(None)
+        }
+        fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
+            self.0.lock().unwrap().submit += 1;
+            Ok(())
+        }
+        fn close(&mut self) {}
+        fn terminate(&mut self) {}
+        fn join(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+    }
 
     #[test]
     fn test() {
-        struct Noop {}
-        impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-            fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
-                Ok(())
-            }
-            fn close(&mut self) {}
-            fn terminate(&mut self) {}
-            fn join(
-                &mut self,
-                _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-        }
-
-        struct IdentityTaskRunner {}
-
-        impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
-            fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
-                Box::pin(async move { Ok(message) })
-            }
-        }
-
         let concurrency = ConcurrencyConfig::new(1);
-        let mut strategy =
-            RunTaskInThreads::new(Noop {}, Box::new(IdentityTaskRunner {}), &concurrency, None);
+        let mut strategy = RunTaskInThreads::new(
+            Mock::new(),
+            Box::new(IdentityTaskRunner {}),
+            &concurrency,
+            None,
+        );
 
         let message = Message::new_any_message("hello_world".to_string(), BTreeMap::new());
 
         strategy.submit(message).unwrap();
         let _ = strategy.poll();
         let _ = strategy.join(None);
+    }
+
+    #[test]
+    fn test_run_task_in_threads() {
+        for poll_after_msg in [false, true] {
+            for poll_before_join in [false, true] {
+                let next_step = Mock::new();
+                let counts = next_step.counts();
+                let concurrency = ConcurrencyConfig::new(2);
+                let mut strategy = RunTaskInThreads::new(
+                    next_step,
+                    Box::new(IdentityTaskRunner {}),
+                    &concurrency,
+                    None,
+                );
+
+                let partition = Partition::new(Topic::new("topic"), 0);
+
+                strategy
+                    .submit(Message::new_broker_message(
+                        "hello".to_string(),
+                        partition,
+                        0,
+                        chrono::Utc::now(),
+                    ))
+                    .unwrap();
+
+                if poll_after_msg {
+                    strategy.poll().unwrap();
+                }
+
+                strategy
+                    .submit(Message::new_broker_message(
+                        "world".to_string(),
+                        partition,
+                        1,
+                        chrono::Utc::now(),
+                    ))
+                    .unwrap();
+
+                if poll_after_msg {
+                    strategy.poll().unwrap();
+                }
+
+                if poll_before_join {
+                    for _ in 0..10 {
+                        if counts.lock().unwrap().submit < 2 {
+                            strategy.poll().unwrap();
+                            std::thread::sleep(Duration::from_millis(100));
+                        } else {
+                            break;
+                        }
+                    }
+
+                    let counts = counts.lock().unwrap();
+                    assert_eq!(counts.submit, 2);
+                    assert!(counts.polled);
+                }
+
+                strategy.join(None).unwrap();
+
+                let counts = counts.lock().unwrap();
+                assert_eq!(counts.submit, 2);
+                assert!(counts.polled);
+            }
+        }
     }
 }
