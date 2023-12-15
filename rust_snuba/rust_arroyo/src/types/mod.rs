@@ -279,6 +279,14 @@ impl<T> Message<T> {
             }
         }
     }
+
+    // Returns this message's timestamp, if it has one.
+    pub fn timestamp(&self) -> Option<DateTime<Utc>> {
+        match &self.inner_message {
+            InnerMessage::BrokerMessage(m) => Some(m.timestamp),
+            InnerMessage::AnyMessage(_) => None,
+        }
+    }
 }
 
 impl<T> fmt::Display for Message<T> {
