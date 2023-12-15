@@ -1,5 +1,36 @@
 # Changelog
 
+## 23.12.0
+
+### Various fixes & improvements
+
+- fix(arroyo): Tag all consumer metrics by the smallest partition index (#5208) by @untitaker
+- feat(metrics-summaries): Add a Rust consumer for metrics summaries (#5210) by @phacops
+- fix(slo): Add ILLEGAL_COLUMN = 44 as an invalid request (#5209) by @evanh
+- ref(rust): Give BufferedMessages a maximum (#5211) by @loewenheim
+- ref(admin): Add AllMigrations role (#5205) by @MeredithAnya
+- fix(rust): Separate clickhouse concurrency from processing (#5207) by @untitaker
+- fix(rust): Increase poll interval (#5197) by @lynnagara
+- feat(rust): Implement LocalProducer and port a test (#5202) by @loewenheim
+- fix(metrics-summaries): Remove low_cardinality modifier as the column is not low cardinality (#5204) by @phacops
+- feat(guages): Add `avg` capability to guages (#5196) by @volokluev
+- fix(rust): Consumer should crash if DLQ limit is reached (#5187) by @lynnagara
+- ref: Remove stale querylog deployments (#5201) by @lynnagara
+- fix(cache): Slightly clean up cache set errors (#5199) by @evanh
+- perf: Increase consumer join timeout (#5200) by @lynnagara
+- fix(rust): Fix SLO metrics again again again [SNS-2565] (#5198) by @untitaker
+- ref(metrics-summaries): Skip all the work if the field needed is not there (#5194) by @phacops
+- feat(spans): Store metrics_summary in the proper column if needed (#5191) by @phacops
+- fix(spans): Add sentry_tags to spans entity (#5162) by @nikhars
+- perf: Reusable multiprocessing pools v2 (#5192) by @lynnagara
+- fix(rust): Suppress error when manually resetting offsets (#5186) by @untitaker
+- fix(rust): Do not drop runtime and accidentally cancel tasks (#5189) by @untitaker
+- feat(spans): Add a metrics summary processor (#5161) by @phacops
+- feat(spans): Add a metrics summary column to link spans with DDM metrics (#5159) by @phacops
+- fix(metrics_summaries): Fix sample by expression (#5190) by @phacops
+
+_Plus 62 more_
+
 ## 23.11.2
 
 ### Various fixes & improvements
