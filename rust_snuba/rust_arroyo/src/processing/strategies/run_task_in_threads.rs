@@ -244,7 +244,7 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{BrokerMessage, Partition, Topic};
+    use crate::types::{Partition, Topic};
 
     use super::*;
     use std::collections::BTreeMap;
