@@ -3,6 +3,7 @@ mod metrics_buffer;
 pub mod strategies;
 
 use std::collections::HashMap;
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -36,6 +37,8 @@ pub enum RunError {
     Poll(#[source] ConsumerError),
     #[error("pause error")]
     Pause(#[source] ConsumerError),
+    #[error("strategy panicked")]
+    StrategyPanic,
 }
 
 pub struct ConsumerState<TPayload> {
@@ -261,7 +264,10 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             }
         };
         let poll_start = Instant::now();
-        let commit_request = strategy.poll();
+
+        let result = panic::catch_unwind(AssertUnwindSafe(|| strategy.poll()));
+
+        let commit_request = result.map_err(|_| RunError::StrategyPanic)?;
 
         self.metrics_buffer
             .incr_timing("arroyo.consumer.processing.time", poll_start.elapsed());
