@@ -63,7 +63,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
         let next_step = Reduce::new(
             Box::new(ClickhouseWriterStep::new(
-                CommitOffsets::new(Duration::from_secs(1)),
+                CommitOffsets::new(chrono::Duration::seconds(1)),
                 self.storage_config.clickhouse_cluster.clone(),
                 self.storage_config.clickhouse_table_name.clone(),
                 self.skip_write,

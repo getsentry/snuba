@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use crate::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
@@ -6,11 +6,10 @@ use crate::processing::strategies::{
 use crate::types::{Message, Partition};
 use crate::utils::metrics::{get_metrics, BoxMetrics};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
-    last_commit_time: SystemTime,
+    last_commit_time: DateTime<Utc>,
     last_record_time: DateTime<Utc>,
     commit_frequency: Duration,
     metrics: BoxMetrics,
@@ -20,7 +19,7 @@ impl CommitOffsets {
     pub fn new(commit_frequency: Duration) -> Self {
         CommitOffsets {
             partitions: Default::default(),
-            last_commit_time: SystemTime::now(),
+            last_commit_time: Utc::now(),
             last_record_time: Utc::now(),
             commit_frequency,
             metrics: get_metrics(),
@@ -28,7 +27,7 @@ impl CommitOffsets {
     }
 
     fn commit(&mut self, force: bool) -> Option<CommitRequest> {
-        if self.last_commit_time.elapsed().unwrap_or_default() <= self.commit_frequency && !force {
+        if Utc::now() - self.last_commit_time <= self.commit_frequency && !force {
             return None;
         }
 
@@ -40,7 +39,7 @@ impl CommitOffsets {
             positions: self.partitions.clone(),
         });
         self.partitions.clear();
-        self.last_commit_time = SystemTime::now();
+        self.last_commit_time = Utc::now();
         ret
     }
 }
@@ -52,7 +51,7 @@ impl<T> ProcessingStrategy<T> for CommitOffsets {
 
     fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
         let now = Utc::now();
-        if (now - self.last_record_time) > chrono::Duration::seconds(1) {
+        if now - self.last_record_time > Duration::seconds(1) {
             if let Some(timestamp) = message.timestamp() {
                 self.metrics.timing(
                     "arroyo.consumer.latency",
@@ -73,7 +72,10 @@ impl<T> ProcessingStrategy<T> for CommitOffsets {
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(
+        &mut self,
+        _: Option<std::time::Duration>,
+    ) -> Result<Option<CommitRequest>, InvalidMessage> {
         Ok(self.commit(true))
     }
 }
@@ -114,7 +116,7 @@ mod tests {
             }),
         };
 
-        let mut noop = CommitOffsets::new(Duration::from_secs(1));
+        let mut noop = CommitOffsets::new(chrono::Duration::seconds(1));
 
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),
