@@ -1,6 +1,4 @@
 use anyhow::Context;
-use chrono::{DateTime, Utc};
-use md5;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,7 +17,7 @@ pub fn process_message(
     let replay_payload: ReplayPayload = serde_json::from_slice(&replay_message.payload)?;
 
     let output = match replay_payload {
-        ReplayPayload::ReplayClickEvent(event) => {
+        ReplayPayload::ClickEvent(event) => {
             let replay_rows = event
                 .clicks
                 .into_iter()
@@ -49,7 +47,7 @@ pub fn process_message(
 
             vec![serde_json::to_vec(&replay_rows)?]
         }
-        ReplayPayload::ReplayEvent(event) => {
+        ReplayPayload::Event(event) => {
             let event_hash = match (event.event_hash, event.segment_id) {
                 (None, None) => Uuid::new_v4(),
                 (None, Some(segment_id)) => {
@@ -81,10 +79,10 @@ pub fn process_message(
                 error_ids: event.error_ids,
                 error_sample_rate: event.contexts.replay.error_sample_rate,
                 session_sample_rate: event.contexts.replay.session_sample_rate,
-                event_hash: event_hash,
+                event_hash,
                 is_archived: event.is_archived,
-                ip_address_v4: ip_address_v4,
-                ip_address_v6: ip_address_v6,
+                ip_address_v4,
+                ip_address_v6,
                 offset: metadata.offset,
                 os_name: event.contexts.os.name,
                 os_version: event.contexts.os.version,
@@ -102,19 +100,19 @@ pub fn process_message(
                 timestamp: event.timestamp,
                 trace_ids: event.trace_ids,
                 urls: event.urls,
-                user: user,
+                user,
                 user_email: event.user.email,
                 user_id: event.user.user_id,
                 user_name: event.user.username,
-                title: title,
-                tags_key: tags_key,
-                tags_value: tags_value,
+                title,
+                tags_key,
+                tags_value,
                 ..Default::default()
             };
 
             vec![serde_json::to_vec(&replay_row)?]
         }
-        ReplayPayload::ReplayEventLinkEvent(event) => {
+        ReplayPayload::EventLinkEvent(event) => {
             let replay_row = ReplayRow {
                 debug_id: event.debug_id,
                 error_id: event.error_id,
@@ -148,18 +146,17 @@ struct ReplayMessage {
     project_id: u64,
     replay_id: Uuid,
     retention_days: u16,
-    start_time: u64,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 enum ReplayPayload {
     #[serde(rename = "replay_actions")]
-    ReplayClickEvent(ReplayClickEvent),
+    ClickEvent(ReplayClickEvent),
     #[serde(rename = "replay_event")]
-    ReplayEvent(ReplayEvent),
+    Event(Box<ReplayEvent>),
     #[serde(rename = "event_link")]
-    ReplayEventLinkEvent(ReplayEventLinkEvent),
+    EventLinkEvent(ReplayEventLinkEvent),
 }
 
 // Replay Click Event
@@ -183,7 +180,7 @@ struct ReplayClickEventClick {
     tag: String,
     testid: String,
     text: String,
-    timestamp: DateTime<Utc>,
+    timestamp: f64,
     title: String,
 }
 
@@ -206,13 +203,13 @@ struct ReplayEvent {
     #[serde(default)]
     release: String,
     #[serde(default)]
-    replay_start_timestamp: Option<DateTime<Utc>>,
+    replay_start_timestamp: Option<f64>,
     #[serde(default)]
     replay_type: String,
     #[serde(default)]
     sdk: Version,
     segment_id: Option<u16>,
-    timestamp: DateTime<Utc>,
+    timestamp: f64,
     #[serde(default)]
     urls: Vec<String>,
     #[serde(default)]
@@ -289,7 +286,7 @@ fn default_sample() -> f64 {
 
 #[derive(Debug, Deserialize)]
 struct ReplayEventLinkEvent {
-    timestamp: DateTime<Utc>,
+    timestamp: f64,
     event_hash: Uuid,
     #[serde(default)]
     debug_id: Uuid,
@@ -326,8 +323,8 @@ struct ReplayRow {
     is_archived: u8,
     error_ids: Vec<Uuid>,
     project_id: u64,
-    timestamp: DateTime<Utc>,
-    replay_start_timestamp: Option<DateTime<Utc>>,
+    timestamp: f64,
+    replay_start_timestamp: Option<f64>,
     platform: String,
     environment: String,
     release: String,
@@ -404,7 +401,7 @@ mod tests {
                 "ip_address": "127.0.0.1",
                 "user_id": "user_id",
                 "username": "username"
-            }
+            },
             "sdk": {
                 "name": "sdk",
                 "verison": "v1"
@@ -419,11 +416,11 @@ mod tests {
             "urls": ["urls"],
             "trace_ids": ["2cd798d70f9346089026d2014a826629"],
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
-            "tags": {"a", "b", "transaction.name": "test"},
+            "tags": {"a": "b", "transaction.name": "test"},
             "segment_id": 0,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
             "timestamp": 1702659277,
-            "type": "replay_event",
+            "type": "replay_event"
         }"#;
         let payload_value = format!("{:?}", payload.as_bytes());
 
@@ -450,6 +447,8 @@ mod tests {
     #[test]
     fn test_parse_replay_click_event() {
         let payload = r#"{
+            "type": "replay_actions",
+        "clicks": [{
             "alt": "Alternate",
             "aria_label": "Aria-label",
             "class": ["hello", "world"],
@@ -464,8 +463,8 @@ mod tests {
             "testid": "",
             "text": "Submit",
             "timestamp": 1702659277,
-            "title": "title",
-            "type": "replay_actions"
+            "title": "title"
+        }]
         }"#;
         let payload_value = format!("{:?}", payload.as_bytes());
 
@@ -548,7 +547,7 @@ mod tests {
                 "ip_address": "127.0.0.1",
                 "user_id": "user_id",
                 "username": "username"
-            }
+            },
             "sdk": {
                 "name": "sdk",
                 "verison": "v1"
@@ -563,11 +562,11 @@ mod tests {
             "urls": ["urls"],
             "trace_ids": ["2cd798d70f9346089026d2014a826629"],
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
-            "tags": {"a", "b", "transaction.name": "test"},
+            "tags": {"a": "b", "transaction.name": "test"},
             "segment_id": 0,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
             "timestamp": 1702659277,
-            "type": "replay_event",
+            "type": "replay_event"
         }"#;
         let payload_value = format!("{:?}", payload.as_bytes());
 
