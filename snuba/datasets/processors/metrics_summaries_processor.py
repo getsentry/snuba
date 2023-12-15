@@ -113,7 +113,7 @@ class MetricsSummariesMessageProcessor(DatasetMessageProcessor):
             None,
         )
         if not span_event:
-            return None
+            return InsertBatch(rows=[], origin_timestamp=None)
         try:
             processed_rows = self._process_span_event(span_event, retention_days)
         except Exception:
