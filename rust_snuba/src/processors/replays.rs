@@ -1,6 +1,7 @@
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
@@ -14,7 +15,7 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
 
     let replay_message: ReplayMessage = serde_json::from_slice(payload_bytes)?;
-    let replay_payload: ReplayPayload = serde_json::from_slice(&replay_message.payload)?;
+    let replay_payload: ReplayPayload = serde_json::from_value(replay_message.payload)?;
 
     let output = match replay_payload {
         ReplayPayload::ClickEvent(event) => {
@@ -144,7 +145,7 @@ pub fn process_message(
 
 #[derive(Debug, Deserialize)]
 struct ReplayMessage {
-    payload: Vec<u8>,
+    payload: Value,
     project_id: u64,
     replay_id: Uuid,
     retention_days: u16,
