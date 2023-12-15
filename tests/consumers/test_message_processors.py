@@ -15,6 +15,7 @@ from snuba.datasets.processors.metrics_summaries_processor import (
 )
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
 
@@ -25,6 +26,7 @@ from snuba.processor import InsertBatch
         ("processed-profiles", ProfilesMessageProcessor),
         ("profiles-call-tree", FunctionsMessageProcessor),
         ("snuba-queries", QuerylogProcessor),
+        ("ingest-replay-events", ReplaysProcessor),
         ("snuba-spans", MetricsSummariesMessageProcessor),
         ("snuba-spans", SpansMessageProcessor),
     ],
