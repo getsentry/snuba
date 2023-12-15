@@ -53,6 +53,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="spans-exp-static-off" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
+  --container-name="metrics-summaries-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
   --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
