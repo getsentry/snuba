@@ -1,7 +1,6 @@
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
@@ -64,10 +63,29 @@ pub fn process_message(
                 Some(IpAddr::V6(ip)) => (None, Some(ip)),
             };
 
-            let title = event.tags.get("title").cloned();
-            let tags_key = event.tags.keys().cloned().collect::<Vec<String>>();
-            let tags_value = event.tags.values().cloned().collect::<Vec<String>>();
             let user = event.user.user_id.clone();
+
+            let tags_key: Vec<String> = event
+                .tags
+                .clone()
+                .iter()
+                .map(|v| v.first().unwrap_or(&String::new()).to_owned())
+                .collect();
+
+            let tags_value: Vec<String> = event
+                .tags
+                .clone()
+                .iter()
+                .map(|v| v.get(1).unwrap_or(&String::new()).to_owned())
+                .collect();
+
+            let mut title: Option<String> = None;
+            for (a, b) in tags_key.iter().zip(tags_value.iter()) {
+                if a == "transaction" {
+                    title = Some(b.to_owned());
+                    break;
+                }
+            }
 
             let replay_row = ReplayRow {
                 browser_name: event.contexts.browser.name,
@@ -221,7 +239,7 @@ struct ReplayEvent {
     #[serde(default)]
     error_ids: Vec<Uuid>,
     #[serde(default)]
-    tags: HashMap<String, String>,
+    tags: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -418,7 +436,10 @@ mod tests {
             "urls": ["urls"],
             "trace_ids": ["2cd798d70f9346089026d2014a826629"],
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
-            "tags": {"a": "b", "transaction.name": "test"},
+            "tags": [
+                ["a", "b"],
+                ["transaction.name", "test"]
+            ],
             "segment_id": 0,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
             "timestamp": 1702659277,
@@ -524,49 +545,7 @@ mod tests {
     #[test]
     fn test_parse_replay_event_sparse() {
         let payload = r#"{
-            "contexts": {
-                "browser": {
-                    "name": "browser",
-                    "verison": "v1"
-                },
-                "device": {
-                    "brand": "brand",
-                    "family": "family",
-                    "model": "model",
-                    "name": "name"
-                },
-                "os": {
-                    "name": "os",
-                    "verison": "v1"
-                },
-                "replay": {
-                    "error_sample_rate": 1,
-                    "session_sample_rate": 0.5
-                }
-            },
-            "user": {
-                "email": "email",
-                "ip_address": "127.0.0.1",
-                "user_id": "user_id",
-                "username": "username"
-            },
-            "sdk": {
-                "name": "sdk",
-                "verison": "v1"
-            },
-            "dist": "dist",
-            "environment": "environment",
             "is_archived": 0,
-            "platform": "platform",
-            "release": "release",
-            "replay_start_timestamp": 1702659277,
-            "replay_type": "buffer",
-            "urls": ["urls"],
-            "trace_ids": ["2cd798d70f9346089026d2014a826629"],
-            "error_ids": ["df11e6d952da470386a64340f13151c4"],
-            "tags": {"a": "b", "transaction.name": "test"},
-            "segment_id": 0,
-            "replay_id": "048aa04be40243948eb3b57089c519ee",
             "timestamp": 1702659277,
             "type": "replay_event"
         }"#;
