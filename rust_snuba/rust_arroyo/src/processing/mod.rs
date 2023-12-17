@@ -524,4 +524,70 @@ mod tests {
 
         assert_eq!(processor.tell(), expected)
     }
+
+    #[test]
+    fn test_strategy_panic() {
+        // Tests that a panic in any of the poll, submit, join, or close methods will crash the consumer
+        // and not deadlock
+        struct TestStrategy {
+            panic_on: String, // poll, submit, join, close
+        }
+        impl ProcessingStrategy<String> for TestStrategy {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+                if self.panic_on == "poll" {
+                    panic!("panic in poll");
+                }
+                Ok(None)
+            }
+
+            fn submit(&mut self, message: Message<String>) -> Result<(), SubmitError<String>> {
+                if self.panic_on == "submit" {
+                    panic!("panic in submit");
+                }
+
+                Ok(())
+            }
+
+            fn close(&mut self) {
+                if self.panic_on == "close" {
+                    panic!("panic in close");
+                }
+            }
+
+            fn terminate(&mut self) {}
+
+            fn join(
+                &mut self,
+                _: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+                if self.panic_on == "join" {
+                    panic!("panic in join");
+                }
+
+                Ok(None)
+            }
+        }
+
+        let mut broker = build_broker();
+        let topic1 = Topic::new("test1");
+        let partition = Partition::new(topic1, 0);
+        let _ = broker.produce(&partition, "message1".to_string());
+        let _ = broker.produce(&partition, "message2".to_string());
+
+        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+            Box::new(TestFactory {}),
+            None,
+        )));
+
+        let consumer = Box::new(LocalConsumer::new(
+            Uuid::nil(),
+            Arc::new(Mutex::new(broker)),
+            "test_group".to_string(),
+            false,
+            &[Topic::new("test1")],
+            Callbacks(consumer_state.clone()),
+        ));
+
+        let mut processor = StreamProcessor::new(consumer, consumer_state);
+    }
 }
