@@ -613,7 +613,7 @@ mod tests {
         let offsets = consumer.tell().unwrap();
         assert_eq!(
             offsets,
-            HashMap::from([(Partition::new(topic.topic, 0), 0)])
+            HashMap::from([(Partition::new(topic.topic, 0), 1)])
         );
 
         consumer
