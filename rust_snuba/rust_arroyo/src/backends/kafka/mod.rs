@@ -333,33 +333,6 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         let duration = timeout.unwrap_or(Duration::ZERO);
         let res = self.consumer.poll(duration);
 
-        ////////
-        if let Some(Err(err)) = &res {
-            if matches!(
-                err.rdkafka_error_code(),
-                Some(RDKafkaErrorCode::AutoOffsetReset)
-            ) {
-                tracing::info!("polling failed, resetting offsets manually");
-                if !self.offsets.lock().unwrap().is_empty() {
-                    let mut tpl =
-                        TopicPartitionList::with_capacity(self.offsets.lock().unwrap().len());
-                    let offsets = self.offsets.lock().unwrap();
-                    for (partition, offset) in offsets.iter() {
-                        tpl.add_partition_offset(
-                            partition.topic.as_str(),
-                            partition.index as i32,
-                            Offset::from_raw(*offset as i64),
-                        )?;
-                    }
-
-                    self.consumer.assign(&tpl).expect("failed to assign");
-                }
-            }
-
-            // return Ok(None);
-        }
-        ///////
-
         match res {
             None => Ok(None),
             Some(res) => {
