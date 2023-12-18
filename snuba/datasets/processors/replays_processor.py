@@ -57,7 +57,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["replay_id"] = to_uuid(replay_event["replay_id"])
         processed["segment_id"] = maybe(to_uint16, replay_event.get("segment_id"))
         processed["timestamp"] = default(
-            lambda: datetime.now(timezone.utc).timestamp(),
+            lambda: int(datetime.now(timezone.utc).timestamp()),
             maybe(to_uint32, replay_event.get("timestamp")),
         )
         processed["replay_start_timestamp"] = maybe(
