@@ -73,7 +73,6 @@ pub fn process_message(
                 }
             }
 
-            // "user_id", "username", "email", "ip_address"
             let user = if !event.user.user_id.is_empty() {
                 event.user.user_id.clone()
             } else if !event.user.username.is_empty() {
