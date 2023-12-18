@@ -63,16 +63,20 @@ pub fn process_message(
                 Some(IpAddr::V6(ip)) => (None, Some(ip)),
             };
 
-            let (tags_key, tags_value): (Vec<String>, Vec<String>) = event.tags.into_iter().unzip();
+            // Tags normalization and title extraction.
+            let mut title = None;
+            let mut tags_key = Vec::with_capacity(event.tags.len());
+            let mut tags_value = Vec::with_capacity(event.tags.len());
 
-            let mut title: Option<String> = None;
-            for (a, b) in tags_key.iter().zip(tags_value.iter()) {
-                if a == "transaction" {
-                    title = Some(b.to_owned());
-                    break;
+            for tag in event.tags.into_iter() {
+                if &tag.0 == "transaction" {
+                    title = Some(tag.1.clone())
                 }
+                tags_key.push(tag.0);
+                tags_value.push(tag.1);
             }
 
+            // Compute user value.
             let user = if !event.user.user_id.is_empty() {
                 event.user.user_id.clone()
             } else if !event.user.username.is_empty() {
@@ -85,6 +89,7 @@ pub fn process_message(
                 String::new()
             };
 
+            // Sample-rate normalization. Null values are inserted as a -1.0 sentinel value.
             let error_sample_rate = event.contexts.replay.error_sample_rate.unwrap_or(-1.0);
             let session_sample_rate = event.contexts.replay.session_sample_rate.unwrap_or(-1.0);
 
