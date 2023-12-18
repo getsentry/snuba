@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Mutex, Once};
 use std::time::Duration;
-use parking_lot::Mutex;
 
 use divan::counter::ItemsCount;
 use once_cell::sync::Lazy;
