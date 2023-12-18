@@ -16,38 +16,34 @@ pub fn process_message(
     let replay_payload = serde_json::from_slice(&replay_message.payload)?;
 
     let output = match replay_payload {
-        ReplayPayload::ClickEvent(event) => {
-            let replay_rows = event.clicks.into_iter().map(|click| ReplayRow {
-                click_alt: click.alt,
-                click_aria_label: click.aria_label,
-                click_class: click.class,
-                click_id: click.id,
-                click_is_dead: click.is_dead,
-                click_is_rage: click.is_rage,
-                click_node_id: click.node_id,
-                click_role: click.role,
-                click_tag: click.tag,
-                click_testid: click.testid,
-                click_text: click.text,
-                click_title: click.title,
-                event_hash: click.event_hash,
-                offset: metadata.offset,
-                partition: metadata.partition,
-                project_id: replay_message.project_id,
-                replay_id: replay_message.replay_id,
-                retention_days: replay_message.retention_days,
-                timestamp: click.timestamp as u32,
-                ..Default::default()
-            });
-
-            let mut rows: Vec<Vec<u8>> = Vec::with_capacity(replay_rows.len());
-
-            for row in replay_rows {
-                rows.push(serde_json::to_vec(&row)?);
-            }
-
-            rows
-        }
+        ReplayPayload::ClickEvent(event) => event
+            .clicks
+            .into_iter()
+            .map(|click| {
+                serde_json::to_vec(&ReplayRow {
+                    click_alt: click.alt,
+                    click_aria_label: click.aria_label,
+                    click_class: click.class,
+                    click_id: click.id,
+                    click_is_dead: click.is_dead,
+                    click_is_rage: click.is_rage,
+                    click_node_id: click.node_id,
+                    click_role: click.role,
+                    click_tag: click.tag,
+                    click_testid: click.testid,
+                    click_text: click.text,
+                    click_title: click.title,
+                    event_hash: click.event_hash,
+                    offset: metadata.offset,
+                    partition: metadata.partition,
+                    project_id: replay_message.project_id,
+                    replay_id: replay_message.replay_id,
+                    retention_days: replay_message.retention_days,
+                    timestamp: click.timestamp as u32,
+                    ..Default::default()
+                })
+            })
+            .collect::<Result<_, _>>()?,
         ReplayPayload::Event(event) => {
             let event_hash = match (event.event_hash, event.segment_id) {
                 (None, None) => Uuid::new_v4(),
