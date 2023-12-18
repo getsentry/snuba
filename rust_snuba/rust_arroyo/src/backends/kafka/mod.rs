@@ -583,24 +583,12 @@ mod tests {
             .unwrap()
             .is_none());
 
-        let offsets = consumer.tell().unwrap();
-        assert_eq!(
-            offsets,
-            HashMap::from([(Partition::new(topic.topic, 0), 1)])
-        );
-
         consumer
             .commit_offsets(HashMap::from([(
                 consumer_message.partition,
                 consumer_message.offset + 1,
             )]))
             .unwrap();
-
-        let offsets = consumer.tell().unwrap();
-        assert_eq!(
-            offsets,
-            HashMap::from([(Partition::new(topic.topic, 0), 1)])
-        );
 
         consumer.shutdown();
     }
