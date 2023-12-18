@@ -82,7 +82,7 @@ def test_replay_processor() -> None:
     #
     # For example, the rust version preserves milliseconds when parsing. However, after
     # inserting into the database this precision is dropped.
-    def normalize_row(row):
+    def normalize_row(row: dict) -> dict:
         row["timestamp"] = datetime.fromtimestamp(
             int(row["timestamp"]), tz=timezone.utc
         )
