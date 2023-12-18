@@ -36,7 +36,7 @@ pub fn process_message(
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
-                timestamp: click.timestamp,
+                timestamp: click.timestamp as u32,
                 ..Default::default()
             });
 
@@ -117,13 +117,13 @@ pub fn process_message(
                 project_id: replay_message.project_id,
                 release: event.release,
                 replay_id: event.replay_id,
-                replay_start_timestamp: event.replay_start_timestamp,
+                replay_start_timestamp: event.replay_start_timestamp.map(|v| v as u32),
                 replay_type: event.replay_type,
                 retention_days: replay_message.retention_days,
                 sdk_name: event.sdk.name,
                 sdk_version: event.sdk.version,
                 segment_id: event.segment_id,
-                timestamp: event.timestamp,
+                timestamp: event.timestamp as u32,
                 trace_ids: event.trace_ids,
                 urls: event.urls,
                 user,
@@ -150,7 +150,7 @@ pub fn process_message(
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
-                timestamp: event.timestamp,
+                timestamp: event.timestamp as u32,
                 warning_id: event.warning_id,
                 ..Default::default()
             };
@@ -351,8 +351,8 @@ struct ReplayRow {
     is_archived: u8,
     error_ids: Vec<Uuid>,
     project_id: u64,
-    timestamp: f64,
-    replay_start_timestamp: Option<f64>,
+    timestamp: u32,
+    replay_start_timestamp: Option<u32>,
     platform: String,
     environment: String,
     release: String,
