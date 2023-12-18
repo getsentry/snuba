@@ -63,19 +63,7 @@ pub fn process_message(
                 Some(IpAddr::V6(ip)) => (None, Some(ip)),
             };
 
-            let tags_key: Vec<String> = event
-                .tags
-                .clone()
-                .iter()
-                .map(|v| v.first().unwrap_or(&String::new()).to_owned())
-                .collect();
-
-            let tags_value: Vec<String> = event
-                .tags
-                .clone()
-                .iter()
-                .map(|v| v.get(1).unwrap_or(&String::new()).to_owned())
-                .collect();
+            let (tags_key, tags_value): (Vec<String>, Vec<String>) = event.tags.into_iter().unzip();
 
             let mut title: Option<String> = None;
             for (a, b) in tags_key.iter().zip(tags_value.iter()) {
@@ -263,7 +251,7 @@ struct ReplayEvent {
     #[serde(default)]
     error_ids: Vec<Uuid>,
     #[serde(default)]
-    tags: Vec<Vec<String>>,
+    tags: Vec<(String, String)>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -518,23 +506,23 @@ mod tests {
     fn test_parse_replay_click_event() {
         let payload = r#"{
             "type": "replay_actions",
-        "clicks": [{
-            "alt": "Alternate",
-            "aria_label": "Aria-label",
-            "class": ["hello", "world"],
-            "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
-            "id": "id",
-            "is_dead": 0,
-            "is_rage": 1,
-            "node_id": 320,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
-            "role": "button",
-            "tag": "div",
-            "testid": "",
-            "text": "Submit",
-            "timestamp": 1702659277,
-            "title": "title"
-        }]
+            "clicks": [{
+                "alt": "Alternate",
+                "aria_label": "Aria-label",
+                "class": ["hello", "world"],
+                "event_hash": "b4370ef8d1994e96b5bc719b72afbf49",
+                "id": "id",
+                "is_dead": 0,
+                "is_rage": 1,
+                "node_id": 320,
+                "role": "button",
+                "tag": "div",
+                "testid": "",
+                "text": "Submit",
+                "timestamp": 1702659277,
+                "title": "title"
+            }]
         }"#;
         let payload_value = payload.as_bytes();
 
@@ -594,7 +582,8 @@ mod tests {
         let payload = r#"{
             "is_archived": 0,
             "timestamp": 1702659277,
-            "type": "replay_event"
+            "type": "replay_event",
+            "replay_id": "048aa04be40243948eb3b57089c519ee"
         }"#;
         let payload_value = payload.as_bytes();
 
