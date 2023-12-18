@@ -131,15 +131,27 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
 
         let mut state = self.0.lock();
         if let Some(s) = state.strategy.as_mut() {
-            s.close();
-            if let Ok(Some(commit_request)) = s.join(None) {
-                state.dlq_policy.flush(&commit_request.positions);
-                tracing::info!("Committing offsets");
-                let res = commit_offsets.commit(commit_request.positions);
+            let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                s.close();
+                s.join(None)
+            }));
 
-                if let Err(err) = res {
-                    let error: &dyn std::error::Error = &err;
-                    tracing::error!(error, "Failed to commit offsets");
+            match result {
+                Ok(join_result) => {
+                    if let Ok(Some(commit_request)) = join_result {
+                        state.dlq_policy.flush(&commit_request.positions);
+                        tracing::info!("Committing offsets");
+                        let res = commit_offsets.commit(commit_request.positions);
+
+                        if let Err(err) = res {
+                            let error: &dyn std::error::Error = &err;
+                            tracing::error!(error, "Failed to commit offsets");
+                        }
+                    }
+                }
+
+                Err(_) => {
+                    tracing::error!("Strategy panicked during close/join");
                 }
             }
         }
@@ -611,7 +623,7 @@ mod tests {
         let topic1 = Topic::new("test1");
         let partition = Partition::new(topic1, 0);
 
-        let test_cases = ["poll", "submit", "join"];
+        let test_cases = ["poll", "submit", "join", "close"];
 
         for test_case in test_cases {
             let mut broker = build_broker();
