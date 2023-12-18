@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import json
 import time
 from datetime import datetime, timezone
-from typing import Type
+from typing import Any, Type
 
 import pytest
 import rust_snuba
@@ -82,7 +84,7 @@ def test_replay_processor() -> None:
     #
     # For example, the rust version preserves milliseconds when parsing. However, after
     # inserting into the database this precision is dropped.
-    def normalize_row(row: dict) -> dict:
+    def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         row["timestamp"] = datetime.fromtimestamp(
             int(row["timestamp"]), tz=timezone.utc
         )
