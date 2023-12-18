@@ -102,7 +102,6 @@ fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
 
 fn commit_impl<C: AssignmentCallbacks>(
     consumer: &BaseConsumer<CustomContext<C>>,
-    consumer_offsets: &Arc<Mutex<HashMap<Partition, u64>>>,
     offsets: HashMap<Partition, u64>,
 ) -> Result<(), ConsumerError> {
     let mut partitions = TopicPartitionList::with_capacity(offsets.len());
@@ -115,24 +114,23 @@ fn commit_impl<C: AssignmentCallbacks>(
     }
 
     consumer.commit(&partitions, CommitMode::Sync).unwrap();
-    consumer_offsets.lock().unwrap().extend(&offsets);
     Ok(())
 }
 
 struct OffsetCommitter<'a, C: AssignmentCallbacks> {
     consumer: &'a BaseConsumer<CustomContext<C>>,
-    consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
 }
 
 impl<'a, C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<'a, C> {
     fn commit(self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        commit_impl(self.consumer, &self.consumer_offsets, offsets)
+        commit_impl(self.consumer, offsets)
     }
 }
 
 pub struct CustomContext<C: AssignmentCallbacks> {
     hub: Arc<Hub>,
     callbacks: C,
+    // Latest offsets seen by the consumer
     consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
     initial_offset_reset: InitialOffset,
 }
@@ -183,7 +181,6 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
 
             let committer = OffsetCommitter {
                 consumer: base_consumer,
-                consumer_offsets: self.consumer_offsets.clone(),
             };
 
             self.callbacks.on_revoke(committer, partitions);
@@ -406,7 +403,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
     fn commit_offsets(&mut self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
-        commit_impl(&self.consumer, &self.offsets, offsets)
+        commit_impl(&self.consumer, offsets)
     }
 }
 
@@ -586,24 +583,12 @@ mod tests {
             .unwrap()
             .is_none());
 
-        let offsets = consumer.tell().unwrap();
-        assert_eq!(
-            offsets,
-            HashMap::from([(Partition::new(topic.topic, 0), 0)])
-        );
-
         consumer
             .commit_offsets(HashMap::from([(
                 consumer_message.partition,
                 consumer_message.offset + 1,
             )]))
             .unwrap();
-
-        let offsets = consumer.tell().unwrap();
-        assert_eq!(
-            offsets,
-            HashMap::from([(Partition::new(topic.topic, 0), 1)])
-        );
 
         consumer.shutdown();
     }
