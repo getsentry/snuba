@@ -6,7 +6,7 @@ storage:
   key: metrics_summaries
   set_key: metrics_summaries
 
-readiness_state: experimental
+readiness_state: partial
 
 schema:
   columns:
