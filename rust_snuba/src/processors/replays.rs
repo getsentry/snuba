@@ -63,8 +63,6 @@ pub fn process_message(
                 Some(IpAddr::V6(ip)) => (None, Some(ip)),
             };
 
-            let user = event.user.user_id.clone();
-
             let tags_key: Vec<String> = event
                 .tags
                 .clone()
@@ -87,6 +85,31 @@ pub fn process_message(
                 }
             }
 
+            // "user_id", "username", "email", "ip_address"
+            let user = if !event.user.user_id.is_empty() {
+                event.user.user_id.clone()
+            } else if !event.user.username.is_empty() {
+                event.user.username.clone()
+            } else if !event.user.email.is_empty() {
+                event.user.email.clone()
+            } else if event.user.ip_address.is_some() {
+                event.user.ip_address.unwrap().to_string()
+            } else {
+                String::new()
+            };
+
+            let error_sample_rate = event
+                .contexts
+                .replay
+                .error_sample_rate
+                .map_or_else(|| -1.0, |s| s);
+
+            let session_sample_rate = event
+                .contexts
+                .replay
+                .session_sample_rate
+                .map_or_else(|| -1.0, |s| s);
+
             let replay_row = ReplayRow {
                 browser_name: event.contexts.browser.name,
                 browser_version: event.contexts.browser.version,
@@ -97,8 +120,8 @@ pub fn process_message(
                 dist: event.dist,
                 environment: event.environment,
                 error_ids: event.error_ids,
-                error_sample_rate: event.contexts.replay.error_sample_rate,
-                session_sample_rate: event.contexts.replay.session_sample_rate,
+                error_sample_rate: error_sample_rate,
+                session_sample_rate: session_sample_rate,
                 event_hash,
                 is_archived: event.is_archived,
                 ip_address_v4,
@@ -110,7 +133,7 @@ pub fn process_message(
                 platform: event.platform,
                 project_id: replay_message.project_id,
                 release: event.release,
-                replay_id: replay_message.replay_id,
+                replay_id: event.replay_id,
                 replay_start_timestamp: event.replay_start_timestamp,
                 replay_type: event.replay_type,
                 retention_days: replay_message.retention_days,
@@ -208,6 +231,7 @@ struct ReplayClickEventClick {
 
 #[derive(Debug, Deserialize)]
 struct ReplayEvent {
+    replay_id: Uuid,
     #[serde(default)]
     contexts: Contexts,
     #[serde(default)]
@@ -268,10 +292,10 @@ struct Device {
 
 #[derive(Debug, Default, Deserialize)]
 struct ReplayContext {
-    #[serde(default = "default_sample")]
-    error_sample_rate: f64,
-    #[serde(default = "default_sample")]
-    session_sample_rate: f64,
+    #[serde(default)]
+    error_sample_rate: Option<f64>,
+    #[serde(default)]
+    session_sample_rate: Option<f64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -298,10 +322,6 @@ fn default_platform() -> String {
     "javascript".to_string()
 }
 
-fn default_sample() -> f64 {
-    -1.0
-}
-
 // ReplayEventLink
 
 #[derive(Debug, Deserialize)]
@@ -323,13 +343,19 @@ struct ReplayEventLinkEvent {
 // ReplayRow is not an exact match with the schema. We're trying to remove many of the nullable
 // columns. These nullable columns are written to with empty values and will eventually have
 // their null condition dropped.
+
 #[derive(Debug, Default, Serialize)]
 struct ReplayRow {
     replay_id: Uuid,
+    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     debug_id: Uuid,
+    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     info_id: Uuid,
+    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     warning_id: Uuid,
+    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     error_id: Uuid,
+    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     fatal_id: Uuid,
     replay_type: String,
     error_sample_rate: f64,
@@ -338,7 +364,6 @@ struct ReplayRow {
     segment_id: Option<u16>,
     trace_ids: Vec<Uuid>,
     title: Option<String>,
-    url: String,
     urls: Vec<String>,
     is_archived: u8,
     error_ids: Vec<Uuid>,
@@ -349,7 +374,9 @@ struct ReplayRow {
     environment: String,
     release: String,
     dist: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ip_address_v4: Option<Ipv4Addr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ip_address_v6: Option<Ipv6Addr>,
     user: String,
     user_id: String,
@@ -369,21 +396,41 @@ struct ReplayRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(skip_serializing_if = "is_u32_zero")]
     click_node_id: u32,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_tag: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_id: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     click_class: Vec<String>,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_text: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_role: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_alt: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_testid: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_aria_label: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     click_title: String,
+    #[serde(skip_serializing_if = "is_u8_zero")]
     click_is_dead: u8,
+    #[serde(skip_serializing_if = "is_u8_zero")]
     click_is_rage: u8,
     retention_days: u16,
     partition: u16,
     offset: u64,
+}
+
+fn is_u8_zero(v: &u8) -> bool {
+    *v == 0
+}
+
+fn is_u32_zero(v: &u32) -> bool {
+    *v == 0
 }
 
 #[cfg(test)]
