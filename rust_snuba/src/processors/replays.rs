@@ -80,23 +80,14 @@ pub fn process_message(
                 event.user.username.clone()
             } else if !event.user.email.is_empty() {
                 event.user.email.clone()
-            } else if event.user.ip_address.is_some() {
-                event.user.ip_address.unwrap().to_string()
+            } else if let Some(ip) = event.user.ip_address {
+                ip.to_string()
             } else {
                 String::new()
             };
 
-            let error_sample_rate = event
-                .contexts
-                .replay
-                .error_sample_rate
-                .map_or_else(|| -1.0, |s| s);
-
-            let session_sample_rate = event
-                .contexts
-                .replay
-                .session_sample_rate
-                .map_or_else(|| -1.0, |s| s);
+            let error_sample_rate = event.contexts.replay.error_sample_rate.unwrap_or(-1.0);
+            let session_sample_rate = event.contexts.replay.session_sample_rate.unwrap_or(-1.0);
 
             let replay_row = ReplayRow {
                 browser_name: event.contexts.browser.name,
