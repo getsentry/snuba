@@ -28,7 +28,7 @@ pub fn process_message(
                     click_is_dead: click.is_dead,
                     click_is_rage: click.is_rage,
                     click_node_id: click.node_id,
-                    click_react_component_name: click.react_component_name,
+                    click_component_name: click.component_name,
                     click_role: click.role,
                     click_tag: click.tag,
                     click_testid: click.testid,
@@ -200,7 +200,7 @@ struct ReplayClickEventClick {
     is_rage: u8,
     node_id: u32,
     #[serde(default)]
-    react_component_name: String,
+    component_name: String,
     role: String,
     tag: String,
     testid: String,
@@ -399,7 +399,7 @@ struct ReplayRow {
     #[serde(skip_serializing_if = "String::is_empty")]
     click_title: String,
     #[serde(skip_serializing_if = "String::is_empty")]
-    click_react_component_name: String,
+    click_component_name: String,
     #[serde(skip_serializing_if = "is_u8_zero")]
     click_is_dead: u8,
     #[serde(skip_serializing_if = "is_u8_zero")]
@@ -512,7 +512,7 @@ mod tests {
                 "is_dead": 0,
                 "is_rage": 1,
                 "node_id": 320,
-                "react_component_name": "SignUpButton",
+                "component_name": "SignUpButton",
                 "role": "button",
                 "tag": "div",
                 "testid": "",
