@@ -29,6 +29,7 @@ cadence = "0.29.1"
 chrono = { version = "0.4.26", features = ["serde"] }
 ctrlc = "3.2.5"
 futures = "0.3.21"
+md5 = "0.7.0"
 procspawn = { version = "1.0.0", features = ["json"] }
 pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = "0.11.11"

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import time
 from datetime import datetime
@@ -15,6 +17,7 @@ from snuba.datasets.processors.metrics_summaries_processor import (
 )
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.processor import InsertBatch
 
@@ -22,6 +25,7 @@ from snuba.processor import InsertBatch
 @pytest.mark.parametrize(
     "topic,processor",
     [
+        ("ingest-replay-events", ReplaysProcessor),
         ("processed-profiles", ProfilesMessageProcessor),
         ("profiles-call-tree", FunctionsMessageProcessor),
         ("snuba-queries", QuerylogProcessor),
@@ -38,6 +42,8 @@ def test_message_processors(
     for ex in sentry_kafka_schemas.iter_examples(topic):
         data_json = ex.load()
         # Hacks to ensure the message isn't rejected with too old
+        if topic == "ingest-replay-events":
+            data_json["start_time"] = int(time.time())
         if topic == "processed-profiles":
             data_json["received"] = int(time.time())
         elif topic == "snuba-spans":
