@@ -53,5 +53,5 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
 
 
 columns: List[Tuple[str, Column[Modifiers]]] = [
-    ("click_title", Column(Column("click_react_component_name", String())))
+    ("click_title", Column("click_react_component_name", String()))
 ]
