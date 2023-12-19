@@ -4,10 +4,11 @@ use crate::processing::strategies::{
 };
 use crate::types::{Message, Partition};
 use crate::utils::metrics::{get_metrics, BoxMetrics};
+use crate::utils::timing::Deadline;
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
@@ -84,28 +85,24 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
-        let start = Instant::now();
+        let deadline = timeout.map(Deadline::new);
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
                 let next_commit = self.next_step.poll()?;
                 self.commit_request_carried_over =
                     merge_commit_request(self.commit_request_carried_over.take(), next_commit);
                 self.flush(true)?;
-                if let Some(t) = timeout {
-                    if start.elapsed() > t {
-                        tracing::warn!("Timeout reached while waiting for tasks to finish");
-                        break;
-                    }
+
+                if deadline.map_or(false, |d| d.has_elapsed()) {
+                    tracing::warn!("Timeout reached while waiting for tasks to finish");
+                    break;
                 }
             }
         } else {
             self.flush(true)?;
         }
 
-        let remaining: Option<Duration> =
-            timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
-
-        let next_commit = self.next_step.join(remaining)?;
+        let next_commit = self.next_step.join(deadline.map(|d| d.remaining()))?;
 
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
