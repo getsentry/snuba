@@ -401,12 +401,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             .shutdown_requested
             .load(Ordering::Relaxed)
         {
-            // In case the strategy panics, we attempt to catch it and return an error.
-            // This enables the consumer to crash rather than hang indedinitely.
-            let result = panic::catch_unwind(AssertUnwindSafe(|| self.run_once()))
-                .unwrap_or(Err(RunError::StrategyPanic));
-
-            if let Err(e) = result {
+            if let Err(e) = self.run_once() {
                 let mut trait_callbacks = self.consumer_state.lock();
 
                 if let Some(strategy) = trait_callbacks.strategy.as_mut() {
