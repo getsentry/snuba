@@ -165,6 +165,7 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
                         Err(error) => {
                             let error: &dyn std::error::Error = &error;
                             tracing::error!(error, "the thread crashed");
+                            panic!("the thread crashed");
                         }
                     }
                 } else {

@@ -87,7 +87,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
+    use parking_lot::Mutex;
     use std::time::SystemTime;
 
     use super::*;
@@ -122,14 +122,14 @@ mod tests {
 
     impl ProcessingStrategy<KafkaPayload> for Mock {
         fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-            self.0.lock().unwrap().polled = true;
+            self.0.lock().polled = true;
             Ok(None)
         }
         fn submit(
             &mut self,
             _message: Message<KafkaPayload>,
         ) -> Result<(), SubmitError<KafkaPayload>> {
-            self.0.lock().unwrap().submit += 1;
+            self.0.lock().submit += 1;
             Ok(())
         }
         fn close(&mut self) {}
@@ -232,7 +232,6 @@ mod tests {
 
         let produced_message = broker
             .lock()
-            .unwrap()
             .storage_mut()
             .consume(&Partition::new(result_topic, 0), 0)
             .unwrap()
@@ -242,7 +241,6 @@ mod tests {
 
         assert!(broker
             .lock()
-            .unwrap()
             .storage_mut()
             .consume(&Partition::new(result_topic, 0), 1)
             .unwrap()
@@ -250,7 +248,7 @@ mod tests {
 
         strategy.poll().unwrap();
         assert_eq!(
-            *counts.lock().unwrap(),
+            *counts.lock(),
             Counts {
                 submit: 1,
                 polled: true
@@ -260,7 +258,7 @@ mod tests {
         strategy.submit(message.clone()).unwrap();
         strategy.join(None).unwrap();
         assert_eq!(
-            *counts.lock().unwrap(),
+            *counts.lock(),
             Counts {
                 submit: 2,
                 polled: true,

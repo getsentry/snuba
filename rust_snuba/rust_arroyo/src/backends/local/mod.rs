@@ -3,10 +3,11 @@ pub mod broker;
 use super::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError, Producer, ProducerError};
 use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use broker::LocalBroker;
+use parking_lot::Mutex;
 use rand::prelude::*;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -78,7 +79,6 @@ impl<TPayload, C: AssignmentCallbacks> LocalConsumer<TPayload, C> {
         let offsets = ret
             .broker
             .lock()
-            .unwrap()
             .subscribe(ret.id, ret.group.clone(), topics.to_vec())
             .unwrap();
 
@@ -123,12 +123,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             }
 
             let offset = self.subscription_state.offsets[partition];
-            let message = self
-                .broker
-                .lock()
-                .unwrap()
-                .consume(partition, offset)
-                .unwrap();
+            let message = self.broker.lock().consume(partition, offset).unwrap();
             if let Some(msg) = message {
                 new_offset = Some((*partition, msg.offset + 1));
                 ret_message = Some(msg);
@@ -189,7 +184,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
             return Err(ConsumerError::UnassignedPartition);
         }
 
-        self.broker.lock().unwrap().commit(&self.group, offsets);
+        self.broker.lock().commit(&self.group, offsets);
         self.commit_offset_calls += 1;
 
         Ok(())
@@ -199,7 +194,7 @@ impl<TPayload: 'static, C: AssignmentCallbacks> Consumer<TPayload, C>
 impl<TPayload, C: AssignmentCallbacks> Drop for LocalConsumer<TPayload, C> {
     fn drop(&mut self) {
         if !self.subscription_state.topics.is_empty() {
-            let broker: &mut LocalBroker<_> = &mut self.broker.lock().unwrap();
+            let broker: &mut LocalBroker<_> = &mut self.broker.lock();
             let partitions = broker.unsubscribe(self.id, self.group.clone()).unwrap();
 
             if let Some(c) = self.subscription_state.callbacks.as_mut() {
@@ -237,7 +232,7 @@ impl<TPayload: Send + Sync + 'static> Producer<TPayload> for LocalProducer<TPayl
         destination: &TopicOrPartition,
         payload: TPayload,
     ) -> Result<(), ProducerError> {
-        let mut broker = self.broker.lock().unwrap();
+        let mut broker = self.broker.lock();
         let partition = match destination {
             TopicOrPartition::Topic(t) => {
                 let max_partitions = broker
@@ -265,8 +260,9 @@ mod tests {
     use crate::backends::{CommitOffsets, Consumer};
     use crate::types::{Partition, Topic};
     use crate::utils::clock::SystemClock;
+    use parking_lot::Mutex;
     use std::collections::{HashMap, HashSet};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
     use uuid::Uuid;
 
