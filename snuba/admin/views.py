@@ -129,6 +129,7 @@ def settings_endpoint() -> Response:
             {
                 "dsn": settings.ADMIN_FRONTEND_DSN,
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "profilesSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
                 "userEmail": g.user.email,

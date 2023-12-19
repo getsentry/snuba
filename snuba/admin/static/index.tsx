@@ -31,6 +31,8 @@ client.getSettings().then((settings) => {
       ],
       // Performance Monitoring
       tracesSampleRate: settings.tracesSampleRate,
+      // Profiles
+      profilesSampleRate: settings.profilesSampleRate,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
       replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
