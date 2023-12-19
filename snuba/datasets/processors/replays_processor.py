@@ -73,14 +73,16 @@ class ReplaysProcessor(DatasetMessageProcessor):
             str, maybe(to_string, replay_event.get("environment"))
         )
         processed["dist"] = default(str, maybe(to_string, replay_event.get("dist")))
-        processed["platform"] = default(str, maybe(to_string, replay_event["platform"]))
+        processed["platform"] = default(
+            str, maybe(to_string, replay_event.get("platform"))
+        )
         processed["replay_type"] = default(
             str,
             maybe(
                 to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
             ),
         )
-        processed["is_archived"] = default(int, replay_event.get("is_archived"))
+        processed["is_archived"] = int(default(int, replay_event.get("is_archived")))
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -132,6 +134,8 @@ class ReplaysProcessor(DatasetMessageProcessor):
     ) -> None:
         contexts = replay_event.get("contexts", {})
         if not contexts:
+            processed["error_sample_rate"] = -1.0
+            processed["session_sample_rate"] = -1.0
             return None
 
         browser_context = contexts.get("browser", {})
@@ -187,8 +191,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         event_hash = replay_event.get("event_hash")
-        if event_hash is None:
-            event_hash = segment_id_to_event_hash(replay_event["segment_id"])
+        segment_id = replay_event.get("segment_id")
+        if event_hash is None and segment_id:
+            event_hash = segment_id_to_event_hash(segment_id)
+        elif event_hash is None:
+            event_hash = uuid.uuid4().hex
 
         processed["event_hash"] = str(uuid.UUID(event_hash))
 
