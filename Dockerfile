@@ -62,7 +62,7 @@ RUN set -ex; \
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
 FROM build_base AS build_rust_snuba
-ARG RUST_TOOLCHAIN=1.72
+ARG RUST_TOOLCHAIN=1.74.1
 ARG SHOULD_BUILD_RUST=true
 
 COPY ./rust_snuba/ ./rust_snuba/
@@ -103,6 +103,7 @@ FROM base AS application_base
 COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/ ./snuba/admin/dist/
+RUN apt-get install -y libjemalloc2 --no-install-recommends
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
@@ -143,7 +144,7 @@ FROM application_base AS testing
 USER 0
 RUN pip install -r requirements-test.txt
 
-ARG RUST_TOOLCHAIN=1.72
+ARG RUST_TOOLCHAIN=1.74.1
 COPY ./rust_snuba/ ./rust_snuba/
 RUN bash -c "set -o pipefail && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y"
 ENV PATH="${PATH}:/root/.cargo/bin/"
