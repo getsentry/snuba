@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from datetime import datetime
 from typing import Type
 
@@ -44,6 +45,10 @@ def test_message_processors(
         # Hacks to ensure the message isn't rejected with too old
         if topic == "ingest-replay-events":
             data_json["start_time"] = int(time.time())
+            payload = json.loads(bytes(data_json["payload"]))
+            if not payload.get("event_hash") and not payload.get("segment_id"):
+                payload["event_hash"] = uuid.uuid4().hex
+            data_json["payload"] = list(json.dumps(payload).encode())
         if topic == "processed-profiles":
             data_json["received"] = int(time.time())
         elif topic == "snuba-spans":
