@@ -275,7 +275,9 @@ def process_replay_actions(
             "click_testid": to_string(click["testid"])[:64],
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
-            "click_react_component_name": to_string(click["react_component_name"])[:64],
+            "click_react_component_name": to_string(
+                click.get("react_component_name", "")
+            )[:64],
             "click_is_dead": to_uint1(click["is_dead"]),
             "click_is_rage": to_uint1(click["is_rage"]),
         }
