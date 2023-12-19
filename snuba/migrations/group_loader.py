@@ -177,6 +177,7 @@ class ReplaysLoader(DirectoryLoader):
             "0014_add_id_event_columns",
             "0015_index_frequently_accessed_columns",
             "0016_materialize_new_event_counts",
+            "0017_add_react_component_name_column",
         ]
 
 
