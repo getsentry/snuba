@@ -73,7 +73,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "aggregate_value",
                     FunctionCall(
-                        "_snuba_sum(d:transactions/duration@millisecond)",
+                        "_snuba_aggregate_value",
                         "sum",
                         (Column("_snuba_value", None, "value"),),
                     ),
@@ -339,7 +339,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "aggregate_value",
                     FunctionCall(
-                        "_snuba_sum(d:transactions/duration@millisecond)",
+                        "_snuba_aggregate_value",
                         "sum",
                         (Column("_snuba_value", None, "value"),),
                     ),
@@ -532,12 +532,20 @@ mql_test_cases = [
             order_by=[
                 OrderBy(
                     OrderByDirection.ASC,
-                    Column(
-                        "_snuba_aggregate_value",
-                        None,
-                        "aggregate_value",
+                    FunctionCall(
+                        alias="_snuba_aggregate_value",
+                        function_name="sum",
+                        parameters=(
+                            (
+                                Column(
+                                    alias="_snuba_value",
+                                    table_name=None,
+                                    column_name="value",
+                                ),
+                            )
+                        ),
                     ),
-                )
+                ),
             ],
             limit=1000,
         ),
@@ -579,7 +587,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "aggregate_value",
                     CurriedFunctionCall(
-                        "_snuba_quantiles(0.5, 0.75)(transaction.user)",
+                        "_snuba_aggregate_value",
                         FunctionCall(
                             None, "quantiles", (Literal(None, 0.5), Literal(None, 0.75))
                         ),
@@ -623,11 +631,7 @@ mql_test_cases = [
                                 None,
                                 "in",
                                 (
-                                    Column(
-                                        "_snuba_project_id",
-                                        None,
-                                        "project_id",
-                                    ),
+                                    Column("_snuba_project_id", None, "project_id"),
                                     FunctionCall(
                                         None,
                                         "tuple",
@@ -826,6 +830,275 @@ mql_test_cases = [
             offset=3,
         ),
         id="Select metric with filter and groupby",
+    ),
+    pytest.param(
+        'quantiles(0.5)(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2023-11-23T18:30:00",
+            "end": "2023-11-23T22:30:00",
+            "rollup": {
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": "False",
+                "orderby": None,
+            },
+            "scope": {
+                "org_ids": [1],
+                "project_ids": [11],
+                "use_case_id": "transactions",
+            },
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                "dist": 888,
+                "transaction": 111111,
+                "status_code": 222222,
+            },
+            "limit": None,
+            "offset": None,
+        },
+        Query(
+            from_distributions,
+            selected_columns=[
+                SelectedExpression(
+                    "aggregate_value",
+                    CurriedFunctionCall(
+                        "_snuba_aggregate_value",
+                        FunctionCall(
+                            None,
+                            "quantiles",
+                            (Literal(None, 0.5),),
+                        ),
+                        (Column("_snuba_value", None, "value"),),
+                    ),
+                ),
+                SelectedExpression(
+                    "transaction",
+                    SubscriptableReference(
+                        "_snuba_tags_raw[111111]",
+                        Column("_snuba_tags_raw", None, "tags_raw"),
+                        Literal(None, "111111"),
+                    ),
+                ),
+                SelectedExpression(
+                    "status_code",
+                    SubscriptableReference(
+                        "_snuba_tags_raw[222222]",
+                        Column("_snuba_tags_raw", None, "tags_raw"),
+                        Literal(None, "222222"),
+                    ),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression,
+                ),
+            ],
+            groupby=[
+                SubscriptableReference(
+                    "_snuba_tags_raw[111111]",
+                    Column("_snuba_tags_raw", None, "tags_raw"),
+                    Literal(None, "111111"),
+                ),
+                SubscriptableReference(
+                    "_snuba_tags_raw[222222]",
+                    Column("_snuba_tags_raw", None, "tags_raw"),
+                    Literal(None, "222222"),
+                ),
+                time_expression,
+            ],
+            condition=FunctionCall(
+                None,
+                "and",
+                (
+                    FunctionCall(
+                        None,
+                        "equals",
+                        (
+                            Column(
+                                "_snuba_granularity",
+                                None,
+                                "granularity",
+                            ),
+                            Literal(None, 60),
+                        ),
+                    ),
+                    FunctionCall(
+                        None,
+                        "and",
+                        (
+                            FunctionCall(
+                                None,
+                                "in",
+                                (
+                                    Column(
+                                        "_snuba_project_id",
+                                        None,
+                                        "project_id",
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "tuple",
+                                        (Literal(None, 11),),
+                                    ),
+                                ),
+                            ),
+                            FunctionCall(
+                                None,
+                                "and",
+                                (
+                                    FunctionCall(
+                                        None,
+                                        "in",
+                                        (
+                                            Column(
+                                                "_snuba_org_id",
+                                                None,
+                                                "org_id",
+                                            ),
+                                            FunctionCall(
+                                                None,
+                                                "tuple",
+                                                (Literal(None, 1),),
+                                            ),
+                                        ),
+                                    ),
+                                    FunctionCall(
+                                        None,
+                                        "and",
+                                        (
+                                            FunctionCall(
+                                                None,
+                                                "equals",
+                                                (
+                                                    Column(
+                                                        "_snuba_use_case_id",
+                                                        None,
+                                                        "use_case_id",
+                                                    ),
+                                                    Literal(None, "transactions"),
+                                                ),
+                                            ),
+                                            FunctionCall(
+                                                None,
+                                                "and",
+                                                (
+                                                    FunctionCall(
+                                                        None,
+                                                        "greaterOrEquals",
+                                                        (
+                                                            Column(
+                                                                "_snuba_timestamp",
+                                                                None,
+                                                                "timestamp",
+                                                            ),
+                                                            Literal(
+                                                                None,
+                                                                datetime(
+                                                                    2023, 11, 23, 18, 30
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                    FunctionCall(
+                                                        None,
+                                                        "and",
+                                                        (
+                                                            FunctionCall(
+                                                                None,
+                                                                "less",
+                                                                (
+                                                                    Column(
+                                                                        "_snuba_timestamp",
+                                                                        None,
+                                                                        "timestamp",
+                                                                    ),
+                                                                    Literal(
+                                                                        None,
+                                                                        datetime(
+                                                                            2023,
+                                                                            11,
+                                                                            23,
+                                                                            22,
+                                                                            30,
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                            FunctionCall(
+                                                                None,
+                                                                "and",
+                                                                (
+                                                                    FunctionCall(
+                                                                        None,
+                                                                        "equals",
+                                                                        (
+                                                                            Column(
+                                                                                "_snuba_metric_id",
+                                                                                None,
+                                                                                "metric_id",
+                                                                            ),
+                                                                            Literal(
+                                                                                None,
+                                                                                123456,
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                    FunctionCall(
+                                                                        None,
+                                                                        "in",
+                                                                        (
+                                                                            SubscriptableReference(
+                                                                                "_snuba_tags_raw[888]",
+                                                                                column=Column(
+                                                                                    "_snuba_tags_raw",
+                                                                                    None,
+                                                                                    "tags_raw",
+                                                                                ),
+                                                                                key=Literal(
+                                                                                    None,
+                                                                                    "888",
+                                                                                ),
+                                                                            ),
+                                                                            FunctionCall(
+                                                                                None,
+                                                                                "tuple",
+                                                                                (
+                                                                                    Literal(
+                                                                                        None,
+                                                                                        "dist1",
+                                                                                    ),
+                                                                                    Literal(
+                                                                                        None,
+                                                                                        "dist2",
+                                                                                    ),
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.ASC,
+                    expression=time_expression,
+                )
+            ],
+            limit=1000,
+            offset=0,
+        ),
+        id="curried function",
     ),
 ]
 

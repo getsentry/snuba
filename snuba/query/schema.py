@@ -24,3 +24,13 @@ SNQL_QUERY_SCHEMA = {
     },
     "additionalProperties": False,
 }
+
+MQL_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string"},
+        "mql_context": {"type": "object"},
+        "dataset": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
