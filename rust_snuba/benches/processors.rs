@@ -1,5 +1,6 @@
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, Once};
+use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use divan::counter::ItemsCount;

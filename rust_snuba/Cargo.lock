@@ -1713,6 +1713,7 @@ dependencies = [
  "divan",
  "futures",
  "once_cell",
+ "parking_lot",
  "procspawn",
  "pyo3",
  "reqwest",
