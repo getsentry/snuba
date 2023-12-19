@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
-from snuba.migrations.groups import get_group_loader
+from snuba.datasets.readiness_state import ReadinessState
+from snuba.migrations.groups import get_group_loader, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.settings import MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS
@@ -59,12 +60,24 @@ class NonBlockingMigrationsPolicy(MigrationPolicy):
     """
 
     def can_run(self, migration_key: MigrationKey) -> bool:
+        if (
+            get_group_readiness_state(migration_key.group)
+            == ReadinessState.EXPERIMENTAL
+        ):
+            return True
+
         migration = get_group_loader(migration_key.group).load_migration(
             migration_key.migration_id
         )
         return False if migration.blocking else True
 
     def can_reverse(self, migration_key: MigrationKey) -> bool:
+        if (
+            get_group_readiness_state(migration_key.group)
+            == ReadinessState.EXPERIMENTAL
+        ):
+            return True
+
         status, timestamp = Runner().get_status(migration_key)
         migration = get_group_loader(migration_key.group).load_migration(
             migration_key.migration_id
