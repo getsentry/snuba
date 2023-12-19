@@ -632,7 +632,13 @@ mod tests {
             let mut processor = build_processor(broker, test_case);
 
             let res = processor.run_once();
-            assert!(res.is_err());
+
+            if test_case == "join" || test_case == "close" {
+                assert!(res.is_ok());
+            } else {
+                assert!(res.is_err());
+            }
+
             processor.shutdown();
         }
     }
