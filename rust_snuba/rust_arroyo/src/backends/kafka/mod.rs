@@ -9,11 +9,11 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
-use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, Rebalance};
+use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext};
 use rdkafka::error::KafkaError;
 use rdkafka::message::{BorrowedMessage, Message};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
-use rdkafka::types::RDKafkaErrorCode;
+use rdkafka::types::{RDKafkaErrorCode, RDKafkaRespErr};
 use sentry::Hub;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -165,107 +165,113 @@ impl<C: AssignmentCallbacks + Send + Sync> ClientContext for CustomContext<C> {
 }
 
 impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
-    fn pre_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
-        if let Rebalance::Revoke(list) = rebalance {
-            let mut partitions: Vec<Partition> = Vec::new();
-            for partition in list.elements().iter() {
-                let topic = Topic::new(partition.topic());
-                let index = partition.partition() as u16;
-                partitions.push(Partition::new(topic, index));
+    // handle entire rebalancing flow ourselves, so that we can call rdkafka.assign with a
+    // customized list of offsets. if we use pre_rebalance and post_rebalance callbacks from
+    // rust-rdkafka, consumer.assign will be called *for us*, leaving us with this flow on
+    // partition assignment:
+    //
+    // 1. rdkafka.assign done by rdkafka
+    // 2. post_rebalance called
+    // 3. post_rebalance modifies the assignment (if e.g. strict_offset_reset=true and
+    //    auto_offset_reset=latest)
+    // 4. rdkafka.assign is called *again*
+    //
+    // in comparison, confluent-kafka-python will execute on_assign, and only call rdkafka.assign
+    // if the callback did not already explicitly call assign.
+    //
+    // if we call rdkafka.assign multiple times, we have seen random AutoOffsetReset errors popping
+    // up in poll(), since we (briefly) assigned invalid offsets to the consumer
+    fn rebalance(
+        &self,
+        base_consumer: &BaseConsumer<Self>,
+        err: RDKafkaRespErr,
+        tpl: &mut TopicPartitionList,
+    ) {
+        match err {
+            RDKafkaRespErr::RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS => {
+                let mut partitions: Vec<Partition> = Vec::new();
+                let mut offsets = self.consumer_offsets.lock().unwrap();
+                for partition in tpl.elements().iter() {
+                    let topic = Topic::new(partition.topic());
+                    let index = partition.partition() as u16;
+                    let arroyo_partition = Partition::new(topic, index);
+                    offsets.remove(&arroyo_partition);
+                    partitions.push(arroyo_partition);
+                }
+
+                let committer = OffsetCommitter {
+                    consumer: base_consumer,
+                };
+
+                // before we give up the assignment, strategies need to flush and commit
+                self.callbacks.on_revoke(committer, partitions);
+
+                base_consumer
+                    .unassign()
+                    .expect("failed to revoke partitions");
             }
+            RDKafkaRespErr::RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS => {
+                let committed_offsets = base_consumer
+                    .committed_offsets((*tpl).clone(), None)
+                    .unwrap();
 
-            let mut offsets = self.consumer_offsets.lock().unwrap();
-            for partition in partitions.iter() {
-                offsets.remove(partition);
-            }
+                let mut offset_map: HashMap<Partition, u64> = HashMap::new();
+                let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
 
-            let committer = OffsetCommitter {
-                consumer: base_consumer,
-            };
+                for partition in committed_offsets.elements() {
+                    let raw_offset = partition.offset().to_raw().unwrap();
 
-            self.callbacks.on_revoke(committer, partitions);
-        }
-    }
+                    let topic = Topic::new(partition.topic());
 
-    fn post_rebalance(&self, base_consumer: &BaseConsumer<Self>, rebalance: &Rebalance) {
-        if let Rebalance::Assign(list) = rebalance {
-            let committed_offsets = base_consumer
-                .committed_offsets((*list).clone(), None)
-                .unwrap();
+                    let new_offset = if raw_offset >= 0 {
+                        raw_offset
+                    } else {
+                        // Resolve according to the auto offset reset policy
+                        let (low_watermark, high_watermark) = base_consumer
+                            .fetch_watermarks(partition.topic(), partition.partition(), None)
+                            .unwrap();
 
-            let mut offset_map: HashMap<Partition, u64> = HashMap::new();
-
-            for partition in committed_offsets.elements() {
-                let raw_offset = partition.offset().to_raw().unwrap();
-
-                let topic = Topic::new(partition.topic());
-
-                if raw_offset >= 0 {
-                    offset_map.insert(
-                        Partition::new(topic, partition.partition() as u16),
-                        raw_offset as u64,
-                    );
-                } else {
-                    // Resolve according to the auto offset reset policy
-                    let (low_watermark, high_watermark) = base_consumer
-                        .fetch_watermarks(partition.topic(), partition.partition(), None)
-                        .unwrap();
-
-                    let resolved_offset = match self.initial_offset_reset {
-                        InitialOffset::Earliest => low_watermark,
-                        InitialOffset::Latest => high_watermark,
-                        InitialOffset::Error => {
-                            panic!("received unexpected offset");
+                        match self.initial_offset_reset {
+                            InitialOffset::Earliest => low_watermark,
+                            InitialOffset::Latest => high_watermark,
+                            InitialOffset::Error => {
+                                panic!("received unexpected offset");
+                            }
                         }
                     };
+
                     offset_map.insert(
                         Partition::new(topic, partition.partition() as u16),
-                        resolved_offset as u64,
+                        new_offset as u64,
                     );
+
+                    tpl.add_partition_offset(
+                        partition.topic(),
+                        partition.partition(),
+                        Offset::from_raw(new_offset),
+                    )
+                    .unwrap();
                 }
+
+                // assign() asap, we can create strategies later
+                base_consumer
+                    .assign(&tpl)
+                    .expect("failed to assign partitions");
+                self.consumer_offsets.lock().unwrap().extend(&offset_map);
+
+                // Ensure that all partitions are resumed on assignment to avoid
+                // carrying over state from a previous assignment.
+                base_consumer
+                    .resume(&tpl)
+                    .expect("failed to resume partitions");
+
+                self.callbacks.on_assign(offset_map);
             }
-
-            let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
-            for (partition, offset) in &offset_map {
-                tpl.add_partition_offset(
-                    partition.topic.as_str(),
-                    partition.index as i32,
-                    Offset::from_raw(*offset as i64),
-                )
-                .unwrap();
+            _ => {
+                let error_code: RDKafkaErrorCode = err.into();
+                // We don't panic here since we will likely re-encounter the error on poll
+                tracing::error!("Error rebalancing: {}", error_code);
             }
-
-            // specifically in rust-rdkafka (not in python confluent-kafka) we are observing a
-            // weird bug where assigning an offset after rebalancing does not work until the
-            // consumer is being polled.
-            //
-            // the poll() may return an offset-related error or advance the internal rdkafka
-            // buffer. but it shouldn't matter which case we hit, because even if poll() returns a
-            // message here, we are resetting offsets to something else, and (hopefully) not commit
-            // anything before that
-            if let Some(Err(err)) = base_consumer.poll(Some(Duration::from_millis(100))) {
-                if matches!(
-                    err.rdkafka_error_code(),
-                    Some(RDKafkaErrorCode::AutoOffsetReset)
-                ) {
-                    tracing::info!("polling failed during rebalancing, resetting offsets manually");
-                } else {
-                    panic!("consumer poll failed in callback: {}", err);
-                }
-            }
-
-            base_consumer
-                .assign(&tpl)
-                .expect("failed to assign partitions");
-            self.consumer_offsets.lock().unwrap().extend(&offset_map);
-
-            // Ensure that all partitions are resumed on assignment to avoid
-            // carrying over state from a previous assignment.
-            base_consumer
-                .resume(&tpl)
-                .expect("failed to resume partitions");
-
-            self.callbacks.on_assign(offset_map);
         }
     }
 }
@@ -574,8 +580,6 @@ mod tests {
 
         assert_eq!(consumer_message.offset, 0);
         let consumer_payload = consumer_message.payload.payload().unwrap();
-        // ensure that our weird workarounds in consumer callbacks (polling the consumer and
-        // discarding the result) do not read past the message we produced into the new topic
         assert_eq!(consumer_payload, b"asdf");
 
         assert!(consumer
