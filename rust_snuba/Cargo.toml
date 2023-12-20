@@ -29,6 +29,7 @@ cadence = "0.29.1"
 chrono = { version = "0.4.26", features = ["serde"] }
 ctrlc = "3.2.5"
 futures = "0.3.21"
+md5 = "0.7.0"
 procspawn = { version = "1.0.0", features = ["json"] }
 pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = "0.11.11"
@@ -42,6 +43,7 @@ tokio = { version = "1.19.2", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 uuid = "1.5.0"
+parking_lot = "0.12.1"
 
 [dev-dependencies]
 divan = "0.1.2"

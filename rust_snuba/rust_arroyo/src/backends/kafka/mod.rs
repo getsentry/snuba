@@ -6,6 +6,7 @@ use super::ConsumerError;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::types::{BrokerMessage, Partition, Topic};
 use chrono::{DateTime, NaiveDateTime, Utc};
+use parking_lot::Mutex;
 use rdkafka::client::ClientContext;
 use rdkafka::config::{ClientConfig, RDKafkaLogLevel};
 use rdkafka::consumer::base_consumer::BaseConsumer;
@@ -19,7 +20,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub mod config;
@@ -190,7 +191,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         match err {
             RDKafkaRespErr::RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS => {
                 let mut partitions: Vec<Partition> = Vec::new();
-                let mut offsets = self.consumer_offsets.lock().unwrap();
+                let mut offsets = self.consumer_offsets.lock();
                 for partition in tpl.elements().iter() {
                     let topic = Topic::new(partition.topic());
                     let index = partition.partition() as u16;
@@ -215,7 +216,8 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                     .committed_offsets((*tpl).clone(), None)
                     .unwrap();
 
-                let mut offset_map: HashMap<Partition, u64> = HashMap::with_capacity(committed_offsets.count());
+                let mut offset_map: HashMap<Partition, u64> =
+                    HashMap::with_capacity(committed_offsets.count());
                 let mut tpl = TopicPartitionList::with_capacity(committed_offsets.count());
 
                 for partition in committed_offsets.elements() {
@@ -257,7 +259,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 base_consumer
                     .assign(&tpl)
                     .expect("failed to assign partitions");
-                self.consumer_offsets.lock().unwrap().extend(&offset_map);
+                self.consumer_offsets.lock().extend(&offset_map);
 
                 // Ensure that all partitions are resumed on assignment to avoid
                 // carrying over state from a previous assignment.
@@ -343,10 +345,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             None => Ok(None),
             Some(res) => {
                 let msg = create_kafka_message(res?);
-                self.offsets
-                    .lock()
-                    .unwrap()
-                    .insert(msg.partition, msg.offset);
+                self.offsets.lock().insert(msg.partition, msg.offset);
 
                 Ok(Some(msg))
             }
@@ -358,7 +357,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
         let mut topic_partition_list = TopicPartitionList::with_capacity(partitions.len());
         {
-            let offsets = self.offsets.lock().unwrap();
+            let offsets = self.offsets.lock();
             for partition in partitions {
                 let offset = offsets
                     .get(&partition)
@@ -381,7 +380,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
         let mut topic_partition_list = TopicPartitionList::new();
         for partition in partitions {
-            if !self.offsets.lock().unwrap().contains_key(&partition) {
+            if !self.offsets.lock().contains_key(&partition) {
                 return Err(ConsumerError::UnassignedPartition);
             }
             topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
@@ -399,7 +398,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
     fn tell(&self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
-        Ok(self.offsets.lock().unwrap().clone())
+        Ok(self.offsets.lock().clone())
     }
 
     fn seek(&self, _: HashMap<Partition, u64>) -> Result<(), ConsumerError> {

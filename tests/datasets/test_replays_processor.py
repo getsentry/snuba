@@ -207,8 +207,8 @@ class ReplayEvent:
             "error_ids": list(
                 map(to_uuid, to_capped_list("trace_ids", self.error_ids))
             ),
-            "timestamp": maybe(to_datetime, self.timestamp),
-            "replay_start_timestamp": maybe(to_datetime, self.replay_start_timestamp),
+            "timestamp": maybe(int, self.timestamp),
+            "replay_start_timestamp": maybe(int, self.replay_start_timestamp),
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
@@ -305,7 +305,7 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(microsecond=0).timestamp()
 
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -320,8 +320,8 @@ class TestReplaysProcessor:
                 "8bea4461d8b944f393c15a3cb1c4169a",
             ],
             segment_id=0,
-            timestamp=str(int(now.timestamp())),
-            replay_start_timestamp=str(int(now.timestamp())),
+            timestamp=str(int(now)),
+            replay_start_timestamp=str(int(now)),
             platform=0,
             dist=0,
             urls=["http://127.0.0.1:8001", None, 0],

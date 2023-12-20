@@ -2,9 +2,11 @@ pub mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use thiserror::Error;
@@ -36,6 +38,8 @@ pub enum RunError {
     Poll(#[source] ConsumerError),
     #[error("pause error")]
     Pause(#[source] ConsumerError),
+    #[error("strategy panicked")]
+    StrategyPanic,
 }
 
 pub struct ConsumerState<TPayload> {
@@ -103,7 +107,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
 
         let start = Instant::now();
 
-        let mut state = self.0.lock().unwrap();
+        let mut state = self.0.lock();
         state.strategy = Some(state.processing_factory.create());
         state.dlq_policy.reset_dlq_limits(&partitions);
 
@@ -125,17 +129,29 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
 
         let start = Instant::now();
 
-        let mut state = self.0.lock().unwrap();
+        let mut state = self.0.lock();
         if let Some(s) = state.strategy.as_mut() {
-            s.close();
-            if let Ok(Some(commit_request)) = s.join(None) {
-                state.dlq_policy.flush(&commit_request.positions);
-                tracing::info!("Committing offsets");
-                let res = commit_offsets.commit(commit_request.positions);
+            let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                s.close();
+                s.join(None)
+            }));
 
-                if let Err(err) = res {
-                    let error: &dyn std::error::Error = &err;
-                    tracing::error!(error, "Failed to commit offsets");
+            match result {
+                Ok(join_result) => {
+                    if let Ok(Some(commit_request)) = join_result {
+                        state.dlq_policy.flush(&commit_request.positions);
+                        tracing::info!("Committing offsets");
+                        let res = commit_offsets.commit(commit_request.positions);
+
+                        if let Err(err) = res {
+                            let error: &dyn std::error::Error = &err;
+                            tracing::error!(error, "Failed to commit offsets");
+                        }
+                    }
+                }
+
+                Err(_) => {
+                    tracing::error!("Strategy panicked during close/join");
                 }
             }
         }
@@ -195,7 +211,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     ) -> Self {
         let max_buffered_messages_per_partition = consumer_state
             .lock()
-            .unwrap()
             .dlq_policy
             .max_buffered_messages_per_partition();
 
@@ -212,10 +227,17 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     pub fn run_once(&mut self) -> Result<(), RunError> {
+        // In case the strategy panics, we attempt to catch it and return an error.
+        // This enables the consumer to crash rather than hang indedinitely.
+        panic::catch_unwind(AssertUnwindSafe(|| self._run_once()))
+            .unwrap_or(Err(RunError::StrategyPanic))
+    }
+
+    fn _run_once(&mut self) -> Result<(), RunError> {
         let metrics = get_metrics();
         metrics.increment("arroyo.consumer.run.count", 1, None);
 
-        if self.consumer_state.lock().unwrap().is_paused {
+        if self.consumer_state.lock().is_paused {
             // If the consumer was paused, it should not be returning any messages
             // on `poll`.
             let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
@@ -251,7 +273,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         // since we do not drive the kafka consumer at this point, it is safe to acquire the state
         // lock, as we can be sure that for the rest of this function, no assignment callback will
         // run.
-        let mut consumer_state = self.consumer_state.lock().unwrap();
+        let mut consumer_state = self.consumer_state.lock();
         let consumer_state: &mut ConsumerState<_> = &mut consumer_state;
 
         let Some(strategy) = consumer_state.strategy.as_mut() else {
@@ -261,6 +283,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             }
         };
         let poll_start = Instant::now();
+
         let commit_request = strategy.poll();
 
         self.metrics_buffer
@@ -379,7 +402,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             .load(Ordering::Relaxed)
         {
             if let Err(e) = self.run_once() {
-                let mut trait_callbacks = self.consumer_state.lock().unwrap();
+                let mut trait_callbacks = self.consumer_state.lock();
 
                 if let Some(strategy) = trait_callbacks.strategy.as_mut() {
                     strategy.terminate();
@@ -515,5 +538,103 @@ mod tests {
         let expected = HashMap::from([(partition, 2)]);
 
         assert_eq!(processor.tell(), expected)
+    }
+
+    #[test]
+    fn test_strategy_panic() {
+        // Tests that a panic in any of the poll, submit, join, or close methods will crash the consumer
+        // and not deadlock
+        struct TestStrategy {
+            panic_on: &'static str, // poll, submit, join, close
+        }
+        impl ProcessingStrategy<String> for TestStrategy {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+                if self.panic_on == "poll" {
+                    panic!("panic in poll");
+                }
+                Ok(None)
+            }
+
+            fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
+                if self.panic_on == "submit" {
+                    panic!("panic in submit");
+                }
+
+                Ok(())
+            }
+
+            fn close(&mut self) {
+                if self.panic_on == "close" {
+                    panic!("panic in close");
+                }
+            }
+
+            fn terminate(&mut self) {}
+
+            fn join(
+                &mut self,
+                _: Option<Duration>,
+            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+                if self.panic_on == "join" {
+                    panic!("panic in join");
+                }
+
+                Ok(None)
+            }
+        }
+
+        struct TestFactory {
+            panic_on: &'static str,
+        }
+        impl ProcessingStrategyFactory<String> for TestFactory {
+            fn create(&self) -> Box<dyn ProcessingStrategy<String>> {
+                Box::new(TestStrategy {
+                    panic_on: self.panic_on,
+                })
+            }
+        }
+
+        fn build_processor(
+            broker: LocalBroker<String>,
+            panic_on: &'static str,
+        ) -> StreamProcessor<String> {
+            let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
+                Box::new(TestFactory { panic_on }),
+                None,
+            )));
+
+            let consumer = Box::new(LocalConsumer::new(
+                Uuid::nil(),
+                Arc::new(Mutex::new(broker)),
+                "test_group".to_string(),
+                false,
+                &[Topic::new("test1")],
+                Callbacks(consumer_state.clone()),
+            ));
+
+            StreamProcessor::new(consumer, consumer_state)
+        }
+
+        let topic1 = Topic::new("test1");
+        let partition = Partition::new(topic1, 0);
+
+        let test_cases = ["poll", "submit", "join", "close"];
+
+        for test_case in test_cases {
+            let mut broker = build_broker();
+            let _ = broker.produce(&partition, "message1".to_string());
+            let _ = broker.produce(&partition, "message2".to_string());
+            let mut processor = build_processor(broker, test_case);
+
+            let res = processor.run_once();
+
+            if test_case == "join" || test_case == "close" {
+                assert!(res.is_ok());
+            } else {
+                assert!(res.is_err());
+            }
+
+            processor.shutdown();
+        }
     }
 }
