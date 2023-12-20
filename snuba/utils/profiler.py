@@ -19,6 +19,7 @@ def run_ondemand_profiler() -> None:
 
 
 def _profiler_main() -> None:
+    transaction_start = None
     open_transaction = None
     own_hostname = socket.gethostname()
 
@@ -50,11 +51,15 @@ def _profiler_main() -> None:
                 open_transaction._profile.active_thread_id = (
                     threading.main_thread().ident
                 )
+
                 open_transaction.__enter__()
+                transaction_start = time.time()
 
-        elif own_hostname not in queried_hostnames and open_transaction is not None:
+        elif open_transaction is not None and (
+            own_hostname not in queried_hostnames
+            or time.time() - transaction_start >= 30
+        ):
             logger.warn("stopping ondemand profile for %s", own_hostname)
-
             with sentry_sdk.Hub.main:
                 open_transaction.__exit__(None, None, None)
                 open_transaction = None
