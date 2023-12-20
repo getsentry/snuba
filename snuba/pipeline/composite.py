@@ -20,6 +20,7 @@ from snuba.pipeline.query_pipeline import QueryExecutionPipeline, QueryPlanner
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.multi import MultiQuery
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.equivalence_adder import add_equivalent_conditions
@@ -246,7 +247,9 @@ class CompositeDataSourcePlan(NamedTuple):
     an execution strategy that is not used.
     """
 
-    translated_source: Union[ClickhouseQuery, CompositeQuery[Table], JoinClause[Table]]
+    translated_source: Union[
+        ClickhouseQuery, CompositeQuery[Table], JoinClause[Table], MultiQuery[Table]
+    ]
     storage_set_key: StorageSetKey
     root_processors: Optional[SubqueryProcessors] = None
     aliased_processors: Optional[Mapping[str, SubqueryProcessors]] = None
@@ -348,6 +351,46 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Enti
             _plan_composite_query(data_source, self.__settings)
         )
 
+    def _visit_multi_query(
+        self, data_source: MultiQuery[Entity]
+    ) -> CompositeDataSourcePlan:
+        # Run plans for each sub query, get storage set key
+        # Don't need processors ATM, the sub queries can run their own processors
+        subquery_plans = []
+        for query in data_source.queries:
+            assert isinstance(
+                query, LogicalQuery
+            ), f"Only subqueries are allowed at query planning stage. {type(query)} found."
+
+            subquery_plans.append(
+                get_entity(query.get_from_clause().key)
+                .get_query_pipeline_builder()
+                .build_planner(query, self.__settings)
+                .build_best_plan()
+            )
+
+        # TODO: Since metric types (entities) are in different storage sets, the
+        # set of subqueries can actually have multiple storage sets and be fine,
+        # since the subqueries are ultimately run independently. However the code
+        # for plans etc. assumes that the subqueries are in the same storage set.
+        # This will need to be changed in the future, for now check the storage
+        # sets are all the same.
+
+        assert is_valid_storage_set_combination(
+            *[p.storage_set_key for p in subquery_plans]
+        )
+        storage_set_key = subquery_plans[0].storage_set_key
+        planned_data_source = MultiQuery(
+            queries=[p.query for p in subquery_plans],
+            result_function=data_source.result_function,
+        )
+
+        return CompositeDataSourcePlan(
+            translated_source=planned_data_source,
+            storage_set_key=storage_set_key,
+            root_processors=SubqueryProcessors([], []),  # Not sure what these should be
+        )
+
 
 class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     """
@@ -405,6 +448,11 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
     def visit_join_clause(self, node: JoinClause[Table]) -> None:
         node.left_node.accept(self)
         node.right_node.accept(self)
+
+    def _visit_multi_query(self, data_source: MultiQuery[Table]) -> None:
+        for query in data_source.queries:
+            assert isinstance(query, ClickhouseQuery)
+            self.__process_simple_query(query, self.__root_processors)
 
 
 class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table]]):

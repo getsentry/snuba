@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Union
 
 import pytest
+from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
@@ -20,12 +21,13 @@ from snuba.pipeline.composite import (
     CompositeExecutionStrategy,
     CompositeQueryPlanner,
 )
-from snuba.query import SelectedExpression
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
+    combine_and_conditions,
 )
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -34,6 +36,7 @@ from snuba.query.data_source.join import (
     JoinConditionExpression,
     JoinType,
 )
+from snuba.query.data_source.multi import MultiQuery
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.expressions import (
     Column,
@@ -82,6 +85,27 @@ groups_table = Table(
     final=False,
     sampling_rate=None,
     mandatory_conditions=groups_schema.get_data_source().get_mandatory_conditions(),
+)
+
+distributions_ent = Entity(
+    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+)
+distributions_storage = get_storage(StorageKey.GENERIC_METRICS_DISTRIBUTIONS)
+assert distributions_storage is not None
+schema = distributions_storage.get_schema()
+assert isinstance(schema, TableSchema)
+distributions_table_name = schema.get_table_name()
+
+distributions_table = Table(
+    distributions_table_name,
+    distributions_storage.get_schema().get_columns(),
+    allocation_policies=distributions_storage.get_allocation_policies(),
+    final=False,
+    sampling_rate=None,
+    mandatory_conditions=distributions_storage.get_schema()
+    .get_data_source()
+    .get_mandatory_conditions(),
 )
 
 TEST_CASES = [
@@ -489,6 +513,272 @@ TEST_CASES = [
             ],
         ),
         id="Simple join turned into a join of subqueries",
+    ),
+    pytest.param(
+        CompositeQuery(
+            from_clause=MultiQuery(
+                queries=[
+                    LogicalQuery(
+                        distributions_ent,
+                        selected_columns=[
+                            SelectedExpression(
+                                "aggregate_value",
+                                FunctionCall(
+                                    "_snuba_sum(d:transactions/duration@millisecond)",
+                                    "sum",
+                                    (Column("_snuba_value", None, "value"),),
+                                ),
+                            ),
+                        ],
+                        condition=combine_and_conditions(
+                            [
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column("_snuba_granularity", None, "granularity"),
+                                    Literal(None, 60),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.IN,
+                                    Column("_snuba_project_id", None, "project_id"),
+                                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.IN,
+                                    Column("_snuba_org_id", None, "org_id"),
+                                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column("_snuba_use_case_id", None, "use_case_id"),
+                                    Literal(None, "transactions"),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.GTE,
+                                    Column("_snuba_timestamp", None, "timestamp"),
+                                    Literal(None, datetime(2021, 1, 1, 0, 0)),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.LT,
+                                    Column("_snuba_timestamp", None, "timestamp"),
+                                    Literal(
+                                        None,
+                                        datetime(2021, 1, 2, 0, 0),
+                                    ),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column("_snuba_metric_id", None, "metric_id"),
+                                    Literal(None, 123456),
+                                ),
+                            ]
+                        ),
+                        order_by=[
+                            OrderBy(
+                                OrderByDirection.ASC,
+                                Column(
+                                    "_snuba_aggregate_value", None, "aggregate_value"
+                                ),
+                            )
+                        ],
+                        limit=1000,
+                    ),
+                ],
+                result_function=lambda x: x,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    AGGREGATE_ALIAS,
+                    FunctionCall(
+                        "average", "avg", (Column(None, None, "count_environment"),)
+                    ),
+                ),
+            ],
+        ),
+        CompositeQueryPlan(
+            CompositeQuery(
+                from_clause=MultiQuery(
+                    queries=[
+                        ClickhouseQuery(
+                            distributions_table,
+                            selected_columns=[
+                                SelectedExpression(
+                                    "aggregate_value",
+                                    FunctionCall(
+                                        "_snuba_sum(d:transactions/duration@millisecond)",
+                                        "sumMerge",
+                                        (Column(None, None, "sum"),),
+                                    ),
+                                ),
+                            ],
+                            condition=combine_and_conditions(
+                                [
+                                    binary_condition(
+                                        ConditionFunctions.EQ,
+                                        Column(
+                                            "_snuba_granularity", None, "granularity"
+                                        ),
+                                        Literal(None, 1),
+                                    ),
+                                    binary_condition(
+                                        ConditionFunctions.IN,
+                                        Column("_snuba_project_id", None, "project_id"),
+                                        FunctionCall(
+                                            None, "tuple", (Literal(None, 1),)
+                                        ),
+                                    ),
+                                    binary_condition(
+                                        ConditionFunctions.IN,
+                                        Column("_snuba_org_id", None, "org_id"),
+                                        FunctionCall(
+                                            None, "tuple", (Literal(None, 1),)
+                                        ),
+                                    ),
+                                    binary_condition(
+                                        ConditionFunctions.EQ,
+                                        Column(
+                                            "_snuba_use_case_id", None, "use_case_id"
+                                        ),
+                                        Literal(None, "transactions"),
+                                    ),
+                                    binary_condition(
+                                        ConditionFunctions.GTE,
+                                        Column("_snuba_timestamp", None, "timestamp"),
+                                        Literal(None, datetime(2021, 1, 1, 0, 0)),
+                                    ),
+                                    binary_condition(
+                                        ConditionFunctions.LT,
+                                        Column("_snuba_timestamp", None, "timestamp"),
+                                        Literal(
+                                            None,
+                                            datetime(2021, 1, 2, 0, 0),
+                                        ),
+                                    ),
+                                    binary_condition(
+                                        ConditionFunctions.EQ,
+                                        Column("_snuba_metric_id", None, "metric_id"),
+                                        Literal(None, 123456),
+                                    ),
+                                ]
+                            ),
+                            order_by=[
+                                OrderBy(
+                                    OrderByDirection.ASC,
+                                    Column(
+                                        "_snuba_aggregate_value",
+                                        None,
+                                        "aggregate_value",
+                                    ),
+                                )
+                            ],
+                            limit=1000,
+                        ),
+                    ],
+                    result_function=lambda x: x,
+                ),
+                selected_columns=[
+                    SelectedExpression(
+                        AGGREGATE_ALIAS,
+                        FunctionCall(
+                            "average", "avg", (Column(None, None, "count_environment"),)
+                        ),
+                    ),
+                ],
+            ),
+            CompositeExecutionStrategy(
+                get_cluster(StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS), [], {}, []
+            ),
+            StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS,
+            SubqueryProcessors(
+                [],
+                [
+                    # TODO: These should probably be used?
+                    # *events_storage.get_query_processors(),
+                    # MandatoryConditionApplier(),
+                    # MandatoryConditionEnforcer([]),
+                ],
+            ),
+            None,
+        ),
+        CompositeQuery(
+            from_clause=MultiQuery(
+                queries=[
+                    ClickhouseQuery(
+                        distributions_table,
+                        selected_columns=[
+                            SelectedExpression(
+                                "aggregate_value",
+                                FunctionCall(
+                                    "_snuba_sum(d:transactions/duration@millisecond)",
+                                    "sumMerge",
+                                    (Column(None, None, "sum"),),
+                                ),
+                            ),
+                        ],
+                        condition=combine_and_conditions(
+                            [
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column("_snuba_granularity", None, "granularity"),
+                                    Literal(None, 1),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.IN,
+                                    Column("_snuba_project_id", None, "project_id"),
+                                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.IN,
+                                    Column("_snuba_org_id", None, "org_id"),
+                                    FunctionCall(None, "tuple", (Literal(None, 1),)),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column("_snuba_use_case_id", None, "use_case_id"),
+                                    Literal(None, "transactions"),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.GTE,
+                                    Column("_snuba_timestamp", None, "timestamp"),
+                                    Literal(None, datetime(2021, 1, 1, 0, 0)),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.LT,
+                                    Column("_snuba_timestamp", None, "timestamp"),
+                                    Literal(
+                                        None,
+                                        datetime(2021, 1, 2, 0, 0),
+                                    ),
+                                ),
+                                binary_condition(
+                                    ConditionFunctions.EQ,
+                                    Column("_snuba_metric_id", None, "metric_id"),
+                                    Literal(None, 123456),
+                                ),
+                            ]
+                        ),
+                        order_by=[
+                            OrderBy(
+                                OrderByDirection.ASC,
+                                Column(
+                                    "_snuba_aggregate_value", None, "aggregate_value"
+                                ),
+                            )
+                        ],
+                        limit=1000,
+                    ),
+                ],
+                result_function=lambda x: x,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    AGGREGATE_ALIAS,
+                    FunctionCall(
+                        "average", "avg", (Column(None, None, "count_environment"),)
+                    ),
+                ),
+            ],
+        ),
+        id="Simple metrics composite query",
     ),
 ]
 

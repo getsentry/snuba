@@ -17,6 +17,7 @@ from snuba.query.data_source.join import (
     JoinNode,
     JoinVisitor,
 )
+from snuba.query.data_source.multi import MultiQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression
 from snuba.query.joins.classifier import (
@@ -234,6 +235,8 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         generate_subqueries(from_clause)
         return
     elif isinstance(from_clause, ProcessableQuery):
+        return
+    elif isinstance(from_clause, MultiQuery):
         return
 
     # Now this has to be a join, so we can work with it.

@@ -1,6 +1,5 @@
 from typing import Set
 
-from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -43,10 +42,7 @@ class SemiJoinOptimizer(CompositeQueryProcessor):
         self, query: CompositeQuery[Table], query_settings: QuerySettings
     ) -> None:
         from_clause = query.get_from_clause()
-        if isinstance(from_clause, CompositeQuery):
-            self.process_query(from_clause, query_settings)
-            return
-        elif isinstance(from_clause, ProcessableQuery):
+        if not isinstance(from_clause, JoinClause):
             return
 
         # Now this has to be a join, so we can work with it.

@@ -3,6 +3,7 @@ from typing import Any, List, Mapping, Sequence, Union
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.multi import MultiQuery
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import StringifyVisitor
@@ -154,3 +155,11 @@ class TracingQueryFormatter(
                 1,
             ),
         ]
+
+    def _visit_multi_query(
+        self, data_source: MultiQuery[SimpleDataSource]
+    ) -> List[str]:
+        formatted_queries = []
+        for q in data_source.queries:
+            formatted_queries.extend(_indent_str_list(format_query(q), 1))
+        return formatted_queries

@@ -11,6 +11,7 @@ from snuba.query import (
     TSimpleDataSource,
 )
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.multi import MultiQuery
 from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.expressions import Expression, ExpressionVisitor
 
@@ -31,6 +32,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
                 ProcessableQuery[TSimpleDataSource],
                 CompositeQuery[TSimpleDataSource],
                 JoinClause[TSimpleDataSource],
+                MultiQuery[TSimpleDataSource],
             ]
         ],
         # TODO: Consider if to remove the defaults and make some of
@@ -92,6 +94,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
         ProcessableQuery[TSimpleDataSource],
         CompositeQuery[TSimpleDataSource],
         JoinClause[TSimpleDataSource],
+        MultiQuery[TSimpleDataSource],
     ]:
         assert self.__from_clause is not None, "Data source has not been provided yet."
         return self.__from_clause
@@ -102,6 +105,7 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
             ProcessableQuery[TSimpleDataSource],
             CompositeQuery[TSimpleDataSource],
             JoinClause[TSimpleDataSource],
+            MultiQuery[TSimpleDataSource],
         ],
     ) -> None:
         self.__from_clause = from_clause

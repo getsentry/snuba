@@ -4,6 +4,7 @@ from typing import Generic, TypeVar, Union
 from snuba.query import ProcessableQuery, TSimpleDataSource
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.multi import MultiQuery
 
 TReturn = TypeVar("TReturn")
 
@@ -26,6 +27,7 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
             JoinClause[TSimpleDataSource],
             ProcessableQuery[TSimpleDataSource],
             CompositeQuery[TSimpleDataSource],
+            MultiQuery[TSimpleDataSource],
         ],
     ) -> TReturn:
         if isinstance(data_source, JoinClause):
@@ -34,6 +36,8 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
             return self._visit_simple_query(data_source)
         elif isinstance(data_source, CompositeQuery):
             return self._visit_composite_query(data_source)
+        elif isinstance(data_source, MultiQuery):
+            return self._visit_multi_query(data_source)
         else:
             # It must be a simple data source according to the type
             # signature, we cannot do that via the isinstance call
@@ -58,4 +62,8 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
     def _visit_composite_query(
         self, data_source: CompositeQuery[TSimpleDataSource]
     ) -> TReturn:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _visit_multi_query(self, data_source: MultiQuery[TSimpleDataSource]) -> TReturn:
         raise NotImplementedError

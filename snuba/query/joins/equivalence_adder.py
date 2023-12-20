@@ -9,6 +9,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
 )
 from snuba.query.data_source.join import entity_from_node
+from snuba.query.data_source.multi import MultiQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression
 from snuba.query.joins.pre_processor import QualifiedCol, get_equivalent_columns
@@ -43,6 +44,8 @@ def add_equivalent_conditions(query: CompositeQuery[Entity]) -> None:
         add_equivalent_conditions(from_clause)
         return
     elif isinstance(from_clause, ProcessableQuery):
+        return
+    elif isinstance(from_clause, MultiQuery):
         return
 
     # Now this has to be a join, so we can work with it.
