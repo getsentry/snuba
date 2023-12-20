@@ -1,24 +1,28 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Represents a Deadline to be reached.
 #[derive(Clone, Copy, Debug)]
 pub struct Deadline {
-    start: Instant,
+    start: coarsetime::Instant,
     duration: Duration,
+}
+
+fn now() -> coarsetime::Instant {
+    coarsetime::Instant::now_without_cache_update()
 }
 
 impl Deadline {
     /// Creates a new [`Deadline`].
     pub fn new(duration: Duration) -> Self {
         Self {
-            start: Instant::now(),
+            start: now(),
             duration,
         }
     }
 
     /// Returns the start since creation.
     pub fn elapsed(&self) -> Duration {
-        self.start.elapsed()
+        now().duration_since(self.start).into()
     }
 
     /// Checks whether the deadline has elapsed.
@@ -35,6 +39,6 @@ impl Deadline {
 
     /// Restarts the deadline with the initial [`Duration`].
     pub fn restart(&mut self) {
-        self.start = Instant::now();
+        self.start = now();
     }
 }
