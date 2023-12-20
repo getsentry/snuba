@@ -86,7 +86,14 @@ def setup_sentry() -> None:
         ],
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
+        # "turn on" profiling without sending anything --
+        # nonzero value required for ondemand profiling as well
+        # profiles_sample_rate=0.00001,
     )
+
+    from snuba.utils.profiler import run_ondemand_profiler
+
+    run_ondemand_profiler()
 
 
 metrics = create_metrics(
