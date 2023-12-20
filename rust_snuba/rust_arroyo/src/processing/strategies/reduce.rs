@@ -8,13 +8,13 @@ use crate::utils::timing::Deadline;
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
     accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
     offsets: BTreeMap<Partition, u64>,
-    batch_start_time: SystemTime,
+    batch_start_time: Deadline,
     message_count: usize,
 }
 
@@ -22,12 +22,13 @@ impl<T, TResult> BatchState<T, TResult> {
     fn new(
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
+        max_batch_time: Duration,
     ) -> BatchState<T, TResult> {
         BatchState {
             value: Some(initial_value),
             accumulator,
             offsets: Default::default(),
-            batch_start_time: SystemTime::now(),
+            batch_start_time: Deadline::new(max_batch_time),
             message_count: 0,
         }
     }
@@ -122,7 +123,8 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
     where
         N: ProcessingStrategy<TResult> + 'static,
     {
-        let batch_state = BatchState::new(initial_value.clone(), accumulator.clone());
+        let batch_state =
+            BatchState::new(initial_value.clone(), accumulator.clone(), max_batch_time);
         Reduce {
             next_step: Box::new(next_step),
             accumulator,
@@ -156,25 +158,27 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             return Ok(());
         }
 
-        let batch_time = self.batch_state.batch_start_time.elapsed().ok();
+        let batch_time = self.batch_state.batch_start_time.elapsed();
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
-            || batch_time.unwrap_or_default() > self.max_batch_time;
+            || batch_time >= self.max_batch_time;
 
         if !batch_complete && !force {
             return Ok(());
         }
 
-        if let Some(batch_time) = batch_time {
-            self.metrics.timing(
-                "arroyo.strategies.reduce.batch_time",
-                batch_time.as_secs(),
-                None,
-            );
-        }
+        self.metrics.timing(
+            "arroyo.strategies.reduce.batch_time",
+            batch_time.as_secs(),
+            None,
+        );
 
         let batch_state = mem::replace(
             &mut self.batch_state,
-            BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
+            BatchState::new(
+                self.initial_value.clone(),
+                self.accumulator.clone(),
+                self.max_batch_time,
+            ),
         );
 
         let next_message =
