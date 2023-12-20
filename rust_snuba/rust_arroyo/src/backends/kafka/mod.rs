@@ -215,8 +215,8 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                     .committed_offsets((*tpl).clone(), None)
                     .unwrap();
 
-                let mut offset_map: HashMap<Partition, u64> = HashMap::new();
-                let mut tpl = TopicPartitionList::with_capacity(offset_map.len());
+                let mut offset_map: HashMap<Partition, u64> = HashMap::with_capacity(committed_offsets.count());
+                let mut tpl = TopicPartitionList::with_capacity(committed_offsets.count());
 
                 for partition in committed_offsets.elements() {
                     let raw_offset = partition.offset().to_raw().unwrap();
