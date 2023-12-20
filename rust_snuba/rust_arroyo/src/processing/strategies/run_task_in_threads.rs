@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tokio::runtime::{Handle, Runtime};
 use tokio::task::JoinHandle;
@@ -12,6 +12,7 @@ use crate::processing::strategies::{
     SubmitError,
 };
 use crate::types::Message;
+use crate::utils::timing::Deadline;
 
 #[derive(Clone, Debug)]
 pub enum RunTaskError {
@@ -206,18 +207,16 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
-        let start = Instant::now();
+        let deadline = timeout.map(Deadline::new);
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
-            if let Some(t) = timeout {
-                if start.elapsed() > t {
-                    tracing::warn!(
-                        %self.metric_name,
-                        "Timeout reached while waiting for tasks to finish",
-                    );
-                    break;
-                }
+            if deadline.map_or(false, |d| d.has_elapsed()) {
+                tracing::warn!(
+                    %self.metric_name,
+                    "Timeout reached while waiting for tasks to finish",
+                );
+                break;
             }
 
             let commit_request = self.poll()?;
@@ -232,9 +231,7 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
         self.handles.clear();
         self.metrics_buffer.flush();
 
-        let remaining = timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
-
-        let next_commit = self.next_step.join(remaining)?;
+        let next_commit = self.next_step.join(deadline.map(|d| d.remaining()))?;
 
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),

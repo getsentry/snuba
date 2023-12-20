@@ -19,6 +19,7 @@ use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, Metrics};
+use crate::utils::timing::Deadline;
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -42,10 +43,12 @@ pub enum RunError {
     StrategyPanic,
 }
 
+const BACKPRESSURE_THRESHOLD: Duration = Duration::from_secs(1);
+
 pub struct ConsumerState<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
-    backpressure_timestamp: Option<Instant>,
+    backpressure_deadline: Option<Deadline>,
     is_paused: bool,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     dlq_policy: DlqPolicyWrapper<TPayload>,
@@ -59,7 +62,7 @@ impl<TPayload: Send + Sync + 'static> ConsumerState<TPayload> {
         Self {
             processing_factory,
             strategy: None,
-            backpressure_timestamp: None,
+            backpressure_deadline: None,
             is_paused: false,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             dlq_policy: DlqPolicyWrapper::new(dlq_policy),
@@ -67,12 +70,9 @@ impl<TPayload: Send + Sync + 'static> ConsumerState<TPayload> {
     }
 
     fn clear_backpressure(&mut self) {
-        if self.backpressure_timestamp.is_some() {
-            self.metrics_buffer.incr_timing(
-                "arroyo.consumer.backpressure.time",
-                self.backpressure_timestamp.unwrap().elapsed(),
-            );
-            self.backpressure_timestamp = None;
+        if let Some(deadline) = self.backpressure_deadline.take() {
+            self.metrics_buffer
+                .incr_timing("arroyo.consumer.backpressure.time", deadline.elapsed());
         }
     }
 }
@@ -282,12 +282,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 Some(_) => return Err(RunError::InvalidState),
             }
         };
-        let poll_start = Instant::now();
-
+        let processing_start = Instant::now();
         let commit_request = strategy.poll();
-
-        self.metrics_buffer
-            .incr_timing("arroyo.consumer.processing.time", poll_start.elapsed());
 
         match commit_request {
             Ok(None) => {}
@@ -311,9 +307,13 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         };
 
         let Some(msg_s) = self.message.take() else {
+            self.metrics_buffer.incr_timing(
+                "arroyo.consumer.processing.time",
+                processing_start.elapsed(),
+            );
             return Ok(());
         };
-        let processing_start = Instant::now();
+
         let ret = strategy.submit(msg_s);
         self.metrics_buffer.incr_timing(
             "arroyo.consumer.processing.time",
@@ -345,21 +345,16 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 // Put back the carried over message
                 self.message = Some(message);
 
-                if consumer_state.backpressure_timestamp.is_none() {
-                    consumer_state.backpressure_timestamp = Some(Instant::now());
-                }
+                let Some(deadline) = consumer_state.backpressure_deadline else {
+                    consumer_state.backpressure_deadline =
+                        Some(Deadline::new(BACKPRESSURE_THRESHOLD));
+                    return Ok(());
+                };
 
                 // If we are in the backpressure state for more than 1 second,
                 // we pause the consumer and hold the message until it is
                 // accepted, at which point we can resume consuming.
-                if !consumer_state.is_paused && consumer_state.backpressure_timestamp.is_some() {
-                    let backpressure_duration =
-                        consumer_state.backpressure_timestamp.unwrap().elapsed();
-
-                    if backpressure_duration < Duration::from_secs(1) {
-                        return Ok(());
-                    }
-
+                if !consumer_state.is_paused && deadline.has_elapsed() {
                     tracing::warn!(
                         "Consumer is in backpressure state for more than 1 second, pausing",
                     );
