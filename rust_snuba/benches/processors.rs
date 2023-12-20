@@ -1,6 +1,5 @@
 use parking_lot::Mutex;
-use std::collections::HashMap;
-use std::sync::{Arc, Once};
+use std::sync::Arc;
 use std::time::Duration;
 
 use divan::counter::ItemsCount;
@@ -15,7 +14,6 @@ use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
 use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
-use rust_arroyo::utils::metrics::{configure_metrics, Metrics};
 use rust_snuba::{
     ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StorageConfig,
 };
@@ -26,7 +24,6 @@ fn main() {
 }
 
 const MSG_COUNT: usize = 5_000;
-static METRICS_INIT: Once = Once::new();
 
 #[divan::bench(consts = [1, 4, 16])]
 fn functions<const N: usize>(bencher: divan::Bencher) {
@@ -79,17 +76,6 @@ fn run_bench(
     processor: &str,
     schema: &str,
 ) {
-    METRICS_INIT.call_once(|| {
-        #[derive(Debug)]
-        struct Noop;
-        impl Metrics for Noop {
-            fn increment(&self, _key: &str, _value: i64, _tags: Option<HashMap<&str, &str>>) {}
-            fn gauge(&self, _key: &str, _value: u64, _tags: Option<HashMap<&str, &str>>) {}
-            fn timing(&self, _key: &str, _value: u64, _tags: Option<HashMap<&str, &str>>) {}
-        }
-
-        configure_metrics(Noop)
-    });
     bencher
         .counter(ItemsCount::new(MSG_COUNT))
         .with_inputs(|| {
@@ -164,7 +150,7 @@ fn create_stream_processor(
     messages: usize,
 ) -> StreamProcessor<KafkaPayload> {
     let factory = create_factory(concurrency, processor, schema);
-    let consumer_state = Arc::new(Mutex::new(ConsumerState::new(factory, None)));
+    let consumer_state = ConsumerState::new(factory, None);
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
 
