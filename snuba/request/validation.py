@@ -16,6 +16,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
+from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
 from snuba.query.query_settings import (
     HTTPQuerySettings,
     QuerySettings,
@@ -53,6 +54,21 @@ def parse_snql_query(
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
     return _parse_snql_query(
         request_parts.query["query"], dataset, custom_processing, settings
+    )
+
+
+def parse_mql_query(
+    request_parts: RequestParts,
+    settings: QuerySettings,
+    dataset: Dataset,
+    custom_processing: Optional[CustomProcessors] = None,
+) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+    return _parse_mql_query(
+        request_parts.query["query"],
+        request_parts.query["mql_context"],
+        dataset,
+        custom_processing,
+        settings,
     )
 
 

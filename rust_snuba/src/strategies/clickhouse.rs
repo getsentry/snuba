@@ -35,7 +35,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
-        let metrics = self.metrics.clone();
+        let metrics = self.metrics;
 
         Box::pin(async move {
             let insert_batch = message.payload();

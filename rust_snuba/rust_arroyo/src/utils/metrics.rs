@@ -1,9 +1,9 @@
 use core::fmt::Debug;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
-pub static METRICS: OnceLock<Arc<dyn Metrics>> = OnceLock::new();
-pub type BoxMetrics = Arc<dyn Metrics>;
+pub static METRICS: OnceLock<Box<dyn Metrics>> = OnceLock::new();
+pub type BoxMetrics = &'static dyn Metrics;
 
 pub trait Metrics: Debug + Send + Sync {
     fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>);
@@ -13,7 +13,7 @@ pub trait Metrics: Debug + Send + Sync {
     fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>);
 }
 
-impl Metrics for BoxMetrics {
+impl Metrics for Box<dyn Metrics> {
     fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>) {
         (**self).increment(key, value, tags)
     }
@@ -26,7 +26,7 @@ impl Metrics for BoxMetrics {
 }
 
 #[derive(Debug)]
-struct Noop {}
+struct Noop;
 
 impl Metrics for Noop {
     fn increment(&self, _key: &str, _value: i64, _tags: Option<HashMap<&str, &str>>) {}
@@ -42,10 +42,10 @@ where
 {
     // Metrics can only be configured once
     METRICS
-        .set(Arc::new(metrics))
+        .set(Box::new(metrics))
         .expect("Metrics already configured");
 }
 
 pub fn get_metrics() -> BoxMetrics {
-    METRICS.get().cloned().unwrap_or_else(|| Arc::new(Noop {}))
+    METRICS.get().map(|b| &**b).unwrap_or(&Noop)
 }

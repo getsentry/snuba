@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use chrono::{DateTime, Utc};
-use rust_arroyo::utils::metrics::{BoxMetrics, Metrics};
+use rust_arroyo::utils::metrics::BoxMetrics;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

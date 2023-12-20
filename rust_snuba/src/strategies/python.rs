@@ -4,12 +4,13 @@ use rust_arroyo::processing::strategies::{
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
+use rust_arroyo::utils::timing::Deadline;
 
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::thread::sleep;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use anyhow::Error;
 use chrono::{DateTime, Utc};
@@ -317,19 +318,17 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
-        let now = Instant::now();
-
-        let deadline = timeout.map(|x| now + x);
+        let deadline = timeout.map(Deadline::new);
 
         // while deadline has not yet passed
-        while deadline.map_or(true, |x| x.elapsed().is_zero()) && !self.handles.is_empty() {
+        while !self.handles.is_empty() && !deadline.map_or(false, |d| d.has_elapsed()) {
             self.check_for_results(0);
             sleep(Duration::from_millis(10));
         }
 
         // TODO: we need to shut down the python module properly in order to avoid dataloss in
         // sentry sdk or similar things that run in python's atexit
-        self.next_step.join(timeout)
+        self.next_step.join(deadline.map(|d| d.remaining()))
     }
 }
 
