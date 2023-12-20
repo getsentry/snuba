@@ -1,14 +1,13 @@
-use crate::utils::metrics::{get_metrics, Metrics};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 use core::fmt::Debug;
 use std::collections::BTreeMap;
 use std::mem;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug)]
 pub struct MetricsBuffer {
-    metrics: Arc<dyn Metrics>,
+    metrics: BoxMetrics,
     timers: BTreeMap<String, Duration>,
     gauges: BTreeMap<String, u64>,
     flush_deadline: Deadline,

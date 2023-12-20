@@ -143,34 +143,33 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
 
         while !self.handles.is_empty() {
             if let Some(front) = self.handles.front() {
-                if front.is_finished() {
-                    let handle = self.handles.pop_front().unwrap();
-                    match self.runtime.block_on(handle) {
-                        Ok(Ok(message)) => match self.next_step.submit(message) {
-                            Err(SubmitError::MessageRejected(MessageRejected {
-                                message: transformed_message,
-                            })) => {
-                                self.message_carried_over = Some(transformed_message);
-                            }
-                            Err(SubmitError::InvalidMessage(invalid_message)) => {
-                                return Err(invalid_message);
-                            }
-                            Ok(_) => {}
-                        },
-                        Ok(Err(RunTaskError::InvalidMessage(e))) => {
-                            return Err(e);
-                        }
-                        Ok(Err(RunTaskError::RetryableError)) => {
-                            tracing::error!("retryable error");
-                        }
-                        Err(error) => {
-                            let error: &dyn std::error::Error = &error;
-                            tracing::error!(error, "the thread crashed");
-                            panic!("the thread crashed");
-                        }
-                    }
-                } else {
+                if !front.is_finished() {
                     break;
+                }
+                let handle = self.handles.pop_front().unwrap();
+                match self.runtime.block_on(handle) {
+                    Ok(Ok(message)) => match self.next_step.submit(message) {
+                        Err(SubmitError::MessageRejected(MessageRejected {
+                            message: transformed_message,
+                        })) => {
+                            self.message_carried_over = Some(transformed_message);
+                        }
+                        Err(SubmitError::InvalidMessage(invalid_message)) => {
+                            return Err(invalid_message);
+                        }
+                        Ok(_) => {}
+                    },
+                    Ok(Err(RunTaskError::InvalidMessage(e))) => {
+                        return Err(e);
+                    }
+                    Ok(Err(RunTaskError::RetryableError)) => {
+                        tracing::error!("retryable error");
+                    }
+                    Err(error) => {
+                        let error: &dyn std::error::Error = &error;
+                        tracing::error!(error, "the thread crashed");
+                        panic!("the thread crashed");
+                    }
                 }
             }
         }
