@@ -740,6 +740,7 @@ class TestReplaysActionProcessor:
                                     "testid": "",
                                     "title": "",
                                     "text": "text",
+                                    "component_name": "SignUpButton",
                                     "timestamp": int(now.timestamp()),
                                     "event_hash": "df3c3aa2daae465e89f1169e49139827",
                                     "is_dead": 0,
@@ -783,6 +784,7 @@ class TestReplaysActionProcessor:
         assert row["click_alt"] == ""
         assert row["click_testid"] == ""
         assert row["click_title"] == ""
+        assert row["click_component_name"] == "SignUpButton"
         assert row["click_is_dead"] == 0
         assert row["click_is_rage"] == 1
 
