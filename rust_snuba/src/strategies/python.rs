@@ -267,7 +267,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                             _,
                         ) = result.extract(py)?;
                         Ok(InsertBatch {
-                            rows: RowData::from_rows(result_decoded),
+                            rows: RowData::from_encoded_rows(result_decoded),
                             origin_timestamp,
                             sentry_received_timestamp,
                         })

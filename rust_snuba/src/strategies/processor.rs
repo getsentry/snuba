@@ -183,7 +183,7 @@ mod tests {
     use rust_arroyo::backends::kafka::types::KafkaPayload;
     use rust_arroyo::types::{Message, Partition, Topic};
 
-    use crate::types::{InsertBatch, RowData};
+    use crate::types::InsertBatch;
     use crate::Noop;
 
     #[test]
@@ -195,11 +195,7 @@ mod tests {
             _payload: KafkaPayload,
             _metadata: KafkaMessageMetadata,
         ) -> anyhow::Result<InsertBatch> {
-            Ok(InsertBatch {
-                rows: RowData::from_rows([]),
-                origin_timestamp: None,
-                sentry_received_timestamp: None,
-            })
+            Ok(InsertBatch::default())
         }
 
         let mut strategy =

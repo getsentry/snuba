@@ -5,34 +5,41 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
+    let from: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
-    if msg._metrics_summary.is_empty() {
-        return Ok(InsertBatch {
-            ..Default::default()
-        });
+    let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
+
+    let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
+    for (metric_mri, summaries) in from._metrics_summary {
+        for summary in summaries {
+            let (tag_keys, tag_values) = summary.tags.into_iter().unzip();
+
+            metrics_summaries.push(MetricsSummary {
+                count: summary.count,
+                deleted: 0,
+                end_timestamp: end_timestamp_ms / 1000,
+                max: summary.max,
+                metric_mri: metric_mri.clone(),
+                min: summary.min,
+                project_id: from.project_id,
+                retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
+                span_id: from.span_id,
+                sum: summary.sum,
+                tag_keys,
+                tag_values,
+                trace_id: from.trace_id,
+            })
+        }
     }
 
-    let summaries: MetricsSummaries = msg.try_into()?;
-    let mut rows: Vec<Vec<u8>> = Vec::with_capacity(summaries.metrics_summaries.len());
-
-    for summary in &summaries.metrics_summaries {
-        let serialized = serde_json::to_vec(&summary)?;
-        rows.push(serialized);
-    }
-
-    Ok(InsertBatch {
-        rows: RowData::from_rows(rows),
-        origin_timestamp: None,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows(metrics_summaries)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -60,10 +67,6 @@ struct FromMetricsSummary {
     tags: BTreeMap<String, String>,
 }
 
-struct MetricsSummaries {
-    metrics_summaries: Vec<MetricsSummary>,
-}
-
 #[derive(Debug, Default, Serialize)]
 struct MetricsSummary {
     count: u64,
@@ -81,39 +84,6 @@ struct MetricsSummary {
     #[serde(rename(serialize = "tags.value"))]
     tag_values: Vec<String>,
     trace_id: Uuid,
-}
-
-impl TryFrom<FromSpanMessage> for MetricsSummaries {
-    type Error = anyhow::Error;
-
-    fn try_from(from: FromSpanMessage) -> anyhow::Result<MetricsSummaries> {
-        let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
-
-        let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
-        for (metric_mri, summaries) in from._metrics_summary {
-            for summary in &summaries {
-                let (tag_keys, tag_values) = summary.tags.clone().into_iter().unzip();
-
-                metrics_summaries.push(MetricsSummary {
-                    count: summary.count,
-                    deleted: 0,
-                    end_timestamp: end_timestamp_ms / 1000,
-                    max: summary.max,
-                    metric_mri: metric_mri.clone(),
-                    min: summary.min,
-                    project_id: from.project_id,
-                    retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
-                    span_id: from.span_id,
-                    sum: summary.sum,
-                    tag_keys,
-                    tag_values,
-                    trace_id: from.trace_id,
-                })
-            }
-        }
-
-        Ok(MetricsSummaries { metrics_summaries })
-    }
 }
 
 #[cfg(test)]
