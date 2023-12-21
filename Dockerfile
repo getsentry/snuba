@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.8.18
+ARG PYTHON_VERSION=3.9.18
 
 FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
 WORKDIR /usr/src/snuba
