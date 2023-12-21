@@ -152,7 +152,7 @@ impl ClickhouseClient {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        let query_params = format!("load_balancing=in_order&insert_distributed_sync=1");
+        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
