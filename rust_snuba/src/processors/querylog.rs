@@ -7,24 +7,26 @@ use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
+    let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
-    let querylog_msg: QuerylogMessage = msg.try_into()?;
+    let querylog_msg = QuerylogMessage {
+        request: from.request,
+        dataset: from.dataset,
+        projects: from.projects,
+        organization: from.organization,
+        status: from.status,
+        timing: from.timing,
+        query_list: from.query_list.try_into()?,
+    };
 
-    let serialized = serde_json::to_vec(&querylog_msg)?;
-
-    Ok(InsertBatch {
-        rows: RowData::from_rows(vec![serialized]),
-        origin_timestamp: None,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows([querylog_msg])
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -306,21 +308,6 @@ struct QuerylogMessage {
     timing: Timing,
     #[serde(flatten)]
     query_list: QueryList,
-}
-
-impl TryFrom<FromQuerylogMessage> for QuerylogMessage {
-    type Error = anyhow::Error;
-    fn try_from(from: FromQuerylogMessage) -> anyhow::Result<QuerylogMessage> {
-        Ok(Self {
-            request: from.request,
-            dataset: from.dataset,
-            projects: from.projects,
-            organization: from.organization,
-            status: from.status,
-            timing: from.timing,
-            query_list: from.query_list.try_into()?,
-        })
-    }
 }
 
 #[cfg(test)]

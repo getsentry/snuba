@@ -84,6 +84,20 @@ pub struct InsertBatch {
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
 }
 
+impl InsertBatch {
+    pub fn from_rows<T>(rows: impl IntoIterator<Item = T>) -> anyhow::Result<Self>
+    where
+        T: Serialize,
+    {
+        let rows = RowData::from_rows(rows)?;
+        Ok(Self {
+            rows,
+            origin_timestamp: None,
+            sentry_received_timestamp: None,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct BytesInsertBatch {
     rows: RowData,
@@ -131,7 +145,9 @@ impl BytesInsertBatch {
     }
 
     pub fn merge(mut self, other: Self) -> Self {
-        self.rows.encoded_rows.extend(other.rows.encoded_rows);
+        self.rows
+            .encoded_rows
+            .extend_from_slice(&other.rows.encoded_rows);
         self.commit_log_offsets.extend(other.commit_log_offsets);
         self.rows.num_rows += other.rows.num_rows;
         self.message_timestamp.merge(other.message_timestamp);
@@ -172,18 +188,36 @@ pub struct RowData {
 }
 
 impl RowData {
-    pub fn from_rows(rows: impl IntoIterator<Item = Vec<u8>>) -> Self {
+    pub fn from_rows<T>(rows: impl IntoIterator<Item = T>) -> anyhow::Result<Self>
+    where
+        T: Serialize,
+    {
         let mut encoded_rows = Vec::new();
         let mut num_rows = 0;
         for row in rows {
-            encoded_rows.extend(row);
-            encoded_rows.extend(b"\n");
+            serde_json::to_writer(&mut encoded_rows, &row)?;
+            encoded_rows.push(b'\n');
+            num_rows += 1;
+        }
+
+        Ok(RowData {
+            num_rows,
+            encoded_rows,
+        })
+    }
+
+    pub fn from_encoded_rows(rows: Vec<Vec<u8>>) -> Self {
+        let mut encoded_rows = Vec::new();
+        let mut num_rows = 0;
+        for row in rows {
+            encoded_rows.extend_from_slice(&row);
+            encoded_rows.push(b'\n');
             num_rows += 1;
         }
 
         RowData {
-            num_rows,
             encoded_rows,
+            num_rows,
         }
     }
 }
