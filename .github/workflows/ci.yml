@@ -152,16 +152,6 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-      # These are pulled in order to be able to use docker layer caching
-      - name: Pull snuba CI images
-        if: github.repository_owner == 'getsentry'
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
-
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
         if: github.repository_owner == 'getsentry'
@@ -219,14 +209,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
@@ -306,14 +288,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
@@ -416,14 +390,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
