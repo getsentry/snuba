@@ -68,6 +68,7 @@ AND (metric_id IN [{IndexedIDs.SPAN_DURATION_METRIC.value},
 {IndexedIDs.SPAN_EXCLUSIVE_TIME_METRIC.value}])
 AND `span.category` = '{span_category}'
 GROUP BY org_id, project_id, `span.category`
+HAVING count_groups > 5000
 ORDER BY count_groups DESC
 LIMIT {limit}
 """
