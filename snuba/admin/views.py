@@ -107,6 +107,12 @@ def authorize() -> None:
             g.user = user
 
 
+@application.after_request
+def set_profiling_header(response: Response) -> Response:
+    response.headers["Document-Policy"] = "js-profiling"
+    return response
+
+
 @application.route("/")
 def root() -> Response:
     return application.send_static_file("index.html")
@@ -130,6 +136,7 @@ def settings_endpoint() -> Response:
                 "dsn": settings.ADMIN_FRONTEND_DSN,
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
                 "profilesSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
+                "tracePropagationTargets": settings.ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
                 "userEmail": g.user.email,
