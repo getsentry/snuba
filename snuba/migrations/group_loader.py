@@ -250,6 +250,7 @@ class QuerylogLoader(DirectoryLoader):
             "0004_add_bytes_scanned",
             "0005_add_codec_update_settings",
             "0006_sorting_key_change",
+            "0007_add_offset_column",
         ]
 
 
