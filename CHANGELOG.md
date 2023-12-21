@@ -1,5 +1,32 @@
 # Changelog
 
+## 23.12.1
+
+### Various fixes & improvements
+
+- perm(cardinality-analyzer): Replace team-ingestion-pipeline with team-ingest (#5240) by @Dav1dde
+- ref(profiling): add profiles to admin and web (#5234) by @MeredithAnya
+- feat(replays): Add react_component_name column (#5232) by @cmanallen
+- feat(cardinality): Add clickhouse host and port parameters (#5237) by @nikhars
+- feat(replays): Add react_component_name column migration (#5231) by @cmanallen
+- chore(deps): bump @sentry/react from 7.56.0 to 7.88.0 in /snuba/admin (#5224) by @dependabot
+- Optimize ConsumerState (#5236) by @Swatinem
+- fix(rust): Handle rebalancing ourselves, remove usage of pre/post-rebalance callbacks (#5229) by @untitaker
+- Unify Timeout/Deadline operations (#5230) by @Swatinem
+- feat(rust): Port arroyo.consumer.latency metric (#5214) by @loewenheim
+- feat(metrics) Add a MQL endpoint to Snuba API  (#5193) by @evanh
+- fix(rust): Fix consumer deadlock on strategy panic (#5216) by @lynnagara
+- ref(migrations): add experimental readiness state to policies (#5206) by @MeredithAnya
+- Use jemalloc unconditionally (#5228) by @Swatinem
+- feat(replays): Add rust-based message processor (#5215) by @cmanallen
+- Use jemalloc in Docker image (#5227) by @Swatinem
+- fix(rust): Fix `self.consumer_offsets` (#5220) by @lynnagara
+- build(rust): Update maturin and add to requirements.txt (#5218) by @lynnagara
+- feat(metrics-summaries): Deploy metrics-summaries consumer automatically (#5221) by @phacops
+- feat(metrics-summaries): Enable metrics-summaries for SaaS (#5219) by @phacops
+- feat(rust): Port run_task_in_threads test (#5213) by @loewenheim
+- meta: Bump new development version (b18bf981)
+
 ## 23.12.0
 
 ### Various fixes & improvements
