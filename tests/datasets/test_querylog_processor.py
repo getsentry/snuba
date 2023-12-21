@@ -122,6 +122,8 @@ def test_simple() -> None:
                 "timestamp": timer.for_json()["timestamp"],
                 "duration_ms": 10,
                 "status": "success",
+                "partition": 0,
+                "offset": 0,
                 "clickhouse_queries.sql": [
                     "select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"
                 ],
