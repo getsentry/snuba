@@ -7,7 +7,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -21,13 +21,7 @@ pub fn process_message(
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    let serialized = serde_json::to_vec(&span)?;
-
-    Ok(InsertBatch {
-        rows: RowData::from_rows(vec![serialized]),
-        origin_timestamp: None,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows([span])
 }
 
 #[derive(Debug, Default, Deserialize)]

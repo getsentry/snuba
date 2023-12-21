@@ -292,14 +292,14 @@ mod tests {
 
         let payloads = vec![
             BytesInsertBatch::new(
-                RowData::from_rows(vec![]),
+                RowData::default(),
                 Utc::now(),
                 None,
                 None,
                 BTreeMap::from([(0, (500, Utc::now()))]),
             ),
             BytesInsertBatch::new(
-                RowData::from_rows(vec![]),
+                RowData::default(),
                 Utc::now(),
                 None,
                 None,
