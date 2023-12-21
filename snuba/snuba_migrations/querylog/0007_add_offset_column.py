@@ -5,7 +5,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
-TABLE_NAME = "querylog_local"
 columns: Sequence[Tuple[Column[Modifiers], str]] = [
     (Column("partition", UInt(16)), "status"),
     (Column("offset", UInt(64)), "partition"),
@@ -31,7 +30,7 @@ def _forward() -> Generator[operations.SqlOperation, None, None]:
     for column, after in columns:
         yield operations.AddColumn(
             StorageSetKey.QUERYLOG,
-            TABLE_NAME,
+            table_name="querylog_local",
             column=column,
             after=after,
             target=operations.OperationTarget.LOCAL,
@@ -39,7 +38,7 @@ def _forward() -> Generator[operations.SqlOperation, None, None]:
 
         yield operations.AddColumn(
             StorageSetKey.QUERYLOG,
-            TABLE_NAME,
+            table_name="querylog_dist",
             column=column,
             after=after,
             target=operations.OperationTarget.DISTRIBUTED,
@@ -50,14 +49,14 @@ def _backward() -> Generator[operations.SqlOperation, None, None]:
     for column, after in columns:
         yield operations.DropColumn(
             storage_set=StorageSetKey.QUERYLOG,
-            table_name=TABLE_NAME,
+            table_name="querylog_dist",
             target=operations.OperationTarget.DISTRIBUTED,
             column_name=column.name,
         )
 
         yield operations.DropColumn(
             storage_set=StorageSetKey.QUERYLOG,
-            table_name=TABLE_NAME,
+            table_name="querylog_local",
             target=operations.OperationTarget.LOCAL,
             column_name=column.name,
         )
