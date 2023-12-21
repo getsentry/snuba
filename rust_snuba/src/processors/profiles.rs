@@ -1,21 +1,18 @@
-use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::types::BrokerMessage;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, RowData};
 
 pub fn process_message(
-    payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    mut msg: ProfileMessage,
+    raw_msg: BrokerMessage<KafkaPayload>,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
-
     // we always want an empty string at least
     msg.device_classification = Some(msg.device_classification.unwrap_or_default());
-    msg.offset = metadata.offset;
-    msg.partition = metadata.partition;
+    msg.offset = raw_msg.offset;
+    msg.partition = raw_msg.partition.index;
 
     let serialized = serde_json::to_vec(&msg)?;
 
@@ -27,7 +24,7 @@ pub fn process_message(
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct ProfileMessage {
+pub struct ProfileMessage {
     #[serde(default)]
     android_api_level: Option<u32>,
     #[serde(default)]
@@ -64,10 +61,9 @@ struct ProfileMessage {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::make_test_message;
+
     use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use std::time::SystemTime;
 
     #[test]
     fn test_profile() {
@@ -95,12 +91,8 @@ mod tests {
             "version_code": "1337",
             "version_name": "v42.0.0"
         }"#;
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let (value, msg) = make_test_message(data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 }

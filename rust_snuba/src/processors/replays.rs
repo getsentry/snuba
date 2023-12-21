@@ -1,18 +1,15 @@
-use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::types::BrokerMessage;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, RowData};
 
 pub fn process_message(
-    payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    replay_message: ReplayMessage,
+    raw_msg: BrokerMessage<KafkaPayload>,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-
-    let replay_message: ReplayMessage = serde_json::from_slice(payload_bytes)?;
     let replay_payload = serde_json::from_slice(&replay_message.payload)?;
 
     let output = match replay_payload {
@@ -35,8 +32,8 @@ pub fn process_message(
                     click_text: click.text,
                     click_title: click.title,
                     event_hash: click.event_hash,
-                    offset: metadata.offset,
-                    partition: metadata.partition,
+                    offset: raw_msg.offset,
+                    partition: raw_msg.partition.index,
                     project_id: replay_message.project_id,
                     replay_id: replay_message.replay_id,
                     retention_days: replay_message.retention_days,
@@ -106,10 +103,10 @@ pub fn process_message(
                 is_archived: event.is_archived,
                 ip_address_v4,
                 ip_address_v6,
-                offset: metadata.offset,
+                offset: raw_msg.offset,
                 os_name: event.contexts.os.name,
                 os_version: event.contexts.os.version,
-                partition: metadata.partition,
+                partition: raw_msg.partition.index,
                 platform: event.platform,
                 project_id: replay_message.project_id,
                 release: event.release,
@@ -142,8 +139,8 @@ pub fn process_message(
                 event_hash: event.event_hash,
                 fatal_id: event.fatal_id,
                 info_id: event.info_id,
-                offset: metadata.offset,
-                partition: metadata.partition,
+                offset: raw_msg.offset,
+                partition: raw_msg.partition.index,
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
@@ -164,7 +161,7 @@ pub fn process_message(
 }
 
 #[derive(Debug, Deserialize)]
-struct ReplayMessage {
+pub struct ReplayMessage {
     payload: Vec<u8>,
     project_id: u64,
     replay_id: Uuid,
@@ -419,10 +416,9 @@ fn is_u32_zero(v: &u32) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::make_test_message;
+
     use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use std::time::SystemTime;
 
     #[test]
     fn test_parse_replay_event() {
@@ -489,13 +485,9 @@ mod tests {
                 "type": "replay_event"
             }}"#
         );
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
@@ -534,13 +526,9 @@ mod tests {
                 "type": "replay_event"
             }}"#
         );
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
@@ -565,13 +553,9 @@ mod tests {
                 "type": "replay_event"
             }}"#
         );
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
@@ -595,12 +579,8 @@ mod tests {
                 "type": "replay_event"
             }}"#
         );
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 }

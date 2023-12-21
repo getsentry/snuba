@@ -1,25 +1,22 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::types::BrokerMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, RowData};
 
 pub fn process_message(
-    payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    msg: FromSpanMessage,
+    raw_msg: BrokerMessage<KafkaPayload>,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
-
     let mut span: Span = msg.try_into()?;
 
-    span.offset = metadata.offset;
-    span.partition = metadata.partition;
+    span.offset = raw_msg.offset;
+    span.partition = raw_msg.partition.index;
 
     let serialized = serde_json::to_vec(&span)?;
 
@@ -31,7 +28,7 @@ pub fn process_message(
 }
 
 #[derive(Debug, Default, Deserialize)]
-struct FromSpanMessage {
+pub struct FromSpanMessage {
     #[serde(default)]
     _metrics_summary: Value,
     #[serde(default)]
@@ -393,9 +390,9 @@ impl SpanStatus {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::make_test_message;
+
     use super::*;
-    use chrono::DateTime;
-    use std::time::SystemTime;
 
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
@@ -477,74 +474,49 @@ mod tests {
     #[test]
     fn test_valid_span() {
         let span = valid_span();
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let data = serde_json::to_string(&span).unwrap();
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
     fn test_null_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let data = serde_json::to_string(&span).unwrap();
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
     fn test_empty_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Some("".into());
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let data = serde_json::to_string(&span).unwrap();
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
     fn test_null_retention_days() {
         let mut span = valid_span();
         span.retention_days = default_retention_days();
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let data = serde_json::to_string(&span).unwrap();
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 
     #[test]
     fn test_null_tags() {
         let mut span = valid_span();
         span.tags = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let data = serde_json::to_string(&span).unwrap();
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 }

@@ -1,19 +1,16 @@
-use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::types::BrokerMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
 use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, RowData};
 
 pub fn process_message(
-    payload: KafkaPayload,
-    _: KafkaMessageMetadata,
+    msg: FromSpanMessage,
+    _raw_msg: BrokerMessage<KafkaPayload>,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
-
     if msg._metrics_summary.is_empty() {
         return Ok(InsertBatch {
             ..Default::default()
@@ -36,7 +33,7 @@ pub fn process_message(
 }
 
 #[derive(Debug, Default, Deserialize)]
-struct FromSpanMessage {
+pub struct FromSpanMessage {
     #[serde(default)]
     _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
     #[serde(default)]
@@ -118,10 +115,10 @@ impl TryFrom<FromSpanMessage> for MetricsSummaries {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::make_test_message;
+
     use super::*;
-    use chrono::DateTime;
     use std::collections::BTreeMap;
-    use std::time::SystemTime;
 
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSpanMessage {
@@ -191,14 +188,9 @@ mod tests {
                 }],
             ),
         ]);
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let data = serde_json::to_string(&span).unwrap();
+        let (value, msg) = make_test_message(&data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 }

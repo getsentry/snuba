@@ -1,21 +1,18 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
-use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::types::BrokerMessage;
 use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, RowData};
 
 pub fn process_message(
-    payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    msg: FromQuerylogMessage,
+    _raw_msg: BrokerMessage<KafkaPayload>,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
-
     let querylog_msg: QuerylogMessage = msg.try_into()?;
 
     let serialized = serde_json::to_vec(&querylog_msg)?;
@@ -284,7 +281,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
 }
 
 #[derive(Debug, Deserialize)]
-struct FromQuerylogMessage {
+pub struct FromQuerylogMessage {
     request: Request,
     dataset: String,
     projects: Vec<u64>,
@@ -325,10 +322,9 @@ impl TryFrom<FromQuerylogMessage> for QuerylogMessage {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::make_test_message;
+
     use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use std::time::SystemTime;
 
     #[test]
     fn test_querylog() {
@@ -425,14 +421,9 @@ mod tests {
             },
             "projects": [1],
             "snql_anonymized": "MATCH Entity(events) SELECT tags_key, tags_value, (count() AS count), (min(timestamp) AS first_seen), (max(timestamp) AS last_seen) GROUP BY tags_key, tags_value WHERE greaterOrEquals(timestamp, toDateTime('$S')) AND less(timestamp, toDateTime('$S')) AND in(project_id, tuple(-1337)) AND in(project_id, tuple(-1337)) AND in(group_id, tuple(-1337)) ORDER BY count DESC LIMIT 4 BY tags_key LIMIT 1000 OFFSET 0"
-          }"#;
+        }"#;
+        let (value, msg) = make_test_message(data);
 
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(value, msg).expect("The message should be processed");
     }
 }

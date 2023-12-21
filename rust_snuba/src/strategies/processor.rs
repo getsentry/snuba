@@ -12,7 +12,7 @@ use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::processors::ProcessingFunction;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::BytesInsertBatch;
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -76,11 +76,11 @@ impl MessageProcessor {
         let kafka_payload = &msg.payload.clone();
         let payload = kafka_payload.payload().ok_or(maybe_err.clone())?;
 
-        if self.validate_schema(payload).is_err() {
-            return Err(maybe_err);
-        };
+        let maybe_value = self
+            .validate_schema(payload)
+            .map_err(|_| maybe_err.clone())?;
 
-        self.process_payload(msg).map_err(|error| {
+        self.process_payload(msg, maybe_value).map_err(|error| {
             self.metrics.increment("invalid_message", 1, None);
 
             sentry::with_scope(
@@ -103,13 +103,14 @@ impl MessageProcessor {
     }
 
     #[tracing::instrument(skip_all)]
-    fn validate_schema(&self, payload: &[u8]) -> Result<(), SchemaError> {
+    fn validate_schema(&self, payload: &[u8]) -> Result<Option<serde_json::Value>, SchemaError> {
         let Some(schema) = &self.schema else {
-            return Ok(());
+            return Ok(None);
         };
 
-        let Err(error) = schema.validate_json(payload) else {
-            return Ok(());
+        let error = match schema.validate_json(payload) {
+            Ok(value) => return Ok(Some(value)),
+            Err(error) => error,
         };
         self.metrics.increment("schema_validation.failed", 1, None);
 
@@ -125,7 +126,8 @@ impl MessageProcessor {
         );
 
         if !self.enforce_schema {
-            Ok(())
+            // FIXME: when validation fails, we throw away the intermediate parsed value
+            Ok(None)
         } else {
             Err(error)
         }
@@ -135,27 +137,23 @@ impl MessageProcessor {
     fn process_payload(
         &self,
         msg: BrokerMessage<KafkaPayload>,
+        maybe_value: Option<serde_json::Value>,
     ) -> anyhow::Result<Message<BytesInsertBatch>> {
-        let metadata = KafkaMessageMetadata {
-            partition: msg.partition.index,
-            offset: msg.offset,
-            timestamp: msg.timestamp,
-        };
-
-        let transformed = (self.func)(msg.payload, metadata)?;
+        let partition = msg.partition;
+        let offset = msg.offset;
+        let timestamp = msg.timestamp;
+        let commit_offsets = (msg.partition.index, (msg.offset, msg.timestamp));
+        let transformed = (self.func)(msg, maybe_value)?;
 
         let payload = BytesInsertBatch::new(
             transformed.rows,
-            msg.timestamp,
+            timestamp,
             transformed.origin_timestamp,
             transformed.sentry_received_timestamp,
-            BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
+            BTreeMap::from([commit_offsets]),
         );
         Ok(Message::new_broker_message(
-            payload,
-            msg.partition,
-            msg.offset,
-            msg.timestamp,
+            payload, partition, offset, timestamp,
         ))
     }
 }
@@ -192,8 +190,8 @@ mod tests {
         let concurrency = ConcurrencyConfig::new(5);
 
         fn noop_processor(
-            _payload: KafkaPayload,
-            _metadata: KafkaMessageMetadata,
+            _raw_msg: BrokerMessage<KafkaPayload>,
+            _maybe_value: Option<serde_json::Value>,
         ) -> anyhow::Result<InsertBatch> {
             Ok(InsertBatch {
                 rows: RowData::from_rows([]),

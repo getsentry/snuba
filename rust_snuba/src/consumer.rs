@@ -10,7 +10,7 @@ use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::Topic;
+use rust_arroyo::types::{BrokerMessage, Partition, Topic};
 use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
@@ -20,7 +20,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::BytesInsertBatch;
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -200,20 +200,16 @@ pub fn process_message(
             NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
             Utc,
         );
+        let partition = Partition::new(Topic::new("_py"), partition);
+        let message = BrokerMessage::new(payload, partition, offset, timestamp);
 
-        let meta = KafkaMessageMetadata {
-            partition,
-            offset,
-            timestamp,
-        };
-
-        let res = func(payload, meta).unwrap();
+        let res = func(message, None).unwrap();
         let batch = BytesInsertBatch::new(
             res.rows,
             timestamp,
             res.origin_timestamp,
             res.sentry_received_timestamp,
-            BTreeMap::from([(partition, (offset, timestamp))]),
+            BTreeMap::from([(partition.index, (offset, timestamp))]),
         );
         batch.encoded_rows().to_vec()
     })

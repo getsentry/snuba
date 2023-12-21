@@ -1,20 +1,17 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::types::BrokerMessage;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::spans::SpanStatus;
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, RowData};
 
 pub fn process_message(
-    payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    msg: FromFunctionsMessage,
+    _raw_msg: BrokerMessage<KafkaPayload>,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
-
     let timestamp = match msg.timestamp {
         Some(timestamp) => timestamp,
         _ => SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
@@ -71,7 +68,7 @@ struct FromFunction {
 }
 
 #[derive(Debug, Deserialize)]
-struct FromFunctionsMessage {
+pub struct FromFunctionsMessage {
     profile_id: Uuid,
     project_id: u64,
     #[serde(default)]
@@ -131,10 +128,9 @@ struct Function {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::make_test_message;
+
     use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use std::time::SystemTime;
 
     #[test]
     fn test_functions() {
@@ -170,12 +166,8 @@ mod tests {
             "device_class": 2,
             "retention_days": 30
         }"#;
-        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        let (value, msg) = make_test_message(data);
+
+        process_message(value, msg).expect("The message should be processed");
     }
 }

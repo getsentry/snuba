@@ -188,13 +188,6 @@ impl RowData {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct KafkaMessageMetadata {
-    pub partition: u16,
-    pub offset: u64,
-    pub timestamp: DateTime<Utc>,
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc};
