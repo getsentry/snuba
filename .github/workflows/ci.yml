@@ -154,18 +154,20 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
+        # outside contributors won't be able to push to the docker registry
+        # ignore the failures in this step
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         if: github.repository_owner == 'getsentry'
         with:
           context: .
-          # push: true
-          load: true
+          push: true
           build-args: |
             SHOULD_BUILD_RUST=true
           target: testing
           tags: |
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
             ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-            ghcr.io/getsentry/snuba-ci:latest
+            ${{ steps.branch.outputs.branch == 'master' && 'ghcr.io/getsentry/snuba-ci:latest' || '' }}
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
@@ -173,21 +175,7 @@ jobs:
           cache-to: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
-
-      - name: Publish images for cache
-        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
-        # outside contributors won't be able to push to the docker registry
-        # ignore the failures in this step
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # Useful to speed up CI
-          docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-          if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
-            # The latest tag should only be published on `master`
-            docker push ghcr.io/getsentry/snuba-ci:latest
-          fi
+            ${{ steps.branch.outputs.branch == 'master' && 'type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max' || '' }}
 
   tests:
     needs: [linting, snuba-image]
