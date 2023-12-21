@@ -352,7 +352,6 @@ jobs:
         with:
           workdir: sentry
           cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
-          python-version: 3.8
           snuba: false
           kafka: true
           clickhouse: true
