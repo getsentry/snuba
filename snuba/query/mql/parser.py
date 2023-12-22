@@ -708,4 +708,5 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
+    print(query)
     return query, snql_anonymized
