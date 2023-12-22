@@ -11,7 +11,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
@@ -24,6 +24,8 @@ pub fn process_message(
         status: from.status,
         timing: from.timing,
         query_list: from.query_list.try_into()?,
+        partition: metadata.partition,
+        offset: metadata.offset,
     };
 
     InsertBatch::from_rows([querylog_msg])
@@ -304,6 +306,8 @@ struct QuerylogMessage {
     projects: Vec<u64>,
     organization: Option<u64>,
     status: String,
+    partition: u16,
+    offset: u64,
     #[serde(flatten)]
     timing: Timing,
     #[serde(flatten)]

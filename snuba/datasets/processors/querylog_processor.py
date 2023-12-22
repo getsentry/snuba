@@ -152,6 +152,8 @@ class QuerylogProcessor(DatasetMessageProcessor):
             "timestamp": message["timing"]["timestamp"],
             "duration_ms": message["timing"]["duration_ms"],
             **self.__extract_query_list(message["query_list"]),
+            "partition": metadata.partition,
+            "offset": metadata.offset,
         }
         self._remove_invalid_data(processed)
 
