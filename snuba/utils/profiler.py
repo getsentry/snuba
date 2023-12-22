@@ -2,9 +2,10 @@ import logging
 import socket
 import threading
 import time
+from typing import Union
 
 import sentry_sdk
-from sentry_sdk.tracing import Transaction
+from sentry_sdk.tracing import NoOpSpan, Transaction
 
 from snuba.state import get_config
 
@@ -32,7 +33,9 @@ def _profiler_main() -> None:
             logger.warn("starting ondemand profile for %s", own_hostname)
 
             with sentry_sdk.Hub.main:
-                open_transaction = sentry_sdk.start_transaction(
+                open_transaction: Union[
+                    Transaction, NoOpSpan, None
+                ] = sentry_sdk.start_transaction(
                     name=f"ondemand profile: {own_hostname}", sampled=True
                 )
                 assert isinstance(open_transaction, Transaction)
