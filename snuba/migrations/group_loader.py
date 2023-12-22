@@ -177,6 +177,7 @@ class ReplaysLoader(DirectoryLoader):
             "0014_add_id_event_columns",
             "0015_index_frequently_accessed_columns",
             "0016_materialize_new_event_counts",
+            "0017_add_component_name_column",
         ]
 
 
@@ -249,6 +250,7 @@ class QuerylogLoader(DirectoryLoader):
             "0004_add_bytes_scanned",
             "0005_add_codec_update_settings",
             "0006_sorting_key_change",
+            "0007_add_offset_column",
         ]
 
 

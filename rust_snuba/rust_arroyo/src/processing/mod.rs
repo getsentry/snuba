@@ -2,7 +2,7 @@ pub mod dlq;
 mod metrics_buffer;
 pub mod strategies;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use std::collections::HashMap;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,7 +18,8 @@ use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerErro
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
-use crate::utils::metrics::{get_metrics, Metrics};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
+use crate::utils::timing::Deadline;
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -42,11 +43,15 @@ pub enum RunError {
     StrategyPanic,
 }
 
-pub struct ConsumerState<TPayload> {
+const BACKPRESSURE_THRESHOLD: Duration = Duration::from_secs(1);
+
+#[derive(Clone)]
+pub struct ConsumerState<TPayload>(Arc<(AtomicBool, Mutex<ConsumerStateInner<TPayload>>)>);
+
+struct ConsumerStateInner<TPayload> {
     processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
     strategy: Option<Box<dyn ProcessingStrategy<TPayload>>>,
-    backpressure_timestamp: Option<Instant>,
-    is_paused: bool,
+    backpressure_deadline: Option<Deadline>,
     metrics_buffer: metrics_buffer::MetricsBuffer,
     dlq_policy: DlqPolicyWrapper<TPayload>,
 }
@@ -56,28 +61,39 @@ impl<TPayload: Send + Sync + 'static> ConsumerState<TPayload> {
         processing_factory: Box<dyn ProcessingStrategyFactory<TPayload>>,
         dlq_policy: Option<DlqPolicy<TPayload>>,
     ) -> Self {
-        Self {
+        let inner = ConsumerStateInner {
             processing_factory,
             strategy: None,
-            backpressure_timestamp: None,
-            is_paused: false,
+            backpressure_deadline: None,
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             dlq_policy: DlqPolicyWrapper::new(dlq_policy),
-        }
+        };
+        Self(Arc::new((AtomicBool::new(false), Mutex::new(inner))))
     }
 
+    fn is_paused(&self) -> bool {
+        self.0 .0.load(Ordering::Relaxed)
+    }
+
+    fn set_paused(&self, paused: bool) {
+        self.0 .0.store(paused, Ordering::Relaxed)
+    }
+
+    fn locked_state(&self) -> MutexGuard<ConsumerStateInner<TPayload>> {
+        self.0 .1.lock()
+    }
+}
+
+impl<T> ConsumerStateInner<T> {
     fn clear_backpressure(&mut self) {
-        if self.backpressure_timestamp.is_some() {
-            self.metrics_buffer.incr_timing(
-                "arroyo.consumer.backpressure.time",
-                self.backpressure_timestamp.unwrap().elapsed(),
-            );
-            self.backpressure_timestamp = None;
+        if let Some(deadline) = self.backpressure_deadline.take() {
+            self.metrics_buffer
+                .incr_timing("arroyo.consumer.backpressure.time", deadline.elapsed());
         }
     }
 }
 
-pub struct Callbacks<TPayload>(pub Arc<Mutex<ConsumerState<TPayload>>>);
+pub struct Callbacks<TPayload>(pub ConsumerState<TPayload>);
 
 #[derive(Debug, Clone)]
 pub struct ProcessorHandle {
@@ -107,7 +123,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
 
         let start = Instant::now();
 
-        let mut state = self.0.lock();
+        let mut state = self.0.locked_state();
         state.strategy = Some(state.processing_factory.create());
         state.dlq_policy.reset_dlq_limits(&partitions);
 
@@ -129,7 +145,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
 
         let start = Instant::now();
 
-        let mut state = self.0.lock();
+        let mut state = self.0.locked_state();
         if let Some(s) = state.strategy.as_mut() {
             let result = panic::catch_unwind(AssertUnwindSafe(|| {
                 s.close();
@@ -156,7 +172,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
             }
         }
         state.strategy = None;
-        state.is_paused = false;
+        self.0.set_paused(false);
         state.clear_backpressure();
 
         metrics.timing(
@@ -177,11 +193,12 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
 /// partition revocation.
 pub struct StreamProcessor<TPayload: Clone> {
     consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
-    consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
+    consumer_state: ConsumerState<TPayload>,
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
-    metrics_buffer: metrics_buffer::MetricsBuffer,
     buffered_messages: BufferedMessages<TPayload>,
+    metrics: BoxMetrics,
+    metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
 impl StreamProcessor<KafkaPayload> {
@@ -191,10 +208,7 @@ impl StreamProcessor<KafkaPayload> {
         topic: Topic,
         dlq_policy: Option<DlqPolicy<KafkaPayload>>,
     ) -> Self {
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
-            Box::new(factory),
-            dlq_policy,
-        )));
+        let consumer_state = ConsumerState::new(Box::new(factory), dlq_policy);
         let callbacks = Callbacks(consumer_state.clone());
 
         // TODO: Can this fail?
@@ -207,10 +221,10 @@ impl StreamProcessor<KafkaPayload> {
 impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     pub fn new(
         consumer: Box<dyn Consumer<TPayload, Callbacks<TPayload>>>,
-        consumer_state: Arc<Mutex<ConsumerState<TPayload>>>,
+        consumer_state: ConsumerState<TPayload>,
     ) -> Self {
         let max_buffered_messages_per_partition = consumer_state
-            .lock()
+            .locked_state()
             .dlq_policy
             .max_buffered_messages_per_partition();
 
@@ -221,8 +235,9 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             processor_handle: ProcessorHandle {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
-            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
             buffered_messages: BufferedMessages::new(max_buffered_messages_per_partition),
+            metrics: get_metrics(),
+            metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }
     }
 
@@ -234,10 +249,10 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     fn _run_once(&mut self) -> Result<(), RunError> {
-        let metrics = get_metrics();
-        metrics.increment("arroyo.consumer.run.count", 1, None);
+        self.metrics.increment("arroyo.consumer.run.count", 1, None);
 
-        if self.consumer_state.lock().is_paused {
+        let consumer_is_paused = self.consumer_state.is_paused();
+        if consumer_is_paused {
             // If the consumer was paused, it should not be returning any messages
             // on `poll`.
             let res = self.consumer.poll(Some(Duration::ZERO)).unwrap();
@@ -273,8 +288,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         // since we do not drive the kafka consumer at this point, it is safe to acquire the state
         // lock, as we can be sure that for the rest of this function, no assignment callback will
         // run.
-        let mut consumer_state = self.consumer_state.lock();
-        let consumer_state: &mut ConsumerState<_> = &mut consumer_state;
+        let mut consumer_state = self.consumer_state.locked_state();
+        let consumer_state: &mut ConsumerStateInner<_> = &mut consumer_state;
 
         let Some(strategy) = consumer_state.strategy.as_mut() else {
             match self.message.as_ref() {
@@ -282,12 +297,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 Some(_) => return Err(RunError::InvalidState),
             }
         };
-        let poll_start = Instant::now();
-
+        let processing_start = Instant::now();
         let commit_request = strategy.poll();
-
-        self.metrics_buffer
-            .incr_timing("arroyo.consumer.processing.time", poll_start.elapsed());
 
         match commit_request {
             Ok(None) => {}
@@ -311,9 +322,13 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         };
 
         let Some(msg_s) = self.message.take() else {
+            self.metrics_buffer.incr_timing(
+                "arroyo.consumer.processing.time",
+                processing_start.elapsed(),
+            );
             return Ok(());
         };
-        let processing_start = Instant::now();
+
         let ret = strategy.submit(msg_s);
         self.metrics_buffer.incr_timing(
             "arroyo.consumer.processing.time",
@@ -323,12 +338,12 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
         match ret {
             Ok(()) => {
                 // Resume if we are currently in a paused state
-                if consumer_state.is_paused {
+                if consumer_is_paused {
                     let partitions = self.consumer.tell().unwrap().into_keys().collect();
 
                     match self.consumer.resume(partitions) {
                         Ok(()) => {
-                            consumer_state.is_paused = false;
+                            self.consumer_state.set_paused(false);
                         }
                         Err(err) => {
                             let error: &dyn std::error::Error = &err;
@@ -345,21 +360,16 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 // Put back the carried over message
                 self.message = Some(message);
 
-                if consumer_state.backpressure_timestamp.is_none() {
-                    consumer_state.backpressure_timestamp = Some(Instant::now());
-                }
+                let Some(deadline) = consumer_state.backpressure_deadline else {
+                    consumer_state.backpressure_deadline =
+                        Some(Deadline::new(BACKPRESSURE_THRESHOLD));
+                    return Ok(());
+                };
 
                 // If we are in the backpressure state for more than 1 second,
                 // we pause the consumer and hold the message until it is
                 // accepted, at which point we can resume consuming.
-                if !consumer_state.is_paused && consumer_state.backpressure_timestamp.is_some() {
-                    let backpressure_duration =
-                        consumer_state.backpressure_timestamp.unwrap().elapsed();
-
-                    if backpressure_duration < Duration::from_secs(1) {
-                        return Ok(());
-                    }
-
+                if !consumer_is_paused && deadline.has_elapsed() {
                     tracing::warn!(
                         "Consumer is in backpressure state for more than 1 second, pausing",
                     );
@@ -368,7 +378,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
 
                     match self.consumer.pause(partitions) {
                         Ok(()) => {
-                            consumer_state.is_paused = true;
+                            self.consumer_state.set_paused(true);
                         }
                         Err(err) => {
                             let error: &dyn std::error::Error = &err;
@@ -402,7 +412,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             .load(Ordering::Relaxed)
         {
             if let Err(e) = self.run_once() {
-                let mut trait_callbacks = self.consumer_state.lock();
+                let mut trait_callbacks = self.consumer_state.locked_state();
 
                 if let Some(strategy) = trait_callbacks.strategy.as_mut() {
                     strategy.terminate();
@@ -488,10 +498,7 @@ mod tests {
     fn test_processor() {
         let broker = build_broker();
 
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
-            Box::new(TestFactory {}),
-            None,
-        )));
+        let consumer_state = ConsumerState::new(Box::new(TestFactory {}), None);
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -515,10 +522,7 @@ mod tests {
         let _ = broker.produce(&partition, "message1".to_string());
         let _ = broker.produce(&partition, "message2".to_string());
 
-        let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
-            Box::new(TestFactory {}),
-            None,
-        )));
+        let consumer_state = ConsumerState::new(Box::new(TestFactory {}), None);
 
         let consumer = Box::new(LocalConsumer::new(
             Uuid::nil(),
@@ -598,10 +602,7 @@ mod tests {
             broker: LocalBroker<String>,
             panic_on: &'static str,
         ) -> StreamProcessor<String> {
-            let consumer_state = Arc::new(Mutex::new(ConsumerState::new(
-                Box::new(TestFactory { panic_on }),
-                None,
-            )));
+            let consumer_state = ConsumerState::new(Box::new(TestFactory { panic_on }), None);
 
             let consumer = Box::new(LocalConsumer::new(
                 Uuid::nil(),

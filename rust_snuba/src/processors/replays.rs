@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -15,35 +15,32 @@ pub fn process_message(
     let replay_message: ReplayMessage = serde_json::from_slice(payload_bytes)?;
     let replay_payload = serde_json::from_slice(&replay_message.payload)?;
 
-    let output = match replay_payload {
-        ReplayPayload::ClickEvent(event) => event
-            .clicks
-            .into_iter()
-            .map(|click| {
-                serde_json::to_vec(&ReplayRow {
-                    click_alt: click.alt,
-                    click_aria_label: click.aria_label,
-                    click_class: click.class,
-                    click_id: click.id,
-                    click_is_dead: click.is_dead,
-                    click_is_rage: click.is_rage,
-                    click_node_id: click.node_id,
-                    click_role: click.role,
-                    click_tag: click.tag,
-                    click_testid: click.testid,
-                    click_text: click.text,
-                    click_title: click.title,
-                    event_hash: click.event_hash,
-                    offset: metadata.offset,
-                    partition: metadata.partition,
-                    project_id: replay_message.project_id,
-                    replay_id: replay_message.replay_id,
-                    retention_days: replay_message.retention_days,
-                    timestamp: click.timestamp as u32,
-                    ..Default::default()
-                })
-            })
-            .collect::<Result<_, _>>()?,
+    match replay_payload {
+        ReplayPayload::ClickEvent(event) => {
+            InsertBatch::from_rows(event.clicks.into_iter().map(|click| ReplayRow {
+                click_alt: click.alt,
+                click_aria_label: click.aria_label,
+                click_class: click.class,
+                click_id: click.id,
+                click_is_dead: click.is_dead,
+                click_is_rage: click.is_rage,
+                click_node_id: click.node_id,
+                click_component_name: click.component_name,
+                click_role: click.role,
+                click_tag: click.tag,
+                click_testid: click.testid,
+                click_text: click.text,
+                click_title: click.title,
+                event_hash: click.event_hash,
+                offset: metadata.offset,
+                partition: metadata.partition,
+                project_id: replay_message.project_id,
+                replay_id: replay_message.replay_id,
+                retention_days: replay_message.retention_days,
+                timestamp: click.timestamp as u32,
+                ..Default::default()
+            }))
+        }
         ReplayPayload::Event(event) => {
             let event_hash = match (event.event_hash, event.segment_id) {
                 (None, None) => Uuid::new_v4(),
@@ -132,7 +129,7 @@ pub fn process_message(
                 ..Default::default()
             };
 
-            vec![serde_json::to_vec(&replay_row)?]
+            InsertBatch::from_rows([replay_row])
         }
         ReplayPayload::EventLinkEvent(event) => {
             let replay_row = ReplayRow {
@@ -151,15 +148,9 @@ pub fn process_message(
                 ..Default::default()
             };
 
-            vec![serde_json::to_vec(&replay_row)?]
+            InsertBatch::from_rows([replay_row])
         }
-    };
-
-    Ok(InsertBatch {
-        rows: RowData::from_rows(output),
-        origin_timestamp: None,
-        sentry_received_timestamp: None,
-    })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -198,6 +189,8 @@ struct ReplayClickEventClick {
     is_dead: u8,
     is_rage: u8,
     node_id: u32,
+    #[serde(default)]
+    component_name: String,
     role: String,
     tag: String,
     testid: String,
@@ -395,6 +388,8 @@ struct ReplayRow {
     click_aria_label: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     click_title: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    click_component_name: String,
     #[serde(skip_serializing_if = "is_u8_zero")]
     click_is_dead: u8,
     #[serde(skip_serializing_if = "is_u8_zero")]
@@ -507,6 +502,7 @@ mod tests {
                 "is_dead": 0,
                 "is_rage": 1,
                 "node_id": 320,
+                "component_name": "SignUpButton",
                 "role": "button",
                 "tag": "div",
                 "testid": "",

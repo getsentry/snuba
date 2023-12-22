@@ -35,7 +35,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
-        let metrics = self.metrics.clone();
+        let metrics = self.metrics;
 
         Box::pin(async move {
             let insert_batch = message.payload();
@@ -152,7 +152,8 @@ impl ClickhouseClient {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        let url = format!("http://{hostname}:{http_port}");
+        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
+        let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         ClickhouseClient {
@@ -193,6 +194,8 @@ mod tests {
             "default",
         );
 
+        assert!(client.url.contains("load_balancing"));
+        assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
