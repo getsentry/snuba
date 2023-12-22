@@ -131,8 +131,7 @@ impl<'a, C: AssignmentCallbacks> CommitOffsets for OffsetCommitter<'a, C> {
 pub struct CustomContext<C: AssignmentCallbacks> {
     hub: Arc<Hub>,
     callbacks: C,
-    // Latest offsets seen by the consumer
-    consumer_offsets: Arc<Mutex<HashMap<Partition, u64>>>,
+    offset_state: Arc<Mutex<OffsetState>>,
     initial_offset_reset: InitialOffset,
 }
 
@@ -191,12 +190,16 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
         match err {
             RDKafkaRespErr::RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS => {
                 let mut partitions: Vec<Partition> = Vec::new();
-                let mut offsets = self.consumer_offsets.lock();
+                let mut offset_state = self.offset_state.lock();
                 for partition in tpl.elements().iter() {
                     let topic = Topic::new(partition.topic());
                     let index = partition.partition() as u16;
                     let arroyo_partition = Partition::new(topic, index);
-                    offsets.remove(&arroyo_partition);
+
+                    if offset_state.offsets.remove(&arroyo_partition).is_none() {
+                        tracing::warn!("failed to delete offset for unknown partition: {}", arroyo_partition);
+                    }
+                    offset_state.paused.remove(&arroyo_partition);
                     partitions.push(arroyo_partition);
                 }
 
@@ -259,7 +262,7 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                 base_consumer
                     .assign(&tpl)
                     .expect("failed to assign partitions");
-                self.consumer_offsets.lock().extend(&offset_map);
+                self.offset_state.lock().offsets.extend(&offset_map);
 
                 // Ensure that all partitions are resumed on assignment to avoid
                 // carrying over state from a previous assignment.
@@ -278,6 +281,15 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
     }
 }
 
+#[derive(Default)]
+struct OffsetState {
+    // offsets: the currently-*read* offset of the consumer, updated on poll()
+    // staged_offsets do not exist: the Commit strategy takes care of offset staging
+    offsets: HashMap<Partition, u64>,
+    // list of partitions that are currently paused
+    paused: HashSet<Partition>,
+}
+
 pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // TODO: This has to be an option as of now because rdkafka requires
     // callbacks during the instantiation. While the streaming processor
@@ -286,13 +298,12 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // in the constructor.
     pub consumer: BaseConsumer<CustomContext<C>>,
     state: KafkaConsumerState,
-    offsets: Arc<Mutex<HashMap<Partition, u64>>>,
+    offset_state: Arc<Mutex<OffsetState>>,
 }
 
 impl<C: AssignmentCallbacks> KafkaConsumer<C> {
     pub fn new(config: KafkaConfig, topics: &[Topic], callbacks: C) -> Result<Self, ConsumerError> {
-        let offsets = Arc::new(Mutex::new(HashMap::new()));
-
+        let offset_state = Arc::new(Mutex::new(OffsetState::default()));
         let initial_offset_reset = config
             .offset_reset_config()
             .ok_or(ConsumerError::InvalidConfig)?
@@ -301,7 +312,7 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
         let context = CustomContext {
             hub: Hub::current(),
             callbacks,
-            consumer_offsets: offsets.clone(),
+            offset_state: offset_state.clone(),
             initial_offset_reset,
         };
 
@@ -318,7 +329,7 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
         Ok(Self {
             consumer,
             state: KafkaConsumerState::Consuming,
-            offsets,
+            offset_state,
         })
     }
 
@@ -345,7 +356,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             None => Ok(None),
             Some(res) => {
                 let msg = create_kafka_message(res?);
-                self.offsets.lock().insert(msg.partition, msg.offset);
+                self.offset_state.lock().offsets.insert(msg.partition, msg.offset + 1);
 
                 Ok(Some(msg))
             }
@@ -356,9 +367,11 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         self.state.assert_consuming_state()?;
 
         let mut topic_partition_list = TopicPartitionList::with_capacity(partitions.len());
+
         {
-            let offsets = self.offsets.lock();
-            for partition in partitions {
+            let offset_state = self.offset_state.lock();
+            let offsets = &offset_state.offsets;
+            for partition in &partitions {
                 let offset = offsets
                     .get(&partition)
                     .ok_or(ConsumerError::UnassignedPartition)?;
@@ -372,6 +385,24 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
         self.consumer.pause(&topic_partition_list)?;
 
+        let to_seek;
+        {
+            let mut offset_state = self.offset_state.lock();
+            to_seek = offset_state.offsets
+                .iter()
+                .filter_map(|(k, v)| if partitions.contains(k) {
+                    Some((k.clone(), v.clone()))
+                } else {
+                    None
+                })
+            .collect();
+            offset_state.paused.extend(partitions.clone());
+        }
+
+        // XXX: Seeking to a specific partition offset and immediately pausing
+        // that partition causes the seek to be ignored for some reason.
+        self.seek(to_seek)?;
+
         Ok(())
     }
 
@@ -379,11 +410,15 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         self.state.assert_consuming_state()?;
 
         let mut topic_partition_list = TopicPartitionList::new();
-        for partition in partitions {
-            if !self.offsets.lock().contains_key(&partition) {
-                return Err(ConsumerError::UnassignedPartition);
+        {
+            let offset_state = self.offset_state.lock();
+            let offsets = &offset_state.offsets;
+            for partition in partitions {
+                if !offsets.contains_key(&partition) {
+                    return Err(ConsumerError::UnassignedPartition);
+                }
+                topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
             }
-            topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
         }
 
         self.consumer.resume(&topic_partition_list)?;
@@ -392,17 +427,30 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
     }
 
     fn paused(&self) -> Result<HashSet<Partition>, ConsumerError> {
-        //TODO: Implement this
-        Ok(HashSet::new())
+        self.state.assert_consuming_state()?;
+        Ok(self.offset_state.lock().paused.clone())
     }
 
     fn tell(&self) -> Result<HashMap<Partition, u64>, ConsumerError> {
         self.state.assert_consuming_state()?;
-        Ok(self.offsets.lock().clone())
+        Ok(self.offset_state.lock().offsets.clone())
     }
 
-    fn seek(&self, _: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
-        //TODO: Implement this
+    fn seek(&self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
+        self.state.assert_consuming_state()?;
+
+        let offset_state = self.offset_state.lock();
+
+        for key in offsets.keys() {
+            if !offset_state.offsets.contains_key(key) {
+                return Err(ConsumerError::UnassignedPartition);
+            }
+        }
+
+        for (partition, offset) in offsets {
+            self.consumer.seek(partition.topic.as_str(), partition.index as i32, Offset::from_raw(offset as i64), None)?;
+        }
+
         Ok(())
     }
 
@@ -414,19 +462,18 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::{AssignmentCallbacks, InitialOffset, KafkaConsumer};
     use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::KafkaPayload;
     use crate::backends::{Consumer, Producer};
-    use crate::types::{Partition, Topic};
-    use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
-    use rdkafka::client::DefaultClientContext;
-    use rdkafka::config::ClientConfig;
+    use crate::testutils::{TestTopic, get_default_broker};
+    use crate::types::{Partition, Topic, BrokerMessage};
     use std::collections::HashMap;
     use std::thread::sleep;
     use std::time::Duration;
-    use tokio::runtime::Runtime;
 
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
@@ -434,60 +481,29 @@ mod tests {
         fn on_revoke<C>(&self, _: C, _: Vec<Partition>) {}
     }
 
-    fn get_admin_client() -> AdminClient<DefaultClientContext> {
-        let mut config = ClientConfig::new();
-        config.set(
-            "bootstrap.servers".to_string(),
-            std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string()),
-        );
-
-        config.create().unwrap()
+    fn wait_for_assignments<T: AssignmentCallbacks>(consumer: &mut KafkaConsumer<T>) {
+        for _ in 0..10 {
+            consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
+            if consumer.tell().unwrap().len() > 0 {
+                println!("Received assignment");
+                break;
+            }
+            sleep(Duration::from_millis(200));
+        }
     }
 
-    async fn create_topic(topic_name: &str, partition_count: i32) {
-        let client = get_admin_client();
-        let topics = [NewTopic::new(
-            topic_name,
-            partition_count,
-            TopicReplication::Fixed(1),
-        )];
-        client
-            .create_topics(&topics, &AdminOptions::new())
-            .await
-            .unwrap();
-    }
+    fn blocking_poll<T: AssignmentCallbacks>(consumer: &mut KafkaConsumer<T>) -> Option<BrokerMessage<KafkaPayload>> {
+        let mut consumer_message = None;
 
-    async fn delete_topic(topic_name: &str) {
-        let client = get_admin_client();
-        client
-            .delete_topics(&[topic_name], &AdminOptions::new())
-            .await
-            .unwrap();
-    }
+        for _ in 0..10 {
+            consumer_message = consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
 
-    struct TestTopic {
-        runtime: Runtime,
-        topic: Topic,
-    }
-
-    impl TestTopic {
-        fn create(name: &str) -> Self {
-            let runtime = Runtime::new().unwrap();
-            let name = format!("rust-arroyo-{}-{}", name, uuid::Uuid::new_v4());
-            runtime.block_on(create_topic(&name, 1));
-            Self {
-                runtime,
-                topic: Topic::new(&name),
+            if consumer_message.is_some() {
+                break;
             }
         }
-    }
 
-    impl Drop for TestTopic {
-        fn drop(&mut self) {
-            let name = self.topic.as_str();
-            // i really wish i had async drop now
-            self.runtime.block_on(delete_topic(name));
-        }
+        consumer_message
     }
 
     #[test]
@@ -634,8 +650,52 @@ mod tests {
     }
 
     #[test]
-    fn test_pause() {}
+    fn test_pause() {
+        let topic = TestTopic::create("test-pause");
+        let configuration = KafkaConfig::new_consumer_config(
+            vec![get_default_broker()],
+            "my-group-1".to_string(),
+            InitialOffset::Earliest,
+            true,
+            30_000,
+            None,
+        );
 
-    #[test]
-    fn test_resume() {}
+        let payload = KafkaPayload::new(None, None, Some("asdf".as_bytes().to_vec()));
+
+        let mut consumer =
+            KafkaConsumer::new(configuration, &[topic.topic], EmptyCallbacks {}).unwrap();
+
+        wait_for_assignments(&mut consumer);
+        topic.produce(payload);
+
+        let old_offsets = consumer.tell().unwrap();
+        assert_eq!(old_offsets, HashMap::from([(Partition::new(topic.topic, 0), 0)]));
+
+        let consumer_message = blocking_poll(&mut consumer).unwrap();
+
+        assert_eq!(consumer_message.offset, 0);
+        let consumer_payload = consumer_message.payload.payload().unwrap();
+        assert_eq!(consumer_payload, b"asdf");
+
+        // try to reproduce the scenario described at
+        // https://github.com/getsentry/arroyo/blob/af4be59fa74acbe00e1cf8dd7921de11acb99509/arroyo/backends/kafka/consumer.py#L503-L504
+        // -- "Seeking to a specific partition offset and immediately pausing that partition causes
+        // the seek to be ignored for some reason."
+        consumer.seek(old_offsets.clone()).unwrap();
+        let current_partitions: HashSet<_> = consumer.tell().unwrap().into_keys().collect();
+        assert_eq!(current_partitions.len(), 1);
+        consumer.pause(current_partitions.clone()).unwrap();
+
+        let empty_poll = consumer.poll(Some(Duration::from_secs(5_000))).unwrap();
+        assert!(empty_poll.is_none(), "{:?}", empty_poll);
+        // consumer.resume(current_partitions).unwrap();
+
+        assert_eq!(consumer.tell().unwrap(), old_offsets);
+
+        assert_eq!(blocking_poll(&mut consumer)
+            .unwrap().payload.payload().unwrap(), b"asdf");
+
+        consumer.shutdown();
+    }
 }
