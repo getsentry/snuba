@@ -19,15 +19,14 @@ def run_ondemand_profiler() -> None:
 
 
 def _profiler_main() -> None:
-    transaction_start = None
-    open_transaction = None
+    current_transaction = None
     own_hostname = socket.gethostname()
 
     while True:
         queried_hostnames = get_config("ondemand_profiler_hostnames") or ""
         queried_hostnames = queried_hostnames.split(",")
 
-        if own_hostname in queried_hostnames and open_transaction is None:
+        if own_hostname in queried_hostnames and current_transaction is None:
             # Log an error to Sentry on purpose, if the pod slows down it
             # should be obvious why.
             logger.warn("starting ondemand profile for %s", own_hostname)
@@ -54,15 +53,21 @@ def _profiler_main() -> None:
 
                 open_transaction.__enter__()
                 transaction_start = time.time()
+                current_transaction = open_transaction, transaction_start
 
-        elif open_transaction is not None and (
-            own_hostname not in queried_hostnames
-            or time.time() - transaction_start >= 30
-        ):
-            logger.warn("stopping ondemand profile for %s", own_hostname)
-            with sentry_sdk.Hub.main:
-                open_transaction.__exit__(None, None, None)
-                open_transaction = None
+            continue
 
-        else:
-            time.sleep(5)
+        if current_transaction is not None:
+            open_transaction, transaction_start = current_transaction
+            if (
+                own_hostname not in queried_hostnames
+                or time.time() - transaction_start >= 30
+            ):
+                logger.warn("stopping ondemand profile for %s", own_hostname)
+                with sentry_sdk.Hub.main:
+                    open_transaction.__exit__(None, None, None)
+                    open_transaction = None
+
+            continue
+
+        time.sleep(5)
