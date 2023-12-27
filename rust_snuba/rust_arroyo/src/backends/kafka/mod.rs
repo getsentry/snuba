@@ -383,25 +383,12 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             }
         }
 
-        self.consumer.pause(&topic_partition_list)?;
+        self.consumer.pause(dbg!(&topic_partition_list))?;
 
-        let to_seek;
         {
             let mut offset_state = self.offset_state.lock();
-            to_seek = offset_state.offsets
-                .iter()
-                .filter_map(|(k, v)| if partitions.contains(k) {
-                    Some((k.clone(), v.clone()))
-                } else {
-                    None
-                })
-            .collect();
             offset_state.paused.extend(partitions.clone());
         }
-
-        // XXX: Seeking to a specific partition offset and immediately pausing
-        // that partition causes the seek to be ignored for some reason.
-        self.seek(to_seek)?;
 
         Ok(())
     }
@@ -410,6 +397,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         self.state.assert_consuming_state()?;
 
         let mut topic_partition_list = TopicPartitionList::new();
+        let mut to_unpause = Vec::new();
         {
             let offset_state = self.offset_state.lock();
             let offsets = &offset_state.offsets;
@@ -418,10 +406,18 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
                     return Err(ConsumerError::UnassignedPartition);
                 }
                 topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
+                to_unpause.push(partition);
             }
         }
 
         self.consumer.resume(&topic_partition_list)?;
+
+        {
+            let mut offset_state = self.offset_state.lock();
+            for partition in to_unpause {
+                offset_state.paused.remove(&partition);
+            }
+        }
 
         Ok(())
     }
@@ -439,16 +435,22 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
     fn seek(&self, offsets: HashMap<Partition, u64>) -> Result<(), ConsumerError> {
         self.state.assert_consuming_state()?;
 
-        let offset_state = self.offset_state.lock();
-
-        for key in offsets.keys() {
-            if !offset_state.offsets.contains_key(key) {
-                return Err(ConsumerError::UnassignedPartition);
+        {
+            let offset_state = self.offset_state.lock();
+            for key in offsets.keys() {
+                if !offset_state.offsets.contains_key(key) {
+                    return Err(ConsumerError::UnassignedPartition);
+                }
             }
         }
 
-        for (partition, offset) in offsets {
-            self.consumer.seek(partition.topic.as_str(), partition.index as i32, Offset::from_raw(offset as i64), None)?;
+        for (partition, offset) in &offsets {
+            self.consumer.seek(partition.topic.as_str(), partition.index as i32, Offset::from_raw(*offset as i64), None)?;
+        }
+
+        {
+            let mut offset_state = self.offset_state.lock();
+            offset_state.offsets.extend(offsets);
         }
 
         Ok(())
@@ -477,8 +479,12 @@ mod tests {
 
     struct EmptyCallbacks {}
     impl AssignmentCallbacks for EmptyCallbacks {
-        fn on_assign(&self, _: HashMap<Partition, u64>) {}
-        fn on_revoke<C>(&self, _: C, _: Vec<Partition>) {}
+        fn on_assign(&self, partitions: HashMap<Partition, u64>) {
+            println!("assignment event: {:?}", partitions);
+        }
+        fn on_revoke<C>(&self, _: C, partitions: Vec<Partition>) {
+            println!("revocation event: {:?}", partitions);
+        }
     }
 
     fn wait_for_assignments<T: AssignmentCallbacks>(consumer: &mut KafkaConsumer<T>) {
@@ -654,19 +660,23 @@ mod tests {
         let topic = TestTopic::create("test-pause");
         let configuration = KafkaConfig::new_consumer_config(
             vec![get_default_broker()],
-            "my-group-1".to_string(),
+            // for this particular test, a separate consumer group is apparently needed, as
+            // otherwise random rebalancing events will occur when other tests with the same
+            // consumer group (but not the same topic) run at the same time
+            "my-group-1-test-pause".to_string(),
             InitialOffset::Earliest,
             true,
-            30_000,
+            60_000,
             None,
         );
 
-        let payload = KafkaPayload::new(None, None, Some("asdf".as_bytes().to_vec()));
 
         let mut consumer =
             KafkaConsumer::new(configuration, &[topic.topic], EmptyCallbacks {}).unwrap();
 
         wait_for_assignments(&mut consumer);
+
+        let payload = KafkaPayload::new(None, None, Some("asdf".as_bytes().to_vec()));
         topic.produce(payload);
 
         let old_offsets = consumer.tell().unwrap();
@@ -686,12 +696,14 @@ mod tests {
         let current_partitions: HashSet<_> = consumer.tell().unwrap().into_keys().collect();
         assert_eq!(current_partitions.len(), 1);
         consumer.pause(current_partitions.clone()).unwrap();
+        assert_eq!(consumer.tell().unwrap(), HashMap::from([(Partition::new(topic.topic, 0), 0)]));
 
-        let empty_poll = consumer.poll(Some(Duration::from_secs(5_000))).unwrap();
+        let empty_poll = consumer.poll(Some(Duration::from_secs(5))).unwrap();
         assert!(empty_poll.is_none(), "{:?}", empty_poll);
-        // consumer.resume(current_partitions).unwrap();
+        consumer.resume(current_partitions).unwrap();
 
         assert_eq!(consumer.tell().unwrap(), old_offsets);
+        assert!(consumer.paused().unwrap().is_empty());
 
         assert_eq!(blocking_poll(&mut consumer)
             .unwrap().payload.payload().unwrap(), b"asdf");
