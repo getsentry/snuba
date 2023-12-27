@@ -3,7 +3,7 @@
 pyenv-setup:
 	@./scripts/pyenv_setup.sh
 
-develop: install-python-dependencies install-rs-dev setup-git
+develop: install-python-dependencies install-rs-dev install-brew-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
@@ -53,6 +53,10 @@ install-rs-dev:
 
 install-py-dev: install-python-dependencies
 .PHONY: install-py-dev
+
+install-brew-dev:
+	brew bundle
+.PHONY: install-brew-dev
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
