@@ -69,7 +69,7 @@ def _profiler_main() -> None:
                 logger.warn("stopping ondemand profile for %s", own_hostname)
                 with sentry_sdk.Hub.main:
                     open_transaction.__exit__(None, None, None)
-                    open_transaction = None
+                    current_transaction = None
 
             continue
 
