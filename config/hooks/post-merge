@@ -10,11 +10,7 @@ trap "rm -f ${files_changed_upstream}" EXIT
 
 git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD > "$files_changed_upstream"
 
-grep -E --quiet 'requirements.txt' "$files_changed_upstream" && needs_py_update=1
-
-grep -E --quiet 'migrations/groups.py' "$files_changed_upstream" && needs_update=1
-
-[[ "$needs_update" ]] && cat <<EOF
+grep -E --quiet 'migrations/groups.py' "$files_changed_upstream" && cat <<EOF
 
 [${red}${bold}!!!${reset}] Some migrations have changed, you may need to run:
 
@@ -22,10 +18,18 @@ grep -E --quiet 'migrations/groups.py' "$files_changed_upstream" && needs_update
 
 EOF
 
-[[ "$needs_py_update" ]] && cat <<EOF
+grep -E --quiet 'requirements.txt' "$files_changed_upstream" && cat <<EOF
 
 [${red}${bold}!!!${reset}] Python dependencies updated, you may need to run:
 
   make install-python-dependencies
+
+EOF
+
+grep -E --quiet 'rust_snuba/' "$files_changed_upstream" && cat <<EOF
+
+[${red}${bold}!!!{$reset}] Rust code changed, you may need to run:
+
+  make install-rs-dev
 
 EOF
