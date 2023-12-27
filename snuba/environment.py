@@ -89,6 +89,10 @@ def setup_sentry() -> None:
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
     )
 
+    from snuba.utils.profiler import run_ondemand_profiler
+
+    run_ondemand_profiler()
+
 
 metrics = create_metrics(
     "snuba",
