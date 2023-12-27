@@ -44,6 +44,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 uuid = "1.5.0"
 parking_lot = "0.12.1"
+phf = { version = "0.11", features = ["macros"] }
 
 [dev-dependencies]
 divan = "0.1.2"

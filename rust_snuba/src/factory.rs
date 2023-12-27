@@ -77,13 +77,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
         let processor = match (
             self.use_rust_processor,
-            processors::get_processing_function(
-                &self.storage_config.message_processor.python_class_name,
-            ),
+            processors::PROCESSING_FUNCTIONS
+                .get(&self.storage_config.message_processor.python_class_name),
         ) {
             (true, Some(func)) => make_rust_processor(
                 next_step,
-                func,
+                *func,
                 &self.logical_topic_name,
                 false,
                 &self.processing_concurrency,
