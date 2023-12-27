@@ -27,7 +27,6 @@ def resolve_tag_key_mappings(
 ) -> None:
     def resolve_tag_column(exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in indexer_mapping:
-            print(get_dataset_name(dataset))
             if get_dataset_name(dataset) == "metrics":
                 column_name = f"tags[{resolve(exp.column_name, indexer_mapping)}]"
             else:

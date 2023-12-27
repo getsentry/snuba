@@ -9,7 +9,10 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.indexer.resolver import resolve_metric_id, resolve_tag_mappings
+from snuba.query.indexer.resolver import (
+    resolve_tag_key_mappings,
+    resolve_tag_value_mappings,
+)
 from snuba.query.logical import Query as LogicalQuery
 
 metric_id_test_cases = [
@@ -125,12 +128,12 @@ metric_id_test_cases = [
 
 @pytest.mark.skip(reason="resolver is not being used yet")
 @pytest.mark.parametrize("query, mappings, expected_query", metric_id_test_cases)
-def test_resolve_metric_id_processor(
+def test_resolve_tag_value_mappings_processor(
     query: CompositeQuery[QueryEntity] | LogicalQuery,
     mappings: dict[str, str | int],
     expected_query: CompositeQuery[QueryEntity] | LogicalQuery,
 ) -> None:
-    resolve_metric_id(query, mappings)
+    resolve_tag_value_mappings(query, mappings)
     assert query == expected_query
 
 
@@ -393,10 +396,10 @@ tag_test_cases = [
 
 @pytest.mark.skip(reason="resolver is not being used yet")
 @pytest.mark.parametrize("query, mappings, expected_query", tag_test_cases)
-def test_resolve_tag_filters_processor(
+def test_resolve_tag_key_mappings_processor(
     query: CompositeQuery[QueryEntity] | LogicalQuery,
     mappings: dict[str, str | int],
     expected_query: CompositeQuery[QueryEntity] | LogicalQuery,
 ) -> None:
-    resolve_tag_mappings(query, mappings)
+    resolve_tag_key_mappings(query, mappings)
     assert query == expected_query
