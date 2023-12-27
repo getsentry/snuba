@@ -1,20 +1,20 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use rdkafka::admin::{NewTopic, AdminClient, TopicReplication, AdminOptions};
+use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::ClientConfig;
 use tokio::runtime::Runtime;
 
-use crate::types::Topic;
-use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::kafka::config::KafkaConfig;
 use crate::backends::kafka::producer::KafkaProducer;
+use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
 use crate::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use crate::types::Message;
+use crate::types::Topic;
 
 #[derive(Clone)]
 pub struct TestStrategy<T> {
@@ -61,10 +61,7 @@ pub fn get_default_broker() -> String {
 
 fn get_admin_client() -> AdminClient<DefaultClientContext> {
     let mut config = ClientConfig::new();
-    config.set(
-        "bootstrap.servers".to_string(),
-        get_default_broker(),
-    );
+    config.set("bootstrap.servers".to_string(), get_default_broker());
 
     config.create().unwrap()
 }
@@ -107,10 +104,8 @@ impl TestTopic {
     }
 
     pub fn produce(&self, payload: KafkaPayload) {
-        let producer_configuration = KafkaConfig::new_producer_config(
-            vec![get_default_broker()],
-            None,
-        );
+        let producer_configuration =
+            KafkaConfig::new_producer_config(vec![get_default_broker()], None);
 
         let producer = KafkaProducer::new(producer_configuration);
 

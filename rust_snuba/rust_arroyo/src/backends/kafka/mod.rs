@@ -197,7 +197,10 @@ impl<C: AssignmentCallbacks> ConsumerContext for CustomContext<C> {
                     let arroyo_partition = Partition::new(topic, index);
 
                     if offset_state.offsets.remove(&arroyo_partition).is_none() {
-                        tracing::warn!("failed to delete offset for unknown partition: {}", arroyo_partition);
+                        tracing::warn!(
+                            "failed to delete offset for unknown partition: {}",
+                            arroyo_partition
+                        );
                     }
                     offset_state.paused.remove(&arroyo_partition);
                     partitions.push(arroyo_partition);
@@ -356,7 +359,10 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             None => Ok(None),
             Some(res) => {
                 let msg = create_kafka_message(res?);
-                self.offset_state.lock().offsets.insert(msg.partition, msg.offset + 1);
+                self.offset_state
+                    .lock()
+                    .offsets
+                    .insert(msg.partition, msg.offset + 1);
 
                 Ok(Some(msg))
             }
@@ -373,7 +379,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             let offsets = &offset_state.offsets;
             for partition in &partitions {
                 let offset = offsets
-                    .get(&partition)
+                    .get(partition)
                     .ok_or(ConsumerError::UnassignedPartition)?;
                 topic_partition_list.add_partition_offset(
                     partition.topic.as_str(),
@@ -405,7 +411,8 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
                 if !offsets.contains_key(&partition) {
                     return Err(ConsumerError::UnassignedPartition);
                 }
-                topic_partition_list.add_partition(partition.topic.as_str(), partition.index as i32);
+                topic_partition_list
+                    .add_partition(partition.topic.as_str(), partition.index as i32);
                 to_unpause.push(partition);
             }
         }
@@ -445,7 +452,12 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         }
 
         for (partition, offset) in &offsets {
-            self.consumer.seek(partition.topic.as_str(), partition.index as i32, Offset::from_raw(*offset as i64), None)?;
+            self.consumer.seek(
+                partition.topic.as_str(),
+                partition.index as i32,
+                Offset::from_raw(*offset as i64),
+                None,
+            )?;
         }
 
         {
@@ -471,8 +483,8 @@ mod tests {
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::KafkaPayload;
     use crate::backends::{Consumer, Producer};
-    use crate::testutils::{TestTopic, get_default_broker};
-    use crate::types::{Partition, Topic, BrokerMessage};
+    use crate::testutils::{get_default_broker, TestTopic};
+    use crate::types::{BrokerMessage, Partition, Topic};
     use std::collections::HashMap;
     use std::thread::sleep;
     use std::time::Duration;
@@ -490,7 +502,7 @@ mod tests {
     fn wait_for_assignments<T: AssignmentCallbacks>(consumer: &mut KafkaConsumer<T>) {
         for _ in 0..10 {
             consumer.poll(Some(Duration::from_millis(5_000))).unwrap();
-            if consumer.tell().unwrap().len() > 0 {
+            if !consumer.tell().unwrap().is_empty() {
                 println!("Received assignment");
                 break;
             }
@@ -498,7 +510,9 @@ mod tests {
         }
     }
 
-    fn blocking_poll<T: AssignmentCallbacks>(consumer: &mut KafkaConsumer<T>) -> Option<BrokerMessage<KafkaPayload>> {
+    fn blocking_poll<T: AssignmentCallbacks>(
+        consumer: &mut KafkaConsumer<T>,
+    ) -> Option<BrokerMessage<KafkaPayload>> {
         let mut consumer_message = None;
 
         for _ in 0..10 {
@@ -670,7 +684,6 @@ mod tests {
             None,
         );
 
-
         let mut consumer =
             KafkaConsumer::new(configuration, &[topic.topic], EmptyCallbacks {}).unwrap();
 
@@ -680,7 +693,10 @@ mod tests {
         topic.produce(payload);
 
         let old_offsets = consumer.tell().unwrap();
-        assert_eq!(old_offsets, HashMap::from([(Partition::new(topic.topic, 0), 0)]));
+        assert_eq!(
+            old_offsets,
+            HashMap::from([(Partition::new(topic.topic, 0), 0)])
+        );
 
         let consumer_message = blocking_poll(&mut consumer).unwrap();
 
@@ -696,7 +712,10 @@ mod tests {
         let current_partitions: HashSet<_> = consumer.tell().unwrap().into_keys().collect();
         assert_eq!(current_partitions.len(), 1);
         consumer.pause(current_partitions.clone()).unwrap();
-        assert_eq!(consumer.tell().unwrap(), HashMap::from([(Partition::new(topic.topic, 0), 0)]));
+        assert_eq!(
+            consumer.tell().unwrap(),
+            HashMap::from([(Partition::new(topic.topic, 0), 0)])
+        );
 
         let empty_poll = consumer.poll(Some(Duration::from_secs(5))).unwrap();
         assert!(empty_poll.is_none(), "{:?}", empty_poll);
@@ -705,8 +724,14 @@ mod tests {
         assert_eq!(consumer.tell().unwrap(), old_offsets);
         assert!(consumer.paused().unwrap().is_empty());
 
-        assert_eq!(blocking_poll(&mut consumer)
-            .unwrap().payload.payload().unwrap(), b"asdf");
+        assert_eq!(
+            blocking_poll(&mut consumer)
+                .unwrap()
+                .payload
+                .payload()
+                .unwrap(),
+            b"asdf"
+        );
 
         consumer.shutdown();
     }
