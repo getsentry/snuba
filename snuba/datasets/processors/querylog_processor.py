@@ -4,5 +4,5 @@ from snuba.datasets.processors.rust_compat_processor import RustCompatProcessor
 
 
 class QuerylogProcessor(RustCompatProcessor):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("QuerylogProcessor")
