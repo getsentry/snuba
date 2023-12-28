@@ -135,7 +135,6 @@ fn create_factory(
         true,
         processing_concurrency,
         clickhouse_concurrency,
-        None,
         true,
         None,
     );

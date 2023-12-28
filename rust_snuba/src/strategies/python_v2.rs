@@ -24,7 +24,6 @@ type PyReturnValue = (ReturnValue, MessageTimestamp, Committable);
 
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
-    // processor_config: MessageProcessorConfig,
     python_strategy: Arc<Mutex<Py<PyAny>>>,
     transformed_messages: VecDeque<Message<BytesInsertBatch>>,
     commit_request_carried_over: Option<CommitRequest>,
@@ -52,7 +51,6 @@ impl PythonTransformStep {
 
         Ok(Self {
             next_step: Box::new(next_step),
-            // processor_config: processor_config,
             python_strategy: Arc::new(Mutex::new(instance)),
             transformed_messages: VecDeque::new(),
             commit_request_carried_over: None,
