@@ -21,18 +21,16 @@ from typing import Deque, Mapping, Optional, Sequence, Tuple, Type, Union, cast
 import rapidjson
 from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
-
+from arroyo.processing.strategies.run_task_with_multiprocessing import (
+    MultiprocessingPool,
+    RunTaskWithMultiprocessing,
+)
 from arroyo.types import BrokerValue, FilteredPayload, Message, Partition, Topic
 
 from snuba.consumers.consumer import json_row_encoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch
-
-from arroyo.processing.strategies.run_task_with_multiprocessing import (
-    RunTaskWithMultiprocessing,
-    MultiprocessingPool,
-)
 
 logger = logging.getLogger(__name__)
 
