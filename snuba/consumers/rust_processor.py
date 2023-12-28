@@ -195,8 +195,7 @@ class RunPythonMultiprocessing:
         try:
             self.__inner.submit(message)
         except InvalidMessage:
-            # TODO: Handle invalid message
-            logger.warning("Invalid message", exc_info=True)
+            logger.warning("Dropping invalid message", exc_info=True)
         except MessageRejected:
             self.__carried_over_message = message
 
@@ -222,7 +221,7 @@ class RunPythonMultiprocessing:
         try:
             self.__inner.poll()
         except InvalidMessage:
-            print("TODO: handle invalid message")
+            logger.warning("Dropping invalid message", exc_info=True)
 
         return self.__get_transformed_messages()
 

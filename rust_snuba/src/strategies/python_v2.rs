@@ -60,7 +60,6 @@ impl PythonTransformStep {
     }
     fn handle_py_return_value(&mut self, messages: Vec<PyReturnValue>) {
         // Used internally by "poll" and "join" to populate `self.transformed_messages` from Python return values
-        // TODO: Handle invalid message
         for py_message in messages {
             let (
                 (payload, origin_timestamp, sentry_received_timestamp),
