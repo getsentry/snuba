@@ -156,19 +156,19 @@ class RunPythonMultiprocessing:
     Rust.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, concurrency: int) -> None:
         self.__transformed_messages = TransformedMessages()
         self.__next = Next(self.__transformed_messages)
         transform_fn = wrap_process_message
-        self.__pool = MultiprocessingPool(1)
+        self.__pool = MultiprocessingPool(concurrency)
         # Message is carried over if we got MessageRejected from the next step
         self.__carried_over_message: Optional[Message[bytes]] = None
 
         self.__inner = RunTaskWithMultiprocessing(
             transform_fn,
             self.__next,
-            1,
-            1,
+            100000,
+            1.0,
             self.__pool,
             DEFAULT_BLOCK_SIZE,
             DEFAULT_BLOCK_SIZE,

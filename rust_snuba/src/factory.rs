@@ -86,8 +86,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.processing_concurrency,
             ),
             _ => Box::new(
-                PythonTransformStep::new(next_step, self.storage_config.message_processor.clone())
-                    .unwrap(),
+                PythonTransformStep::new(
+                    next_step,
+                    self.storage_config.message_processor.clone(),
+                    self.processing_concurrency.concurrency,
+                )
+                .unwrap(),
             ),
         };
 

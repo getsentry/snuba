@@ -30,7 +30,11 @@ pub struct PythonTransformStep {
 }
 
 impl PythonTransformStep {
-    pub fn new<N>(next_step: N, processor_config: MessageProcessorConfig) -> Result<Self, Error>
+    pub fn new<N>(
+        next_step: N,
+        processor_config: MessageProcessorConfig,
+        concurrency: usize,
+    ) -> Result<Self, Error>
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
@@ -46,7 +50,7 @@ impl PythonTransformStep {
         let instance = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
             let module = PyModule::import(py, "snuba.consumers.rust_processor")?;
             let cls: Py<PyAny> = module.getattr("RunPythonMultiprocessing")?.into();
-            cls.call0(py)
+            cls.call1(py, (concurrency,))
         })?;
 
         Ok(Self {
