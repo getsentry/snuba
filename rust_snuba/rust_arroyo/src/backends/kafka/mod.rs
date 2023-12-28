@@ -389,7 +389,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
             }
         }
 
-        self.consumer.pause(dbg!(&topic_partition_list))?;
+        self.consumer.pause(&topic_partition_list)?;
 
         {
             let mut offset_state = self.offset_state.lock();
