@@ -12,28 +12,25 @@
 
 
 import importlib
-import os
-from datetime import datetime
-from typing import Optional, Sequence, Tuple, Type, Deque, Union, Mapping, cast
-from collections import deque
 import logging
+import os
+from collections import deque
+from datetime import datetime
+from typing import Deque, Mapping, Optional, Sequence, Tuple, Type, Union, cast
 
-from arroyo.dlq import InvalidMessage
-from arroyo.processing.strategies import MessageRejected
-from arroyo.types import Message, BrokerValue, Topic, Partition, FilteredPayload
-from arroyo.processing.strategies import ProcessingStrategy
 import rapidjson
+from arroyo.dlq import InvalidMessage
+from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
+from arroyo.processing.strategies.run_task import RunTask
+from arroyo.processing.strategies.run_task_with_multiprocessing import (  # RunTaskWithMultiprocessing,
+    MultiprocessingPool,
+)
+from arroyo.types import BrokerValue, FilteredPayload, Message, Partition, Topic
 
 from snuba.consumers.consumer import json_row_encoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch
-
-from arroyo.processing.strategies.run_task_with_multiprocessing import (
-    # RunTaskWithMultiprocessing,
-    MultiprocessingPool,
-)
-from arroyo.processing.strategies.run_task import RunTask
 
 logger = logging.getLogger(__name__)
 
