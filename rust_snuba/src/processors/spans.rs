@@ -14,7 +14,7 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
+    let msg: FromSpanMessage = simd_json::from_slice(payload_bytes.clone().as_mut_slice())?;
 
     let mut span: Span = msg.try_into()?;
 

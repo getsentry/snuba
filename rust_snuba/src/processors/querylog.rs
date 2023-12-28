@@ -14,7 +14,7 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
+    let from: FromQuerylogMessage = simd_json::from_slice(payload_bytes.clone().as_mut_slice())?;
 
     let querylog_msg = QuerylogMessage {
         request: from.request,
