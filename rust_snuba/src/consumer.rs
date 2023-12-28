@@ -193,7 +193,7 @@ pub fn process_message(
 ) -> Option<Vec<u8>> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
-    processors::get_processing_function(name).map(|func| {
+    processors::PROCESSING_FUNCTIONS.get(name).map(|func| {
         let payload = KafkaPayload::new(None, None, Some(value));
 
         let timestamp = DateTime::from_naive_utc_and_offset(
