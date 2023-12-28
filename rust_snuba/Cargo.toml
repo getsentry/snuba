@@ -47,7 +47,7 @@ uuid = "1.5.0"
 parking_lot = "0.12.1"
 
 [dev-dependencies]
-divan = "0.1.2"
+criterion = "0.5.1"
 once_cell = "1.18.0"
 procspawn = { version = "1.0.0", features = ["test-support", "json"] }
 pyo3 = { version = "*", features = ["auto-initialize"] }
