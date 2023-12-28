@@ -21,16 +21,18 @@ from typing import Deque, Mapping, Optional, Sequence, Tuple, Type, Union, cast
 import rapidjson
 from arroyo.dlq import InvalidMessage
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
-from arroyo.processing.strategies.run_task import RunTask
-from arroyo.processing.strategies.run_task_with_multiprocessing import (  # RunTaskWithMultiprocessing,
-    MultiprocessingPool,
-)
+
 from arroyo.types import BrokerValue, FilteredPayload, Message, Partition, Topic
 
 from snuba.consumers.consumer import json_row_encoder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch
+
+from arroyo.processing.strategies.run_task_with_multiprocessing import (
+    RunTaskWithMultiprocessing,
+    MultiprocessingPool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,14 +166,14 @@ class RunPythonMultiprocessing:
         # Message is carried over if we got MessageRejected from the next step
         self.__carried_over_message: Optional[Message[bytes]] = None
 
-        self.__inner = RunTask(
+        self.__inner = RunTaskWithMultiprocessing(
             transform_fn,
             self.__next,
-            # 1,
-            # 1,
-            # self.__pool,
-            # DEFAULT_BLOCK_SIZE,
-            # DEFAULT_BLOCK_SIZE,
+            1,
+            1,
+            self.__pool,
+            DEFAULT_BLOCK_SIZE,
+            DEFAULT_BLOCK_SIZE,
         )
 
     def submit(

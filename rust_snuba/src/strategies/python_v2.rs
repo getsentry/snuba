@@ -13,6 +13,7 @@ use rust_arroyo::processing::strategies::{
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use rust_arroyo::utils::timing::Deadline;
 use std::collections::{BTreeMap, VecDeque};
+use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -34,19 +35,17 @@ impl PythonTransformStep {
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
+        std::env::set_var(
+            "RUST_SNUBA_PROCESSOR_MODULE",
+            processor_config.python_module.clone(),
+        );
+        std::env::set_var(
+            "RUST_SNUBA_PROCESSOR_CLASSNAME",
+            processor_config.python_class_name.clone(),
+        );
+
         let instance = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
             let module = PyModule::import(py, "snuba.consumers.rust_processor")?;
-
-            let initializer: Py<PyAny> = module.getattr("initialize_processor")?.into();
-
-            initializer.call1(
-                py,
-                (
-                    processor_config.python_module.clone(),
-                    processor_config.python_class_name.clone(),
-                ),
-            )?;
-
             let cls: Py<PyAny> = module.getattr("RunPythonMultiprocessing")?.into();
             cls.call0(py)
         })?;
