@@ -35,11 +35,11 @@ impl PythonTransformStep {
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
-        std::env::set_var(
+        env::set_var(
             "RUST_SNUBA_PROCESSOR_MODULE",
             processor_config.python_module.clone(),
         );
-        std::env::set_var(
+        env::set_var(
             "RUST_SNUBA_PROCESSOR_CLASSNAME",
             processor_config.python_class_name.clone(),
         );

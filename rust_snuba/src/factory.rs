@@ -12,7 +12,7 @@ use crate::config;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::processor::make_rust_processor;
-use crate::strategies::python::PythonTransformStep;
+use crate::strategies::python_v2::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
@@ -23,7 +23,7 @@ pub struct ConsumerStrategyFactory {
     skip_write: bool,
     processing_concurrency: ConcurrencyConfig,
     clickhouse_concurrency: ConcurrencyConfig,
-    python_max_queue_depth: Option<usize>,
+    // python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
     health_check_file: Option<String>,
 }
@@ -38,7 +38,7 @@ impl ConsumerStrategyFactory {
         skip_write: bool,
         processing_concurrency: ConcurrencyConfig,
         clickhouse_concurrency: ConcurrencyConfig,
-        python_max_queue_depth: Option<usize>,
+        _python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
         health_check_file: Option<String>,
     ) -> Self {
@@ -50,7 +50,7 @@ impl ConsumerStrategyFactory {
             skip_write,
             processing_concurrency,
             clickhouse_concurrency,
-            python_max_queue_depth,
+            // python_max_queue_depth,
             use_rust_processor,
             health_check_file,
         }
@@ -90,10 +90,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             ),
             _ => Box::new(
                 PythonTransformStep::new(
-                    self.storage_config.message_processor.clone(),
-                    self.processing_concurrency.concurrency,
-                    self.python_max_queue_depth,
                     next_step,
+                    self.storage_config.message_processor.clone(),
+                    // self.processing_concurrency.concurrency,
+                    // self.python_max_queue_depth,
                 )
                 .unwrap(),
             ),
