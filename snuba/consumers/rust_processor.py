@@ -156,7 +156,7 @@ class RunPythonMultiprocessing:
     Rust.
     """
 
-    def __init__(self, concurrency: int) -> None:
+    def __init__(self, concurrency: int, max_queue_depth: int) -> None:
         self.__transformed_messages = TransformedMessages()
         self.__next = Next(self.__transformed_messages)
         transform_fn = wrap_process_message
@@ -167,7 +167,7 @@ class RunPythonMultiprocessing:
         self.__inner = RunTaskWithMultiprocessing(
             transform_fn,
             self.__next,
-            100000,
+            max_queue_depth,
             1.0,
             self.__pool,
             DEFAULT_BLOCK_SIZE,

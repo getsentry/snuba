@@ -34,6 +34,7 @@ impl PythonTransformStep {
         next_step: N,
         processor_config: MessageProcessorConfig,
         concurrency: usize,
+        max_queue_depth: Option<usize>,
     ) -> Result<Self, Error>
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -50,7 +51,7 @@ impl PythonTransformStep {
         let instance = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
             let module = PyModule::import(py, "snuba.consumers.rust_processor")?;
             let cls: Py<PyAny> = module.getattr("RunPythonMultiprocessing")?.into();
-            cls.call1(py, (concurrency,))
+            cls.call1(py, (concurrency, max_queue_depth.unwrap_or(concurrency)))
         })?;
 
         Ok(Self {
@@ -267,7 +268,7 @@ mod tests {
             python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
         };
 
-        let mut step = PythonTransformStep::new(sink.clone(), processor_config).unwrap();
+        let mut step = PythonTransformStep::new(sink.clone(), processor_config, 1, None).unwrap();
         let _ = step.poll();
         step.submit(Message::new_broker_message(
             KafkaPayload::new(

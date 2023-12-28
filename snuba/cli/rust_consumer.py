@@ -115,7 +115,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--python-max-queue-depth",
     type=int,
     default=None,
-    help="Deprecated.",
+    help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
 )
 @click.option(
     "--max-poll-interval-ms",
@@ -194,5 +194,6 @@ def rust_consumer(
         concurrency_override or concurrency or 1,
         use_rust_processor,
         max_poll_interval_ms,
+        python_max_queue_depth,
         health_check_file,
     )

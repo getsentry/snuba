@@ -23,6 +23,7 @@ pub struct ConsumerStrategyFactory {
     skip_write: bool,
     processing_concurrency: ConcurrencyConfig,
     clickhouse_concurrency: ConcurrencyConfig,
+    python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
     health_check_file: Option<String>,
 }
@@ -37,6 +38,7 @@ impl ConsumerStrategyFactory {
         skip_write: bool,
         processing_concurrency: ConcurrencyConfig,
         clickhouse_concurrency: ConcurrencyConfig,
+        python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
         health_check_file: Option<String>,
     ) -> Self {
@@ -48,6 +50,7 @@ impl ConsumerStrategyFactory {
             skip_write,
             processing_concurrency,
             clickhouse_concurrency,
+            python_max_queue_depth,
             use_rust_processor,
             health_check_file,
         }
@@ -90,6 +93,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     next_step,
                     self.storage_config.message_processor.clone(),
                     self.processing_concurrency.concurrency,
+                    self.python_max_queue_depth,
                 )
                 .unwrap(),
             ),
