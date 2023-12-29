@@ -297,7 +297,7 @@ jobs:
           tags: snuba-test
           load: true
           build-args: |
-            SHOULD_BUILD_RUST=false
+            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}

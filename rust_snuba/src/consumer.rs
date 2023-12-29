@@ -183,6 +183,8 @@ pub fn consumer_impl(
     processor.run().unwrap();
 }
 
+pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
+
 #[pyfunction]
 pub fn process_message(
     name: &str,
@@ -190,31 +192,33 @@ pub fn process_message(
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
-) -> Option<Vec<u8>> {
+) -> PyResult<Vec<u8>> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
-    processors::get_processing_function(name).map(|func| {
-        let payload = KafkaPayload::new(None, None, Some(value));
+    let func = processors::get_processing_function(name)
+        .ok_or(SnubaRustError::new_err("processor not found"))?;
 
-        let timestamp = DateTime::from_naive_utc_and_offset(
-            NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
-            Utc,
-        );
+    let payload = KafkaPayload::new(None, None, Some(value));
 
-        let meta = KafkaMessageMetadata {
-            partition,
-            offset,
-            timestamp,
-        };
+    let timestamp = DateTime::from_naive_utc_and_offset(
+        NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
+        Utc,
+    );
 
-        let res = func(payload, meta).unwrap();
-        let batch = BytesInsertBatch::new(
-            res.rows,
-            timestamp,
-            res.origin_timestamp,
-            res.sentry_received_timestamp,
-            BTreeMap::from([(partition, (offset, timestamp))]),
-        );
-        batch.encoded_rows().to_vec()
-    })
+    let meta = KafkaMessageMetadata {
+        partition,
+        offset,
+        timestamp,
+    };
+
+    let res = func(payload, meta)
+        .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+    let batch = BytesInsertBatch::new(
+        res.rows,
+        timestamp,
+        res.origin_timestamp,
+        res.sentry_received_timestamp,
+        BTreeMap::from([(partition, (offset, timestamp))]),
+    );
+    Ok(batch.encoded_rows().to_vec())
 }
