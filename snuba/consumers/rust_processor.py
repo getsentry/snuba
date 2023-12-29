@@ -59,7 +59,7 @@ initialize_processor()
 
 def ensure_utc(value: Optional[datetime]) -> Optional[datetime]:
     if value and value.tzinfo is None:
-        value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=timezone.utc)
     return value
 
 
