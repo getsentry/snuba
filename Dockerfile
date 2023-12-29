@@ -77,7 +77,7 @@ RUN set -ex; \
     echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
     echo '[registries.crates-io]' >> ~/.cargo/config; \
     echo 'protocol = "sparse"' >> ~/.cargo/config; \
-    maturin build --release --compatibility linux --locked --strip
+    maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
