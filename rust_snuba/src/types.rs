@@ -181,7 +181,7 @@ impl BytesInsertBatch {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
     encoded_rows: Vec<u8>,
     num_rows: usize,

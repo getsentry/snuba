@@ -5,6 +5,7 @@ mod querylog;
 mod replays;
 mod spans;
 mod utils;
+mod outcomes;
 
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -19,6 +20,7 @@ pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
         "ReplaysProcessor" => Some(replays::process_message),
         "SpansMessageProcessor" => Some(spans::process_message),
         "MetricsSummariesMessageProcessor" => Some(metrics_summaries::process_message),
+        "OutcomesProcessor" => Some(outcomes::process_message),
         _ => None,
     }
 }
