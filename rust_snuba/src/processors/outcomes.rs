@@ -44,15 +44,17 @@ pub fn process_message(
         }
     }
 
-    if msg.outcome != OUTCOME_ABUSE {
-        // we dont care about abuse outcomes for these metrics
-        if msg.category.is_none() {
+    // we dont care about abuse outcomes for these metrics
+    if msg.category.is_none() {
+        msg.category = Some(DEFAULT_CATEGORY);
+        if msg.outcome != OUTCOME_ABUSE {
             get_metrics().increment("missing_category", 1, None);
-            msg.category = Some(DEFAULT_CATEGORY);
         }
-        if msg.quantity.is_none() {
+    }
+    if msg.quantity.is_none() {
+        msg.quantity = Some(1);
+        if msg.outcome != OUTCOME_ABUSE {
             get_metrics().increment("missing_quantity", 1, None);
-            msg.quantity = Some(1);
         }
     }
 
@@ -99,11 +101,11 @@ mod tests {
         };
         let result = process_message(payload, meta).expect("The message should be processed");
 
-        let expected = "{\"timestamp\":1680029444,\"org_id\":1,\"project_id\":1,\"key_id\":null,\"outcome\":4,\"reason\":null,\"event_id\":null,\"quantity\":3,\"category\":1}";
+        let expected = "{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}";
 
         assert_eq!(
             result.rows,
-            RowData::from_rows(vec![expected.as_bytes().to_vec()]).unwrap()
+            RowData::from_encoded_rows(vec![expected.as_bytes().to_vec()])
         );
     }
 }
