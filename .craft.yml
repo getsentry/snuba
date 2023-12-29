@@ -10,11 +10,11 @@ statusProvider:
 targets:
   - id: release
     name: docker
-    source: us.gcr.io/sentryio/snuba
+    source: ghcr.io/getsentry/snuba
     target: getsentry/snuba
   - id: latest
     name: docker
-    source: us.gcr.io/sentryio/snuba
+    source: ghcr.io/getsentry/snuba
     target: getsentry/snuba
     targetFormat: '{{{target}}}:latest'
   - name: github
