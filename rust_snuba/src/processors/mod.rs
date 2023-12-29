@@ -1,11 +1,11 @@
 mod functions;
 mod metrics_summaries;
+mod outcomes;
 mod profiles;
 mod querylog;
 mod replays;
 mod spans;
 mod utils;
-mod outcomes;
 
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
