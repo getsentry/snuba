@@ -12,7 +12,7 @@ use crate::config;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::processor::make_rust_processor;
-use crate::strategies::python::PythonTransformStep;
+use crate::strategies::python_v2::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
@@ -90,10 +90,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             ),
             _ => Box::new(
                 PythonTransformStep::new(
+                    next_step,
                     self.storage_config.message_processor.clone(),
                     self.processing_concurrency.concurrency,
                     self.python_max_queue_depth,
-                    next_step,
                 )
                 .unwrap(),
             ),
