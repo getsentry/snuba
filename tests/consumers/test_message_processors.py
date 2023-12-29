@@ -15,6 +15,7 @@ from snuba.datasets.processors.functions_processor import FunctionsMessageProces
 from snuba.datasets.processors.metrics_summaries_processor import (
     MetricsSummariesMessageProcessor,
 )
+from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.datasets.processors.profiles_processor import ProfilesMessageProcessor
 from snuba.datasets.processors.querylog_processor import QuerylogProcessor
 from snuba.datasets.processors.replays_processor import ReplaysProcessor
@@ -31,6 +32,7 @@ from snuba.processor import InsertBatch
         ("snuba-queries", QuerylogProcessor),
         ("snuba-spans", MetricsSummariesMessageProcessor),
         ("snuba-spans", SpansMessageProcessor),
+        ("outcomes", OutcomesProcessor),
     ],
 )
 def test_message_processors(

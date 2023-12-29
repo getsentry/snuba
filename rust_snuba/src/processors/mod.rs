@@ -1,5 +1,6 @@
 mod functions;
 mod metrics_summaries;
+mod outcomes;
 mod profiles;
 mod querylog;
 mod replays;
@@ -19,6 +20,7 @@ pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
         "ReplaysProcessor" => Some(replays::process_message),
         "SpansMessageProcessor" => Some(spans::process_message),
         "MetricsSummariesMessageProcessor" => Some(metrics_summaries::process_message),
+        "OutcomesProcessor" => Some(outcomes::process_message),
         _ => None,
     }
 }

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sentry_kafka_schemas.schema_types.outcomes_v1 import Outcome
@@ -63,7 +63,6 @@ class OutcomesProcessor(DatasetMessageProcessor):
             if "quantity" not in outcome:
                 metrics.increment("missing_quantity")
 
-        message = None
         try:
             timestamp = _ensure_valid_date(
                 datetime.strptime(
@@ -74,13 +73,15 @@ class OutcomesProcessor(DatasetMessageProcessor):
             metrics.increment("bad_outcome_timestamp")
             timestamp = _ensure_valid_date(datetime.utcnow())
 
+        assert timestamp is not None
+
         message = {
             "org_id": outcome.get("org_id", 0),
             "project_id": outcome.get("project_id", 0),
             "key_id": outcome.get("key_id"),
-            "timestamp": timestamp,
+            "timestamp": int(timestamp.replace(tzinfo=timezone.utc).timestamp()),
             "outcome": outcome["outcome"],
-            "category": outcome.get("category", DataCategory.ERROR),
+            "category": outcome.get("category", DataCategory.ERROR.value),
             "quantity": outcome.get("quantity", 1),
             "reason": _unicodify(reason),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
