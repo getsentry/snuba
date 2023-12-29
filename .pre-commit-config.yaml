@@ -26,7 +26,6 @@ repos:
     rev: 4.0.1
     hooks:
       - id: flake8
-        language_version: python3.9
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
@@ -47,4 +46,4 @@ repos:
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
 default_language_version:
-  python: python3.9
+  python: python3.10
