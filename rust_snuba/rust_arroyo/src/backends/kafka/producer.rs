@@ -4,7 +4,7 @@ use crate::backends::Producer as ArroyoProducer;
 use crate::backends::ProducerError;
 use crate::types::TopicOrPartition;
 use rdkafka::config::ClientConfig;
-use rdkafka::producer::{BaseRecord, DefaultProducerContext, ThreadedProducer};
+use rdkafka::producer::{DefaultProducerContext, ThreadedProducer};
 
 pub struct KafkaProducer {
     producer: ThreadedProducer<DefaultProducerContext>,
@@ -27,24 +27,7 @@ impl ArroyoProducer<KafkaPayload> for KafkaProducer {
         destination: &TopicOrPartition,
         payload: KafkaPayload,
     ) -> Result<(), ProducerError> {
-        let topic = match destination {
-            TopicOrPartition::Topic(topic) => topic.name.as_ref(),
-            TopicOrPartition::Partition(partition) => partition.topic.name.as_ref(),
-        };
-
-        let msg_key = payload.key.unwrap_or_default();
-        let msg_payload = payload.payload.unwrap_or_default();
-
-        let mut base_record = BaseRecord::to(topic).payload(&msg_payload).key(&msg_key);
-
-        let partition = match destination {
-            TopicOrPartition::Topic(_) => None,
-            TopicOrPartition::Partition(partition) => Some(partition.index),
-        };
-
-        if let Some(index) = partition {
-            base_record = base_record.partition(index as i32)
-        }
+        let base_record = payload.to_base_record(destination);
 
         self.producer
             .send(base_record)
@@ -63,20 +46,14 @@ mod tests {
     use crate::types::{Topic, TopicOrPartition};
     #[test]
     fn test_producer() {
-        let topic = Topic {
-            name: "test".to_string(),
-        };
+        let topic = Topic::new("test");
         let destination = TopicOrPartition::Topic(topic);
         let configuration =
             KafkaConfig::new_producer_config(vec!["127.0.0.1:9092".to_string()], None);
 
         let producer = KafkaProducer::new(configuration);
 
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some("asdf".as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some("asdf".as_bytes().to_vec()));
         producer
             .produce(&destination, payload)
             .expect("Message produced")

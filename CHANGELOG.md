@@ -1,5 +1,149 @@
 # Changelog
 
+## 23.12.1
+
+### Various fixes & improvements
+
+- perm(cardinality-analyzer): Replace team-ingestion-pipeline with team-ingest (#5240) by @Dav1dde
+- ref(profiling): add profiles to admin and web (#5234) by @MeredithAnya
+- feat(replays): Add react_component_name column (#5232) by @cmanallen
+- feat(cardinality): Add clickhouse host and port parameters (#5237) by @nikhars
+- feat(replays): Add react_component_name column migration (#5231) by @cmanallen
+- chore(deps): bump @sentry/react from 7.56.0 to 7.88.0 in /snuba/admin (#5224) by @dependabot
+- Optimize ConsumerState (#5236) by @Swatinem
+- fix(rust): Handle rebalancing ourselves, remove usage of pre/post-rebalance callbacks (#5229) by @untitaker
+- Unify Timeout/Deadline operations (#5230) by @Swatinem
+- feat(rust): Port arroyo.consumer.latency metric (#5214) by @loewenheim
+- feat(metrics) Add a MQL endpoint to Snuba API  (#5193) by @evanh
+- fix(rust): Fix consumer deadlock on strategy panic (#5216) by @lynnagara
+- ref(migrations): add experimental readiness state to policies (#5206) by @MeredithAnya
+- Use jemalloc unconditionally (#5228) by @Swatinem
+- feat(replays): Add rust-based message processor (#5215) by @cmanallen
+- Use jemalloc in Docker image (#5227) by @Swatinem
+- fix(rust): Fix `self.consumer_offsets` (#5220) by @lynnagara
+- build(rust): Update maturin and add to requirements.txt (#5218) by @lynnagara
+- feat(metrics-summaries): Deploy metrics-summaries consumer automatically (#5221) by @phacops
+- feat(metrics-summaries): Enable metrics-summaries for SaaS (#5219) by @phacops
+- feat(rust): Port run_task_in_threads test (#5213) by @loewenheim
+- meta: Bump new development version (b18bf981)
+
+## 23.12.0
+
+### Various fixes & improvements
+
+- fix(arroyo): Tag all consumer metrics by the smallest partition index (#5208) by @untitaker
+- feat(metrics-summaries): Add a Rust consumer for metrics summaries (#5210) by @phacops
+- fix(slo): Add ILLEGAL_COLUMN = 44 as an invalid request (#5209) by @evanh
+- ref(rust): Give BufferedMessages a maximum (#5211) by @loewenheim
+- ref(admin): Add AllMigrations role (#5205) by @MeredithAnya
+- fix(rust): Separate clickhouse concurrency from processing (#5207) by @untitaker
+- fix(rust): Increase poll interval (#5197) by @lynnagara
+- feat(rust): Implement LocalProducer and port a test (#5202) by @loewenheim
+- fix(metrics-summaries): Remove low_cardinality modifier as the column is not low cardinality (#5204) by @phacops
+- feat(guages): Add `avg` capability to guages (#5196) by @volokluev
+- fix(rust): Consumer should crash if DLQ limit is reached (#5187) by @lynnagara
+- ref: Remove stale querylog deployments (#5201) by @lynnagara
+- fix(cache): Slightly clean up cache set errors (#5199) by @evanh
+- perf: Increase consumer join timeout (#5200) by @lynnagara
+- fix(rust): Fix SLO metrics again again again [SNS-2565] (#5198) by @untitaker
+- ref(metrics-summaries): Skip all the work if the field needed is not there (#5194) by @phacops
+- feat(spans): Store metrics_summary in the proper column if needed (#5191) by @phacops
+- fix(spans): Add sentry_tags to spans entity (#5162) by @nikhars
+- perf: Reusable multiprocessing pools v2 (#5192) by @lynnagara
+- fix(rust): Suppress error when manually resetting offsets (#5186) by @untitaker
+- fix(rust): Do not drop runtime and accidentally cancel tasks (#5189) by @untitaker
+- feat(spans): Add a metrics summary processor (#5161) by @phacops
+- feat(spans): Add a metrics summary column to link spans with DDM metrics (#5159) by @phacops
+- fix(metrics_summaries): Fix sample by expression (#5190) by @phacops
+
+_Plus 62 more_
+
+## 23.11.2
+
+### Various fixes & improvements
+
+- ref(rust): Add a few metrics missing from snuba dashboard (#5102) by @untitaker
+- ref(rust): Put back the querylog deployment (#5101) by @lynnagara
+- fix(rust): Capture warnings as exceptions (#5100) by @loewenheim
+- fix(rust): Untangle offset commit on revocation (#5095) by @loewenheim
+- fix(discover): Enable column validator on discover entities (#5094) by @evanh
+- fix: Skip warnings in gocd error checks (#5091) by @evanh
+- feat(rust): Populate commit_log_offsets so they can be produced (#5086) by @lynnagara
+- fix(rust-python): Join handles less frequently, fix backpressure bug (#5088) by @untitaker
+- fix(validation): Add missing replay columns (#5090) by @evanh
+- Add profile_id to spans query columns (#5087) by @enochtangg
+- feat(rust): Add snuba latency SLO metric (#5071) by @untitaker
+- fix: make sure SNUBA_RELEASE is set (#5085) by @MeredithAnya
+- ref: bump sentry-arroyo to 2.14.22 (#5089) by @getsentry-bot
+- fix(metrics) Add _indexed_tags_hash column to distributions (#5081) by @evanh
+- Add a benchmark to test Rust consumers (#5024) by @Swatinem
+- meta: Bump new development version (8b263f1c)
+- fix(rust): Fix the ProduceCommitLog strategy (#5076) by @lynnagara
+- fix(replacegroup): Catch bad datetime formats in ReplaceGroup (#5083) by @evanh
+- feat(self-hosted): disable allocation policy in self hosted (#5084) by @volokluev
+
+## 23.11.1
+
+### Various fixes & improvements
+
+- fix(validation): EntityContainsColumnValidator wasn't actually enabled (#4399) by @rahul-kumar-saini
+- ref: bump sentry-arroyo to 2.14.21 (#5079) by @getsentry-bot
+- feat(rust): Add building blocks for DLQ (#5072) by @lynnagara
+- fix: Remove unnecessary locking in metrics (#5077) by @untitaker
+- ref(rust): Ensure none keys are properly stripped from broker config (#5075) by @lynnagara
+- ref: Temporarily remove querylog rust consumer from gocd deployment (#5073) by @lynnagara
+- fix(rust): Kafka headers improvements (#5063) by @lynnagara
+- fix(rust): Clear all backpressure state between assignments (#5055) by @untitaker
+- ref: Bump sentry-kafka-schemas to 0.1.35 (#5062) by @lynnagara
+- Revert "feat: Experiment using statsdproxy for aggregation (#4734)" (201e07b0) by @getsentry-bot
+- Relicense under FSL-1.0-Apache-2.0 (#5058) by @chadwhitacre
+- add raw tags hash column to sets dist table (#5059) by @enochtangg
+- ci: Reduce Sentry test concurrency (#5061) by @lynnagara
+- fix(rust): Rename run_once metric (#5056) by @untitaker
+- feat(rust): Buffered messages option 3 (#5053) by @lynnagara
+- feat: Experiment using statsdproxy for aggregation (#4734) by @lynnagara
+- fix(rust): Rename metrics namespace, and implement one metric from python (#5036) by @untitaker
+- skip flake test_optimized_partition_tracker unit test (#5052) by @enochtangg
+- fix(generic-metrics): Add raw tags hash to gauges dist table (#5049) by @enochtangg
+- Add support for join queries to the subscription system (#5006) by @wedamija
+- ref: bump sentry-arroyo to 2.14.20 (#5047) by @getsentry-bot
+- Spawn only one Tokio Runtime (#5039) by @Swatinem
+- Avoid double locking (#5048) by @Swatinem
+- ref(rust): Add --python-max-queue-depth option (#5030) by @untitaker
+
+_Plus 11 more_
+
+## 23.11.0
+
+### Various fixes & improvements
+
+- Move `SchemaValidator` into async task  (#5037) by @Swatinem
+- Micro-optimize `ClickhouseWriter` (#5035) by @Swatinem
+- ref(rust): Add source information to `RunError` (#5034) by @loewenheim
+- fix(cli): Remove misleading defaults (#4837) by @untitaker
+- Remove `BadMessage` in favor of `anyhow::Error` (#5032) by @Swatinem
+- Remove some unused Send/Sync bounds (#5029) by @loewenheim
+- Use more early-returns (#5023) by @Swatinem
+- ref(rust): Fix inconsistency in metrics trait (#5027) by @lynnagara
+- feat(rust): Add strategy that produces the commit log topic (#4976) by @lynnagara
+- chore(rust): Move common functionality out (#5026) by @nikhars
+- ref(rust): Rename Transform to RunTask (#5021) by @lynnagara
+- Avoid Mutex on `AssignmentCallbacks` (#5025) by @Swatinem
+- ref: Remove most Clone bounds (#5020) by @loewenheim
+- feat(rust): Port the buffered messages class to Rust (#4993) by @lynnagara
+- fix(migration): move metrics migration into the right place (#5007) by @volokluev
+- feat(settings): Allow runtime configurable referrer overrides (#5005) by @nikhars
+- Optimize subset checks (#5018) by @Swatinem
+- ref: Rename and simplify TopicContent struct (#5017) by @loewenheim
+- Intern `Topic` and make it `Copy` (#5016) by @Swatinem
+- Avoid intermediate `HashMap` in TopicPartitionList (#5015) by @Swatinem
+- Give `Topic` and `Partition` a `new` fn (#5014) by @Swatinem
+- Apply clippy suggestions (#5008) by @Swatinem
+- ref: rust-rdkafka 0.36 (#5004) by @lynnagara
+- fix(metrics): add _raw_tags_hash column to distributed table (counters) (#4998) by @volokluev
+
+_Plus 75 more_
+
 ## 23.10.1
 
 ### Various fixes & improvements

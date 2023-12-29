@@ -63,9 +63,11 @@ from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
+from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_snql_query
+from snuba.request.validation import build_request, parse_mql_query, parse_snql_query
+from snuba.state import get_float_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -152,7 +154,7 @@ def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
             for storage in storages
         }
 
-        for (cluster_key, cluster) in unique_clusters.items():
+        for cluster_key, cluster in unique_clusters.items():
             clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
             clickhouse_tables = clickhouse.execute("show tables").results
             known_table_names = connection_grouped_table_names[cluster_key]
@@ -320,7 +322,6 @@ def health_envoy() -> Response:
 
     down_file_exists = check_down_file_exists()
 
-    body: Mapping[str, Union[str, bool]]
     if not down_file_exists:
         status = 200
     else:
@@ -418,6 +419,17 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         assert False, "unexpected fallthrough"
 
 
+@application.route("/<dataset:dataset>/mql", methods=["GET", "POST"])
+@util.time_request("query", {"mql": "true"})
+def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
+    if http_request.method == "POST":
+        body = parse_request_body(http_request)
+        _trace_transaction(dataset)
+        return dataset_query(dataset, body, timer, is_mql=True)
+    else:
+        assert False, "unexpected fallthrough"
+
+
 def _sanitize_payload(
     payload: MutableMapping[str, Any], res: MutableMapping[str, Any]
 ) -> None:
@@ -461,8 +473,20 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
+def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
+    metrics.increment(
+        "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
+    )
+    if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
+        logger.info(f"Received referrer: {request.attribution_info.referrer}")
+        if request.attribution_info.referrer == "<unknown>":
+            logger.info(f"Received unknown referrer from request: {request}, {body}")
+
+
 @with_span()
-def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Response:
+def dataset_query(
+    dataset: Dataset, body: Dict[str, Any], timer: Timer, is_mql: bool = False
+) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
@@ -479,11 +503,13 @@ def dataset_query(dataset: Dataset, body: Dict[str, Any], timer: Timer) -> Respo
             metrics.timing("post.shutdown.query.delay", diff, tags=tags)
 
     with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build(HTTPQuerySettings)
+        schema = RequestSchema.build(HTTPQuerySettings, is_mql)
 
+    parse_function = parse_snql_query if not is_mql else parse_mql_query
     request = build_request(
-        body, parse_snql_query, HTTPQuerySettings, schema, dataset, timer, referrer
+        body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
     )
+    _get_and_log_referrer(request, body)
 
     try:
         result = parse_and_run_query(dataset, request, timer)
@@ -697,6 +723,7 @@ if application.debug or application.testing:
                     output_block_size=None,
                     max_insert_batch_size=None,
                     max_insert_batch_time=None,
+                    metrics_tags={},
                 ).create_with_partitions(commit, {})
                 strategy.submit(message)
                 strategy.close()

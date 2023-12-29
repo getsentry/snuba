@@ -31,6 +31,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
+@click.option(
+    "--no-strict-offset-reset",
+    is_flag=True,
+    help="Forces the kafka consumer auto offset reset.",
+)
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
     "--commit-log-topic",
@@ -93,16 +98,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--concurrency",
     type=int,
 )
-# To be deprecated in favor of concurrency
 @click.option(
-    "--processes",
-    type=int,
-)
-@click.option(
-    "--use-rust-processor",
+    "--use-rust-processor/--use-python-processor",
     "use_rust_processor",
     is_flag=True,
-    help="Use the Rust instead of Python message processor (if available)",
+    help="Use the Rust (if available) or Python message processor",
     default=False,
 )
 @click.option(
@@ -111,11 +111,29 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="Kafka group instance id. passing a value here will run kafka with static membership.",
 )
+@click.option(
+    "--python-max-queue-depth",
+    type=int,
+    default=None,
+    help="How many messages should be queued up in the Python message processor before backpressure kicks in. Defaults to the number of processes.",
+)
+@click.option(
+    "--max-poll-interval-ms",
+    type=int,
+    default=30000,
+)
+@click.option(
+    "--health-check-file",
+    default=None,
+    type=str,
+    help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
     consumer_group: str,
     auto_offset_reset: str,
+    no_strict_offset_reset: bool,
     raw_events_topic: Optional[str],
     commit_log_topic: Optional[str],
     replacements_topic: Optional[str],
@@ -128,9 +146,11 @@ def rust_consumer(
     log_level: str,
     skip_write: bool,
     concurrency: Optional[int],
-    processes: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
+    max_poll_interval_ms: int,
+    python_max_queue_depth: Optional[int],
+    health_check_file: Optional[str],
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -156,7 +176,8 @@ def rust_consumer(
 
     import rust_snuba
 
-    os.environ["RUST_LOG"] = log_level.lower()
+    # TODO: remove after debugging
+    os.environ["RUST_LOG"] = "debug" if not use_rust_processor else log_level.lower()
 
     # XXX: Temporary way to quickly test different values for concurrency
     # Should be removed before this is put into  prod
@@ -167,8 +188,12 @@ def rust_consumer(
     rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
+        no_strict_offset_reset,
         consumer_config_raw,
         skip_write,
-        concurrency_override or concurrency or processes or 1,
+        concurrency_override or concurrency or 1,
         use_rust_processor,
+        max_poll_interval_ms,
+        python_max_queue_depth,
+        health_check_file,
     )

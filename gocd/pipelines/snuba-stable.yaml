@@ -42,11 +42,7 @@ pipelines:
                                     "sentry (0)" \
                                     "sentry (1)" \
                                     "sentry (2)" \
-                                    "sentry (3)" \
-                                    "sentry (4)" \
-                                    "sentry (5)" \
-                                    "sentry (6)" \
-                                    "sentry (7)"
+                                    "sentry (3)"
                               - script: |
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
                                     ${GO_REVISION_SNUBA_REPO} \
@@ -112,7 +108,8 @@ pipelines:
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
-                                    --container-name="optimize"
+                                    --container-name="optimize" \
+                                    --container-name="cardinality-report"
             - deploy:
                   fetch_materials: true
                   jobs:
@@ -169,4 +166,5 @@ pipelines:
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
-                                    --container-name="optimize"
+                                    --container-name="optimize" \
+                                    --container-name="cardinality-report"

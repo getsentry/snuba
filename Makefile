@@ -3,7 +3,7 @@
 pyenv-setup:
 	@./scripts/pyenv_setup.sh
 
-develop: install-python-dependencies setup-git
+develop: install-python-dependencies install-rs-dev install-brew-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
@@ -43,8 +43,20 @@ install-python-dependencies:
 	pip install `grep ^-- requirements.txt` -r requirements-build.txt
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
+.PHONY: install-python-dependencies
+
+# install-rs-dev/install-py-dev mimick sentry's naming conventions
+install-rs-dev:
+	which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
+	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
+.PHONY: install-rs-dev
 
 install-py-dev: install-python-dependencies
+.PHONY: install-py-dev
+
+install-brew-dev:
+	brew bundle
+.PHONY: install-brew-dev
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
@@ -77,22 +89,27 @@ watch-rust-snuba:
 
 test-rust:
 	. scripts/rust-envvars && \
-		(cd rust_snuba/rust_arroyo/ && cargo test) && \
-		cd rust_snuba && cargo test
+		cd rust_snuba && \
+		cargo test --workspace
 .PHONY: test-rust
 
 lint-rust:
 	. scripts/rust-envvars && \
-		(cd rust_snuba/rust_arroyo/ && cargo clippy -- -D warnings) && \
-		(cd rust_snuba && cargo clippy -- -D warnings)
+		cd rust_snuba && \
+		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 
 format-rust:
 	. scripts/rust-envvars && \
-		(cd rust_snuba && rustup component add rustfmt --toolchain stable 2> /dev/null) && \
-		(cd rust_snuba/rust_arroyo/ && cargo +stable fmt --all) && \
-		(cd rust_snuba && cargo +stable fmt --all)
+		cd rust_snuba && \
+		cargo +stable fmt --all
 .PHONY: format-rust
+
+format-rust-ci:
+	. scripts/rust-envvars && \
+		cd rust_snuba && \
+		cargo +stable fmt --all --check
+.PHONY: format-rust-ci
 
 gocd:
 	rm -rf ./gocd/generated-pipelines

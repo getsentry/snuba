@@ -1,8 +1,11 @@
 # Use owners-snuba by default
 * @getsentry/owners-snuba
 
+# rust_snuba
+/rust_snuba @getsentry/owners-snuba @getsentry/owners-processing
+
 # Legal
-/LICENSE  @getsentry/owners-legal
+/LICENSE.md  @getsentry/owners-legal
 
 # Build & Releases
 /.github/workflows/release.yml  @getsentry/releases

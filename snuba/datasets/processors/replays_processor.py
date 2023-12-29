@@ -57,11 +57,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["replay_id"] = to_uuid(replay_event["replay_id"])
         processed["segment_id"] = maybe(to_uint16, replay_event.get("segment_id"))
         processed["timestamp"] = default(
-            lambda: datetime.now(timezone.utc),
-            maybe(to_datetime, replay_event.get("timestamp")),
+            lambda: int(datetime.now(timezone.utc).timestamp()),
+            maybe(to_uint32, replay_event.get("timestamp")),
         )
         processed["replay_start_timestamp"] = maybe(
-            to_datetime, replay_event.get("replay_start_timestamp")
+            to_uint32, replay_event.get("replay_start_timestamp")
         )
         processed["urls"] = self.__extract_urls(replay_event)
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
@@ -275,6 +275,7 @@ def process_replay_actions(
             "click_testid": to_string(click["testid"])[:64],
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
+            "click_component_name": to_string(click.get("component_name", ""))[:64],
             "click_is_dead": to_uint1(click["is_dead"]),
             "click_is_rage": to_uint1(click["is_rage"]),
         }
@@ -349,6 +350,10 @@ def to_datetime(value: Any) -> datetime:
     Datetimes for the replays schema standardize on 32 bit dates.
     """
     return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, int(value)))
+
+
+def to_uint32(value: Any) -> int:
+    return _collapse_or_err(_collapse_uint32, int(value))
 
 
 def to_uint1(value: Any) -> int:

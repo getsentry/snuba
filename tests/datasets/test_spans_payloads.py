@@ -20,19 +20,21 @@ from tests.helpers import write_processed_messages
 
 # some time in way in the future
 start_time_ms = 4111111111111
+received = 1234567890
 duration_ms = 1234560123
 project_id = 1234567890123456
 
 required_fields = {
-    "trace_id": "12345678901234567890123456789012",
-    "span_id": "1234567890123456",
-    "project_id": project_id,
-    "start_timestamp_ms": start_time_ms,
     "duration_ms": duration_ms,
     "exclusive_time_ms": 1234567890123,
     "is_segment": True,
+    "project_id": project_id,
+    "received": received,
     "retention_days": 90,
     "sentry_tags": {},
+    "span_id": "1234567890123456",
+    "start_timestamp_ms": start_time_ms,
+    "trace_id": "12345678901234567890123456789012",
 }
 
 expected_for_required_fields = {

@@ -84,7 +84,7 @@ time_validation_tests = [
         id="subquery has their dates adjusted",
     ),
     pytest.param(
-        """MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.c
+        """MATCH (e: events) -[contains]-> (t: transactions) SELECT 4-5, e.event_id
         WHERE e.project_id=1
         AND e.timestamp>=toDateTime('2021-01-01T00:30:00')
         AND e.timestamp<toDateTime('2021-01-03T00:30:00')
@@ -122,7 +122,9 @@ time_validation_tests = [
                         "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
                     ),
                 ),
-                SelectedExpression("e.c", Column("_snuba_e.c", "e", "c")),
+                SelectedExpression(
+                    "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
+                ),
             ],
             condition=binary_condition(
                 "and",

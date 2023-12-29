@@ -84,16 +84,13 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
         (
-            "cdc-consumer",
+            "spans-consumer",
             [
                 "snuba",
-                "multistorage-consumer",
-                "--auto-offset-reset=latest",
-                "--no-strict-offset-reset",
-                "--log-level=debug",
-                "--storage=groupedmessages",
-                "--storage=groupassignees",
-                "--consumer-group=cdc_group",
+                "consumer",
+                "--storage=spans",
+                "--consumer-group=spans_group",
+                *COMMON_CONSUMER_DEV_OPTIONS,
             ],
         ),
     ]
@@ -225,6 +222,16 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "consumer",
                     "--storage=generic_metrics_counters_raw",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
+                    *COMMON_CONSUMER_DEV_OPTIONS,
+                ],
+            ),
+            (
+                "generic-metrics-gauges-consumer",
+                [
+                    "snuba",
+                    "consumer",
+                    "--storage=generic_metrics_gauges_raw",
+                    "--consumer-group=snuba-gen-metrics-gauges-consumers",
                     *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),
@@ -374,20 +381,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "consumer",
                     "--storage=search_issues",
                     "--consumer-group=generic_events_group",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
-                ],
-            ),
-        ]
-
-    if settings.ENABLE_SPANS_CONSUMER:
-        daemons += [
-            (
-                "spans-consumer",
-                [
-                    "snuba",
-                    "consumer",
-                    "--storage=spans",
-                    "--consumer-group=spans_group",
                     *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),

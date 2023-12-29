@@ -195,7 +195,6 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         ):
             return None
         elif type_ in _REPLACEMENT_BY_TYPE:
-
             processed = _REPLACEMENT_BY_TYPE[type_].parse_message(
                 message,
                 self.__replacement_context,
@@ -263,7 +262,11 @@ def _build_event_set_filter(
         if not msg_value:
             return ""
 
-        timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
+        try:
+            timestamp = datetime.strptime(msg_value, settings.PAYLOAD_DATETIME_FORMAT)
+        except ValueError:  # e.g. "2023-08-28T03:05:38+00:00"
+            timestamp = datetime.fromisoformat(msg_value)
+
         return (
             f"timestamp {operator} toDateTime('{timestamp.strftime(DATETIME_FORMAT)}')"
         )
@@ -392,7 +395,6 @@ class DeleteGroupsReplacement(Replacement):
         message: ReplacementMessage[EndDeleteGroupsMessageBody],
         context: ReplacementContext,
     ) -> Optional[DeleteGroupsReplacement]:
-
         group_ids = message.data["group_ids"]
         if not group_ids:
             return None

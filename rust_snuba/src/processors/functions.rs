@@ -1,72 +1,56 @@
-use crate::processors::spans::SpanStatus;
-use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+use crate::processors::spans::SpanStatus;
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, BadMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromFunctionsMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            BadMessage
-        })?;
+) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
-        let profile_id = Uuid::parse_str(msg.profile_id.as_str()).map_err(|_err| BadMessage)?;
-        let timestamp = match msg.timestamp {
-            Some(timestamp) => timestamp,
-            _ => SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|_err| BadMessage)?
-                .as_secs(),
-        };
-        let device_classification = match msg.device_class {
-            Some(device_classification) => device_classification,
-            _ => 0,
-        };
-        let mut rows = Vec::with_capacity(msg.functions.len());
+    let timestamp = match msg.timestamp {
+        Some(timestamp) => timestamp,
+        _ => SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+    };
+    let device_classification = msg.device_class.unwrap_or_default();
 
-        for from in &msg.functions {
-            let function = Function {
-                // Profile metadata
-                browser_name: msg.browser_name.clone(),
-                device_classification,
-                dist: msg.dist.clone(),
-                environment: msg.environment.clone(),
-                http_method: msg.http_method.clone(),
-                platform: msg.platform.clone(),
-                profile_id: profile_id.to_string(),
-                project_id: msg.project_id,
-                release: msg.release.clone(),
-                retention_days: msg.retention_days,
-                timestamp,
-                transaction_name: msg.transaction_name.clone(),
-                transaction_op: msg.transaction_op.clone(),
-                transaction_status: msg.transaction_status as u8,
+    let functions = msg.functions.into_iter().map(|from| {
+        Function {
+            profile_id: msg.profile_id,
+            project_id: msg.project_id,
+            // Profile metadata
+            browser_name: msg.browser_name.clone(),
+            device_classification,
+            dist: msg.dist.clone(),
+            environment: msg.environment.clone(),
+            http_method: msg.http_method.clone(),
+            platform: msg.platform.clone(),
+            release: msg.release.clone(),
+            retention_days: msg.retention_days,
+            timestamp,
+            transaction_name: msg.transaction_name.clone(),
+            transaction_op: msg.transaction_op.clone(),
+            transaction_status: msg.transaction_status as u8,
 
-                // Function metadata
-                fingerprint: from.fingerprint,
-                durations: from.self_times_ns.clone(),
-                function: from.function.clone(),
-                package: from.package.clone(),
-                name: from.function.clone(),
-                is_application: from.in_app as u8,
+            // Function metadata
+            fingerprint: from.fingerprint,
+            durations: from.self_times_ns,
+            function: from.function.clone(),
+            package: from.package.clone(),
+            name: from.function,
+            is_application: from.in_app as u8,
 
-                ..Default::default()
-            };
-            let serialized = serde_json::to_vec(&function).map_err(|err| {
-                log::error!("Failed to serialize message: {}", err);
-                BadMessage
-            })?;
-            rows.push(serialized);
+            ..Default::default()
         }
-
-        return Ok(BytesInsertBatch { rows });
-    }
-    Err(BadMessage)
+    });
+    InsertBatch::from_rows(functions)
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,6 +64,8 @@ struct FromFunction {
 
 #[derive(Debug, Deserialize)]
 struct FromFunctionsMessage {
+    profile_id: Uuid,
+    project_id: u64,
     #[serde(default)]
     browser_name: Option<String>,
     #[serde(default)]
@@ -92,8 +78,6 @@ struct FromFunctionsMessage {
     #[serde(default)]
     http_method: Option<String>,
     platform: String,
-    profile_id: String,
-    project_id: u64,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
@@ -106,6 +90,8 @@ struct FromFunctionsMessage {
 
 #[derive(Default, Debug, Serialize)]
 struct Function {
+    profile_id: Uuid,
+    project_id: u64,
     browser_name: Option<String>,
     device_classification: u32,
     dist: Option<String>,
@@ -120,8 +106,6 @@ struct Function {
     name: String,
     package: String,
     platform: String,
-    profile_id: String,
-    project_id: u64,
     release: Option<String>,
     retention_days: u32,
     timestamp: u64,
@@ -178,11 +162,7 @@ mod tests {
             "device_class": 2,
             "retention_days": 30
         }"#;
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

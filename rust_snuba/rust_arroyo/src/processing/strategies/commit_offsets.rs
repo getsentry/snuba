@@ -1,19 +1,67 @@
-use crate::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use chrono::{DateTime, Duration, Utc};
+
+use crate::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use crate::types::{Message, Partition};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
-    last_commit_time: SystemTime,
+    last_commit_time: DateTime<Utc>,
+    last_record_time: DateTime<Utc>,
     commit_frequency: Duration,
+    metrics: BoxMetrics,
 }
-impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
-    fn poll(&mut self) -> Option<CommitRequest> {
-        self.commit(false)
+
+impl CommitOffsets {
+    pub fn new(commit_frequency: Duration) -> Self {
+        CommitOffsets {
+            partitions: Default::default(),
+            last_commit_time: Utc::now(),
+            last_record_time: Utc::now(),
+            commit_frequency,
+            metrics: get_metrics(),
+        }
     }
 
-    fn submit(&mut self, message: Message<T>) -> Result<(), MessageRejected<T>> {
+    fn commit(&mut self, force: bool) -> Option<CommitRequest> {
+        if Utc::now() - self.last_commit_time <= self.commit_frequency && !force {
+            return None;
+        }
+
+        if self.partitions.is_empty() {
+            return None;
+        }
+
+        let ret = Some(CommitRequest {
+            positions: self.partitions.clone(),
+        });
+        self.partitions.clear();
+        self.last_commit_time = Utc::now();
+        ret
+    }
+}
+
+impl<T> ProcessingStrategy<T> for CommitOffsets {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(self.commit(false))
+    }
+
+    fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
+        let now = Utc::now();
+        if now - self.last_record_time > Duration::seconds(1) {
+            if let Some(timestamp) = message.timestamp() {
+                self.metrics.timing(
+                    "arroyo.consumer.latency",
+                    (now - timestamp).num_seconds() as u64,
+                    None,
+                );
+                self.last_record_time = now;
+            }
+        }
+
         for (partition, offset) in message.committable() {
             self.partitions.insert(partition, offset);
         }
@@ -24,41 +72,11 @@ impl<T: Clone> ProcessingStrategy<T> for CommitOffsets {
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<Duration>) -> Option<CommitRequest> {
-        self.commit(true)
-    }
-}
-
-impl CommitOffsets {
-    pub fn new(commit_frequency: Duration) -> Self {
-        CommitOffsets {
-            partitions: Default::default(),
-            last_commit_time: SystemTime::now(),
-            commit_frequency,
-        }
-    }
-
-    fn commit(&mut self, force: bool) -> Option<CommitRequest> {
-        if SystemTime::now()
-            > self
-                .last_commit_time
-                .checked_add(self.commit_frequency)
-                .unwrap()
-            || force
-        {
-            if !self.partitions.is_empty() {
-                let ret = Some(CommitRequest {
-                    positions: self.partitions.clone(),
-                });
-                self.partitions.clear();
-                self.last_commit_time = SystemTime::now();
-                ret
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+    fn join(
+        &mut self,
+        _: Option<std::time::Duration>,
+    ) -> Result<Option<CommitRequest>, InvalidMessage> {
+        Ok(self.commit(true))
     }
 }
 
@@ -75,48 +93,30 @@ mod tests {
 
     #[test]
     fn test_commit_offsets() {
-        env_logger::init();
-        let partition1 = Partition {
-            topic: Topic {
-                name: "noop-commit".to_string(),
-            },
-            index: 0,
-        };
-        let partition2 = Partition {
-            topic: Topic {
-                name: "noop-commit".to_string(),
-            },
-            index: 1,
-        };
+        tracing_subscriber::fmt().with_test_writer().init();
+        let partition1 = Partition::new(Topic::new("noop-commit"), 0);
+        let partition2 = Partition::new(Topic::new("noop-commit"), 1);
         let timestamp = DateTime::from(SystemTime::now());
 
         let m1 = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                partition: partition1.clone(),
+                partition: partition1,
                 offset: 1000,
-                payload: KafkaPayload {
-                    key: None,
-                    headers: None,
-                    payload: None,
-                },
+                payload: KafkaPayload::new(None, None, None),
                 timestamp,
             }),
         };
 
         let m2 = Message {
             inner_message: InnerMessage::BrokerMessage(BrokerMessage {
-                partition: partition2.clone(),
+                partition: partition2,
                 offset: 2000,
-                payload: KafkaPayload {
-                    key: None,
-                    headers: None,
-                    payload: None,
-                },
+                payload: KafkaPayload::new(None, None, None),
                 timestamp,
             }),
         };
 
-        let mut noop = CommitOffsets::new(Duration::from_secs(1));
+        let mut noop = CommitOffsets::new(chrono::Duration::seconds(1));
 
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),
@@ -124,13 +124,13 @@ mod tests {
         commit_req1.positions.insert(partition1, 1001);
         noop.submit(m1).expect("Failed to submit");
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).unwrap(),
             None
         );
 
         sleep(Duration::from_secs(2));
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).unwrap(),
             Some(commit_req1)
         );
 
@@ -140,14 +140,15 @@ mod tests {
         commit_req2.positions.insert(partition2, 2001);
         noop.submit(m2).expect("Failed to submit");
         assert_eq!(
-            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop),
+            <CommitOffsets as ProcessingStrategy<KafkaPayload>>::poll(&mut noop).unwrap(),
             None
         );
         assert_eq!(
             <CommitOffsets as ProcessingStrategy<KafkaPayload>>::join(
                 &mut noop,
                 Some(Duration::from_secs(5))
-            ),
+            )
+            .unwrap(),
             Some(commit_req2)
         );
     }

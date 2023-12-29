@@ -49,7 +49,9 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
 )
 
 ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS: list[str] | None = None
 ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_PROFILES_SAMPLE_RATE = float(os.environ.get("ADMIN_PROFILES_SAMPLE_RATE", 1.0))
 ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
 ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
@@ -70,6 +72,7 @@ MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
+ALLOCATION_POLICY_ENABLED = True
 DEFAULT_DATASET_NAME = "events"
 DISABLED_ENTITIES: Set[str] = set()
 DISABLED_DATASETS: Set[str] = set()
@@ -106,14 +109,15 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "spans",
             "group_attributes",
             "generic_metrics_gauges",
+            "metrics_summaries",
         },
         "single_node": True,
     },
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST: str | None = None
-DOGSTATSD_PORT: int | None = None
+DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_STATSD_HOST") or None
+DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_STATSD_PORT") or 0) or None
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
@@ -194,7 +198,7 @@ SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 STARFISH_SLACK_CHANNEL_ID = os.environ.get("STARFISH_SLACK_CHANNEL_ID")
 
 # Snuba Options
-
+SNUBA_PROFILES_SAMPLE_RATE = float(os.environ.get("SNUBA_PROFILES_SAMPLE_RATE", 0.0))
 SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
@@ -291,7 +295,13 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {
+    "deprecate",
+    "limited",
+    "experimental",
+    "partial",
+    "complete",
+}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_FAIL_QUERIES: bool = True
@@ -336,9 +346,6 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
-
-# Enable spans ingestion
-ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Enable group attributes consumer
 ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(

@@ -1,54 +1,83 @@
-use crate::config::ClickhouseConfig;
-use crate::types::BytesInsertBatch;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{CommitRequest, MessageRejected, ProcessingStrategy};
+use rust_arroyo::processing::strategies::{
+    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+};
 use rust_arroyo::types::Message;
-use std::time::Duration;
+use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
+
+use crate::config::ClickhouseConfig;
+use crate::types::BytesInsertBatch;
 
 struct ClickhouseWriter {
-    client: ClickhouseClient,
+    client: Arc<ClickhouseClient>,
+    metrics: BoxMetrics,
     skip_write: bool,
 }
 
 impl ClickhouseWriter {
     pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
-        ClickhouseWriter { client, skip_write }
+        ClickhouseWriter {
+            client: Arc::new(client),
+            metrics: get_metrics(),
+            skip_write,
+        }
     }
 }
 
 impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
-        let client: ClickhouseClient = self.client.clone();
+        let client = self.client.clone();
+        let metrics = self.metrics;
+
         Box::pin(async move {
-            let len = message.payload().rows.len();
-            let mut data = vec![];
-            for row in message.payload().rows {
-                data.extend(row);
-                data.extend(b"\n");
-            }
+            let insert_batch = message.payload();
+            let write_start = SystemTime::now();
 
             if skip_write {
-                log::info!("skipping write of {} rows", len);
-                return Ok(message);
+                tracing::info!("skipping write of {} rows", insert_batch.len());
+            } else {
+                tracing::debug!("performing write");
+
+                let response = client
+                    .send(insert_batch.encoded_rows().to_vec())
+                    .await
+                    .unwrap();
+
+                tracing::debug!(?response);
+                tracing::info!("Inserted {} rows", insert_batch.len());
             }
 
-            log::debug!("performing write");
-            let response = client.send(data).await.unwrap();
+            let write_finish = SystemTime::now();
 
-            log::debug!("response: {:?}", response);
-            log::info!("Inserted {} rows", len);
+            if let Ok(elapsed) = write_finish.duration_since(write_start) {
+                metrics.timing(
+                    "insertions.batch_write_ms",
+                    elapsed.as_millis() as u64,
+                    None,
+                );
+            }
+            metrics.increment(
+                "insertions.batch_write_msgs",
+                insert_batch.len() as i64,
+                None,
+            );
+            insert_batch.record_message_latency(&metrics);
+
             Ok(message)
         })
     }
 }
 
 pub struct ClickhouseWriterStep {
-    inner: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
 }
 
 impl ClickhouseWriterStep {
@@ -57,7 +86,7 @@ impl ClickhouseWriterStep {
         cluster_config: ClickhouseConfig,
         table: String,
         skip_write: bool,
-        concurrency: usize,
+        concurrency: &ConcurrencyConfig,
     ) -> Self
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -66,7 +95,7 @@ impl ClickhouseWriterStep {
         let http_port = cluster_config.http_port;
         let database = cluster_config.database;
 
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ClickhouseWriter::new(
                 ClickhouseClient::new(&hostname, http_port, &table, &database),
@@ -74,21 +103,21 @@ impl ClickhouseWriterStep {
             )),
             concurrency,
             Some("clickhouse"),
-        ));
+        );
 
         ClickhouseWriterStep { inner }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Option<CommitRequest> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
         message: Message<BytesInsertBatch>,
-    ) -> Result<(), MessageRejected<BytesInsertBatch>> {
+    ) -> Result<(), SubmitError<BytesInsertBatch>> {
         self.inner.submit(message)
     }
 
@@ -100,7 +129,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Option<CommitRequest> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         self.inner.join(timeout)
     }
 }
@@ -108,50 +137,45 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
 #[derive(Clone)]
 pub struct ClickhouseClient {
     client: Client,
-    url: String,
     headers: HeaderMap<HeaderValue>,
-    table: String,
+    url: String,
+    query: String,
 }
+
 impl ClickhouseClient {
     pub fn new(hostname: &str, http_port: u16, table: &str, database: &str) -> ClickhouseClient {
-        let mut client = ClickhouseClient {
-            client: Client::new(),
-            url: format!("http://{}:{}", hostname, http_port),
-            headers: HeaderMap::new(),
-            table: table.to_string(),
-        };
-
-        client
-            .headers
-            .insert(CONNECTION, HeaderValue::from_static("keep-alive"));
-        client
-            .headers
-            .insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
-        client.headers.insert(
+        let mut headers = HeaderMap::with_capacity(3);
+        headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
+        headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
+        headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
-        client
+
+        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
+        let url = format!("http://{hostname}:{http_port}?{query_params}");
+        let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
+
+        ClickhouseClient {
+            client: Client::new(),
+            headers,
+            url,
+            query,
+        }
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> Result<Response, anyhow::Error> {
+    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         let res = self
             .client
-            .post(self.url.clone())
+            .post(&self.url)
             .headers(self.headers.clone())
+            .query(&[("query", &self.query)])
             .body(body)
-            .query(&[(
-                "query",
-                format!("INSERT INTO {} FORMAT JSONEachRow", self.table),
-            )])
             .send()
             .await?;
 
         if res.status() != reqwest::StatusCode::OK {
-            return Err(anyhow::anyhow!(
-                "error writing to clickhouse: {}",
-                res.text().await?
-            ));
+            anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
         }
 
         Ok(res)
@@ -170,7 +194,9 @@ mod tests {
             "default",
         );
 
-        println!("{}", "running test");
+        assert!(client.url.contains("load_balancing"));
+        assert!(client.url.contains("insert_distributed_sync"));
+        println!("running test");
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())

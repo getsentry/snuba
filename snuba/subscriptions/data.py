@@ -9,11 +9,11 @@ from functools import partial
 from typing import (
     Any,
     Iterator,
+    List,
     Mapping,
     NamedTuple,
     NewType,
     Optional,
-    Sequence,
     Tuple,
     Union,
 )
@@ -31,6 +31,7 @@ from snuba.query.conditions import (
     binary_condition,
     combine_and_conditions,
 )
+from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity as EntityDS
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
@@ -55,7 +56,6 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
 }
 
 logger = logging.getLogger("snuba.subscriptions")
-
 
 PartitionId = NewType("PartitionId", int)
 
@@ -94,48 +94,67 @@ class SubscriptionData:
         offset: Optional[int],
         query: Union[CompositeQuery[EntityDS], Query],
     ) -> None:
-        # TODO: Support composite queries with multiple entities.
+        added_timestamp_column = False
         from_clause = query.get_from_clause()
-        if not isinstance(from_clause, EntityDS):
-            raise InvalidSubscriptionError("Only simple queries are supported")
-        entity = get_entity(from_clause.key)
-        required_timestamp_column = entity.required_time_column
-        if required_timestamp_column is None:
+        entities: List[Tuple[Optional[str], Entity]] = []
+        if isinstance(from_clause, JoinClause):
+            for alias, node in from_clause.get_alias_node_map().items():
+                assert isinstance(node.data_source, EntityDS), node.data_source
+                entities.append((alias, get_entity(node.data_source.key)))
+        elif isinstance(from_clause, EntityDS):
+            entities = [(None, get_entity(from_clause.key))]
+        else:
             raise InvalidSubscriptionError(
-                "Entity must have a timestamp column for subscriptions"
+                "Only simple queries and join queries are supported"
             )
+        for entity_alias, entity in entities:
+            conditions_to_add: List[Expression] = [
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, entity_alias, "project_id"),
+                    Literal(None, self.project_id),
+                ),
+            ]
 
-        conditions_to_add: Sequence[Expression] = [
-            binary_condition(
-                ConditionFunctions.EQ,
-                Column(None, None, "project_id"),
-                Literal(None, self.project_id),
-            ),
-            binary_condition(
-                ConditionFunctions.GTE,
-                Column(None, None, required_timestamp_column),
-                Literal(None, (timestamp - timedelta(seconds=self.time_window_sec))),
-            ),
-            binary_condition(
-                ConditionFunctions.LT,
-                Column(None, None, required_timestamp_column),
-                Literal(None, timestamp),
-            ),
-        ]
+            required_timestamp_column = entity.required_time_column
+            if required_timestamp_column is not None:
+                added_timestamp_column = True
+                conditions_to_add.extend(
+                    [
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, entity_alias, required_timestamp_column),
+                            Literal(
+                                None,
+                                (timestamp - timedelta(seconds=self.time_window_sec)),
+                            ),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.LT,
+                            Column(None, entity_alias, required_timestamp_column),
+                            Literal(None, timestamp),
+                        ),
+                    ]
+                )
 
-        new_condition = combine_and_conditions(conditions_to_add)
-        condition = query.get_condition()
-        if condition:
-            new_condition = binary_condition(
-                BooleanFunctions.AND, condition, new_condition
+            new_condition = combine_and_conditions(conditions_to_add)
+            condition = query.get_condition()
+            if condition:
+                new_condition = binary_condition(
+                    BooleanFunctions.AND, condition, new_condition
+                )
+
+            query.set_ast_condition(new_condition)
+
+            subscription_processors = self.entity.get_subscription_processors()
+            if subscription_processors:
+                for processor in subscription_processors:
+                    processor.process(query, self.metadata, offset)
+
+        if not added_timestamp_column:
+            raise InvalidSubscriptionError(
+                "At least one Entity must have a timestamp column for subscriptions"
             )
-
-        query.set_ast_condition(new_condition)
-
-        subscription_processors = self.entity.get_subscription_processors()
-        if subscription_processors:
-            for processor in subscription_processors:
-                processor.process(query, self.metadata, offset)
 
     def validate(self) -> None:
         if self.time_window_sec < 60:
