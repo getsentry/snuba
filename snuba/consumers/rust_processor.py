@@ -62,6 +62,7 @@ def ensure_utc(value: Optional[datetime]) -> Optional[datetime]:
         value.replace(tzinfo=timezone.utc)
     return value
 
+
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
 ) -> Tuple[Sequence[bytes], Optional[datetime], Optional[datetime]]:
