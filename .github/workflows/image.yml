@@ -14,7 +14,7 @@ jobs:
       SHOULD_BUILD_ADMIN_UI: ${{ matrix.arch == 'arm64' && 'false' || 'true' }}
       NODE_VERSION: 19.x
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/setup-node@v3
       with:
         node-version: ${{env.NODE_VERSION}}
