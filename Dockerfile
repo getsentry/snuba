@@ -103,8 +103,9 @@ FROM base AS application_base
 COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/ ./snuba/admin/dist/
-RUN apt-get install -y libjemalloc2 --no-install-recommends
 RUN set -ex; \
+    apt-get install -y libjemalloc2 --no-install-recommends; \
+    ln -s /usr/lib/*/libjemalloc.so.2 /usr/src/snuba/libjemalloc.so.2; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
@@ -117,7 +118,7 @@ RUN set -ex; \
     snuba --help
 
 ARG SOURCE_COMMIT
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 \
+ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
