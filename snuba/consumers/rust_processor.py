@@ -15,7 +15,7 @@ import importlib
 import logging
 import os
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Deque, Mapping, Optional, Sequence, Tuple, Type, Union, cast
 
 import rapidjson
@@ -57,6 +57,11 @@ def initialize_processor(
 initialize_processor()
 
 
+def ensure_utc(value: Optional[datetime]) -> Optional[datetime]:
+    if value.tzinfo is None:
+        value.replace(tzinfo=timezone.utc)
+    return value
+
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
 ) -> Tuple[Sequence[bytes], Optional[datetime], Optional[datetime]]:
@@ -74,8 +79,8 @@ def process_rust_message(
 
     return (
         [json_row_encoder.encode(row) for row in rv.rows],
-        rv.origin_timestamp,
-        rv.sentry_received_timestamp,
+        ensure_utc(rv.origin_timestamp),
+        ensure_utc(rv.sentry_received_timestamp),
     )
 
 
