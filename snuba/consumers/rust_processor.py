@@ -244,4 +244,5 @@ class RunPythonMultiprocessing:
         return self.__get_transformed_messages()
 
     def terminate(self) -> None:
+        self.__pool.close()
         self.__inner.terminate()

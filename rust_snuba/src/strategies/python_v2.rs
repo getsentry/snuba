@@ -140,7 +140,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
         let mut apply_backpressure = false;
 
-        let _ = Python::with_gil(|py| -> PyResult<()> {
+        Python::with_gil(|py| -> PyResult<()> {
             let python_strategy = self.python_strategy.lock();
             match message.clone().inner_message {
                 InnerMessage::AnyMessage(..) => {
@@ -180,7 +180,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                 }
             };
             Ok(())
-        });
+        })
+        .unwrap();
 
         if apply_backpressure {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
