@@ -99,10 +99,10 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=int,
 )
 @click.option(
-    "--use-rust-processor",
+    "--use-rust-processor/--use-python-processor",
     "use_rust_processor",
     is_flag=True,
-    help="Use the Rust instead of Python message processor (if available)",
+    help="Use the Rust (if available) or Python message processor",
     default=False,
 )
 @click.option(
