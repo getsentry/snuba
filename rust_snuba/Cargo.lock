@@ -2163,13 +2163,14 @@ dependencies = [
 [[package]]
 name = "statsdproxy"
 version = "0.1.0"
-source = "git+https://github.com/getsentry/statsdproxy#07b51e05107882226d94c27207bb968c1181e3d9"
+source = "git+https://github.com/getsentry/statsdproxy?branch=fix/cadence-avoid-mutex#9fb34dd1704a2908090e96a96f1f49edfa6fd50f"
 dependencies = [
  "anyhow",
  "cadence",
  "crc32fast",
  "env_logger",
  "log",
+ "thread_local",
 ]
 
 [[package]]
