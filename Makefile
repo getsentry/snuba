@@ -3,7 +3,7 @@
 pyenv-setup:
 	@./scripts/pyenv_setup.sh
 
-develop: install-python-dependencies setup-git
+develop: install-python-dependencies install-rs-dev install-brew-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
@@ -43,8 +43,20 @@ install-python-dependencies:
 	pip install `grep ^-- requirements.txt` -r requirements-build.txt
 	pip install `grep ^-- requirements.txt` -e .
 	pip install `grep ^-- requirements.txt` -r requirements-test.txt
+.PHONY: install-python-dependencies
+
+# install-rs-dev/install-py-dev mimick sentry's naming conventions
+install-rs-dev:
+	which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
+	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
+.PHONY: install-rs-dev
 
 install-py-dev: install-python-dependencies
+.PHONY: install-py-dev
+
+install-brew-dev:
+	brew bundle
+.PHONY: install-brew-dev
 
 snubadocs:
 	pip install -U -r ./docs-requirements.txt

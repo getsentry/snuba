@@ -163,6 +163,10 @@ ROLES = {
         name="cardinality-analyzer",
         actions={InteractToolAction([TOOL_RESOURCES["cardinality-analyzer"]])},
     ),
+    "AllMigrationsExecutor": Role(
+        name="AllMigrationsExecutor",
+        actions={ExecuteAllAction(list(MIGRATIONS_RESOURCES.values()))},
+    ),
 }
 
 DEFAULT_ROLES = [

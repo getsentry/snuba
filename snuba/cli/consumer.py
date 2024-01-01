@@ -136,7 +136,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=10)
 @click.option(
     "--enforce-schema",
     type=bool,
@@ -201,7 +201,6 @@ def consumer(
     group_instance_id: Optional[str],
     skip_write: bool,
 ) -> None:
-
     setup_logging(log_level)
     setup_sentry()
 
@@ -262,6 +261,7 @@ def consumer(
         max_insert_batch_size=max_insert_batch_size,
         max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
+        metrics_tags=metrics_tags,
         profile_path=profile_path,
         slice_id=slice_id,
         join_timeout=join_timeout,

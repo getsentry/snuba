@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 pub mod commit_offsets;
+pub mod healthcheck;
 pub mod produce;
 pub mod reduce;
 pub mod run_task;
@@ -115,6 +116,28 @@ pub trait ProcessingStrategy<TPayload>: Send + Sync {
     /// completed and committed before the continuing the rebalancing
     /// process.
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage>;
+}
+
+impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPayload> for Box<S> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        (**self).poll()
+    }
+
+    fn submit(&mut self, message: Message<TPayload>) -> Result<(), SubmitError<TPayload>> {
+        (**self).submit(message)
+    }
+
+    fn close(&mut self) {
+        (**self).close()
+    }
+
+    fn terminate(&mut self) {
+        (**self).terminate()
+    }
+
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        (**self).join(timeout)
+    }
 }
 
 pub trait ProcessingStrategyFactory<TPayload>: Send + Sync {

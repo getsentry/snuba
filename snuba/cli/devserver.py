@@ -83,6 +83,16 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=errors",
             ],
         ),
+        (
+            "spans-consumer",
+            [
+                "snuba",
+                "consumer",
+                "--storage=spans",
+                "--consumer-group=spans_group",
+                *COMMON_CONSUMER_DEV_OPTIONS,
+            ],
+        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
@@ -371,20 +381,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "consumer",
                     "--storage=search_issues",
                     "--consumer-group=generic_events_group",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
-                ],
-            ),
-        ]
-
-    if settings.ENABLE_SPANS_CONSUMER:
-        daemons += [
-            (
-                "spans-consumer",
-                [
-                    "snuba",
-                    "consumer",
-                    "--storage=spans",
-                    "--consumer-group=spans_group",
                     *COMMON_CONSUMER_DEV_OPTIONS,
                 ],
             ),

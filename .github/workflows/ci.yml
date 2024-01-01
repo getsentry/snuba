@@ -39,7 +39,7 @@ jobs:
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: '3.10'
       - uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit
@@ -100,7 +100,7 @@ jobs:
         name: Checkout code
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: '3.10'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -118,7 +118,7 @@ jobs:
         name: Checkout code
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: '3.10'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -151,16 +151,6 @@ jobs:
       - name: Registry login
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-
-      # These are pulled in order to be able to use docker layer caching
-      - name: Pull snuba CI images
-        if: github.repository_owner == 'getsentry'
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
@@ -219,14 +209,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
@@ -307,14 +289,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
-
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4
         with:
@@ -323,7 +297,7 @@ jobs:
           tags: snuba-test
           load: true
           build-args: |
-            SHOULD_BUILD_RUST=false
+            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -351,8 +325,6 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          cache-files-hash: ${{ hashFiles('sentry/requirements**.txt') }}
-          python-version: 3.8
           snuba: false
           kafka: true
           clickhouse: true
@@ -418,14 +390,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Pull snuba CI images
-        run: |
-          set +e # skip missing images
-          docker pull ghcr.io/getsentry/snuba-ci:${{ github.sha }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:${{ needs.snuba-image.outputs.branch }} ; \
-            docker pull ghcr.io/getsentry/snuba-ci:latest || true
-          set -e
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v4

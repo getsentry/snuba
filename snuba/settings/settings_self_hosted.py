@@ -3,6 +3,7 @@ from typing import Set
 
 env = os.environ.get
 
+ALLOCATION_POLICY_ENABLED = False
 DEBUG = env("DEBUG", "0").lower() in ("1", "true")
 
 DEFAULT_RETENTION_DAYS = env("SENTRY_EVENT_RETENTION_DAYS", 90)

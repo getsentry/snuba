@@ -41,7 +41,7 @@ jobs:
             "${args[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg SHOULD_BUILD_ADMIN_UI="$SHOULD_BUILD_ADMIN_UI" \
-            --build-arg SHOULD_BUILD_RUST=false \
+            --build-arg SHOULD_BUILD_RUST=true \
             --platform linux/${{ matrix.arch }} \
             --tag "$IMG_VERSIONED" \
             --target application \

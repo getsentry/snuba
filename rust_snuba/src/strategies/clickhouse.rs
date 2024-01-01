@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
@@ -10,12 +10,14 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::Message;
+use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
+    metrics: BoxMetrics,
     skip_write: bool,
 }
 
@@ -23,6 +25,7 @@ impl ClickhouseWriter {
     pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
         ClickhouseWriter {
             client: Arc::new(client),
+            metrics: get_metrics(),
             skip_write,
         }
     }
@@ -32,27 +35,42 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
+        let metrics = self.metrics;
 
         Box::pin(async move {
-            let rows = &message.payload().rows;
-
-            let len = rows.len();
-            let mut data = vec![];
-            for row in rows {
-                data.extend(row);
-                data.extend(b"\n");
-            }
+            let insert_batch = message.payload();
+            let write_start = SystemTime::now();
 
             if skip_write {
-                tracing::info!("skipping write of {} rows", len);
-                return Ok(message);
+                tracing::info!("skipping write of {} rows", insert_batch.len());
+            } else {
+                tracing::debug!("performing write");
+
+                let response = client
+                    .send(insert_batch.encoded_rows().to_vec())
+                    .await
+                    .unwrap();
+
+                tracing::debug!(?response);
+                tracing::info!("Inserted {} rows", insert_batch.len());
             }
 
-            tracing::debug!("performing write");
-            let response = client.send(data).await.unwrap();
+            let write_finish = SystemTime::now();
 
-            tracing::debug!(?response);
-            tracing::info!("Inserted {} rows", len);
+            if let Ok(elapsed) = write_finish.duration_since(write_start) {
+                metrics.timing(
+                    "insertions.batch_write_ms",
+                    elapsed.as_millis() as u64,
+                    None,
+                );
+            }
+            metrics.increment(
+                "insertions.batch_write_msgs",
+                insert_batch.len() as i64,
+                None,
+            );
+            insert_batch.record_message_latency(&metrics);
+
             Ok(message)
         })
     }
@@ -134,7 +152,8 @@ impl ClickhouseClient {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        let url = format!("http://{hostname}:{http_port}");
+        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
+        let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         ClickhouseClient {
@@ -175,6 +194,8 @@ mod tests {
             "default",
         );
 
+        assert!(client.url.contains("load_balancing"));
+        assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());

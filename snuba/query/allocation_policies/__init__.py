@@ -404,7 +404,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE))
+        return (
+            bool(self.get_config_value(IS_ACTIVE))
+            and settings.ALLOCATION_POLICY_ENABLED
+        )
 
     @property
     def is_enforced(self) -> bool:

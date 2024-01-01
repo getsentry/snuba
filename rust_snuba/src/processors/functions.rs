@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::spans::SpanStatus;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
-) -> anyhow::Result<BytesInsertBatch> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
 
@@ -21,9 +21,8 @@ pub fn process_message(
     };
     let device_classification = msg.device_class.unwrap_or_default();
 
-    let mut rows = Vec::with_capacity(msg.functions.len());
-    for from in msg.functions {
-        let function = Function {
+    let functions = msg.functions.into_iter().map(|from| {
+        Function {
             profile_id: msg.profile_id,
             project_id: msg.project_id,
             // Profile metadata
@@ -49,12 +48,9 @@ pub fn process_message(
             is_application: from.in_app as u8,
 
             ..Default::default()
-        };
-        let serialized = serde_json::to_vec(&function)?;
-        rows.push(serialized);
-    }
-
-    Ok(BytesInsertBatch { rows })
+        }
+    });
+    InsertBatch::from_rows(functions)
 }
 
 #[derive(Debug, Deserialize)]

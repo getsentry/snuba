@@ -67,6 +67,18 @@ pub enum TopicOrPartition {
     Partition(Partition),
 }
 
+impl From<Topic> for TopicOrPartition {
+    fn from(value: Topic) -> Self {
+        Self::Topic(value)
+    }
+}
+
+impl From<Partition> for TopicOrPartition {
+    fn from(value: Partition) -> Self {
+        Self::Partition(value)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct BrokerMessage<T> {
     pub payload: T,
@@ -252,7 +264,7 @@ impl<T> Message<T> {
     }
 
     /// Map a fallible function over this messages's payload.
-    pub fn try_map<TReplaced, E, F: FnOnce(T) -> Result<TReplaced, E>>(
+    pub fn try_map<TReplaced, E, F: Fn(T) -> Result<TReplaced, E>>(
         self,
         f: F,
     ) -> Result<Message<TReplaced>, E> {
@@ -267,6 +279,14 @@ impl<T> Message<T> {
             }
         }
     }
+
+    // Returns this message's timestamp, if it has one.
+    pub fn timestamp(&self) -> Option<DateTime<Utc>> {
+        match &self.inner_message {
+            InnerMessage::BrokerMessage(m) => Some(m.timestamp),
+            InnerMessage::AnyMessage(_) => None,
+        }
+    }
 }
 
 impl<T> fmt::Display for Message<T> {
@@ -277,22 +297,15 @@ impl<T> fmt::Display for Message<T> {
             }) => {
                 write!(
                     f,
-                    "Message<{}>(partition={}), offset={}",
+                    "Message<{}>(partition={partition}), offset={offset}",
                     type_name::<T>(),
-                    &partition,
-                    &offset
                 )
             }
             InnerMessage::AnyMessage(AnyMessage { committable, .. }) => {
                 write!(
                     f,
-                    "Message<{}>(committable={})",
+                    "Message<{}>(committable={committable:?})",
                     type_name::<T>(),
-                    &committable
-                        .iter()
-                        .map(|(k, v)| format!("{}:{}", k, v))
-                        .collect::<Vec<_>>()
-                        .join(",")
                 )
             }
         }

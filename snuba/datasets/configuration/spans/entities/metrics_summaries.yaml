@@ -1,0 +1,78 @@
+version: v1
+kind: entity
+name: metrics_summaries
+
+schema:
+  [
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: span_id, type: UInt, args: { size: 64 } },
+    { name: trace_id, type: UUID },
+    { name: metric_mri, type: String },
+    { name: min, type: Float, args: { size: 64 } },
+    { name: max, type: Float, args: { size: 64 } },
+    { name: sum, type: Float, args: { size: 64 } },
+    { name: count, type: Float, args: { size: 64 } },
+    { name: end_timestamp, type: DateTime },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [{ name: key, type: String }, { name: value, type: String }],
+        },
+    },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [readonly],
+        },
+    },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: deleted, type: UInt, args: { size: 8 } },
+  ]
+
+storages:
+  - storage: metrics_summaries
+    is_writable: true
+    translation_mappers:
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table: null
+            from_column_name: tags
+            to_nested_col_table: null
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+            nullable: false
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: BasicFunctionsProcessor
+  - processor: ReferrerRateLimiterProcessor
+  - processor: ProjectReferrerRateLimiter
+    args:
+      project_column: project_id
+  - processor: ProjectRateLimiterProcessor
+    args:
+      project_column: project_id
+  - processor: ResourceQuotaProcessor
+    args:
+      project_field: project_id
+
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+        - project_id
+  - validator: TagConditionValidator
+    args: {}
+  - validator: DatetimeConditionValidator
+    args: {}
+
+required_time_column: end_timestamp

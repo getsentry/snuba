@@ -3,16 +3,18 @@ use crate::processing::strategies::{
     SubmitError,
 };
 use crate::types::{Message, Partition};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
+use crate::utils::timing::Deadline;
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::Duration;
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
     accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
     offsets: BTreeMap<Partition, u64>,
-    batch_start_time: SystemTime,
+    batch_start_time: Deadline,
     message_count: usize,
 }
 
@@ -20,12 +22,13 @@ impl<T, TResult> BatchState<T, TResult> {
     fn new(
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
+        max_batch_time: Duration,
     ) -> BatchState<T, TResult> {
         BatchState {
             value: Some(initial_value),
             accumulator,
             offsets: Default::default(),
-            batch_start_time: SystemTime::now(),
+            batch_start_time: Deadline::new(max_batch_time),
             message_count: 0,
         }
     }
@@ -50,6 +53,7 @@ pub struct Reduce<T, TResult> {
     batch_state: BatchState<T, TResult>,
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
+    metrics: BoxMetrics,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
@@ -82,28 +86,24 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
     }
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
-        let start = Instant::now();
+        let deadline = timeout.map(Deadline::new);
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
                 let next_commit = self.next_step.poll()?;
                 self.commit_request_carried_over =
                     merge_commit_request(self.commit_request_carried_over.take(), next_commit);
                 self.flush(true)?;
-                if let Some(t) = timeout {
-                    if start.elapsed() > t {
-                        tracing::warn!("Timeout reached while waiting for tasks to finish");
-                        break;
-                    }
+
+                if deadline.map_or(false, |d| d.has_elapsed()) {
+                    tracing::warn!("Timeout reached while waiting for tasks to finish");
+                    break;
                 }
             }
         } else {
             self.flush(true)?;
         }
 
-        let remaining: Option<Duration> =
-            timeout.map(|t| t.checked_sub(start.elapsed()).unwrap_or(Duration::ZERO));
-
-        let next_commit = self.next_step.join(remaining)?;
+        let next_commit = self.next_step.join(deadline.map(|d| d.remaining()))?;
 
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
@@ -113,16 +113,20 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
 }
 
 impl<T, TResult: Clone> Reduce<T, TResult> {
-    pub fn new(
-        next_step: Box<dyn ProcessingStrategy<TResult>>,
+    pub fn new<N>(
+        next_step: N,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
-    ) -> Reduce<T, TResult> {
-        let batch_state = BatchState::new(initial_value.clone(), accumulator.clone());
+    ) -> Self
+    where
+        N: ProcessingStrategy<TResult> + 'static,
+    {
+        let batch_state =
+            BatchState::new(initial_value.clone(), accumulator.clone(), max_batch_time);
         Reduce {
-            next_step,
+            next_step: Box::new(next_step),
             accumulator,
             initial_value,
             max_batch_size,
@@ -130,6 +134,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             batch_state,
             message_carried_over: None,
             commit_request_carried_over: None,
+            metrics: get_metrics(),
         }
     }
 
@@ -153,38 +158,42 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             return Ok(());
         }
 
+        let batch_time = self.batch_state.batch_start_time.elapsed();
         let batch_complete = self.batch_state.message_count >= self.max_batch_size
-            || self
-                .batch_state
-                .batch_start_time
-                .elapsed()
-                .unwrap_or_default()
-                > self.max_batch_time;
+            || batch_time >= self.max_batch_time;
 
-        if batch_complete || force {
-            let batch_state = mem::replace(
-                &mut self.batch_state,
-                BatchState::new(self.initial_value.clone(), self.accumulator.clone()),
-            );
-
-            let next_message =
-                Message::new_any_message(batch_state.value.unwrap(), batch_state.offsets);
-
-            match self.next_step.submit(next_message) {
-                Err(SubmitError::MessageRejected(MessageRejected {
-                    message: transformed_message,
-                })) => {
-                    self.message_carried_over = Some(transformed_message);
-                    return Ok(());
-                }
-                Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
-                }
-                Ok(_) => return Ok(()),
-            }
+        if !batch_complete && !force {
+            return Ok(());
         }
 
-        Ok(())
+        self.metrics.timing(
+            "arroyo.strategies.reduce.batch_time",
+            batch_time.as_secs(),
+            None,
+        );
+
+        let batch_state = mem::replace(
+            &mut self.batch_state,
+            BatchState::new(
+                self.initial_value.clone(),
+                self.accumulator.clone(),
+                self.max_batch_time,
+            ),
+        );
+
+        let next_message =
+            Message::new_any_message(batch_state.value.unwrap(), batch_state.offsets);
+
+        match self.next_step.submit(next_message) {
+            Err(SubmitError::MessageRejected(MessageRejected {
+                message: transformed_message,
+            })) => {
+                self.message_carried_over = Some(transformed_message);
+                Ok(())
+            }
+            Err(SubmitError::InvalidMessage(invalid_message)) => Err(invalid_message),
+            Ok(_) => Ok(()),
+        }
     }
 }
 
@@ -240,11 +249,11 @@ mod tests {
             acc
         });
 
-        let next_step = Box::new(NextStep {
+        let next_step = NextStep {
             submitted: submitted_messages,
-        });
+        };
 
-        let mut strategy: Reduce<u64, Vec<u64>> = Reduce::new(
+        let mut strategy = Reduce::new(
             next_step,
             accumulator,
             initial_value,

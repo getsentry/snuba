@@ -28,6 +28,7 @@ def build_node(
     from_clause: Entity,
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression],
+    granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
     return IndividualNode(
         alias=alias,
@@ -35,6 +36,7 @@ def build_node(
             from_clause=from_clause,
             selected_columns=selected_columns,
             condition=condition,
+            granularity=granularity,
         ),
     )
 
@@ -42,24 +44,28 @@ def build_node(
 def events_node(
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression] = None,
+    granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
     return build_node(
         "ev",
         Entity(EntityKey.EVENTS, EntityColumnSet(EVENTS_SCHEMA.columns)),
         selected_columns,
         condition,
+        granularity,
     )
 
 
 def groups_node(
     selected_columns: Sequence[SelectedExpression],
     condition: Optional[Expression] = None,
+    granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
     return build_node(
         "gr",
         Entity(EntityKey.GROUPEDMESSAGE, EntityColumnSet(GROUPS_SCHEMA.columns)),
         selected_columns,
         condition,
+        granularity,
     )
 
 

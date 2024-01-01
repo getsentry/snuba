@@ -1,21 +1,67 @@
+use chrono::{DateTime, Duration, Utc};
+
 use crate::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
 use crate::types::{Message, Partition};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
-    last_commit_time: SystemTime,
+    last_commit_time: DateTime<Utc>,
+    last_record_time: DateTime<Utc>,
     commit_frequency: Duration,
+    metrics: BoxMetrics,
 }
+
+impl CommitOffsets {
+    pub fn new(commit_frequency: Duration) -> Self {
+        CommitOffsets {
+            partitions: Default::default(),
+            last_commit_time: Utc::now(),
+            last_record_time: Utc::now(),
+            commit_frequency,
+            metrics: get_metrics(),
+        }
+    }
+
+    fn commit(&mut self, force: bool) -> Option<CommitRequest> {
+        if Utc::now() - self.last_commit_time <= self.commit_frequency && !force {
+            return None;
+        }
+
+        if self.partitions.is_empty() {
+            return None;
+        }
+
+        let ret = Some(CommitRequest {
+            positions: self.partitions.clone(),
+        });
+        self.partitions.clear();
+        self.last_commit_time = Utc::now();
+        ret
+    }
+}
+
 impl<T> ProcessingStrategy<T> for CommitOffsets {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         Ok(self.commit(false))
     }
 
     fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
+        let now = Utc::now();
+        if now - self.last_record_time > Duration::seconds(1) {
+            if let Some(timestamp) = message.timestamp() {
+                self.metrics.timing(
+                    "arroyo.consumer.latency",
+                    (now - timestamp).num_seconds() as u64,
+                    None,
+                );
+                self.last_record_time = now;
+            }
+        }
+
         for (partition, offset) in message.committable() {
             self.partitions.insert(partition, offset);
         }
@@ -26,35 +72,11 @@ impl<T> ProcessingStrategy<T> for CommitOffsets {
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(
+        &mut self,
+        _: Option<std::time::Duration>,
+    ) -> Result<Option<CommitRequest>, InvalidMessage> {
         Ok(self.commit(true))
-    }
-}
-
-impl CommitOffsets {
-    pub fn new(commit_frequency: Duration) -> Self {
-        CommitOffsets {
-            partitions: Default::default(),
-            last_commit_time: SystemTime::now(),
-            commit_frequency,
-        }
-    }
-
-    fn commit(&mut self, force: bool) -> Option<CommitRequest> {
-        if self.last_commit_time.elapsed().unwrap_or_default() > self.commit_frequency || force {
-            if !self.partitions.is_empty() {
-                let ret = Some(CommitRequest {
-                    positions: self.partitions.clone(),
-                });
-                self.partitions.clear();
-                self.last_commit_time = SystemTime::now();
-                ret
-            } else {
-                None
-            }
-        } else {
-            None
-        }
     }
 }
 
@@ -71,7 +93,7 @@ mod tests {
 
     #[test]
     fn test_commit_offsets() {
-        env_logger::init();
+        tracing_subscriber::fmt().with_test_writer().init();
         let partition1 = Partition::new(Topic::new("noop-commit"), 0);
         let partition2 = Partition::new(Topic::new("noop-commit"), 1);
         let timestamp = DateTime::from(SystemTime::now());
@@ -94,7 +116,7 @@ mod tests {
             }),
         };
 
-        let mut noop = CommitOffsets::new(Duration::from_secs(1));
+        let mut noop = CommitOffsets::new(chrono::Duration::seconds(1));
 
         let mut commit_req1 = CommitRequest {
             positions: Default::default(),
