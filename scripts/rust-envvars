@@ -7,4 +7,4 @@ export PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
 export PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
 # load cargo envvars explicitly in case user forgot
-source "$HOME/.cargo/env"
+. "$HOME/.cargo/env"
