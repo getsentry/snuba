@@ -1,4 +1,5 @@
 use parking_lot::Mutex;
+use rust_arroyo::utils::metrics::configure_metrics;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,11 +16,13 @@ use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcesso
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
-    ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StorageConfig,
+    ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StorageConfig, StatsDBackend,
 };
 use uuid::Uuid;
 
 fn main() {
+    // this sends to nowhere, but because it's UDP we won't error.
+    configure_metrics(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer", Default::default()));
     divan::main();
 }
 

@@ -25,3 +25,4 @@ pub use config::{ClickhouseConfig, MessageProcessorConfig, StorageConfig};
 pub use factory::ConsumerStrategyFactory;
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;
+pub use metrics::statsd::StatsDBackend;
