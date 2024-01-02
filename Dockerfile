@@ -164,8 +164,9 @@ FROM application_base AS testing
 USER 0
 RUN pip install -r requirements-test.txt
 
-ARG RUST_TOOLCHAIN=1.74.1
 COPY ./rust_snuba/ ./rust_snuba/
+# re-"install" rust for the testing image
 COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
+COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba
