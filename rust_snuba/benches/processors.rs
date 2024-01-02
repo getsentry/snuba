@@ -1,5 +1,4 @@
 use parking_lot::Mutex;
-use rust_arroyo::utils::metrics::configure_metrics;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,6 +14,7 @@ use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
 use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
+use rust_arroyo::utils::metrics::configure_metrics;
 use rust_snuba::{
     ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StatsDBackend, StorageConfig,
 };
