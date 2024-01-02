@@ -1,8 +1,11 @@
 use cadence::prelude::*;
-use cadence::{BufferedUdpMetricSink, MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
+use cadence::{MetricBuilder, MetricError, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
+use statsdproxy::cadence::StatsdProxyMetricSink;
+use statsdproxy::config::AggregateMetricsConfig;
+use statsdproxy::middleware::aggregate::AggregateMetrics;
+use statsdproxy::middleware::Upstream;
 use std::collections::HashMap;
-use std::net::UdpSocket;
 
 #[derive(Debug)]
 pub struct StatsDBackend {
@@ -11,13 +14,20 @@ pub struct StatsDBackend {
 
 impl StatsDBackend {
     pub fn new(host: &str, port: u16, prefix: &str, global_tags: HashMap<&str, &str>) -> Self {
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        socket.set_nonblocking(true).unwrap();
-        let sink_addr = (host, port);
-        let buffered = BufferedUdpMetricSink::from(sink_addr, socket).unwrap();
-        let queuing_sink = QueuingMetricSink::from(buffered);
+        let upstream_addr = format!("{}:{}", host, port);
+        let aggregator_sink = StatsdProxyMetricSink::new(move || {
+            let upstream = Upstream::new(upstream_addr.clone()).unwrap();
+            let config = AggregateMetricsConfig {
+                aggregate_counters: true,
+                flush_offset: 0,
+                flush_interval: 1,
+                aggregate_gauges: true,
+                max_map_size: None,
+            };
+            AggregateMetrics::new(config, upstream)
+        });
 
-        let mut client_builder = StatsdClient::builder(prefix, queuing_sink);
+        let mut client_builder = StatsdClient::builder(prefix, aggregator_sink);
         for (k, v) in global_tags {
             client_builder = client_builder.with_tag(k, v);
         }
