@@ -27,7 +27,7 @@ Message processors
 Each storage in Snuba defines a conversion function mapping the layout of a
 Kafka message to a list of ClickHouse rows.
 
-Message processors are defined in :py:module:`snuba.dataset.processors`, and
+Message processors are defined in :py:mod:`snuba.dataset.processors`, and
 need to subclass from
 :py:class:`snuba.dataset.processors.DatasetMessageProcessor`. Just by
 subclassing, their name becomes available for reference in
