@@ -674,7 +674,7 @@ def parse_mql_query(
     ):
         query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
     with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
-        resolve_mappings(query, mql_context.indexer_mappings)
+        resolve_mappings(query, mql_context.indexer_mappings, dataset)
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
@@ -708,4 +708,5 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
+
     return query, snql_anonymized
