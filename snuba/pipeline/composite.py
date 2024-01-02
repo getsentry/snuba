@@ -522,6 +522,7 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
     def execute(self) -> QueryResult:
         plan = CompositeQueryPlanner(self.__query, self.__settings).build_best_plan()
         root_processors, aliased_processors = plan.get_plan_processors()
+        # TODO: This is also run in the `CompositeExecutionStrategy`, do we need it twice?
         ProcessorsExecutor(
             root_processors,
             aliased_processors,
