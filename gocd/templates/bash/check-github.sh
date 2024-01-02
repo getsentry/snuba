@@ -10,4 +10,5 @@
   "sentry (0)" \
   "sentry (1)" \
   "sentry (2)" \
-  "sentry (3)"
+  "sentry (3)" \
+  ".github/workflows/image.yml / build (amd64)"

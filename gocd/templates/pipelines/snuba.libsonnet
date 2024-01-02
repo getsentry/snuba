@@ -167,7 +167,6 @@ function(region) {
                     elastic_profile_id: 'snuba',
                     tasks: [
                       gocdtasks.script(importstr '../bash/check-github.sh'),
-                      gocdtasks.script(importstr '../bash/check-cloud-build.sh'),
                       gocdtasks.script(importstr '../bash/check-migrations.sh'),
                     ],
                   },

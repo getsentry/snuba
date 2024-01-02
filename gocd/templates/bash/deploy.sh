@@ -6,7 +6,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
   --container-name="api" \
   --container-name="consumer" \
   --container-name="errors-consumer" \
@@ -53,13 +53,13 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="metrics-summaries-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
   --type="cronjob" \
   --container-name="cleanup" \
   --container-name="optimize" \
   --container-name="cardinality-report" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
   --type="statefulset" \
   --container-name="spans-exp-static-on"

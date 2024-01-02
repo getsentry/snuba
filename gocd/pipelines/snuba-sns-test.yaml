@@ -90,7 +90,7 @@ pipelines:
                                     --container-name="spans-consumer" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize"

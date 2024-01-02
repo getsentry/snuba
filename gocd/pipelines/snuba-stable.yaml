@@ -101,7 +101,7 @@ pipelines:
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba,is_canary=true" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize" \
@@ -127,7 +127,7 @@ pipelines:
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
                                     --container-name="consumer" \
                                     --container-name="errors-consumer" \
@@ -159,7 +159,7 @@ pipelines:
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize" \

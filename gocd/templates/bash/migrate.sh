@@ -8,6 +8,6 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --label-selector="service=${SNUBA_SERVICE_NAME}" \
   --container-name="${SNUBA_SERVICE_NAME}" \
   "snuba-migrate" \
-  "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  "ghcr.io/getsentry/snuba:${GO_REVISION_SNUBA_REPO}" \
   -- \
   snuba migrations migrate --check-dangerous -r complete -r partial
