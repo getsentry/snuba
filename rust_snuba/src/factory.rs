@@ -60,7 +60,7 @@ impl ConsumerStrategyFactory {
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let accumulator = Arc::new(BytesInsertBatch::merge);
-        let compute_batch_length = Arc::new(BytesInsertBatch::compute_batch_length);
+        let compute_batch_length = Some(Arc::new(BytesInsertBatch::len));
 
         let next_step = Reduce::new(
             Box::new(ClickhouseWriterStep::new(

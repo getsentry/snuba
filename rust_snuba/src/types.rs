@@ -179,10 +179,6 @@ impl BytesInsertBatch {
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
-
-    pub fn compute_batch_length(&self) -> u64 {
-        &self.rows.num_rows
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
