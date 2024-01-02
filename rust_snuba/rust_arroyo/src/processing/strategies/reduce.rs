@@ -219,36 +219,90 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    struct NextStep<T> {
+        pub submitted: Arc<Mutex<Vec<T>>>,
+    }
+
+    impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+
+        fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
+            self.submitted.lock().unwrap().push(message.into_payload());
+            Ok(())
+        }
+
+        fn close(&mut self) {}
+
+        fn terminate(&mut self) {}
+
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+    }
+
     #[test]
     fn test_reduce() {
         let submitted_messages = Arc::new(Mutex::new(Vec::new()));
         let submitted_messages_clone = submitted_messages.clone();
 
-        struct NextStep<T> {
-            pub submitted: Arc<Mutex<Vec<T>>>,
+        let partition1 = Partition::new(Topic::new("test"), 0);
+
+        let max_batch_size = 2;
+        let max_batch_time = Duration::from_secs(1);
+
+        let initial_value = Vec::new();
+        let accumulator = Arc::new(|mut acc: Vec<u64>, value: u64| {
+            acc.push(value);
+            acc
+        });
+        let compute_batch_size = |_: &_| -> usize { 1 };
+
+        let next_step = NextStep {
+            submitted: submitted_messages,
+        };
+
+        let mut strategy = Reduce::new(
+            next_step,
+            accumulator,
+            initial_value,
+            max_batch_size,
+            max_batch_time,
+            compute_batch_size,
+        );
+
+        for i in 0..3 {
+            let msg = Message {
+                inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
+                    i,
+                    partition1,
+                    i,
+                    chrono::Utc::now(),
+                )),
+            };
+            strategy.submit(msg).unwrap();
+            let _ = strategy.poll();
         }
 
-        impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
+        // 3 messages with a max batch size of 2 means 1 batch was cleared
+        // and 1 message is left before next size limit.
+        assert_eq!(strategy.batch_state.message_count, 1);
 
-            fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
-                self.submitted.lock().unwrap().push(message.into_payload());
-                Ok(())
-            }
+        strategy.close();
+        let _ = strategy.join(None);
 
-            fn close(&mut self) {}
+        // 2 batches were created
+        assert_eq!(
+            *submitted_messages_clone.lock().unwrap(),
+            vec![vec![0, 1], vec![2]]
+        );
+    }
 
-            fn terminate(&mut self) {}
-
-            fn join(
-                &mut self,
-                _: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-        }
+    #[test]
+    fn test_reduce_with_custom_batch_size() {
+        let submitted_messages = Arc::new(Mutex::new(Vec::new()));
+        let submitted_messages_clone = submitted_messages.clone();
 
         let partition1 = Partition::new(Topic::new("test"), 0);
 
@@ -260,7 +314,6 @@ mod tests {
             acc.push(value);
             acc
         });
-        // Count each message as batch size of 5 to test a custom size.
         let compute_batch_size = |_: &_| -> usize { 5 };
 
         let next_step = NextStep {
@@ -289,7 +342,8 @@ mod tests {
             let _ = strategy.poll();
         }
 
-        // 3 messages with a max batch size of 10 means 1 batch was cleared and 5 is left.
+        // 3 messages returning 5 items each and a max batch size of 10
+        // means 1 batch was cleared and 5 items are in the current batch.
         assert_eq!(strategy.batch_state.message_count, 5);
 
         strategy.close();
