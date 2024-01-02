@@ -16,7 +16,7 @@ struct BatchState<T, TResult> {
     offsets: BTreeMap<Partition, u64>,
     batch_start_time: Deadline,
     message_count: usize,
-    compute_batch_length: Arc<dyn Fn(&T) -> usize + Send + Sync>,
+    compute_batch_size: fn(&T) -> usize,
 }
 
 impl<T, TResult> BatchState<T, TResult> {
@@ -24,21 +24,15 @@ impl<T, TResult> BatchState<T, TResult> {
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         max_batch_time: Duration,
-        compute_batch_length: Option<Arc<dyn Fn(&T) -> usize + Send + Sync>>,
+        compute_batch_size: fn(&T) -> usize,
     ) -> BatchState<T, TResult> {
-        let compute_batch_length_function = if let Some(compute_batch_length) = compute_batch_length
-        {
-            compute_batch_length
-        } else {
-            Arc::new(|_: &_| 1)
-        };
         BatchState {
             value: Some(initial_value),
             accumulator,
             offsets: Default::default(),
             batch_start_time: Deadline::new(max_batch_time),
             message_count: 0,
-            compute_batch_length: compute_batch_length_function,
+            compute_batch_size,
         }
     }
 
@@ -49,7 +43,7 @@ impl<T, TResult> BatchState<T, TResult> {
 
         let tmp = self.value.take().unwrap();
         let payload = message.into_payload();
-        self.message_count += (self.compute_batch_length)(&payload);
+        self.message_count += (self.compute_batch_size)(&payload);
         self.value = Some((self.accumulator)(tmp, payload));
     }
 }
@@ -64,7 +58,7 @@ pub struct Reduce<T, TResult> {
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics: BoxMetrics,
-    compute_batch_length: Option<Arc<dyn Fn(&T) -> usize + Send + Sync>>,
+    compute_batch_size: fn(&T) -> usize,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
@@ -130,7 +124,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
-        compute_batch_length: Option<Arc<dyn Fn(&T) -> usize + Send + Sync>>,
+        compute_batch_size: fn(&T) -> usize,
     ) -> Self
     where
         N: ProcessingStrategy<TResult> + 'static,
@@ -139,7 +133,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             initial_value.clone(),
             accumulator.clone(),
             max_batch_time,
-            compute_batch_length.clone(),
+            compute_batch_size,
         );
         Reduce {
             next_step: Box::new(next_step),
@@ -151,7 +145,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             message_carried_over: None,
             commit_request_carried_over: None,
             metrics: get_metrics(),
-            compute_batch_length,
+            compute_batch_size,
         }
     }
 
@@ -195,7 +189,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
                 self.initial_value.clone(),
                 self.accumulator.clone(),
                 self.max_batch_time,
-                self.compute_batch_length.clone(),
+                self.compute_batch_size,
             ),
         );
 
@@ -258,7 +252,7 @@ mod tests {
 
         let partition1 = Partition::new(Topic::new("test"), 0);
 
-        let max_batch_size = 2;
+        let max_batch_size = 10;
         let max_batch_time = Duration::from_secs(1);
 
         let initial_value = Vec::new();
@@ -266,6 +260,8 @@ mod tests {
             acc.push(value);
             acc
         });
+        // Count each message as batch size of 5 to test a custom size.
+        let compute_batch_size = |_: &_| -> usize { 5 };
 
         let next_step = NextStep {
             submitted: submitted_messages,
@@ -277,7 +273,7 @@ mod tests {
             initial_value,
             max_batch_size,
             max_batch_time,
-            None,
+            compute_batch_size,
         );
 
         for i in 0..3 {
@@ -292,6 +288,9 @@ mod tests {
             strategy.submit(msg).unwrap();
             let _ = strategy.poll();
         }
+
+        // 3 messages with a max batch size of 10 means 1 batch was cleared and 5 is left.
+        assert_eq!(strategy.batch_state.message_count, 5);
 
         strategy.close();
         let _ = strategy.join(None);
