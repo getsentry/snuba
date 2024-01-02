@@ -16,7 +16,7 @@ struct BatchState<T, TResult> {
     offsets: BTreeMap<Partition, u64>,
     batch_start_time: Deadline,
     message_count: usize,
-    compute_batch_length: Arc<dyn Fn(T) -> usize + Send + Sync>,
+    compute_batch_length: Arc<dyn Fn(&T) -> usize + Send + Sync>,
 }
 
 impl<T, TResult> BatchState<T, TResult> {
@@ -24,13 +24,13 @@ impl<T, TResult> BatchState<T, TResult> {
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         max_batch_time: Duration,
-        compute_batch_length: Option<Arc<dyn Fn(T) -> usize + Send + Sync>>,
+        compute_batch_length: Option<Arc<dyn Fn(&T) -> usize + Send + Sync>>,
     ) -> BatchState<T, TResult> {
         let compute_batch_length_function = if let Some(compute_batch_length) = compute_batch_length
         {
             compute_batch_length
         } else {
-            Arc::new(|_| 1)
+            Arc::new(|_: &_| 1)
         };
         BatchState {
             value: Some(initial_value),
@@ -49,8 +49,8 @@ impl<T, TResult> BatchState<T, TResult> {
 
         let tmp = self.value.take().unwrap();
         let payload = message.into_payload();
+        self.message_count += (self.compute_batch_length)(&payload);
         self.value = Some((self.accumulator)(tmp, payload));
-        self.message_count += (self.compute_batch_length)(payload);
     }
 }
 
@@ -64,7 +64,7 @@ pub struct Reduce<T, TResult> {
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics: BoxMetrics,
-    compute_batch_length: Option<Arc<dyn Fn(T) -> usize + Send + Sync>>,
+    compute_batch_length: Option<Arc<dyn Fn(&T) -> usize + Send + Sync>>,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
@@ -130,7 +130,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
-        compute_batch_length: Option<Arc<dyn Fn(T) -> usize + Send + Sync>>,
+        compute_batch_length: Option<Arc<dyn Fn(&T) -> usize + Send + Sync>>,
     ) -> Self
     where
         N: ProcessingStrategy<TResult> + 'static,
