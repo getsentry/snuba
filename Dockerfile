@@ -91,7 +91,7 @@ RUN set -ex; \
     maturin build --release --compatibility linux --locked
 
 FROM build_rust_snuba_base AS build_rust_snuba
-COPY . ./
+COPY ./rust_snuba/ ./rust_snuba/
 COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba/target/
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
