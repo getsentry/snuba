@@ -11,9 +11,9 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-
-    let replay_message: ReplayMessage = serde_json::from_slice(payload_bytes)?;
-    let replay_payload = serde_json::from_slice(&replay_message.payload)?;
+    let replay_message: ReplayMessage =
+        simd_json::from_slice(payload_bytes.clone().as_mut_slice())?;
+    let replay_payload = simd_json::from_slice(replay_message.payload.clone().as_mut_slice())?;
 
     match replay_payload {
         ReplayPayload::ClickEvent(event) => {

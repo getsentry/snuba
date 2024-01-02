@@ -12,9 +12,9 @@ pub fn process_message(
     _: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let from: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
-
-    let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
+    let from: FromSpanMessage = simd_json::serde::from_slice(payload_bytes.clone().as_mut_slice())?;
+    let mut metrics_summaries: Vec<MetricsSummary> =
+        Vec::with_capacity(from._metrics_summary.len());
 
     let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
     for (metric_mri, summaries) in from._metrics_summary {

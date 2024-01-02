@@ -10,7 +10,7 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
+    let mut msg: ProfileMessage = simd_json::from_slice(payload_bytes.clone().as_mut_slice())?;
 
     // we always want an empty string at least
     msg.device_classification = Some(msg.device_classification.unwrap_or_default());
