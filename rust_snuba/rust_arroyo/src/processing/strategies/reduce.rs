@@ -16,6 +16,7 @@ struct BatchState<T, TResult> {
     offsets: BTreeMap<Partition, u64>,
     batch_start_time: Deadline,
     message_count: usize,
+    compute_batch_length: Arc<dyn Fn(T) -> usize + Send + Sync>,
 }
 
 impl<T, TResult> BatchState<T, TResult> {
@@ -23,13 +24,21 @@ impl<T, TResult> BatchState<T, TResult> {
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         max_batch_time: Duration,
+        compute_batch_length: Option<Arc<dyn Fn(T) -> usize + Send + Sync>>,
     ) -> BatchState<T, TResult> {
+        let compute_batch_length_function = if let Some(compute_batch_length) = compute_batch_length
+        {
+            compute_batch_length
+        } else {
+            Arc::new(|_| 1)
+        };
         BatchState {
             value: Some(initial_value),
             accumulator,
             offsets: Default::default(),
             batch_start_time: Deadline::new(max_batch_time),
             message_count: 0,
+            compute_batch_length: compute_batch_length_function,
         }
     }
 
@@ -39,8 +48,9 @@ impl<T, TResult> BatchState<T, TResult> {
         }
 
         let tmp = self.value.take().unwrap();
-        self.value = Some((self.accumulator)(tmp, message.into_payload()));
-        self.message_count += 1;
+        let payload = message.into_payload();
+        self.value = Some((self.accumulator)(tmp, payload));
+        self.message_count += (self.compute_batch_length)(payload);
     }
 }
 
@@ -54,6 +64,7 @@ pub struct Reduce<T, TResult> {
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics: BoxMetrics,
+    compute_batch_length: Option<Arc<dyn Fn(T) -> usize + Send + Sync>>,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
@@ -119,12 +130,17 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
+        compute_batch_length: Option<Arc<dyn Fn(T) -> usize + Send + Sync>>,
     ) -> Self
     where
         N: ProcessingStrategy<TResult> + 'static,
     {
-        let batch_state =
-            BatchState::new(initial_value.clone(), accumulator.clone(), max_batch_time);
+        let batch_state = BatchState::new(
+            initial_value.clone(),
+            accumulator.clone(),
+            max_batch_time,
+            compute_batch_length.clone(),
+        );
         Reduce {
             next_step: Box::new(next_step),
             accumulator,
@@ -135,6 +151,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             message_carried_over: None,
             commit_request_carried_over: None,
             metrics: get_metrics(),
+            compute_batch_length,
         }
     }
 
@@ -178,6 +195,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
                 self.initial_value.clone(),
                 self.accumulator.clone(),
                 self.max_batch_time,
+                self.compute_batch_length.clone(),
             ),
         );
 
@@ -259,6 +277,7 @@ mod tests {
             initial_value,
             max_batch_size,
             max_batch_time,
+            None,
         );
 
         for i in 0..3 {
