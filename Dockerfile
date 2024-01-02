@@ -28,9 +28,13 @@ RUN set -ex; \
         g++ \
         gnupg \
     '; \
+    runtimeDeps=' \
+        libjemalloc2 \
+    '; \
     apt-get update; \
-    apt-get install -y $buildDeps --no-install-recommends; \
+    apt-get install -y $buildDeps $runtimeDeps --no-install-recommends; \
     pip install -r requirements-build.txt; \
+    ln -s /usr/lib/*/libjemalloc.so.2 /usr/src/snuba/libjemalloc.so.2; \
     echo "$buildDeps" > /tmp/build-deps.txt
 
 FROM build_base AS base
@@ -61,22 +65,39 @@ RUN set -ex; \
 # There are optimizations we can make in the future to split building of Rust
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
-FROM build_base AS build_rust_snuba
+FROM build_base AS build_rust_snuba_base
 ARG RUST_TOOLCHAIN=1.74.1
-ARG SHOULD_BUILD_RUST=true
 
-COPY ./rust_snuba/ ./rust_snuba/
 RUN set -ex; \
-    cd ./rust_snuba/; \
-    mkdir -p ./target/wheels/; \
-    [ "$SHOULD_BUILD_RUST" = "true" ] || exit 0; \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
-    export PATH="$HOME/.cargo/bin/:$PATH"; \
     # use git CLI to avoid OOM on ARM64
     echo '[net]' > ~/.cargo/config; \
     echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
     echo '[registries.crates-io]' >> ~/.cargo/config; \
-    echo 'protocol = "sparse"' >> ~/.cargo/config; \
+    echo 'protocol = "sparse"' >> ~/.cargo/config
+
+ENV PATH="/root/.cargo/bin/:${PATH}"
+
+FROM build_rust_snuba_base AS build_rust_snuba_deps
+
+COPY ./rust_snuba/rust_arroyo/Cargo.toml ./rust_snuba/rust_arroyo/Cargo.toml
+COPY ./rust_snuba/rust_arroyo/Cargo.lock ./rust_snuba/rust_arroyo/Cargo.lock
+COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
+COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
+COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
+
+RUN set -ex; \
+    sh scripts/rust-dummy-build.sh; \
+    cd ./rust_snuba/; \
+    maturin build --release --compatibility linux --locked --strip
+
+FROM build_rust_snuba_base AS build_rust_snuba
+COPY . ./
+COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba/target/
+COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
+RUN set -ex; \
+    cd ./rust_snuba/; \
+    touch ./rust_arroyo/src/lib.rs; \
     maturin build --release --compatibility linux --locked --strip
 
 # Install nodejs and yarn and build the admin UI
@@ -104,8 +125,6 @@ COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/ ./snuba/admin/dist/
 RUN set -ex; \
-    apt-get install -y libjemalloc2 --no-install-recommends; \
-    ln -s /usr/lib/*/libjemalloc.so.2 /usr/src/snuba/libjemalloc.so.2; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
     chown -R snuba:snuba ./; \
@@ -148,6 +167,6 @@ RUN pip install -r requirements-test.txt
 
 ARG RUST_TOOLCHAIN=1.74.1
 COPY ./rust_snuba/ ./rust_snuba/
-RUN bash -c "set -o pipefail && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y"
+COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba
