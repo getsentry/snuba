@@ -192,8 +192,7 @@ impl RowData {
     {
         let mut encoded_rows = Vec::new();
         for row in rows {
-            let mut data: Vec<u8> = Vec::new();
-            serde_json::to_writer(&mut data, &row)?;
+            let data: Vec<u8> = serde_json::to_vec(&row)?;
             encoded_rows.push(data);
         }
 
