@@ -11,7 +11,7 @@ use crate::processing::strategies::{
     SubmitError,
 };
 use crate::types::Message;
-use crate::utils::metrics::{BoxMetrics, get_metrics};
+use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 
 #[derive(Clone, Debug)]
