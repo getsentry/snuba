@@ -32,6 +32,10 @@ jobs:
             --target application \
             .
         docker tag "$IMG_VERSIONED" "$IMG_CACHE"
+      # arm64 builds are so slow due to compiling Rust code using QEMU, let's
+      # exclude them from PR builds. we could eventually reenable them once we
+      # have improved caching by a lot.
+      if: matrix.arch != 'arm64' || github.event_name != 'pull_request'
     - name: push
       run: |
         set -euxo pipefail
