@@ -208,6 +208,7 @@ class TestApi(SimpleAPITest):
                     ),
                 ).data
             )
+            assert "data" in result, result
             buckets = self.minutes / rollup_mins
             for b in range(int(buckets)):
                 bucket_time = parse_datetime(result["data"][b]["time"]).replace(
