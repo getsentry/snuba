@@ -30,11 +30,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
             int(metadata.timestamp.timestamp() * 1000),
         )
 
-        rows = [
-            json.loads(bytes(line))
-            for line in rust_processed_message
-            if line
-        ]
+        rows = [json.loads(bytes(line)) for line in rust_processed_message if line]
 
         return InsertBatch(
             rows=rows,
