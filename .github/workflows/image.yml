@@ -12,7 +12,7 @@ jobs:
             # macos-m1 is the only ARM64 machine that GitHub actions offers,
             # but it works "fine" to build linux/arm64 images with. Faster than
             # QEMU/binfmt
-            os: macos-m1
+            os: macos-latest-xlarge
           - arch: amd64
             os: ubuntu-latest
 
