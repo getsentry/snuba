@@ -22,19 +22,17 @@ class RustCompatProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        rust_processed_message = bytes(
-            self.__process_message(
-                self.__processor_name,
-                json.dumps(message).encode("utf8"),
-                metadata.partition,
-                metadata.offset,
-                int(metadata.timestamp.timestamp() * 1000),
-            )
+        rust_processed_message = self.__process_message(
+            self.__processor_name,
+            json.dumps(message).encode("utf8"),
+            metadata.partition,
+            metadata.offset,
+            int(metadata.timestamp.timestamp() * 1000),
         )
 
         rows = [
-            json.loads(line)
-            for line in rust_processed_message.rstrip(b"\n").split(b"\n")
+            json.loads(bytes(line))
+            for line in rust_processed_message
             if line
         ]
 

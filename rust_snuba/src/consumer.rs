@@ -192,7 +192,7 @@ pub fn process_message(
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
-) -> PyResult<Vec<u8>> {
+) -> PyResult<Vec<Vec<u8>>> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
     let func = processors::get_processing_function(name)
@@ -220,5 +220,6 @@ pub fn process_message(
         res.sentry_received_timestamp,
         BTreeMap::from([(partition, (offset, timestamp))]),
     );
+
     Ok(batch.encoded_rows().to_vec())
 }

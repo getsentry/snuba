@@ -149,7 +149,6 @@ impl BytesInsertBatch {
             .encoded_rows
             .extend_from_slice(&other.rows.encoded_rows);
         self.commit_log_offsets.extend(other.commit_log_offsets);
-        self.rows.num_rows += other.rows.num_rows;
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
@@ -169,10 +168,10 @@ impl BytesInsertBatch {
     }
 
     pub fn len(&self) -> usize {
-        self.rows.num_rows
+        self.rows.encoded_rows.len()
     }
 
-    pub fn encoded_rows(&self) -> &[u8] {
+    pub fn encoded_rows(&self) -> &Vec<Vec<u8>> {
         &self.rows.encoded_rows
     }
 
@@ -183,8 +182,7 @@ impl BytesInsertBatch {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
-    encoded_rows: Vec<u8>,
-    num_rows: usize,
+    encoded_rows: Vec<Vec<u8>>,
 }
 
 impl RowData {
@@ -193,32 +191,17 @@ impl RowData {
         T: Serialize,
     {
         let mut encoded_rows = Vec::new();
-        let mut num_rows = 0;
         for row in rows {
-            serde_json::to_writer(&mut encoded_rows, &row)?;
-            encoded_rows.push(b'\n');
-            num_rows += 1;
+            let mut data: Vec<u8> = Vec::new();
+            serde_json::to_writer(&mut data, &row)?;
+            encoded_rows.push(data);
         }
 
-        Ok(RowData {
-            num_rows,
-            encoded_rows,
-        })
+        Ok(RowData { encoded_rows })
     }
 
     pub fn from_encoded_rows(rows: Vec<Vec<u8>>) -> Self {
-        let mut encoded_rows = Vec::new();
-        let mut num_rows = 0;
-        for row in rows {
-            encoded_rows.extend_from_slice(&row);
-            encoded_rows.push(b'\n');
-            num_rows += 1;
-        }
-
-        RowData {
-            encoded_rows,
-            num_rows,
-        }
+        RowData { encoded_rows: rows }
     }
 }
 
