@@ -168,7 +168,7 @@ impl ClickhouseClient {
 
     fn chunk(&self, rows: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
         rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
-            .map(|chunk| chunk.to_vec().into_iter().flatten().collect())
+            .map(|chunk| chunk.iter().flatten().cloned().collect())
             .collect()
     }
 
