@@ -7,14 +7,23 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
-    runs-on: ubuntu-latest
+        include:
+          - arch: arm64
+            # macos-m1 is the only ARM64 machine that GitHub actions offers,
+            # but it works "fine" to build linux/arm64 images with. Faster than
+            # QEMU/binfmt
+            os: macos-m1
+          - arch: amd64
+            os: ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
     env:
       IMG_CACHE: ghcr.io/getsentry/snuba:${{ matrix.arch }}-latest
       IMG_VERSIONED: ghcr.io/getsentry/snuba:${{ matrix.arch }}-${{ github.sha }}
+
     steps:
     - uses: actions/checkout@v3
-    - run: docker run --rm --privileged tonistiigi/binfmt --install arm64
-      if: matrix.arch == 'arm64'
     - name: build
       run: |
         set -euxo pipefail
@@ -32,10 +41,6 @@ jobs:
             --target application \
             .
         docker tag "$IMG_VERSIONED" "$IMG_CACHE"
-      # arm64 builds are so slow due to compiling Rust code using QEMU, let's
-      # exclude them from PR builds. we could eventually reenable them once we
-      # have improved caching by a lot.
-      if: matrix.arch != 'arm64' || github.event_name != 'pull_request'
     - name: push
       run: |
         set -euxo pipefail
