@@ -14,12 +14,20 @@ use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
 use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
+use rust_arroyo::utils::metrics::configure_metrics;
 use rust_snuba::{
-    ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StorageConfig,
+    ClickhouseConfig, ConsumerStrategyFactory, MessageProcessorConfig, StatsDBackend, StorageConfig,
 };
 use uuid::Uuid;
 
 fn main() {
+    // this sends to nowhere, but because it's UDP we won't error.
+    configure_metrics(StatsDBackend::new(
+        "127.0.0.1",
+        8081,
+        "snuba.consumer",
+        Default::default(),
+    ));
     divan::main();
 }
 

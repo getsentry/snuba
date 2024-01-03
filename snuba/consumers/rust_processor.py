@@ -229,6 +229,14 @@ class RunPythonMultiprocessing:
         except InvalidMessage:
             logger.warning("Dropping invalid message", exc_info=True)
 
+        # If there is a carried over message we should attempt to submit and clear it
+        if self.__carried_over_message is not None:
+            try:
+                self.__inner.submit(self.__carried_over_message)
+                self.__carried_over_message = None
+            except MessageRejected:
+                pass
+
         return self.__get_transformed_messages()
 
     def join(
