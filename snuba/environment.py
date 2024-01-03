@@ -91,7 +91,10 @@ def setup_sentry() -> None:
 
     from snuba.utils.profiler import run_ondemand_profiler
 
-    run_ondemand_profiler()
+    if settings.SENTRY_DSN is not None:
+        # Do not run ondemand profiler in tests, it interferes with mocked
+        # `time.sleep()` and assertions on that mock.
+        run_ondemand_profiler()
 
 
 metrics = create_metrics(
