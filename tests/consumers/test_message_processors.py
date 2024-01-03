@@ -58,8 +58,10 @@ def test_message_processors(
         offset = 1
         millis_since_epoch = int(time.time() * 1000)
 
-        rust_processed_message = rust_snuba.process_message(  # type: ignore
-            processor_name, data_bytes, partition, offset, millis_since_epoch
+        rust_processed_message = bytes(
+            rust_snuba.process_message(  # type: ignore
+                processor_name, data_bytes, partition, offset, millis_since_epoch
+            )
         )
         python_processed_message = processor().process_message(
             data_json,
@@ -73,5 +75,5 @@ def test_message_processors(
         assert isinstance(python_processed_message, InsertBatch)
 
         assert [
-            json.loads(bytes(line)) for line in rust_processed_message if line
+            json.loads(line) for line in rust_processed_message.rstrip(b"\n").split(b"\n") if line
         ] == python_processed_message.rows

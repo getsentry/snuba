@@ -15,7 +15,7 @@ use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 
-const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 8192;
+const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
@@ -166,13 +166,13 @@ impl ClickhouseClient {
         }
     }
 
-    fn chunk(&self, rows: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    fn chunk(&self, rows: Vec<u8>) -> Vec<Vec<u8>> {
         rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
-            .map(|chunk| chunk.iter().flatten().cloned().collect())
+            .map(|chunk| chunk.to_vec())
             .collect()
     }
 
-    pub async fn send(&self, body: Vec<Vec<u8>>) -> anyhow::Result<Response> {
+    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
         let chunks: Vec<Result<_, ::std::io::Error>> =
             self.chunk(body).into_iter().map(Ok).collect();
         let stream = futures::stream::iter(chunks);
@@ -197,6 +197,7 @@ impl ClickhouseClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
         let client: ClickhouseClient = ClickhouseClient::new(
@@ -223,12 +224,10 @@ mod tests {
             "default",
         );
 
-        let mut data = Vec::new();
-        for _ in 0..8192 {
-            data.push(vec![0]);
-        }
+        let mut data: Vec<u8> = vec![0; 8192];
+
         assert_eq!(client.chunk(data.clone()).len(), 1);
-        data.push(vec![0]);
+        data.push(0);
         assert_eq!(client.chunk(data).len(), 2);
     }
 }

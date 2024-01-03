@@ -171,7 +171,7 @@ impl BytesInsertBatch {
         self.rows.encoded_rows.len()
     }
 
-    pub fn encoded_rows(&self) -> &Vec<Vec<u8>> {
+    pub fn encoded_rows(&self) -> &[u8] {
         &self.rows.encoded_rows
     }
 
@@ -182,7 +182,8 @@ impl BytesInsertBatch {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
-    encoded_rows: Vec<Vec<u8>>,
+    encoded_rows: Vec<u8>,
+    num_rows: usize,
 }
 
 impl RowData {
@@ -191,16 +192,32 @@ impl RowData {
         T: Serialize,
     {
         let mut encoded_rows = Vec::new();
+        let mut num_rows = 0;
         for row in rows {
-            let data: Vec<u8> = serde_json::to_vec(&row)?;
-            encoded_rows.push(data);
+            serde_json::to_writer(&mut encoded_rows, &row)?;
+            encoded_rows.push(b'\n');
+            num_rows += 1;
         }
 
-        Ok(RowData { encoded_rows })
+        Ok(RowData {
+            num_rows,
+            encoded_rows,
+        })
     }
 
     pub fn from_encoded_rows(rows: Vec<Vec<u8>>) -> Self {
-        RowData { encoded_rows: rows }
+        let mut encoded_rows = Vec::new();
+        let mut num_rows = 0;
+        for row in rows {
+            encoded_rows.extend_from_slice(&row);
+            encoded_rows.push(b'\n');
+            num_rows += 1;
+        }
+
+        RowData {
+            encoded_rows,
+            num_rows,
+        }
     }
 }
 
