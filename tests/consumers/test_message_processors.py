@@ -73,7 +73,5 @@ def test_message_processors(
         assert isinstance(python_processed_message, InsertBatch)
 
         assert [
-            json.loads(bytes(line))
-            for line in rust_processed_message
-            if line
+            json.loads(bytes(line)) for line in rust_processed_message if line
         ] == python_processed_message.rows
