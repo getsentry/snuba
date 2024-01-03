@@ -16,6 +16,7 @@ struct BatchState<T, TResult> {
     offsets: BTreeMap<Partition, u64>,
     batch_start_time: Deadline,
     message_count: usize,
+    compute_batch_size: fn(&T) -> usize,
 }
 
 impl<T, TResult> BatchState<T, TResult> {
@@ -23,6 +24,7 @@ impl<T, TResult> BatchState<T, TResult> {
         initial_value: TResult,
         accumulator: Arc<dyn Fn(TResult, T) -> TResult + Send + Sync>,
         max_batch_time: Duration,
+        compute_batch_size: fn(&T) -> usize,
     ) -> BatchState<T, TResult> {
         BatchState {
             value: Some(initial_value),
@@ -30,6 +32,7 @@ impl<T, TResult> BatchState<T, TResult> {
             offsets: Default::default(),
             batch_start_time: Deadline::new(max_batch_time),
             message_count: 0,
+            compute_batch_size,
         }
     }
 
@@ -39,8 +42,9 @@ impl<T, TResult> BatchState<T, TResult> {
         }
 
         let tmp = self.value.take().unwrap();
-        self.value = Some((self.accumulator)(tmp, message.into_payload()));
-        self.message_count += 1;
+        let payload = message.into_payload();
+        self.message_count += (self.compute_batch_size)(&payload);
+        self.value = Some((self.accumulator)(tmp, payload));
     }
 }
 
@@ -54,6 +58,7 @@ pub struct Reduce<T, TResult> {
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
     metrics: BoxMetrics,
+    compute_batch_size: fn(&T) -> usize,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
@@ -119,12 +124,17 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
         initial_value: TResult,
         max_batch_size: usize,
         max_batch_time: Duration,
+        compute_batch_size: fn(&T) -> usize,
     ) -> Self
     where
         N: ProcessingStrategy<TResult> + 'static,
     {
-        let batch_state =
-            BatchState::new(initial_value.clone(), accumulator.clone(), max_batch_time);
+        let batch_state = BatchState::new(
+            initial_value.clone(),
+            accumulator.clone(),
+            max_batch_time,
+            compute_batch_size,
+        );
         Reduce {
             next_step: Box::new(next_step),
             accumulator,
@@ -135,6 +145,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             message_carried_over: None,
             commit_request_carried_over: None,
             metrics: get_metrics(),
+            compute_batch_size,
         }
     }
 
@@ -178,6 +189,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
                 self.initial_value.clone(),
                 self.accumulator.clone(),
                 self.max_batch_time,
+                self.compute_batch_size,
             ),
         );
 
@@ -207,36 +219,33 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    struct NextStep<T> {
+        pub submitted: Arc<Mutex<Vec<T>>>,
+    }
+
+    impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+
+        fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
+            self.submitted.lock().unwrap().push(message.into_payload());
+            Ok(())
+        }
+
+        fn close(&mut self) {}
+
+        fn terminate(&mut self) {}
+
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+            Ok(None)
+        }
+    }
+
     #[test]
     fn test_reduce() {
         let submitted_messages = Arc::new(Mutex::new(Vec::new()));
         let submitted_messages_clone = submitted_messages.clone();
-
-        struct NextStep<T> {
-            pub submitted: Arc<Mutex<Vec<T>>>,
-        }
-
-        impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-
-            fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
-                self.submitted.lock().unwrap().push(message.into_payload());
-                Ok(())
-            }
-
-            fn close(&mut self) {}
-
-            fn terminate(&mut self) {}
-
-            fn join(
-                &mut self,
-                _: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-        }
 
         let partition1 = Partition::new(Topic::new("test"), 0);
 
@@ -248,6 +257,7 @@ mod tests {
             acc.push(value);
             acc
         });
+        let compute_batch_size = |_: &_| -> usize { 1 };
 
         let next_step = NextStep {
             submitted: submitted_messages,
@@ -259,6 +269,7 @@ mod tests {
             initial_value,
             max_batch_size,
             max_batch_time,
+            compute_batch_size,
         );
 
         for i in 0..3 {
@@ -273,6 +284,67 @@ mod tests {
             strategy.submit(msg).unwrap();
             let _ = strategy.poll();
         }
+
+        // 3 messages with a max batch size of 2 means 1 batch was cleared
+        // and 1 message is left before next size limit.
+        assert_eq!(strategy.batch_state.message_count, 1);
+
+        strategy.close();
+        let _ = strategy.join(None);
+
+        // 2 batches were created
+        assert_eq!(
+            *submitted_messages_clone.lock().unwrap(),
+            vec![vec![0, 1], vec![2]]
+        );
+    }
+
+    #[test]
+    fn test_reduce_with_custom_batch_size() {
+        let submitted_messages = Arc::new(Mutex::new(Vec::new()));
+        let submitted_messages_clone = submitted_messages.clone();
+
+        let partition1 = Partition::new(Topic::new("test"), 0);
+
+        let max_batch_size = 10;
+        let max_batch_time = Duration::from_secs(1);
+
+        let initial_value = Vec::new();
+        let accumulator = Arc::new(|mut acc: Vec<u64>, value: u64| {
+            acc.push(value);
+            acc
+        });
+        let compute_batch_size = |_: &_| -> usize { 5 };
+
+        let next_step = NextStep {
+            submitted: submitted_messages,
+        };
+
+        let mut strategy = Reduce::new(
+            next_step,
+            accumulator,
+            initial_value,
+            max_batch_size,
+            max_batch_time,
+            compute_batch_size,
+        );
+
+        for i in 0..3 {
+            let msg = Message {
+                inner_message: InnerMessage::BrokerMessage(BrokerMessage::new(
+                    i,
+                    partition1,
+                    i,
+                    chrono::Utc::now(),
+                )),
+            };
+            strategy.submit(msg).unwrap();
+            let _ = strategy.poll();
+        }
+
+        // 3 messages returning 5 items each and a max batch size of 10
+        // means 1 batch was cleared and 5 items are in the current batch.
+        assert_eq!(strategy.batch_state.message_count, 5);
 
         strategy.close();
         let _ = strategy.join(None);
