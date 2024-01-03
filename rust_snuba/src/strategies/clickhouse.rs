@@ -197,7 +197,6 @@ impl ClickhouseClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[tokio::test]
     async fn it_works() -> Result<(), reqwest::Error> {
         let client: ClickhouseClient = ClickhouseClient::new(
@@ -210,7 +209,7 @@ mod tests {
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
-        let res = client.send(vec![]).await;
+        let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
     }
@@ -224,7 +223,7 @@ mod tests {
             "default",
         );
 
-        let mut data: Vec<u8> = vec![0; 8192];
+        let mut data: Vec<u8> = vec![0; 1_000_000];
 
         assert_eq!(client.chunk(data.clone()).len(), 1);
         data.push(0);
