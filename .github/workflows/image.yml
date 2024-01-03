@@ -24,6 +24,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: install docker
+      run: brew install docker
+      if: matrix.os == macos-latest-xlarge
     - name: build
       run: |
         set -euxo pipefail
