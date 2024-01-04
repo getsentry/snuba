@@ -10,7 +10,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "METRICS": "metrics",
     "MIGRATIONS": "migrations",
     "OUTCOMES": "outcomes",
-    # "QUERYLOG": "querylog",
+    "QUERYLOG": "querylog",
     "SESSIONS": "sessions",
     "TRANSACTIONS": "transactions",
     "PROFILES": "profiles",
