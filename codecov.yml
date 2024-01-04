@@ -19,3 +19,6 @@ coverage:
         # intitialization code doesn't need to be retried
         # and so that code is not executed during that test run
         threshold: 1%
+
+github_checks:
+  annotations: false
