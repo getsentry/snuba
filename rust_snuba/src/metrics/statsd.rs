@@ -1,5 +1,5 @@
 use cadence::prelude::*;
-use cadence::{MetricBuilder, MetricError, StatsdClient};
+use cadence::{MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
 use statsdproxy::cadence::StatsdProxyMetricSink;
 use statsdproxy::config::AggregateMetricsConfig;
