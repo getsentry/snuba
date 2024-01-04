@@ -429,3 +429,47 @@ class TestGenericMetricsMQLApi(BaseApiTest):
 
         assert rows[0]["aggregate_value"] == 4.0
         assert rows[0]["status_code"] == "200"
+
+    def test_dots_in_mri_names(self) -> None:
+        query = MetricsQuery(
+            query=Timeseries(
+                metric=Metric(
+                    "transaction.duration",
+                    "d:transactions/measurements.indexer_batch.payloads.len@none",
+                    DISTRIBUTIONS.metric_id,
+                    DISTRIBUTIONS.entity,
+                ),
+                aggregate="avg",
+                aggregate_params=None,
+                filters=[
+                    Condition(
+                        Column("status_code"),
+                        Op.IN,
+                        ["200", "400"],
+                    )
+                ],
+                groupby=None,
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, totals=None, orderby=None, granularity=60),
+            scope=MetricsScope(
+                org_ids=[1], project_ids=[1], use_case_id="transactions"
+            ),
+            indexer_mappings={
+                "d:transactions/measurements.indexer_batch.payloads.len@none": DISTRIBUTIONS.metric_id,
+                "status_code": resolve_str("status_code"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200
