@@ -43,12 +43,8 @@ impl<T, TResult> BatchState<T, TResult> {
 
         let tmp = self.value.take().unwrap();
         let payload = message.into_payload();
-        let batch_size = (self.compute_batch_size)(&payload);
-
-        if batch_size > 0 {
-            self.message_count += batch_size;
-            self.value = Some((self.accumulator)(tmp, payload));
-        }
+        self.message_count += (self.compute_batch_size)(&payload);
+        self.value = Some((self.accumulator)(tmp, payload));
     }
 }
 
