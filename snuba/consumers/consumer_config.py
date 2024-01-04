@@ -157,7 +157,9 @@ def resolve_consumer_config(
     resolved_raw_topic = _resolve_topic_config(
         "main topic", default_topic_spec, raw_topic, slice_id
     )
-    resolved_raw_topic = _add_to_topic_broker_config(resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes)
+    resolved_raw_topic = _add_to_topic_broker_config(
+        resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
+    )
 
     if resolved_raw_topic and group_instance_id is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
