@@ -27,7 +27,7 @@ jobs:
     - name: install docker and start it
       run: |
         set -euxo pipefail
-        brew install docker
+        brew install docker colima
         colima start
       if: matrix.os == 'macos-latest-xlarge'
     - name: build
