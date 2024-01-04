@@ -22,3 +22,8 @@ coverage:
 
 github_checks:
   annotations: false
+
+ignore:
+  # This file is exercised by Rust testsuite, and we have no coverage for Rust
+  # (let alone coverage for the FFI contraption Rust + Python)
+  - "snuba/consumers/rust_processor.py"
