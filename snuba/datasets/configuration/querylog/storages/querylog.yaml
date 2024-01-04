@@ -3,7 +3,7 @@ kind: writable_storage
 name: querylog
 storage:
   key: querylog
-  set_key: sessions
+  set_key: querylog
 readiness_state: partial
 schema:
   columns: [
