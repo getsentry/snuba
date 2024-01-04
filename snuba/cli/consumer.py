@@ -239,6 +239,11 @@ def consumer(
         slice_id=slice_id,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        # XXX: This is overridden later in arroyo's `build_kafka_consumer_configuration`
+        # (which we probably want to revisit) but is here for compatibility with Rust,
+        # which does not perform this override.
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
         group_instance_id=group_instance_id,
     )
 

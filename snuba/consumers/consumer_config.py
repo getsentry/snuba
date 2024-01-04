@@ -134,6 +134,8 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
     group_instance_id: Optional[str] = None,
 ) -> ConsumerConfig:
     """
@@ -155,6 +157,8 @@ def resolve_consumer_config(
     resolved_raw_topic = _resolve_topic_config(
         "main topic", default_topic_spec, raw_topic, slice_id
     )
+    resolved_raw_topic = _add_to_topic_broker_config(resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes)
+
     if resolved_raw_topic and group_instance_id is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
             resolved_raw_topic, "group.instance.id", group_instance_id

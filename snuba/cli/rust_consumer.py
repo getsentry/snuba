@@ -36,6 +36,18 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     is_flag=True,
     help="Forces the kafka consumer auto offset reset.",
 )
+@click.option(
+    "--queued-max-messages-kbytes",
+    default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+    type=int,
+    help="Maximum number of kilobytes per topic+partition in the local consumer queue.",
+)
+@click.option(
+    "--queued-min-messages",
+    default=settings.DEFAULT_QUEUED_MIN_MESSAGES,
+    type=int,
+    help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
+)
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
     "--commit-log-topic",
@@ -134,6 +146,8 @@ def rust_consumer(
     consumer_group: str,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
     raw_events_topic: Optional[str],
     commit_log_topic: Optional[str],
     replacements_topic: Optional[str],
@@ -166,6 +180,8 @@ def rust_consumer(
         replacement_bootstrap_servers=replacement_bootstrap_servers,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
         slice_id=slice_id,
         group_instance_id=group_instance_id,
     )
