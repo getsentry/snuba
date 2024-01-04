@@ -406,10 +406,7 @@ mod tests {
         strategy.close();
         let _ = strategy.join(None);
 
-        // 2 batches were created
-        assert_eq!(
-            *submitted_messages_clone.lock().unwrap(),
-            vec![]
-        );
+        // no batches were created
+        assert!(submitted_messages_clone.lock().unwrap().is_empty());
     }
 }
