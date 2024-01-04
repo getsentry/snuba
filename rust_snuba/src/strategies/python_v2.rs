@@ -259,6 +259,9 @@ mod tests {
     }
 
     #[test]
+    // test is flaky in CI and fails 100% of the time locally with " signal only works in main
+    // thread of the main interpreter"
+    #[ignore]
     fn test_python() {
         set_sys_executable();
 

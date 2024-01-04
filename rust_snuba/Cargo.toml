@@ -32,7 +32,7 @@ futures = "0.3.21"
 md5 = "0.7.0"
 procspawn = { version = "1.0.0", features = ["json"] }
 pyo3 = { version = "0.18.1", features = ["chrono"] }
-reqwest = "0.11.11"
+reqwest = { version = "0.11.11", features = ["stream"] }
 rust_arroyo = { path = "./rust_arroyo" }
 sentry = { version = "0.32.0", features = ["anyhow", "tracing"] }
 sentry-kafka-schemas = "0.1.35"
@@ -47,7 +47,7 @@ uuid = "1.5.0"
 parking_lot = "0.12.1"
 
 [dev-dependencies]
-divan = "0.1.2"
+criterion = "0.5.1"
 once_cell = "1.18.0"
 procspawn = { version = "1.0.0", features = ["test-support", "json"] }
 pyo3 = { version = "*", features = ["auto-initialize"] }

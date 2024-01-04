@@ -15,6 +15,8 @@ use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
 
+const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
+
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
     metrics: BoxMetrics,
@@ -164,13 +166,23 @@ impl ClickhouseClient {
         }
     }
 
+    fn chunk(&self, rows: Vec<u8>) -> Vec<Vec<u8>> {
+        rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
+            .map(|chunk| chunk.to_vec())
+            .collect()
+    }
+
     pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
+        let chunks: Vec<Result<_, ::std::io::Error>> =
+            self.chunk(body).into_iter().map(Ok).collect();
+        let stream = futures::stream::iter(chunks);
+
         let res = self
             .client
             .post(&self.url)
             .headers(self.headers.clone())
             .query(&[("query", &self.query)])
-            .body(body)
+            .body(reqwest::Body::wrap_stream(stream))
             .send()
             .await?;
 
@@ -200,5 +212,21 @@ mod tests {
         let res = client.send(b"[]".to_vec()).await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
+    }
+
+    #[test]
+    fn chunk() {
+        let client: ClickhouseClient = ClickhouseClient::new(
+            &std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
+            8123,
+            "querylog_local",
+            "default",
+        );
+
+        let mut data: Vec<u8> = vec![0; 1_000_000];
+
+        assert_eq!(client.chunk(data.clone()).len(), 1);
+        data.push(0);
+        assert_eq!(client.chunk(data).len(), 2);
     }
 }
