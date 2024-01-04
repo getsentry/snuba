@@ -6,12 +6,12 @@ use std::time::Duration;
 use tokio::runtime::{Handle, Runtime};
 use tokio::task::JoinHandle;
 
-use crate::processing::metrics_buffer::MetricsBuffer;
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     SubmitError,
 };
 use crate::types::Message;
+use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 
 #[derive(Clone, Debug)]
@@ -85,7 +85,7 @@ pub struct RunTaskInThreads<TPayload, TTransformed> {
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metrics_buffer: MetricsBuffer,
+    metrics: BoxMetrics,
     metric_name: String,
 }
 
@@ -110,7 +110,7 @@ impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
             handles: VecDeque::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
-            metrics_buffer: MetricsBuffer::new(),
+            metrics: get_metrics(),
             metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
         }
     }
@@ -124,8 +124,8 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
-        self.metrics_buffer
-            .gauge(&self.metric_name, self.handles.len() as u64);
+        self.metrics
+            .gauge(&self.metric_name, self.handles.len() as u64, None);
 
         if let Some(message) = self.message_carried_over.take() {
             match self.next_step.submit(message) {
@@ -228,7 +228,6 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
             handle.abort();
         }
         self.handles.clear();
-        self.metrics_buffer.flush();
 
         let next_commit = self.next_step.join(deadline.map(|d| d.remaining()))?;
 
