@@ -24,5 +24,7 @@ fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 pub use config::{ClickhouseConfig, MessageProcessorConfig, StorageConfig};
 pub use factory::ConsumerStrategyFactory;
 pub use metrics::statsd::StatsDBackend;
+pub use processors::get_processing_function;
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;
+pub use types::KafkaMessageMetadata;
