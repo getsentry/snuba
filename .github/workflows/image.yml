@@ -24,8 +24,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: install docker
-      run: brew install docker
+    - name: install docker and start it
+      run: |
+        set -euxo pipefail
+        brew install docker
+        colima start
       if: matrix.os == 'macos-latest-xlarge'
     - name: build
       run: |
