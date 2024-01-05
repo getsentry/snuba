@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -15,16 +13,6 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
-
-    let (timestamp, origin_timestamp) = match msg.timestamp {
-        Some(timestamp) => (timestamp, DateTime::from_timestamp(timestamp as i64, 0)),
-        _ => (
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
-            None,
-        ),
-    };
-    let device_classification = msg.device_class.unwrap_or_default();
-
     let functions = msg.functions.iter().map(|from| {
         Function {
             profile_id: msg.profile_id,
@@ -32,14 +20,14 @@ pub fn process_message(
 
             // Profile metadata
             browser_name: msg.browser_name.as_deref(),
-            device_classification,
+            device_classification: msg.device_class.unwrap_or_default(),
             dist: msg.dist.as_deref(),
             environment: msg.environment.as_deref(),
             http_method: msg.http_method.as_deref(),
             platform: &msg.platform,
             release: msg.release.as_deref(),
             retention_days: msg.retention_days,
-            timestamp,
+            timestamp: msg.timestamp,
             transaction_name: &msg.transaction_name,
             transaction_op: &msg.transaction_op,
             transaction_status: msg.transaction_status as u8,
@@ -58,7 +46,7 @@ pub fn process_message(
 
     Ok(InsertBatch {
         rows: RowData::from_rows(functions)?,
-        origin_timestamp,
+        origin_timestamp: DateTime::from_timestamp(msg.received, 0),
         sentry_received_timestamp: None,
     })
 }
@@ -88,11 +76,11 @@ struct InputMessage {
     #[serde(default)]
     http_method: Option<String>,
     platform: String,
+    received: i64,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
-    #[serde(default)]
-    timestamp: Option<u64>,
+    timestamp: u64,
     transaction_name: String,
     transaction_op: String,
     transaction_status: SpanStatus,
@@ -145,6 +133,7 @@ mod tests {
             "profile_id": "7329158c39964fbb9ec57c20cf4a2bb8",
             "transaction_name": "vroom-vroom",
             "timestamp": 1694447692,
+            "received": 1694447692,
             "functions": [
                 {
                     "fingerprint": 123,
