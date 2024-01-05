@@ -128,6 +128,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=str,
     help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
 )
+@click.option(
+    "--enforce-schema",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Enforce schema on the raw events topic.",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -151,6 +158,7 @@ def rust_consumer(
     max_poll_interval_ms: int,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
+    enforce_schema: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -196,4 +204,5 @@ def rust_consumer(
         max_poll_interval_ms,
         python_max_queue_depth,
         health_check_file,
+        enforce_schema,
     )

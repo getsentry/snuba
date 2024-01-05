@@ -36,6 +36,7 @@ pub fn consumer(
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
+    enforce_schema: bool,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -49,6 +50,7 @@ pub fn consumer(
             max_poll_interval_ms,
             python_max_queue_depth,
             health_check_file,
+            enforce_schema,
         )
     });
 }
@@ -65,6 +67,7 @@ pub fn consumer_impl(
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
+    enforce_schema: bool,
 ) {
     setup_logging();
 
@@ -168,6 +171,7 @@ pub fn consumer_impl(
         python_max_queue_depth,
         use_rust_processor,
         health_check_file.map(ToOwned::to_owned),
+        enforce_schema,
     );
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);

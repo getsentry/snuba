@@ -26,6 +26,7 @@ pub struct ConsumerStrategyFactory {
     python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
     health_check_file: Option<String>,
+    enforce_schema: bool,
 }
 
 impl ConsumerStrategyFactory {
@@ -41,6 +42,7 @@ impl ConsumerStrategyFactory {
         python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
         health_check_file: Option<String>,
+        enforce_schema: bool,
     ) -> Self {
         Self {
             storage_config,
@@ -53,6 +55,7 @@ impl ConsumerStrategyFactory {
             python_max_queue_depth,
             use_rust_processor,
             health_check_file,
+            enforce_schema,
         }
     }
 }
@@ -85,7 +88,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 next_step,
                 func,
                 &self.logical_topic_name,
-                false,
+                self.enforce_schema,
                 &self.processing_concurrency,
             ),
             _ => Box::new(
