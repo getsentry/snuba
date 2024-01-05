@@ -33,10 +33,10 @@ pub fn consumer(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    enforce_schema: bool,
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
-    enforce_schema: bool,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -47,10 +47,10 @@ pub fn consumer(
             skip_write,
             concurrency,
             use_rust_processor,
+            enforce_schema,
             max_poll_interval_ms,
             python_max_queue_depth,
             health_check_file,
-            enforce_schema,
         )
     });
 }
@@ -64,10 +64,10 @@ pub fn consumer_impl(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    enforce_schema: bool,
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
-    enforce_schema: bool,
 ) {
     setup_logging();
 
@@ -80,7 +80,6 @@ pub fn consumer_impl(
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
-    assert!(consumer_config.commit_log_topic.is_none());
 
     let mut _sentry_guard = None;
 

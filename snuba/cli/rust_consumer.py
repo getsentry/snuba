@@ -201,8 +201,8 @@ def rust_consumer(
         skip_write,
         concurrency_override or concurrency or 1,
         use_rust_processor,
+        enforce_schema,
         max_poll_interval_ms,
         python_max_queue_depth,
         health_check_file,
-        enforce_schema,
     )

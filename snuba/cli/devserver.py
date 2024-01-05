@@ -6,8 +6,11 @@ COMMON_CONSUMER_DEV_OPTIONS = [
     "--auto-offset-reset=latest",
     "--no-strict-offset-reset",
     "--log-level=debug",
-    "--use-rust-processor",
     "--enforce-schema",
+]
+
+COMMON_RUST_CONSUMER_DEV_OPTIONS = COMMON_CONSUMER_DEV_OPTIONS + [
+    "--use-rust-processor",
 ]
 
 
@@ -51,7 +54,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "rust-consumer",
                 "--storage=transactions",
                 "--consumer-group=transactions_group",
-                *COMMON_CONSUMER_DEV_OPTIONS,
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
         (
@@ -61,15 +64,16 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "rust-consumer",
                 "--storage=outcomes_raw",
                 "--consumer-group=outcomes_group",
-                *COMMON_CONSUMER_DEV_OPTIONS,
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
         (
             "errors-consumer",
             [
                 "snuba",
-                "rust-consumer",
+                "consumer",
                 "--storage=errors",
+                "--consumer-group=errors_group",
                 *COMMON_CONSUMER_DEV_OPTIONS,
             ],
         ),
@@ -92,7 +96,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=spans",
                 "--consumer-group=spans_group",
                 "--use-rust-processor",
-                *COMMON_CONSUMER_DEV_OPTIONS,
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
     ]
@@ -194,7 +198,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=metrics_raw",
                     "--consumer-group=snuba-metrics-consumers",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -204,7 +208,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=generic_metrics_distributions_raw",
                     "--consumer-group=snuba-gen-metrics-distributions-consumers",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -214,7 +218,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=generic_metrics_sets_raw",
                     "--consumer-group=snuba-gen-metrics-sets-consumers",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -224,7 +228,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=generic_metrics_counters_raw",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -234,7 +238,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=generic_metrics_gauges_raw",
                     "--consumer-group=snuba-gen-metrics-gauges-consumers",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -347,7 +351,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "rust-consumer",
                     "--storage=profiles",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    "--consumer-group=profiles_group",
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
             (
@@ -356,7 +361,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "rust-consumer",
                     "--storage=functions_raw",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -369,7 +374,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "rust-consumer",
                     "--storage=replays",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    "--consumer-group=replays_group",
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -383,8 +389,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=search_issues",
                     "--consumer-group=generic_events_group",
-                    "--use-rust-processor",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
@@ -398,7 +403,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "rust-consumer",
                     "--storage=group_attributes",
                     "--consumer-group=group_attributes_group",
-                    *COMMON_CONSUMER_DEV_OPTIONS,
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),
         ]
