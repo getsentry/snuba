@@ -53,14 +53,9 @@ pub fn process_message(
         }
     });
 
-    let origin_timestamp = match msg.received {
-        Some(origin_timestamp) => DateTime::from_timestamp(origin_timestamp, 0),
-        _ => None,
-    };
-
     Ok(InsertBatch {
         rows: RowData::from_rows(functions)?,
-        origin_timestamp,
+        origin_timestamp: DateTime::from_timestamp(msg.received, 0),
         sentry_received_timestamp: None,
     })
 }
@@ -90,7 +85,7 @@ struct InputMessage {
     #[serde(default)]
     http_method: Option<String>,
     platform: String,
-    received: Option<i64>,
+    received: i64,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
