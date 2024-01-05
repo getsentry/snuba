@@ -133,6 +133,7 @@ mod tests {
             "profile_id": "7329158c39964fbb9ec57c20cf4a2bb8",
             "transaction_name": "vroom-vroom",
             "timestamp": 1694447692,
+            "received": 1694447692,
             "functions": [
                 {
                     "fingerprint": 123,
