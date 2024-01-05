@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
