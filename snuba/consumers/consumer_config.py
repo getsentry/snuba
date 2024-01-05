@@ -134,8 +134,8 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
-    queued_max_messages_kbytes: int,
-    queued_min_messages: int,
+    queued_max_messages_kbytes: Optional[int],
+    queued_min_messages: Optional[int],
     group_instance_id: Optional[str] = None,
 ) -> ConsumerConfig:
     """
@@ -157,6 +157,9 @@ def resolve_consumer_config(
     resolved_raw_topic = _resolve_topic_config(
         "main topic", default_topic_spec, raw_topic, slice_id
     )
+
+    # assert resolved_raw_topic is not None
+
     resolved_raw_topic = _add_to_topic_broker_config(
         resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
     )
@@ -164,12 +167,10 @@ def resolve_consumer_config(
         resolved_raw_topic, "queued.min.messages", queued_min_messages
     )
 
-    if resolved_raw_topic and group_instance_id is not None:
+    if group_instance_id is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
             resolved_raw_topic, "group.instance.id", group_instance_id
         )
-
-    assert resolved_raw_topic is not None
 
     commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
     resolved_commit_log_topic = _resolve_topic_config(
