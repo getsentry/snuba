@@ -215,15 +215,9 @@ class Runner:
             if fake:
                 self._update_migration_status(migration_key, Status.COMPLETED)
             else:
-                try:
-                    self._run_migration_impl(
-                        migration_key, force=force, check_dangerous=check_dangerous
-                    )
-                except Exception as e:
-                    import pdb
-
-                    pdb.set_trace()
-                    print(e)
+                self._run_migration_impl(
+                    migration_key, force=force, check_dangerous=check_dangerous
+                )
 
             if use_through and migration_key.migration_id.startswith(through):
                 logger.info(f"Ran through: {migration_key.migration_id}")
