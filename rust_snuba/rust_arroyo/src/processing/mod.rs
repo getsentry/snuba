@@ -166,8 +166,8 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
                     }
                 }
 
-                Err(_) => {
-                    tracing::error!("Strategy panicked during close/join");
+                Err(err) => {
+                    tracing::error!(?err, "Strategy panicked during close/join");
                 }
             }
         }
