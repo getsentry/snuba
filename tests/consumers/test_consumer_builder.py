@@ -35,8 +35,6 @@ consumer_config = resolve_consumer_config(
     slice_id=None,
     max_batch_size=3,
     max_batch_time_ms=4,
-    queued_max_messages_kbytes=1,
-    queued_min_messages=2,
 )
 
 # Below, a ConsumerBuilder with only required args

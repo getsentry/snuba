@@ -158,14 +158,17 @@ def resolve_consumer_config(
         "main topic", default_topic_spec, raw_topic, slice_id
     )
 
-    # assert resolved_raw_topic is not None
+    assert resolved_raw_topic is not None
 
-    resolved_raw_topic = _add_to_topic_broker_config(
-        resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
-    )
-    resolved_raw_topic = _add_to_topic_broker_config(
-        resolved_raw_topic, "queued.min.messages", queued_min_messages
-    )
+    if queued_max_messages_kbytes is not None:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
+        )
+
+    if queued_min_messages is not None:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "queued.min.messages", queued_min_messages
+        )
 
     if group_instance_id is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
