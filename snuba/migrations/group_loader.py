@@ -351,6 +351,7 @@ class SpansLoader(DirectoryLoader):
             "0005_spans_add_sentry_tags",
             "0006_spans_add_profile_id",
             "0007_spans_add_metrics_summary",
+            "0008_spans_add_index_on_span_id",
         ]
 
 
