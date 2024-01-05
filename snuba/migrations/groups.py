@@ -118,7 +118,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.QUERYLOG: _MigrationGroup(
         loader=QuerylogLoader(),
         storage_sets_keys={StorageSetKey.QUERYLOG},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.LIMITED,
     ),
     MigrationGroup.PROFILES: _MigrationGroup(
         loader=ProfilesLoader(),
