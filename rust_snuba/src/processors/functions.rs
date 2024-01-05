@@ -13,7 +13,7 @@ pub fn process_message(
     _metadata: KafkaMessageMetadata,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromFunctionsMessage = serde_json::from_slice(payload_bytes)?;
+    let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
     let timestamp = match msg.timestamp {
         Some(timestamp) => timestamp,
@@ -21,30 +21,30 @@ pub fn process_message(
     };
     let device_classification = msg.device_class.unwrap_or_default();
 
-    let functions = msg.functions.into_iter().map(|from| {
+    let functions = msg.functions.iter().map(|from| {
         Function {
             profile_id: msg.profile_id,
             project_id: msg.project_id,
             // Profile metadata
-            browser_name: msg.browser_name.clone(),
+            browser_name: msg.browser_name.as_deref(),
             device_classification,
-            dist: msg.dist.clone(),
-            environment: msg.environment.clone(),
-            http_method: msg.http_method.clone(),
-            platform: msg.platform.clone(),
-            release: msg.release.clone(),
+            dist: msg.dist.as_deref(),
+            environment: msg.environment.as_deref(),
+            http_method: msg.http_method.as_deref(),
+            platform: &msg.platform,
+            release: msg.release.as_deref(),
             retention_days: msg.retention_days,
             timestamp,
-            transaction_name: msg.transaction_name.clone(),
-            transaction_op: msg.transaction_op.clone(),
+            transaction_name: &msg.transaction_name,
+            transaction_op: &msg.transaction_op,
             transaction_status: msg.transaction_status as u8,
 
             // Function metadata
             fingerprint: from.fingerprint,
-            durations: from.self_times_ns,
-            function: from.function.clone(),
-            package: from.package.clone(),
-            name: from.function,
+            durations: &from.self_times_ns,
+            function: &from.function,
+            package: &from.package,
+            name: &from.function,
             is_application: from.in_app as u8,
 
             ..Default::default()
@@ -54,7 +54,7 @@ pub fn process_message(
 }
 
 #[derive(Debug, Deserialize)]
-struct FromFunction {
+struct InputFunction {
     fingerprint: u64,
     function: String,
     in_app: bool,
@@ -63,7 +63,7 @@ struct FromFunction {
 }
 
 #[derive(Debug, Deserialize)]
-struct FromFunctionsMessage {
+struct InputMessage {
     profile_id: Uuid,
     project_id: u64,
     #[serde(default)]
@@ -74,7 +74,7 @@ struct FromFunctionsMessage {
     dist: Option<String>,
     #[serde(default)]
     environment: Option<String>,
-    functions: Vec<FromFunction>,
+    functions: Vec<InputFunction>,
     #[serde(default)]
     http_method: Option<String>,
     platform: String,
@@ -89,36 +89,36 @@ struct FromFunctionsMessage {
 }
 
 #[derive(Default, Debug, Serialize)]
-struct Function {
+struct Function<'a> {
     profile_id: Uuid,
     project_id: u64,
-    browser_name: Option<String>,
+    browser_name: Option<&'a str>,
     device_classification: u32,
-    dist: Option<String>,
-    durations: Vec<u64>,
-    environment: Option<String>,
+    dist: Option<&'a str>,
+    durations: &'a [u64],
+    environment: Option<&'a str>,
     fingerprint: u64,
-    function: String,
-    http_method: Option<String>,
+    function: &'a str,
+    http_method: Option<&'a str>,
     is_application: u8,
     materialization_version: u8,
-    module: String,
-    name: String,
-    package: String,
-    platform: String,
-    release: Option<String>,
+    module: &'a str,
+    name: &'a str,
+    package: &'a str,
+    platform: &'a str,
+    release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
-    transaction_name: String,
-    transaction_op: String,
+    transaction_name: &'a str,
+    transaction_op: &'a str,
     transaction_status: u8,
 
     // Deprecated fields
     depth: u8,
-    os_name: String,
-    os_version: String,
+    os_name: &'a str,
+    os_version: &'a str,
     parent_fingerprint: u8,
-    path: String,
+    path: &'a str,
 }
 
 #[cfg(test)]
