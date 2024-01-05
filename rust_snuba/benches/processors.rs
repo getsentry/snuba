@@ -200,7 +200,7 @@ fn main() {
         profiles => "processed-profiles",
         functions => "profiles-call-tree",
         // FIXME: example payloads panic
-        // replays => "ingest-replay-events",
+        replays => "ingest-replay-events",
         // FIXME: the schema does not really match the metrics summaries
         // metrics => "snuba-generic-metrics",
         outcomes => "outcomes",
