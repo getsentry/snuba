@@ -51,6 +51,12 @@ STREAM_LOADER_SCHEMA = {
             ],
             "description": "Field to be used for timestamp synchronization by the scheduler",
         },
+        "subscription_delay_seconds": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 120,
+            "description": "Additional delay in seconds to be added before scheduling. Amount added depends on the synchronization timestamp used. For orig_message_ts, we typically add 60 seconds to account for ingest time as it is not included.",
+        },
         "replacement_topic": {
             "type": ["string", "null"],
             "description": "Name of the replacements Kafka topic",
@@ -454,7 +460,7 @@ ENTITY_SUBSCRIPTION_VALIDATORS = {
 
 READINESS_STATE_SCHEMA = {
     "type": "string",
-    "enum": ["limited", "deprecate", "partial", "complete"],
+    "enum": ["limited", "deprecate", "partial", "complete", "experimental"],
     "description": "The readiness state defines the availability of the storage in various environments. Internally, this label is used to determine which environments this storage is released in. There for four different readiness states: limited, deprecrate, partial, and complete. Different environments support a set of these readiness_states . If this is a new storage, start with `limited` which only exposes the storage to CI and local development.",
 }
 

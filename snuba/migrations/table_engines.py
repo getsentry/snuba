@@ -164,7 +164,7 @@ class Distributed(TableEngine):
             f", {self.__sharding_key}" if self.__sharding_key else ""
         )
 
-        return f"Distributed({cluster_name}, {database_name}, {self.__local_table_name}{optional_sharding_key})"
+        return f"Distributed(`{cluster_name}`, {database_name}, {self.__local_table_name}{optional_sharding_key})"
 
 
 class Merge(TableEngine):

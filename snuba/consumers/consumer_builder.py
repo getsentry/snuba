@@ -1,7 +1,7 @@
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import MutableMapping, Optional
 
 from arroyo.backends.kafka import (
     KafkaConsumer,
@@ -71,6 +71,7 @@ class ConsumerBuilder:
         max_insert_batch_size: Optional[int],
         max_insert_batch_time_ms: Optional[int],
         metrics: MetricsBackend,
+        metrics_tags: MutableMapping[str, str],
         slice_id: Optional[int],
         join_timeout: Optional[float],
         enforce_schema: bool,
@@ -136,6 +137,7 @@ class ConsumerBuilder:
             self.commit_log_producer = None
 
         self.metrics = metrics
+        self.metrics_tags = metrics_tags
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
         self.max_insert_batch_size = max_insert_batch_size
@@ -161,7 +163,6 @@ class ConsumerBuilder:
         input_topic: Topic,
         dlq_policy: Optional[DlqPolicy[KafkaPayload]],
     ) -> StreamProcessor[KafkaPayload]:
-
         configuration = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
             group_id=self.group_id,
@@ -173,6 +174,11 @@ class ConsumerBuilder:
 
         if self.max_poll_interval_ms is not None:
             configuration["max.poll.interval.ms"] = self.max_poll_interval_ms
+            # HACK: If the max poll interval is less than 45 seconds, set the session timeout
+            # to the same. (it's default is 45 seconds and it must be <= to max.poll.interval.ms)
+            if self.max_poll_interval_ms < 45000:
+                configuration["session.timeout.ms"] = self.max_poll_interval_ms
+
         if self.group_instance_id is not None:
             configuration["group.instance.id"] = self.group_instance_id
 
@@ -249,6 +255,7 @@ class ConsumerBuilder:
             initialize_parallel_transform=setup_sentry,
             health_check_file=self.health_check_file,
             skip_write=self.__skip_write,
+            metrics_tags=self.metrics_tags,
         )
 
         if self.__profile_path is not None:
@@ -306,6 +313,7 @@ class ConsumerBuilder:
             output_block_size=self.output_block_size,
             max_messages_to_process=instruction.max_messages_to_process,
             initialize_parallel_transform=setup_sentry,
+            metrics_tags=self.metrics_tags,
         )
 
         return strategy_factory
@@ -342,6 +350,14 @@ class ConsumerBuilder:
 
         if instruction.policy == DlqReplayPolicy.REINSERT_DLQ:
             dlq_policy = self.__build_default_dlq_policy()
+            # We don't need to apply the limit to the DLQ consumer, just reinsert all
+            # if that option was selected
+            assert dlq_policy is not None
+            dlq_policy = DlqPolicy(
+                dlq_policy.producer,
+                None,
+                dlq_policy.max_buffered_messages_per_partition,
+            )
         elif instruction.policy == DlqReplayPolicy.DROP_INVALID_MESSAGES:
             dlq_policy = DlqPolicy(
                 NoopDlqProducer(),

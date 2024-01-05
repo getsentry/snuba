@@ -363,6 +363,7 @@ TEST_CASES = [
                     Literal(None, "sometime"),
                 ),
             ),
+            granularity=123,
         ),
         CompositeQuery(
             from_clause=events_groups_join(
@@ -387,10 +388,12 @@ TEST_CASES = [
                                 (Column("_snuba_project_id", None, "project_id"),),
                             ),
                         ),
-                    ]
+                    ],
+                    granularity=123,
                 ),
                 groups_node(
                     [SelectedExpression("_snuba_id", Column("_snuba_id", None, "id"))],
+                    granularity=123,
                 ),
             ),
             selected_columns=[
@@ -418,8 +421,9 @@ TEST_CASES = [
                     Literal(None, "sometime"),
                 ),
             ),
+            granularity=123,
         ),
-        id="Query with group by, aggregation and having clause",
+        id="Query with granularity, group by, aggregation and having clause",
     ),
     pytest.param(
         CompositeQuery(

@@ -1,10 +1,11 @@
-#![allow(dead_code)]
-
 use cadence::prelude::*;
-use cadence::{BufferedUdpMetricSink, MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
+use cadence::{MetricBuilder, MetricError, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
+use statsdproxy::cadence::StatsdProxyMetricSink;
+use statsdproxy::config::AggregateMetricsConfig;
+use statsdproxy::middleware::aggregate::AggregateMetrics;
+use statsdproxy::middleware::Upstream;
 use std::collections::HashMap;
-use std::net::UdpSocket;
 
 #[derive(Debug)]
 pub struct StatsDBackend {
@@ -13,13 +14,20 @@ pub struct StatsDBackend {
 
 impl StatsDBackend {
     pub fn new(host: &str, port: u16, prefix: &str, global_tags: HashMap<&str, &str>) -> Self {
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        socket.set_nonblocking(true).unwrap();
-        let sink_addr = (host, port);
-        let buffered = BufferedUdpMetricSink::from(sink_addr, socket).unwrap();
-        let queuing_sink = QueuingMetricSink::from(buffered);
+        let upstream_addr = format!("{}:{}", host, port);
+        let aggregator_sink = StatsdProxyMetricSink::new(move || {
+            let upstream = Upstream::new(upstream_addr.clone()).unwrap();
+            let config = AggregateMetricsConfig {
+                aggregate_counters: true,
+                flush_offset: 0,
+                flush_interval: 1,
+                aggregate_gauges: true,
+                max_map_size: None,
+            };
+            AggregateMetrics::new(config, upstream)
+        });
 
-        let mut client_builder = StatsdClient::builder(prefix, queuing_sink);
+        let mut client_builder = StatsdClient::builder(prefix, aggregator_sink);
         for (k, v) in global_tags {
             client_builder = client_builder.with_tag(k, v);
         }
@@ -46,20 +54,20 @@ impl StatsDBackend {
 
 impl ArroyoMetrics for StatsDBackend {
     fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) = self.send_with_tags(self.client.count_with_tags(key, value), tags) {
-            log::debug!("Error sending metric: {}", e);
+        if let Err(error) = self.send_with_tags(self.client.count_with_tags(key, value), tags) {
+            tracing::debug!(%error, "Error sending metric");
         }
     }
 
-    fn gauge(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
-            log::debug!("Error sending metric: {}", e);
+    fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+        if let Err(error) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
+            tracing::debug!(%error, "Error sending metric");
         }
     }
 
-    fn timing(&mut self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(e) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
-            log::debug!("Error sending metric: {}", e);
+    fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
+        if let Err(error) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
+            tracing::debug!(%error, "Error sending metric");
         }
     }
 }
@@ -71,8 +79,7 @@ mod tests {
 
     #[test]
     fn statsd_metric_backend() {
-        let mut backend =
-            StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
+        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
 
         backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
         backend.gauge("b", 20, Some(HashMap::from([("tag2", "value2")])));

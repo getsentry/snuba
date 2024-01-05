@@ -1,50 +1,40 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
-use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+
+use anyhow::Context;
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 use uuid::Uuid;
+
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromQuerylogMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
-        })?;
-        let querylog_msg: QuerylogMessage = msg.try_into()?;
+    metadata: KafkaMessageMetadata,
+) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
-        let serialized = serde_json::to_vec(&querylog_msg).map_err(|err| {
-            log::error!("Failed to serialize message: {}", err);
-            InvalidMessage
-        })?;
+    let querylog_msg = QuerylogMessage {
+        request: from.request,
+        dataset: from.dataset,
+        projects: from.projects,
+        organization: from.organization,
+        status: from.status,
+        timing: from.timing,
+        query_list: from.query_list.try_into()?,
+        partition: metadata.partition,
+        offset: metadata.offset,
+    };
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-
-    Err(InvalidMessage)
+    InsertBatch::from_rows([querylog_msg])
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct RequestBody {
     #[serde(flatten)]
     fields: BTreeMap<String, Value>,
-}
-
-fn serialize_uuid<S>(input: &str, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let uuid = Uuid::parse_str(input)
-        .map_err(S::Error::custom)?
-        .to_string();
-    s.serialize_str(&uuid)
 }
 
 fn nullable_result_profile<'de, D>(deserializer: D) -> Result<ResultProfile, D::Error>
@@ -65,8 +55,8 @@ where
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Request {
-    #[serde(rename(serialize = "request_id"), serialize_with = "serialize_uuid")]
-    id: String,
+    #[serde(rename(serialize = "request_id"))]
+    id: Uuid,
     #[serde(
         rename(serialize = "request_body"),
         serialize_with = "serialize_json_str"
@@ -101,36 +91,6 @@ struct Stats {
     is_duplicate: Option<u8>,
     #[serde(flatten)]
     extra: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Serialize)]
-struct SortedStats {
-    #[serde(flatten)]
-    stats: BTreeMap<String, Value>,
-}
-
-impl From<Stats> for SortedStats {
-    fn from(from: Stats) -> SortedStats {
-        // consistent, cache hit, max_threads and is_duplicated may not be present
-        let mut stats = from.extra;
-        if from.consistent.is_some() {
-            stats.insert("consistent".to_string(), from.consistent.into());
-        }
-        stats.insert("final".to_string(), from.r#final.into());
-        if from.cache_hit.is_some() {
-            stats.insert("cache_hit".to_string(), from.cache_hit.into());
-        }
-        stats.insert("sample".to_string(), from.sample.into());
-        if from.max_threads.is_some() {
-            stats.insert("max_threads".to_string(), from.max_threads.into());
-        }
-        stats.insert("clickhouse_table".to_string(), from.clickhouse_table.into());
-        stats.insert("query_id".to_string(), from.query_id.into());
-        if from.is_duplicate.is_some() {
-            stats.insert("is_duplicate".to_string(), from.is_duplicate.into());
-        }
-        Self { stats }
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,7 +130,7 @@ struct WhereProfile {
 struct FromQuery {
     sql: String,
     status: String,
-    trace_id: String,
+    trace_id: Uuid,
     stats: Stats,
     profile: Profile,
     #[serde(default, deserialize_with = "nullable_result_profile")]
@@ -184,7 +144,7 @@ struct QueryList {
     #[serde(rename(serialize = "clickhouse_queries.status"))]
     status: Vec<String>,
     #[serde(rename(serialize = "clickhouse_queries.trace_id"))]
-    trace_id: Vec<String>,
+    trace_id: Vec<Uuid>,
     #[serde(rename(serialize = "clickhouse_queries.stats"))]
     stats: Vec<String>,
     #[serde(rename(serialize = "clickhouse_queries.final"))]
@@ -224,8 +184,8 @@ struct QueryList {
 }
 
 impl TryFrom<Vec<FromQuery>> for QueryList {
-    type Error = InvalidMessage;
-    fn try_from(from: Vec<FromQuery>) -> Result<QueryList, InvalidMessage> {
+    type Error = anyhow::Error;
+    fn try_from(from: Vec<FromQuery>) -> anyhow::Result<QueryList> {
         let mut sql = vec![];
         let mut status = vec![];
         let mut trace_id = vec![];
@@ -251,25 +211,20 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
         for q in from {
             sql.push(q.sql);
             status.push(q.status);
-            trace_id.push(
-                Uuid::parse_str(&q.trace_id)
-                    .map_err(|_| InvalidMessage)?
-                    .to_string(),
-            );
-            stats.push(
-                serde_json::to_string(&SortedStats::from(q.stats.clone()))
-                    .map_err(|_| InvalidMessage)?,
-            );
+            trace_id.push(q.trace_id);
             r#final.push(q.stats.r#final as u8);
             cache_hit.push(q.stats.cache_hit.unwrap_or(0));
-            sample.push(match q.stats.sample {
-                Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0) as f32,
-                _ => 0.0,
-            });
+            let sample_value = q
+                .stats
+                .sample
+                .as_ref()
+                .and_then(Value::as_f64)
+                .unwrap_or_default() as f32;
+            sample.push(sample_value);
             max_threads.push(q.stats.max_threads.unwrap_or(0));
             num_days.push(q.profile.time_range.unwrap_or(0));
-            clickhouse_table.push(q.stats.clickhouse_table);
-            query_id.push(q.stats.query_id);
+            clickhouse_table.push(q.stats.clickhouse_table.clone());
+            query_id.push(q.stats.query_id.clone());
             is_duplicate.push(q.stats.is_duplicate.unwrap_or(0));
             consistent.push(q.stats.consistent.unwrap_or(false) as u8);
             all_columns.push(q.profile.all_columns);
@@ -280,6 +235,30 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             array_join_columns.push(q.profile.array_join_cols);
             bytes_scanned.push(q.result_profile.bytes);
             duration_ms.push((q.result_profile.elapsed * 1000.0) as u64);
+
+            // consistent, cache hit, max_threads and is_duplicated may not be present
+            let mut sorted_stats = q.stats.extra;
+            if let Some(consistent) = q.stats.consistent {
+                sorted_stats.insert("consistent".to_string(), consistent.into());
+            }
+            sorted_stats.insert("final".to_string(), q.stats.r#final.into());
+            if let Some(cache_hit) = q.stats.cache_hit {
+                sorted_stats.insert("cache_hit".to_string(), cache_hit.into());
+            }
+            sorted_stats.insert("sample".to_string(), q.stats.sample.into());
+            if let Some(max_threads) = q.stats.max_threads {
+                sorted_stats.insert("max_threads".to_string(), max_threads.into());
+            }
+            sorted_stats.insert(
+                "clickhouse_table".to_string(),
+                q.stats.clickhouse_table.into(),
+            );
+            sorted_stats.insert("query_id".to_string(), q.stats.query_id.into());
+            if let Some(is_duplicate) = q.stats.is_duplicate {
+                sorted_stats.insert("is_duplicate".to_string(), is_duplicate.into());
+            }
+
+            stats.push(serde_json::to_string(&sorted_stats)?);
         }
 
         Ok(Self {
@@ -327,25 +306,12 @@ struct QuerylogMessage {
     projects: Vec<u64>,
     organization: Option<u64>,
     status: String,
+    partition: u16,
+    offset: u64,
     #[serde(flatten)]
     timing: Timing,
     #[serde(flatten)]
     query_list: QueryList,
-}
-
-impl TryFrom<FromQuerylogMessage> for QuerylogMessage {
-    type Error = InvalidMessage;
-    fn try_from(from: FromQuerylogMessage) -> Result<QuerylogMessage, InvalidMessage> {
-        Ok(Self {
-            request: from.request,
-            dataset: from.dataset,
-            projects: from.projects,
-            organization: from.organization,
-            status: from.status,
-            timing: from.timing,
-            query_list: from.query_list.try_into()?,
-        })
-    }
 }
 
 #[cfg(test)]
@@ -452,11 +418,7 @@ mod tests {
             "snql_anonymized": "MATCH Entity(events) SELECT tags_key, tags_value, (count() AS count), (min(timestamp) AS first_seen), (max(timestamp) AS last_seen) GROUP BY tags_key, tags_value WHERE greaterOrEquals(timestamp, toDateTime('$S')) AND less(timestamp, toDateTime('$S')) AND in(project_id, tuple(-1337)) AND in(project_id, tuple(-1337)) AND in(group_id, tuple(-1337)) ORDER BY count DESC LIMIT 4 BY tags_key LIMIT 1000 OFFSET 0"
           }"#;
 
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

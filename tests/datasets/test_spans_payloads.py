@@ -7,6 +7,7 @@ from typing import Any, Dict, Generator, Mapping, Sequence
 
 import pytest
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
+from structlog.testing import capture_logs
 
 from snuba import state
 from snuba.consumers.types import KafkaMessageMetadata
@@ -19,18 +20,21 @@ from tests.helpers import write_processed_messages
 
 # some time in way in the future
 start_time_ms = 4111111111111
+received = 1234567890
+duration_ms = 1234560123
 project_id = 1234567890123456
 
 required_fields = {
-    "trace_id": "12345678901234567890123456789012",
-    "span_id": "1234567890123456",
-    "project_id": project_id,
-    "start_timestamp_ms": start_time_ms,
-    "duration_ms": 1234560123,
+    "duration_ms": duration_ms,
     "exclusive_time_ms": 1234567890123,
     "is_segment": True,
+    "project_id": project_id,
+    "received": received,
     "retention_days": 90,
     "sentry_tags": {},
+    "span_id": "1234567890123456",
+    "start_timestamp_ms": start_time_ms,
+    "trace_id": "12345678901234567890123456789012",
 }
 
 expected_for_required_fields = {
@@ -46,11 +50,13 @@ expected_for_required_fields = {
     "description": "",
     "group_raw": 0,
     "start_timestamp": int(
-        datetime.datetime(2100, 4, 11, 7, 18, 31, 111000).timestamp()
+        datetime.datetime.fromtimestamp(start_time_ms / 1000.0).timestamp()
     ),
     "start_ms": 111,
     "end_timestamp": int(
-        datetime.datetime(2100, 4, 25, 14, 14, 31, 234000).timestamp()
+        datetime.datetime.fromtimestamp(
+            (start_time_ms + duration_ms) / 1000.0
+        ).timestamp()
     ),
     "end_ms": 234,
     "duration": 1234560123,
@@ -76,7 +82,13 @@ expected_for_required_fields = {
 payloads = [
     {**required_fields},
     {**required_fields, **{"description": "test span"}},
-    {**required_fields, **{"event_id": "12345678901234567890123456789012"}},
+    {
+        **required_fields,
+        **{
+            "event_id": "12345678901234567890123456789012",
+            "profile_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+        },
+    },
     {**required_fields, **{"group_raw": "deadbeefdeadbeef"}},
     {**required_fields, **{"tags": {"tag1": "value1", "tag2": 123, "tag3": True}}},
     {
@@ -123,7 +135,10 @@ expected_results: Sequence[Mapping[str, Any]] = [
     {**expected_for_required_fields, **{"description": "test span"}},
     {
         **expected_for_required_fields,
-        **{"transaction_id": str(uuid.UUID("12345678901234567890123456789012"))},
+        **{
+            "transaction_id": str(uuid.UUID("12345678901234567890123456789012")),
+            "profile_id": str(uuid.UUID("deadbeefdeadbeefdeadbeefdeadbeef")),
+        },
     },
     {**expected_for_required_fields, **{"group_raw": int("deadbeefdeadbeef", 16)}},
     {
@@ -218,9 +233,10 @@ class TestSpansPayloads:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime.datetime(1970, 1, 1)
         )
-        processed = SpansMessageProcessor().process_message(payload2, meta)
-        assert processed is None
-        assert "Failed to process span message" in caplog.text
+        with capture_logs() as logs:
+            processed = SpansMessageProcessor().process_message(payload2, meta)
+            assert processed is None
+            assert "Failed to process span message" in str(logs)
 
 
 class TestWriteSpansClickhouse:

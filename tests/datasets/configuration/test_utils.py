@@ -25,6 +25,7 @@ def test_build_stream_loader() -> None:
             "commit_log_topic": "snuba-generic-metrics-sets-commit-log",
             "subscription_scheduler_mode": "global",
             "subscription_synchronization_timestamp": "orig_message_ts",
+            "subscription_delay_seconds": 60,
             "subscription_scheduled_topic": "scheduled-subscriptions-generic-metrics-sets",
             "subscription_result_topic": "generic-metrics-subscription-results",
             "dlq_topic": "snuba-dead-letter-generic-metrics",
@@ -149,7 +150,4 @@ def test_invalid_readiness_state() -> None:
     }
     with pytest.raises(JsonSchemaValueException) as e:
         STORAGE_VALIDATORS["readable_storage"](config)
-    assert (
-        e.value.message
-        == "data.readiness_state must be one of ['limited', 'deprecate', 'partial', 'complete']"
-    )
+    assert e.value.message.startswith("data.readiness_state must be one of")

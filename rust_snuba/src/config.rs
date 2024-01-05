@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ConsumerConfig {
-    pub storages: Vec<StoragesConfig>,
+    pub storages: Vec<StorageConfig>,
     pub raw_topic: TopicConfig,
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
@@ -15,14 +16,45 @@ pub struct ConsumerConfig {
     pub env: EnvConfig,
 }
 
-#[derive(Deserialize)]
+pub fn deserialize_broker_config<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let data = RawBrokerConfig::deserialize(deserializer)?
+        .iter()
+        .filter_map(|(k, v)| {
+            if v.is_null() {
+                None
+            } else if v.is_number() {
+                // Numeric types are valid in confluent-kafka-python config but not in the Rust library
+                Some((k.to_string(), v.as_number().unwrap().to_string()))
+            } else if v.is_string() {
+                if v.as_str().unwrap().is_empty() {
+                    return None;
+                }
+                Some((k.to_string(), v.as_str().unwrap().to_string()))
+            } else {
+                panic!("Unsupported type");
+            }
+        })
+        .collect();
+
+    Ok(data)
+}
+
+#[derive(Deserialize, Debug)]
 pub struct TopicConfig {
     pub physical_topic_name: String,
     pub logical_topic_name: String,
+    #[serde(deserialize_with = "deserialize_broker_config")]
     pub broker_config: BrokerConfig,
 }
 
-pub type BrokerConfig = HashMap<String, Option<String>>;
+type RawBrokerConfig = HashMap<String, Value>;
+
+pub type BrokerConfig = HashMap<String, String>;
 
 impl ConsumerConfig {
     pub fn load_from_str(payload: &str) -> Result<Self, anyhow::Error> {
@@ -31,16 +63,16 @@ impl ConsumerConfig {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct StoragesConfig {
+pub struct StorageConfig {
     pub name: String,
     pub clickhouse_table_name: String,
     pub clickhouse_cluster: ClickhouseConfig,
     pub message_processor: MessageProcessorConfig,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ClickhouseConfig {
     pub host: String,
@@ -51,17 +83,35 @@ pub struct ClickhouseConfig {
     pub database: String,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct MessageProcessorConfig {
     pub python_class_name: String,
     pub python_module: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
     pub dogstatsd_host: Option<String>,
     pub dogstatsd_port: Option<u16>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config() {
+        let raw =
+            "{\"physical_topic_name\": \"test\", \"logical_topic_name\": \"test\", \"broker_config\": {\"bootstrap.servers\": \"127.0.0.1:9092\", \"queued.max.messages.kbytes\": 10000}}";
+
+        let topic_config: TopicConfig = serde_json::from_str(raw).unwrap();
+
+        assert_eq!(
+            topic_config.broker_config["queued.max.messages.kbytes"],
+            "10000"
+        );
+    }
 }

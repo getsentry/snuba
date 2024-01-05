@@ -1,4 +1,3 @@
-import logging
 import numbers
 import random
 import time
@@ -6,6 +5,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Tuple
 
+import rapidjson
+import structlog
 from sentry_kafka_schemas.schema_types.snuba_spans_v1 import SpanEvent
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
@@ -27,7 +28,7 @@ from snuba.processor import (
 )
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 metrics = MetricsWrapper(environment.metrics, "spans.processor")
 
@@ -83,7 +84,8 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         processed["trace_id"] = str(uuid.UUID(span_event["trace_id"]))
         processed["span_id"] = int(span_event["span_id"], 16)
         processed["segment_id"] = processed["span_id"]
-        processed["is_segment"] = span_event["is_segment"]
+        processed["is_segment"] = 1 if span_event["is_segment"] else 0
+
         parent_span_id: Optional[str] = span_event.get("parent_span_id", None)
         if parent_span_id:
             processed["parent_span_id"] = int(parent_span_id, 16)
@@ -111,7 +113,10 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         )
 
         processed["duration"] = max(span_event["duration_ms"], 0)
-        processed["exclusive_time"] = span_event["exclusive_time_ms"]
+        processed["exclusive_time"] = float(span_event["exclusive_time_ms"])
+
+        if metrics_summary := span_event.get("_metrics_summary"):
+            processed["metrics_summary"] = rapidjson.dumps(metrics_summary)
 
     @staticmethod
     def _process_tags(
@@ -166,6 +171,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
         TODO: For the top level span belonging to a transaction, we do not know how to fill these
               values yet. For now lets just set them to their default values.
         """
+        if "sentry_tags" not in span_event:
+            return
+
         sentry_tags = span_event["sentry_tags"].copy()
         sentry_tag_keys, sentry_tag_values = extract_extra_tags(sentry_tags)
         processed["sentry_tags.key"] = sentry_tag_keys
@@ -253,4 +261,9 @@ class SpansMessageProcessor(DatasetMessageProcessor):
                 )
             return None
 
-        return InsertBatch(rows=processed_rows, origin_timestamp=None)
+        received = (
+            datetime.utcfromtimestamp(span_event["received"])
+            if "received" in span_event
+            else None
+        )
+        return InsertBatch(rows=processed_rows, origin_timestamp=received)

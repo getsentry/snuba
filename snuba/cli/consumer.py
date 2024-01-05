@@ -125,6 +125,7 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes",
+    "--concurrency",
     type=int,
 )
 @click.option(
@@ -135,7 +136,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=10)
 @click.option(
     "--enforce-schema",
     type=bool,
@@ -149,6 +150,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--max-poll-interval-ms",
     type=int,
+    default=30000,
 )
 @click.option(
     "--health-check-file",
@@ -190,16 +192,15 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    join_timeout: int = 5,
-    enforce_schema: bool = False,
-    log_level: Optional[str] = None,
-    profile_path: Optional[str] = None,
-    max_poll_interval_ms: Optional[int] = None,
-    health_check_file: Optional[str] = None,
-    group_instance_id: Optional[str] = None,
-    skip_write: bool
+    join_timeout: int,
+    enforce_schema: bool,
+    log_level: Optional[str],
+    profile_path: Optional[str],
+    max_poll_interval_ms: int,
+    health_check_file: Optional[str],
+    group_instance_id: Optional[str],
+    skip_write: bool,
 ) -> None:
-
     setup_logging(log_level)
     setup_sentry()
 
@@ -208,10 +209,13 @@ def consumer(
     storage_key = StorageKey(storage_name)
     sentry_sdk.set_tag("storage", storage_name)
 
-    logger.info("Checking Clickhouse connections")
+    logger.info("Checking Clickhouse connections...")
     storage = get_storage(storage_key)
     cluster = storage.get_cluster()
     check_clickhouse_connections([cluster])
+    logger.info(
+        f"Successfully connected to Clickhouse: cluster_name={cluster.get_clickhouse_cluster_name()}"
+    )
 
     metrics_tags = {
         "consumer_group": consumer_group,
@@ -257,6 +261,7 @@ def consumer(
         max_insert_batch_size=max_insert_batch_size,
         max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
+        metrics_tags=metrics_tags,
         profile_path=profile_path,
         slice_id=slice_id,
         join_timeout=join_timeout,

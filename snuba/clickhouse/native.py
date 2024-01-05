@@ -227,7 +227,13 @@ class ClickhousePool(object):
                     metrics.increment(
                         "connection_error"
                         if not fallback_mode
-                        else "fallback_connection_error"
+                        else "fallback_connection_error",
+                        tags={
+                            "host": self.host,
+                            "port": str(self.port),
+                            "user": self.user,
+                            "database": self.database,
+                        },
                     )
 
                     # Force a reconnection next time

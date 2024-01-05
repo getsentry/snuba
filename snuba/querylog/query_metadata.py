@@ -10,7 +10,9 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storage import StorageNotAvailable
+from snuba.query.exceptions import InvalidQueryException
 from snuba.request import Request
+from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
@@ -57,6 +59,8 @@ class RequestStatus(Enum):
     CACHE_SET_TIMEOUT = "cache-set-timeout"
     # The thread waiting for a cache result to be written times out
     CACHE_WAIT_TIMEOUT = "cache-wait-timeout"
+    # If the query takes longer than 30 seconds to run, and the thread is killed by the cache
+    QUERY_TIMEOUT = "query-timeout"
     # Clickhouse predicted the query would time out. TOO_SLOW
     PREDICTED_TIMEOUT = "predicted-timeout"
     # Clickhouse timeout, TIMEOUT_EXCEEDED
@@ -89,6 +93,7 @@ SLO_FOR = {
     RequestStatus.INVALID_REQUEST,
     RequestStatus.INVALID_TYPING,
     RequestStatus.RATE_LIMITED,
+    RequestStatus.QUERY_TIMEOUT,
     RequestStatus.PREDICTED_TIMEOUT,
     RequestStatus.MEMORY_EXCEEDED,
 }
@@ -102,8 +107,10 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.ILLEGAL_TYPE_OF_ARGUMENT: RequestStatus.INVALID_TYPING,
     ErrorCodes.TYPE_MISMATCH: RequestStatus.INVALID_TYPING,
     ErrorCodes.NO_COMMON_TYPE: RequestStatus.INVALID_TYPING,
+    ErrorCodes.ILLEGAL_COLUMN: RequestStatus.INVALID_REQUEST,
     ErrorCodes.UNKNOWN_FUNCTION: RequestStatus.INVALID_REQUEST,
     ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
+    ErrorCodes.CANNOT_PARSE_UUID: RequestStatus.INVALID_REQUEST,
 }
 
 
@@ -120,10 +127,12 @@ def get_request_status(cause: Exception | None = None) -> Status:
     elif isinstance(cause, ClickhouseError):
         slo_status = ERROR_CODE_MAPPINGS.get(cause.code, RequestStatus.ERROR)
     elif isinstance(cause, TimeoutError):
-        slo_status = RequestStatus.CACHE_SET_TIMEOUT
+        slo_status = RequestStatus.QUERY_TIMEOUT
     elif isinstance(cause, ExecutionTimeoutError):
         slo_status = RequestStatus.CACHE_WAIT_TIMEOUT
-    elif isinstance(cause, StorageNotAvailable):
+    elif isinstance(
+        cause, (StorageNotAvailable, InvalidJsonRequestException, InvalidQueryException)
+    ):
         slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR

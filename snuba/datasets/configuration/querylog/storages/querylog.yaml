@@ -4,7 +4,7 @@ name: querylog
 storage:
   key: querylog
   set_key: querylog
-readiness_state: partial
+readiness_state: limited
 schema:
   columns: [
       { name: request_id, type: UUID },
@@ -24,6 +24,8 @@ schema:
       { name: timestamp, type: DateTime },
       { name: duration_ms, type: UInt, args: { size: 32 } },
       { name: status, type: String },
+      { name: partition, type: UInt, args: { size: 16 } },
+      { name: offset, type: UInt, args: { size: 64 } },
       # clickhouse_queries Nested columns.
       # This is expanded into arrays instead of being expressed as a
       # Nested column because, when adding new columns to a nested field

@@ -62,7 +62,7 @@ TEST_CASES = [
     pytest.param(
         """
         MATCH (transactions)
-        SELECT col1
+        SELECT event_id
         WHERE tags_key IN tuple('t1', 't2')
             AND finish_ts >= toDateTime('2021-01-01T00:00:00')
             AND finish_ts < toDateTime('2021-01-02T00:00:00')
@@ -78,7 +78,7 @@ TEST_CASES = [
     pytest.param(
         """
         MATCH (events)
-        SELECT col1
+        SELECT event_id
         WHERE tags_key IN tuple('t1', 't2')
             AND timestamp >= toDateTime('2021-01-01T00:00:00')
             AND timestamp < toDateTime('2021-01-02T00:00:00')
@@ -148,7 +148,7 @@ def temp_settings() -> Any:
 def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
     snql_query = """
         MATCH (events)
-        SELECT col1
+        SELECT event_id
         WHERE tags_key IN tuple('t1', 't2')
             AND timestamp >= toDateTime('2021-01-01T00:00:00')
             AND timestamp < toDateTime('2021-01-02T00:00:00')

@@ -11,6 +11,7 @@ Contents:
    architecture/datamodel
    architecture/slicing
    architecture/queryprocessing
+   architecture/consumer
    configuration/overview
    query/overview
    language/snql

@@ -9,4 +9,5 @@
   "Dataset Config Validation" \
   "sentry (0)" \
   "sentry (1)" \
-  "Tests on multiple clickhouse versions (21.8.13.1.altinitystable)"
+  "sentry (2)" \
+  "sentry (3)"

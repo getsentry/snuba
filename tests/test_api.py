@@ -208,6 +208,7 @@ class TestApi(SimpleAPITest):
                     ),
                 ).data
             )
+            assert "data" in result, result
             buckets = self.minutes / rollup_mins
             for b in range(int(buckets)):
                 bucket_time = parse_datetime(result["data"][b]["time"]).replace(
@@ -1907,23 +1908,22 @@ class TestApi(SimpleAPITest):
     def test_consistent(self, disable_query_cache: Callable[..., Any]) -> None:
         state.set_config("consistent_override", "test_override=0;another=0.5")
         state.set_config("read_through_cache.short_circuit", 1)
-        query = json.dumps(
-            {
-                "project": 2,
-                "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                "aggregations": [["count()", "", "aggregate"]],
-                "consistent": True,
-                "debug": True,
-                "from_date": self.base_time.isoformat(),
-                "to_date": (
-                    self.base_time + timedelta(minutes=self.minutes)
-                ).isoformat(),
-            }
-        )
+        query_data = {
+            "project": 2,
+            "tenant_ids": {"referrer": "test_query", "organization_id": 1234},
+            "aggregations": [["count()", "", "aggregate"]],
+            "consistent": True,
+            "debug": True,
+            "from_date": self.base_time.isoformat(),
+            "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+        }
+        query = json.dumps(query_data)
 
         response = json.loads(self.post(query, referrer="test_query").data)
         assert response["stats"]["consistent"]
 
+        query_data["tenant_ids"]["referrer"] = "test_override"  # type: ignore
+        query = json.dumps(query_data)
         response = json.loads(self.post(query, referrer="test_override").data)
         assert response["stats"]["consistent"] == False
 
@@ -2150,7 +2150,7 @@ class TestApi(SimpleAPITest):
                     json.dumps(
                         {
                             "project": 1,
-                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                            "tenant_ids": {"referrer": "test", "organization_id": 1234},
                             "selected_columns": [
                                 "event_id",
                                 "title",
@@ -2241,6 +2241,49 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data == {
             "subscription_id": f"0/{expected_uuid.hex}",
         }
+
+    def test_tenant_ids(self) -> None:
+        expected_uuid = uuid.uuid1()
+
+        tenant_ids = {
+            "organization_id": 1,
+            "referrer": "my-referrer",
+            "use_case_id": "transactions",
+        }
+
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post(
+                f"{self.dataset_name}/{self.entity_key}/subscriptions",
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "query": "MATCH (events) SELECT count() AS count WHERE platform IN tuple('a')",
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                        "tenant_ids": tenant_ids,
+                    }
+                ).encode("utf-8"),
+            )
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {
+            "subscription_id": f"0/{expected_uuid.hex}",
+        }
+
+        subscription_id = data["subscription_id"]
+        partition = subscription_id.split("/", 1)[0]
+
+        _, data = list(
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                EntityKey.EVENTS,
+                partition,
+            ).all()
+        )[0]
+        assert data.tenant_ids == dict()  # not saved to the redis store
+        assert "tenant_ids" not in data.to_dict()  # doesn't show up in dictified data
 
     def test_selected_entity_is_used(self) -> None:
         """

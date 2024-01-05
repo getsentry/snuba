@@ -37,7 +37,7 @@ TESTS = [
                 "GRANULARITY 60"
             ),
             "parent_api": "<unknown>",
-            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+            "tenant_ids": {"organization_id": 1, "referrer": "my_request"},
         },
         binary_condition(
             BooleanFunctions.AND,
@@ -115,9 +115,10 @@ TENANT_ID_TESTS = [
                 "LIMIT 1000 "
                 "GRANULARITY 60"
             ),
-            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+            "tenant_ids": {"organization_id": 1, "referrer": "my_request"},
         },
-        {"organization_id": 1, "referrer": "test", "project_id": 1},
+        {"organization_id": 1, "referrer": "my_request", "project_id": 1},
+        "my_request",
         id="one project id in query",
     ),
     pytest.param(
@@ -135,14 +136,39 @@ TENANT_ID_TESTS = [
             "tenant_ids": {"organization_id": 1, "referrer": "test"},
         },
         {"organization_id": 1, "referrer": "test"},
+        "test",
         id="multiple projects, no project tenant",
+    ),
+    pytest.param(
+        {
+            "query": (
+                "MATCH (events) "
+                "SELECT count() AS count BY time "
+                "WHERE "
+                "project_id IN tuple(1, 2, 3, 4) AND"
+                "timestamp >= toDateTime('2011-07-01t19:54:15') AND"
+                "timestamp < toDateTime('2018-07-06t19:54:15') "
+                "LIMIT 1000 "
+                "GRANULARITY 60"
+            ),
+            "tenant_ids": {"organization_id": 1, "referrer": "test"},
+        },
+        {"organization_id": 1, "referrer": "test"},
+        "test",
+        id="only use tenant_id referrer in request",
     ),
 ]
 
 
-@pytest.mark.parametrize("request_payload, expected_tenant_ids", TENANT_ID_TESTS)
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "request_payload, expected_tenant_ids, expected_referrer",
+    TENANT_ID_TESTS,
+)
 def test_tenant_ids(
-    request_payload: dict[str, Any], expected_tenant_ids: dict[str, Any]
+    request_payload: dict[str, Any],
+    expected_tenant_ids: dict[str, Any],
+    expected_referrer: str,
 ) -> None:
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
@@ -156,4 +182,5 @@ def test_tenant_ids(
         Timer("test"),
         "my_request",
     )
+    assert request.referrer == expected_referrer
     assert request.attribution_info.tenant_ids == expected_tenant_ids

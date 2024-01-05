@@ -1,44 +1,33 @@
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::InvalidMessage;
-use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
+
+use anyhow::Context;
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
+
+use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, InvalidMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            InvalidMessage
-        })?;
-        let mut span: Span = msg.try_into()?;
+    metadata: KafkaMessageMetadata,
+) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
-        span.offset = _metadata.offset;
-        span.partition = _metadata.partition;
+    let mut span: Span = msg.try_into()?;
 
-        let serialized = serde_json::to_vec(&span).map_err(|err| {
-            log::error!("Failed to serialize processed message: {}", err);
-            InvalidMessage
-        })?;
+    span.offset = metadata.offset;
+    span.partition = metadata.partition;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-    Err(InvalidMessage)
-}
-
-const DEFAULT_RETENTION_DAYS: u16 = 90;
-
-fn default_retention_days() -> Option<u16> {
-    Some(DEFAULT_RETENTION_DAYS)
+    InsertBatch::from_rows([span])
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct FromSpanMessage {
+    #[serde(default)]
+    _metrics_summary: Value,
     #[serde(default)]
     description: String,
     duration_ms: u32,
@@ -47,6 +36,7 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     group_raw: u64,
     is_segment: bool,
+    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
@@ -61,6 +51,11 @@ struct FromSpanMessage {
     start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FromMeasurementValue {
+    value: f64,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -136,14 +131,11 @@ impl FromSentryTags {
             tags.insert("status_code".into(), status_code.into());
         }
 
-        for (key, value) in &self.extra{
+        for (key, value) in &self.extra {
             tags.insert(key.into(), value.into());
         }
 
-        (
-            tags.keys().cloned().collect(),
-            tags.values().cloned().collect(),
-        )
+        tags.into_iter().unzip()
     }
 }
 
@@ -168,6 +160,8 @@ struct Span {
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
+    #[serde(default)]
+    metrics_summary: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
@@ -199,12 +193,12 @@ struct Span {
 }
 
 impl TryFrom<FromSpanMessage> for Span {
-    type Error = InvalidMessage;
+    type Error = anyhow::Error;
 
-    fn try_from(from: FromSpanMessage) -> Result<Span, InvalidMessage> {
+    fn try_from(from: FromSpanMessage) -> anyhow::Result<Span> {
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
         let group = if let Some(group) = &from.sentry_tags.group {
-            u64::from_str_radix(group, 16).map_err(|_| InvalidMessage)?
+            u64::from_str_radix(group, 16)?
         } else {
             0
         };
@@ -213,8 +207,16 @@ impl TryFrom<FromSpanMessage> for Span {
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
         let tags = from.tags.unwrap_or_default();
-        let mut tag_keys: Vec<String> = tags.clone().into_keys().collect();
-        let mut tag_values: Vec<String> = tags.into_values().collect();
+        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) = tags.into_iter().unzip();
+
+        let measurements = from.measurements.unwrap_or_default();
+        let (measurement_keys, measurement_raw_values): (Vec<_>, Vec<_>) =
+            measurements.into_iter().unzip();
+
+        let mut measurement_values: Vec<f64> = Vec::new();
+        for measurement in measurement_raw_values {
+            measurement_values.push(measurement.value);
+        }
 
         if let Some(http_method) = from.sentry_tags.http_method.clone() {
             tag_keys.push("http.method".into());
@@ -231,6 +233,10 @@ impl TryFrom<FromSpanMessage> for Span {
             tag_values.push(transaction_method);
         }
 
+        let metrics_summary = match from._metrics_summary {
+            Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
+            _ => "".into(),
+        };
 
         Ok(Self {
             action: from.sentry_tags.action.unwrap_or_default(),
@@ -243,6 +249,9 @@ impl TryFrom<FromSpanMessage> for Span {
             group,
             group_raw: from.group_raw,
             is_segment: if from.is_segment { 1 } else { 0 },
+            measurement_keys,
+            measurement_values,
+            metrics_summary,
             module: from.sentry_tags.module.unwrap_or_default(),
             op: from.sentry_tags.op.unwrap_or_default(),
             parent_span_id: from.parent_span_id,
@@ -267,14 +276,6 @@ impl TryFrom<FromSpanMessage> for Span {
             ..Default::default()
         })
     }
-}
-
-fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let hex = String::deserialize(deserializer)?;
-    u64::from_str_radix(&hex, 16).map_err(serde::de::Error::custom)
 }
 
 #[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
@@ -472,11 +473,7 @@ mod tests {
         let span = valid_span();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -491,11 +488,7 @@ mod tests {
         span.sentry_tags.status = Option::None;
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -510,11 +503,7 @@ mod tests {
         span.sentry_tags.status = Some("".into());
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -529,11 +518,7 @@ mod tests {
         span.retention_days = default_retention_days();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -548,11 +533,7 @@ mod tests {
         span.tags = Option::None;
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,

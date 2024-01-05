@@ -40,7 +40,9 @@ pipelines:
                                     "Tests and code coverage (test_distributed_migrations)" \
                                     "Dataset Config Validation" \
                                     "sentry (0)" \
-                                    "sentry (1)"
+                                    "sentry (1)" \
+                                    "sentry (2)" \
+                                    "sentry (3)"
                               - script: |
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
                                     ${GO_REVISION_SNUBA_REPO} \
@@ -106,7 +108,8 @@ pipelines:
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
-                                    --container-name="optimize"
+                                    --container-name="optimize" \
+                                    --container-name="cardinality-report"
             - deploy:
                   fetch_materials: true
                   jobs:
@@ -163,4 +166,5 @@ pipelines:
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
-                                    --container-name="optimize"
+                                    --container-name="optimize" \
+                                    --container-name="cardinality-report"

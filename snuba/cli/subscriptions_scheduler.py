@@ -68,7 +68,6 @@ logger = logging.getLogger(__name__)
     help="The slice id for the corresponding storage to the given entity",
 )
 @click.option("--log-level", help="Logging level to use.")
-@click.option("--delay-seconds", type=int)
 @click.option(
     "--stale-threshold-seconds",
     type=int,
@@ -92,7 +91,6 @@ def subscriptions_scheduler(
     schedule_ttl: int,
     slice_id: Optional[int],
     log_level: Optional[str],
-    delay_seconds: Optional[int],
     stale_threshold_seconds: Optional[int],
     health_check_file: Optional[str],
 ) -> None:
@@ -157,10 +155,8 @@ def subscriptions_scheduler(
         storage is not None
     ), f"Entity {entity_name} does not have a writable storage by default."
 
-    if stale_threshold_seconds is not None and delay_seconds is not None:
-        assert (
-            stale_threshold_seconds > delay_seconds
-        ), "stale_threshold_seconds must be greater than delay_seconds"
+    if stale_threshold_seconds is not None:
+        assert stale_threshold_seconds > 120, "stale_threshold_seconds must be 120"
 
     stream_loader = storage.get_table_writer().get_stream_loader()
 
@@ -185,7 +181,6 @@ def subscriptions_scheduler(
         auto_offset_reset,
         not no_strict_offset_reset,
         schedule_ttl,
-        delay_seconds,
         stale_threshold_seconds,
         metrics,
         slice_id,

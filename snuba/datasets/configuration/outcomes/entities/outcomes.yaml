@@ -7,38 +7,39 @@ schema:
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: key_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
     { name: outcome, type: UInt, args: { size: 8 } },
     { name: reason, type: String },
     { name: quantity, type: UInt, args: { size: 64 } },
     { name: category, type: UInt, args: { size: 8 } },
     { name: times_seen, type: UInt, args: { size: 64 } },
-    { name: time, type: DateTime },
   ]
 
 required_time_column: timestamp
 storages:
-- storage: outcomes_hourly
-  is_writable: false
-- storage: outcomes_raw
-  is_writable: true
+  - storage: outcomes_hourly
+    is_writable: false
+  - storage: outcomes_raw
+    is_writable: true
 storage_selector:
   selector: SimpleQueryStorageSelector
   args:
     storage: outcomes_hourly
 query_processors:
-- processor: BasicFunctionsProcessor
-- processor: TimeSeriesProcessor
-  args:
-    time_group_columns:
-      time: timestamp
-    time_parse_columns:
-    - timestamp
-- processor: ReferrerRateLimiterProcessor
-- processor: OrganizationRateLimiterProcessor
-  args:
-    org_column: org_id
+  - processor: BasicFunctionsProcessor
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - timestamp
+  - processor: ReferrerRateLimiterProcessor
+  - processor: OrganizationRateLimiterProcessor
+    args:
+      org_column: org_id
+validate_data_model: error
 validators:
-- validator: EntityRequiredColumnValidator
-  args:
-    required_filter_columns:
-    - org_id
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns:
+        - org_id
