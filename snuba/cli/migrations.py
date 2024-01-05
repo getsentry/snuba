@@ -245,7 +245,6 @@ def reverse_in_progress(
     """
     setup_logging(log_level)
     if not dry_run:
-        check_clickhouse_connections()
         check_for_inactive_replicas()
     runner = Runner()
 
