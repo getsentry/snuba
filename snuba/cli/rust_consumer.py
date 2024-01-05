@@ -115,7 +115,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "use_rust_processor",
     is_flag=True,
     help="Use the Rust (if available) or Python message processor",
-    default=False,
+    default=True,
 )
 @click.option(
     "--group-instance-id",
