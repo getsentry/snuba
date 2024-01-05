@@ -65,7 +65,7 @@ class ConsumerConfig:
 
 
 def _add_to_topic_broker_config(
-    topic_config: TopicConfig, param_key: str, param_value: str
+    topic_config: TopicConfig, param_key: str, param_value: str | int
 ) -> TopicConfig:
     """
     Add a parameter to the broker configuration of a topic.
@@ -73,6 +73,7 @@ def _add_to_topic_broker_config(
     the broker configuration.
     """
     assert isinstance(param_key, str)
+
     # copy the broker config to avoid modifying the original
     broker_config = {k: v for k, v in topic_config.broker_config.items()}
     broker_config[param_key] = param_value
@@ -134,8 +135,8 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
-    queued_max_messages_kbytes: Optional[int],
-    queued_min_messages: Optional[int],
+    queued_max_messages_kbytes: Optional[int] = None,
+    queued_min_messages: Optional[int] = None,
     group_instance_id: Optional[str] = None,
 ) -> ConsumerConfig:
     """
