@@ -16,12 +16,9 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
-    let (timestamp, origin_timestamp) = match msg.timestamp {
-        Some(timestamp) => (timestamp, DateTime::from_timestamp(timestamp as i64, 0)),
-        _ => (
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
-            None,
-        ),
+    let timestamp = match msg.timestamp {
+        Some(timestamp) => timestamp,
+        _ => SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
     };
     let device_classification = msg.device_class.unwrap_or_default();
 
@@ -56,6 +53,11 @@ pub fn process_message(
         }
     });
 
+    let origin_timestamp = match msg.received {
+        Some(origin_timestamp) => DateTime::from_timestamp(origin_timestamp, 0),
+        _ => None,
+    };
+
     Ok(InsertBatch {
         rows: RowData::from_rows(functions)?,
         origin_timestamp,
@@ -88,6 +90,7 @@ struct InputMessage {
     #[serde(default)]
     http_method: Option<String>,
     platform: String,
+    received: Option<i64>,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
