@@ -1,12 +1,13 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::spans::SpanStatus;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -15,9 +16,12 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
-    let timestamp = match msg.timestamp {
-        Some(timestamp) => timestamp,
-        _ => SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+    let (timestamp, origin_timestamp) = match msg.timestamp {
+        Some(timestamp) => (timestamp, DateTime::from_timestamp(timestamp as i64, 0)),
+        _ => (
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+            None,
+        ),
     };
     let device_classification = msg.device_class.unwrap_or_default();
 
@@ -25,6 +29,7 @@ pub fn process_message(
         Function {
             profile_id: msg.profile_id,
             project_id: msg.project_id,
+
             // Profile metadata
             browser_name: msg.browser_name.as_deref(),
             device_classification,
@@ -50,7 +55,12 @@ pub fn process_message(
             ..Default::default()
         }
     });
-    InsertBatch::from_rows(functions)
+
+    Ok(InsertBatch {
+        rows: RowData::from_rows(functions)?,
+        origin_timestamp,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize)]
