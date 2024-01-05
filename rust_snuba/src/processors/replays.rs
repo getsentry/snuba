@@ -99,7 +99,7 @@ pub fn process_message(
                 error_sample_rate,
                 session_sample_rate,
                 event_hash,
-                is_archived: event.is_archived,
+                is_archived: event.is_archived.into(),
                 ip_address_v4,
                 ip_address_v6,
                 offset: metadata.offset,
@@ -213,7 +213,7 @@ struct ReplayEvent {
     #[serde(default)]
     event_hash: Option<Uuid>,
     #[serde(default)]
-    is_archived: u8,
+    is_archived: bool,
     #[serde(default = "default_platform")]
     platform: String,
     #[serde(default)]
@@ -449,7 +449,7 @@ mod tests {
             },
             "dist": "dist",
             "environment": "environment",
-            "is_archived": 0,
+            "is_archived": false,
             "platform": "platform",
             "release": "release",
             "replay_start_timestamp": 1702659277,
@@ -567,7 +567,7 @@ mod tests {
     #[test]
     fn test_parse_replay_event_sparse() {
         let payload = r#"{
-            "is_archived": 0,
+            "is_archived": true,
             "timestamp": 1702659277,
             "type": "replay_event",
             "replay_id": "048aa04be40243948eb3b57089c519ee"
