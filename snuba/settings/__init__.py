@@ -96,7 +96,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "metrics",
             "migrations",
             "outcomes",
-            # "querylog",
+            "querylog",
             "sessions",
             "transactions",
             "profiles",
