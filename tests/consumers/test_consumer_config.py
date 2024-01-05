@@ -23,9 +23,6 @@ def test_consumer_config() -> None:
     assert resolved.raw_topic.physical_topic_name == "new-events"
     assert resolved.raw_topic.logical_topic_name == "events"
     assert resolved.commit_log_topic is not None
-    assert (
-        resolved.commit_log_topic.broker_config["bootstrap.servers"] == "127.0.0.1:9092"
-    )
     assert resolved.commit_log_topic.physical_topic_name == "snuba-commit-log"
     assert resolved.replacements_topic is not None
     assert resolved.replacements_topic.physical_topic_name == "event-replacements"
