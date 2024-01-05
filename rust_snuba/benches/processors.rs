@@ -5,6 +5,7 @@ use std::time::{Duration, SystemTime};
 
 use criterion::measurement::WallTime;
 use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
+use once_cell::sync::Lazy;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::local::broker::LocalBroker;
 use rust_arroyo::backends::local::LocalConsumer;
@@ -15,6 +16,7 @@ use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
 use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
+
 use rust_arroyo::utils::metrics::configure_metrics;
 use rust_snuba::{
     get_processing_function, ClickhouseConfig, ConsumerStrategyFactory, KafkaMessageMetadata,
@@ -22,10 +24,14 @@ use rust_snuba::{
 };
 use uuid::Uuid;
 
-mod utils;
-use crate::utils::{payloads_for_schema, processor_for_schema, RUNTIME};
-
 const MSG_COUNT: usize = 5_000;
+
+static RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+});
 
 fn create_factory(
     concurrency: usize,
@@ -83,9 +89,10 @@ fn create_stream_processor(
     let mut broker = LocalBroker::new(Box::new(storage), Box::new(clock));
     broker.create_topic(topic, 1).unwrap();
 
-    let payloads = payloads_for_schema(schema);
+    let schema = sentry_kafka_schemas::get_schema(schema, None).unwrap();
+    let payloads = schema.examples();
     for payload in payloads.iter().cycle().take(messages) {
-        let payload = KafkaPayload::new(None, None, Some(payload.as_bytes().to_vec()));
+        let payload = KafkaPayload::new(None, None, Some(payload.to_vec()));
         broker.produce(&partition, payload).unwrap();
     }
 
@@ -103,8 +110,6 @@ fn create_stream_processor(
 }
 
 fn run_fn_bench(bencher: &mut BenchmarkGroup<WallTime>, schema: &str) {
-    let messages = payloads_for_schema(schema);
-
     let processor_name = processor_for_schema(schema);
     let processor_fn = get_processing_function(processor_name).unwrap();
     let metadata = KafkaMessageMetadata {
@@ -112,14 +117,16 @@ fn run_fn_bench(bencher: &mut BenchmarkGroup<WallTime>, schema: &str) {
         offset: 1,
         timestamp: DateTime::from(SystemTime::now()),
     };
+    let schema = sentry_kafka_schemas::get_schema(schema, None).unwrap();
+    let payloads = schema.examples();
 
     bencher
         .warm_up_time(Duration::from_millis(500))
-        .throughput(Throughput::Elements(messages.len() as u64))
+        .throughput(Throughput::Elements(payloads.len() as u64))
         .bench_function(BenchmarkId::from_parameter("-"), |b| {
             b.iter(|| {
-                for payload in messages {
-                    let payload = KafkaPayload::new(None, None, Some(payload.as_bytes().to_vec()));
+                for payload in payloads {
+                    let payload = KafkaPayload::new(None, None, Some(payload.to_vec()));
                     let processed = processor_fn(payload, metadata.clone()).unwrap();
                     black_box(processed);
                 }
@@ -161,6 +168,19 @@ macro_rules! define_benches {
             group.finish();
         })+
     };
+}
+
+pub fn processor_for_schema(schema: &str) -> &str {
+    match schema {
+        "snuba-spans" => "SpansMessageProcessor",
+        "snuba-queries" => "QuerylogProcessor",
+        "processed-profiles" => "ProfilesMessageProcessor",
+        "profiles-call-tree" => "FunctionsMessageProcessor",
+        "ingest-replay-events" => "ReplaysProcessor",
+        "snuba-generic-metrics" => "MetricsSummariesMessageProcessor",
+        "outcomes" => "OutcomesProcessor",
+        _ => todo!("need to add new schemas and processors"),
+    }
 }
 
 fn main() {
