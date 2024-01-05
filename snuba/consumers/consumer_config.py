@@ -161,6 +161,11 @@ def resolve_consumer_config(
 
     assert resolved_raw_topic is not None
 
+    if bootstrap_servers:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "bootstrap.servers", ",".join(bootstrap_servers)
+        )
+
     if queued_max_messages_kbytes is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
             resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
@@ -181,10 +186,24 @@ def resolve_consumer_config(
         "commit log", commit_log_topic_spec, commit_log_topic, slice_id
     )
 
+    if resolved_commit_log_topic and commit_log_bootstrap_servers:
+        resolved_commit_log_topic = _add_to_topic_broker_config(
+            resolved_commit_log_topic,
+            "bootstrap.servers",
+            ",".join(commit_log_bootstrap_servers),
+        )
+
     replacements_topic_spec = stream_loader.get_replacement_topic_spec()
     resolved_replacements_topic = _resolve_topic_config(
         "replacements topic", replacements_topic_spec, replacements_topic, slice_id
     )
+
+    if resolved_replacements_topic and replacement_bootstrap_servers:
+        resolved_replacements_topic = _add_to_topic_broker_config(
+            resolved_replacements_topic,
+            "bootstrap.servers",
+            ",".join(replacement_bootstrap_servers),
+        )
 
     resolved_env_config = _resolve_env_config()
 
