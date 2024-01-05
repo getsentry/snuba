@@ -180,7 +180,6 @@ class Runner:
             pending_migrations = self._get_pending_migrations_for_group(
                 MigrationGroup.SYSTEM
             ) + self._get_pending_migrations_for_group(group)
-
         if readiness_states:
             pending_migrations = [
                 m

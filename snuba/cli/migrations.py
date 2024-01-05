@@ -85,7 +85,6 @@ def migrate(
     Blocking migrations will not be run unless --force is passed.
     """
     setup_logging(log_level)
-    check_clickhouse_connections()
     check_for_inactive_replicas()
     runner = Runner()
 

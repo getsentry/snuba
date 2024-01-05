@@ -1,5 +1,5 @@
 use cadence::prelude::*;
-use cadence::{MetricBuilder, MetricError, StatsdClient};
+use cadence::{MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
 use statsdproxy::cadence::StatsdProxyMetricSink;
 use statsdproxy::config::AggregateMetricsConfig;
@@ -27,7 +27,9 @@ impl StatsDBackend {
             AggregateMetrics::new(config, upstream)
         });
 
-        let mut client_builder = StatsdClient::builder(prefix, aggregator_sink);
+        let queuing_sink = QueuingMetricSink::from(aggregator_sink);
+
+        let mut client_builder = StatsdClient::builder(prefix, queuing_sink);
         for (k, v) in global_tags {
             client_builder = client_builder.with_tag(k, v);
         }
