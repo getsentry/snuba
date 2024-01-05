@@ -292,7 +292,7 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 
 # The migration groups that can be skipped are listed in OPTIONAL_GROUPS.
 # Migrations for skipped groups will not be run.
-SKIPPED_MIGRATION_GROUPS: Set[str] = set()
+SKIPPED_MIGRATION_GROUPS: Set[str] = set(["querylog", "test_migration"])
 
 # Dataset readiness states supported in this environment
 SUPPORTED_STATES: Set[str] = {
