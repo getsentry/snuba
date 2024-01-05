@@ -1,9 +1,10 @@
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -17,7 +18,13 @@ pub fn process_message(
     msg.offset = metadata.offset;
     msg.partition = metadata.partition;
 
-    InsertBatch::from_rows([msg])
+    let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
+
+    Ok(InsertBatch {
+        rows: RowData::from_rows([msg])?,
+        origin_timestamp,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
