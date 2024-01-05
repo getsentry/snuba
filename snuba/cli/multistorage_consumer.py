@@ -163,6 +163,8 @@ def multistorage_consumer(
         slice_id=slice_id,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
     )
 
     storages = {
