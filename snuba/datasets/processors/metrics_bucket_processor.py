@@ -3,24 +3,20 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
-from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
-    ILLEGAL_VALUE_IN_DIST,
-    ILLEGAL_VALUE_IN_SET,
-    INT_EXPECTED,
     INT_FLOAT_EXPECTED,
     InputType,
     OutputType,
-    is_set_message,
     values_for_distribution_message,
     values_for_set_message,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
-DISABLED_MATERIALIZATION_VERSION = 1
+ENABLED_MATERIALIZATION_VERSION = 4
+
 ILLEGAL_VALUE_FOR_COUNTER = "Illegal value for counter value."
 
 
@@ -88,11 +84,7 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             keys.append(int(key))
             values.append(value)
 
-        mat_version = (
-            DISABLED_MATERIALIZATION_VERSION
-            if settings.WRITE_METRICS_AGG_DIRECTLY
-            else settings.ENABLED_MATERIALIZATION_VERSION
-        )
+        mat_version = ENABLED_MATERIALIZATION_VERSION
 
         try:
             retention_days = enforce_retention(message["retention_days"], timestamp)
@@ -123,44 +115,6 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
         return InsertBatch(
             [processed], None, sentry_received_timestamp=sentry_received_timestamp
         )
-
-
-class SetsMetricsProcessor(MetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_set_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        values = message["value"]
-        for value in values:
-            assert isinstance(
-                value, int
-            ), f"{ILLEGAL_VALUE_IN_SET} {INT_EXPECTED}: {value}"
-        return {"set_values": values}
-
-
-class CounterMetricsProcessor(MetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "c"
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        value = message["value"]
-        assert isinstance(
-            value, (int, float)
-        ), f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
-        return {"value": value}
-
-
-class DistributionsMetricsProcessor(MetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return message["type"] is not None and message["type"] == "d"
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        values = message["value"]
-        for value in values:
-            assert isinstance(
-                value, (int, float)
-            ), f"{ILLEGAL_VALUE_IN_DIST} {INT_FLOAT_EXPECTED}: {value}"
-        return {"values": values}
 
 
 class PolymorphicMetricsProcessor(MetricsBucketProcessor):
