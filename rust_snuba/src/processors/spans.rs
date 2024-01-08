@@ -42,7 +42,7 @@ struct FromSpanMessage {
     project_id: u64,
     #[serde(default = "default_retention_days")]
     retention_days: Option<u16>,
-    #[serde(deserialize_with = "hex_to_u64")]
+    #[serde(default, deserialize_with = "hex_to_u64")]
     segment_id: u64,
     sentry_tags: FromSentryTags,
     #[serde(deserialize_with = "hex_to_u64")]
