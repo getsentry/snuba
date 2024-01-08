@@ -63,7 +63,7 @@ pub fn process_message(
 
             for tag in event.tags.into_iter() {
                 if &tag.0 == "transaction" {
-                    title = Some(tag.1.clone())
+                    title = tag.1.clone()
                 }
                 tags_key.push(tag.0);
                 tags_value.push(tag.1);
@@ -235,7 +235,7 @@ struct ReplayEvent {
     #[serde(default)]
     error_ids: Vec<Uuid>,
     #[serde(default)]
-    tags: Vec<(String, String)>,
+    tags: Vec<(String, Option<String>)>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -367,7 +367,7 @@ struct ReplayRow {
     #[serde(rename = "tags.key")]
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
-    tags_value: Vec<String>,
+    tags_value: Vec<Option<String>>,
     #[serde(skip_serializing_if = "is_u32_zero")]
     click_node_id: u32,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -459,7 +459,7 @@ mod tests {
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
             "tags": [
                 ["a", "b"],
-                ["transaction.name", "test"]
+                ["transaction.name", null]
             ],
             "segment_id": 0,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
