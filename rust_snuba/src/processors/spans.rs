@@ -36,7 +36,7 @@ struct FromSpanMessage {
     exclusive_time_ms: f64,
     is_segment: bool,
     measurements: Option<BTreeMap<String, FromMeasurementValue>>,
-    #[serde(deserialize_with = "hex_to_u64")]
+    #[serde(default, deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
