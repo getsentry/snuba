@@ -31,7 +31,8 @@ struct FromSpanMessage {
     #[serde(default)]
     description: String,
     duration_ms: u32,
-    event_id: Uuid,
+    #[serde(default)]
+    event_id: Option<Uuid>,
     exclusive_time_ms: f64,
     #[serde(deserialize_with = "hex_to_u64")]
     group_raw: u64,
@@ -187,7 +188,7 @@ struct Span {
     #[serde(rename(serialize = "tags.value"))]
     tag_values: Vec<String>,
     trace_id: Uuid,
-    transaction_id: Uuid,
+    transaction_id: Option<Uuid>,
     transaction_op: String,
     user: String,
 }
