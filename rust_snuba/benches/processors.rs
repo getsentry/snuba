@@ -24,6 +24,13 @@ use rust_snuba::{
 };
 use uuid::Uuid;
 
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 const MSG_COUNT: usize = 5_000;
 
 static RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
