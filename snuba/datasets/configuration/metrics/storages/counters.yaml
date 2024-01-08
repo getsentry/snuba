@@ -1,5 +1,5 @@
 version: v1
-kind: writable_storage
+kind: readable_storage
 name: metrics_counters
 storage:
   key: metrics_counters

@@ -1,5 +1,5 @@
 version: v1
-kind: writable_storage
+kind: readable_storage
 name: metrics_distributions
 storage:
   key: metrics_distributions
