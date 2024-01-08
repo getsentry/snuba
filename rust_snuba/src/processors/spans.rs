@@ -36,8 +36,7 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     group_raw: u64,
     is_segment: bool,
-    #[serde(default)]
-    measurements: BTreeMap<String, FromMeasurementValue>,
+    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
     #[serde(deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
@@ -50,8 +49,7 @@ struct FromSpanMessage {
     #[serde(deserialize_with = "hex_to_u64")]
     span_id: u64,
     start_timestamp_ms: u64,
-    #[serde(default)]
-    tags: BTreeMap<String, String>,
+    tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
 }
 
@@ -208,10 +206,12 @@ impl TryFrom<FromSpanMessage> for Span {
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
-        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) =
+            from.tags.unwrap_or_default().into_iter().unzip();
 
         let (measurement_keys, measurement_values) = from
             .measurements
+            .unwrap_or_default()
             .into_iter()
             .map(|(k, v)| (k, v.value))
             .unzip();
