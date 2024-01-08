@@ -48,10 +48,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
             } else {
                 tracing::debug!("performing write");
 
-                let response = client
-                    .send(insert_batch.encoded_rows().to_vec())
-                    .await
-                    .unwrap();
+                let response = client.send(insert_batch.encoded_rows()).await.unwrap();
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", insert_batch.len());
@@ -166,15 +163,14 @@ impl ClickhouseClient {
         }
     }
 
-    fn chunk(&self, rows: Vec<u8>) -> Vec<Vec<u8>> {
+    fn chunked_body(rows: &[u8]) -> Vec<Result<Box<[u8]>, std::io::Error>> {
         rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
-            .map(|chunk| chunk.to_vec())
+            .map(|chunk| Ok(Box::from(chunk)))
             .collect()
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
-        let chunks: Vec<Result<_, ::std::io::Error>> =
-            self.chunk(body).into_iter().map(Ok).collect();
+    pub async fn send(&self, body: &[u8]) -> anyhow::Result<Response> {
+        let chunks = Self::chunked_body(body);
         let stream = futures::stream::iter(chunks);
 
         let res = self
@@ -209,24 +205,17 @@ mod tests {
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
-        let res = client.send(b"[]".to_vec()).await;
+        let res = client.send(b"[]").await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
     }
 
     #[test]
-    fn chunk() {
-        let client: ClickhouseClient = ClickhouseClient::new(
-            &std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
-            8123,
-            "querylog_local",
-            "default",
-        );
-
+    fn chunked_body() {
         let mut data: Vec<u8> = vec![0; 1_000_000];
 
-        assert_eq!(client.chunk(data.clone()).len(), 1);
+        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 1);
         data.push(0);
-        assert_eq!(client.chunk(data).len(), 2);
+        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 2);
     }
 }

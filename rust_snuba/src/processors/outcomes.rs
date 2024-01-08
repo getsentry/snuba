@@ -83,10 +83,10 @@ struct Outcome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::RowData;
     use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
+
     #[test]
     fn test_outcome() {
         let data = r#"{
@@ -104,11 +104,8 @@ mod tests {
         };
         let result = process_message(payload, meta).expect("The message should be processed");
 
-        let expected = "{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}";
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}";
 
-        assert_eq!(
-            result.rows,
-            RowData::from_encoded_rows(vec![expected.as_bytes().to_vec()])
-        );
+        assert_eq!(result.rows.into_encoded_rows(), expected);
     }
 }
