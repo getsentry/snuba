@@ -76,7 +76,7 @@ fn create_factory(
         false,
         None,
         "test-group".to_owned(),
-        Topic::new("test")
+        Topic::new("test"),
     );
     Box::new(factory)
 }
