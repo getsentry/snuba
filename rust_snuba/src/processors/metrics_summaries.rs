@@ -55,7 +55,7 @@ struct InputMessage {
     #[serde(default)]
     duration_ms: u32,
     project_id: u64,
-    // #[serde(default = "default_retention_days")]
+    #[serde(default)]
     retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
     span_id: u64,
