@@ -14,8 +14,6 @@ use rust_snuba::{MessageProcessorConfig, Noop, PythonTransformStep};
 use serde_json::json;
 
 fn main() {
-    procspawn::init();
-
     let step = Noop;
 
     let output = Arc::new(AtomicUsize::new(0));
@@ -30,13 +28,13 @@ fn main() {
     );
 
     let mut step = PythonTransformStep::new(
+        step,
         MessageProcessorConfig {
             python_class_name: "SpansMessageProcessor".into(),
             python_module: "snuba.datasets.processors.spans_processor".into(),
         },
         8,
         Some(256),
-        step,
     )
     .unwrap();
 

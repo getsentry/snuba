@@ -15,7 +15,7 @@ use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::make_rust_processor;
-use crate::strategies::python_v2::PythonTransformStep;
+use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
