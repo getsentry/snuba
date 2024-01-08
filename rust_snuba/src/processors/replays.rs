@@ -127,7 +127,7 @@ pub fn process_message(
                 tags_key,
                 tags_value: tags_value
                     .into_iter()
-                    .map(|s| s.unwrap_or(String::new()))
+                    .map(|s| s.unwrap_or_default())
                     .collect(),
                 ..Default::default()
             };
