@@ -125,7 +125,10 @@ pub fn process_message(
                 user_name: event.user.username,
                 title,
                 tags_key,
-                tags_value,
+                tags_value: tags_value
+                    .into_iter()
+                    .map(|s| s.unwrap_or(String::new()))
+                    .collect(),
                 ..Default::default()
             };
 
@@ -367,7 +370,7 @@ struct ReplayRow {
     #[serde(rename = "tags.key")]
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
-    tags_value: Vec<Option<String>>,
+    tags_value: Vec<String>,
     #[serde(skip_serializing_if = "is_u32_zero")]
     click_node_id: u32,
     #[serde(skip_serializing_if = "String::is_empty")]
