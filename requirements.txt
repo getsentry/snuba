@@ -40,4 +40,3 @@ PyYAML==6.0
 sqlparse==0.4.2
 google-api-python-client==2.88.0
 sentry-usage-accountant==0.0.10
-maturin==1.4.0
