@@ -39,7 +39,7 @@ impl fmt::Debug for Topic {
 
 impl fmt::Display for Topic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Topic({})", self.as_str())
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -65,6 +65,15 @@ impl fmt::Display for Partition {
 pub enum TopicOrPartition {
     Topic(Topic),
     Partition(Partition),
+}
+
+impl TopicOrPartition {
+    pub fn topic(&self) -> Topic {
+        match self {
+            TopicOrPartition::Topic(topic) => *topic,
+            TopicOrPartition::Partition(partition) => partition.topic,
+        }
+    }
 }
 
 impl From<Topic> for TopicOrPartition {
