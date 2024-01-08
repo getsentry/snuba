@@ -5,3 +5,4 @@ api_changes:
   - "snuba/web/*.py"
   - "snuba/query/**/*.py"
   - "snuba/snuba_migrations/**/*"
+  - "snuba/cli/devserver.py"
