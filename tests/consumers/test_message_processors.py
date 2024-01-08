@@ -12,7 +12,6 @@ import sentry_kafka_schemas
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
-from snuba.datasets.processors.querylog_processor import QuerylogProcessor
 from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.processor import InsertBatch
 
@@ -21,7 +20,6 @@ from snuba.processor import InsertBatch
     "topic,processor",
     [
         ("ingest-replay-events", ReplaysProcessor),
-        ("snuba-queries", QuerylogProcessor),
         ("outcomes", OutcomesProcessor),
     ],
 )
