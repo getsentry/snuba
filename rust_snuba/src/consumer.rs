@@ -132,9 +132,6 @@ pub fn consumer_impl(
 
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
-    let concurrency = ConcurrencyConfig::new(concurrency);
-    let clickhouse_concurrency = ConcurrencyConfig::with_runtime(2, concurrency.handle());
-
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
     let dlq_policy = match skip_write {
@@ -149,8 +146,9 @@ pub fn consumer_impl(
                 Topic::new(&dlq_topic_config.physical_topic_name),
             ));
 
+            let handle = ConcurrencyConfig::new(10).handle();
             DlqPolicy::new(
-                concurrency.handle(),
+                handle,
                 kafka_dlq_producer,
                 DlqLimit {
                     max_invalid_ratio: Some(0.01),
@@ -167,8 +165,8 @@ pub fn consumer_impl(
         max_batch_size,
         max_batch_time,
         skip_write,
-        concurrency,
-        clickhouse_concurrency,
+        ConcurrencyConfig::new(concurrency),
+        ConcurrencyConfig::new(2),
         python_max_queue_depth,
         use_rust_processor,
         health_check_file.map(ToOwned::to_owned),

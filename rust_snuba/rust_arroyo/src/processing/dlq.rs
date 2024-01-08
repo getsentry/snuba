@@ -300,7 +300,7 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
 
     /// Clears the DLQ limits.
     pub fn reset_dlq_limits(&mut self, assignment: &HashMap<Partition, u64>) {
-        let Some(inner) = self.inner.as_ref() else {
+        let Some(inner) = self.inner.as_mut() else {
             return;
         };
 
