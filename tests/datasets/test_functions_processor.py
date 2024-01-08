@@ -145,4 +145,6 @@ class TestFunctionsProcessor:
 
         assert FunctionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch(batch, datetime.utcfromtimestamp(message.received))
+        ) == InsertBatch(
+            rows=batch, origin_timestamp=None, sentry_received_timestamp=None
+        )
