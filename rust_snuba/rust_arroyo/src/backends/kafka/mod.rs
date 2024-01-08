@@ -78,8 +78,14 @@ impl KafkaConsumerState {
     }
 }
 
-fn create_kafka_message(msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
-    let topic = Topic::new(msg.topic());
+fn create_kafka_message(topics: &[Topic], msg: BorrowedMessage) -> BrokerMessage<KafkaPayload> {
+    let topic = msg.topic();
+    let topic = *topics
+        .iter()
+        .find(|t| t.as_str() == topic)
+        .unwrap_or_else(|| {
+            panic!("Received message for topic `{topic}` that we never subscribed to");
+        });
     let partition = Partition {
         topic,
         index: msg.partition() as u16,
@@ -300,6 +306,7 @@ pub struct KafkaConsumer<C: AssignmentCallbacks> {
     // So we need to build the kafka consumer upon subscribe and not
     // in the constructor.
     pub consumer: BaseConsumer<CustomContext<C>>,
+    topics: Vec<Topic>,
     state: KafkaConsumerState,
     offset_state: Arc<Mutex<OffsetState>>,
 }
@@ -328,9 +335,11 @@ impl<C: AssignmentCallbacks> KafkaConsumer<C> {
 
         let topic_str: Vec<&str> = topics.iter().map(|t| t.as_str()).collect();
         consumer.subscribe(&topic_str)?;
+        let topics = topics.to_owned();
 
         Ok(Self {
             consumer,
+            topics,
             state: KafkaConsumerState::Consuming,
             offset_state,
         })
@@ -358,7 +367,7 @@ impl<C: AssignmentCallbacks> ArroyoConsumer<KafkaPayload, C> for KafkaConsumer<C
         match res {
             None => Ok(None),
             Some(res) => {
-                let msg = create_kafka_message(res?);
+                let msg = create_kafka_message(&self.topics, res?);
                 self.offset_state
                     .lock()
                     .offsets
