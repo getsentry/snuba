@@ -104,7 +104,7 @@ mod tests {
         };
         let result = process_message(payload, meta).expect("The message should be processed");
 
-        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}";
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
 
         assert_eq!(result.rows.into_encoded_rows(), expected);
     }
