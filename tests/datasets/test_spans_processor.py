@@ -42,47 +42,50 @@ class SpanEventExample:
     status: str
     trace_id: str
     transaction_name: str
-    user: Optional[str]
 
     def serialize(self) -> SpanEvent:
-        return {
-            "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
-            "duration_ms": self.duration_ms,
-            "exclusive_time_ms": self.exclusive_time_ms,
-            "is_segment": False,
-            "parent_span_id": self.parent_span_id,
-            "project_id": self.project_id,
-            "received": self.received,
-            "event_id": self.event_id,
-            "retention_days": self.retention_days,
-            "segment_id": self.segment_id,
-            "sentry_tags": {
-                "http.method": "GET",
-                "action": "SELECT",
-                "domain": "targetdomain.tld:targetport",
-                "module": self.module,
-                "group": self.group,
-                "status": "ok",
-                "system": "python",
-                "status_code": "200",
-                "transaction": self.transaction_name,
-                "transaction.op": self.op,
-                "op": "http.client",
-                "transaction.method": "GET",
-                "user": self.user or "",
-            },
-            "span_id": self.span_id,
-            "start_timestamp_ms": self.start_timestamp_ms,
-            "tags": {
-                "tag1": "value1",
-                "tag2": "123",
-                "tag3": "True",
-            },
-            "trace_id": self.trace_id,
-            "profile_id": self.profile_id,
-            "measurements": self.measurements,
-            "_metrics_summary": self.metrics_summary,
-        }
+        span = SpanEvent(
+            {
+                "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
+                "duration_ms": self.duration_ms,
+                "exclusive_time_ms": self.exclusive_time_ms,
+                "is_segment": False,
+                "parent_span_id": self.parent_span_id,
+                "project_id": self.project_id,
+                "received": self.received,
+                "retention_days": self.retention_days,
+                "segment_id": self.segment_id,
+                "sentry_tags": {
+                    "http.method": "GET",
+                    "action": "SELECT",
+                    "domain": "targetdomain.tld:targetport",
+                    "module": self.module,
+                    "group": self.group,
+                    "status": "ok",
+                    "system": "python",
+                    "status_code": "200",
+                    "transaction": self.transaction_name,
+                    "transaction.op": self.op,
+                    "op": "http.client",
+                    "transaction.method": "GET",
+                },
+                "span_id": self.span_id,
+                "start_timestamp_ms": self.start_timestamp_ms,
+                "tags": {
+                    "tag1": "value1",
+                    "tag2": "123",
+                    "tag3": "True",
+                },
+                "trace_id": self.trace_id,
+                "measurements": self.measurements,
+                "_metrics_summary": self.metrics_summary,
+            }
+        )
+        if self.event_id:
+            span["event_id"] = self.event_id
+        if self.profile_id:
+            span["profile_id"] = self.profile_id
+        return span
 
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:
         return [
@@ -134,7 +137,6 @@ class SpanEventExample:
                 "offset": meta.offset,
                 "retention_days": self.retention_days,
                 "deleted": 0,
-                "user": self.user,
                 "sentry_tags.key": [
                     "action",
                     "domain",
@@ -148,7 +150,6 @@ class SpanEventExample:
                     "transaction",
                     "transaction.method",
                     "transaction.op",
-                    "user",
                 ],
                 "sentry_tags.value": [
                     "SELECT",
@@ -163,11 +164,11 @@ class SpanEventExample:
                     self.transaction_name,
                     "GET",
                     self.op,
-                    "123",
                 ],
                 "metrics_summary": rapidjson.dumps(self.metrics_summary),
                 "profile_id": self.profile_id,
                 "transaction_id": str(UUID(self.event_id)),
+                "user": "",
             },
         ]
 
@@ -330,7 +331,6 @@ def get_span_event() -> SpanEventExample:
         status="cancelled",
         trace_id="deadbeefdeadbeefdeadbeefdeadbeef",
         transaction_name="/organizations/:orgId/issues/",
-        user="123",
     )
 
 
