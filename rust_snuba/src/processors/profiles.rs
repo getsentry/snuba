@@ -13,8 +13,6 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
 
-    // we always want an empty string at least
-    msg.device_classification = Some(msg.device_classification.unwrap_or_default());
     msg.offset = metadata.offset;
     msg.partition = metadata.partition;
 
@@ -34,7 +32,7 @@ struct ProfileMessage {
     #[serde(default)]
     architecture: Option<String>,
     #[serde(default)]
-    device_classification: Option<String>,
+    device_classification: String,
     device_locale: String,
     device_manufacturer: String,
     device_model: String,

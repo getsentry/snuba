@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -20,7 +20,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -213,12 +213,5 @@ pub fn process_message(
 
     let res = func(payload, meta)
         .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
-    let batch = BytesInsertBatch::new(
-        res.rows,
-        timestamp,
-        res.origin_timestamp,
-        res.sentry_received_timestamp,
-        BTreeMap::from([(partition, (offset, timestamp))]),
-    );
-    Ok(batch.encoded_rows().to_vec())
+    Ok(res.rows.into_encoded_rows())
 }

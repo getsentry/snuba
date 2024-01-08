@@ -220,6 +220,10 @@ impl RowData {
             num_rows,
         }
     }
+
+    pub fn into_encoded_rows(self) -> Vec<u8> {
+        self.encoded_rows
+    }
 }
 
 #[derive(Clone, Debug)]
