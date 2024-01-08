@@ -18,20 +18,21 @@ from snuba.processor import InsertBatch
 
 @dataclass
 class SpanEventExample:
-    project_id: int
     duration_ms: int
     environment: Optional[str]
-    event_id: str
+    event_id: Optional[str]
     exclusive_time_ms: int
     group: str
-    group_raw: str
     http_method: Optional[str]
-    http_referer: Optional[str]
+    measurements: Dict[str, _MeasurementValue]
+    metrics_summary: Dict[str, Any]
     module: str
     op: str
     organization_id: int
     parent_span_id: str
     platform: str
+    profile_id: Optional[str]
+    project_id: int
     received: float
     release: str
     retention_days: int
@@ -41,21 +42,18 @@ class SpanEventExample:
     status: str
     trace_id: str
     transaction_name: str
-    user_id: Optional[str]
-    user_name: Optional[str]
-    measurements: Dict[str, _MeasurementValue]
-    _metrics_summary: Dict[str, Any]
+    user: Optional[str]
 
     def serialize(self) -> SpanEvent:
         return {
             "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
             "duration_ms": self.duration_ms,
             "exclusive_time_ms": self.exclusive_time_ms,
-            "group_raw": self.group_raw,
             "is_segment": False,
             "parent_span_id": self.parent_span_id,
             "project_id": self.project_id,
             "received": self.received,
+            "event_id": self.event_id,
             "retention_days": self.retention_days,
             "segment_id": self.segment_id,
             "sentry_tags": {
@@ -71,6 +69,7 @@ class SpanEventExample:
                 "transaction.op": self.op,
                 "op": "http.client",
                 "transaction.method": "GET",
+                "user": self.user or "",
             },
             "span_id": self.span_id,
             "start_timestamp_ms": self.start_timestamp_ms,
@@ -78,11 +77,11 @@ class SpanEventExample:
                 "tag1": "value1",
                 "tag2": "123",
                 "tag3": "True",
-                "sentry:user": self.user_id or "",
             },
             "trace_id": self.trace_id,
+            "profile_id": self.profile_id,
             "measurements": self.measurements,
-            "_metrics_summary": self._metrics_summary,
+            "_metrics_summary": self.metrics_summary,
         }
 
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:
@@ -114,7 +113,7 @@ class SpanEventExample:
                 "exclusive_time": self.exclusive_time_ms,
                 "op": "http.client",
                 "group": int(self.group, 16),
-                "group_raw": int(self.group_raw, 16),
+                "group_raw": 0,
                 "span_status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
                 "span_kind": "",
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
@@ -124,22 +123,18 @@ class SpanEventExample:
                 "platform": self.platform,
                 "action": "SELECT",
                 "tags.key": [
-                    "sentry:user",
                     "tag1",
                     "tag2",
                     "tag3",
-                    "http.method",
-                    "status_code",
-                    "transaction.method",
                 ],
-                "tags.value": ["123", "value1", "123", "True", "GET", "200", "GET"],
+                "tags.value": ["value1", "123", "True"],
                 "measurements.key": ["memory"],
                 "measurements.value": [1000.0],
                 "partition": meta.partition,
                 "offset": meta.offset,
                 "retention_days": self.retention_days,
                 "deleted": 0,
-                "user": self.user_id,
+                "user": self.user,
                 "sentry_tags.key": [
                     "action",
                     "domain",
@@ -153,6 +148,7 @@ class SpanEventExample:
                     "transaction",
                     "transaction.method",
                     "transaction.op",
+                    "user",
                 ],
                 "sentry_tags.value": [
                     "SELECT",
@@ -167,8 +163,11 @@ class SpanEventExample:
                     self.transaction_name,
                     "GET",
                     self.op,
+                    "123",
                 ],
-                "metrics_summary": rapidjson.dumps(self._metrics_summary),
+                "metrics_summary": rapidjson.dumps(self.metrics_summary),
+                "profile_id": self.profile_id,
+                "transaction_id": str(UUID(self.event_id)),
             },
         ]
 
@@ -274,33 +273,14 @@ def __get_timestamps() -> Tuple[float, float, float]:
 def get_span_event() -> SpanEventExample:
     received, start, finish = __get_timestamps()
     return SpanEventExample(
-        project_id=1,
         duration_ms=int(1000 * (finish - start)),
         environment="prod",
         event_id="e5e062bf2e1d4afd96fd2f90b6770431",
         exclusive_time_ms=int(1000 * (finish - start)),
         group="deadbeefdeadbeef",
-        group_raw="deadbeefdeadbeef",
         http_method="POST",
-        http_referer="tagstore.something",
         measurements={"memory": {"value": 1000.0}},
-        module="http",
-        op="navigation",
-        organization_id=69,
-        parent_span_id="deadbeefdeadbeef",
-        platform="python",
-        received=received,
-        release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
-        retention_days=90,
-        segment_id="deadbeefdeadbeef",
-        span_id="deadbeefdeadbeef",
-        start_timestamp_ms=int(start * 1000),
-        status="cancelled",
-        trace_id="deadbeefdeadbeefdeadbeefdeadbeef",
-        transaction_name="/organizations/:orgId/issues/",
-        user_id="123",
-        user_name="me",
-        _metrics_summary={
+        metrics_summary={
             "c:sentry.events.outcomes@none": [
                 {
                     "count": 1,
@@ -334,6 +314,23 @@ def get_span_event() -> SpanEventExample:
                 }
             ],
         },
+        module="http",
+        op="navigation",
+        organization_id=69,
+        parent_span_id="deadbeefdeadbeef",
+        platform="python",
+        profile_id=None,
+        project_id=1,
+        received=received,
+        release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
+        retention_days=90,
+        segment_id="deadbeefdeadbeef",
+        span_id="deadbeefdeadbeef",
+        start_timestamp_ms=int(start * 1000),
+        status="cancelled",
+        trace_id="deadbeefdeadbeefdeadbeefdeadbeef",
+        transaction_name="/organizations/:orgId/issues/",
+        user="123",
     )
 
 
@@ -375,4 +372,4 @@ class TestSpansProcessor:
         expected_result = message.build_result(meta)
         assert len(rows) == len(expected_result)
         for index in range(len(rows)):
-            assert compare_types_and_values(rows[index], expected_result[index])
+            assert rows[index] == expected_result[index]
