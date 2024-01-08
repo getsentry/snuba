@@ -95,7 +95,7 @@ pub fn process_message(
                 device_name: event.contexts.device.name,
                 dist: event.dist,
                 environment: event.environment,
-                error_ids: event.error_ids,
+                error_ids: event.error_ids.unwrap_or_default(),
                 error_sample_rate,
                 session_sample_rate,
                 event_hash,
@@ -117,8 +117,8 @@ pub fn process_message(
                 sdk_version: event.sdk.version,
                 segment_id: event.segment_id,
                 timestamp: event.timestamp as u32,
-                trace_ids: event.trace_ids,
-                urls: event.urls,
+                trace_ids: event.trace_ids.unwrap_or_default(),
+                urls: event.urls.unwrap_or_default(),
                 user,
                 user_email: event.user.email,
                 user_id: event.user.user_id,
@@ -230,13 +230,13 @@ struct ReplayEvent {
     segment_id: Option<u16>,
     timestamp: f64,
     #[serde(default)]
-    urls: Vec<String>,
+    urls: Option<Vec<String>>,
     #[serde(default)]
     user: User,
     #[serde(default)]
-    trace_ids: Vec<Uuid>,
+    trace_ids: Option<Vec<Uuid>>,
     #[serde(default)]
-    error_ids: Vec<Uuid>,
+    error_ids: Option<Vec<Uuid>>,
     #[serde(default)]
     tags: Vec<(String, Option<String>)>,
 }
@@ -463,6 +463,79 @@ mod tests {
             "tags": [
                 ["a", "b"],
                 ["transaction.name", null]
+            ],
+            "segment_id": 0,
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "timestamp": 1702659277,
+            "type": "replay_event"
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_parse_replay_event_null_vecs() {
+        let payload = r#"{
+            "contexts": {
+                "browser": {
+                    "name": "browser",
+                    "verison": "v1"
+                },
+                "device": {
+                    "brand": "brand",
+                    "family": "family",
+                    "model": "model",
+                    "name": "name"
+                },
+                "os": {
+                    "name": "os",
+                    "verison": "v1"
+                },
+                "replay": {
+                    "error_sample_rate": 1,
+                    "session_sample_rate": 0.5
+                }
+            },
+            "user": {
+                "email": "email",
+                "ip_address": "127.0.0.1",
+                "user_id": "user_id",
+                "username": "username"
+            },
+            "sdk": {
+                "name": "sdk",
+                "verison": "v1"
+            },
+            "dist": "dist",
+            "environment": "environment",
+            "is_archived": false,
+            "platform": "platform",
+            "release": "release",
+            "replay_start_timestamp": 1702659277,
+            "replay_type": "buffer",
+            "urls": null,
+            "trace_ids": null,
+            "error_ids": null,
+            "tags": [
+                ["a", "b"]
             ],
             "segment_id": 0,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
