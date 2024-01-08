@@ -131,7 +131,7 @@ class TestSpansApi(BaseApiTest):
                                     "transaction": "/api/do_things",
                                     "transaction.op": "http",
                                     "op": "http.client",
-                                    "status": "0",
+                                    "status": "unknown",
                                     "module": "sentry",
                                     "action": "POST",
                                     "domain": "sentry.io:1234",
