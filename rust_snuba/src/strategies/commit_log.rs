@@ -80,13 +80,8 @@ impl TryFrom<Commit> for KafkaPayload {
     type Error = CommitLogError;
 
     fn try_from(commit: Commit) -> Result<Self, CommitLogError> {
-        let key = Some(
-            format!(
-                "{}:{}:{}",
-                commit.topic, commit.partition, commit.group
-            )
-            .into_bytes(),
-        );
+        let key =
+            Some(format!("{}:{}:{}", commit.topic, commit.partition, commit.group).into_bytes());
 
         let orig_message_ts = commit.orig_message_ts.timestamp_millis() as f64 / 1000.0;
 
@@ -129,8 +124,8 @@ impl ProduceMessage {
 impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
     fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
         let producer = self.producer.clone();
-        let destination: TopicOrPartition = self.destination.clone().into();
-        let topic = self.topic.clone();
+        let destination: TopicOrPartition = self.destination.into();
+        let topic = self.topic;
         let skip_produce = self.skip_produce;
         let consumer_group = self.consumer_group.clone();
 
@@ -290,7 +285,10 @@ mod tests {
                 payload: KafkaPayload,
             ) -> Result<(), ProducerError> {
                 assert_eq!(topic.topic().as_str(), "test-commitlog");
-                self.payloads.lock().unwrap().push((str::from_utf8(payload.key().unwrap()).unwrap().to_owned(), payload));
+                self.payloads.lock().unwrap().push((
+                    str::from_utf8(payload.key().unwrap()).unwrap().to_owned(),
+                    payload,
+                ));
                 Ok(())
             }
         }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 
@@ -164,7 +164,10 @@ pub fn consumer_impl(
         let producer_config =
             KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
         let producer = KafkaProducer::new(producer_config);
-        Some((Arc::new(producer), Topic::new(&topic_config.physical_topic_name)))
+        Some((
+            Arc::new(producer),
+            Topic::new(&topic_config.physical_topic_name),
+        ))
     } else {
         None
     };

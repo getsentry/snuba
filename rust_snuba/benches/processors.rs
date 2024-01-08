@@ -59,6 +59,8 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let clickhouse_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let commitlog_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactory::new(
         storage,
         schema.into(),
@@ -67,10 +69,14 @@ fn create_factory(
         true,
         processing_concurrency,
         clickhouse_concurrency,
+        commitlog_concurrency,
         None,
         true,
         None,
         false,
+        None,
+        "test-group".to_owned(),
+        Topic::new("test")
     );
     Box::new(factory)
 }

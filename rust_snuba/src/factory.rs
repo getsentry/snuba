@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use rust_arroyo::types::Topic;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+use rust_arroyo::types::Topic;
 
 use crate::config;
 use crate::processors;
@@ -79,19 +79,20 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 
-        let next_step: Box<dyn ProcessingStrategy<_>> = if let Some((ref producer, destination)) = self.commit_log_producer {
-            Box::new(ProduceCommitLog::new(
-                next_step,
-                producer.clone(),
-                destination,
-                self.physical_topic_name.clone(),
-                self.physical_consumer_group.clone(),
-                &self.commitlog_concurrency,
-                false,
-            ))
-        } else {
-            Box::new(next_step)
-        };
+        let next_step: Box<dyn ProcessingStrategy<_>> =
+            if let Some((ref producer, destination)) = self.commit_log_producer {
+                Box::new(ProduceCommitLog::new(
+                    next_step,
+                    producer.clone(),
+                    destination,
+                    self.physical_topic_name,
+                    self.physical_consumer_group.clone(),
+                    &self.commitlog_concurrency,
+                    false,
+                ))
+            } else {
+                Box::new(next_step)
+            };
 
         let accumulator = Arc::new(BytesInsertBatch::merge);
         let next_step = Reduce::new(
