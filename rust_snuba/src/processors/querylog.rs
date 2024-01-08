@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
+use crate::config::EnvConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -12,6 +13,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
+    _config: &EnvConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
@@ -424,6 +426,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &EnvConfig::default())
+            .expect("The message should be processed");
     }
 }

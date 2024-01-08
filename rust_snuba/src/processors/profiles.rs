@@ -1,3 +1,4 @@
+use crate::config::EnvConfig;
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -9,6 +10,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
+    _config: &EnvConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
@@ -100,6 +102,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &EnvConfig::default())
+            .expect("The message should be processed");
     }
 }
