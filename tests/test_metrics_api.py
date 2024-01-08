@@ -10,7 +10,7 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_messages import InputType
-from snuba.datasets.processors.metrics_aggregate_processor import timestamp_to_bucket
+from snuba.datasets.processors.metrics_bucket_processor import timestamp_to_bucket
 from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
