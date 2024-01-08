@@ -82,11 +82,11 @@ fn create_kafka_message(topics: &[Topic], msg: BorrowedMessage) -> BrokerMessage
     let topic = msg.topic();
     // NOTE: We avoid calling `Topic::new` here, as that uses a lock to intern the `topic` name.
     // As we only ever expect one of our pre-defined topics, we can also guard against Broker errors.
-    let Some(topic) = topics.iter().find(|t| t.as_str() == topic) else {
+    let Some(&topic) = topics.iter().find(|t| t.as_str() == topic) else {
         panic!("Received message for topic `{topic}` that we never subscribed to");
     };
     let partition = Partition {
-        topic: *topic,
+        topic,
         index: msg.partition() as u16,
     };
     let time_millis = msg.timestamp().to_millis().unwrap_or(0);
