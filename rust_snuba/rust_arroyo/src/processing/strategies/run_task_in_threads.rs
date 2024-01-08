@@ -128,6 +128,12 @@ where
 
         gauge!(&self.metric_name, self.handles.len() as u64);
 
+        self.metrics.gauge(
+            "arroyo.strategies.run_task_in_threads.concurrency",
+            self.concurrency as u64,
+            None,
+        );
+
         if let Some(message) = self.message_carried_over.take() {
             match self.next_step.submit(message) {
                 Err(SubmitError::MessageRejected(MessageRejected {
