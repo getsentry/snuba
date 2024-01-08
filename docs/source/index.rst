@@ -21,4 +21,4 @@ Contents:
    clickhouse/topology
    clickhouse/schema_design
    clickhouse/supported_versions
-   profiling
+   profiler
