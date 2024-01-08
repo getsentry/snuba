@@ -11,11 +11,8 @@ from snuba.datasets.processors.generic_metrics_processor import (
     GenericSetsMetricsProcessor,
 )
 from snuba.datasets.processors.metrics_bucket_processor import (
-    CounterMetricsProcessor,
-    DistributionsMetricsProcessor,
     MetricsBucketProcessor,
     PolymorphicMetricsProcessor,
-    SetsMetricsProcessor,
     timestamp_to_bucket,
 )
 from snuba.processor import AggregateInsertBatch, InsertBatch
@@ -111,121 +108,6 @@ DIST_MESSAGE_SHARED = {
     "mapping_meta": MAPPING_META_COMMON,
     "sentry_received_timestamp": sentry_received_timestamp,
 }
-
-TEST_CASES_BUCKETS = [
-    pytest.param(
-        SET_MESSAGE_SHARED,
-        [
-            {
-                "org_id": 1,
-                "project_id": 2,
-                "metric_id": 1232341,
-                "use_case_id": "sessions",
-                "timestamp": expected_timestamp,
-                "tags.key": [10, 20, 30],
-                "tags.value": [11, 22, 33],
-                "set_values": [324234, 345345, 456456, 567567],
-                "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
-                "timeseries_id": ANY,
-                "partition": 1,
-                "offset": 100,
-            }
-        ],
-        None,
-        None,
-        id="Simple set with valid content",
-    ),
-    pytest.param(
-        COUNTER_MESSAGE_SHARED,
-        None,
-        [
-            {
-                "org_id": 1,
-                "project_id": 2,
-                "metric_id": 1232341,
-                "use_case_id": "sessions",
-                "timestamp": expected_timestamp,
-                "tags.key": [10, 20, 30],
-                "tags.value": [11, 22, 33],
-                "value": 123.123,
-                "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 30,
-                "timeseries_id": ANY,
-                "partition": 1,
-                "offset": 100,
-            }
-        ],
-        None,
-        id="Simple counter with valid content",
-    ),
-    pytest.param(
-        DIST_MESSAGE_SHARED,
-        None,
-        None,
-        [
-            {
-                "org_id": 1,
-                "project_id": 2,
-                "metric_id": 1232341,
-                "use_case_id": "sessions",
-                "timestamp": expected_timestamp,
-                "tags.key": [10, 20, 30],
-                "tags.value": [11, 22, 33],
-                "values": [324.12, 345.23, 4564.56, 567567],
-                "materialization_version": MATERIALIZATION_VERSION,
-                "retention_days": 90,
-                "timeseries_id": ANY,
-                "partition": 1,
-                "offset": 100,
-            }
-        ],
-        id="Simple distribution with valid content",
-    ),
-]
-
-
-@pytest.mark.parametrize(
-    "message, expected_set, expected_counter, expected_distributions",
-    TEST_CASES_BUCKETS,
-)
-def test_metrics_processor(
-    message: Mapping[str, Any],
-    expected_set: Optional[Sequence[Mapping[str, Any]]],
-    expected_counter: Optional[Sequence[Mapping[str, Any]]],
-    expected_distributions: Optional[Sequence[Mapping[str, Any]]],
-) -> None:
-    settings.DISABLED_DATASETS = set()
-
-    meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
-
-    expected_set_result = (
-        InsertBatch(expected_set, None, expected_sentry_received_timestamp)
-        if expected_set is not None
-        else None
-    )
-    assert SetsMetricsProcessor().process_message(message, meta) == expected_set_result
-
-    expected_counter_result = (
-        InsertBatch(expected_counter, None, expected_sentry_received_timestamp)
-        if expected_counter is not None
-        else None
-    )
-    assert (
-        CounterMetricsProcessor().process_message(message, meta)
-        == expected_counter_result
-    )
-
-    expected_distributions_result = (
-        InsertBatch(expected_distributions, None, expected_sentry_received_timestamp)
-        if expected_distributions is not None
-        else None
-    )
-    assert (
-        DistributionsMetricsProcessor().process_message(message, meta)
-        == expected_distributions_result
-    )
-
 
 MOCK_TIME_BUCKET = expected_timestamp
 
@@ -330,7 +212,7 @@ def test_metrics_polymorphic_processor(
     # test_time_bucketing tests the bucket function, parameterizing the output times here
     # would require repeating the code in the class we're testing
     with patch(
-        "snuba.datasets.processors.metrics_aggregate_processor.timestamp_to_bucket",
+        "snuba.datasets.processors.metrics_bucket_processor.timestamp_to_bucket",
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (
@@ -465,7 +347,7 @@ def test_generic_metrics_sets_processor(
 
 @pytest.fixture
 def processor() -> MetricsBucketProcessor:
-    return SetsMetricsProcessor()
+    return GenericSetsMetricsProcessor()
 
 
 def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:
