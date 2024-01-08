@@ -198,7 +198,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
 
     fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
         let deadline = timeout.map(Deadline::new);
-        let timeout_secs = timeout.map(|d| d.as_secs()).unwrap();
+        let timeout_secs = timeout.map(|d| d.as_secs());
 
         let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
             let python_strategy = self.python_strategy.lock();

@@ -4,7 +4,7 @@ name: querylog
 storage:
   key: querylog
   set_key: querylog
-readiness_state: deprecate
+readiness_state: limited
 schema:
   columns: [
       { name: request_id, type: UUID },

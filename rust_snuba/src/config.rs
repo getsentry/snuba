@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Deserializer};
+use serde_json::Value;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -24,11 +25,19 @@ where
     let data = RawBrokerConfig::deserialize(deserializer)?
         .iter()
         .filter_map(|(k, v)| {
-            let v = v.as_ref()?;
-            if v.is_empty() {
-                return None;
+            if v.is_null() {
+                None
+            } else if v.is_number() {
+                // Numeric types are valid in confluent-kafka-python config but not in the Rust library
+                Some((k.to_string(), v.as_number().unwrap().to_string()))
+            } else if v.is_string() {
+                if v.as_str().unwrap().is_empty() {
+                    return None;
+                }
+                Some((k.to_string(), v.as_str().unwrap().to_string()))
+            } else {
+                panic!("Unsupported type");
             }
-            Some((k.to_owned(), v.to_owned()))
         })
         .collect();
 
@@ -43,7 +52,7 @@ pub struct TopicConfig {
     pub broker_config: BrokerConfig,
 }
 
-type RawBrokerConfig = HashMap<String, Option<String>>;
+type RawBrokerConfig = HashMap<String, Value>;
 
 pub type BrokerConfig = HashMap<String, String>;
 
@@ -87,4 +96,22 @@ pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
     pub dogstatsd_host: Option<String>,
     pub dogstatsd_port: Option<u16>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config() {
+        let raw =
+            "{\"physical_topic_name\": \"test\", \"logical_topic_name\": \"test\", \"broker_config\": {\"bootstrap.servers\": \"127.0.0.1:9092\", \"queued.max.messages.kbytes\": 10000}}";
+
+        let topic_config: TopicConfig = serde_json::from_str(raw).unwrap();
+
+        assert_eq!(
+            topic_config.broker_config["queued.max.messages.kbytes"],
+            "10000"
+        );
+    }
 }

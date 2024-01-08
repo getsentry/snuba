@@ -1,9 +1,10 @@
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -12,12 +13,16 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
 
-    // we always want an empty string at least
-    msg.device_classification = Some(msg.device_classification.unwrap_or_default());
     msg.offset = metadata.offset;
     msg.partition = metadata.partition;
 
-    InsertBatch::from_rows([msg])
+    let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
+
+    Ok(InsertBatch {
+        rows: RowData::from_rows([msg])?,
+        origin_timestamp,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -27,7 +32,7 @@ struct ProfileMessage {
     #[serde(default)]
     architecture: Option<String>,
     #[serde(default)]
-    device_classification: Option<String>,
+    device_classification: String,
     device_locale: String,
     device_manufacturer: String,
     device_model: String,

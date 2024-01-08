@@ -149,6 +149,7 @@ impl BytesInsertBatch {
             .encoded_rows
             .extend_from_slice(&other.rows.encoded_rows);
         self.commit_log_offsets.extend(other.commit_log_offsets);
+        self.rows.num_rows += self.rows.num_rows;
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
@@ -168,7 +169,7 @@ impl BytesInsertBatch {
     }
 
     pub fn len(&self) -> usize {
-        self.rows.encoded_rows.len()
+        self.rows.num_rows
     }
 
     pub fn encoded_rows(&self) -> &[u8] {
@@ -218,6 +219,10 @@ impl RowData {
             encoded_rows,
             num_rows,
         }
+    }
+
+    pub fn into_encoded_rows(self) -> Vec<u8> {
+        self.encoded_rows
     }
 }
 

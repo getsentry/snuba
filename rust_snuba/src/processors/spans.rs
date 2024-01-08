@@ -206,29 +206,27 @@ impl TryFrom<FromSpanMessage> for Span {
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
-        let tags = from.tags.unwrap_or_default();
-        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) = tags.into_iter().unzip();
+        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) =
+            from.tags.unwrap_or_default().into_iter().unzip();
 
-        let measurements = from.measurements.unwrap_or_default();
-        let (measurement_keys, measurement_raw_values): (Vec<_>, Vec<_>) =
-            measurements.into_iter().unzip();
+        let (measurement_keys, measurement_values) = from
+            .measurements
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, v.value))
+            .unzip();
 
-        let mut measurement_values: Vec<f64> = Vec::new();
-        for measurement in measurement_raw_values {
-            measurement_values.push(measurement.value);
-        }
-
-        if let Some(http_method) = from.sentry_tags.http_method.clone() {
+        if let Some(http_method) = from.sentry_tags.http_method {
             tag_keys.push("http.method".into());
             tag_values.push(http_method);
         }
 
-        if let Some(status_code) = &from.sentry_tags.status_code {
+        if let Some(status_code) = from.sentry_tags.status_code {
             tag_keys.push("status_code".into());
-            tag_values.push(status_code.into());
+            tag_values.push(status_code);
         }
 
-        if let Some(transaction_method) = from.sentry_tags.transaction_method.clone() {
+        if let Some(transaction_method) = from.sentry_tags.transaction_method {
             tag_keys.push("transaction.method".into());
             tag_values.push(transaction_method);
         }
@@ -486,9 +484,8 @@ mod tests {
     fn test_null_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -501,9 +498,8 @@ mod tests {
     fn test_empty_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Some("".into());
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -516,9 +512,8 @@ mod tests {
     fn test_null_retention_days() {
         let mut span = valid_span();
         span.retention_days = default_retention_days();
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -531,9 +526,8 @@ mod tests {
     fn test_null_tags() {
         let mut span = valid_span();
         span.tags = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
