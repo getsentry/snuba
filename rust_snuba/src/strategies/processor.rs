@@ -11,7 +11,7 @@ use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
-use crate::config::EnvConfig;
+use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
@@ -21,7 +21,7 @@ pub fn make_rust_processor(
     schema_name: &str,
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
-    env_config: EnvConfig,
+    processor_config: ProcessorConfig,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
     let metrics = get_metrics();
@@ -31,7 +31,7 @@ pub fn make_rust_processor(
         enforce_schema,
         metrics,
         func,
-        env_config,
+        processor_config,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -64,7 +64,7 @@ struct MessageProcessor {
     enforce_schema: bool,
     metrics: BoxMetrics,
     func: ProcessingFunction,
-    env_config: EnvConfig,
+    processor_config: ProcessorConfig,
 }
 
 impl MessageProcessor {
@@ -146,7 +146,7 @@ impl MessageProcessor {
             timestamp: msg.timestamp,
         };
 
-        let transformed = (self.func)(msg.payload, metadata, &self.env_config)?;
+        let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
 
         let payload = BytesInsertBatch::new(
             transformed.rows,
@@ -187,7 +187,6 @@ mod tests {
     use rust_arroyo::backends::kafka::types::KafkaPayload;
     use rust_arroyo::types::{Message, Partition, Topic};
 
-    use crate::config::EnvConfig;
     use crate::types::InsertBatch;
     use crate::Noop;
 
@@ -199,7 +198,7 @@ mod tests {
         fn noop_processor(
             _payload: KafkaPayload,
             _metadata: KafkaMessageMetadata,
-            _config: &EnvConfig,
+            _config: &ProcessorConfig,
         ) -> anyhow::Result<InsertBatch> {
             Ok(InsertBatch::default())
         }
@@ -210,7 +209,7 @@ mod tests {
             "outcomes",
             true,
             &concurrency,
-            EnvConfig::default(),
+            ProcessorConfig::default(),
         );
 
         let example = "{

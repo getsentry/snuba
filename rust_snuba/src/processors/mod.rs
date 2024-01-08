@@ -7,12 +7,12 @@ mod replays;
 mod spans;
 mod utils;
 
-use crate::config::EnvConfig;
+use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 pub type ProcessingFunction =
-    fn(KafkaPayload, KafkaMessageMetadata, config: &EnvConfig) -> anyhow::Result<InsertBatch>;
+    fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<InsertBatch>;
 
 pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
     match name {

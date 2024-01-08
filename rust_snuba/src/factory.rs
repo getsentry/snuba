@@ -125,7 +125,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.logical_topic_name,
                 self.enforce_schema,
                 &self.processing_concurrency,
-                self.env_config.clone(),
+                config::ProcessorConfig {
+                    env_config: self.env_config.clone(),
+                },
             ),
             _ => Box::new(
                 PythonTransformStep::new(

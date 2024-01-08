@@ -1,4 +1,4 @@
-use crate::config::EnvConfig;
+use crate::config::ProcessorConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 pub fn process_message(
     payload: KafkaPayload,
     _: KafkaMessageMetadata,
-    config: &EnvConfig,
+    config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: InputMessage = serde_json::from_slice(payload_bytes)?;
@@ -35,7 +35,7 @@ pub fn process_message(
                 metric_mri,
                 min: summary.min,
                 project_id: from.project_id,
-                retention_days: enforce_retention(from.retention_days, config),
+                retention_days: enforce_retention(from.retention_days, &config.env_config),
                 span_id: from.span_id,
                 sum: summary.sum,
                 tag_keys,
@@ -149,7 +149,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta, &EnvConfig::default())
+        process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
     }
 }

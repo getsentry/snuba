@@ -20,7 +20,7 @@ use rust_arroyo::utils::clock::SystemClock;
 use rust_arroyo::utils::metrics::configure_metrics;
 use rust_snuba::{
     get_processing_function, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig,
-    KafkaMessageMetadata, MessageProcessorConfig, StatsDBackend, StorageConfig,
+    KafkaMessageMetadata, MessageProcessorConfig, ProcessorConfig, StatsDBackend, StorageConfig,
 };
 use uuid::Uuid;
 
@@ -40,7 +40,7 @@ static RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
-static ENV_CONFIG: Lazy<EnvConfig> = Lazy::new(EnvConfig::default);
+static PROCESSOR_CONFIG: Lazy<ProcessorConfig> = Lazy::new(ProcessorConfig::default);
 
 fn create_factory(
     concurrency: usize,
@@ -144,7 +144,8 @@ fn run_fn_bench(bencher: &mut BenchmarkGroup<WallTime>, schema: &str) {
             b.iter(|| {
                 for payload in payloads {
                     let payload = KafkaPayload::new(None, None, Some(payload.to_vec()));
-                    let processed = processor_fn(payload, metadata.clone(), &ENV_CONFIG).unwrap();
+                    let processed =
+                        processor_fn(payload, metadata.clone(), &PROCESSOR_CONFIG).unwrap();
                     black_box(processed);
                 }
             })

@@ -3,6 +3,11 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
+#[derive(Clone, Default)]
+pub struct ProcessorConfig {
+    pub env_config: EnvConfig,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct ConsumerConfig {

@@ -236,7 +236,7 @@ pub fn process_message(
         timestamp,
     };
 
-    let res = func(payload, meta, &config::EnvConfig::default())
+    let res = func(payload, meta, &config::ProcessorConfig::default())
         .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
     Ok(res.rows.into_encoded_rows())
 }

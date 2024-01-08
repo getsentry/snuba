@@ -6,20 +6,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::config::EnvConfig;
+use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, hex_to_u64};
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-    config: &EnvConfig,
+    config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
     let mut span: Span = msg.try_into()?;
-    span.retention_days = Some(enforce_retention(span.retention_days, config));
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
     span.offset = metadata.offset;
     span.partition = metadata.partition;
@@ -476,7 +476,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta, &EnvConfig::default())
+        process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
     }
 
@@ -491,7 +491,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta, &EnvConfig::default())
+        process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
     }
 
@@ -506,7 +506,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta, &EnvConfig::default())
+        process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
     }
 
@@ -522,7 +522,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta, &EnvConfig::default())
+        process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
     }
 
@@ -537,7 +537,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta, &EnvConfig::default())
+        process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
     }
 }
