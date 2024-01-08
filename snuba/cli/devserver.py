@@ -11,6 +11,7 @@ COMMON_CONSUMER_DEV_OPTIONS = [
 
 COMMON_RUST_CONSUMER_DEV_OPTIONS = COMMON_CONSUMER_DEV_OPTIONS + [
     "--use-rust-processor",
+    "--no-skip-write",
 ]
 
 
