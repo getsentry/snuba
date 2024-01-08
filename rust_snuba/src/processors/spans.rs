@@ -203,6 +203,7 @@ impl TryFrom<FromSpanMessage> for Span {
             0
         };
         let status = from.sentry_tags.status.unwrap_or_default() as u8;
+
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
