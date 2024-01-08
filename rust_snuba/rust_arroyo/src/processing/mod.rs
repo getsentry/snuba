@@ -1,14 +1,10 @@
-pub mod dlq;
-mod metrics_buffer;
-pub mod strategies;
-
-use parking_lot::{Mutex, MutexGuard};
 use std::collections::HashMap;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 
 use crate::backends::kafka::config::KafkaConfig;
@@ -20,6 +16,11 @@ use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
+
+pub mod dlq;
+mod metrics_buffer;
+pub mod strategies;
+
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
