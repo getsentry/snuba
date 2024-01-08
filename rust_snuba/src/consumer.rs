@@ -146,7 +146,9 @@ pub fn consumer_impl(
                 Topic::new(&dlq_topic_config.physical_topic_name),
             ));
 
+            let handle = ConcurrencyConfig::new(10).handle();
             DlqPolicy::new(
+                handle,
                 kafka_dlq_producer,
                 DlqLimit {
                     max_invalid_ratio: Some(0.01),
