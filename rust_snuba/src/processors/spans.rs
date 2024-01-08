@@ -34,17 +34,15 @@ struct FromSpanMessage {
     #[serde(default)]
     event_id: Option<Uuid>,
     exclusive_time_ms: f64,
-    #[serde(deserialize_with = "hex_to_u64")]
-    group_raw: u64,
     is_segment: bool,
     measurements: Option<BTreeMap<String, FromMeasurementValue>>,
-    #[serde(deserialize_with = "hex_to_u64")]
+    #[serde(default, deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
     #[serde(default = "default_retention_days")]
     retention_days: Option<u16>,
-    #[serde(deserialize_with = "hex_to_u64")]
+    #[serde(default, deserialize_with = "hex_to_u64")]
     segment_id: u64,
     sentry_tags: FromSentryTags,
     #[serde(deserialize_with = "hex_to_u64")]
@@ -153,6 +151,7 @@ struct Span {
     end_timestamp: u64,
     exclusive_time: f64,
     group: u64,
+    #[serde(default)]
     group_raw: u64,
     is_segment: u8,
     #[serde(default)]
@@ -246,7 +245,6 @@ impl TryFrom<FromSpanMessage> for Span {
             end_timestamp: end_timestamp_ms / 1000,
             exclusive_time: from.exclusive_time_ms,
             group,
-            group_raw: from.group_raw,
             is_segment: if from.is_segment { 1 } else { 0 },
             measurement_keys,
             measurement_values,
@@ -415,7 +413,6 @@ mod tests {
         duration_ms: Option<u32>,
         event_id: Option<Uuid>,
         exclusive_time_ms: Option<f64>,
-        group_raw: Option<String>,
         is_segment: Option<bool>,
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
@@ -435,7 +432,6 @@ mod tests {
             duration_ms: Some(1000),
             event_id: Some(Uuid::new_v4()),
             exclusive_time_ms: Some(1000.0),
-            group_raw: Some("deadbeefdeadbeef".into()),
             is_segment: Some(false),
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
