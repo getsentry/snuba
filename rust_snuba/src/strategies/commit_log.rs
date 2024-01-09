@@ -121,8 +121,8 @@ impl ProduceMessage {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMessage {
+    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
         let topic = self.topic;
@@ -160,7 +160,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
 }
 
 pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
 }
 
 impl ProduceCommitLog {

@@ -1,5 +1,5 @@
 use crate::backends::kafka::types::KafkaPayload;
-use crate::backends::Producer;
+use crate::backends::{Producer, ProducerError};
 use crate::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
@@ -9,6 +9,8 @@ use crate::processing::strategies::{
 use crate::types::{Message, TopicOrPartition};
 use std::sync::Arc;
 use std::time::Duration;
+
+use super::run_task_in_threads::RunTaskError;
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
@@ -24,22 +26,21 @@ impl ProduceMessage {
     }
 }
 
-impl TaskRunner<KafkaPayload, KafkaPayload> for ProduceMessage {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload> {
+impl TaskRunner<KafkaPayload, KafkaPayload, ProducerError> for ProduceMessage {
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload, ProducerError> {
         let producer = self.producer.clone();
         let topic = self.topic;
 
         Box::pin(async move {
             producer
-                .produce(&topic, message.payload().clone())
-                .expect("Message was produced");
+                .produce(&topic, message.payload().clone()).map_err(RunTaskError::Other)?;
             Ok(message)
         })
     }
 }
 
 pub struct Produce {
-    inner: RunTaskInThreads<KafkaPayload, KafkaPayload>,
+    inner: RunTaskInThreads<KafkaPayload, KafkaPayload, ProducerError>,
 }
 
 impl Produce {
