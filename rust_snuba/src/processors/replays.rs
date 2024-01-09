@@ -464,8 +464,6 @@ mod tests {
         let rows = deserialize_message(data.as_bytes(), 0, 0).unwrap();
         let replay_row = rows.first().unwrap();
 
-        println!("{:?}", replay_row);
-
         // Columns in the critical path.
         assert_eq!(&replay_row.browser_name, "browser");
         assert_eq!(&replay_row.browser_version, "v1");
