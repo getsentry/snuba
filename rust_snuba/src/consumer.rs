@@ -84,6 +84,8 @@ pub fn consumer_impl(
 
     let mut _sentry_guard = None;
 
+    let env_config = consumer_config.env.clone();
+
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
         tracing::debug!(sentry_dsn = dsn);
@@ -176,6 +178,7 @@ pub fn consumer_impl(
 
     let factory = ConsumerStrategyFactory::new(
         first_storage,
+        env_config,
         logical_topic_name,
         max_batch_size,
         max_batch_time,
@@ -233,7 +236,7 @@ pub fn process_message(
         timestamp,
     };
 
-    let res = func(payload, meta)
+    let res = func(payload, meta, &config::ProcessorConfig::default())
         .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
     Ok(res.rows.into_encoded_rows())
 }

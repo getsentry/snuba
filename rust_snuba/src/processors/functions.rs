@@ -1,3 +1,4 @@
+use crate::config::ProcessorConfig;
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -10,6 +11,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
@@ -100,7 +102,6 @@ struct Function<'a> {
     http_method: Option<&'a str>,
     is_application: u8,
     materialization_version: u8,
-    module: &'a str,
     name: &'a str,
     package: &'a str,
     platform: &'a str,
@@ -167,6 +168,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

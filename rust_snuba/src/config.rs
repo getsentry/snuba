@@ -1,7 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
+
+#[derive(Clone, Default)]
+pub struct ProcessorConfig {
+    pub env_config: EnvConfig,
+}
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -90,12 +95,28 @@ pub struct MessageProcessorConfig {
     pub python_module: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct EnvConfig {
     pub sentry_dsn: Option<String>,
     pub dogstatsd_host: Option<String>,
     pub dogstatsd_port: Option<u16>,
+    pub default_retention_days: u16,
+    pub lower_retention_days: u16,
+    pub valid_retention_days: HashSet<u16>,
+}
+
+impl Default for EnvConfig {
+    fn default() -> Self {
+        Self {
+            sentry_dsn: None,
+            dogstatsd_host: None,
+            dogstatsd_port: None,
+            default_retention_days: 90,
+            lower_retention_days: 30,
+            valid_retention_days: [30, 90].iter().cloned().collect(),
+        }
+    }
 }
 
 #[cfg(test)]

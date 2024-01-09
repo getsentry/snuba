@@ -1,15 +1,17 @@
+use crate::config::ProcessorConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
-use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
+use crate::processors::utils::{enforce_retention, hex_to_u64};
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _: KafkaMessageMetadata,
+    config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: InputMessage = serde_json::from_slice(payload_bytes)?;
@@ -33,7 +35,7 @@ pub fn process_message(
                 metric_mri,
                 min: summary.min,
                 project_id: from.project_id,
-                retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
+                retention_days: enforce_retention(from.retention_days, &config.env_config),
                 span_id: from.span_id,
                 sum: summary.sum,
                 tag_keys,
@@ -53,7 +55,7 @@ struct InputMessage {
     #[serde(default)]
     duration_ms: u32,
     project_id: u64,
-    #[serde(default = "default_retention_days")]
+    #[serde(default)]
     retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
     span_id: u64,
@@ -147,6 +149,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

@@ -1,3 +1,4 @@
+use crate::config::ProcessorConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let replay_row = deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;
@@ -980,6 +982,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }
