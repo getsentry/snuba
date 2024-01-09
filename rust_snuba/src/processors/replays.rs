@@ -87,21 +87,15 @@ pub fn deserialize_message(
                 },
             };
 
-            // Derive user value through precedence checks.
-            let user = match (
-                &event.user.user_id,
-                &event.user.username,
-                &event.user.email,
-                &ip_address_v4,
-                &ip_address_v6,
-            ) {
-                (Some(uid), _, _, _, _) => uid.clone(),
-                (_, Some(username), _, _, _) => username.clone(),
-                (_, _, Some(email), _, _) => email.clone(),
-                (_, _, _, Some(ip), _) => ip.to_string().clone(),
-                (_, _, _, _, Some(ip)) => ip.to_string().clone(),
-                _ => String::new(),
-            };
+            let user = event
+                .user
+                .user_id
+                .clone()
+                .or(event.user.username.clone())
+                .or(event.user.email.clone())
+                .or(ip_address_v4.as_ref().map(|v| v.to_string()))
+                .or(ip_address_v6.as_ref().map(|v| v.to_string()))
+                .unwrap_or_default();
 
             // Sample-rate normalization. Null values are inserted as a -1.0 sentinel value.
             let error_sample_rate = event.contexts.replay.error_sample_rate.unwrap_or(-1.0);
