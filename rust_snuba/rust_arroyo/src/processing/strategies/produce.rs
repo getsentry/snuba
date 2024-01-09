@@ -91,9 +91,8 @@ mod tests {
     use std::time::SystemTime;
 
     use super::*;
-    use crate::backends::kafka::config::{KafkaConfig, KafkaConsumerConfig};
+    use crate::backends::kafka::config::KafkaConfig;
     use crate::backends::kafka::producer::KafkaProducer;
-    use crate::backends::kafka::InitialOffset;
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::local::LocalProducer;
     use crate::backends::storages::memory::MemoryMessageStorage;
@@ -144,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_produce() {
-        let config = KafkaConfig::new_config(
+        let config = KafkaConfig::new(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             Default::default(),
         );

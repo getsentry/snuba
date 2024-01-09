@@ -140,8 +140,7 @@ pub fn consumer_impl(
     let dlq_policy = match skip_write {
         true => None,
         false => consumer_config.dlq_topic.map(|dlq_topic_config| {
-            let producer_config =
-                KafkaConfig::new_producer_config(vec![], dlq_topic_config.broker_config);
+            let producer_config = KafkaConfig::new(vec![], dlq_topic_config.broker_config);
             let producer = KafkaProducer::new(producer_config);
 
             let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
@@ -162,16 +161,14 @@ pub fn consumer_impl(
         }),
     };
 
-    let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
-        let producer_config = KafkaConfig::new_producer_config(vec![], topic_config.broker_config);
+    let commit_log_producer = consumer_config.commit_log_topic.map(|topic_config| {
+        let producer_config = KafkaConfig::new(vec![], topic_config.broker_config);
         let producer = KafkaProducer::new(producer_config);
-        Some((
+        (
             Arc::new(producer),
             Topic::new(&topic_config.physical_topic_name),
-        ))
-    } else {
-        None
-    };
+        )
+    });
 
     let factory = ConsumerStrategyFactory::new(
         first_storage,

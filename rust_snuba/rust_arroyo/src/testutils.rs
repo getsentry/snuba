@@ -105,7 +105,7 @@ impl TestTopic {
 
     pub fn produce(&self, payload: KafkaPayload) {
         let producer_configuration =
-            KafkaConfig::new_producer_config(vec![get_default_broker()], Default::default());
+            KafkaConfig::new(vec![get_default_broker()], Default::default());
 
         let producer = KafkaProducer::new(producer_configuration);
 

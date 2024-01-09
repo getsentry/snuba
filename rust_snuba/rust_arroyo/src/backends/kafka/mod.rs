@@ -591,7 +591,7 @@ mod tests {
             Default::default(),
         );
 
-        let producer_configuration = KafkaConfig::new_producer_config(
+        let producer_configuration = KafkaConfig::new(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
             Default::default(),
         );

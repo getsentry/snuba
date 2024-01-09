@@ -16,21 +16,11 @@ pub struct KafkaConfig {
 }
 
 impl KafkaConfig {
-    pub fn new_config(
-        bootstrap_servers: Vec<String>,
-        extra_config: HashMap<String, String>,
-    ) -> Self {
+    pub fn new(bootstrap_servers: Vec<String>, extra_config: HashMap<String, String>) -> Self {
         Self {
             bootstrap_servers,
             extra_config,
         }
-    }
-
-    pub fn new_producer_config(
-        bootstrap_servers: Vec<String>,
-        extra_config: HashMap<String, String>,
-    ) -> Self {
-        Self::new_config(bootstrap_servers, extra_config)
     }
 }
 
@@ -69,7 +59,7 @@ impl KafkaConsumerConfig {
         max_poll_interval_ms: usize,
         extra_config: HashMap<String, String>,
     ) -> Self {
-        let core = KafkaConfig::new_config(bootstrap_servers, extra_config);
+        let core = KafkaConfig::new(bootstrap_servers, extra_config);
         // HACK: If the max poll interval is less than 45 seconds, set the session timeout
         // to the same. (its default is 45 seconds and it must be <= to max.poll.interval.ms)
         let session_timeout_ms = if max_poll_interval_ms < 45_000 {
