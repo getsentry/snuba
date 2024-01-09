@@ -42,8 +42,6 @@ def _generate_tests() -> Iterator[Case]:
 
         try:
             for example in sentry_kafka_schemas.iter_examples(topic.value):
-                if "replay" in str(example.path):
-                    continue
                 yield Case(
                     example=example,
                     processor=processor,

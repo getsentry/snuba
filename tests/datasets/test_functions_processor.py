@@ -13,6 +13,7 @@ from snuba.processor import InsertBatch
 class Function:
     fingerprint: int
     function: str
+    module: str
     package: str
     in_app: bool
     self_times_ns: Sequence[int]
@@ -21,6 +22,7 @@ class Function:
         return {
             "fingerprint": self.fingerprint,
             "function": self.function,
+            "module": self.module,
             "package": self.package,
             "in_app": self.in_app,
             "self_times_ns": self.self_times_ns,
@@ -81,8 +83,8 @@ class TestFunctionsProcessor:
             timestamp=now,
             received=now,
             functions=[
-                Function(123, "foo", "bar", True, [1, 2, 3]),
-                Function(456, "baz", "", False, [4, 5, 6]),
+                Function(123, "foo", "", "bar", True, [1, 2, 3]),
+                Function(456, "baz", "qux", "", False, [4, 5, 6]),
             ],
             platform="python",
             environment="prod",
@@ -123,6 +125,7 @@ class TestFunctionsProcessor:
                 "fingerprint": 123,
                 "name": "foo",
                 "function": "foo",
+                "module": "",
                 "package": "bar",
                 "path": "",
                 "is_application": 1,
@@ -135,6 +138,7 @@ class TestFunctionsProcessor:
                 "fingerprint": 456,
                 "name": "baz",
                 "function": "baz",
+                "module": "qux",
                 "package": "",
                 "path": "",
                 "is_application": 0,
@@ -145,6 +149,4 @@ class TestFunctionsProcessor:
 
         assert FunctionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch(
-            rows=batch, origin_timestamp=None, sentry_received_timestamp=None
-        )
+        ) == InsertBatch(batch, datetime.utcfromtimestamp(message.received))

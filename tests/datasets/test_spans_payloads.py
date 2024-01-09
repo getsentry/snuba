@@ -15,6 +15,7 @@ from snuba.datasets.processors.spans_processor import SpansMessageProcessor
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch
+from tests.datasets.test_spans_processor import compare_types_and_values
 from tests.helpers import write_processed_messages
 
 # some time in way in the future
@@ -30,7 +31,6 @@ required_fields = {
     "project_id": project_id,
     "received": received,
     "retention_days": 90,
-    "segment_id": "1234567890123456",
     "sentry_tags": {},
     "span_id": "1234567890123456",
     "start_timestamp_ms": start_time_ms,
@@ -38,51 +38,45 @@ required_fields = {
 }
 
 expected_for_required_fields = {
-    "action": "",
     "deleted": 0,
+    "retention_days": 90,
+    "partition": 2,
+    "offset": 1,
+    "project_id": project_id,
+    "trace_id": "12345678-9012-3456-7890-123456789012",
+    "span_id": 1311768467284833366,
+    "segment_id": 1311768467284833366,
+    "is_segment": True,
     "description": "",
-    "domain": "",
-    "duration": 1234560123,
-    "end_ms": 234,
+    "group_raw": 0,
+    "start_timestamp": int(
+        datetime.datetime.fromtimestamp(start_time_ms / 1000.0).timestamp()
+    ),
+    "start_ms": 111,
     "end_timestamp": int(
         datetime.datetime.fromtimestamp(
             (start_time_ms + duration_ms) / 1000.0
         ).timestamp()
     ),
-    "exclusive_time": 1234567890123.0,
-    "group": 0,
-    "group_raw": 0,
-    "is_segment": 1,
-    "measurements.key": [],
-    "measurements.value": [],
-    "metrics_summary": "",
-    "module": "",
-    "offset": 1,
-    "op": "",
-    "parent_span_id": 0,
-    "partition": 2,
-    "platform": "",
-    "profile_id": None,
-    "project_id": project_id,
-    "retention_days": 90,
-    "segment_id": 1311768467284833366,
-    "segment_name": "",
-    "sentry_tags.key": [],
-    "sentry_tags.value": [],
-    "span_id": 1311768467284833366,
-    "span_kind": "",
-    "span_status": 2,
-    "start_ms": 111,
-    "start_timestamp": int(
-        datetime.datetime.fromtimestamp(start_time_ms / 1000.0).timestamp()
-    ),
-    "status": 2,
+    "end_ms": 234,
+    "duration": 1234560123,
+    "exclusive_time": 1234567890123,
     "tags.key": [],
     "tags.value": [],
-    "trace_id": "12345678-9012-3456-7890-123456789012",
-    "transaction_id": None,
-    "transaction_op": "",
     "user": "",
+    "measurements.key": [],
+    "measurements.value": [],
+    "sentry_tags.key": [],
+    "sentry_tags.value": [],
+    "module": "",
+    "action": "",
+    "domain": "",
+    "group": 0,
+    "span_kind": "",
+    "platform": "",
+    "segment_name": "",
+    "span_status": 2,
+    "op": "",
 }
 
 payloads = [
@@ -95,12 +89,13 @@ payloads = [
             "profile_id": "deadbeefdeadbeefdeadbeefdeadbeef",
         },
     },
-    {**required_fields, **{"tags": {"tag1": "value1", "tag2": "123", "tag3": "True"}}},
+    {**required_fields, **{"group_raw": "deadbeefdeadbeef"}},
+    {**required_fields, **{"tags": {"tag1": "value1", "tag2": 123, "tag3": True}}},
     {
         **required_fields,
         **{
-            "sentry_tags": {
-                "user": "user1",
+            "tags": {
+                "sentry:user": "user1",
             }
         },
     },
@@ -109,7 +104,7 @@ payloads = [
         **{
             "sentry_tags": {
                 "status": "ok",
-                "status_code": "200",
+                "status_code": 200,
             }
         },
     },
@@ -118,7 +113,7 @@ payloads = [
         **{
             "sentry_tags": {
                 "status": "ok",
-                "status_code": "200",
+                "status_code": 200,
                 "group": "deadbeefdeadbeef",
             }
         },
@@ -145,6 +140,7 @@ expected_results: Sequence[Mapping[str, Any]] = [
             "profile_id": str(uuid.UUID("deadbeefdeadbeefdeadbeefdeadbeef")),
         },
     },
+    {**expected_for_required_fields, **{"group_raw": int("deadbeefdeadbeef", 16)}},
     {
         **expected_for_required_fields,
         **{
@@ -154,37 +150,44 @@ expected_results: Sequence[Mapping[str, Any]] = [
     },
     {
         **expected_for_required_fields,
-        **{
-            "user": "user1",
-            "sentry_tags.key": ["user"],
-            "sentry_tags.value": ["user1"],
-        },
+        **{"user": "user1", "tags.key": ["sentry:user"], "tags.value": ["user1"]},
     },
     {
         **expected_for_required_fields,
+        **{
+            "span_status": 0,
+            "status": 0,
+            "tags.key": ["status_code"],
+            "tags.value": ["200"],
+        },
         **{
             "sentry_tags.key": ["status", "status_code"],
             "sentry_tags.value": ["ok", "200"],
-            "span_status": 0,
-            "status": 0,
         },
     },
     {
         **expected_for_required_fields,
         **{
-            "group": int("deadbeefdeadbeef", 16),
-            "sentry_tags.key": ["group", "status", "status_code"],
-            "sentry_tags.value": ["deadbeefdeadbeef", "ok", "200"],
             "span_status": 0,
             "status": 0,
+            "group": int("deadbeefdeadbeef", 16),
+            "tags.key": ["status_code"],
+            "tags.value": ["200"],
+        },
+        **{
+            "sentry_tags.key": ["group", "status", "status_code"],
+            "sentry_tags.value": ["deadbeefdeadbeef", "ok", "200"],
         },
     },
     {
         **expected_for_required_fields,
+        **{
+            "tags.key": ["release", "transaction.method", "user"],
+            "tags.value": ["release1234", "GET", "user1"],
+        },
         **{
             "sentry_tags.key": ["release", "transaction.method", "user"],
             "sentry_tags.value": ["release1234", "GET", "user1"],
-            "user": "user1",
         },
     },
 ]
@@ -214,7 +217,7 @@ class TestSpansPayloads:
 
         assert isinstance(processed_rows, InsertBatch), processed_rows
         actual_result = processed_rows.rows[0]
-        assert actual_result == expected_result
+        assert compare_types_and_values(actual_result, expected_result)
 
     def test_fail_missing_required(self, setup_state: None, caplog: Any) -> None:
         payload1: Any = required_fields.copy()
@@ -222,8 +225,8 @@ class TestSpansPayloads:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime.datetime(1970, 1, 1)
         )
-        with pytest.raises(Exception):
-            SpansMessageProcessor().process_message(payload1, meta)
+        processed = SpansMessageProcessor().process_message(payload1, meta)
+        assert processed is None
 
         payload2: Any = required_fields.copy()
         del payload2["span_id"]
@@ -231,9 +234,9 @@ class TestSpansPayloads:
             offset=1, partition=2, timestamp=datetime.datetime(1970, 1, 1)
         )
         with capture_logs() as logs:
-            with pytest.raises(Exception):
-                SpansMessageProcessor().process_message(payload2, meta)
-                assert "Failed to process span message" in str(logs)
+            processed = SpansMessageProcessor().process_message(payload2, meta)
+            assert processed is None
+            assert "Failed to process span message" in str(logs)
 
 
 class TestWriteSpansClickhouse:
