@@ -262,9 +262,9 @@ def process_replay_actions(
             "error_ids": [],
             "urls": [],
             "platform": "javascript",
-            "user": None,
-            "sdk_name": None,
-            "sdk_version": None,
+            "user": "",
+            "sdk_name": "",
+            "sdk_version": "",
             # Kafka columns.
             "retention_days": processed["retention_days"],
             "partition": metadata.partition,
