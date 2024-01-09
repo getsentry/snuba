@@ -117,6 +117,11 @@ query_processors:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
+  - processor: MappingOptimizer
+    args:
+      column_name: sentry_tags
+      hash_map_name: _sentry_tags_hash_map
+      killswitch: tags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
   - processor: ArrayJoinKeyValueOptimizer
     args:
