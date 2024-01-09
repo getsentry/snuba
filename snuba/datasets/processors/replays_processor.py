@@ -192,7 +192,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
     ) -> None:
         event_hash = replay_event.get("event_hash")
         if event_hash is None:
-            event_hash = segment_id_to_event_hash(replay_event["segment_id"])
+            event_hash = segment_id_to_event_hash(replay_event.get("segment_id", None))
 
         processed["event_hash"] = str(uuid.UUID(event_hash))
 
