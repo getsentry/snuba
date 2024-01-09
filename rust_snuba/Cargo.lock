@@ -2322,6 +2322,7 @@ dependencies = [
 [[package]]
 name = "statsdproxy"
 version = "0.1.0"
+source = "git+https://github.com/getsentry/statsdproxy#527fcd5b1184edcdcfb3439ad1f18f3977d7ac07"
 dependencies = [
  "anyhow",
  "cadence",
