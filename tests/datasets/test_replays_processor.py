@@ -768,9 +768,9 @@ class TestReplaysActionProcessor:
         assert row["error_ids"] == []
         assert row["urls"] == []
         assert row["platform"] == "javascript"
-        assert row["user"] is None
-        assert row["sdk_name"] is None
-        assert row["sdk_version"] is None
+        assert row["user"] == ""
+        assert row["sdk_name"] == ""
+        assert row["sdk_version"] == ""
         assert row["retention_days"] == 30
         assert row["partition"] == 0
         assert row["offset"] == 0
