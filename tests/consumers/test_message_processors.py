@@ -118,10 +118,6 @@ def test_replays_message_processor() -> None:
                 parsed_rust_message = json.loads(line)
                 parsed_python_message = python_processed_message.rows[0]
 
-                # event_hash is broken by an example omitting the event_hash value.
-                parsed_rust_message.pop("event_hash", None)
-                parsed_python_message.pop("event_hash", None)  # type: ignore
-
                 # timestamp is sometimes in different formats so we'll coerce.
                 ts1 = parsed_rust_message.pop("timestamp", None)
                 ts2 = parsed_python_message.pop("timestamp", None)  # type: ignore

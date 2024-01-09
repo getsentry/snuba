@@ -191,14 +191,8 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         event_hash = replay_event.get("event_hash")
-        if event_hash:
-            event_hash = str(uuid.UUID(event_hash))
-        elif "segment_id" in replay_event:
-            event_hash = str(
-                uuid.UUID(segment_id_to_event_hash(replay_event["segment_id"]))
-            )
-        else:
-            event_hash = uuid.uuid4().hex
+        if event_hash is None:
+            event_hash = segment_id_to_event_hash(replay_event["segment_id"])
 
         processed["event_hash"] = str(uuid.UUID(event_hash))
 
@@ -259,7 +253,7 @@ def process_replay_actions(
             ),
             "replay_id": to_uuid(payload["replay_id"]),
             "segment_id": None,
-            "event_hash": click["event_hash"],
+            "event_hash": str(uuid.UUID(click["event_hash"])),
             # Default values for non-nullable columns.
             "trace_ids": [],
             "error_ids": [],
@@ -313,7 +307,7 @@ def process_replay_event_link(
         "project_id": processed["project_id"],
         "replay_id": to_uuid(payload["replay_id"]),
         "segment_id": None,
-        "event_hash": payload["event_hash"],
+        "event_hash": str(uuid.UUID(payload["event_hash"])),
         "timestamp": raise_on_null(
             "timestamp", maybe(to_datetime, payload["timestamp"])
         ),
