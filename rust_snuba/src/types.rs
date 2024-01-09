@@ -149,7 +149,7 @@ impl BytesInsertBatch {
             .encoded_rows
             .extend_from_slice(&other.rows.encoded_rows);
         self.commit_log_offsets.extend(other.commit_log_offsets);
-        self.rows.num_rows += self.rows.num_rows;
+        self.rows.num_rows += other.rows.num_rows;
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
