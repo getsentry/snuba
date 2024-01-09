@@ -1,12 +1,22 @@
+use crate::config::EnvConfig;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Deserializer};
 
-pub const DEFAULT_RETENTION_DAYS: u16 = 90;
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S.%6fZ";
 
-pub fn default_retention_days() -> Option<u16> {
-    Some(DEFAULT_RETENTION_DAYS)
+pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
+    let mut retention_days = value.unwrap_or(config.default_retention_days);
+
+    if !config.valid_retention_days.contains(&retention_days) {
+        if retention_days <= config.lower_retention_days {
+            retention_days = config.lower_retention_days;
+        } else {
+            retention_days = config.default_retention_days;
+        }
+    }
+
+    retention_days
 }
 
 pub fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>

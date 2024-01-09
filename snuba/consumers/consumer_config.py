@@ -46,6 +46,9 @@ class EnvConfig:
     sentry_dsn: Optional[str]
     dogstatsd_host: Optional[str]
     dogstatsd_port: Optional[int]
+    default_retention_days: int
+    lower_retention_days: int
+    valid_retention_days: list[int]
 
 
 @dataclass(frozen=True)
@@ -116,10 +119,16 @@ def _resolve_env_config() -> EnvConfig:
     sentry_dsn = settings.SENTRY_DSN
     dogstatsd_host = settings.DOGSTATSD_HOST
     dogstatsd_port = settings.DOGSTATSD_PORT
+    default_retention_days = settings.DEFAULT_RETENTION_DAYS
+    lower_retention_days = settings.LOWER_RETENTION_DAYS
+    valid_retention_days = list(settings.VALID_RETENTION_DAYS)
     return EnvConfig(
         sentry_dsn=sentry_dsn,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port,
+        default_retention_days=default_retention_days,
+        lower_retention_days=lower_retention_days,
+        valid_retention_days=valid_retention_days,
     )
 
 
