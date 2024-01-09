@@ -588,12 +588,12 @@ mod tests {
             InitialOffset::Earliest,
             true,
             30_000,
-            None,
+            Default::default(),
         );
 
         let producer_configuration = KafkaConfig::new_producer_config(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
-            None,
+            Default::default(),
         );
 
         let producer = KafkaProducer::new(producer_configuration);
@@ -687,7 +687,7 @@ mod tests {
             InitialOffset::Earliest,
             true,
             60_000,
-            None,
+            Default::default(),
         );
 
         let mut consumer =

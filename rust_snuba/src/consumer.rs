@@ -163,8 +163,7 @@ pub fn consumer_impl(
     };
 
     let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
-        let producer_config =
-            KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
+        let producer_config = KafkaConfig::new_producer_config(vec![], topic_config.broker_config);
         let producer = KafkaProducer::new(producer_config);
         Some((
             Arc::new(producer),

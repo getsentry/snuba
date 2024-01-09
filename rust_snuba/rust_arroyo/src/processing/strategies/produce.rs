@@ -91,7 +91,7 @@ mod tests {
     use std::time::SystemTime;
 
     use super::*;
-    use crate::backends::kafka::config::KafkaConsumerConfig;
+    use crate::backends::kafka::config::{KafkaConfig, KafkaConsumerConfig};
     use crate::backends::kafka::producer::KafkaProducer;
     use crate::backends::kafka::InitialOffset;
     use crate::backends::local::broker::LocalBroker;
@@ -144,12 +144,8 @@ mod tests {
 
     #[test]
     fn test_produce() {
-        let config = KafkaConsumerConfig::new(
+        let config = KafkaConfig::new_config(
             vec![std::env::var("DEFAULT_BROKERS").unwrap_or("127.0.0.1:9092".to_string())],
-            "my_group".to_string(),
-            InitialOffset::Latest,
-            false,
-            30_000,
             Default::default(),
         );
 
@@ -176,7 +172,7 @@ mod tests {
             }
         }
 
-        let producer: KafkaProducer = KafkaProducer::new(config.core.clone());
+        let producer: KafkaProducer = KafkaProducer::new(config);
         let concurrency = ConcurrencyConfig::new(10);
         let mut strategy = Produce::new(
             Noop {},
