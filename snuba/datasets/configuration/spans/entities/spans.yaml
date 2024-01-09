@@ -59,30 +59,12 @@ schema:
         },
     },
     {
-      name: _tags_hash_map,
-      type: Array,
-      args:
-        {
-          inner_type: { type: UInt, args: { size: 64 } },
-          schema_modifiers: [readonly],
-        },
-    },
-    {
       name: sentry_tags,
       type: Nested,
       args:
         {
           subcolumns:
             [{ name: key, type: String }, { name: value, type: String }],
-        },
-    },
-    {
-      name: _sentry_tags_hash_map,
-      type: Array,
-      args:
-        {
-          inner_type: { type: UInt, args: { size: 64 } },
-          schema_modifiers: [readonly],
         },
     },
     {
@@ -95,6 +77,24 @@ schema:
               { name: key, type: String },
               { name: value, type: Float, args: { size: 64 } },
             ],
+        },
+    },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [readonly],
+        },
+    },
+    {
+      name: _sentry_tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [readonly],
         },
     },
     { name: partition, type: UInt, args: { size: 16 } },
@@ -128,7 +128,7 @@ storages:
             from_column_table: null
             from_column_name: sentry_tags
             to_nested_col_table: null
-            to_nested_col_name: sentry_tags
+            to_nested_col_name: tags
             value_subcolumn_name: value
             nullable: false
         - mapper: SubscriptableMapper

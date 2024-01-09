@@ -54,7 +54,6 @@ class BufferedWriterWrapper(Generic[TEncoded, TDecoded]):
 
     def __flush(self) -> None:
         logger.debug("Flushing buffer with %d elements", len(self.__buffer))
-        print(self.__buffer)
         self.__writer.write(self.__buffer)
         self.__buffer = []
 
