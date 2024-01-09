@@ -19,7 +19,7 @@ pub fn deserialize_message(
     payload: &[u8],
     partition: u16,
     offset: u64,
-) -> Result<Vec<ReplayRow>, serde_json::Error> {
+) -> anyhow::Result<Vec<ReplayRow>> {
     let replay_message: ReplayMessage = serde_json::from_slice(payload)?;
     let replay_payload = serde_json::from_slice(&replay_message.payload)?;
 
