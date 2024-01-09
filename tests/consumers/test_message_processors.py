@@ -11,6 +11,7 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.processor import InsertBatch
 
@@ -18,9 +19,7 @@ from snuba.processor import InsertBatch
 @pytest.mark.parametrize(
     "topic,processor",
     [
-        # TODO(colton): See why the replays tests are failing with the latest
-        # examples from sentry-kafka-schemas.
-        # ("ingest-replay-events", ReplaysProcessor),
+        ("ingest-replay-events", ReplaysProcessor),
         ("outcomes", OutcomesProcessor),
     ],
 )
