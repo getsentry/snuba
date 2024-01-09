@@ -38,17 +38,7 @@ pub fn init<R: Recorder + Send + Sync + 'static>(recorder: R) -> Result<(), R> {
 ///
 /// This function will be a noop in case no global [`Recorder`] is configured.
 pub fn record_metric(metric: Metric<'_>) {
-    with_recorder(|r| r.record_metric(metric))
-}
-
-fn with_recorder<F, R>(f: F) -> R
-where
-    F: FnOnce(&dyn Recorder) -> R,
-    R: Default,
-{
     if let Some(recorder) = GLOBAL_RECORDER.get() {
-        f(recorder)
-    } else {
-        Default::default()
+        recorder.record_metric(metric)
     }
 }
