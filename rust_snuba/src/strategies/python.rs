@@ -139,6 +139,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         }
 
         let mut apply_backpressure = false;
+        let mut invalid_message: Option<InvalidMessage> = None;
 
         Python::with_gil(|py| -> PyResult<()> {
             let python_strategy = self.python_strategy.lock();
@@ -165,13 +166,23 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         timestamp,
                     );
 
-                    let rv: u8 = python_strategy
+                    let rv: (u8, Option<InvalidMessageMetadata>) = python_strategy
                         .call_method1(py, "submit", args)?
                         .extract(py)?;
 
                     match rv {
-                        1 => {
+                        (1, _) => {
                             apply_backpressure = true;
+                        }
+                        (2, meta) => {
+                            let metadata = meta.unwrap();
+                            invalid_message = Some(InvalidMessage {
+                                partition: Partition {
+                                    topic: Topic::new(&metadata.topic),
+                                    index: metadata.partition,
+                                },
+                                offset: metadata.offset,
+                            });
                         }
                         _ => {
                             tracing::debug!("successfully submitted to multiprocessing");
@@ -182,6 +193,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             Ok(())
         })
         .unwrap();
+
+        if let Some(msg) = invalid_message {
+            return Err(SubmitError::InvalidMessage(msg));
+        }
 
         if apply_backpressure {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
@@ -241,6 +256,23 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             self.commit_request_carried_over.take(),
             next_commit,
         ))
+    }
+}
+
+#[derive(Debug)]
+struct InvalidMessageMetadata {
+    pub topic: String,
+    pub partition: u16,
+    pub offset: u64,
+}
+
+impl FromPyObject<'_> for InvalidMessageMetadata {
+    fn extract(dict: &'_ PyAny) -> PyResult<Self> {
+        Ok(InvalidMessageMetadata {
+            topic: dict.get_item("topic")?.extract()?,
+            partition: dict.get_item("partition")?.extract()?,
+            offset: dict.get_item("offset")?.extract()?,
+        })
     }
 }
 
