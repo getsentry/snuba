@@ -328,15 +328,10 @@ struct ReplayEventLinkEvent {
 #[derive(Debug, Default, Serialize)]
 pub struct ReplayRow {
     replay_id: Uuid,
-    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     debug_id: Uuid,
-    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     info_id: Uuid,
-    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     warning_id: Uuid,
-    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     error_id: Uuid,
-    #[serde(skip_serializing_if = "uuid::Uuid::is_nil")]
     fatal_id: Uuid,
     replay_type: String,
     error_sample_rate: f64,
@@ -355,9 +350,7 @@ pub struct ReplayRow {
     environment: String,
     release: String,
     dist: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     ip_address_v4: Option<Ipv4Addr>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     ip_address_v6: Option<Ipv6Addr>,
     user: String,
     user_id: String,
@@ -377,31 +370,18 @@ pub struct ReplayRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
-    #[serde(skip_serializing_if = "is_u32_zero")]
     click_node_id: u32,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_tag: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_id: String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     click_class: Vec<String>,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_text: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_role: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_alt: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_testid: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_aria_label: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_title: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     click_component_name: String,
-    #[serde(skip_serializing_if = "is_u8_zero")]
     click_is_dead: u8,
-    #[serde(skip_serializing_if = "is_u8_zero")]
     click_is_rage: u8,
     retention_days: u16,
     partition: u16,
