@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use cadence::prelude::*;
 use cadence::{MetricBuilder, MetricError, StatsdClient};
 use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
@@ -5,7 +7,8 @@ use statsdproxy::cadence::StatsdProxyMetricSink;
 use statsdproxy::config::AggregateMetricsConfig;
 use statsdproxy::middleware::aggregate::AggregateMetrics;
 use statsdproxy::middleware::Upstream;
-use std::collections::HashMap;
+
+use crate::metrics::global_tags::AddGlobalTags;
 
 #[derive(Debug)]
 pub struct StatsDBackend {
@@ -13,10 +16,16 @@ pub struct StatsDBackend {
 }
 
 impl StatsDBackend {
-    pub fn new(host: &str, port: u16, prefix: &str, global_tags: HashMap<&str, &str>) -> Self {
+    pub fn new(host: &str, port: u16, prefix: &str) -> Self {
         let upstream_addr = format!("{}:{}", host, port);
         let aggregator_sink = StatsdProxyMetricSink::new(move || {
-            let upstream = Upstream::new(upstream_addr.clone()).unwrap();
+            let next_step = Upstream::new(upstream_addr.clone()).unwrap();
+
+            // adding global tags *after* aggregation is more performant than trying to do the same
+            // in cadence, as it means more bytes and more memory to deal with in
+            // AggregateMetricsConfig
+            let next_step = AddGlobalTags::new(next_step);
+
             let config = AggregateMetricsConfig {
                 aggregate_counters: true,
                 flush_offset: 0,
@@ -24,17 +33,11 @@ impl StatsDBackend {
                 aggregate_gauges: true,
                 max_map_size: None,
             };
-            AggregateMetrics::new(config, upstream)
+            AggregateMetrics::new(config, next_step)
         });
 
-        let mut client_builder = StatsdClient::builder(prefix, aggregator_sink);
-        for (k, v) in global_tags {
-            client_builder = client_builder.with_tag(k, v);
-        }
-
-        Self {
-            client: client_builder.build(),
-        }
+        let client = StatsdClient::builder(prefix, aggregator_sink).build();
+        Self { client }
     }
 
     fn send_with_tags<'t, T: cadence::Metric + From<String>>(
@@ -79,7 +82,7 @@ mod tests {
 
     #[test]
     fn statsd_metric_backend() {
-        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
+        let backend = StatsDBackend::new("0.0.0.0", 8125, "test");
 
         backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
         backend.gauge("b", 20, Some(HashMap::from([("tag2", "value2")])));

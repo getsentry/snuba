@@ -125,6 +125,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
         let start = Instant::now();
 
         let mut state = self.0.locked_state();
+        state.processing_factory.update_partitions(&partitions);
         state.strategy = Some(state.processing_factory.create());
         state.dlq_policy.reset_dlq_limits(&partitions);
 

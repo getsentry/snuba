@@ -143,9 +143,18 @@ impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPay
 pub trait ProcessingStrategyFactory<TPayload>: Send + Sync {
     /// Instantiate and return a ``ProcessingStrategy`` instance.
     ///
-    /// :param commit: A function that accepts a mapping of ``Partition``
-    /// instances to offset values that should be committed.
+    /// This callback is executed on almost every rebalance, so do not do any heavy operations in
+    /// here.
+    ///
+    /// In a future version of Arroyo we might want to call this callback less often, for example
+    /// only if it is necessary to join and close strategies for ordering guarantees.
     fn create(&self) -> Box<dyn ProcessingStrategy<TPayload>>;
+
+    /// Callback to find out about the currently assigned partitions.
+    ///
+    /// Do not do any heavy work in this callback, even less than in `create`. This is guaranteed
+    /// to be called every rebalance.
+    fn update_partitions(&self, _partitions: &HashMap<Partition, u64>) {}
 }
 
 #[cfg(test)]
