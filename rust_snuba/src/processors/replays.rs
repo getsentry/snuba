@@ -84,9 +84,15 @@ pub fn deserialize_message(
                 Ok(IpAddr::V6(ipv6)) => (None, Some(ipv6)),
             };
 
-            let user = event
-                .user
-                .user_id
+            // Handle user-id field.
+            let user_id = match &event.user.user_id {
+                Some(UserId::String(v)) => Some(v.clone()),
+                Some(UserId::Number(v)) => Some(v.to_string()),
+                None => None,
+            };
+
+            // Handle user field.
+            let user = user_id
                 .clone()
                 .or(event.user.username.clone())
                 .or(event.user.email.clone())
@@ -133,7 +139,7 @@ pub fn deserialize_message(
                 urls: event.urls.unwrap_or_default(),
                 user,
                 user_email: event.user.email.unwrap_or_default(),
-                user_id: event.user.user_id.unwrap_or_default(),
+                user_id: user_id.unwrap_or_default(),
                 user_name: event.user.username.unwrap_or_default(),
                 title,
                 tags_key,
@@ -213,6 +219,13 @@ struct ReplayClickEventClick {
 
 // Replay Event
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum UserId {
+    String(String),
+    Number(u64),
+}
+
 #[derive(Debug, Deserialize)]
 struct ReplayEvent {
     replay_id: Uuid,
@@ -288,7 +301,7 @@ struct User {
     #[serde(default)]
     username: Option<String>,
     #[serde(default)]
-    user_id: Option<String>,
+    user_id: Option<UserId>,
     #[serde(default)]
     email: Option<String>,
     #[serde(default)]
