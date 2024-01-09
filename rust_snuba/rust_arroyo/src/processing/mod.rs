@@ -14,8 +14,8 @@ use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerErro
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
 use crate::processing::strategies::{MessageRejected, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
-use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
+use crate::{counter, timer};
 
 pub mod dlq;
 mod metrics_buffer;
@@ -115,11 +115,9 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
     // initialization.  But we just provide a signal back to the
     // processor to do that.
     fn on_assign(&self, partitions: HashMap<Partition, u64>) {
-        let metrics = get_metrics();
-        metrics.increment(
+        counter!(
             "arroyo.consumer.partitions_assigned.count",
-            partitions.len() as i64,
-            None,
+            partitions.len() as i64
         );
 
         let start = Instant::now();
@@ -128,20 +126,14 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
         state.strategy = Some(state.processing_factory.create());
         state.dlq_policy.reset_dlq_limits(&partitions);
 
-        metrics.timing(
-            "arroyo.consumer.create_strategy.time",
-            start.elapsed().as_millis() as u64,
-            None,
-        );
+        timer!("arroyo.consumer.create_strategy.time", start.elapsed());
     }
 
     fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, partitions: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
-        let metrics = get_metrics();
-        metrics.increment(
+        counter!(
             "arroyo.consumer.partitions_revoked.count",
             partitions.len() as i64,
-            None,
         );
 
         let start = Instant::now();
@@ -176,11 +168,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
         self.0.set_paused(false);
         state.clear_backpressure();
 
-        metrics.timing(
-            "arroyo.consumer.join.time",
-            start.elapsed().as_millis() as u64,
-            None,
-        );
+        timer!("arroyo.consumer.join.time", start.elapsed());
 
         tracing::info!("End revoke partitions");
 
@@ -198,7 +186,6 @@ pub struct StreamProcessor<TPayload: Clone> {
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
     buffered_messages: BufferedMessages<TPayload>,
-    metrics: BoxMetrics,
     metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
@@ -237,7 +224,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
             buffered_messages: BufferedMessages::new(max_buffered_messages_per_partition),
-            metrics: get_metrics(),
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }
     }
@@ -250,7 +236,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     fn _run_once(&mut self) -> Result<(), RunError> {
-        self.metrics.increment("arroyo.consumer.run.count", 1, None);
+        counter!("arroyo.consumer.run.count");
 
         let consumer_is_paused = self.consumer_state.is_paused();
         if consumer_is_paused {

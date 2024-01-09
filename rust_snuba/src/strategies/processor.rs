@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::counter;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
-use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
@@ -22,12 +22,10 @@ pub fn make_rust_processor(
     concurrency: &ConcurrencyConfig,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
-    let metrics = get_metrics();
 
     let task_runner = MessageProcessor {
         schema,
         enforce_schema,
-        metrics,
         func,
     };
 
@@ -59,7 +57,6 @@ fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
 struct MessageProcessor {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
-    metrics: BoxMetrics,
     func: ProcessingFunction,
 }
 
@@ -81,7 +78,7 @@ impl MessageProcessor {
         };
 
         self.process_payload(msg).map_err(|error| {
-            self.metrics.increment("invalid_message", 1, None);
+            counter!("invalid_message");
 
             sentry::with_scope(
                 |scope| {
@@ -111,7 +108,7 @@ impl MessageProcessor {
         let Err(error) = schema.validate_json(payload) else {
             return Ok(());
         };
-        self.metrics.increment("schema_validation.failed", 1, None);
+        counter!("schema_validation.failed");
 
         sentry::with_scope(
             |scope| {

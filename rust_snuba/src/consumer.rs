@@ -7,12 +7,12 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::metrics;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
-use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
 
@@ -107,7 +107,7 @@ pub fn consumer_impl(
         tags.insert("storage", storage_name.as_str());
         tags.insert("consumer_group", consumer_group);
 
-        configure_metrics(StatsDBackend::new(&host, port, "snuba.consumer", tags));
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer", tags)).unwrap();
     }
 
     if !use_rust_processor {
