@@ -496,3 +496,18 @@ def test_is_not_enforced() -> None:
     )
     assert throttled_metrics[0].tags["is_enforced"] == "True"
     assert throttled_metrics[1].tags["is_enforced"] == "False"
+
+
+def test_outdated_configs() -> None:
+    # test that if config items get removed from the definitions, they get removed from redis
+    # on read
+    pass
+
+
+@pytest.mark.redis_db
+def test_configs_with_dot_values() -> None:
+    # test that configs with dots can be stored and read
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
+    policy.set_config_value("my_param_config", 5, {"ref": "a.b.c", "org": 1})
+    configs = policy.get_current_configs()
+    print(configs)

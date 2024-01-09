@@ -578,7 +578,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                     logger.exception(
                         f"AllocationPolicy could not deserialize a key: {key}"
                     )
-                    continue
+                    raise
                 detailed_configs.append(
                     definitions[config_key].to_config_dict(
                         value=runtime_configs[key], params=params
@@ -602,7 +602,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         parameters = "."
         for param in sorted(list(params.keys())):
-            parameters += f"{param}:{params[param]},"
+            param_sanitized = param.replace(".", "\\.")
+            value_sanitized = str(params[param]).replace(".", "\\.")
+            parameters += f"{param_sanitized}:{value_sanitized},"
         parameters = parameters[:-1]
         return f"{self.runtime_config_prefix}.{config}{parameters}"
 
