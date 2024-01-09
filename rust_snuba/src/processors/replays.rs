@@ -50,12 +50,6 @@ pub fn process_message(
                 (Some(event_hash), _) => event_hash,
             };
 
-            let (ip_address_v4, ip_address_v6) = match event.user.ip_address {
-                None => (None, None),
-                Some(IpAddr::V4(ip)) => (Some(ip), None),
-                Some(IpAddr::V6(ip)) => (None, Some(ip)),
-            };
-
             // Tags normalization and title extraction.
             let mut title = None;
             let mut tags_key = Vec::with_capacity(event.tags.len());
@@ -69,17 +63,30 @@ pub fn process_message(
                 tags_value.push(tag.1);
             }
 
-            // Compute user value.
-            let user = if !event.user.user_id.is_empty() {
-                event.user.user_id.clone()
-            } else if !event.user.username.is_empty() {
-                event.user.username.clone()
-            } else if !event.user.email.is_empty() {
-                event.user.email.clone()
-            } else if let Some(ip) = event.user.ip_address {
-                ip.to_string()
-            } else {
-                String::new()
+            // Unwrap the ip-address string.
+            let ip_address_string = event.user.ip_address.unwrap_or_default();
+            let (ip_address_v4, ip_address_v6) = match ip_address_string.parse::<IpAddr>() {
+                Err(_) => (None, None),
+                Ok(ip) => match ip {
+                    IpAddr::V4(ipv4) => (Some(ipv4), None),
+                    IpAddr::V6(ipv6) => (None, Some(ipv6)),
+                },
+            };
+
+            // Derive user value through precedence checks.
+            let user = match (
+                &event.user.user_id,
+                &event.user.username,
+                &event.user.email,
+                &ip_address_v4,
+                &ip_address_v6,
+            ) {
+                (Some(uid), _, _, _, _) => uid.clone(),
+                (_, Some(username), _, _, _) => username.clone(),
+                (_, _, Some(email), _, _) => email.clone(),
+                (_, _, _, Some(ip), _) => ip.to_string().clone(),
+                (_, _, _, _, Some(ip)) => ip.to_string().clone(),
+                _ => String::new(),
             };
 
             // Sample-rate normalization. Null values are inserted as a -1.0 sentinel value.
@@ -120,9 +127,9 @@ pub fn process_message(
                 trace_ids: event.trace_ids.unwrap_or_default(),
                 urls: event.urls.unwrap_or_default(),
                 user,
-                user_email: event.user.email,
-                user_id: event.user.user_id,
-                user_name: event.user.username,
+                user_email: event.user.email.unwrap_or_default(),
+                user_id: event.user.user_id.unwrap_or_default(),
+                user_name: event.user.username.unwrap_or_default(),
                 title,
                 tags_key,
                 tags_value: tags_value
@@ -276,13 +283,13 @@ struct ReplayContext {
 #[derive(Debug, Default, Deserialize)]
 struct User {
     #[serde(default)]
-    username: String,
+    username: Option<String>,
     #[serde(default)]
-    user_id: String,
+    user_id: Option<String>,
     #[serde(default)]
-    email: String,
+    email: Option<String>,
     #[serde(default)]
-    ip_address: Option<IpAddr>,
+    ip_address: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -445,6 +452,80 @@ mod tests {
                 "ip_address": "127.0.0.1",
                 "user_id": "user_id",
                 "username": "username"
+            },
+            "sdk": {
+                "name": "sdk",
+                "verison": "v1"
+            },
+            "dist": "dist",
+            "environment": "environment",
+            "is_archived": false,
+            "platform": "platform",
+            "release": "release",
+            "replay_start_timestamp": 1702659277,
+            "replay_type": "buffer",
+            "urls": ["urls"],
+            "trace_ids": ["2cd798d70f9346089026d2014a826629"],
+            "error_ids": ["df11e6d952da470386a64340f13151c4"],
+            "tags": [
+                ["a", "b"],
+                ["transaction.name", null]
+            ],
+            "segment_id": 0,
+            "replay_id": "048aa04be40243948eb3b57089c519ee",
+            "timestamp": 1702659277,
+            "type": "replay_event"
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta).expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_parse_replay_event_null_user_fields() {
+        let payload = r#"{
+            "contexts": {
+                "browser": {
+                    "name": "browser",
+                    "verison": "v1"
+                },
+                "device": {
+                    "brand": "brand",
+                    "family": "family",
+                    "model": "model",
+                    "name": "name"
+                },
+                "os": {
+                    "name": "os",
+                    "verison": "v1"
+                },
+                "replay": {
+                    "error_sample_rate": 1,
+                    "session_sample_rate": 0.5
+                }
+            },
+            "user": {
+                "email": null,
+                "ip_address": null,
+                "user_id": null,
+                "username": null
             },
             "sdk": {
                 "name": "sdk",
