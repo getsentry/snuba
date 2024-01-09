@@ -66,17 +66,30 @@ struct MessageProcessor {
 impl MessageProcessor {
     async fn process_message(
         self,
-        msg: BrokerMessage<KafkaPayload>,
-    ) -> Result<Message<BytesInsertBatch>, RunTaskError> {
+        message: Message<KafkaPayload>,
+    ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
+        let msg = match message.inner_message {
+            InnerMessage::BrokerMessage(msg) => msg,
+            _ => {
+                return Err(RunTaskError::Other(anyhow::anyhow!(
+                    "Unexpected message type"
+                )))
+            }
+        };
+
         let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
         });
 
         let kafka_payload = &msg.payload.clone();
-        let payload = kafka_payload.payload().ok_or(maybe_err.clone())?;
+        let Some(payload) = kafka_payload.payload() else {
+            return Err(maybe_err);
+        };
 
-        if self.validate_schema(payload).is_err() {
+        if let Err(error) = self.validate_schema(payload) {
+            let error: &dyn std::error::Error = &error;
+            tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
         };
 
@@ -160,16 +173,14 @@ impl MessageProcessor {
     }
 }
 
-impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<BytesInsertBatch> {
-        let broker_message = match message.inner_message {
-            InnerMessage::BrokerMessage(msg) => msg,
-            _ => panic!("Unexpected message type"),
-        };
-
+impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProcessor {
+    fn get_task(
+        &self,
+        message: Message<KafkaPayload>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         Box::pin(
             self.clone()
-                .process_message(broker_message)
+                .process_message(message)
                 .bind_hub(Hub::new_from_top(Hub::current())),
         )
     }
