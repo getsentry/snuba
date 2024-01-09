@@ -108,18 +108,18 @@ def test_replays_message_processor() -> None:
 
                 # event_hash is broken by an example omitting the event_hash value.
                 parsed_rust_message.pop("event_hash", None)
-                parsed_python_message.pop("event_hash", None)
+                parsed_python_message.pop("event_hash", None)  # type: ignore
 
                 # timestamp is sometimes in different formats so we'll coerce.
                 ts1 = parsed_rust_message.pop("timestamp", None)
-                ts2 = parsed_python_message.pop("timestamp", None)
+                ts2 = parsed_python_message.pop("timestamp", None)  # type: ignore
                 if isinstance(ts2, datetime):
                     ts2 = int(ts2.timestamp())
                 assert ts1 == ts2
 
                 # replay_start_timestamp is sometimes in different formats so we'll coerce.
                 sts1 = parsed_rust_message.pop("replay_start_timestamp", None)
-                sts2 = parsed_python_message.pop("replay_start_timestamp", None)
+                sts2 = parsed_python_message.pop("replay_start_timestamp", None)  # type: ignore
                 if isinstance(sts2, datetime):
                     sts2 = int(sts2.timestamp())
                 assert sts1 == sts2
