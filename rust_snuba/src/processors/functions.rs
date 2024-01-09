@@ -100,6 +100,7 @@ struct Function<'a> {
     http_method: Option<&'a str>,
     is_application: u8,
     materialization_version: u8,
+    module: &'a str,
     name: &'a str,
     package: &'a str,
     platform: &'a str,

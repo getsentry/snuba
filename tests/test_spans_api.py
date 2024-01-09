@@ -291,8 +291,7 @@ class TestSpansApi(BaseApiTest):
         to_date = (self.base_time + self.skew).isoformat()
         response = self._post_query(
             f"""MATCH (spans)
-                SELECT span_id,
-                sentry_tags[module] AS module
+                SELECT span_id, sentry_tags[sometag] AS sometag
                 WHERE project_id = 1
                 AND timestamp >= toDateTime('{from_date}')
                 AND timestamp < toDateTime('{to_date}')
@@ -301,4 +300,4 @@ class TestSpansApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-        assert len(data["data"]) >= 1, data["data"]
+        assert len(data["data"]) >= 1, data

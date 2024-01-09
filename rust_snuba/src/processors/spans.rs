@@ -74,7 +74,6 @@ struct FromSentryTags {
     transaction_method: Option<String>,
     #[serde(rename(deserialize = "transaction.op"))]
     transaction_op: Option<String>,
-    user: Option<String>,
     #[serde(flatten)]
     extra: BTreeMap<String, String>,
 }
@@ -129,10 +128,6 @@ impl FromSentryTags {
 
         if let Some(status_code) = &self.status_code {
             tags.insert("status_code".into(), status_code.into());
-        }
-
-        if let Some(user) = &self.user {
-            tags.insert("user".into(), user.into());
         }
 
         for (key, value) in &self.extra {
@@ -208,11 +203,10 @@ impl TryFrom<FromSpanMessage> for Span {
             0
         };
         let status = from.sentry_tags.status.unwrap_or_default() as u8;
-
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
-        let (tag_keys, tag_values): (Vec<_>, Vec<_>) =
+        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) =
             from.tags.unwrap_or_default().into_iter().unzip();
 
         let (measurement_keys, measurement_values) = from
@@ -221,6 +215,21 @@ impl TryFrom<FromSpanMessage> for Span {
             .into_iter()
             .map(|(k, v)| (k, v.value))
             .unzip();
+
+        if let Some(http_method) = from.sentry_tags.http_method {
+            tag_keys.push("http.method".into());
+            tag_values.push(http_method);
+        }
+
+        if let Some(status_code) = from.sentry_tags.status_code {
+            tag_keys.push("status_code".into());
+            tag_values.push(status_code);
+        }
+
+        if let Some(transaction_method) = from.sentry_tags.transaction_method {
+            tag_keys.push("transaction.method".into());
+            tag_values.push(transaction_method);
+        }
 
         let metrics_summary = match from._metrics_summary {
             Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
@@ -261,7 +270,6 @@ impl TryFrom<FromSpanMessage> for Span {
             trace_id: from.trace_id,
             transaction_id: from.event_id,
             transaction_op,
-            user: from.sentry_tags.user.unwrap_or_default(),
             ..Default::default()
         })
     }

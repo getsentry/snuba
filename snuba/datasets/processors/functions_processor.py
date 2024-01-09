@@ -41,6 +41,7 @@ class FunctionsMessageProcessor(DatasetMessageProcessor):
                 "name": function["function"],  # to be removed
                 "function": function["function"],
                 "package": function.get("package", ""),
+                "module": function.get("module", ""),
                 "path": "",  # deprecated
                 "is_application": 1 if function.get("in_app", True) else 0,
                 "platform": message["platform"],
