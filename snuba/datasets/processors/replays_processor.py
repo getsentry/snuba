@@ -135,6 +135,9 @@ class ReplaysProcessor(DatasetMessageProcessor):
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
     ) -> None:
         contexts = replay_event.get("contexts", {})
+        if not contexts:
+            return None
+
         browser_context = contexts.get("browser", {})
         device_context = contexts.get("device", {})
         os_context = contexts.get("os", {})
