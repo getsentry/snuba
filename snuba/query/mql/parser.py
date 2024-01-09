@@ -327,6 +327,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         target.aggregate = selected_aggregate
         return target
 
+    def visit_curried_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        return str(node.text)
+
     def visit_curried_aggregate(
         self,
         node: Node,
