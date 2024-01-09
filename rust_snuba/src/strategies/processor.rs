@@ -70,7 +70,11 @@ impl MessageProcessor {
     ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
         let msg = match message.inner_message {
             InnerMessage::BrokerMessage(msg) => msg,
-            _ => return Err(RunTaskError::Other(anyhow::anyhow!("Unexpected message type"))),
+            _ => {
+                return Err(RunTaskError::Other(anyhow::anyhow!(
+                    "Unexpected message type"
+                )))
+            }
         };
 
         let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
@@ -170,8 +174,10 @@ impl MessageProcessor {
 }
 
 impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProcessor {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
-
+    fn get_task(
+        &self,
+        message: Message<KafkaPayload>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         Box::pin(
             self.clone()
                 .process_message(message)

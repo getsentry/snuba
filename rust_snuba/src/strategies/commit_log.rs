@@ -122,7 +122,10 @@ impl ProduceMessage {
 }
 
 impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMessage {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+    fn get_task(
+        &self,
+        message: Message<BytesInsertBatch>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
         let topic = self.topic;

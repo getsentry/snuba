@@ -33,7 +33,8 @@ impl TaskRunner<KafkaPayload, KafkaPayload, ProducerError> for ProduceMessage {
 
         Box::pin(async move {
             producer
-                .produce(&topic, message.payload().clone()).map_err(RunTaskError::Other)?;
+                .produce(&topic, message.payload().clone())
+                .map_err(RunTaskError::Other)?;
             Ok(message)
         })
     }

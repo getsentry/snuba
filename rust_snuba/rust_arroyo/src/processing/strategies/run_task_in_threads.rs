@@ -15,7 +15,7 @@ use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 
 #[derive(Clone, Debug)]
-pub enum RunTaskError<TError>{
+pub enum RunTaskError<TError> {
     RetryableError,
     InvalidMessage(InvalidMessage),
     Other(TError),
@@ -119,8 +119,9 @@ impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TE
 
 impl<TPayload, TTransformed, TError> ProcessingStrategy<TPayload>
     for RunTaskInThreads<TPayload, TTransformed, TError>
-    where TTransformed: Send + Sync + 'static,
-          TError: Into<Box<dyn std::error::Error>> + Send + Sync + 'static,
+where
+    TTransformed: Send + Sync + 'static,
+    TError: Into<Box<dyn std::error::Error>> + Send + Sync + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
@@ -260,8 +261,8 @@ mod tests {
 
     struct IdentityTaskRunner {}
 
-    impl<T: Send + Sync + 'static> TaskRunner<T, T, ()> for IdentityTaskRunner {
-        fn get_task(&self, message: Message<T>) -> RunTaskFunc<T, TError> {
+    impl<T: Send + Sync + 'static> TaskRunner<T, T, &'static str> for IdentityTaskRunner {
+        fn get_task(&self, message: Message<T>) -> RunTaskFunc<T, &'static str> {
             Box::pin(async move { Ok(message) })
         }
     }
