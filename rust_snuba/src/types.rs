@@ -77,7 +77,7 @@ impl LatencyRecorder {
 /// sensitive to serialization speed. If there are additional things that should be returned from
 /// the Rust message processor that are not necessary in Python, it's probably best to duplicate
 /// this struct for Python as there it can be an internal type.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct InsertBatch {
     pub rows: RowData,
     pub origin_timestamp: Option<DateTime<Utc>>,
@@ -95,6 +95,14 @@ impl InsertBatch {
             origin_timestamp: None,
             sentry_received_timestamp: None,
         })
+    }
+
+    /// In case the processing function wants to skip the message, we return an empty batch.
+    /// But instead of having the caller send an empty batch, lets make an explicit api for
+    /// skipping. This way we can change the implementation later if we want to. Skipping ensures
+    /// that the message is committed but not processed.
+    pub fn skip() -> Self {
+        Self::default()
     }
 }
 

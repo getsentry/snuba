@@ -45,6 +45,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 uuid = "1.5.0"
 parking_lot = "0.12.1"
+adler32 = "1.0.4"
 
 [dev-dependencies]
 criterion = "0.5.1"
