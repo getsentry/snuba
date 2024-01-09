@@ -58,8 +58,7 @@ pub fn deserialize_message(
             let event_hash = match (event.event_hash, event.segment_id) {
                 (None, None) => Uuid::new_v4(),
                 (None, Some(segment_id)) => {
-                    Uuid::from_slice(md5::compute(segment_id.to_string().as_bytes()).as_slice())
-                        .expect("md5 hash never exceeds 16 bytes")
+                    Uuid::from_slice(md5::compute(segment_id.to_string().as_bytes()).as_slice())?
                 }
                 (Some(event_hash), _) => event_hash,
             };
