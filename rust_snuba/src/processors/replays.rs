@@ -80,10 +80,8 @@ pub fn deserialize_message(
             let ip_address_string = event.user.ip_address.unwrap_or_default();
             let (ip_address_v4, ip_address_v6) = match ip_address_string.parse::<IpAddr>() {
                 Err(_) => (None, None),
-                Ok(ip) => match ip {
-                    IpAddr::V4(ipv4) => (Some(ipv4), None),
-                    IpAddr::V6(ipv6) => (None, Some(ipv6)),
-                },
+                Ok(IpAddr::V4(ipv4)) => (Some(ipv4), None),
+                Ok(IpAddr::V6(ipv6)) => (None, Some(ipv6)),
             };
 
             let user = event
