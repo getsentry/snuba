@@ -77,6 +77,6 @@ mod tests {
     #[test]
     fn test_record_cogs() {
         let mut accountant = CogsAccountant::new("127.0.0.1:9092");
-        accountant.record_bytes("generic_metrics_processor_sets", "ddm", 100)
+        accountant.record_bytes("generic_metrics_processor_sets", "custom", 100)
     }
 }
