@@ -45,16 +45,14 @@ fn generate_timeseries_id(
 
 #[derive(Debug, Deserialize)]
 struct FromGenericMetricsMessage {
-    // TODO: We don't seem to be performing any validation on the version. Should we?
-    version: u8,
     use_case_id: String,
     org_id: u64,
     project_id: u64,
     metric_id: u64,
     #[serde(rename = "type")]
-    type_: String,
+    r#type: String,
     timestamp: u64,
-    sentry_received_timestamp: u64,
+    sentry_received_timestamp: SentryReceivedTimestamp,
     tags: BTreeMap<String, String>,
     value: MetricValue,
     retention_days: u16,
@@ -76,9 +74,15 @@ enum MetricValue {
     },
 }
 
-/// The raw row that is written to clickhouse for counters.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum SentryReceivedTimestamp {
+    UInt(u64),
+    Float(f64),
+}
+
 #[derive(Debug, Serialize, Default)]
-struct CountersRawRow {
+struct CommonMetricFields {
     use_case_id: String,
     org_id: u64,
     project_id: u64,
@@ -91,12 +95,6 @@ struct CountersRawRow {
     tags_indexed_value: Vec<u64>,
     #[serde(rename = "tags.raw_value")]
     tags_raw_value: Vec<String>,
-    #[serde(default)]
-    set_values: Vec<u64>,
-    #[serde(default)]
-    count_value: f64,
-    #[serde(default)]
-    distribution_values: Vec<f64>,
     metric_type: String,
     materialization_version: u8,
     timeseries_id: u32,
@@ -113,18 +111,25 @@ struct CountersRawRow {
     day_retention_days: Option<u8>,
 }
 
+/// The raw row that is written to clickhouse for counters.
+#[derive(Debug, Serialize, Default)]
+struct CountersRawRow {
+    #[serde(flatten)]
+    common_fields: CommonMetricFields,
+    #[serde(default)]
+    set_values: Vec<u64>,
+    #[serde(default)]
+    count_value: f64,
+    #[serde(default)]
+    distribution_values: Vec<f64>,
+}
+
 impl TryFrom<FromGenericMetricsMessage> for CountersRawRow {
     type Error = anyhow::Error;
 
     fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<CountersRawRow> {
-        if from.version != 2 {
-            // TODO: No checks happen for version even in current python processor. Should
-            // we be doing something here?
-            tracing::warn!("Unsupported version: {}", from.version);
-        }
-
-        if from.type_ != "c" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.type_));
+        if from.r#type != "c" {
+            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
         }
 
         let timeseries_id =
@@ -151,7 +156,7 @@ impl TryFrom<FromGenericMetricsMessage> for CountersRawRow {
             }
         };
 
-        Ok(Self {
+        let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -162,14 +167,15 @@ impl TryFrom<FromGenericMetricsMessage> for CountersRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            count_value,
             materialization_version: 2,
             timeseries_id,
             granularities,
-            min_retention_days: None,
-            decasecond_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
+            ..Default::default()
+        };
+
+        Ok(Self {
+            common_fields,
+            count_value,
             ..Default::default()
         })
     }
@@ -183,15 +189,21 @@ pub fn process_counter_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
 
-    let sentry_received_timestamp =
-        DateTime::from_timestamp(msg.sentry_received_timestamp.try_into().unwrap(), 0);
+    let sentry_received_timestamp = match msg.sentry_received_timestamp {
+        SentryReceivedTimestamp::UInt(timestamp) => {
+            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
+        }
+        SentryReceivedTimestamp::Float(timestamp) => {
+            DateTime::from_timestamp(timestamp as i64, 0)
+        }
+    };
 
     let result: Result<CountersRawRow, anyhow::Error> = msg.try_into();
     match result {
         Ok(mut row) => {
-            row.partition = metadata.partition;
-            row.offset = metadata.offset;
-            row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+            row.common_fields.partition = metadata.partition;
+            row.common_fields.offset = metadata.offset;
+            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
 
             Ok(InsertBatch {
                 rows: RowData::from_rows([row])?,
@@ -214,52 +226,21 @@ pub fn process_counter_message(
 /// The raw row that is written to clickhouse for sets.
 #[derive(Debug, Serialize, Default)]
 struct SetsRawRow {
-    use_case_id: String,
-    org_id: u64,
-    project_id: u64,
-    metric_id: u64,
-    timestamp: u64,
-    retention_days: u16,
-    #[serde(rename = "tags.key")]
-    tags_key: Vec<u64>,
-    #[serde(default, rename = "tags.indexed_value")]
-    tags_indexed_value: Vec<u64>,
-    #[serde(rename = "tags.raw_value")]
-    tags_raw_value: Vec<String>,
-    #[serde(default)]
+    #[serde(flatten)]
+    common_fields: CommonMetricFields,
     set_values: Vec<u64>,
     #[serde(default)]
     count_value: f64,
     #[serde(default)]
     distribution_values: Vec<f64>,
-    metric_type: String,
-    materialization_version: u8,
-    timeseries_id: u32,
-    partition: u16,
-    offset: u64,
-    granularities: Vec<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    decasecond_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    min_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hr_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    day_retention_days: Option<u8>,
 }
 
 impl TryFrom<FromGenericMetricsMessage> for SetsRawRow {
     type Error = anyhow::Error;
 
     fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<SetsRawRow> {
-        if from.version != 2 {
-            // TODO: No checks happen for version even in current python processor. Should
-            // we be doing something here?
-            tracing::warn!("Unsupported version: {}", from.version);
-        }
-
-        if from.type_ != "s" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.type_));
+        if from.r#type != "s" {
+            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
         }
 
         let timeseries_id =
@@ -286,7 +267,7 @@ impl TryFrom<FromGenericMetricsMessage> for SetsRawRow {
             }
         };
 
-        Ok(Self {
+        let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -297,10 +278,15 @@ impl TryFrom<FromGenericMetricsMessage> for SetsRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            set_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            ..Default::default()
+        };
+
+        Ok(Self {
+            common_fields,
+            set_values,
             ..Default::default()
         })
     }
@@ -314,15 +300,21 @@ pub fn process_set_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
 
-    let sentry_received_timestamp =
-        DateTime::from_timestamp(msg.sentry_received_timestamp.try_into().unwrap(), 0);
+    let sentry_received_timestamp = match msg.sentry_received_timestamp {
+        SentryReceivedTimestamp::UInt(timestamp) => {
+            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
+        }
+        SentryReceivedTimestamp::Float(timestamp) => {
+            DateTime::from_timestamp(timestamp as i64, 0)
+        }
+    };
 
     let result: Result<SetsRawRow, anyhow::Error> = msg.try_into();
     match result {
         Ok(mut row) => {
-            row.partition = metadata.partition;
-            row.offset = metadata.offset;
-            row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+            row.common_fields.partition = metadata.partition;
+            row.common_fields.offset = metadata.offset;
+            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
 
             Ok(InsertBatch {
                 rows: RowData::from_rows([row])?,
@@ -344,54 +336,24 @@ pub fn process_set_message(
 
 #[derive(Debug, Serialize, Default)]
 struct DistributionsRawRow {
-    use_case_id: String,
-    org_id: u64,
-    project_id: u64,
-    metric_id: u64,
-    timestamp: u64,
-    retention_days: u16,
-    #[serde(rename = "tags.key")]
-    tags_key: Vec<u64>,
-    #[serde(default, rename = "tags.indexed_value")]
-    tags_indexed_value: Vec<u64>,
-    #[serde(rename = "tags.raw_value")]
-    tags_raw_value: Vec<String>,
+    #[serde(flatten)]
+    common_fields: CommonMetricFields,
     #[serde(default)]
     set_values: Vec<u64>,
     #[serde(default)]
     count_value: f64,
     #[serde(default)]
     distribution_values: Vec<f64>,
-    metric_type: String,
-    materialization_version: u8,
-    timeseries_id: u32,
-    partition: u16,
-    offset: u64,
-    granularities: Vec<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enable_histogram: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    decasecond_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    min_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hr_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    day_retention_days: Option<u8>,
 }
 
 impl TryFrom<FromGenericMetricsMessage> for DistributionsRawRow {
     type Error = anyhow::Error;
 
     fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<DistributionsRawRow> {
-        if from.version != 2 {
-            // TODO: No checks happen for version even in current python processor. Should
-            // we be doing something here?
-            tracing::warn!("Unsupported version: {}", from.version);
-        }
-
-        if from.type_ != "d" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.type_));
+        if from.r#type != "d" {
+            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
         }
 
         let timeseries_id =
@@ -425,7 +387,7 @@ impl TryFrom<FromGenericMetricsMessage> for DistributionsRawRow {
             }
         };
 
-        Ok(Self {
+        let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -436,10 +398,15 @@ impl TryFrom<FromGenericMetricsMessage> for DistributionsRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            distribution_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            ..Default::default()
+        };
+
+        Ok(Self {
+            common_fields,
+            distribution_values,
             enable_histogram,
             ..Default::default()
         })
@@ -454,15 +421,21 @@ pub fn process_distribution_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
 
-    let sentry_received_timestamp =
-        DateTime::from_timestamp(msg.sentry_received_timestamp.try_into().unwrap(), 0);
+    let sentry_received_timestamp = match msg.sentry_received_timestamp {
+        SentryReceivedTimestamp::UInt(timestamp) => {
+            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
+        }
+        SentryReceivedTimestamp::Float(timestamp) => {
+            DateTime::from_timestamp(timestamp as i64, 0)
+        }
+    };
 
     let result: Result<DistributionsRawRow, anyhow::Error> = msg.try_into();
     match result {
         Ok(mut row) => {
-            row.partition = metadata.partition;
-            row.offset = metadata.offset;
-            row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+            row.common_fields.partition = metadata.partition;
+            row.common_fields.offset = metadata.offset;
+            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
 
             Ok(InsertBatch {
                 rows: RowData::from_rows([row])?,
@@ -484,19 +457,7 @@ pub fn process_distribution_message(
 
 #[derive(Debug, Serialize, Default)]
 struct GaugesRawRow {
-    use_case_id: String,
-    org_id: u64,
-    project_id: u64,
-    metric_id: u64,
-    timestamp: u64,
-    #[serde(default = "default_retention_days")]
-    retention_days: u16,
-    #[serde(rename = "tags.key")]
-    tags_key: Vec<u64>,
-    #[serde(default, rename = "tags.indexed_value")]
-    tags_indexed_value: Vec<u64>,
-    #[serde(rename = "tags.raw_value")]
-    tags_raw_value: Vec<String>,
+    common_fields: CommonMetricFields,
     #[serde(default)]
     set_values: Vec<u64>,
     #[serde(default)]
@@ -513,34 +474,14 @@ struct GaugesRawRow {
     gauges_values_sum: Vec<f64>,
     #[serde(rename = "gauges_values.count")]
     gauges_values_count: Vec<u64>,
-    metric_type: String,
-    materialization_version: u8,
-    timeseries_id: u32,
-    partition: u16,
-    offset: u64,
-    granularities: Vec<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    decasecond_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    min_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    hr_retention_days: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    day_retention_days: Option<u8>,
 }
 
 impl TryFrom<FromGenericMetricsMessage> for GaugesRawRow {
     type Error = anyhow::Error;
 
     fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<GaugesRawRow> {
-        if from.version != 2 {
-            // TODO: No checks happen for version even in current python processor. Should
-            // we be doing something here?
-            tracing::warn!("Unsupported version: {}", from.version);
-        }
-
-        if from.type_ != "g" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.type_));
+        if from.r#type != "g" {
+            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
         }
 
         let timeseries_id =
@@ -585,7 +526,7 @@ impl TryFrom<FromGenericMetricsMessage> for GaugesRawRow {
             }
         }
 
-        Ok(Self {
+        let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -596,14 +537,19 @@ impl TryFrom<FromGenericMetricsMessage> for GaugesRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
+            materialization_version: 2,
+            timeseries_id,
+            granularities,
+            ..Default::default()
+        };
+
+        Ok(Self {
+            common_fields,
             gauges_values_last,
             gauges_values_count,
             gauges_values_max,
             gauges_values_min,
             gauges_values_sum,
-            materialization_version: 2,
-            timeseries_id,
-            granularities,
             ..Default::default()
         })
     }
@@ -617,15 +563,21 @@ pub fn process_gauge_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
 
-    let sentry_received_timestamp =
-        DateTime::from_timestamp(msg.sentry_received_timestamp.try_into().unwrap(), 0);
+    let sentry_received_timestamp = match msg.sentry_received_timestamp {
+        SentryReceivedTimestamp::UInt(timestamp) => {
+            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
+        }
+        SentryReceivedTimestamp::Float(timestamp) => {
+            DateTime::from_timestamp(timestamp as i64, 0)
+        }
+    };
 
     let result: Result<GaugesRawRow, anyhow::Error> = msg.try_into();
     match result {
         Ok(mut row) => {
-            row.partition = metadata.partition;
-            row.offset = metadata.offset;
-            row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+            row.common_fields.partition = metadata.partition;
+            row.common_fields.offset = metadata.offset;
+            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
 
             Ok(InsertBatch {
                 rows: RowData::from_rows([row])?,
@@ -721,7 +673,7 @@ mod tests {
         "project_id": 3,
         "metric_id": 65564,
         "timestamp": 1704614940,
-        "sentry_received_timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940.123,
         "tags": {"9223372036854776010": "production", "9223372036854776017": "init", "65690": "metric_e2e_spans_gauge_v_VUW93LMS"},
         "retention_days": 90,
         "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65689":"metric_e2e_spans_gauge_k_VUW93LMS"},"d":{"65564":"g:spans/spans@none"}},
@@ -770,7 +722,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let result = f(payload, meta);
+        let result = f(payload, meta, &ProcessorConfig::default());
         assert!(result.is_ok());
         result
     }
@@ -788,36 +740,38 @@ mod tests {
             DUMMY_COUNTER_MESSAGE,
         );
         let expected_row = CountersRawRow {
-            use_case_id: "spans".to_string(),
-            org_id: 1,
-            project_id: 3,
-            metric_id: 65561,
-            timestamp: 1704614940,
-            retention_days: 90,
-            tags_key: vec![65689, 9223372036854776010, 9223372036854776017],
-            tags_indexed_value: vec![0; 3],
-            tags_raw_value: vec![
-                "metric_e2e_spans_counter_v_VUW93LMS".to_string(),
-                "production".to_string(),
-                "init".to_string(),
-            ],
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65561,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65689, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_counter_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "init".to_string(),
+                ],
+                metric_type: "counter".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1979522105,
+                partition: 0,
+                offset: 1,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: None,
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
             set_values: vec![],
             count_value: 1.0,
             distribution_values: vec![],
-            metric_type: "counter".to_string(),
-            materialization_version: 2,
-            timeseries_id: 1979522105,
-            partition: 0,
-            offset: 1,
-            granularities: vec![
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
-            decasecond_retention_days: None,
-            min_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -857,36 +811,38 @@ mod tests {
             DUMMY_SET_MESSAGE,
         );
         let expected_row = SetsRawRow {
-            use_case_id: "spans".to_string(),
-            org_id: 1,
-            project_id: 3,
-            metric_id: 65562,
-            timestamp: 1704614940,
-            retention_days: 90,
-            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-            tags_indexed_value: vec![0; 3],
-            tags_raw_value: vec![
-                "metric_e2e_spans_set_v_VUW93LMS".to_string(),
-                "production".to_string(),
-                "errored".to_string(),
-            ],
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65562,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_set_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "errored".to_string(),
+                ],
+                metric_type: "set".to_string(),
+                materialization_version: 2,
+                timeseries_id: 828906429,
+                partition: 0,
+                offset: 1,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: None,
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
             set_values: vec![0, 1, 2, 3, 4, 5],
             count_value: 0.0,
             distribution_values: vec![],
-            metric_type: "set".to_string(),
-            materialization_version: 2,
-            timeseries_id: 828906429,
-            partition: 0,
-            offset: 1,
-            granularities: vec![
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
-            decasecond_retention_days: None,
-            min_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -926,36 +882,38 @@ mod tests {
             DUMMY_DISTRIBUTION_MESSAGE,
         );
         let expected_row = DistributionsRawRow {
-            use_case_id: "spans".to_string(),
-            org_id: 1,
-            project_id: 3,
-            metric_id: 65563,
-            timestamp: 1704614940,
-            retention_days: 90,
-            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-            tags_indexed_value: vec![0; 3],
-            tags_raw_value: vec![
-                "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
-                "production".to_string(),
-                "healthy".to_string(),
-            ],
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                partition: 0,
+                offset: 1,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: None,
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
             set_values: vec![],
             count_value: 0.0,
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
-            metric_type: "distribution".to_string(),
-            materialization_version: 2,
-            timeseries_id: 1436359714,
-            partition: 0,
-            offset: 1,
-            granularities: vec![
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
-            decasecond_retention_days: None,
-            min_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
             enable_histogram: None,
         };
         assert_eq!(
@@ -981,36 +939,38 @@ mod tests {
             DUMMY_DISTRIBUTION_MESSAGE_WITH_HIST_AGGREGATE_OPTION,
         );
         let expected_row = DistributionsRawRow {
-            use_case_id: "spans".to_string(),
-            org_id: 1,
-            project_id: 3,
-            metric_id: 65563,
-            timestamp: 1704614940,
-            retention_days: 90,
-            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-            tags_indexed_value: vec![0; 3],
-            tags_raw_value: vec![
-                "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
-                "production".to_string(),
-                "healthy".to_string(),
-            ],
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                partition: 0,
+                offset: 1,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: None,
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
             set_values: vec![],
             count_value: 0.0,
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
-            metric_type: "distribution".to_string(),
-            materialization_version: 2,
-            timeseries_id: 1436359714,
-            partition: 0,
-            offset: 1,
-            granularities: vec![
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
-            decasecond_retention_days: None,
-            min_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
             enable_histogram: Some(1),
         };
         assert_eq!(
@@ -1051,19 +1011,35 @@ mod tests {
             DUMMY_GAUGE_MESSAGE,
         );
         let expected_row = GaugesRawRow {
-            use_case_id: "spans".to_string(),
-            org_id: 1,
-            project_id: 3,
-            metric_id: 65564,
-            timestamp: 1704614940,
-            retention_days: 90,
-            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-            tags_indexed_value: vec![0; 3],
-            tags_raw_value: vec![
-                "metric_e2e_spans_gauge_v_VUW93LMS".to_string(),
-                "production".to_string(),
-                "init".to_string(),
-            ],
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65564,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_gauge_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "init".to_string(),
+                ],
+                metric_type: "gauge".to_string(),
+                materialization_version: 2,
+                timeseries_id: 569776957,
+                partition: 0,
+                offset: 1,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: None,
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
             set_values: vec![],
             count_value: 0.0,
             distribution_values: vec![],
@@ -1072,20 +1048,6 @@ mod tests {
             gauges_values_max: vec![10.0],
             gauges_values_min: vec![1.0],
             gauges_values_sum: vec![20.0],
-            metric_type: "gauge".to_string(),
-            materialization_version: 2,
-            timeseries_id: 569776957,
-            partition: 0,
-            offset: 1,
-            granularities: vec![
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-            ],
-            decasecond_retention_days: None,
-            min_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1104,24 +1066,42 @@ mod tests {
                 as fn(
                     rust_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
                 )
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE_WITH_TEN_SECOND_AGGREGATE_OPTION,
         );
         let expected_row = GaugesRawRow {
-            use_case_id: "spans".to_string(),
-            org_id: 1,
-            project_id: 3,
-            metric_id: 65564,
-            timestamp: 1704614940,
-            retention_days: 90,
-            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-            tags_indexed_value: vec![0; 3],
-            tags_raw_value: vec![
-                "metric_e2e_spans_gauge_v_VUW93LMS".to_string(),
-                "production".to_string(),
-                "init".to_string(),
-            ],
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65564,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_gauge_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "init".to_string(),
+                ],
+                metric_type: "gauge".to_string(),
+                materialization_version: 2,
+                timeseries_id: 569776957,
+                partition: 0,
+                offset: 1,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                    GRANULARITY_TEN_SECONDS,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: None,
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
             set_values: vec![],
             count_value: 0.0,
             distribution_values: vec![],
@@ -1130,21 +1110,6 @@ mod tests {
             gauges_values_max: vec![10.0],
             gauges_values_min: vec![1.0],
             gauges_values_sum: vec![20.0],
-            metric_type: "gauge".to_string(),
-            materialization_version: 2,
-            timeseries_id: 569776957,
-            partition: 0,
-            offset: 1,
-            granularities: vec![
-                GRANULARITY_ONE_MINUTE,
-                GRANULARITY_ONE_HOUR,
-                GRANULARITY_ONE_DAY,
-                GRANULARITY_TEN_SECONDS,
-            ],
-            decasecond_retention_days: None,
-            min_retention_days: None,
-            hr_retention_days: None,
-            day_retention_days: None,
         };
         assert_eq!(
             result.unwrap(),
