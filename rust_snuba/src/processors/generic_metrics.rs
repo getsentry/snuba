@@ -1,4 +1,4 @@
-use adler32::adler32;
+use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -30,17 +30,18 @@ fn generate_timeseries_id(
     metric_id: u64,
     tags: &BTreeMap<String, String>,
 ) -> u32 {
-    let mut buffer = Vec::new();
-    buffer.extend_from_slice(&org_id.to_le_bytes());
-    buffer.extend_from_slice(&project_id.to_le_bytes());
-    buffer.extend_from_slice(&metric_id.to_le_bytes());
+    let mut adler = Adler32::new();
+
+    adler.write_slice(&org_id.to_le_bytes());
+    adler.write_slice(&project_id.to_le_bytes());
+    adler.write_slice(&metric_id.to_le_bytes());
 
     for (key, value) in tags {
-        buffer.extend_from_slice(key.as_bytes());
-        buffer.extend_from_slice(value.as_bytes());
+        adler.write_slice(key.as_bytes());
+        adler.write_slice(value.as_bytes());
     }
 
-    adler32(&*buffer).unwrap()
+    adler.checksum()
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,12 +125,29 @@ struct CountersRawRow {
     distribution_values: Vec<f64>,
 }
 
-impl TryFrom<FromGenericMetricsMessage> for CountersRawRow {
-    type Error = anyhow::Error;
+/// Parse is the trait which should be implemented for all metric types.
+/// It is used to parse the incoming message into the appropriate raw row.
+/// Item represents the row into which the message should be parsed.
+trait Parse {
+    type Item;
 
-    fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<CountersRawRow> {
+    fn parse(
+        from: FromGenericMetricsMessage,
+        metadata: KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<Option<Self::Item>>;
+}
+
+impl Parse for CountersRawRow {
+    type Item = CountersRawRow;
+
+    fn parse(
+        from: FromGenericMetricsMessage,
+        metadata: KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<Option<CountersRawRow>> {
         if from.r#type != "c" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
+            return Ok(Option::None);
         }
 
         let timeseries_id =
@@ -163,21 +181,58 @@ impl TryFrom<FromGenericMetricsMessage> for CountersRawRow {
             metric_type: "counter".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: from.retention_days,
+            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            partition: metadata.partition,
+            offset: metadata.offset,
             ..Default::default()
         };
 
-        Ok(Self {
+        Ok(Some(Self {
             common_fields,
             count_value,
             ..Default::default()
-        })
+        }))
+    }
+}
+
+fn process_message<T>(
+    payload: KafkaPayload,
+    metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch>
+where
+    T: Parse<Item = T> + Serialize,
+{
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
+
+    let sentry_received_timestamp = match msg.sentry_received_timestamp {
+        SentryReceivedTimestamp::UInt(timestamp) => {
+            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
+        }
+        SentryReceivedTimestamp::Float(timestamp) => DateTime::from_timestamp(timestamp as i64, 0),
+    };
+
+    let result: Result<Option<T>, anyhow::Error> = T::parse(msg, metadata, config);
+    match result {
+        Ok(row) => {
+            if let Some(row) = row {
+                Ok(InsertBatch {
+                    rows: RowData::from_rows([row])?,
+                    origin_timestamp: None,
+                    sentry_received_timestamp,
+                })
+            } else {
+                Ok(InsertBatch::skip())
+            }
+        }
+        Err(err) => Err(err),
     }
 }
 
@@ -186,41 +241,7 @@ pub fn process_counter_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
-
-    let sentry_received_timestamp = match msg.sentry_received_timestamp {
-        SentryReceivedTimestamp::UInt(timestamp) => {
-            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
-        }
-        SentryReceivedTimestamp::Float(timestamp) => {
-            DateTime::from_timestamp(timestamp as i64, 0)
-        }
-    };
-
-    let result: Result<CountersRawRow, anyhow::Error> = msg.try_into();
-    match result {
-        Ok(mut row) => {
-            row.common_fields.partition = metadata.partition;
-            row.common_fields.offset = metadata.offset;
-            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
-
-            Ok(InsertBatch {
-                rows: RowData::from_rows([row])?,
-                origin_timestamp: None,
-                sentry_received_timestamp,
-            })
-        }
-        Err(err) => {
-            // If we get an error here, we should check if it is because of an unsupported
-            // metric type. If so, we should call InsertBatch::skip. Otherwise, we should
-            // return the original error.
-            if err.to_string().contains("Unsupported metric type") {
-                return Ok(InsertBatch::skip());
-            }
-            Err(err)
-        }
-    }
+    process_message::<CountersRawRow>(payload, metadata, config)
 }
 
 /// The raw row that is written to clickhouse for sets.
@@ -235,12 +256,16 @@ struct SetsRawRow {
     distribution_values: Vec<f64>,
 }
 
-impl TryFrom<FromGenericMetricsMessage> for SetsRawRow {
-    type Error = anyhow::Error;
+impl Parse for SetsRawRow {
+    type Item = SetsRawRow;
 
-    fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<SetsRawRow> {
+    fn parse(
+        from: FromGenericMetricsMessage,
+        metadata: KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<Option<SetsRawRow>> {
         if from.r#type != "s" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
+            return Ok(Option::None);
         }
 
         let timeseries_id =
@@ -274,21 +299,23 @@ impl TryFrom<FromGenericMetricsMessage> for SetsRawRow {
             metric_type: "set".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: from.retention_days,
+            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            partition: metadata.partition,
+            offset: metadata.offset,
             ..Default::default()
         };
 
-        Ok(Self {
+        Ok(Some(Self {
             common_fields,
             set_values,
             ..Default::default()
-        })
+        }))
     }
 }
 
@@ -297,41 +324,7 @@ pub fn process_set_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
-
-    let sentry_received_timestamp = match msg.sentry_received_timestamp {
-        SentryReceivedTimestamp::UInt(timestamp) => {
-            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
-        }
-        SentryReceivedTimestamp::Float(timestamp) => {
-            DateTime::from_timestamp(timestamp as i64, 0)
-        }
-    };
-
-    let result: Result<SetsRawRow, anyhow::Error> = msg.try_into();
-    match result {
-        Ok(mut row) => {
-            row.common_fields.partition = metadata.partition;
-            row.common_fields.offset = metadata.offset;
-            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
-
-            Ok(InsertBatch {
-                rows: RowData::from_rows([row])?,
-                origin_timestamp: None,
-                sentry_received_timestamp,
-            })
-        }
-        Err(err) => {
-            // If we get an error here, we should check if it is because of an unsupported
-            // metric type. If so, we should call InsertBatch::skip. Otherwise, we should
-            // return the original error.
-            if err.to_string().contains("Unsupported metric type") {
-                return Ok(InsertBatch::skip());
-            }
-            Err(err)
-        }
-    }
+    process_message::<SetsRawRow>(payload, metadata, config)
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -348,12 +341,16 @@ struct DistributionsRawRow {
     enable_histogram: Option<u8>,
 }
 
-impl TryFrom<FromGenericMetricsMessage> for DistributionsRawRow {
-    type Error = anyhow::Error;
+impl Parse for DistributionsRawRow {
+    type Item = DistributionsRawRow;
 
-    fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<DistributionsRawRow> {
+    fn parse(
+        from: FromGenericMetricsMessage,
+        metadata: KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<Option<DistributionsRawRow>> {
         if from.r#type != "d" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
+            return Ok(Option::None);
         }
 
         let timeseries_id =
@@ -394,22 +391,24 @@ impl TryFrom<FromGenericMetricsMessage> for DistributionsRawRow {
             metric_type: "distribution".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: from.retention_days,
+            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            partition: metadata.partition,
+            offset: metadata.offset,
             ..Default::default()
         };
 
-        Ok(Self {
+        Ok(Some(Self {
             common_fields,
             distribution_values,
             enable_histogram,
             ..Default::default()
-        })
+        }))
     }
 }
 
@@ -418,41 +417,7 @@ pub fn process_distribution_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
-
-    let sentry_received_timestamp = match msg.sentry_received_timestamp {
-        SentryReceivedTimestamp::UInt(timestamp) => {
-            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
-        }
-        SentryReceivedTimestamp::Float(timestamp) => {
-            DateTime::from_timestamp(timestamp as i64, 0)
-        }
-    };
-
-    let result: Result<DistributionsRawRow, anyhow::Error> = msg.try_into();
-    match result {
-        Ok(mut row) => {
-            row.common_fields.partition = metadata.partition;
-            row.common_fields.offset = metadata.offset;
-            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
-
-            Ok(InsertBatch {
-                rows: RowData::from_rows([row])?,
-                origin_timestamp: None,
-                sentry_received_timestamp,
-            })
-        }
-        Err(err) => {
-            // If we get an error here, we should check if it is because of an unsupported
-            // metric type. If so, we should call InsertBatch::skip. Otherwise, we should
-            // return the original error.
-            if err.to_string().contains("Unsupported metric type") {
-                return Ok(InsertBatch::skip());
-            }
-            Err(err)
-        }
-    }
+    process_message::<DistributionsRawRow>(payload, metadata, config)
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -476,12 +441,16 @@ struct GaugesRawRow {
     gauges_values_count: Vec<u64>,
 }
 
-impl TryFrom<FromGenericMetricsMessage> for GaugesRawRow {
-    type Error = anyhow::Error;
+impl Parse for GaugesRawRow {
+    type Item = GaugesRawRow;
 
-    fn try_from(from: FromGenericMetricsMessage) -> anyhow::Result<GaugesRawRow> {
+    fn parse(
+        from: FromGenericMetricsMessage,
+        metadata: KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<Option<GaugesRawRow>> {
         if from.r#type != "g" {
-            return Err(anyhow::anyhow!("Unsupported metric type: {}", from.r#type));
+            return Ok(Option::None);
         }
 
         let timeseries_id =
@@ -533,17 +502,19 @@ impl TryFrom<FromGenericMetricsMessage> for GaugesRawRow {
             metric_type: "gauge".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: from.retention_days,
+            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            partition: metadata.partition,
+            offset: metadata.offset,
             ..Default::default()
         };
 
-        Ok(Self {
+        Ok(Some(Self {
             common_fields,
             gauges_values_last,
             gauges_values_count,
@@ -551,7 +522,7 @@ impl TryFrom<FromGenericMetricsMessage> for GaugesRawRow {
             gauges_values_min,
             gauges_values_sum,
             ..Default::default()
-        })
+        }))
     }
 }
 
@@ -560,41 +531,7 @@ pub fn process_gauge_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
-
-    let sentry_received_timestamp = match msg.sentry_received_timestamp {
-        SentryReceivedTimestamp::UInt(timestamp) => {
-            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
-        }
-        SentryReceivedTimestamp::Float(timestamp) => {
-            DateTime::from_timestamp(timestamp as i64, 0)
-        }
-    };
-
-    let result: Result<GaugesRawRow, anyhow::Error> = msg.try_into();
-    match result {
-        Ok(mut row) => {
-            row.common_fields.partition = metadata.partition;
-            row.common_fields.offset = metadata.offset;
-            row.common_fields.retention_days = enforce_retention(Some(row.common_fields.retention_days), &config.env_config);
-
-            Ok(InsertBatch {
-                rows: RowData::from_rows([row])?,
-                origin_timestamp: None,
-                sentry_received_timestamp,
-            })
-        }
-        Err(err) => {
-            // If we get an error here, we should check if it is because of an unsupported
-            // metric type. If so, we should call InsertBatch::skip. Otherwise, we should
-            // return the original error.
-            if err.to_string().contains("Unsupported metric type") {
-                return Ok(InsertBatch::skip());
-            }
-            Err(err)
-        }
-    }
+    process_message::<GaugesRawRow>(payload, metadata, config)
 }
 
 #[cfg(test)]
