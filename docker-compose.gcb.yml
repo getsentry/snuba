@@ -3,16 +3,14 @@ version: "3.4"
 
 x-test-common: &test-common
   depends_on:
-    redis_cluster:
-      condition: service_started
+    redis-cluster:
+      condition: service_healthy
     kafka:
       condition: service_started
     clickhouse:
       condition: service_started
     zookeeper:
       condition: service_started
-    redis1:
-      condition: service_healthy
   image: "$SNUBA_IMAGE"
   profiles: ["run_test"]
   volumes:
@@ -21,8 +19,8 @@ x-test-common: &test-common
     SNUBA_SETTINGS: "$SNUBA_SETTINGS"
     CLICKHOUSE_HOST: clickhouse
     USE_REDIS_CLUSTER: "1"
-    REDIS_HOST: "redis1"
-    REDIS_PORT: 6379
+    REDIS_HOST: "redis-cluster"
+    REDIS_PORT: 7000
     REDIS_DB: 0
     DEFAULT_BROKERS: "kafka:9092"
   # override the `snuba` user to write to the /.artifacts mount
@@ -148,37 +146,12 @@ services:
         soft: 262144
         hard: 262144
 
-  redis1: &redis_config
-    image: redis:5.0-alpine
+  # This is the same thing as https://github.com/Grokzen/docker-redis-cluster but mirrored
+  redis-cluster:
+    image: ghcr.io/getsentry/docker-redis-cluster:7.0.10
     healthcheck:
       test: ["CMD-SHELL", 'redis-cli cluster info | grep "cluster_slots_assigned:16384"']
-    command:
-      - redis-server
-      - "--appendonly"
-      - "no"
-      - "--cluster-enabled"
-      - "yes"
-      - "--cluster-config-file"
-      - "/data/redis_cluster.conf"
-  redis2:
-    <<: *redis_config
-  redis3:
-    <<: *redis_config
-  redis_cluster:
-    <<: *redis_config
-    command:
-      - "/bin/sh"
-      - "-c"
-      - >-
-        echo yes |
-        redis-cli --cluster create
-        $$(getent hosts redis1 | awk '{ print $$1 }'):6379
-        $$(getent hosts redis2 | awk '{ print $$1 }'):6379
-        $$(getent hosts redis3 | awk '{ print $$1 }'):6379
-    depends_on:
-      - redis1
-      - redis2
-      - redis3
+
 networks:
   default:
     external:
