@@ -23,8 +23,6 @@ jobs:
         docker buildx build \
             "${args[@]}" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg SHOULD_BUILD_ADMIN_UI="true" \
-            --build-arg SHOULD_BUILD_RUST=true \
             --platform linux/${{ matrix.arch }} \
             --tag "$IMG_VERSIONED" \
             --target application \
