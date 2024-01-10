@@ -4,6 +4,7 @@ import json
 import time
 from datetime import datetime
 from typing import Type
+from unittest.mock import patch
 
 import pytest
 import rust_snuba
@@ -34,6 +35,7 @@ from snuba.processor import InsertBatch
         ("snuba-generic-metrics", GenericGaugesMetricsProcessor),
     ],
 )
+@patch("snuba.settings.DISCARD_OLD_EVENTS", False)
 def test_message_processors(
     topic: str, processor: Type[DatasetMessageProcessor]
 ) -> None:

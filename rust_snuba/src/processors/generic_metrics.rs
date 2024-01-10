@@ -153,6 +153,8 @@ impl Parse for CountersRawRow {
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
+        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+
         let count_value = match from.value {
             MetricValue::Counter(value) => value,
             _ => {
@@ -162,6 +164,7 @@ impl Parse for CountersRawRow {
             }
         };
 
+
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
@@ -169,13 +172,14 @@ impl Parse for CountersRawRow {
             metric_type: "counter".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
+            retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            min_retention_days: Some(retention_days as u8),
             ..Default::default()
         };
         Ok(Some(Self {
@@ -257,6 +261,7 @@ impl Parse for SetsRawRow {
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
+        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
         let set_values = match from.value {
             MetricValue::SetOrDistribution(values) => values,
@@ -274,13 +279,14 @@ impl Parse for SetsRawRow {
             metric_type: "set".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
+            retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            min_retention_days: Some(retention_days as u8),
             ..Default::default()
         };
         Ok(Some(Self {
@@ -333,6 +339,7 @@ impl Parse for DistributionsRawRow {
         } else if aggregate_option == "hist" {
             enable_histogram = Some(1);
         }
+        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
         let distribution_values = match from.value {
             MetricValue::DistributionFloat(value) => value,
@@ -353,13 +360,14 @@ impl Parse for DistributionsRawRow {
             metric_type: "distribution".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
+            retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            min_retention_days: Some(retention_days as u8),
             ..Default::default()
         };
         Ok(Some(Self {
@@ -417,6 +425,7 @@ impl Parse for GaugesRawRow {
         if aggregate_option == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
+        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
         let mut gauges_values_last = vec![];
         let mut gauges_values_count = vec![];
@@ -451,13 +460,14 @@ impl Parse for GaugesRawRow {
             metric_type: "gauge".to_string(),
             metric_id: from.metric_id,
             timestamp: from.timestamp,
-            retention_days: enforce_retention(Some(from.retention_days), &config.env_config),
+            retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: 2,
             timeseries_id,
             granularities,
+            min_retention_days: Some(retention_days as u8),
             ..Default::default()
         };
         Ok(Some(Self {
@@ -645,7 +655,7 @@ mod tests {
                     GRANULARITY_ONE_DAY,
                 ],
                 decasecond_retention_days: None,
-                min_retention_days: None,
+                min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
             },
@@ -712,7 +722,7 @@ mod tests {
                     GRANULARITY_ONE_DAY,
                 ],
                 decasecond_retention_days: None,
-                min_retention_days: None,
+                min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
             },
@@ -779,7 +789,7 @@ mod tests {
                     GRANULARITY_ONE_DAY,
                 ],
                 decasecond_retention_days: None,
-                min_retention_days: None,
+                min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
             },
@@ -832,7 +842,7 @@ mod tests {
                     GRANULARITY_ONE_DAY,
                 ],
                 decasecond_retention_days: None,
-                min_retention_days: None,
+                min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
             },
@@ -900,7 +910,7 @@ mod tests {
                     GRANULARITY_ONE_DAY,
                 ],
                 decasecond_retention_days: None,
-                min_retention_days: None,
+                min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
             },
@@ -957,7 +967,7 @@ mod tests {
                     GRANULARITY_TEN_SECONDS,
                 ],
                 decasecond_retention_days: None,
-                min_retention_days: None,
+                min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
             },
