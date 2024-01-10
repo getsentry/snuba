@@ -11,6 +11,12 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.generic_metrics_processor import (
+    GenericCountersMetricsProcessor,
+    GenericDistributionsMetricsProcessor,
+    GenericGaugesMetricsProcessor,
+    GenericSetsMetricsProcessor,
+)
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.processor import InsertBatch
 
@@ -22,6 +28,10 @@ from snuba.processor import InsertBatch
         # examples from sentry-kafka-schemas.
         # ("ingest-replay-events", ReplaysProcessor),
         ("outcomes", OutcomesProcessor),
+        ("snuba-generic-metrics", GenericCountersMetricsProcessor),
+        ("snuba-generic-metrics", GenericSetsMetricsProcessor),
+        ("snuba-generic-metrics", GenericDistributionsMetricsProcessor),
+        ("snuba-generic-metrics", GenericGaugesMetricsProcessor),
     ],
 )
 def test_message_processors(
