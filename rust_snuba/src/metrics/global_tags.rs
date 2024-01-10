@@ -28,7 +28,7 @@ impl<'a, M> AddGlobalTags<'a, M>
 where
     M: Middleware,
 {
-    pub fn new_with_tagmap(next: M, global_tags: &'a RwLock<BTreeMap<String, String>>) -> Self {
+    fn new_with_tagmap(next: M, global_tags: &'a RwLock<BTreeMap<String, String>>) -> Self {
         AddGlobalTags { next, global_tags }
     }
 }
