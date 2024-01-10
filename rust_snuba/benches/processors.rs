@@ -19,10 +19,17 @@ use rust_arroyo::utils::clock::SystemClock;
 
 use rust_arroyo::utils::metrics::configure_metrics;
 use rust_snuba::{
-    get_processing_function, ClickhouseConfig, ConsumerStrategyFactory, KafkaMessageMetadata,
-    MessageProcessorConfig, StatsDBackend, StorageConfig,
+    get_processing_function, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig,
+    KafkaMessageMetadata, MessageProcessorConfig, ProcessorConfig, StatsDBackend, StorageConfig,
 };
 use uuid::Uuid;
+
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 const MSG_COUNT: usize = 5_000;
 
@@ -32,6 +39,8 @@ static RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
         .build()
         .unwrap()
 });
+
+static PROCESSOR_CONFIG: Lazy<ProcessorConfig> = Lazy::new(ProcessorConfig::default);
 
 fn create_factory(
     concurrency: usize,
@@ -59,17 +68,25 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let clickhouse_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let commitlog_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactory::new(
         storage,
+        EnvConfig::default(),
         schema.into(),
         1_000,
         Duration::from_millis(10),
         true,
         processing_concurrency,
         clickhouse_concurrency,
+        commitlog_concurrency,
         None,
         true,
         None,
+        false,
+        None,
+        "test-group".to_owned(),
+        Topic::new("test"),
     );
     Box::new(factory)
 }
@@ -127,7 +144,8 @@ fn run_fn_bench(bencher: &mut BenchmarkGroup<WallTime>, schema: &str) {
             b.iter(|| {
                 for payload in payloads {
                     let payload = KafkaPayload::new(None, None, Some(payload.to_vec()));
-                    let processed = processor_fn(payload, metadata.clone()).unwrap();
+                    let processed =
+                        processor_fn(payload, metadata.clone(), &PROCESSOR_CONFIG).unwrap();
                     black_box(processed);
                 }
             })
@@ -199,7 +217,6 @@ fn main() {
         querylog => "snuba-queries",
         profiles => "processed-profiles",
         functions => "profiles-call-tree",
-        // FIXME: example payloads panic
         replays => "ingest-replay-events",
         // FIXME: the schema does not really match the metrics summaries
         // metrics => "snuba-generic-metrics",

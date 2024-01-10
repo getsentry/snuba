@@ -1,7 +1,9 @@
 .PHONY: develop setup-git test install-python-dependencies install-py-dev
 
-pyenv-setup:
-	@./scripts/pyenv_setup.sh
+reset-python:
+	pre-commit clean
+	rm -rf .venv
+.PHONY: reset-python
 
 develop: install-python-dependencies install-rs-dev install-brew-dev setup-git
 

@@ -1,15 +1,20 @@
-use crate::backends::kafka::producer::KafkaProducer;
-use crate::backends::kafka::types::KafkaPayload;
-use crate::backends::Producer;
-use crate::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+
+use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
+
+use crate::backends::kafka::producer::KafkaProducer;
+use crate::backends::kafka::types::KafkaPayload;
+use crate::backends::Producer;
+use crate::types::{BrokerMessage, Partition, Topic, TopicOrPartition};
+
+// This is a per-partition max
+const MAX_PENDING_FUTURES: usize = 1000;
 
 pub trait DlqProducer<TPayload>: Send + Sync {
     // Send a message to the DLQ.
@@ -230,6 +235,7 @@ impl DlqLimitState {
 /// upon creation of the consumer. It consists of the DLQ producer implementation and
 /// any limits that should be applied.
 pub struct DlqPolicy<TPayload> {
+    handle: Handle,
     producer: Box<dyn DlqProducer<TPayload>>,
     limit: DlqLimit,
     max_buffered_messages_per_partition: Option<usize>,
@@ -237,11 +243,13 @@ pub struct DlqPolicy<TPayload> {
 
 impl<TPayload> DlqPolicy<TPayload> {
     pub fn new(
+        handle: Handle,
         producer: Box<dyn DlqProducer<TPayload>>,
         limit: DlqLimit,
         max_buffered_messages_per_partition: Option<usize>,
     ) -> Self {
         DlqPolicy {
+            handle,
             producer,
             limit,
             max_buffered_messages_per_partition,
@@ -264,54 +272,57 @@ impl<TPayload> fmt::Debug for DlqPolicy<TPayload> {
 // Wraps the DLQ policy and keeps track of messages pending produce/commit.
 type Futures<TPayload> = VecDeque<(u64, JoinHandle<BrokerMessage<TPayload>>)>;
 
-pub(crate) struct DlqPolicyWrapper<TPayload> {
-    dlq_policy: Option<DlqPolicy<TPayload>>,
+struct Inner<TPayload> {
+    dlq_policy: DlqPolicy<TPayload>,
     dlq_limit_state: DlqLimitState,
-    // need to keep concurrency config around in order to not drop runtime
-    concurrency_config: ConcurrencyConfig,
-    // This is a per-partition max
-    max_pending_futures: usize,
     futures: BTreeMap<Partition, Futures<TPayload>>,
+}
+
+pub(crate) struct DlqPolicyWrapper<TPayload> {
+    inner: Option<Inner<TPayload>>,
 }
 
 impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
     pub fn new(dlq_policy: Option<DlqPolicy<TPayload>>) -> Self {
-        let concurrency_config = ConcurrencyConfig::new(10);
-        DlqPolicyWrapper {
+        let inner = dlq_policy.map(|dlq_policy| Inner {
             dlq_policy,
             dlq_limit_state: DlqLimitState::default(),
-            concurrency_config,
-            max_pending_futures: 1000,
             futures: BTreeMap::new(),
-        }
+        });
+        Self { inner }
     }
 
     pub fn max_buffered_messages_per_partition(&self) -> Option<usize> {
-        self.dlq_policy
+        self.inner
             .as_ref()
-            .and_then(|p| p.max_buffered_messages_per_partition)
+            .and_then(|i| i.dlq_policy.max_buffered_messages_per_partition)
     }
 
     /// Clears the DLQ limits.
     pub fn reset_dlq_limits(&mut self, assignment: &HashMap<Partition, u64>) {
-        let Some(policy) = self.dlq_policy.as_ref() else {
+        let Some(inner) = self.inner.as_mut() else {
             return;
         };
 
-        self.dlq_limit_state = policy
+        inner.dlq_limit_state = inner
+            .dlq_policy
             .producer
-            .build_initial_state(policy.limit, assignment);
+            .build_initial_state(inner.dlq_policy.limit, assignment);
     }
 
     // Removes all completed futures, then appends a future with message to be produced
     // to the queue. Blocks if there are too many pending futures until some are done.
     pub fn produce(&mut self, message: BrokerMessage<TPayload>) {
-        for (_p, values) in self.futures.iter_mut() {
+        let Some(inner) = self.inner.as_mut() else {
+            tracing::info!("dlq policy missing, dropping message");
+            return;
+        };
+        for (_p, values) in inner.futures.iter_mut() {
             while !values.is_empty() {
                 let len = values.len();
                 let (_, future) = &mut values[0];
-                if future.is_finished() || len >= self.max_pending_futures {
-                    let res = self.concurrency_config.handle().block_on(future);
+                if future.is_finished() || len >= MAX_PENDING_FUTURES {
+                    let res = inner.dlq_policy.handle.block_on(future);
                     if let Err(err) = res {
                         tracing::error!("Error producing to DLQ: {}", err);
                     }
@@ -322,35 +333,36 @@ impl<TPayload: Send + Sync + 'static> DlqPolicyWrapper<TPayload> {
             }
         }
 
-        if let Some(dlq_policy) = &self.dlq_policy {
-            if self.dlq_limit_state.record_invalid_message(&message) {
-                tracing::info!("producing message to dlq");
-                let (partition, offset) = (message.partition, message.offset);
+        if inner.dlq_limit_state.record_invalid_message(&message) {
+            tracing::info!("producing message to dlq");
+            let (partition, offset) = (message.partition, message.offset);
 
-                let task = dlq_policy.producer.produce(message);
-                let handle = self.concurrency_config.handle().spawn(task);
+            let task = inner.dlq_policy.producer.produce(message);
+            let handle = inner.dlq_policy.handle.spawn(task);
 
-                self.futures
-                    .entry(partition)
-                    .or_default()
-                    .push_back((offset, handle));
-            } else {
-                panic!("DLQ limit was reached");
-            }
+            inner
+                .futures
+                .entry(partition)
+                .or_default()
+                .push_back((offset, handle));
         } else {
-            tracing::info!("dlq policy missing, dropping message");
+            panic!("DLQ limit was reached");
         }
     }
 
     // Blocks until all messages up to the committable have been produced so
     // they are safe to commit.
     pub fn flush(&mut self, committable: &HashMap<Partition, u64>) {
+        let Some(inner) = self.inner.as_mut() else {
+            return;
+        };
+
         for (&p, &committable_offset) in committable {
-            if let Some(values) = self.futures.get_mut(&p) {
+            if let Some(values) = inner.futures.get_mut(&p) {
                 while let Some((offset, future)) = values.front_mut() {
                     // The committable offset is message's offset + 1
                     if committable_offset > *offset {
-                        if let Err(error) = self.concurrency_config.handle().block_on(future) {
+                        if let Err(error) = inner.dlq_policy.handle.block_on(future) {
                             let error: &dyn std::error::Error = &error;
                             tracing::error!(error, "Error producing to DLQ");
                         }
@@ -433,11 +445,15 @@ impl<TPayload> BufferedMessages<TPayload> {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::Topic;
-    use chrono::Utc;
-    use std::sync::Mutex;
 
     use super::*;
+
+    use std::sync::Mutex;
+
+    use chrono::Utc;
+
+    use crate::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+    use crate::types::Topic;
 
     #[test]
     fn test_buffered_messages() {
@@ -552,7 +568,9 @@ mod tests {
 
         let producer = TestDlqProducer::new();
 
+        let handle = ConcurrencyConfig::new(10).handle();
         let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
+            handle,
             Box::new(producer.clone()),
             DlqLimit::default(),
             None,
@@ -584,7 +602,9 @@ mod tests {
 
         let producer = TestDlqProducer::new();
 
+        let handle = ConcurrencyConfig::new(10).handle();
         let mut wrapper = DlqPolicyWrapper::new(Some(DlqPolicy::new(
+            handle,
             Box::new(producer),
             DlqLimit {
                 max_consecutive_count: Some(5),

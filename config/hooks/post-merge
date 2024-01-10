@@ -28,7 +28,7 @@ EOF
 
 grep -E --quiet 'rust_snuba/' "$files_changed_upstream" && cat <<EOF
 
-[${red}${bold}!!!{$reset}] Rust code changed, you may need to run:
+[${red}${bold}!!!${reset}] Rust code changed, you may need to run:
 
   make install-rs-dev
 

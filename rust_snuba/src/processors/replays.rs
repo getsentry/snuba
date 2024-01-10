@@ -1,3 +1,4 @@
+use crate::config::ProcessorConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,7 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
 
@@ -63,7 +65,7 @@ pub fn process_message(
 
             for tag in event.tags.into_iter() {
                 if &tag.0 == "transaction" {
-                    title = Some(tag.1.clone())
+                    title = tag.1.clone()
                 }
                 tags_key.push(tag.0);
                 tags_value.push(tag.1);
@@ -125,7 +127,10 @@ pub fn process_message(
                 user_name: event.user.username,
                 title,
                 tags_key,
-                tags_value,
+                tags_value: tags_value
+                    .into_iter()
+                    .map(|s| s.unwrap_or_default())
+                    .collect(),
                 ..Default::default()
             };
 
@@ -235,7 +240,7 @@ struct ReplayEvent {
     #[serde(default)]
     error_ids: Vec<Uuid>,
     #[serde(default)]
-    tags: Vec<(String, String)>,
+    tags: Vec<(String, Option<String>)>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -459,7 +464,7 @@ mod tests {
             "error_ids": ["df11e6d952da470386a64340f13151c4"],
             "tags": [
                 ["a", "b"],
-                ["transaction.name", "test"]
+                ["transaction.name", null]
             ],
             "segment_id": 0,
             "replay_id": "048aa04be40243948eb3b57089c519ee",
@@ -485,7 +490,8 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
@@ -530,7 +536,8 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
@@ -561,7 +568,8 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
@@ -591,6 +599,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }
