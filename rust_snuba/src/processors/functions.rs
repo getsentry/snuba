@@ -14,6 +14,7 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
+
     let functions = msg.functions.iter().map(|from| {
         Function {
             profile_id: msg.profile_id,
@@ -39,8 +40,8 @@ pub fn process_message(
     });
 
     Ok(InsertBatch {
-        rows: RowData::from_rows(functions)?,
         origin_timestamp: DateTime::from_timestamp(msg.received, 0),
+        rows: RowData::from_rows(functions)?,
         sentry_received_timestamp: None,
     })
 }

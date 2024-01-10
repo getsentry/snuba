@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,7 +9,7 @@ use uuid::Uuid;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, hex_to_u64};
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -18,13 +19,18 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
+    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: Span = msg.try_into()?;
-    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    InsertBatch::from_rows([span])
+    Ok(InsertBatch {
+        origin_timestamp,
+        rows: RowData::from_rows([span])?,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -43,6 +49,7 @@ struct FromSpanMessage {
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
+    received: f64,
     retention_days: Option<u16>,
     #[serde(default, deserialize_with = "hex_to_u64")]
     segment_id: u64,
