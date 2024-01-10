@@ -418,6 +418,7 @@ mod tests {
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
+        received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
         sentry_tags: TestSentryTags,
@@ -438,15 +439,8 @@ mod tests {
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
             retention_days: Some(90),
+            received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
-            span_id: Some("deadbeefdeadbeef".into()),
-            start_timestamp_ms: Some(1691105878720),
-            trace_id: Some(Uuid::new_v4()),
-            tags: Some(BTreeMap::from([
-                ("tag1".into(), "value1".into()),
-                ("tag2".into(), "123".into()),
-                ("tag3".into(), "true".into()),
-            ])),
             sentry_tags: TestSentryTags {
                 action: Some("GET".into()),
                 domain: Some("targetdomain.tld:targetport".into()),
@@ -461,6 +455,14 @@ mod tests {
                 transaction_method: Some("GET".into()),
                 transaction_op: Some("navigation".into()),
             },
+            span_id: Some("deadbeefdeadbeef".into()),
+            start_timestamp_ms: Some(1691105878720),
+            tags: Some(BTreeMap::from([
+                ("tag1".into(), "value1".into()),
+                ("tag2".into(), "123".into()),
+                ("tag3".into(), "true".into()),
+            ])),
+            trace_id: Some(Uuid::new_v4()),
         }
     }
 
