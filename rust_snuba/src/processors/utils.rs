@@ -1,5 +1,6 @@
 use crate::config::EnvConfig;
 use chrono::{DateTime, NaiveDateTime, Utc};
+use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, UsageUnit};
 use serde::{Deserialize, Deserializer};
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
@@ -38,4 +39,45 @@ where
         Err(_) => Utc::now(),
     };
     Ok(seconds_since_epoch.timestamp() as u32)
+}
+
+#[allow(dead_code)]
+pub struct CogsAccountant {
+    accountant: UsageAccountant<KafkaProducer>,
+    // We only log a warning once if there was an error recording cogs. Once this is true, we no longer record.
+    logged_warning: bool,
+}
+
+impl CogsAccountant {
+    #[allow(dead_code)]
+    fn new(bootstrap_servers: &str) -> Self {
+        let config = KafkaConfig::new_producer_config(bootstrap_servers, None);
+        Self {
+            accountant: UsageAccountant::new_with_kafka(config, None, None),
+            logged_warning: false,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn record_bytes(&mut self, resource_id: &str, app_feature: &str, amount_bytes: u64) {
+        if let Err(err) =
+            self.accountant
+                .record(resource_id, app_feature, amount_bytes, UsageUnit::Bytes)
+        {
+            if !self.logged_warning {
+                tracing::warn!(?err, "error recording cogs");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_record_cogs() {
+        let mut accountant = CogsAccountant::new("127.0.0.1:9092");
+        accountant.record_bytes("generic_metrics_processor_sets", "custom", 100)
+    }
 }
