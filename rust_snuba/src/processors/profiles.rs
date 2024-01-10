@@ -5,26 +5,24 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
 
-    msg.retention_days = Some(enforce_retention(msg.retention_days, &config.env_config));
     msg.offset = metadata.offset;
     msg.partition = metadata.partition;
 
     let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
 
     Ok(InsertBatch {
-        origin_timestamp,
         rows: RowData::from_rows([msg])?,
+        origin_timestamp,
         sentry_received_timestamp: None,
     })
 }
@@ -52,7 +50,7 @@ struct ProfileMessage {
     profile_id: Uuid,
     project_id: u64,
     received: i64,
-    retention_days: Option<u16>,
+    retention_days: u32,
     trace_id: Uuid,
     transaction_id: Uuid,
     transaction_name: String,

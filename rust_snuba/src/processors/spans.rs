@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
-use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -9,7 +8,7 @@ use uuid::Uuid;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, hex_to_u64};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -19,18 +18,13 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
-    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: Span = msg.try_into()?;
-
     span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
+
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    Ok(InsertBatch {
-        origin_timestamp,
-        rows: RowData::from_rows([span])?,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows([span])
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -49,7 +43,6 @@ struct FromSpanMessage {
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
-    received: f64,
     retention_days: Option<u16>,
     #[serde(default, deserialize_with = "hex_to_u64")]
     segment_id: u64,
@@ -418,7 +411,6 @@ mod tests {
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
-        received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
         sentry_tags: TestSentryTags,
@@ -439,8 +431,15 @@ mod tests {
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
             retention_days: Some(90),
-            received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
+            span_id: Some("deadbeefdeadbeef".into()),
+            start_timestamp_ms: Some(1691105878720),
+            trace_id: Some(Uuid::new_v4()),
+            tags: Some(BTreeMap::from([
+                ("tag1".into(), "value1".into()),
+                ("tag2".into(), "123".into()),
+                ("tag3".into(), "true".into()),
+            ])),
             sentry_tags: TestSentryTags {
                 action: Some("GET".into()),
                 domain: Some("targetdomain.tld:targetport".into()),
@@ -455,14 +454,6 @@ mod tests {
                 transaction_method: Some("GET".into()),
                 transaction_op: Some("navigation".into()),
             },
-            span_id: Some("deadbeefdeadbeef".into()),
-            start_timestamp_ms: Some(1691105878720),
-            tags: Some(BTreeMap::from([
-                ("tag1".into(), "value1".into()),
-                ("tag2".into(), "123".into()),
-                ("tag3".into(), "true".into()),
-            ])),
-            trace_id: Some(Uuid::new_v4()),
         }
     }
 
