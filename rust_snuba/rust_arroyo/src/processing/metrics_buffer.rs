@@ -1,4 +1,4 @@
-use crate::utils::metrics::{get_metrics, BoxMetrics};
+use crate::timer;
 use crate::utils::timing::Deadline;
 use core::fmt::Debug;
 use std::collections::BTreeMap;
@@ -7,7 +7,6 @@ use std::time::Duration;
 
 #[derive(Debug)]
 pub struct MetricsBuffer {
-    metrics: BoxMetrics,
     timers: BTreeMap<String, Duration>,
     flush_deadline: Deadline,
 }
@@ -22,7 +21,6 @@ impl MetricsBuffer {
     // We may want to replace this with the statsdproxy aggregation step.
     pub fn new() -> Self {
         Self {
-            metrics: get_metrics(),
             timers: BTreeMap::new(),
             flush_deadline: Deadline::new(FLUSH_INTERVAL),
         }
@@ -40,8 +38,7 @@ impl MetricsBuffer {
     pub fn flush(&mut self) {
         let timers = mem::take(&mut self.timers);
         for (metric, duration) in timers {
-            self.metrics
-                .timing(&metric, duration.as_millis() as u64, None);
+            timer!(&metric, duration);
         }
 
         self.flush_deadline.restart();

@@ -3,7 +3,7 @@ use crate::processors::utils::ensure_valid_datetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::utils::metrics::get_metrics;
+use rust_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -53,13 +53,13 @@ pub fn process_message(
     if msg.category.is_none() {
         msg.category = Some(DEFAULT_CATEGORY);
         if msg.outcome != OUTCOME_ABUSE {
-            get_metrics().increment("missing_category", 1, None);
+            counter!("missing_category");
         }
     }
     if msg.quantity.is_none() {
         msg.quantity = Some(1);
         if msg.outcome != OUTCOME_ABUSE {
-            get_metrics().increment("missing_quantity", 1, None);
+            counter!("missing_quantity");
         }
     }
 
