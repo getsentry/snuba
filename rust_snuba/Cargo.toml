@@ -45,6 +45,11 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 uuid = "1.5.0"
 parking_lot = "0.12.1"
+sentry_usage_accountant = "0.0.3"
+
+
+[patch.crates-io]
+rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer", features = ["cmake-build", "tracing"] }
 
 [dev-dependencies]
 criterion = "0.5.1"
