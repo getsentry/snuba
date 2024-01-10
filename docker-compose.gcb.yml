@@ -150,7 +150,7 @@ services:
   redis-cluster:
     image: ghcr.io/getsentry/docker-redis-cluster:7.0.10
     healthcheck:
-      test: ["CMD-SHELL", 'redis-cli cluster info | grep "cluster_slots_assigned:16384"']
+      test: ["CMD-SHELL", 'redis-cli -p 7000 cluster info | grep "cluster_slots_assigned:16384"']
 
 networks:
   default:
