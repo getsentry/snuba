@@ -33,12 +33,6 @@ def get_original_queries() -> Sequence[QueryToRerun]:
     help="Clickhouse native port to write to.",
     required=True,
 )
-@click.option(
-    "--filename",
-    help="Filename for mapped query ids.",
-    default="mapped_query_ids",
-    required=False,
-)
 @click.option("--log-level", help="Logging level to use.")
 def query_replayer(
     *,
