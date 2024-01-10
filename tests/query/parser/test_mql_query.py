@@ -1407,11 +1407,11 @@ mql_test_cases = [
                 SelectedExpression(
                     "aggregate_value",
                     FunctionCall(
-                        None,
+                        "_snuba_aggregate_value",
                         "apdex",
                         (
                             FunctionCall(
-                                "_snuba_aggregate_value",
+                                None,
                                 "sum",
                                 (Column("_snuba_value", None, "value"),),
                             ),
@@ -1608,16 +1608,15 @@ mql_test_cases = [
                 OrderBy(
                     OrderByDirection.ASC,
                     FunctionCall(
-                        alias="_snuba_aggregate_value",
-                        function_name="sum",
-                        parameters=(
-                            (
-                                Column(
-                                    alias="_snuba_value",
-                                    table_name=None,
-                                    column_name="value",
-                                ),
-                            )
+                        "_snuba_aggregate_value",
+                        "apdex",
+                        (
+                            FunctionCall(
+                                None,
+                                "sum",
+                                (Column("_snuba_value", None, "value"),),
+                            ),
+                            Literal(None, 500),
                         ),
                     ),
                 ),
