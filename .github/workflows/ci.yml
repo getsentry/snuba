@@ -362,6 +362,7 @@ jobs:
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_ddm_meta.py \
+              tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
