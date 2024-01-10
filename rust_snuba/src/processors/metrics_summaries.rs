@@ -1,12 +1,14 @@
 use crate::config::ProcessorConfig;
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
 use crate::processors::utils::{enforce_retention, hex_to_u64};
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -14,12 +16,20 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let from: InputMessage = serde_json::from_slice(payload_bytes)?;
+    let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
+    if msg._metrics_summary.is_none() {
+        return Ok(InsertBatch {
+            ..Default::default()
+        });
+    }
+
+    let span: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
     let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
+    let end_timestamp_ms = span.start_timestamp_ms + span.duration_ms as u64;
+    let retention_days = enforce_retention(span.retention_days, &config.env_config);
 
-    let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
-    for (metric_mri, summaries) in &from._metrics_summary {
+    for (metric_mri, summaries) in &span.metrics_summary {
         for summary in summaries {
             let (tag_keys, tag_values) = summary
                 .tags
@@ -34,27 +44,39 @@ pub fn process_message(
                 max: summary.max,
                 metric_mri,
                 min: summary.min,
-                project_id: from.project_id,
-                retention_days: enforce_retention(from.retention_days, &config.env_config),
-                span_id: from.span_id,
+                project_id: span.project_id,
+                retention_days,
+                span_id: span.span_id,
                 sum: summary.sum,
                 tag_keys,
                 tag_values,
-                trace_id: from.trace_id,
+                trace_id: span.trace_id,
             })
         }
     }
 
-    InsertBatch::from_rows(metrics_summaries)
+    let origin_timestamp = DateTime::from_timestamp(span.received as i64, 0);
+
+    Ok(InsertBatch {
+        rows: RowData::from_rows(metrics_summaries)?,
+        origin_timestamp,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct InputMessage {
-    #[serde(default)]
-    _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
+    _metrics_summary: Option<Box<RawValue>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FromSpanMessage {
     #[serde(default)]
     duration_ms: u32,
+    #[serde(rename = "_metrics_summary")]
+    metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
     project_id: u64,
+    received: f64,
     #[serde(default)]
     retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
