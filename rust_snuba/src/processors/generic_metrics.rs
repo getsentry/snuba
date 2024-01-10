@@ -1013,7 +1013,6 @@ mod tests {
             day_retention_days: None,
             enable_histogram: Some(1),
         };
-        println!("Expected distribution raw row: {:?}", expected_row);
         assert_eq!(
             result.unwrap(),
             InsertBatch {
