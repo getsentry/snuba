@@ -49,7 +49,7 @@ sentry_usage_accountant = "0.0.3"
 
 
 [patch.crates-io]
-rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer", features = ["cmake-build", "tracing"] }
+rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer" }
 
 [dev-dependencies]
 criterion = "0.5.1"
