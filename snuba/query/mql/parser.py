@@ -379,7 +379,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         assert isinstance(target.expression, SelectedExpression)
         column = target.expression.expression
         arbitrary_function = SelectedExpression(
-            name=arbitrary_function_name,
+            name=target.expression.name,
             expression=FunctionCall(
                 alias=None,
                 function_name=arbitrary_function_name,

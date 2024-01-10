@@ -1405,7 +1405,7 @@ mql_test_cases = [
             ),
             selected_columns=[
                 SelectedExpression(
-                    "apdex",
+                    "aggregate_value",
                     FunctionCall(
                         None,
                         "apdex",
