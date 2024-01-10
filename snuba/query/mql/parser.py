@@ -377,19 +377,18 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Literal(alias=None, value=param[-1]) for param in params
         ]
         assert isinstance(target.expression, SelectedExpression)
-        aggregate = target.expression.expression
-        assert isinstance(aggregate, FunctionCall)
-        new_aggregate = FunctionCall(
+        assert isinstance(target.expression.expression, FunctionCall)
+        aggregate = FunctionCall(
             alias=None,
-            function_name=aggregate.function_name,
-            parameters=aggregate.parameters,
+            function_name=target.expression.expression.function_name,
+            parameters=target.expression.expression.parameters,
         )
         arbitrary_function = SelectedExpression(
             name=target.expression.name,
             expression=FunctionCall(
                 alias=target.expression.name,
                 function_name=arbitrary_function_name,
-                parameters=(new_aggregate, *arbitrary_function_params),
+                parameters=(aggregate, *arbitrary_function_params),
             ),
         )
         target.expression = arbitrary_function
