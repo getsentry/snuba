@@ -72,6 +72,11 @@ def test_message_processors(
             ),
         )
 
+        # Handle scenarios where the message needs to be skipped by the processor
+        if not python_processed_message:
+            assert rust_processed_message == b""
+            continue
+
         assert isinstance(python_processed_message, InsertBatch)
 
         assert [
