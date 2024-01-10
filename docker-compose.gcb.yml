@@ -3,10 +3,16 @@ version: "3.4"
 
 x-test-common: &test-common
   depends_on:
-    - redis_cluster
-    - kafka
-    - clickhouse
-    - zookeeper
+    redis_cluster:
+      condition: service_started
+    kafka:
+      condition: service_started
+    clickhouse:
+      condition: service_started
+    zookeeper:
+      condition: service_started
+    redis1:
+      condition: service_healthy
   image: "$SNUBA_IMAGE"
   profiles: ["run_test"]
   volumes:
@@ -144,6 +150,8 @@ services:
 
   redis1: &redis_config
     image: redis:5.0-alpine
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli cluster info | grep "cluster_slots_assigned:16384"']
     command:
       - redis-server
       - "--appendonly"
@@ -167,7 +175,6 @@ services:
         $$(getent hosts redis1 | awk '{ print $$1 }'):6379
         $$(getent hosts redis2 | awk '{ print $$1 }'):6379
         $$(getent hosts redis3 | awk '{ print $$1 }'):6379
-        redis-cli -h $$(getent hosts redis1) -p 6300 cluster info | grep "cluster_slots_assigned:16384"
     depends_on:
       - redis1
       - redis2
