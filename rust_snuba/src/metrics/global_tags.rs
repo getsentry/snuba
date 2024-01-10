@@ -95,16 +95,28 @@ mod tests {
 
     #[test]
     fn test_basic() {
-        let results = RefCell::new(vec![]);
-        let global_tags = RwLock::new(BTreeMap::from([("env".to_owned(), "prod".to_owned())]));
+        let test_cases = [
+            // Without tags
+            ("users.online:1|c", "users.online:1|c|#env:prod"),
+            // With tags
+            (
+                "users.online:1|c|#tag1:a",
+                "users.online:1|c|#tag1:a,env:prod",
+            ),
+        ];
 
-        let step = FnStep(|metric: &mut Metric| results.borrow_mut().push(metric.clone()));
-        let mut step = AddGlobalTags::new_with_tagmap(step, &global_tags);
+        for test_case in test_cases {
+            let results = RefCell::new(vec![]);
+            let global_tags = RwLock::new(BTreeMap::from([("env".to_owned(), "prod".to_owned())]));
 
-        let mut metric = Metric::new(b"users.online:1|c|#tag1:a".to_vec());
-        step.submit(&mut metric);
-        assert_eq!(results.borrow().len(), 1);
-        let updated_metric = Metric::new(results.borrow_mut()[0].raw.clone());
-        assert_eq!(updated_metric.raw, b"users.online:1|c|#tag1:a,env:prod");
+            let step = FnStep(|metric: &mut Metric| results.borrow_mut().push(metric.clone()));
+            let mut middleware = AddGlobalTags::new_with_tagmap(step, &global_tags);
+
+            let mut metric = Metric::new(test_case.0.as_bytes().to_vec());
+            middleware.submit(&mut metric);
+            assert_eq!(results.borrow().len(), 1);
+            let updated_metric = Metric::new(results.borrow_mut()[0].raw.clone());
+            assert_eq!(updated_metric.raw, test_case.1.as_bytes());
+        }
     }
 }
