@@ -44,6 +44,8 @@ where
 #[allow(dead_code)]
 pub struct CogsAccountant {
     accountant: UsageAccountant<KafkaProducer>,
+    // We only log a warning once if there was an error recording cogs. Once this is true, we no longer record.
+    logged_warning: bool,
 }
 
 impl CogsAccountant {
@@ -52,6 +54,7 @@ impl CogsAccountant {
         let config = KafkaConfig::new_producer_config(bootstrap_servers, None);
         Self {
             accountant: UsageAccountant::new_with_kafka(config, None, None),
+            logged_warning: false,
         }
     }
 
@@ -60,7 +63,9 @@ impl CogsAccountant {
             self.accountant
                 .record(resource_id, app_feature, amount_bytes, UsageUnit::Bytes)
         {
-            tracing::warn!(?err, "error recording cogs");
+            if !self.logged_warning {
+                tracing::warn!(?err, "error recording cogs");
+            }
         }
     }
 }
