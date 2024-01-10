@@ -5,7 +5,6 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::spans::SpanStatus;
 use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
@@ -21,23 +20,16 @@ pub fn process_message(
             project_id: msg.project_id,
 
             // Profile metadata
-            browser_name: msg.browser_name.as_deref(),
-            device_classification: msg.device_class.unwrap_or_default(),
-            dist: msg.dist.as_deref(),
             environment: msg.environment.as_deref(),
-            http_method: msg.http_method.as_deref(),
             platform: &msg.platform,
             release: msg.release.as_deref(),
             retention_days: msg.retention_days,
             timestamp: msg.timestamp,
             transaction_name: &msg.transaction_name,
-            transaction_op: &msg.transaction_op,
-            transaction_status: msg.transaction_status as u8,
 
             // Function metadata
             fingerprint: from.fingerprint,
             durations: &from.self_times_ns,
-            function: &from.function,
             package: &from.package,
             name: &from.function,
             is_application: from.in_app as u8,
@@ -64,60 +56,48 @@ struct InputFunction {
 
 #[derive(Debug, Deserialize)]
 struct InputMessage {
-    profile_id: Uuid,
-    project_id: u64,
-    #[serde(default)]
-    browser_name: Option<String>,
-    #[serde(default)]
-    device_class: Option<u32>,
-    #[serde(default)]
-    dist: Option<String>,
     #[serde(default)]
     environment: Option<String>,
     functions: Vec<InputFunction>,
-    #[serde(default)]
-    http_method: Option<String>,
     platform: String,
+    profile_id: Uuid,
+    project_id: u64,
     received: i64,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
     timestamp: u64,
     transaction_name: String,
-    transaction_op: String,
-    transaction_status: SpanStatus,
 }
 
 #[derive(Default, Debug, Serialize)]
 struct Function<'a> {
-    profile_id: Uuid,
-    project_id: u64,
-    browser_name: Option<&'a str>,
-    device_classification: u32,
-    dist: Option<&'a str>,
     durations: &'a [u64],
     environment: Option<&'a str>,
     fingerprint: u64,
-    function: &'a str,
-    http_method: Option<&'a str>,
     is_application: u8,
     materialization_version: u8,
     name: &'a str,
     package: &'a str,
     platform: &'a str,
+    profile_id: Uuid,
+    project_id: u64,
     release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
     transaction_name: &'a str,
-    transaction_op: &'a str,
-    transaction_status: u8,
 
     // Deprecated fields
+    browser_name: &'a str,
     depth: u8,
+    device_classification: u32,
+    dist: &'a str,
     os_name: &'a str,
     os_version: &'a str,
     parent_fingerprint: u8,
     path: &'a str,
+    transaction_op: &'a str,
+    transaction_status: u8,
 }
 
 #[cfg(test)]
