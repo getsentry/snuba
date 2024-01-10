@@ -376,6 +376,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         arbitrary_function_params = [
             Literal(alias=None, value=param[-1]) for param in params
         ]
+        assert isinstance(target.expression, SelectedExpression)
         column = target.expression.expression
         arbitrary_function = SelectedExpression(
             name=arbitrary_function_name,
