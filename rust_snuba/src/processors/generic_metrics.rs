@@ -409,6 +409,7 @@ pub fn process_distribution_message(
 
 #[derive(Debug, Serialize, Default)]
 struct GaugesRawRow {
+    #[serde(flatten)]
     common_fields: CommonMetricFields,
     #[serde(default)]
     set_values: Vec<u64>,
