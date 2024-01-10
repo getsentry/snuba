@@ -72,3 +72,39 @@ where
         self.next.submit(metric)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::cell::RefCell;
+    use std::collections::BTreeMap;
+
+    use statsdproxy::{middleware::Middleware, types::Metric};
+
+    struct FnStep<F>(pub F);
+
+    impl<F> Middleware for FnStep<F>
+    where
+        F: FnMut(&mut Metric),
+    {
+        fn submit(&mut self, metric: &mut Metric) {
+            (self.0)(metric)
+        }
+    }
+
+    #[test]
+    fn test_basic() {
+        let results = RefCell::new(vec![]);
+        let global_tags = RwLock::new(BTreeMap::from([("env".to_owned(), "prod".to_owned())]));
+
+        let step = FnStep(|metric: &mut Metric| results.borrow_mut().push(metric.clone()));
+        let mut step = AddGlobalTags::new_with_tagmap(step, &global_tags);
+
+        let mut metric = Metric::new(b"users.online:1|c|#tag1:a".to_vec());
+        step.submit(&mut metric);
+        assert_eq!(results.borrow().len(), 1);
+        let updated_metric = Metric::new(results.borrow_mut()[0].raw.clone());
+        assert_eq!(updated_metric.raw, b"users.online:1|c|#tag1:a,env:prod");
+    }
+}
