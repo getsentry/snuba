@@ -99,8 +99,6 @@ struct CommonMetricFields {
     metric_type: String,
     materialization_version: u8,
     timeseries_id: u32,
-    partition: u16,
-    offset: u64,
     granularities: Vec<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     decasecond_retention_days: Option<u8>,
@@ -118,11 +116,7 @@ struct CountersRawRow {
     #[serde(flatten)]
     common_fields: CommonMetricFields,
     #[serde(default)]
-    set_values: Vec<u64>,
-    #[serde(default)]
     count_value: f64,
-    #[serde(default)]
-    distribution_values: Vec<f64>,
 }
 
 /// Parse is the trait which should be implemented for all metric types.
@@ -133,7 +127,6 @@ trait Parse {
 
     fn parse(
         from: FromGenericMetricsMessage,
-        metadata: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<Self::Item>>;
 }
@@ -143,7 +136,6 @@ impl Parse for CountersRawRow {
 
     fn parse(
         from: FromGenericMetricsMessage,
-        metadata: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<CountersRawRow>> {
         if from.r#type != "c" {
@@ -184,21 +176,17 @@ impl Parse for CountersRawRow {
             materialization_version: 2,
             timeseries_id,
             granularities,
-            partition: metadata.partition,
-            offset: metadata.offset,
             ..Default::default()
         };
         Ok(Some(Self {
             common_fields,
             count_value,
-            ..Default::default()
         }))
     }
 }
 
 fn process_message<T>(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch>
 where
@@ -214,7 +202,7 @@ where
         SentryReceivedTimestamp::Float(timestamp) => DateTime::from_timestamp(timestamp as i64, 0),
     };
 
-    let result: Result<Option<T>, anyhow::Error> = T::parse(msg, metadata, config);
+    let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
     match result {
         Ok(row) => {
             if let Some(row) = row {
@@ -233,10 +221,10 @@ where
 
 pub fn process_counter_message(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<CountersRawRow>(payload, metadata, config)
+    process_message::<CountersRawRow>(payload, config)
 }
 
 /// The raw row that is written to clickhouse for sets.
@@ -245,10 +233,6 @@ struct SetsRawRow {
     #[serde(flatten)]
     common_fields: CommonMetricFields,
     set_values: Vec<u64>,
-    #[serde(default)]
-    count_value: f64,
-    #[serde(default)]
-    distribution_values: Vec<f64>,
 }
 
 impl Parse for SetsRawRow {
@@ -256,7 +240,6 @@ impl Parse for SetsRawRow {
 
     fn parse(
         from: FromGenericMetricsMessage,
-        metadata: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
         if from.r#type != "s" {
@@ -298,35 +281,27 @@ impl Parse for SetsRawRow {
             materialization_version: 2,
             timeseries_id,
             granularities,
-            partition: metadata.partition,
-            offset: metadata.offset,
             ..Default::default()
         };
         Ok(Some(Self {
             common_fields,
             set_values,
-            ..Default::default()
         }))
     }
 }
 
 pub fn process_set_message(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<SetsRawRow>(payload, metadata, config)
+    process_message::<SetsRawRow>(payload, config)
 }
 
 #[derive(Debug, Serialize, Default)]
 struct DistributionsRawRow {
     #[serde(flatten)]
     common_fields: CommonMetricFields,
-    #[serde(default)]
-    set_values: Vec<u64>,
-    #[serde(default)]
-    count_value: f64,
-    #[serde(default)]
     distribution_values: Vec<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enable_histogram: Option<u8>,
@@ -337,7 +312,6 @@ impl Parse for DistributionsRawRow {
 
     fn parse(
         from: FromGenericMetricsMessage,
-        metadata: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         if from.r#type != "d" {
@@ -386,37 +360,28 @@ impl Parse for DistributionsRawRow {
             materialization_version: 2,
             timeseries_id,
             granularities,
-            partition: metadata.partition,
-            offset: metadata.offset,
             ..Default::default()
         };
         Ok(Some(Self {
             common_fields,
             distribution_values,
             enable_histogram,
-            ..Default::default()
         }))
     }
 }
 
 pub fn process_distribution_message(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<DistributionsRawRow>(payload, metadata, config)
+    process_message::<DistributionsRawRow>(payload, config)
 }
 
 #[derive(Debug, Serialize, Default)]
 struct GaugesRawRow {
     #[serde(flatten)]
     common_fields: CommonMetricFields,
-    #[serde(default)]
-    set_values: Vec<u64>,
-    #[serde(default)]
-    count_value: f64,
-    #[serde(default)]
-    distribution_values: Vec<f64>,
     #[serde(rename = "gauges_values.last")]
     gauges_values_last: Vec<f64>,
     #[serde(rename = "gauges_values.min")]
@@ -434,7 +399,6 @@ impl Parse for GaugesRawRow {
 
     fn parse(
         from: FromGenericMetricsMessage,
-        metadata: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<GaugesRawRow>> {
         if from.r#type != "g" {
@@ -494,8 +458,6 @@ impl Parse for GaugesRawRow {
             materialization_version: 2,
             timeseries_id,
             granularities,
-            partition: metadata.partition,
-            offset: metadata.offset,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -505,17 +467,16 @@ impl Parse for GaugesRawRow {
             gauges_values_max,
             gauges_values_min,
             gauges_values_sum,
-            ..Default::default()
         }))
     }
 }
 
 pub fn process_gauge_message(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<GaugesRawRow>(payload, metadata, config)
+    process_message::<GaugesRawRow>(payload, config)
 }
 
 #[cfg(test)]
@@ -678,8 +639,6 @@ mod tests {
                 metric_type: "counter".to_string(),
                 materialization_version: 2,
                 timeseries_id: 1979522105,
-                partition: 0,
-                offset: 1,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
@@ -690,9 +649,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
             },
-            set_values: vec![],
             count_value: 1.0,
-            distribution_values: vec![],
         };
         assert_eq!(
             result.unwrap(),
@@ -749,8 +706,6 @@ mod tests {
                 metric_type: "set".to_string(),
                 materialization_version: 2,
                 timeseries_id: 828906429,
-                partition: 0,
-                offset: 1,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
@@ -762,8 +717,6 @@ mod tests {
                 day_retention_days: None,
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
-            count_value: 0.0,
-            distribution_values: vec![],
         };
         assert_eq!(
             result.unwrap(),
@@ -820,8 +773,6 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 2,
                 timeseries_id: 1436359714,
-                partition: 0,
-                offset: 1,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
@@ -832,8 +783,6 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
             },
-            set_values: vec![],
-            count_value: 0.0,
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
         };
@@ -877,8 +826,6 @@ mod tests {
                 metric_type: "distribution".to_string(),
                 materialization_version: 2,
                 timeseries_id: 1436359714,
-                partition: 0,
-                offset: 1,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
@@ -889,8 +836,6 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
             },
-            set_values: vec![],
-            count_value: 0.0,
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
         };
@@ -949,8 +894,6 @@ mod tests {
                 metric_type: "gauge".to_string(),
                 materialization_version: 2,
                 timeseries_id: 569776957,
-                partition: 0,
-                offset: 1,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
@@ -961,9 +904,6 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
             },
-            set_values: vec![],
-            count_value: 0.0,
-            distribution_values: vec![],
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
             gauges_values_max: vec![10.0],
@@ -1010,8 +950,6 @@ mod tests {
                 metric_type: "gauge".to_string(),
                 materialization_version: 2,
                 timeseries_id: 569776957,
-                partition: 0,
-                offset: 1,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
                     GRANULARITY_ONE_HOUR,
@@ -1023,9 +961,6 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
             },
-            set_values: vec![],
-            count_value: 0.0,
-            distribution_values: vec![],
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
             gauges_values_max: vec![10.0],
