@@ -58,6 +58,7 @@ impl CogsAccountant {
         }
     }
 
+    #[allow(dead_code)]
     fn record_bytes(&mut self, resource_id: &str, app_feature: &str, amount_bytes: u64) {
         if let Err(err) =
             self.accountant
