@@ -152,19 +152,15 @@ impl Parse for CountersRawRow {
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ];
-
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
-
         let count_value = match from.value {
             MetricValue::Counter(value) => value,
             _ => {
@@ -192,7 +188,6 @@ impl Parse for CountersRawRow {
             offset: metadata.offset,
             ..Default::default()
         };
-
         Ok(Some(Self {
             common_fields,
             count_value,
@@ -270,15 +265,12 @@ impl Parse for SetsRawRow {
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ];
-
         if from.aggregation_option.unwrap_or_default() == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
@@ -310,7 +302,6 @@ impl Parse for SetsRawRow {
             offset: metadata.offset,
             ..Default::default()
         };
-
         Ok(Some(Self {
             common_fields,
             set_values,
@@ -355,15 +346,12 @@ impl Parse for DistributionsRawRow {
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ];
-
         let mut enable_histogram = None;
         let aggregate_option = from.aggregation_option.unwrap_or_default();
         if aggregate_option == "ten_second" {
@@ -402,7 +390,6 @@ impl Parse for DistributionsRawRow {
             offset: metadata.offset,
             ..Default::default()
         };
-
         Ok(Some(Self {
             common_fields,
             distribution_values,
@@ -455,15 +442,12 @@ impl Parse for GaugesRawRow {
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
             GRANULARITY_ONE_DAY,
         ];
-
         let aggregate_option = from.aggregation_option.unwrap_or_default();
         if aggregate_option == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
@@ -513,7 +497,6 @@ impl Parse for GaugesRawRow {
             offset: metadata.offset,
             ..Default::default()
         };
-
         Ok(Some(Self {
             common_fields,
             gauges_values_last,
