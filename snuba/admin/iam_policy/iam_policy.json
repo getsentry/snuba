@@ -39,7 +39,8 @@
     },
     {
       "members": [
-        "group:team-ops@sentry.io"
+        "group:team-ops@sentry.io",
+        "group:team-sns@sentry.io"
       ],
       "role": "roles/AllMigrationsExecutor"
     }

@@ -22,6 +22,7 @@ use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
     storage_config: config::StorageConfig,
+    env_config: config::EnvConfig,
     logical_topic_name: String,
     max_batch_size: usize,
     max_batch_time: Duration,
@@ -42,6 +43,7 @@ impl ConsumerStrategyFactory {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         storage_config: config::StorageConfig,
+        env_config: config::EnvConfig,
         logical_topic_name: String,
         max_batch_size: usize,
         max_batch_time: Duration,
@@ -59,6 +61,7 @@ impl ConsumerStrategyFactory {
     ) -> Self {
         Self {
             storage_config,
+            env_config,
             logical_topic_name,
             max_batch_size,
             max_batch_time,
@@ -131,6 +134,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.logical_topic_name,
                 self.enforce_schema,
                 &self.processing_concurrency,
+                config::ProcessorConfig {
+                    env_config: self.env_config.clone(),
+                },
             ),
             _ => Box::new(
                 PythonTransformStep::new(
