@@ -101,13 +101,11 @@ RUN set -ex; \
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
-ARG SHOULD_BUILD_ADMIN_UI=true
 ENV NODE_VERSION=19
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
     mkdir -p snuba/admin/dist/; \
-    [ "$SHOULD_BUILD_ADMIN_UI" = "true" ] || exit 0; \
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
     curl -SLO https://deb.nodesource.com/nsolid_setup_deb.sh | bash -s -- ${NODE_VERSION} &&\

@@ -159,8 +159,6 @@ jobs:
           context: .
           # push: true
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           tags: |
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -217,8 +215,6 @@ jobs:
           push: false
           tags: snuba-test
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -296,8 +292,6 @@ jobs:
           push: false
           tags: snuba-test
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -398,8 +392,6 @@ jobs:
           push: false
           tags: snuba-test
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
