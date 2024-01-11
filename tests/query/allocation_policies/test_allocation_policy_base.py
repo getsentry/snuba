@@ -498,12 +498,6 @@ def test_is_not_enforced() -> None:
     assert throttled_metrics[1].tags["is_enforced"] == "False"
 
 
-def test_outdated_configs() -> None:
-    # test that if config items get removed from the definitions, they get removed from redis
-    # on read
-    pass
-
-
 @pytest.mark.redis_db
 def test_configs_with_delimiter_values() -> None:
     # test that configs with dots can be stored and read
