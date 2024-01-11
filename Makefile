@@ -1,5 +1,9 @@
 .PHONY: develop setup-git test install-python-dependencies install-py-dev
 
+apply-migrations:
+	snuba migrations migrate --force
+.PHONY: apply-migrations
+
 reset-python:
 	pre-commit clean
 	rm -rf .venv
