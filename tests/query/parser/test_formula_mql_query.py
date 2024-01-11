@@ -601,7 +601,53 @@ def test_formula_scalar_value() -> None:
 
 
 def test_arbitrary_functions() -> None:
-    query_body = "apdex(`d:transactions/duration@millisecond`, 123) / (max(`d:transactions/duration@millisecond`)"
+    query_body = "apdex(sum(`d:transactions/duration@millisecond`), 123) / max(`d:transactions/duration@millisecond`)"
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            FunctionCall(
+                None,
+                "apdex",
+                (
+                    Literal(None, "d:transactions/duration@millisecond"),
+                    Literal(None, 123),
+                ),
+            ),
+            timeseries("maxIf", 123456),
+            "_snuba_aggregate_value",
+        ),
+    )
+    expected = Query(
+        from_distributions,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression,
+            ),
+        ],
+        groupby=[time_expression],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression,
+            )
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_arbitrary_functions_with_formula() -> None:
+    query_body = "apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 123)"
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
