@@ -78,7 +78,7 @@ def value_for_counter_message(message: Mapping[str, Any]) -> Mapping[str, Any]:
         value, (int, float)
     ), f"{ILLEGAL_VALUE_IN_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
 
-    value = float(value) if isinstance(value, int) else value
+    value = float(value)
     return {"metric_type": OutputType.COUNTER.value, "count_value": value}
 
 
