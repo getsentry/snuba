@@ -55,7 +55,7 @@ logger = logging.getLogger("snuba.mql.parser")
 
 @dataclass
 class InitialParseResult:
-    aggregate: SelectedExpression | None = None
+    expression: SelectedExpression | None = None
     groupby: List[SelectedExpression] | None = None
     conditions: List[Expression] | None = None
     mri: str | None = None
@@ -324,11 +324,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 parameters=tuple(Column(None, None, "value")),
             ),
         )
-        target.aggregate = selected_aggregate
+        target.expression = selected_aggregate
         return target
-
-    def visit_curried_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
-        return str(node.text)
 
     def visit_curried_aggregate(
         self,
@@ -358,7 +355,44 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 (Column(None, None, "value"),),
             ),
         )
-        target.aggregate = selected_aggregate_column
+        target.expression = selected_aggregate_column
+        return target
+
+    def visit_arbitrary_function(
+        self,
+        node: Node,
+        children: Tuple[
+            str,
+            Tuple[
+                Any,
+                Sequence[InitialParseResult],
+                Sequence[Sequence[Union[str, int, float]]],
+                Any,
+            ],
+        ],
+    ) -> InitialParseResult:
+        arbitrary_function_name, zero_or_one = children
+        _, expr, params, *_ = zero_or_one
+        _, target, _ = expr
+        arbitrary_function_params = [
+            Literal(alias=None, value=param[-1]) for param in params
+        ]
+        assert isinstance(target.expression, SelectedExpression)
+        assert isinstance(target.expression.expression, FunctionCall)
+        aggregate = FunctionCall(
+            alias=None,
+            function_name=target.expression.expression.function_name,
+            parameters=target.expression.expression.parameters,
+        )
+        arbitrary_function = SelectedExpression(
+            name=target.expression.name,
+            expression=FunctionCall(
+                alias=target.expression.name,
+                function_name=arbitrary_function_name,
+                parameters=(aggregate, *arbitrary_function_params),
+            ),
+        )
+        target.expression = arbitrary_function
         return target
 
     def visit_param(
@@ -385,6 +419,14 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return agg_params
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_curried_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_arbitrary_function_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
         return node.text
 
@@ -442,10 +484,10 @@ def parse_mql_query_body(
         """
         exp_tree = MQL_GRAMMAR.parse(body)
         parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
-        if not parsed.aggregate:
-            raise ParsingException("No aggregate specified in MQL query")
+        if not parsed.expression:
+            raise ParsingException("No expression specified in MQL query")
 
-        selected_columns = [parsed.aggregate]
+        selected_columns = [parsed.expression]
         if parsed.groupby:
             selected_columns.extend(parsed.groupby)
         groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None

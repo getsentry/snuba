@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
-from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
-
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.functions_processor import FunctionsMessageProcessor
 from snuba.processor import InsertBatch
@@ -29,41 +27,29 @@ class Function:
 
 @dataclass
 class ProfileFunctionsEvent:
-    project_id: int
-    profile_id: str
-    transaction_name: str
-    timestamp: int
+    environment: Optional[str]
     functions: Sequence[Function]
     platform: str
-    environment: Optional[str]
-    release: Optional[str]
-    dist: Optional[str]
-    transaction_op: Optional[str]
-    transaction_status: Optional[str]
-    http_method: Optional[str]
-    browser_name: Optional[str]
-    device_class: Optional[int]
-    retention_days: int
+    profile_id: str
+    project_id: int
     received: Optional[int]
+    release: Optional[str]
+    retention_days: int
+    timestamp: int
+    transaction_name: str
 
     def serialize(self) -> Mapping[str, Any]:
         return {
-            "project_id": self.project_id,
-            "profile_id": self.profile_id,
-            "transaction_name": self.transaction_name,
-            "timestamp": self.timestamp,
+            "environment": self.environment,
             "functions": [f.serialize() for f in self.functions],
             "platform": self.platform,
-            "environment": self.environment,
-            "release": self.release,
-            "dist": self.dist,
-            "transaction_op": self.transaction_op,
-            "transaction_status": self.transaction_status,
-            "http_method": self.http_method,
-            "browser_name": self.browser_name,
-            "device_class": self.device_class,
-            "retention_days": self.retention_days,
+            "profile_id": self.profile_id,
+            "project_id": self.project_id,
             "received": self.received,
+            "release": self.release,
+            "retention_days": self.retention_days,
+            "timestamp": self.timestamp,
+            "transaction_name": self.transaction_name,
         }
 
 
@@ -75,74 +61,65 @@ class TestFunctionsProcessor:
 
         now = int(datetime.now(timezone.utc).timestamp())
         message = ProfileFunctionsEvent(
-            project_id=22,
-            profile_id="a" * 32,
-            transaction_name="vroom-vroom",
-            timestamp=now,
-            received=now,
+            environment="prod",
             functions=[
                 Function(123, "foo", "bar", True, [1, 2, 3]),
                 Function(456, "baz", "", False, [4, 5, 6]),
             ],
             platform="python",
-            environment="prod",
+            profile_id="a" * 32,
+            project_id=22,
+            received=now,
             release="foo@1.0.0",
-            dist="1",
-            transaction_op="http.server",
-            transaction_status="ok",
-            http_method="GET",
-            browser_name="Chrome",
-            device_class=2,
             retention_days=30,
+            timestamp=now,
+            transaction_name="vroom-vroom",
         )
 
         base = {
+            # function metadata fields
+            "environment": "prod",
+            "platform": "python",
             "profile_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "project_id": 22,
-            "transaction_name": "vroom-vroom",
-            "timestamp": now,
-            "platform": "python",
-            "environment": "prod",
             "release": "foo@1.0.0",
-            "dist": "1",
-            "transaction_op": "http.server",
-            "transaction_status": SPAN_STATUS_NAME_TO_CODE["ok"],
-            "http_method": "GET",
-            "browser_name": "Chrome",
-            "device_classification": 2,
+            "retention_days": 30,
+            "timestamp": now,
+            "transaction_name": "vroom-vroom",
+            # snuba fields
+            "materialization_version": 0,
+            # deprecated fields
+            "browser_name": "",
+            "depth": 0,
+            "device_classification": 0,
+            "dist": "",
             "os_name": "",
             "os_version": "",
-            "retention_days": 30,
-            "materialization_version": 0,
+            "parent_fingerprint": 0,
+            "path": "",
+            "transaction_op": "",
+            "transaction_status": 0,
         }
 
         batch = [
             {
-                "depth": 0,
-                "parent_fingerprint": 0,
-                "fingerprint": 123,
-                "name": "foo",
-                "function": "foo",
-                "package": "bar",
-                "path": "",
-                "is_application": 1,
                 "durations": [1, 2, 3],
+                "fingerprint": 123,
+                "is_application": 1,
+                "name": "foo",
+                "package": "bar",
                 **base,
             },
             {
-                "depth": 0,
-                "parent_fingerprint": 0,
-                "fingerprint": 456,
-                "name": "baz",
-                "function": "baz",
-                "package": "",
-                "path": "",
-                "is_application": 0,
                 "durations": [4, 5, 6],
+                "fingerprint": 456,
+                "is_application": 0,
+                "name": "baz",
+                "package": "",
                 **base,
             },
         ]
 
         assert FunctionsMessageProcessor().process_message(
             message.serialize(), meta
-        ) == InsertBatch(batch, datetime.utcfromtimestamp(message.received))
+        ) == InsertBatch(rows=batch, origin_timestamp=None)

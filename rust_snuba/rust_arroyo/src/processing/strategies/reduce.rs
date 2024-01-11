@@ -2,8 +2,8 @@ use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     SubmitError,
 };
+use crate::timer;
 use crate::types::{Message, Partition};
-use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 use std::collections::BTreeMap;
 use std::mem;
@@ -57,7 +57,6 @@ pub struct Reduce<T, TResult> {
     batch_state: BatchState<T, TResult>,
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metrics: BoxMetrics,
     compute_batch_size: fn(&T) -> usize,
 }
 
@@ -144,7 +143,6 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             batch_state,
             message_carried_over: None,
             commit_request_carried_over: None,
-            metrics: get_metrics(),
             compute_batch_size,
         }
     }
@@ -177,11 +175,8 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             return Ok(());
         }
 
-        self.metrics.timing(
-            "arroyo.strategies.reduce.batch_time",
-            batch_time.as_secs(),
-            None,
-        );
+        // FIXME: this used to be in seconds
+        timer!("arroyo.strategies.reduce.batch_time", batch_time);
 
         let batch_state = mem::replace(
             &mut self.batch_state,

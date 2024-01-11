@@ -6,25 +6,26 @@ use std::time::Duration;
 use tokio::runtime::{Handle, Runtime};
 use tokio::task::JoinHandle;
 
+use crate::gauge;
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
     SubmitError,
 };
 use crate::types::Message;
-use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 
 #[derive(Clone, Debug)]
-pub enum RunTaskError {
+pub enum RunTaskError<TError> {
     RetryableError,
     InvalidMessage(InvalidMessage),
+    Other(TError),
 }
 
-pub type RunTaskFunc<TTransformed> =
-    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError>> + Send>>;
+pub type RunTaskFunc<TTransformed, TError> =
+    Pin<Box<dyn Future<Output = Result<Message<TTransformed>, RunTaskError<TError>>> + Send>>;
 
-pub trait TaskRunner<TPayload, TTransformed>: Send + Sync {
-    fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed>;
+pub trait TaskRunner<TPayload, TTransformed, TError>: Send + Sync {
+    fn get_task(&self, message: Message<TPayload>) -> RunTaskFunc<TTransformed, TError>;
 }
 
 /// This is configuration for the [`RunTaskInThreads`] strategy.
@@ -77,22 +78,21 @@ enum RuntimeOrHandle {
     Runtime(Runtime),
 }
 
-pub struct RunTaskInThreads<TPayload, TTransformed> {
+pub struct RunTaskInThreads<TPayload, TTransformed, TError> {
     next_step: Box<dyn ProcessingStrategy<TTransformed>>,
-    task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
+    task_runner: Box<dyn TaskRunner<TPayload, TTransformed, TError>>,
     concurrency: usize,
     runtime: Handle,
-    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError>>>,
+    handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError<TError>>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metrics: BoxMetrics,
     metric_name: String,
 }
 
-impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
+impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TError> {
     pub fn new<N>(
         next_step: N,
-        task_runner: Box<dyn TaskRunner<TPayload, TTransformed>>,
+        task_runner: Box<dyn TaskRunner<TPayload, TTransformed, TError>>,
         concurrency: &ConcurrencyConfig,
         // If provided, this name is used for metrics
         custom_strategy_name: Option<&'static str>,
@@ -110,22 +110,23 @@ impl<TPayload, TTransformed> RunTaskInThreads<TPayload, TTransformed> {
             handles: VecDeque::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
-            metrics: get_metrics(),
             metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
         }
     }
 }
 
-impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
-    for RunTaskInThreads<TPayload, TTransformed>
+impl<TPayload, TTransformed, TError> ProcessingStrategy<TPayload>
+    for RunTaskInThreads<TPayload, TTransformed, TError>
+where
+    TTransformed: Send + Sync + 'static,
+    TError: Into<Box<dyn std::error::Error>> + Send + Sync + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
-        self.metrics
-            .gauge(&self.metric_name, self.handles.len() as u64, None);
+        gauge!(&self.metric_name, self.handles.len() as u64);
 
         if let Some(message) = self.message_carried_over.take() {
             match self.next_step.submit(message) {
@@ -165,8 +166,17 @@ impl<TPayload, TTransformed: Send + Sync + 'static> ProcessingStrategy<TPayload>
                     Ok(Err(RunTaskError::RetryableError)) => {
                         tracing::error!("retryable error");
                     }
+                    Ok(Err(RunTaskError::Other(error))) => {
+                        // XXX: at some point we should extend the error return type of poll() to
+                        // pass those errors through to the stream processor
+                        let error: Box<dyn std::error::Error> = error.into();
+                        tracing::error!(error, "the thread errored");
+                        panic!("the thread errored");
+                    }
                     Err(error) => {
-                        let error: &dyn std::error::Error = &error;
+                        // XXX: at some point we should extend the error return type of poll() to
+                        // pass those errors through to the stream processor
+                        let error: Box<dyn std::error::Error> = error.into();
                         tracing::error!(error, "the thread crashed");
                         panic!("the thread crashed");
                     }
@@ -248,8 +258,8 @@ mod tests {
 
     struct IdentityTaskRunner {}
 
-    impl<T: Send + Sync + 'static> TaskRunner<T, T> for IdentityTaskRunner {
-        fn get_task(&self, message: Message<T>) -> RunTaskFunc<T> {
+    impl<T: Send + Sync + 'static> TaskRunner<T, T, &'static str> for IdentityTaskRunner {
+        fn get_task(&self, message: Message<T>) -> RunTaskFunc<T, &'static str> {
             Box::pin(async move { Ok(message) })
         }
     }
