@@ -18,8 +18,9 @@ use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcesso
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
-    get_processing_function, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig,
-    KafkaMessageMetadata, MessageProcessorConfig, ProcessorConfig, StatsDBackend, StorageConfig,
+    ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
+    MessageProcessorConfig, ProcessingFunction, ProcessorConfig, StatsDBackend, StorageConfig,
+    PROCESSORS,
 };
 use uuid::Uuid;
 
@@ -44,8 +45,8 @@ static PROCESSOR_CONFIG: Lazy<ProcessorConfig> = Lazy::new(ProcessorConfig::defa
 fn create_factory(
     concurrency: usize,
     schema: &str,
+    python_class_name: &str,
 ) -> Box<dyn ProcessingStrategyFactory<KafkaPayload>> {
-    let processor_name = processor_for_schema(schema);
     let storage = StorageConfig {
         name: "test".into(),
         clickhouse_table_name: "test".into(),
@@ -58,7 +59,7 @@ fn create_factory(
             database: "test".into(),
         },
         message_processor: MessageProcessorConfig {
-            python_class_name: processor_name.into(),
+            python_class_name: python_class_name.into(),
             python_module: "test".into(),
         },
     };
@@ -93,9 +94,10 @@ fn create_factory(
 fn create_stream_processor(
     concurrency: usize,
     schema: &str,
+    python_class_name: &str,
     messages: usize,
 ) -> StreamProcessor<KafkaPayload> {
-    let factory = create_factory(concurrency, schema);
+    let factory = create_factory(concurrency, schema, python_class_name);
     let consumer_state = ConsumerState::new(factory, None);
     let topic = Topic::new("test");
     let partition = Partition::new(topic, 0);
@@ -125,9 +127,11 @@ fn create_stream_processor(
     StreamProcessor::new(consumer, consumer_state)
 }
 
-fn run_fn_bench(bencher: &mut BenchmarkGroup<WallTime>, schema: &str) {
-    let processor_name = processor_for_schema(schema);
-    let processor_fn = get_processing_function(processor_name).unwrap();
+fn run_fn_bench(
+    bencher: &mut BenchmarkGroup<WallTime>,
+    schema: &str,
+    processor_fn: ProcessingFunction,
+) {
     let metadata = KafkaMessageMetadata {
         partition: 0,
         offset: 1,
@@ -151,7 +155,12 @@ fn run_fn_bench(bencher: &mut BenchmarkGroup<WallTime>, schema: &str) {
         });
 }
 
-fn run_processor_bench(bencher: &mut BenchmarkGroup<WallTime>, concurrency: usize, schema: &str) {
+fn run_processor_bench(
+    bencher: &mut BenchmarkGroup<WallTime>,
+    concurrency: usize,
+    schema: &str,
+    python_class_name: &str,
+) {
     bencher
         .throughput(Throughput::Elements(MSG_COUNT as u64))
         .warm_up_time(Duration::from_millis(500))
@@ -161,7 +170,12 @@ fn run_processor_bench(bencher: &mut BenchmarkGroup<WallTime>, concurrency: usiz
             &concurrency,
             |b, &s| {
                 b.iter(|| {
-                    let mut processor = black_box(create_stream_processor(s, schema, MSG_COUNT));
+                    let mut processor = black_box(create_stream_processor(
+                        s,
+                        schema,
+                        python_class_name,
+                        MSG_COUNT,
+                    ));
                     loop {
                         let res = processor.run_once();
                         if matches!(res, Err(RunError::Poll(ConsumerError::EndOfPartition))) {
@@ -174,48 +188,20 @@ fn run_processor_bench(bencher: &mut BenchmarkGroup<WallTime>, concurrency: usiz
         );
 }
 
-macro_rules! define_benches {
-    ($c:ident: $($name:ident => $schema:literal,)+) => {
-        $({
-            let mut group = $c.benchmark_group(stringify!($name));
-            run_fn_bench(&mut group, $schema);
-            for concurrency in [1, 4, 16] {
-                run_processor_bench(&mut group, concurrency, $schema);
-            }
-            group.finish();
-        })+
-    };
-}
-
-pub fn processor_for_schema(schema: &str) -> &str {
-    match schema {
-        "snuba-spans" => "SpansMessageProcessor",
-        "snuba-queries" => "QuerylogProcessor",
-        "processed-profiles" => "ProfilesMessageProcessor",
-        "profiles-call-tree" => "FunctionsMessageProcessor",
-        "ingest-replay-events" => "ReplaysProcessor",
-        "snuba-generic-metrics" => "MetricsSummariesMessageProcessor",
-        "outcomes" => "OutcomesProcessor",
-        _ => todo!("need to add new schemas and processors"),
-    }
-}
-
 fn main() {
     // this sends to nowhere, but because it's UDP we won't error.
     metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer")).unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 
-    define_benches!(c:
-        spans => "snuba-spans",
-        querylog => "snuba-queries",
-        profiles => "processed-profiles",
-        functions => "profiles-call-tree",
-        replays => "ingest-replay-events",
-        // FIXME: the schema does not really match the metrics summaries
-        // metrics => "snuba-generic-metrics",
-        outcomes => "outcomes",
-    );
+    for (python_class_name, topic_name, processor_fn) in PROCESSORS {
+        let mut group = c.benchmark_group(*topic_name);
+        run_fn_bench(&mut group, topic_name, *processor_fn);
+        for concurrency in [1, 4, 16] {
+            run_processor_bench(&mut group, concurrency, topic_name, python_class_name);
+        }
+        group.finish();
+    }
 
     c.final_summary()
 }

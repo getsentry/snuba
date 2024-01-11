@@ -54,6 +54,7 @@ rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-co
 
 [dev-dependencies]
 criterion = "0.5.1"
+insta = { version = "1.34.0", features = ["json", "redactions"] }
 once_cell = "1.18.0"
 procspawn = { version = "1.0.0", features = ["test-support", "json"] }
 pyo3 = { version = "*", features = ["auto-initialize"] }
