@@ -1,18 +1,18 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Duration, Utc};
 
 use crate::processing::strategies::{
     CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
 };
+use crate::timer;
 use crate::types::{Message, Partition};
-use crate::utils::metrics::{get_metrics, BoxMetrics};
-use std::collections::HashMap;
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
     last_commit_time: DateTime<Utc>,
     last_record_time: DateTime<Utc>,
     commit_frequency: Duration,
-    metrics: BoxMetrics,
 }
 
 impl CommitOffsets {
@@ -22,7 +22,6 @@ impl CommitOffsets {
             last_commit_time: Utc::now(),
             last_record_time: Utc::now(),
             commit_frequency,
-            metrics: get_metrics(),
         }
     }
 
@@ -53,10 +52,10 @@ impl<T> ProcessingStrategy<T> for CommitOffsets {
         let now = Utc::now();
         if now - self.last_record_time > Duration::seconds(1) {
             if let Some(timestamp) = message.timestamp() {
-                self.metrics.timing(
+                // FIXME: this used to be in seconds
+                timer!(
                     "arroyo.consumer.latency",
-                    (now - timestamp).num_seconds() as u64,
-                    None,
+                    (now - timestamp).to_std().unwrap_or_default()
                 );
                 self.last_record_time = now;
             }
