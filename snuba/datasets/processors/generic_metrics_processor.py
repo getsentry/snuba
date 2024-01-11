@@ -2,7 +2,7 @@ import logging
 import pickle
 import zlib
 from abc import ABC, abstractmethod, abstractproperty
-from datetime import datetime
+from datetime import datetime, timezone
 from random import random
 from typing import (
     Any,
@@ -146,7 +146,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "metric_id": message["metric_id"],
-            "timestamp": timestamp,
+            "timestamp": int(timestamp.replace(tzinfo=timezone.utc).timestamp()),
             "tags.key": keys,
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
