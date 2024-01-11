@@ -73,9 +73,10 @@ pub fn deserialize_message(
             for tag in event.tags.into_iter() {
                 if &tag.0 == "transaction" {
                     title = tag.1.clone()
+                } else {
+                    tags_key.push(tag.0);
+                    tags_value.push(tag.1);
                 }
-                tags_key.push(tag.0);
-                tags_value.push(tag.1);
             }
 
             // Unwrap the ip-address string.
