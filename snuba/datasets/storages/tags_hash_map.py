@@ -16,6 +16,16 @@ CONTEXTS_HASH_MAP_COLUMN = (
     "contexts.key, contexts.value)"
 )
 
+# There an issue in Clickhouse where the arrayMap function passes
+# in Nothing type values for empty arrays. This causes the regex function to fail
+# without the toString function, unless a merge for the part is completed.
+# This is fixed in Clickhouse 22.
+SENTRY_TAGS_HASH_MAP_COLUMN = (
+    "arrayMap((k, v) -> cityHash64(concat("
+    "replaceRegexpAll(toString(k), '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', toString(v))), "
+    "sentry_tags.key, sentry_tags.value)"
+)
+
 
 def hash_map_int_column_definition(key_column_name: str, value_column_name: str) -> str:
     return (
