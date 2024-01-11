@@ -202,13 +202,7 @@ pub fn processor_for_schema(schema: &str) -> &str {
 
 fn main() {
     // this sends to nowhere, but because it's UDP we won't error.
-    metrics::init(StatsDBackend::new(
-        "127.0.0.1",
-        8081,
-        "snuba.consumer",
-        Default::default(),
-    ))
-    .unwrap();
+    metrics::init(StatsDBackend::new("127.0.0.1", 8081, "snuba.consumer")).unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 

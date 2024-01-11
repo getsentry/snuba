@@ -2274,6 +2274,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8621587d4798caf8eb44879d42e56b9a93ea5dcd315a6487c357130095b62801"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2309,14 +2319,19 @@ dependencies = [
 
 [[package]]
 name = "statsdproxy"
-version = "0.1.0"
-source = "git+https://github.com/getsentry/statsdproxy#254df23dd886a0a7c8259ccb75bf284309a92bfe"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75c3ca857ffc876cad78f6c1489356c962d214fe500117c61865550e6304509d"
 dependencies = [
  "anyhow",
  "cadence",
+ "clap",
  "crc32fast",
  "env_logger",
  "log",
+ "serde",
+ "serde_yaml",
+ "signal-hook",
  "thread_local",
 ]
 

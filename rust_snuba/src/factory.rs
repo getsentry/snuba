@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,9 +9,10 @@ use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::Topic;
+use rust_arroyo::types::{Partition, Topic};
 
 use crate::config;
+use crate::metrics::global_tags::set_global_tag;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
@@ -79,6 +81,13 @@ impl ConsumerStrategyFactory {
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
+    fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        match partitions.keys().map(|partition| partition.index).min() {
+            Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
+            None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
+        }
+    }
+
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 

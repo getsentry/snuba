@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,6 +18,7 @@ use pyo3::prelude::*;
 use crate::config;
 use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
+use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::types::KafkaMessageMetadata;
@@ -99,17 +99,16 @@ pub fn consumer_impl(
         consumer_config.env.dogstatsd_host,
         consumer_config.env.dogstatsd_port,
     ) {
-        let mut tags = HashMap::new();
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        tags.insert("storage", storage_name.as_str());
-        tags.insert("consumer_group", consumer_group);
+        set_global_tag("storage".to_owned(), storage_name);
+        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer", tags)).unwrap();
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
