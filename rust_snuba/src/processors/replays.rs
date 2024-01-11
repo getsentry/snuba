@@ -87,7 +87,7 @@ pub fn deserialize_message(
             };
 
             // Handle user-id field.
-            let user_id = match &event.user.user_id {
+            let user_id = match &event.user.id {
                 Some(UserId::String(v)) => Some(v.clone()),
                 Some(UserId::Number(v)) => Some(v.to_string()),
                 None => None,
@@ -303,7 +303,7 @@ struct User {
     #[serde(default)]
     username: Option<String>,
     #[serde(default)]
-    user_id: Option<UserId>,
+    id: Option<UserId>,
     #[serde(default)]
     email: Option<String>,
     #[serde(default)]
@@ -436,7 +436,7 @@ mod tests {
             "user": {
                 "email": "email",
                 "ip_address": "127.0.0.1",
-                "user_id": "user_id",
+                "id": "user_id",
                 "username": "username"
             },
             "sdk": {
