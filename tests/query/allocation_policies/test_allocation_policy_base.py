@@ -505,9 +505,25 @@ def test_outdated_configs() -> None:
 
 
 @pytest.mark.redis_db
-def test_configs_with_dot_values() -> None:
+def test_configs_with_delimiter_values() -> None:
     # test that configs with dots can be stored and read
     policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
-    policy.set_config_value("my_param_config", 5, {"ref": "a.b.c", "org": 1})
+    policy.set_config_value("my_param_config", 5, {"ref": "a,::.b.c", "org": 1})
     configs = policy.get_current_configs()
     print(configs)
+    assert {
+        "name": "my_param_config",
+        "type": "int",
+        "default": -1,
+        "description": "",
+        "value": 5,
+        "params": {"org": 1, "ref": "a,::.b.c"},
+    } in configs
+
+
+def test_cannot_use_escape_sequences() -> None:
+    policy = SomeParametrizedConfigPolicy(StorageKey("something"), [], {})
+    with pytest.raises(InvalidPolicyConfig):
+        policy.set_config_value(
+            "my_param_config", 5, {"ref": "a__dot_literal__.b.c", "org": 1}
+        )

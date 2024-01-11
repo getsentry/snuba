@@ -353,6 +353,16 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         section of this docstring for more info.
     """
 
+    # This component builds redis strings that are delimited by dots, commas, colons
+    # in order to allow those characters to exist in config we replace them with their
+    # counterparts on write/read. It may be better to just replace our serialization with JSON
+    # instead of what we're doing but this is where we're at rn 1/10/24
+    __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
+        ".": "__dot_literal__",
+        ",": "__comma_literal__",
+        ":": "__colon_literal__",
+    }
+
     def __init__(
         self,
         storage_key: StorageKey,
@@ -578,7 +588,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                     logger.exception(
                         f"AllocationPolicy could not deserialize a key: {key}"
                     )
-                    raise
+                    continue
                 detailed_configs.append(
                     definitions[config_key].to_config_dict(
                         value=runtime_configs[key], params=params
@@ -602,8 +612,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         parameters = "."
         for param in sorted(list(params.keys())):
-            param_sanitized = param.replace(".", "\\.")
-            value_sanitized = str(params[param]).replace(".", "\\.")
+            param_sanitized = self.__escape_delimiter_chars(param)
+            value_sanitized = self.__escape_delimiter_chars(params[param])
             parameters += f"{param_sanitized}:{value_sanitized},"
         parameters = parameters[:-1]
         return f"{self.runtime_config_prefix}.{config}{parameters}"
@@ -630,11 +640,35 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             params_split = params_string.split(",")
             for param_string in params_split:
                 param_key, param_value = param_string.split(":")
+                param_key = self.__unescape_delimiter_chars(param_key)
+                param_value = self.__unescape_delimiter_chars(param_value)
                 params_dict[param_key] = param_value
 
         self.__validate_config_params(config_key=config_key, params=params_dict)
 
         return config_key, params_dict
+
+    def __escape_delimiter_chars(self, key: str) -> str:
+        if not isinstance(key, str):
+            return key
+        for (
+            delimiter_char,
+            escape_sequence,
+        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+            if escape_sequence in str(key):
+                raise InvalidPolicyConfig(
+                    f"{escape_sequence} is not a valid string for a policy config"
+                )
+            key = key.replace(delimiter_char, escape_sequence)
+        return key
+
+    def __unescape_delimiter_chars(self, key: str) -> str:
+        for (
+            delimiter_char,
+            escape_sequence,
+        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+            key = key.replace(escape_sequence, delimiter_char)
+        return key
 
     def __validate_config_params(
         self, config_key: str, params: dict[str, Any], value: Any = None
