@@ -49,7 +49,7 @@ install-python-dependencies:
 
 # install-rs-dev/install-py-dev mimick sentry's naming conventions
 install-rs-dev:
-	which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
+	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
 	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
 .PHONY: install-rs-dev
 

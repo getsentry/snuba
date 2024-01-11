@@ -1,23 +1,22 @@
-use chrono::DateTime;
-use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use chrono::DateTime;
 use criterion::measurement::WallTime;
 use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::local::broker::LocalBroker;
 use rust_arroyo::backends::local::LocalConsumer;
 use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
 use rust_arroyo::backends::ConsumerError;
+use rust_arroyo::metrics;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
 use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
-
-use rust_arroyo::utils::metrics::configure_metrics;
 use rust_snuba::{
     get_processing_function, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig,
     KafkaMessageMetadata, MessageProcessorConfig, ProcessorConfig, StatsDBackend, StorageConfig,
@@ -203,12 +202,13 @@ pub fn processor_for_schema(schema: &str) -> &str {
 
 fn main() {
     // this sends to nowhere, but because it's UDP we won't error.
-    configure_metrics(StatsDBackend::new(
+    metrics::init(StatsDBackend::new(
         "127.0.0.1",
         8081,
         "snuba.consumer",
         Default::default(),
-    ));
+    ))
+    .unwrap();
 
     let mut c = Criterion::default().configure_from_args();
 
