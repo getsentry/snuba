@@ -64,11 +64,14 @@ class OutcomesProcessor(DatasetMessageProcessor):
                 metrics.increment("missing_quantity")
 
         try:
-            timestamp = _ensure_valid_date(
-                datetime.strptime(
-                    outcome["timestamp"], settings.PAYLOAD_DATETIME_FORMAT
-                ),
+            timestamp_str = outcome["timestamp"]
+            # strip out nanoseconds from timestamp using string slicing before
+            # parsing, because apparently relay produces this data today
+            timestamp_str = timestamp_str[0:26] + timestamp_str[-1:]
+            timestamp = datetime.strptime(
+                timestamp_str, settings.PAYLOAD_DATETIME_FORMAT
             )
+            timestamp = _ensure_valid_date(timestamp)
         except Exception:
             metrics.increment("bad_outcome_timestamp")
             timestamp = _ensure_valid_date(datetime.utcnow())
