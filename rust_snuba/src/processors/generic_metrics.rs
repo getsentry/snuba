@@ -157,7 +157,6 @@ impl Parse for CountersRawRow {
             }
         };
 
-
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
@@ -191,7 +190,8 @@ where
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
-    let sentry_received_timestamp = DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
+    let sentry_received_timestamp =
+        DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
     match result {
