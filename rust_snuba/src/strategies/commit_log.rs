@@ -167,7 +167,6 @@ pub struct ProduceCommitLog {
 }
 
 impl ProduceCommitLog {
-    #[allow(dead_code)]
     pub fn new<N>(
         next_step: N,
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
