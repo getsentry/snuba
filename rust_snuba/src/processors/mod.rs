@@ -26,8 +26,7 @@ macro_rules! define_processing_functions {
             }
         }
 
-        #[cfg(test)]
-        const PROCESSORS: &[(&'static str, &'static str, ProcessingFunction)] = &[
+        pub const PROCESSORS: &[(&'static str, &'static str, ProcessingFunction)] = &[
             $(($name, $logical_topic, $function),)*
         ];
     };
@@ -68,11 +67,8 @@ mod tests {
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(format!("{}-{}", topic_name, example_i));
 
-                match *topic_name {
-                    "ingest-replay-events" => {
-                        settings.add_redaction(".*.event_hash", "<event UUID>");
-                    }
-                    _ => (),
+                if *topic_name == "ingest-replay-events" {
+                    settings.add_redaction(".*.event_hash", "<event UUID>");
                 }
 
                 settings.set_description(std::str::from_utf8(example).unwrap());
