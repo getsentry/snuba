@@ -49,6 +49,33 @@ schema:
           },
       },
       {
+        name: _tags_hash_map,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [ readonly ],
+          },
+      },
+      {
+        name: sentry_tags,
+        type: Nested,
+        args:
+          {
+            subcolumns:
+              [ { name: key, type: String }, { name: value, type: String } ],
+          },
+      },
+      {
+        name: _sentry_tags_hash_map,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [ readonly ],
+          },
+      },
+      {
         name: measurements,
         type: Nested,
         args:
@@ -61,7 +88,7 @@ schema:
           },
       },
       {
-        name: _tags_hash_map,
+        name: _measurements_hash_map,
         type: Array,
         args:
           {
@@ -108,16 +135,26 @@ query_processors:
       column_name: tags
       hash_map_name: _tags_hash_map
       killswitch: tags_hash_map_enabled
+  - processor: MappingOptimizer
+    args:
+      column_name: sentry_tags
+      hash_map_name: _sentry_tags_hash_map
+      killswitch: sentry_tags_hash_map_enabled
+  - processor: MappingOptimizer
+    args:
+      column_name: measurements
+      hash_map_name: _measurements_hash_map
+      killswitch: measurements_hash_map_enabled
   - processor: EmptyTagConditionProcessor
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
   - processor: ArrayJoinKeyValueOptimizer
     args:
-      column_name: measurements
-  - processor: ArrayHasOptimizer
+      column_name: sentry_tags
+  - processor: ArrayJoinKeyValueOptimizer
     args:
-      array_columns: [measurements.key]
+      column_name: measurements
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:

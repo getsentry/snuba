@@ -1,27 +1,36 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::config::ProcessorConfig;
+use crate::processors::utils::{enforce_retention, hex_to_u64};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
+    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: Span = msg.try_into()?;
 
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    InsertBatch::from_rows([span])
+    Ok(InsertBatch {
+        origin_timestamp,
+        rows: RowData::from_rows([span])?,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -40,7 +49,7 @@ struct FromSpanMessage {
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
-    #[serde(default = "default_retention_days")]
+    received: f64,
     retention_days: Option<u16>,
     #[serde(default, deserialize_with = "hex_to_u64")]
     segment_id: u64,
@@ -74,6 +83,7 @@ struct FromSentryTags {
     transaction_method: Option<String>,
     #[serde(rename(deserialize = "transaction.op"))]
     transaction_op: Option<String>,
+    user: Option<String>,
     #[serde(flatten)]
     extra: BTreeMap<String, String>,
 }
@@ -130,6 +140,10 @@ impl FromSentryTags {
             tags.insert("status_code".into(), status_code.into());
         }
 
+        if let Some(user) = &self.user {
+            tags.insert("user".into(), user.into());
+        }
+
         for (key, value) in &self.extra {
             tags.insert(key.into(), value.into());
         }
@@ -169,7 +183,7 @@ struct Span {
     platform: String,
     profile_id: Option<Uuid>,
     project_id: u64,
-    retention_days: u16,
+    retention_days: Option<u16>,
     segment_id: u64,
     segment_name: String,
     #[serde(rename(serialize = "sentry_tags.key"))]
@@ -203,10 +217,11 @@ impl TryFrom<FromSpanMessage> for Span {
             0
         };
         let status = from.sentry_tags.status.unwrap_or_default() as u8;
+
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
-        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) =
+        let (tag_keys, tag_values): (Vec<_>, Vec<_>) =
             from.tags.unwrap_or_default().into_iter().unzip();
 
         let (measurement_keys, measurement_values) = from
@@ -215,21 +230,6 @@ impl TryFrom<FromSpanMessage> for Span {
             .into_iter()
             .map(|(k, v)| (k, v.value))
             .unzip();
-
-        if let Some(http_method) = from.sentry_tags.http_method {
-            tag_keys.push("http.method".into());
-            tag_values.push(http_method);
-        }
-
-        if let Some(status_code) = from.sentry_tags.status_code {
-            tag_keys.push("status_code".into());
-            tag_values.push(status_code);
-        }
-
-        if let Some(transaction_method) = from.sentry_tags.transaction_method {
-            tag_keys.push("transaction.method".into());
-            tag_values.push(transaction_method);
-        }
 
         let metrics_summary = match from._metrics_summary {
             Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
@@ -255,7 +255,7 @@ impl TryFrom<FromSpanMessage> for Span {
             platform: from.sentry_tags.system.unwrap_or_default(),
             profile_id: from.profile_id,
             project_id: from.project_id,
-            retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
+            retention_days: from.retention_days,
             segment_id: from.segment_id,
             segment_name: from.sentry_tags.transaction.unwrap_or_default(),
             sentry_tag_keys,
@@ -270,6 +270,7 @@ impl TryFrom<FromSpanMessage> for Span {
             trace_id: from.trace_id,
             transaction_id: from.event_id,
             transaction_op,
+            user: from.sentry_tags.user.unwrap_or_default(),
             ..Default::default()
         })
     }
@@ -417,6 +418,7 @@ mod tests {
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
+        received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
         sentry_tags: TestSentryTags,
@@ -437,15 +439,8 @@ mod tests {
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
             retention_days: Some(90),
+            received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
-            span_id: Some("deadbeefdeadbeef".into()),
-            start_timestamp_ms: Some(1691105878720),
-            trace_id: Some(Uuid::new_v4()),
-            tags: Some(BTreeMap::from([
-                ("tag1".into(), "value1".into()),
-                ("tag2".into(), "123".into()),
-                ("tag3".into(), "true".into()),
-            ])),
             sentry_tags: TestSentryTags {
                 action: Some("GET".into()),
                 domain: Some("targetdomain.tld:targetport".into()),
@@ -460,6 +455,14 @@ mod tests {
                 transaction_method: Some("GET".into()),
                 transaction_op: Some("navigation".into()),
             },
+            span_id: Some("deadbeefdeadbeef".into()),
+            start_timestamp_ms: Some(1691105878720),
+            tags: Some(BTreeMap::from([
+                ("tag1".into(), "value1".into()),
+                ("tag2".into(), "123".into()),
+                ("tag3".into(), "true".into()),
+            ])),
+            trace_id: Some(Uuid::new_v4()),
         }
     }
 
@@ -474,7 +477,8 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
@@ -488,7 +492,8 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
@@ -502,21 +507,24 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_null_retention_days() {
         let mut span = valid_span();
-        span.retention_days = default_retention_days();
+        span.retention_days = None;
         let data = serde_json::to_vec(&span).unwrap();
         let payload = KafkaPayload::new(None, None, Some(data));
+
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
@@ -530,6 +538,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

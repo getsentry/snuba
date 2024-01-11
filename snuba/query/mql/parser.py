@@ -55,7 +55,7 @@ logger = logging.getLogger("snuba.mql.parser")
 
 @dataclass
 class InitialParseResult:
-    aggregate: SelectedExpression | None = None
+    expression: SelectedExpression | None = None
     formula: str | None = None
     parameters: list[InitialParseResult] | None = None
     groupby: list[SelectedExpression] | None = None
@@ -109,8 +109,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         Given an input parse result from `sum(mri){x:y}`, this should output
         an expression like `sumIf(value, x = y AND metric_id = mri)`.
         """
-        assert param.aggregate is not None
-        exp = param.aggregate.expression
+        assert param.expression is not None
+        exp = param.expression.expression
         assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
 
         conditions = param.conditions or []
@@ -159,12 +159,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         # TODO: If the formula has filters/group by, where do those appear?
 
         # If the parameters of the query are timeseries, extract the expressions from the result
-        if term.aggregate is not None:
-            term = replace(term, aggregate=self._build_timeseries_formula_param(term))
-        if coefficient.aggregate is not None:
+        if term.expression is not None:
+            term = replace(term, expression=self._build_timeseries_formula_param(term))
+        if coefficient.expression is not None:
             coefficient = replace(
                 coefficient,
-                aggregate=self._build_timeseries_formula_param(coefficient),
+                expression=self._build_timeseries_formula_param(coefficient),
             )
 
         if term.groupby != coefficient.groupby:
@@ -173,7 +173,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             )
 
         return InitialParseResult(
-            aggregate=None,
+            expression=None,
             formula=term_operator,
             parameters=[term, coefficient],
             groupby=term.groupby,
@@ -418,11 +418,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 parameters=tuple(Column(None, None, "value")),
             ),
         )
-        target.aggregate = selected_aggregate
+        target.expression = selected_aggregate
         return target
-
-    def visit_curried_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
-        return str(node.text)
 
     def visit_curried_aggregate(
         self,
@@ -452,7 +449,44 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 (Column(None, None, "value"),),
             ),
         )
-        target.aggregate = selected_aggregate_column
+        target.expression = selected_aggregate_column
+        return target
+
+    def visit_arbitrary_function(
+        self,
+        node: Node,
+        children: Tuple[
+            str,
+            Tuple[
+                Any,
+                Sequence[InitialParseResult],
+                Sequence[Sequence[Union[str, int, float]]],
+                Any,
+            ],
+        ],
+    ) -> InitialParseResult:
+        arbitrary_function_name, zero_or_one = children
+        _, expr, params, *_ = zero_or_one
+        _, target, _ = expr
+        arbitrary_function_params = [
+            Literal(alias=None, value=param[-1]) for param in params
+        ]
+        assert isinstance(target.expression, SelectedExpression)
+        assert isinstance(target.expression.expression, FunctionCall)
+        aggregate = FunctionCall(
+            alias=None,
+            function_name=target.expression.expression.function_name,
+            parameters=target.expression.expression.parameters,
+        )
+        arbitrary_function = SelectedExpression(
+            name=target.expression.name,
+            expression=FunctionCall(
+                alias=target.expression.name,
+                function_name=arbitrary_function_name,
+                parameters=(aggregate, *arbitrary_function_params),
+            ),
+        )
+        target.expression = arbitrary_function
         return target
 
     def visit_param(
@@ -479,6 +513,14 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return agg_params
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_curried_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_arbitrary_function_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
         return node.text
 
@@ -536,14 +578,16 @@ def parse_mql_query_body(
         """
         exp_tree = MQL_GRAMMAR.parse(body)
         parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
-        if not parsed.aggregate and not parsed.formula:
-            raise ParsingException("No aggregate or formula specified in MQL query")
+        if not parsed.expression and not parsed.formula:
+            raise ParsingException(
+                "No aggregate/expression or formula specified in MQL query"
+            )
 
         if parsed.formula:
 
             def extract_expression(param: InitialParseResult) -> Expression:
-                if param.aggregate is not None:
-                    return param.aggregate.expression
+                if param.expression is not None:
+                    return param.expression.expression
                 elif param.formula:
                     parameters = param.parameters or []
                     return FunctionCall(
@@ -573,8 +617,8 @@ def parse_mql_query_body(
                 selected_columns=selected_columns,
                 groupby=groupby,
             )
-        if parsed.aggregate:
-            selected_columns = [parsed.aggregate]
+        if parsed.expression:
+            selected_columns = [parsed.expression]
             if parsed.groupby:
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
