@@ -20,12 +20,14 @@ class QueryMeasurement:
     read_rows: int
     read_bytes: int
 
+
 @dataclass(frozen=True)
 class MismatchedValues:
     base_value: int
     new_value: int
     delta: int
     delta_percent: float
+
 
 @dataclass
 class QueryMismatch:
@@ -35,6 +37,7 @@ class QueryMismatch:
     result_bytes: MismatchedValues
     read_rows: MismatchedValues
     read_bytes: MismatchedValues
+
 
 MEASUREMENTS = [
     "query_duration_ms",
@@ -95,7 +98,9 @@ def query_comparer(
         assert v1_row[0] == v2_row[0], "Invalid query_ids: ids must match"
         total_rows += 1
 
-        mismatches_exist = any([1 for i in range(1, len(v1_row)) if v1_row[i] != v2_row[i]])
+        mismatches_exist = any(
+            [1 for i in range(1, len(v1_row)) if v1_row[i] != v2_row[i]]
+        )
         if not mismatches_exist:
             continue
 
@@ -106,7 +111,7 @@ def query_comparer(
 
     print("\ntotal queries:", total_rows)
     print("total mismatches:", len(mismatches))
-    print("percent mismatches:", len(mismatches)/total_rows)
+    print("percent mismatches:", len(mismatches) / total_rows)
 
 
 def _create_mismatch(v1_data, v2_data):
@@ -116,7 +121,7 @@ def _create_mismatch(v1_data, v2_data):
         v2_value = v2_data.__getattribute__(m)
 
         delta = v2_value - v1_value
-        delta_percent = (delta/v1_value) * 100
+        delta_percent = (delta / v1_value) * 100
         mismatched_values = MismatchedValues(
             v1_value,
             v2_value,
