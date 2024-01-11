@@ -86,7 +86,7 @@ pub struct RunTaskInThreads<TPayload, TTransformed, TError> {
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError<TError>>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metric_name: String,
+    metric_name_prefix: String,
 }
 
 impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TError> {
@@ -110,7 +110,7 @@ impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TE
             handles: VecDeque::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
-            metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
+            metric_name_prefix: format!("arroyo.strategies.{strategy_name}."),
         }
     }
 }
@@ -126,12 +126,14 @@ where
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
-        gauge!(&self.metric_name, self.handles.len() as u64);
+        gauge!(
+            &(self.metric_name_prefix + "threads"),
+            self.handles.len() as u64
+        );
 
-        self.metrics.gauge(
-            "arroyo.strategies.run_task_in_threads.concurrency",
+        gauge!(
+            &(self.metric_name_prefix + "concurrency"),
             self.concurrency as u64,
-            None,
         );
 
         if let Some(message) = self.message_carried_over.take() {
