@@ -4,7 +4,7 @@ use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, Usage
 use serde::{Deserialize, Deserializer};
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
-pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S.%6fZ";
+pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S.%fZ";
 
 pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
     let mut retention_days = value.unwrap_or(config.default_retention_days);
