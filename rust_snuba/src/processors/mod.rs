@@ -1,4 +1,5 @@
 mod functions;
+mod generic_metrics;
 mod metrics_summaries;
 mod outcomes;
 mod profiles;
@@ -23,6 +24,12 @@ pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
         "SpansMessageProcessor" => Some(spans::process_message),
         "MetricsSummariesMessageProcessor" => Some(metrics_summaries::process_message),
         "OutcomesProcessor" => Some(outcomes::process_message),
+        "GenericCountersMetricsProcessor" => Some(generic_metrics::process_counter_message),
+        "GenericSetsMetricsProcessor" => Some(generic_metrics::process_set_message),
+        "GenericDistributionsMetricsProcessor" => {
+            Some(generic_metrics::process_distribution_message)
+        }
+        "GenericGaugesMetricsProcessor" => Some(generic_metrics::process_gauge_message),
         _ => None,
     }
 }
