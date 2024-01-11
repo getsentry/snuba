@@ -52,8 +52,8 @@ struct FromGenericMetricsMessage {
     metric_id: u64,
     #[serde(rename = "type")]
     r#type: String,
-    timestamp: u64,
-    sentry_received_timestamp: SentryReceivedTimestamp,
+    timestamp: f64,
+    sentry_received_timestamp: f64,
     tags: BTreeMap<String, String>,
     value: MetricValue,
     retention_days: u16,
@@ -75,20 +75,13 @@ enum MetricValue {
     },
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum SentryReceivedTimestamp {
-    UInt(u64),
-    Float(f64),
-}
-
 #[derive(Debug, Serialize, Default)]
 struct CommonMetricFields {
     use_case_id: String,
     org_id: u64,
     project_id: u64,
     metric_id: u64,
-    timestamp: u64,
+    timestamp: u32,
     retention_days: u16,
     #[serde(rename = "tags.key")]
     tags_key: Vec<u64>,
@@ -171,7 +164,7 @@ impl Parse for CountersRawRow {
             project_id: from.project_id,
             metric_type: "counter".to_string(),
             metric_id: from.metric_id,
-            timestamp: from.timestamp,
+            timestamp: from.timestamp as u32,
             retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
@@ -198,13 +191,7 @@ where
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
-
-    let sentry_received_timestamp = match msg.sentry_received_timestamp {
-        SentryReceivedTimestamp::UInt(timestamp) => {
-            DateTime::from_timestamp(timestamp.try_into().unwrap(), 0)
-        }
-        SentryReceivedTimestamp::Float(timestamp) => DateTime::from_timestamp(timestamp as i64, 0),
-    };
+    let sentry_received_timestamp = DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
     match result {
@@ -278,7 +265,7 @@ impl Parse for SetsRawRow {
             project_id: from.project_id,
             metric_type: "set".to_string(),
             metric_id: from.metric_id,
-            timestamp: from.timestamp,
+            timestamp: from.timestamp as u32,
             retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
@@ -359,7 +346,7 @@ impl Parse for DistributionsRawRow {
             project_id: from.project_id,
             metric_type: "distribution".to_string(),
             metric_id: from.metric_id,
-            timestamp: from.timestamp,
+            timestamp: from.timestamp as u32,
             retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
@@ -459,7 +446,7 @@ impl Parse for GaugesRawRow {
             project_id: from.project_id,
             metric_type: "gauge".to_string(),
             metric_id: from.metric_id,
-            timestamp: from.timestamp,
+            timestamp: from.timestamp as u32,
             retention_days,
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
