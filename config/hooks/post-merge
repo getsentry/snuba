@@ -1,35 +1,43 @@
 #!/usr/bin/env bash
+## vim: shiftwidth=2
 
 red="$(tput setaf 1)"
 bold="$(tput bold)"
 reset="$(tput sgr0)"
-
 
 files_changed_upstream="$(mktemp)"
 trap "rm -f ${files_changed_upstream}" EXIT
 
 git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD > "$files_changed_upstream"
 
-grep -E --quiet 'migrations/groups.py' "$files_changed_upstream" && cat <<EOF
+commandline=
 
-[${red}${bold}!!!${reset}] Some migrations have changed, you may need to run:
+if grep -E --quiet 'migrations/groups.py' "$files_changed_upstream"; then
+  commandline+=" apply-migrations"
+fi
 
-  snuba migrations migrate --force
+if grep -E --quiet 'requirements.txt' "$files_changed_upstream"; then
+  commandline+=" install-py-dev"
+fi
+
+if grep -E --quiet 'rust_snuba/' "$files_changed_upstream"; then
+  commandline+=" install-rs-dev"
+fi
+
+if [ -n "$commandline" ]; then
+  command="make$commandline"
+  cat <<EOF
+
+[${red}${bold}!!!${reset}] ${red} It looks like some dependencies have changed that will require your intervention. Run the following to update:${reset}
+
+    ${red}${bold}${command}${reset}
 
 EOF
 
-grep -E --quiet 'requirements.txt' "$files_changed_upstream" && cat <<EOF
-
-[${red}${bold}!!!${reset}] Python dependencies updated, you may need to run:
-
-  make install-python-dependencies
-
-EOF
-
-grep -E --quiet 'rust_snuba/' "$files_changed_upstream" && cat <<EOF
-
-[${red}${bold}!!!${reset}] Rust code changed, you may need to run:
-
-  make install-rs-dev
-
-EOF
+  if [ "$SENTRY_POST_MERGE_AUTO_UPDATE" ]; then
+    echo "${yellow}Automatically running update command because SENTRY_POST_MERGE_AUTO_UPDATE is set.${reset}"
+    $commmand
+  else
+    echo "${yellow}If you want these commands to be executed automatically after pulling code, you can export the SENTRY_POST_MERGE_AUTO_UPDATE variable.${reset}"
+  fi
+fi

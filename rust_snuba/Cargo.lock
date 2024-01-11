@@ -2028,6 +2028,7 @@ dependencies = [
 name = "rust_snuba"
 version = "0.1.0"
 dependencies = [
+ "adler",
  "anyhow",
  "cadence",
  "chrono",

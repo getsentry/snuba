@@ -1,4 +1,5 @@
 mod functions;
+mod generic_metrics;
 mod metrics_summaries;
 mod outcomes;
 mod profiles;
@@ -41,6 +42,10 @@ define_processing_functions! {
     ("SpansMessageProcessor", "snuba-spans", spans::process_message),
     ("MetricsSummariesMessageProcessor", "snuba-spans", metrics_summaries::process_message),
     ("OutcomesProcessor", "outcomes", outcomes::process_message),
+    ("GenericCountersMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_counter_message),
+    ("GenericSetsMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_set_message),
+    ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", generic_metrics::process_distribution_message),
+    ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
 }
 
 #[cfg(test)]

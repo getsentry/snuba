@@ -4,6 +4,7 @@ import json
 import time
 from datetime import datetime
 from typing import Type
+from unittest.mock import patch
 
 import pytest
 import rust_snuba
@@ -11,12 +12,28 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.generic_metrics_processor import (
+    GenericCountersMetricsProcessor,
+    GenericDistributionsMetricsProcessor,
+    GenericGaugesMetricsProcessor,
+    GenericSetsMetricsProcessor,
+)
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.processor import InsertBatch
 
 
-@pytest.mark.parametrize("topic,processor", [("outcomes", OutcomesProcessor)])
+@pytest.mark.parametrize(
+    "topic,processor",
+    [
+        ("outcomes", OutcomesProcessor),
+        ("snuba-generic-metrics", GenericCountersMetricsProcessor),
+        ("snuba-generic-metrics", GenericSetsMetricsProcessor),
+        ("snuba-generic-metrics", GenericDistributionsMetricsProcessor),
+        ("snuba-generic-metrics", GenericGaugesMetricsProcessor),
+    ],
+)
+@patch("snuba.settings.DISCARD_OLD_EVENTS", False)
 def test_message_processors(
     topic: str, processor: Type[DatasetMessageProcessor]
 ) -> None:
@@ -54,6 +71,11 @@ def test_message_processors(
                 timestamp=datetime.utcfromtimestamp(millis_since_epoch / 1000),
             ),
         )
+
+        # Handle scenarios where the message needs to be skipped by the processor
+        if not python_processed_message:
+            assert rust_processed_message == b""
+            continue
 
         assert isinstance(python_processed_message, InsertBatch)
 
