@@ -172,7 +172,7 @@ where
                         return Err(StrategyError::Other(error.into()));
                     }
                     Err(e) => {
-                        return Err(e.into());
+                        return Err(StrategyError::Other(e.into()));
                     }
                 }
             }

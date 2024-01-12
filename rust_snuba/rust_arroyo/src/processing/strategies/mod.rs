@@ -1,5 +1,3 @@
-use tokio::task::JoinError;
-
 use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -64,19 +62,12 @@ pub fn merge_commit_request(
 #[derive(Debug)]
 pub enum StrategyError {
     InvalidMessage(InvalidMessage),
-    JoinError(JoinError),
     Other(Box<dyn std::error::Error>),
 }
 
 impl From<InvalidMessage> for StrategyError {
     fn from(value: InvalidMessage) -> Self {
         Self::InvalidMessage(value)
-    }
-}
-
-impl From<JoinError> for StrategyError {
-    fn from(value: JoinError) -> Self {
-        Self::JoinError(value)
     }
 }
 

@@ -309,11 +309,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 }
             }
 
-            Err(StrategyError::JoinError(error)) => {
-                let error: &dyn std::error::Error = &error;
-                tracing::error!(error, "the thread crashed");
-            }
-
             Err(StrategyError::Other(error)) => {
                 tracing::error!(error, "the thread errored");
             }
