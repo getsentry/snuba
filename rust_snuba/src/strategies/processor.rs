@@ -57,7 +57,7 @@ pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>
 }
 
 #[derive(Clone)]
-pub struct MessageProcessor {
+struct MessageProcessor {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
     func: ProcessingFunction,
@@ -88,7 +88,7 @@ impl MessageProcessor {
             return Err(maybe_err);
         };
 
-        if let Err(error) = validate_schema(&self.schema, payload) {
+        if let Err(error) = validate_schema(&self.schema, self.enforce_schema, payload) {
             let error: &dyn std::error::Error = &error;
             tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
@@ -159,7 +159,11 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProces
 }
 
 #[tracing::instrument(skip_all)]
-pub fn validate_schema(schema: &Option<Arc<Schema>>, payload: &[u8]) -> Result<(), SchemaError> {
+pub fn validate_schema(
+    schema: &Option<Arc<Schema>>,
+    enforce_schema: bool,
+    payload: &[u8],
+) -> Result<(), SchemaError> {
     let Some(schema) = &schema else {
         return Ok(());
     };
@@ -180,7 +184,11 @@ pub fn validate_schema(schema: &Option<Arc<Schema>>, payload: &[u8]) -> Result<(
         },
     );
 
-    Err(error)
+    if !enforce_schema {
+        Ok(())
+    } else {
+        Err(error)
+    }
 }
 
 #[cfg(test)]

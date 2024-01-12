@@ -160,7 +160,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         )
                         .unwrap(),
                     ),
-                    Box::new(SchemaValidator { schema }),
+                    Box::new(SchemaValidator {
+                        schema,
+                        enforce_schema: self.enforce_schema,
+                    }),
                     &self.processing_concurrency,
                     Some("validate_schema"),
                 ))
@@ -178,6 +181,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 #[derive(Clone)]
 struct SchemaValidator {
     schema: Option<Arc<Schema>>,
+    enforce_schema: bool,
 }
 
 impl SchemaValidator {
@@ -204,7 +208,7 @@ impl SchemaValidator {
             return Err(maybe_err);
         };
 
-        if let Err(error) = validate_schema(&self.schema, payload) {
+        if let Err(error) = validate_schema(&self.schema, self.enforce_schema, payload) {
             let error: &dyn std::error::Error = &error;
             tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
