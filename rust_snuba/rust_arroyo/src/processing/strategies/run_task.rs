@@ -1,11 +1,9 @@
 use crate::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    SubmitError,
+    StrategyError, SubmitError,
 };
 use crate::types::Message;
 use std::time::Duration;
-
-use super::StrategyError;
 
 pub struct RunTask<TPayload, TTransformed> {
     pub function:
