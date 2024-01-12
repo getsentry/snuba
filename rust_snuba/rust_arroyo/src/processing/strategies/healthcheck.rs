@@ -2,10 +2,10 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use crate::counter;
-use crate::processing::strategies::{CommitRequest, ProcessingStrategy, SubmitError};
+use crate::processing::strategies::{
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+};
 use crate::types::Message;
-
-use super::StrategyError;
 
 const TOUCH_INTERVAL: Duration = Duration::from_secs(1);
 
