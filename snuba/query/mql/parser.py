@@ -159,15 +159,22 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         # TODO: If the formula has filters/group by, where do those appear?
 
         # If the parameters of the query are timeseries, extract the expressions from the result
-        if term.expression is not None:
+        if isinstance(term, InitialParseResult) and term.expression is not None:
             term = replace(term, expression=self._build_timeseries_formula_param(term))
-        if coefficient.expression is not None:
+        if (
+            isinstance(coefficient, InitialParseResult)
+            and coefficient.expression is not None
+        ):
             coefficient = replace(
                 coefficient,
                 expression=self._build_timeseries_formula_param(coefficient),
             )
 
-        if term.groupby != coefficient.groupby:
+        if (
+            isinstance(term, InitialParseResult)
+            and isinstance(coefficient, InitialParseResult)
+            and term.groupby != coefficient.groupby
+        ):
             raise InvalidQueryException(
                 "All terms in a formula must have the same groupby"
             )
@@ -215,10 +222,37 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         if packed_filters:
             assert isinstance(packed_filters, list)
             _, _, filter_expr, *_ = packed_filters[0]
-            if target.conditions is not None:
-                target.conditions = target.conditions + [filter_expr]
+            if target.formula is not None:
+
+                def pushdown_filter(param: InitialParseResult) -> InitialParseResult:
+                    if param.formula is not None:
+                        parameters = param.parameters or []
+                        for p in parameters:
+                            pushdown_filter(p)
+                    elif param.expression is not None:
+                        exp = param.expression.expression
+                        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
+                        exp = replace(
+                            exp,
+                            parameters=(
+                                exp.parameters[0],
+                                binary_condition("and", filter_expr, exp.parameters[1]),
+                            ),
+                        )
+                        param.expression = replace(param.expression, expression=exp)
+                    else:
+                        raise InvalidQueryException("Could not parse formula")
+
+                    return param
+
+                if target.parameters is not None:
+                    for param in target.parameters:
+                        pushdown_filter(param)
             else:
-                target.conditions = [filter_expr]
+                if target.conditions is not None:
+                    target.conditions = target.conditions + [filter_expr]
+                else:
+                    target.conditions = [filter_expr]
 
         if packed_groupbys:
             assert isinstance(packed_groupbys, list)
@@ -253,7 +287,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[Sequence[Union[str, Sequence[str]]], Any],
+        children: Tuple[Sequence[Union[str, Sequence[str]]] | FunctionCall, Any],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
@@ -585,8 +619,10 @@ def parse_mql_query_body(
 
         if parsed.formula:
 
-            def extract_expression(param: InitialParseResult) -> Expression:
-                if param.expression is not None:
+            def extract_expression(param: InitialParseResult | Any) -> Expression:
+                if not isinstance(param, InitialParseResult):
+                    return Literal(None, param)
+                elif param.expression is not None:
                     return param.expression.expression
                 elif param.formula:
                     parameters = param.parameters or []

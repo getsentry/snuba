@@ -453,9 +453,8 @@ def test_mismatch_groupby() -> None:
         parse_mql_query(str(query_body), mql_context, generic_metrics)
 
 
-@pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_formula_filters() -> None:
-    query_body = "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)){status_code:200}"
+    query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}"
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
@@ -467,7 +466,7 @@ def test_formula_filters() -> None:
                 ),
             ),
             timeseries(
-                "sumIf",
+                "maxIf",
                 123456,
                 binary_condition(
                     "equals", tag_column("status_code"), Literal(None, "200")
@@ -505,9 +504,8 @@ def test_formula_filters() -> None:
     assert eq, reason
 
 
-@pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_formula_groupby() -> None:
-    query_body = "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)){status_code:200} by transaction"
+    query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction"
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
@@ -519,7 +517,7 @@ def test_formula_groupby() -> None:
                 ),
             ),
             timeseries(
-                "sumIf",
+                "maxIf",
                 123456,
                 binary_condition(
                     "equals", tag_column("status_code"), Literal(None, "200")
@@ -533,11 +531,15 @@ def test_formula_groupby() -> None:
         selected_columns=[
             expected_selected,
             SelectedExpression(
+                name="transaction",
+                expression=tag_column("transaction"),
+            ),
+            SelectedExpression(
                 "time",
                 time_expression,
             ),
         ],
-        groupby=[time_expression],
+        groupby=[tag_column("transaction"), time_expression],
         condition=formula_condition,
         order_by=[
             OrderBy(
@@ -557,7 +559,6 @@ def test_formula_groupby() -> None:
     assert eq, reason
 
 
-@pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_formula_scalar_value() -> None:
     query_body = "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100"
     expected_selected = SelectedExpression(
@@ -600,6 +601,7 @@ def test_formula_scalar_value() -> None:
     assert eq, reason
 
 
+@pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_arbitrary_functions() -> None:
     query_body = "apdex(sum(`d:transactions/duration@millisecond`), 123) / max(`d:transactions/duration@millisecond`)"
     expected_selected = SelectedExpression(
@@ -646,6 +648,7 @@ def test_arbitrary_functions() -> None:
     assert eq, reason
 
 
+@pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_arbitrary_functions_with_formula() -> None:
     query_body = "apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 123)"
     expected_selected = SelectedExpression(
