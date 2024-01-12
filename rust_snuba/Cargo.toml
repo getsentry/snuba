@@ -50,7 +50,7 @@ adler = "1.0.2"
 
 
 [patch.crates-io]
-rdkafka = { git = "https://github.com/getsentry/rust-rdkafka", branch = "base-consumer" }
+rdkafka = { git = "https://github.com/fede1024/rust-rdkafka" }
 
 [dev-dependencies]
 criterion = "0.5.1"
