@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::counter;
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use crate::types::Message;
 
@@ -49,7 +49,7 @@ impl<TPayload, Next> ProcessingStrategy<TPayload> for HealthCheck<Next>
 where
     Next: ProcessingStrategy<TPayload> + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.maybe_touch_file();
 
         self.next_step.poll()
@@ -67,7 +67,7 @@ where
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.join(timeout)
     }
 }

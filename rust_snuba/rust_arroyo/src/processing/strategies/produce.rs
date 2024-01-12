@@ -4,7 +4,7 @@ use crate::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use crate::types::{Message, TopicOrPartition};
 use std::sync::Arc;
@@ -66,7 +66,7 @@ impl Produce {
 }
 
 impl ProcessingStrategy<KafkaPayload> for Produce {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
@@ -82,7 +82,7 @@ impl ProcessingStrategy<KafkaPayload> for Produce {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.join(timeout)
     }
 }
@@ -99,7 +99,7 @@ mod tests {
     use crate::backends::local::broker::LocalBroker;
     use crate::backends::local::LocalProducer;
     use crate::backends::storages::memory::MemoryMessageStorage;
-    use crate::processing::strategies::InvalidMessage;
+    use crate::processing::strategies::StrategyError;
     use crate::types::{BrokerMessage, InnerMessage, Partition, Topic};
     use crate::utils::clock::TestingClock;
     use chrono::Utc;
@@ -123,7 +123,7 @@ mod tests {
     }
 
     impl ProcessingStrategy<KafkaPayload> for Mock {
-        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             self.0.lock().polled = true;
             Ok(None)
         }
@@ -139,7 +139,7 @@ mod tests {
         fn join(
             &mut self,
             _timeout: Option<Duration>,
-        ) -> Result<Option<CommitRequest>, InvalidMessage> {
+        ) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }
@@ -159,7 +159,7 @@ mod tests {
 
         struct Noop {}
         impl ProcessingStrategy<KafkaPayload> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
                 Ok(None)
             }
             fn submit(
@@ -173,7 +173,7 @@ mod tests {
             fn join(
                 &mut self,
                 _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            ) -> Result<Option<CommitRequest>, StrategyError> {
                 Ok(None)
             }
         }
