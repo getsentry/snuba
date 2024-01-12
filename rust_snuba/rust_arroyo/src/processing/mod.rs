@@ -42,8 +42,8 @@ pub enum RunError {
     Pause(#[source] ConsumerError),
     #[error("strategy panicked")]
     StrategyPanic,
-    #[error("the thread errored")]
-    Thread(#[source] Box<dyn std::error::Error>),
+    #[error("the strategy errored")]
+    Strategy(#[source] Box<dyn std::error::Error>),
 }
 
 const BACKPRESSURE_THRESHOLD: Duration = Duration::from_secs(1);
@@ -312,7 +312,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             }
 
             Err(StrategyError::Other(error)) => {
-                return Err(RunError::Thread(error));
+                return Err(RunError::Strategy(error));
             }
         };
 
