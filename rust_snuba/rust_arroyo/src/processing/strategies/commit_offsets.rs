@@ -6,7 +6,7 @@ use crate::processing::strategies::{CommitRequest, ProcessingStrategy, SubmitErr
 use crate::timer;
 use crate::types::{Message, Partition};
 
-use super::PollError;
+use super::StrategyError;
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
@@ -44,7 +44,7 @@ impl CommitOffsets {
 }
 
 impl<T> ProcessingStrategy<T> for CommitOffsets {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(self.commit(false))
     }
 
@@ -71,7 +71,10 @@ impl<T> ProcessingStrategy<T> for CommitOffsets {
 
     fn terminate(&mut self) {}
 
-    fn join(&mut self, _: Option<std::time::Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(
+        &mut self,
+        _: Option<std::time::Duration>,
+    ) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(self.commit(true))
     }
 }

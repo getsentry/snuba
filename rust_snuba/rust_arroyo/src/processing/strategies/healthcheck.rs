@@ -5,7 +5,7 @@ use crate::counter;
 use crate::processing::strategies::{CommitRequest, ProcessingStrategy, SubmitError};
 use crate::types::Message;
 
-use super::PollError;
+use super::StrategyError;
 
 const TOUCH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -49,7 +49,7 @@ impl<TPayload, Next> ProcessingStrategy<TPayload> for HealthCheck<Next>
 where
     Next: ProcessingStrategy<TPayload> + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.maybe_touch_file();
 
         self.next_step.poll()
@@ -67,7 +67,7 @@ where
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.join(timeout)
     }
 }

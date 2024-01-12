@@ -13,7 +13,7 @@ use rust_arroyo::processing::strategies::produce::Produce;
 use rust_arroyo::processing::strategies::run_task::RunTask;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, PollError, ProcessingStrategy, ProcessingStrategyFactory,
+    CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, StrategyError,
     SubmitError,
 };
 use rust_arroyo::processing::StreamProcessor;
@@ -37,7 +37,7 @@ fn reverse_string(value: KafkaPayload) -> Result<KafkaPayload, InvalidMessage> {
 }
 struct Noop {}
 impl ProcessingStrategy<KafkaPayload> for Noop {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(None)
     }
     fn submit(&mut self, _message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
@@ -45,7 +45,7 @@ impl ProcessingStrategy<KafkaPayload> for Noop {
     }
     fn close(&mut self) {}
     fn terminate(&mut self) {}
-    fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(None)
     }
 }

@@ -1,5 +1,5 @@
 use crate::processing::strategies::{
-    merge_commit_request, CommitRequest, MessageRejected, PollError, ProcessingStrategy,
+    merge_commit_request, CommitRequest, MessageRejected, ProcessingStrategy, StrategyError,
     SubmitError,
 };
 use crate::timer;
@@ -63,7 +63,7 @@ pub struct Reduce<T, TResult> {
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
@@ -91,7 +91,7 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
@@ -210,7 +210,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
 mod tests {
     use crate::processing::strategies::reduce::Reduce;
     use crate::processing::strategies::{
-        CommitRequest, PollError, ProcessingStrategy, SubmitError,
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
     };
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use std::sync::{Arc, Mutex};
@@ -221,7 +221,7 @@ mod tests {
     }
 
     impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-        fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
 
@@ -234,7 +234,7 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }

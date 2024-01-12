@@ -7,7 +7,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
-    CommitRequest, PollError, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use rust_arroyo::types::Message;
 use rust_arroyo::{counter, timer};
@@ -104,7 +104,7 @@ impl ClickhouseWriterStep {
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
@@ -123,7 +123,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.join(timeout)
     }
 }

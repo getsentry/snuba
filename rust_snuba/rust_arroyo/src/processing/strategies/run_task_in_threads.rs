@@ -14,7 +14,7 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use crate::utils::timing::Deadline;
 
-use super::PollError;
+use super::StrategyError;
 
 #[derive(Clone, Debug)]
 pub enum RunTaskError<TError> {
@@ -123,7 +123,7 @@ where
     TTransformed: Send + Sync + 'static,
     TError: Into<Box<dyn std::error::Error>> + Send + Sync + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
@@ -169,7 +169,7 @@ where
                         tracing::error!("retryable error");
                     }
                     Ok(Err(RunTaskError::Other(error))) => {
-                        return Err(PollError::Other(error.into()));
+                        return Err(StrategyError::Other(error.into()));
                     }
                     Err(e) => {
                         return Err(e.into());
@@ -209,7 +209,7 @@ where
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
 
         // Poll until there are no more messages or timeout is hit
@@ -277,7 +277,7 @@ mod tests {
     }
 
     impl ProcessingStrategy<String> for Mock {
-        fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             self.0.lock().unwrap().polled = true;
             Ok(None)
         }
@@ -287,7 +287,10 @@ mod tests {
         }
         fn close(&mut self) {}
         fn terminate(&mut self) {}
-        fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+        fn join(
+            &mut self,
+            _timeout: Option<Duration>,
+        ) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }

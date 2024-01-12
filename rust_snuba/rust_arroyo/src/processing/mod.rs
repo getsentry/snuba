@@ -12,7 +12,7 @@ use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::kafka::KafkaConsumer;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
-use crate::processing::strategies::{MessageRejected, SubmitError};
+use crate::processing::strategies::{MessageRejected, StrategyError, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
 use crate::utils::timing::Deadline;
 use crate::{counter, timer};
@@ -297,7 +297,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 consumer_state.dlq_policy.flush(&request.positions);
                 self.consumer.commit_offsets(request.positions).unwrap();
             }
-            Err(strategies::PollError::InvalidMessage(e)) => {
+            Err(StrategyError::InvalidMessage(e)) => {
                 match self.buffered_messages.pop(&e.partition, e.offset) {
                     Some(msg) => {
                         tracing::error!(?e, "Invalid message");
@@ -309,12 +309,12 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 }
             }
 
-            Err(strategies::PollError::JoinError(error)) => {
+            Err(StrategyError::JoinError(error)) => {
                 let error: &dyn std::error::Error = &error;
                 tracing::error!(error, "the thread crashed");
             }
 
-            Err(strategies::PollError::Other(error)) => {
+            Err(StrategyError::Other(error)) => {
                 tracing::error!(error, "the thread errored");
             }
         };
@@ -437,7 +437,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
 #[cfg(test)]
 mod tests {
     use super::strategies::{
-        CommitRequest, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
+        CommitRequest, ProcessingStrategy, ProcessingStrategyFactory, StrategyError, SubmitError,
     };
     use super::*;
     use crate::backends::local::broker::LocalBroker;
@@ -454,7 +454,7 @@ mod tests {
     }
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
-        fn poll(&mut self) -> Result<Option<CommitRequest>, strategies::PollError> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(self.message.as_ref().map(|message| CommitRequest {
                 positions: HashMap::from_iter(message.committable()),
             }))
@@ -469,10 +469,7 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(
-            &mut self,
-            _: Option<Duration>,
-        ) -> Result<Option<CommitRequest>, strategies::PollError> {
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }
@@ -553,7 +550,7 @@ mod tests {
             panic_on: &'static str, // poll, submit, join, close
         }
         impl ProcessingStrategy<String> for TestStrategy {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, strategies::PollError> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
                 if self.panic_on == "poll" {
                     panic!("panic in poll");
                 }
@@ -579,7 +576,7 @@ mod tests {
             fn join(
                 &mut self,
                 _: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, strategies::PollError> {
+            ) -> Result<Option<CommitRequest>, StrategyError> {
                 if self.panic_on == "join" {
                     panic!("panic in join");
                 }

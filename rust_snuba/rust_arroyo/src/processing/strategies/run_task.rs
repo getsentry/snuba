@@ -5,7 +5,7 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use std::time::Duration;
 
-use super::PollError;
+use super::StrategyError;
 
 pub struct RunTask<TPayload, TTransformed> {
     pub function:
@@ -33,7 +33,7 @@ impl<TPayload, TTransformed> RunTask<TPayload, TTransformed> {
 impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
     for RunTask<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         match self.next_step.poll() {
             Ok(commit_request) => {
                 self.commit_request_carried_over =
@@ -90,7 +90,7 @@ impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let next_commit = self.next_step.join(timeout)?;
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
@@ -113,7 +113,7 @@ mod tests {
 
         struct Noop {}
         impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
                 Ok(None)
             }
             fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
@@ -124,7 +124,7 @@ mod tests {
             fn join(
                 &mut self,
                 _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, PollError> {
+            ) -> Result<Option<CommitRequest>, StrategyError> {
                 Ok(None)
             }
         }
