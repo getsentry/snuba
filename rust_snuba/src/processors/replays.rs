@@ -1,5 +1,5 @@
 use crate::config::ProcessorConfig;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -73,9 +73,10 @@ pub fn deserialize_message(
             for tag in event.tags.into_iter() {
                 if &tag.0 == "transaction" {
                     title = tag.1.clone()
+                } else {
+                    tags_key.push(tag.0);
+                    tags_value.push(tag.1);
                 }
-                tags_key.push(tag.0);
-                tags_value.push(tag.1);
             }
 
             // Unwrap the ip-address string.
@@ -87,7 +88,7 @@ pub fn deserialize_message(
             };
 
             // Handle user-id field.
-            let user_id = match &event.user.user_id {
+            let user_id = match &event.user.id {
                 Some(UserId::String(v)) => Some(v.clone()),
                 Some(UserId::Number(v)) => Some(v.to_string()),
                 None => None,
@@ -152,24 +153,37 @@ pub fn deserialize_message(
                 ..Default::default()
             }])
         }
-        ReplayPayload::EventLinkEvent(event) => Ok(vec![ReplayRow {
-            debug_id: event.debug_id,
-            error_id: event.error_id,
-            error_sample_rate: -1.0,
-            event_hash: event.event_hash,
-            fatal_id: event.fatal_id,
-            info_id: event.info_id,
-            offset,
-            partition,
-            platform: "javascript".to_string(),
-            project_id: replay_message.project_id,
-            replay_id: replay_message.replay_id,
-            retention_days: replay_message.retention_days,
-            session_sample_rate: -1.0,
-            timestamp: event.timestamp as u32,
-            warning_id: event.warning_id,
-            ..Default::default()
-        }]),
+        ReplayPayload::EventLinkEvent(event) => {
+            let level_id = event
+                .debug_id
+                .or(event.error_id)
+                .or(event.fatal_id)
+                .or(event.info_id)
+                .or(event.warning_id)
+                .unwrap_or_default();
+            if level_id.is_nil() {
+                return Err(anyhow!("missing level id"));
+            }
+
+            Ok(vec![ReplayRow {
+                debug_id: event.debug_id.unwrap_or_default(),
+                error_id: event.error_id.unwrap_or_default(),
+                error_sample_rate: -1.0,
+                event_hash: event.event_hash,
+                fatal_id: event.fatal_id.unwrap_or_default(),
+                info_id: event.info_id.unwrap_or_default(),
+                offset,
+                partition,
+                platform: "javascript".to_string(),
+                project_id: replay_message.project_id,
+                replay_id: replay_message.replay_id,
+                retention_days: replay_message.retention_days,
+                session_sample_rate: -1.0,
+                timestamp: event.timestamp as u32,
+                warning_id: event.warning_id.unwrap_or_default(),
+                ..Default::default()
+            }])
+        }
     }
 }
 
@@ -303,7 +317,7 @@ struct User {
     #[serde(default)]
     username: Option<String>,
     #[serde(default)]
-    user_id: Option<UserId>,
+    id: Option<UserId>,
     #[serde(default)]
     email: Option<String>,
     #[serde(default)]
@@ -325,15 +339,15 @@ struct ReplayEventLinkEvent {
     timestamp: f64,
     event_hash: Uuid,
     #[serde(default)]
-    debug_id: Uuid,
+    debug_id: Option<Uuid>,
     #[serde(default)]
-    error_id: Uuid,
+    error_id: Option<Uuid>,
     #[serde(default)]
-    fatal_id: Uuid,
+    fatal_id: Option<Uuid>,
     #[serde(default)]
-    info_id: Uuid,
+    info_id: Option<Uuid>,
     #[serde(default)]
-    warning_id: Uuid,
+    warning_id: Option<Uuid>,
 }
 
 // ReplayRow is not an exact match with the schema. We're trying to remove many of the nullable
@@ -436,7 +450,7 @@ mod tests {
             "user": {
                 "email": "email",
                 "ip_address": "127.0.0.1",
-                "user_id": "user_id",
+                "id": "user_id",
                 "username": "username"
             },
             "sdk": {

@@ -393,7 +393,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_quoted_string(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
-        return str(node.text[1:-1])
+        match = str(node.text[1:-1]).replace('\\"', '"')
+        return match
 
     def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
         _, _, first, zero_or_more_others, _, _ = children
