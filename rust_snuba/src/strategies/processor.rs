@@ -40,7 +40,7 @@ pub fn make_rust_processor(
     ))
 }
 
-fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
+pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
     match sentry_kafka_schemas::get_schema(schema_name, None) {
         Ok(s) => Some(Arc::new(s)),
         Err(error) => {
@@ -57,7 +57,7 @@ fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
 }
 
 #[derive(Clone)]
-struct MessageProcessor {
+pub struct MessageProcessor {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
     func: ProcessingFunction,
