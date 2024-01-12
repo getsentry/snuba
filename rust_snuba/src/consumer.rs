@@ -1,3 +1,4 @@
+use std::process;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -204,7 +205,11 @@ pub fn consumer_impl(
     })
     .expect("Error setting Ctrl-C handler");
 
-    processor.run().unwrap();
+    if let Err(error) = processor.run() {
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error);
+        process::exit(1);
+    }
 }
 
 pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
