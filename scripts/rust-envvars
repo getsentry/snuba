@@ -3,7 +3,7 @@
 #
 # Related thread: https://github.com/PyO3/pyo3/issues/1741
 
-export PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
+export SNUBA_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
 # load cargo envvars explicitly in case user forgot
 . "$HOME/.cargo/env"

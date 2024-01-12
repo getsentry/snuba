@@ -282,7 +282,7 @@ mod tests {
     use rust_arroyo::testutils::TestStrategy;
 
     fn set_sys_executable() {
-        let python_executable = std::env::var("PYTHONEXECUTABLE").unwrap();
+        let python_executable = std::env::var("SNUBA_PYTHONEXECUTABLE").unwrap();
         Python::with_gil(|py| -> PyResult<()> {
             PyModule::import(py, "sys")?.setattr("executable", python_executable)?;
             Ok(())
