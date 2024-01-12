@@ -3,7 +3,6 @@
 #
 # Related thread: https://github.com/PyO3/pyo3/issues/1741
 
-export PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
 export PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
 # load cargo envvars explicitly in case user forgot
