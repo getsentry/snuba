@@ -1,4 +1,5 @@
 import json
+import sys
 from dataclasses import asdict
 from typing import Optional, Sequence
 
@@ -208,7 +209,7 @@ def rust_consumer(
         f"rust_consumer.{storage_names[0]}.concurrency"
     )
 
-    rust_snuba.consumer(  # type: ignore
+    exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
@@ -221,3 +222,5 @@ def rust_consumer(
         python_max_queue_depth,
         health_check_file,
     )
+
+    sys.exit(exitcode)

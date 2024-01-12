@@ -70,7 +70,7 @@ pub fn consumer_impl(
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
-) {
+) -> usize {
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
@@ -92,7 +92,7 @@ pub fn consumer_impl(
         tracing::debug!(sentry_dsn = dsn);
         // this forces anyhow to record stack traces when capturing an error:
         std::env::set_var("RUST_BACKTRACE", "1");
-        _sentry_guard = Some(setup_sentry(&dsn));
+        sentry_guard = Some(setup_sentry(&dsn));
     }
 
     // setup arroyo metrics
@@ -208,7 +208,9 @@ pub fn consumer_impl(
     if let Err(error) = processor.run() {
         let error: &dyn std::error::Error = &error;
         tracing::error!(error);
-        process::exit(1);
+        1
+    } else {
+        0
     }
 }
 
