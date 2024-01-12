@@ -2,6 +2,7 @@ use crate::config::EnvConfig;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, UsageUnit};
 use serde::{Deserialize, Deserializer};
+use std::collections::HashMap;
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S.%6fZ";
@@ -41,7 +42,6 @@ where
     Ok(seconds_since_epoch.timestamp() as u32)
 }
 
-#[allow(dead_code)]
 pub struct CogsAccountant {
     accountant: UsageAccountant<KafkaProducer>,
     // We only log a warning once if there was an error recording cogs. Once this is true, we no longer record.
@@ -50,16 +50,17 @@ pub struct CogsAccountant {
 
 impl CogsAccountant {
     #[allow(dead_code)]
-    fn new(bootstrap_servers: &str) -> Self {
-        let config = KafkaConfig::new_producer_config(bootstrap_servers, None);
+    pub fn new(broker_config: HashMap<String, String>, topic_name: &str) -> Self {
+        let config = KafkaConfig::new_producer_config(broker_config);
+
         Self {
-            accountant: UsageAccountant::new_with_kafka(config, None, None),
+            accountant: UsageAccountant::new_with_kafka(config, Some(topic_name), None),
             logged_warning: false,
         }
     }
 
     #[allow(dead_code)]
-    fn record_bytes(&mut self, resource_id: &str, app_feature: &str, amount_bytes: u64) {
+    pub fn record_bytes(&mut self, resource_id: &str, app_feature: &str, amount_bytes: u64) {
         if let Err(err) =
             self.accountant
                 .record(resource_id, app_feature, amount_bytes, UsageUnit::Bytes)
@@ -77,7 +78,13 @@ mod tests {
 
     #[test]
     fn test_record_cogs() {
-        let mut accountant = CogsAccountant::new("127.0.0.1:9092");
+        let mut accountant = CogsAccountant::new(
+            HashMap::from([(
+                "bootstrap.servers".to_string(),
+                "127.0.0.1:9092".to_string(),
+            )]),
+            "shared-resources-usage",
+        );
         accountant.record_bytes("generic_metrics_processor_sets", "custom", 100)
     }
 }

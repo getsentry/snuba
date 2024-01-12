@@ -2174,9 +2174,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_usage_accountant"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "138cf3a8c688b2eaf39b24e46a19268d762af95aed95b19fd9cb4314a62135f1"
+checksum = "3fccc73f5028e49cd951c4f1a013a2b71372e8912295f05a7a3504b653f625ca"
 dependencies = [
  "chrono",
  "rdkafka",
