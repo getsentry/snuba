@@ -1,4 +1,3 @@
-use std::process;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -92,7 +91,7 @@ pub fn consumer_impl(
         tracing::debug!(sentry_dsn = dsn);
         // this forces anyhow to record stack traces when capturing an error:
         std::env::set_var("RUST_BACKTRACE", "1");
-        sentry_guard = Some(setup_sentry(&dsn));
+        _sentry_guard = Some(setup_sentry(&dsn));
     }
 
     // setup arroyo metrics
