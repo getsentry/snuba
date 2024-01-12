@@ -10,9 +10,7 @@ use crate::backends::kafka::config::KafkaConfig;
 use crate::backends::kafka::producer::KafkaProducer;
 use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::Producer;
-use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
-};
+use crate::processing::strategies::{CommitRequest, PollError, ProcessingStrategy, SubmitError};
 use crate::types::Message;
 use crate::types::Topic;
 
@@ -36,7 +34,7 @@ impl<T> TestStrategy<T> {
 }
 
 impl<T: Send> ProcessingStrategy<T> for TestStrategy<T> {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
         Ok(None)
     }
 
@@ -47,10 +45,7 @@ impl<T: Send> ProcessingStrategy<T> for TestStrategy<T> {
 
     fn close(&mut self) {}
     fn terminate(&mut self) {}
-    fn join(
-        &mut self,
-        _timeout: Option<Duration>,
-    ) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
         Ok(None)
     }
 }

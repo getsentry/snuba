@@ -7,8 +7,8 @@ use parking_lot::Mutex;
 use pyo3::prelude::*;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{
-    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    SubmitError,
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, PollError,
+    ProcessingStrategy, SubmitError,
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use rust_arroyo::utils::timing::Deadline;
@@ -95,7 +95,7 @@ impl PythonTransformStep {
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
         let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
             let python_strategy = self.python_strategy.lock();
             let result = python_strategy.call_method0(py, "poll")?;
@@ -119,7 +119,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     break;
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -211,7 +211,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
         let deadline = timeout.map(Deadline::new);
         let timeout_secs = timeout.map(|d| d.as_secs());
 
@@ -244,7 +244,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     }
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }

@@ -1,3 +1,5 @@
+use tokio::task::JoinError;
+
 use crate::types::{Message, Partition};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -59,6 +61,25 @@ pub fn merge_commit_request(
     }
 }
 
+#[derive(Debug)]
+pub enum PollError {
+    InvalidMessage(InvalidMessage),
+    JoinError(JoinError),
+    Other(Box<dyn std::error::Error>),
+}
+
+impl From<InvalidMessage> for PollError {
+    fn from(value: InvalidMessage) -> Self {
+        Self::InvalidMessage(value)
+    }
+}
+
+impl From<JoinError> for PollError {
+    fn from(value: JoinError) -> Self {
+        Self::JoinError(value)
+    }
+}
+
 /// A processing strategy defines how a stream processor processes messages
 /// during the course of a single assignment. The processor is instantiated
 /// when the assignment is received, and closed when the assignment is
@@ -77,7 +98,7 @@ pub trait ProcessingStrategy<TPayload>: Send + Sync {
     ///
     /// This method may raise exceptions that were thrown by asynchronous
     /// tasks since the previous call to ``poll``.
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage>;
+    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError>;
 
     /// Submit a message for processing.
     ///
@@ -115,11 +136,11 @@ pub trait ProcessingStrategy<TPayload>: Send + Sync {
     /// until this function exits, allowing any work in progress to be
     /// completed and committed before the continuing the rebalancing
     /// process.
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage>;
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError>;
 }
 
 impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPayload> for Box<S> {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
         (**self).poll()
     }
 
@@ -135,7 +156,7 @@ impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPay
         (**self).terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
         (**self).join(timeout)
     }
 }

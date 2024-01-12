@@ -5,6 +5,8 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use std::time::Duration;
 
+use super::PollError;
+
 pub struct RunTask<TPayload, TTransformed> {
     pub function:
         Box<dyn Fn(TPayload) -> Result<TTransformed, InvalidMessage> + Send + Sync + 'static>,
@@ -31,7 +33,7 @@ impl<TPayload, TTransformed> RunTask<TPayload, TTransformed> {
 impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
     for RunTask<TPayload, TTransformed>
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
         match self.next_step.poll() {
             Ok(commit_request) => {
                 self.commit_request_carried_over =
@@ -48,7 +50,7 @@ impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
                     self.message_carried_over = Some(transformed_message);
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -88,7 +90,7 @@ impl<TPayload, TTransformed: Send + Sync> ProcessingStrategy<TPayload>
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, PollError> {
         let next_commit = self.next_step.join(timeout)?;
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
@@ -111,7 +113,7 @@ mod tests {
 
         struct Noop {}
         impl ProcessingStrategy<String> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, PollError> {
                 Ok(None)
             }
             fn submit(&mut self, _message: Message<String>) -> Result<(), SubmitError<String>> {
@@ -122,7 +124,7 @@ mod tests {
             fn join(
                 &mut self,
                 _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            ) -> Result<Option<CommitRequest>, PollError> {
                 Ok(None)
             }
         }
