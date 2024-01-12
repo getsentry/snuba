@@ -10,16 +10,15 @@ use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
-use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::{Partition, Topic};
-use sentry_kafka_schemas::Schema;
-
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
 use rust_arroyo::processing::strategies::InvalidMessage;
+use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::{InnerMessage, Message};
+use rust_arroyo::types::{Partition, Topic};
 use sentry::{Hub, SentryFutureExt};
+use sentry_kafka_schemas::Schema;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
