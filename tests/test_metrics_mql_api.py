@@ -573,6 +573,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 180, data
 
+    @pytest.mark.xfail(reason="Needs snuba-sdk 2.0.21 or later")
     def test_complex_formula(self) -> None:
         query = MetricsQuery(
             query=Formula(
