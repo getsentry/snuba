@@ -88,7 +88,7 @@ impl MessageProcessor {
             return Err(maybe_err);
         };
 
-        if let Err(error) = self.validate_schema(payload) {
+        if let Err(error) = validate_schema(&self.schema, payload) {
             let error: &dyn std::error::Error = &error;
             tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
@@ -114,35 +114,6 @@ impl MessageProcessor {
 
             maybe_err
         })
-    }
-
-    #[tracing::instrument(skip_all)]
-    fn validate_schema(&self, payload: &[u8]) -> Result<(), SchemaError> {
-        let Some(schema) = &self.schema else {
-            return Ok(());
-        };
-
-        let Err(error) = schema.validate_json(payload) else {
-            return Ok(());
-        };
-        counter!("schema_validation.failed");
-
-        sentry::with_scope(
-            |scope| {
-                let payload = String::from_utf8_lossy(payload).into();
-                scope.set_extra("payload", payload)
-            },
-            || {
-                let error: &dyn std::error::Error = &error;
-                tracing::error!(error, "Validation error");
-            },
-        );
-
-        if !self.enforce_schema {
-            Ok(())
-        } else {
-            Err(error)
-        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -185,6 +156,31 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProces
                 .bind_hub(Hub::new_from_top(Hub::current())),
         )
     }
+}
+
+#[tracing::instrument(skip_all)]
+pub fn validate_schema(schema: &Option<Arc<Schema>>, payload: &[u8]) -> Result<(), SchemaError> {
+    let Some(schema) = &schema else {
+        return Ok(());
+    };
+
+    let Err(error) = schema.validate_json(payload) else {
+        return Ok(());
+    };
+    counter!("schema_validation.failed");
+
+    sentry::with_scope(
+        |scope| {
+            let payload = String::from_utf8_lossy(payload).into();
+            scope.set_extra("payload", payload)
+        },
+        || {
+            let error: &dyn std::error::Error = &error;
+            tracing::error!(error, "Validation error");
+        },
+    );
+
+    Err(error)
 }
 
 #[cfg(test)]

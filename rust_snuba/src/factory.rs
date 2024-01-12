@@ -14,12 +14,19 @@ use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategy
 use rust_arroyo::types::{Partition, Topic};
 use sentry_kafka_schemas::Schema;
 
+use rust_arroyo::processing::strategies::run_task_in_threads::{
+    RunTaskError, RunTaskFunc, TaskRunner,
+};
+use rust_arroyo::processing::strategies::InvalidMessage;
+use rust_arroyo::types::{InnerMessage, Message};
+use sentry::{Hub, SentryFutureExt};
+
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
-use crate::strategies::processor::{get_schema, make_rust_processor, MessageProcessor};
+use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -143,9 +150,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             ),
             _ => {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
-                let processor_config = config::ProcessorConfig {
-                    env_config: self.env_config.clone(),
-                };
 
                 Box::new(RunTaskInThreads::new(
                     Box::new(
@@ -158,7 +162,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         .unwrap(),
                     ),
                     Box::new(SchemaValidator { schema }),
-                    &self.processing_concurrency.concurrency,
+                    &self.processing_concurrency,
                     Some("validate_schema"),
                 ))
             }
@@ -181,8 +185,8 @@ impl SchemaValidator {
     async fn process_message(
         self,
         message: Message<KafkaPayload>,
-    ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
-        let msg = match message.inner_message {
+    ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
+        let msg = match &message.inner_message {
             InnerMessage::BrokerMessage(msg) => msg,
             _ => {
                 return Err(RunTaskError::Other(anyhow::anyhow!(
@@ -201,7 +205,7 @@ impl SchemaValidator {
             return Err(maybe_err);
         };
 
-        if let Err(error) = self.validate_schema(payload) {
+        if let Err(error) = validate_schema(&self.schema, payload) {
             let error: &dyn std::error::Error = &error;
             tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
@@ -209,38 +213,10 @@ impl SchemaValidator {
 
         Ok(message)
     }
-
-    #[tracing::instrument(skip_all)]
-    fn validate_schema(&self, payload: &[u8]) -> Result<(), SchemaError> {
-        let Some(schema) = &self.schema else {
-            return Ok(());
-        };
-
-        let Err(error) = schema.validate_json(payload) else {
-            return Ok(());
-        };
-        counter!("schema_validation.failed");
-
-        sentry::with_scope(
-            |scope| {
-                let payload = String::from_utf8_lossy(payload).into();
-                scope.set_extra("payload", payload)
-            },
-            || {
-                let error: &dyn std::error::Error = &error;
-                tracing::error!(error, "Validation error");
-            },
-        );
-
-        Err(error)
-    }
 }
 
-impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for SchemaValidator {
-    fn get_task(
-        &self,
-        message: Message<KafkaPayload>,
-    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+impl TaskRunner<KafkaPayload, KafkaPayload, anyhow::Error> for SchemaValidator {
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload, anyhow::Error> {
         Box::pin(
             self.clone()
                 .process_message(message)
