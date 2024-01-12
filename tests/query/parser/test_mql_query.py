@@ -1375,6 +1375,301 @@ mql_test_cases = [
         id="Select metric with filter for metrics dataset",
     ),
     pytest.param(
+        'max(d:transactions/duration@millisecond){bar:" !\\"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2024-01-07T13:35:00+00:00",
+            "end": "2024-01-08T13:40:00+00:00",
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~": 78910,
+                "bar": 111213,
+                "transaction": 141516,
+            },
+            "limit": 10000,
+            "offset": None,
+            "rollup": {
+                "granularity": 60,
+                "interval": 300,
+                "orderby": None,
+                "with_totals": None,
+            },
+            "scope": {
+                "org_ids": [1],
+                "project_ids": [1],
+                "use_case_id": "transactions",
+            },
+        },
+        Query(
+            QueryEntity(
+                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "aggregate_value",
+                    FunctionCall(
+                        "_snuba_aggregate_value",
+                        "max",
+                        (Column("_snuba_value", None, "value"),),
+                    ),
+                ),
+                SelectedExpression(
+                    "transaction",
+                    SubscriptableReference(
+                        "_snuba_tags_raw[141516]",
+                        Column("_snuba_tags_raw", None, "tags_raw"),
+                        Literal(None, "141516"),
+                    ),
+                ),
+                SelectedExpression(
+                    "time",
+                    FunctionCall(
+                        "_snuba_time",
+                        "toStartOfInterval",
+                        (
+                            Column("_snuba_timestamp", None, "timestamp"),
+                            FunctionCall(
+                                None, "toIntervalSecond", (Literal(None, 300),)
+                            ),
+                            Literal(None, "Universal"),
+                        ),
+                    ),
+                ),
+            ],
+            condition=FunctionCall(
+                alias=None,
+                function_name="and",
+                parameters=(
+                    FunctionCall(
+                        alias=None,
+                        function_name="equals",
+                        parameters=(
+                            Column(
+                                alias="_snuba_granularity",
+                                table_name=None,
+                                column_name="granularity",
+                            ),
+                            Literal(alias=None, value=60),
+                        ),
+                    ),
+                    FunctionCall(
+                        alias=None,
+                        function_name="and",
+                        parameters=(
+                            FunctionCall(
+                                alias=None,
+                                function_name="in",
+                                parameters=(
+                                    Column(
+                                        alias="_snuba_project_id",
+                                        table_name=None,
+                                        column_name="project_id",
+                                    ),
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="tuple",
+                                        parameters=(Literal(alias=None, value=1),),
+                                    ),
+                                ),
+                            ),
+                            FunctionCall(
+                                alias=None,
+                                function_name="and",
+                                parameters=(
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="in",
+                                        parameters=(
+                                            Column(
+                                                alias="_snuba_org_id",
+                                                table_name=None,
+                                                column_name="org_id",
+                                            ),
+                                            FunctionCall(
+                                                alias=None,
+                                                function_name="tuple",
+                                                parameters=(
+                                                    Literal(alias=None, value=1),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    FunctionCall(
+                                        alias=None,
+                                        function_name="and",
+                                        parameters=(
+                                            FunctionCall(
+                                                alias=None,
+                                                function_name="equals",
+                                                parameters=(
+                                                    Column(
+                                                        alias="_snuba_use_case_id",
+                                                        table_name=None,
+                                                        column_name="use_case_id",
+                                                    ),
+                                                    Literal(
+                                                        alias=None, value="transactions"
+                                                    ),
+                                                ),
+                                            ),
+                                            FunctionCall(
+                                                alias=None,
+                                                function_name="and",
+                                                parameters=(
+                                                    FunctionCall(
+                                                        alias=None,
+                                                        function_name="greaterOrEquals",
+                                                        parameters=(
+                                                            Column(
+                                                                alias="_snuba_timestamp",
+                                                                table_name=None,
+                                                                column_name="timestamp",
+                                                            ),
+                                                            Literal(
+                                                                alias=None,
+                                                                value=datetime(
+                                                                    2024, 1, 7, 13, 35
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                    FunctionCall(
+                                                        alias=None,
+                                                        function_name="and",
+                                                        parameters=(
+                                                            FunctionCall(
+                                                                alias=None,
+                                                                function_name="less",
+                                                                parameters=(
+                                                                    Column(
+                                                                        alias="_snuba_timestamp",
+                                                                        table_name=None,
+                                                                        column_name="timestamp",
+                                                                    ),
+                                                                    Literal(
+                                                                        alias=None,
+                                                                        value=datetime(
+                                                                            2024,
+                                                                            1,
+                                                                            8,
+                                                                            13,
+                                                                            40,
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                            FunctionCall(
+                                                                alias=None,
+                                                                function_name="and",
+                                                                parameters=(
+                                                                    FunctionCall(
+                                                                        alias=None,
+                                                                        function_name="equals",
+                                                                        parameters=(
+                                                                            Column(
+                                                                                alias="_snuba_metric_id",
+                                                                                table_name=None,
+                                                                                column_name="metric_id",
+                                                                            ),
+                                                                            Literal(
+                                                                                alias=None,
+                                                                                value=123456,
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                    FunctionCall(
+                                                                        alias=None,
+                                                                        function_name="equals",
+                                                                        parameters=(
+                                                                            SubscriptableReference(
+                                                                                alias="_snuba_tags_raw[111213]",
+                                                                                column=Column(
+                                                                                    alias="_snuba_tags_raw",
+                                                                                    table_name=None,
+                                                                                    column_name="tags_raw",
+                                                                                ),
+                                                                                key=Literal(
+                                                                                    alias=None,
+                                                                                    value="111213",
+                                                                                ),
+                                                                            ),
+                                                                            Literal(
+                                                                                alias=None,
+                                                                                value=" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+                                                                            ),
+                                                                        ),
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            groupby=[
+                SubscriptableReference(
+                    "_snuba_tags_raw[141516]",
+                    Column(
+                        "_snuba_tags_raw",
+                        None,
+                        "tags_raw",
+                    ),
+                    Literal(None, "141516"),
+                ),
+                FunctionCall(
+                    alias="_snuba_time",
+                    function_name="toStartOfInterval",
+                    parameters=(
+                        Column(
+                            alias="_snuba_timestamp",
+                            table_name=None,
+                            column_name="timestamp",
+                        ),
+                        FunctionCall(
+                            alias=None,
+                            function_name="toIntervalSecond",
+                            parameters=(Literal(alias=None, value=300),),
+                        ),
+                        Literal(alias=None, value="Universal"),
+                    ),
+                ),
+            ],
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.ASC,
+                    expression=FunctionCall(
+                        alias="_snuba_time",
+                        function_name="toStartOfInterval",
+                        parameters=(
+                            Column(
+                                alias="_snuba_timestamp",
+                                table_name=None,
+                                column_name="timestamp",
+                            ),
+                            FunctionCall(
+                                alias=None,
+                                function_name="toIntervalSecond",
+                                parameters=(Literal(alias=None, value=300),),
+                            ),
+                            Literal(alias=None, value="Universal"),
+                        ),
+                    ),
+                )
+            ],
+            limit=10000,
+        ),
+        "generic_metrics",
+        id="test crazy characters",
+    ),
+    pytest.param(
         'apdex(sum(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
         {
             "entity": "generic_metrics_distributions",
