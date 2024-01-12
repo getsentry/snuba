@@ -100,7 +100,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     self.physical_topic_name,
                     self.physical_consumer_group.clone(),
                     &self.commitlog_concurrency,
-                    false,
+                    self.skip_write,
                 ))
             } else {
                 Box::new(next_step)
