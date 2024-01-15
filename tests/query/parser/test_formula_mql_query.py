@@ -604,6 +604,8 @@ def test_formula_scalar_value() -> None:
 @pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_arbitrary_functions() -> None:
     query_body = "apdex(sum(`d:transactions/duration@millisecond`), 123) / max(`d:transactions/duration@millisecond`)"
+
+    # Note: This expected selected might not be correct, depending on exactly how we build this
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
@@ -651,6 +653,8 @@ def test_arbitrary_functions() -> None:
 @pytest.mark.xfail(reason="Not implemented yet")  # type: ignore
 def test_arbitrary_functions_with_formula() -> None:
     query_body = "apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 123)"
+
+    # Note: This expected selected might not be correct, depending on exactly how we build this
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
@@ -677,6 +681,64 @@ def test_arbitrary_functions_with_formula() -> None:
         ],
         groupby=[time_expression],
         condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression,
+            )
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+@pytest.mark.xfail(reason="Not implemented yet = needs snuba-sdk>2.0.20")  # type: ignore
+def test_arbitrary_functions_with_formula_and_filters() -> None:
+    query_body = 'apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}'
+
+    # Note: This expected selected might not be correct, depending on exactly how we build this
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        FunctionCall(
+            "_snuba_aggregate_value",
+            "apdex",
+            (
+                divide(
+                    timeseries("sumIf", 123456),
+                    timeseries("maxIf", 123456),
+                ),
+                Literal(None, 500),
+            ),
+        ),
+    )
+    expected = Query(
+        from_distributions,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression,
+            ),
+        ],
+        groupby=[time_expression],
+        condition=binary_condition(
+            "and",
+            formula_condition,
+            binary_condition(
+                "in",
+                tag_column("dist"),
+                FunctionCall(
+                    None, "array", (Literal(None, "dist1"), Literal(None, "dist2"))
+                ),
+            ),
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
