@@ -59,6 +59,18 @@ pub fn merge_commit_request(
     }
 }
 
+#[derive(Debug)]
+pub enum StrategyError {
+    InvalidMessage(InvalidMessage),
+    Other(Box<dyn std::error::Error>),
+}
+
+impl From<InvalidMessage> for StrategyError {
+    fn from(value: InvalidMessage) -> Self {
+        Self::InvalidMessage(value)
+    }
+}
+
 /// A processing strategy defines how a stream processor processes messages
 /// during the course of a single assignment. The processor is instantiated
 /// when the assignment is received, and closed when the assignment is
@@ -77,7 +89,7 @@ pub trait ProcessingStrategy<TPayload>: Send + Sync {
     ///
     /// This method may raise exceptions that were thrown by asynchronous
     /// tasks since the previous call to ``poll``.
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage>;
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError>;
 
     /// Submit a message for processing.
     ///
@@ -115,11 +127,11 @@ pub trait ProcessingStrategy<TPayload>: Send + Sync {
     /// until this function exits, allowing any work in progress to be
     /// completed and committed before the continuing the rebalancing
     /// process.
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage>;
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError>;
 }
 
 impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPayload> for Box<S> {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         (**self).poll()
     }
 
@@ -135,7 +147,7 @@ impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPay
         (**self).terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         (**self).join(timeout)
     }
 }
@@ -143,9 +155,18 @@ impl<TPayload, S: ProcessingStrategy<TPayload> + ?Sized> ProcessingStrategy<TPay
 pub trait ProcessingStrategyFactory<TPayload>: Send + Sync {
     /// Instantiate and return a ``ProcessingStrategy`` instance.
     ///
-    /// :param commit: A function that accepts a mapping of ``Partition``
-    /// instances to offset values that should be committed.
+    /// This callback is executed on almost every rebalance, so do not do any heavy operations in
+    /// here.
+    ///
+    /// In a future version of Arroyo we might want to call this callback less often, for example
+    /// only if it is necessary to join and close strategies for ordering guarantees.
     fn create(&self) -> Box<dyn ProcessingStrategy<TPayload>>;
+
+    /// Callback to find out about the currently assigned partitions.
+    ///
+    /// Do not do any heavy work in this callback, even less than in `create`. This is guaranteed
+    /// to be called every rebalance.
+    fn update_partitions(&self, _partitions: &HashMap<Partition, u64>) {}
 }
 
 #[cfg(test)]

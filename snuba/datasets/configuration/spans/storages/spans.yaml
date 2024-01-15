@@ -67,6 +67,15 @@ schema:
           },
       },
       {
+        name: _sentry_tags_hash_map,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [ readonly ],
+          },
+      },
+      {
         name: measurements,
         type: Nested,
         args:
@@ -76,6 +85,15 @@ schema:
                 { name: key, type: String },
                 { name: value, type: Float, args: { size: 64 } },
               ],
+          },
+      },
+      {
+        name: _measurements_hash_map,
+        type: Array,
+        args:
+          {
+            inner_type: { type: UInt, args: { size: 64 } },
+            schema_modifiers: [ readonly ],
           },
       },
       { name: partition, type: UInt, args: { size: 16 } },
@@ -122,6 +140,11 @@ query_processors:
       column_name: sentry_tags
       hash_map_name: _sentry_tags_hash_map
       killswitch: sentry_tags_hash_map_enabled
+  - processor: MappingOptimizer
+    args:
+      column_name: measurements
+      hash_map_name: _measurements_hash_map
+      killswitch: measurements_hash_map_enabled
   - processor: EmptyTagConditionProcessor
   - processor: ArrayJoinKeyValueOptimizer
     args:
@@ -132,9 +155,6 @@ query_processors:
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: measurements
-  - processor: ArrayHasOptimizer
-    args:
-      array_columns: [measurements.key]
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:

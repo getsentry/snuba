@@ -7,6 +7,10 @@ from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.environment import setup_logging
+from snuba.migrations.connect import (
+    check_clickhouse_connections,
+    check_for_inactive_replicas,
+)
 from snuba.migrations.errors import MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
@@ -26,6 +30,7 @@ def list() -> None:
     Lists migrations and their statuses
     """
     setup_logging()
+    check_clickhouse_connections()
     runner = Runner()
     for group, group_migrations in runner.show_all():
         readiness_state = get_group_readiness_state(group)
@@ -80,6 +85,8 @@ def migrate(
     Blocking migrations will not be run unless --force is passed.
     """
     setup_logging(log_level)
+    check_clickhouse_connections()
+    check_for_inactive_replicas()
     runner = Runner()
 
     try:
@@ -136,6 +143,9 @@ def run(
     Migrations that are already in an in-progress or completed status will not be run.
     """
     setup_logging(log_level)
+    if not dry_run:
+        check_clickhouse_connections()
+        check_for_inactive_replicas()
 
     runner = Runner()
     migration_group = MigrationGroup(group)
@@ -188,6 +198,9 @@ def reverse(
     --fake marks a migration as reversed without doing anything.
     """
     setup_logging(log_level)
+    if not dry_run:
+        check_clickhouse_connections()
+        check_for_inactive_replicas()
     runner = Runner()
     migration_group = MigrationGroup(group)
     migration_key = MigrationKey(migration_group, migration_id)
@@ -232,6 +245,9 @@ def reverse_in_progress(
     --fake marks migrations as reversed without doing anything.
     """
     setup_logging(log_level)
+    if not dry_run:
+        check_clickhouse_connections()
+        check_for_inactive_replicas()
     runner = Runner()
 
     migration_group = MigrationGroup(group) if group else None

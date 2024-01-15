@@ -11,7 +11,7 @@ RECORD_QUERIES = True
 
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
-SKIPPED_MIGRATION_GROUPS: Set[str] = set([])
+SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 SUPPORTED_STATES: Set[str] = {
     "deprecate",
     "limited",
@@ -25,7 +25,7 @@ ENABLE_DEV_FEATURES = True
 # rather than the pretty formatted one. If you're debugging
 # something and you're at your wit's end, try setting this to False
 # to explore the unrefined Expression structure
-PRETTY_FORMAT_EXPRESSIONS = True
+PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. But if you're testing the policy, it

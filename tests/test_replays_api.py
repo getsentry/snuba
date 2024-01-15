@@ -107,7 +107,7 @@ class TestReplaysApi(BaseApiTest):
         assert data["data"] == [
             {
                 "title": None,
-                "user": None,
+                "user": "",
                 "sdk_name": "",
                 "sdk_version": "",
             }

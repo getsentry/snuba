@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,9 +9,10 @@ use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::Topic;
+use rust_arroyo::types::{Partition, Topic};
 
 use crate::config;
+use crate::metrics::global_tags::set_global_tag;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
@@ -20,6 +22,7 @@ use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
     storage_config: config::StorageConfig,
+    env_config: config::EnvConfig,
     logical_topic_name: String,
     max_batch_size: usize,
     max_batch_time: Duration,
@@ -40,6 +43,7 @@ impl ConsumerStrategyFactory {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         storage_config: config::StorageConfig,
+        env_config: config::EnvConfig,
         logical_topic_name: String,
         max_batch_size: usize,
         max_batch_time: Duration,
@@ -57,6 +61,7 @@ impl ConsumerStrategyFactory {
     ) -> Self {
         Self {
             storage_config,
+            env_config,
             logical_topic_name,
             max_batch_size,
             max_batch_time,
@@ -76,6 +81,13 @@ impl ConsumerStrategyFactory {
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
+    fn update_partitions(&self, partitions: &HashMap<Partition, u64>) {
+        match partitions.keys().map(|partition| partition.index).min() {
+            Some(min) => set_global_tag("min_partition".to_owned(), min.to_string()),
+            None => set_global_tag("min_partition".to_owned(), "none".to_owned()),
+        }
+    }
+
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 
@@ -88,7 +100,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     self.physical_topic_name,
                     self.physical_consumer_group.clone(),
                     &self.commitlog_concurrency,
-                    false,
+                    self.skip_write,
                 ))
             } else {
                 Box::new(next_step)
@@ -122,6 +134,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.logical_topic_name,
                 self.enforce_schema,
                 &self.processing_concurrency,
+                config::ProcessorConfig {
+                    env_config: self.env_config.clone(),
+                },
             ),
             _ => Box::new(
                 PythonTransformStep::new(

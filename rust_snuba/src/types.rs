@@ -1,9 +1,9 @@
 use std::cmp::min;
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use rust_arroyo::utils::metrics::BoxMetrics;
+use rust_arroyo::timer;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
@@ -52,21 +52,19 @@ impl LatencyRecorder {
         (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64
     }
 
-    fn send_metric(&self, metrics: &BoxMetrics, write_time: DateTime<Utc>, metric_name: &str) {
+    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str) {
         if self.num_values == 0 {
             return;
         }
 
-        metrics.timing(
-            &format!("insertions.max_{}_ms", metric_name),
-            self.max_value_ms(write_time),
-            None,
+        timer!(
+            format_args!("insertions.max_{}_ms", metric_name),
+            self.max_value_ms(write_time)
         );
 
-        metrics.timing(
-            &format!("insertions.{}_ms", metric_name),
+        timer!(
+            format_args!("insertions.{}_ms", metric_name),
             self.avg_value_ms(write_time),
-            None,
         );
     }
 }
@@ -77,7 +75,7 @@ impl LatencyRecorder {
 /// sensitive to serialization speed. If there are additional things that should be returned from
 /// the Rust message processor that are not necessary in Python, it's probably best to duplicate
 /// this struct for Python as there it can be an internal type.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct InsertBatch {
     pub rows: RowData,
     pub origin_timestamp: Option<DateTime<Utc>>,
@@ -95,6 +93,14 @@ impl InsertBatch {
             origin_timestamp: None,
             sentry_received_timestamp: None,
         })
+    }
+
+    /// In case the processing function wants to skip the message, we return an empty batch.
+    /// But instead of having the caller send an empty batch, lets make an explicit api for
+    /// skipping. This way we can change the implementation later if we want to. Skipping ensures
+    /// that the message is committed but not processed.
+    pub fn skip() -> Self {
+        Self::default()
     }
 }
 
@@ -157,15 +163,14 @@ impl BytesInsertBatch {
         self
     }
 
-    pub fn record_message_latency(&self, metrics: &BoxMetrics) {
+    pub fn record_message_latency(&self) {
         let write_time = Utc::now();
 
-        self.message_timestamp
-            .send_metric(metrics, write_time, "latency");
+        self.message_timestamp.send_metric(write_time, "latency");
         self.origin_timestamp
-            .send_metric(metrics, write_time, "end_to_end_latency");
+            .send_metric(write_time, "end_to_end_latency");
         self.sentry_received_timestamp
-            .send_metric(metrics, write_time, "sentry_received_latency");
+            .send_metric(write_time, "sentry_received_latency");
     }
 
     pub fn len(&self) -> usize {

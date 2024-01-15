@@ -1,0 +1,65 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"event_id\": \"dcc403b73ef548648188bbfa6012e9dc\",\n  \"organization_id\": 69,\n  \"project_id\": 1,\n  \"trace_id\": \"deadbeefdeadbeefdeadbeefdeadbeef\",\n  \"span_id\": \"deadbeefdeadbeef\",\n  \"parent_span_id\": \"deadbeefdeadbeef\",\n  \"segment_id\": \"deadbeefdeadbeef\",\n  \"profile_id\": \"deadbeefdeadbeefdeadbeefdeadbeef\",\n  \"is_segment\": false,\n  \"start_timestamp_ms\": 1691105878720,\n  \"received\": 169110587919.123,\n  \"duration_ms\": 1000,\n  \"exclusive_time_ms\": 1000,\n  \"retention_days\": 90,\n  \"tags\": {\n    \"tag1\": \"value1\",\n    \"tag2\": \"123\",\n    \"tag3\": \"True\"\n  },\n  \"sentry_tags\": {\n    \"http.method\": \"GET\",\n    \"action\": \"GET\",\n    \"domain\": \"targetdomain.tld:targetport\",\n    \"module\": \"http\",\n    \"group\": \"deadbeefdeadbeef\",\n    \"status\": \"ok\",\n    \"system\": \"python\",\n    \"status_code\": \"200\",\n    \"transaction\": \"/organizations/:orgId/issues/\",\n    \"transaction.op\": \"navigation\",\n    \"op\": \"http.client\",\n    \"transaction.method\": \"GET\"\n  },\n  \"measurements\": {\n    \"http.response_content_length\": {\n      \"value\": 100.0,\n      \"unit\": \"byte\"\n    }\n  },\n  \"_metrics_summary\": {\n    \"c:sentry.events.outcomes@none\": [\n      {\n        \"count\": 1,\n        \"max\": 1.0,\n        \"min\": 1.0,\n        \"sum\": 1.0,\n        \"tags\": {\n          \"category\": \"error\",\n          \"environment\": \"unknown\",\n          \"event_type\": \"error\",\n          \"outcome\": \"accepted\",\n          \"release\": \"backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8\",\n          \"topic\": \"outcomes-billing\",\n          \"transaction\": \"sentry.tasks.store.save_event\"\n        }\n      }\n    ],\n    \"c:sentry.events.post_save.normalize.errors@none\": [\n      {\n        \"count\": 1,\n        \"max\": 0.0,\n        \"min\": 0.0,\n        \"sum\": 0.0,\n        \"tags\": {\n          \"environment\": \"unknown\",\n          \"event_type\": \"error\",\n          \"from_relay\": \"False\",\n          \"release\": \"backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8\",\n          \"transaction\": \"sentry.tasks.store.save_event\"\n        }\n      }\n    ]\n  }\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "count": 1,
+    "deleted": 0,
+    "end_timestamp": 1691105879,
+    "max": 1.0,
+    "metric_mri": "c:sentry.events.outcomes@none",
+    "min": 1.0,
+    "project_id": 1,
+    "retention_days": 90,
+    "span_id": 16045690984833335023,
+    "sum": 1.0,
+    "tags.key": [
+      "category",
+      "environment",
+      "event_type",
+      "outcome",
+      "release",
+      "topic",
+      "transaction"
+    ],
+    "tags.value": [
+      "error",
+      "unknown",
+      "error",
+      "accepted",
+      "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+      "outcomes-billing",
+      "sentry.tasks.store.save_event"
+    ],
+    "trace_id": "deadbeef-dead-beef-dead-beefdeadbeef"
+  },
+  {
+    "count": 1,
+    "deleted": 0,
+    "end_timestamp": 1691105879,
+    "max": 0.0,
+    "metric_mri": "c:sentry.events.post_save.normalize.errors@none",
+    "min": 0.0,
+    "project_id": 1,
+    "retention_days": 90,
+    "span_id": 16045690984833335023,
+    "sum": 0.0,
+    "tags.key": [
+      "environment",
+      "event_type",
+      "from_relay",
+      "release",
+      "transaction"
+    ],
+    "tags.value": [
+      "unknown",
+      "error",
+      "False",
+      "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+      "sentry.tasks.store.save_event"
+    ],
+    "trace_id": "deadbeef-dead-beef-dead-beefdeadbeef"
+  }
+]

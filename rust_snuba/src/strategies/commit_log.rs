@@ -6,7 +6,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
 use serde::{Deserialize, Serialize};
@@ -121,8 +121,11 @@ impl ProduceMessage {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMessage {
+    fn get_task(
+        &self,
+        message: Message<BytesInsertBatch>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
         let topic = self.topic;
@@ -160,11 +163,10 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
 }
 
 pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
 }
 
 impl ProduceCommitLog {
-    #[allow(dead_code)]
     pub fn new<N>(
         next_step: N,
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
@@ -195,7 +197,7 @@ impl ProduceCommitLog {
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
@@ -214,7 +216,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.join(timeout)
     }
 }
@@ -252,7 +254,7 @@ mod tests {
             pub payloads: Vec<BytesInsertBatch>,
         }
         impl ProcessingStrategy<BytesInsertBatch> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
                 Ok(None)
             }
             fn submit(
@@ -267,7 +269,7 @@ mod tests {
             fn join(
                 &mut self,
                 _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            ) -> Result<Option<CommitRequest>, StrategyError> {
                 Ok(None)
             }
         }

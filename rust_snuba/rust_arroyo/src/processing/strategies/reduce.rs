@@ -1,14 +1,16 @@
 use crate::processing::strategies::{
-    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    merge_commit_request, CommitRequest, MessageRejected, ProcessingStrategy, StrategyError,
     SubmitError,
 };
+use crate::timer;
 use crate::types::{Message, Partition};
-use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
+
+use super::InvalidMessage;
 
 struct BatchState<T, TResult> {
     value: Option<TResult>,
@@ -57,12 +59,11 @@ pub struct Reduce<T, TResult> {
     batch_state: BatchState<T, TResult>,
     message_carried_over: Option<Message<TResult>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metrics: BoxMetrics,
     compute_batch_size: fn(&T) -> usize,
 }
 
 impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Reduce<T, TResult> {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
@@ -90,7 +91,7 @@ impl<T: Send + Sync, TResult: Clone + Send + Sync> ProcessingStrategy<T> for Red
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
         if self.message_carried_over.is_some() {
             while self.message_carried_over.is_some() {
@@ -144,7 +145,6 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             batch_state,
             message_carried_over: None,
             commit_request_carried_over: None,
-            metrics: get_metrics(),
             compute_batch_size,
         }
     }
@@ -177,11 +177,8 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
             return Ok(());
         }
 
-        self.metrics.timing(
-            "arroyo.strategies.reduce.batch_time",
-            batch_time.as_secs(),
-            None,
-        );
+        // FIXME: this used to be in seconds
+        timer!("arroyo.strategies.reduce.batch_time", batch_time);
 
         let batch_state = mem::replace(
             &mut self.batch_state,
@@ -213,7 +210,7 @@ impl<T, TResult: Clone> Reduce<T, TResult> {
 mod tests {
     use crate::processing::strategies::reduce::Reduce;
     use crate::processing::strategies::{
-        CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+        CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
     };
     use crate::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
     use std::sync::{Arc, Mutex};
@@ -224,7 +221,7 @@ mod tests {
     }
 
     impl<T: Send + Sync> ProcessingStrategy<T> for NextStep<T> {
-        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
 
@@ -237,7 +234,7 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }

@@ -260,7 +260,7 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
-PRETTY_FORMAT_EXPRESSIONS = True
+PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
 
 # Capacity Management
 # HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
