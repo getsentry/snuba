@@ -63,7 +63,7 @@ struct FromSpanMessage {
 
 #[derive(Debug, Default, Deserialize)]
 struct FromMeasurementValue {
-    value: f64,
+    value: Option<f64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -228,7 +228,7 @@ impl TryFrom<FromSpanMessage> for Span {
             .measurements
             .unwrap_or_default()
             .into_iter()
-            .map(|(k, v)| (k, v.value))
+            .map(|(k, v)| (k, v.value.unwrap_or_default()))
             .unzip();
 
         let metrics_summary = match from._metrics_summary {
@@ -385,9 +385,24 @@ impl SpanStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::DateTime;
+    use std::collections::BTreeMap;
     use std::time::SystemTime;
+
+    use chrono::DateTime;
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    use rust_arroyo::backends::kafka::types::KafkaPayload;
+
+    use crate::config::ProcessorConfig;
+    use crate::types::KafkaMessageMetadata;
+
+    use super::process_message;
+
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    struct FromMeasurementValue {
+        value: Option<f64>,
+    }
 
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
@@ -415,6 +430,7 @@ mod tests {
         event_id: Option<Uuid>,
         exclusive_time_ms: Option<f64>,
         is_segment: Option<bool>,
+        measurements: Option<BTreeMap<String, FromMeasurementValue>>,
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
@@ -435,6 +451,7 @@ mod tests {
             event_id: Some(Uuid::new_v4()),
             exclusive_time_ms: Some(1000.0),
             is_segment: Some(false),
+            measurements: Default::default(),
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
@@ -531,6 +548,27 @@ mod tests {
     fn test_null_tags() {
         let mut span = valid_span();
         span.tags = Option::None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+    }
+    #[test]
+    fn test_null_measurement_values() {
+        let mut span = valid_span();
+        let mut measurements: BTreeMap<String, FromMeasurementValue> = BTreeMap::new();
+        measurements.insert(
+            "some".into(),
+            FromMeasurementValue {
+                value: Option::None,
+            },
+        );
+        span.measurements = Some(measurements);
         let data = serde_json::to_vec(&span).unwrap();
         let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
