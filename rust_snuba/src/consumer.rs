@@ -1,4 +1,3 @@
-use std::process;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -70,7 +69,7 @@ pub fn consumer_impl(
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
-) {
+) -> usize {
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
@@ -208,7 +207,9 @@ pub fn consumer_impl(
     if let Err(error) = processor.run() {
         let error: &dyn std::error::Error = &error;
         tracing::error!(error);
-        process::exit(1);
+        1
+    } else {
+        0
     }
 }
 
