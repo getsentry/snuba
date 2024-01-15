@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.1.0
+
+### Various fixes & improvements
+
+- fix(rust): Actually drop before exiting (#5394) by @untitaker
+- ref(rust): Bump cogs accountant library (#5391) by @lynnagara
+- fix(mql): Properly encode/decode double quotes in MQL strings (#5338) by @evanh
+- fix(rust-consumers): Define consumer group for functions consumer (#5389) by @Zylphrex
+- ref(rust): Don't panic in RunTaskInThreads::poll (#5387) by @loewenheim
+- deps(rust): Change rdkafka dep to upstream master (#5386) by @loewenheim
+- fix(rust): Don't produce commit log in --skip-write mode (#5385) by @lynnagara
+- feat(spans): add migration to add compression to spans (#4726) by @dbanda
+- feat: Add snapshot tests for processors (#5379) by @untitaker
+- ref(metrics): Refactor how global tags work, and introduce min_partition tag (#5346) by @untitaker
+- fix(devenv): Make post-merge hook exactly like sentry's (#5378) by @untitaker
+- fix(Makefile): Change ordering for Rust dev setup (#5384) by @ayirr7
+- Validate at least one event link was sent (#5383) by @cmanallen
+- ref: speed up .github/workflows/image.yml (#5382) by @asottile-sentry
+- feat(rust): Port generic metrics to rust consumer (#5360) by @nikhars
+- fix(rust): Remove noise from output of make install-rs-dev (#5373) by @untitaker
+- feat(spans): Set origin_timestamp for spans (#5372) by @phacops
+- feat(rust): Cogs recording utility for generic metrics (#5362) by @lynnagara
+- fix(ci): Add ddm_meta test to "full tests" (#5370) by @untitaker
+- feat(MQL): Bump snuba-sdk to 2.0.18 and support arbitrary functions in MQL parser (#5358) by @enochtangg
+- fix(ci): Wait for healthcheck to succeed before running test_distributed (#5363) by @untitaker
+- ref(docker): Remove obsolete build args (#5369) by @untitaker
+- Revert "feat(spans): Set origin_timestamp for spans (#5367)" (1c963c3e) by @getsentry-bot
+- ref: Remove experimental consumers from gocd deployment (#5368) by @lynnagara
+
+_Plus 108 more_
+
 ## 23.12.1
 
 ### Various fixes & improvements
