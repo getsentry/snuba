@@ -4,10 +4,10 @@ use std::convert::TryFrom;
 use crate::config::ProcessorConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use schemars::JsonSchema;
 use serde::{ser::Error, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
-use schemars::JsonSchema;
 
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
