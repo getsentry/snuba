@@ -19,6 +19,7 @@ pub struct ConsumerConfig {
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
     pub env: EnvConfig,
+    pub accountant_topic: Option<TopicConfig>,
 }
 
 pub fn deserialize_broker_config<'de, D>(

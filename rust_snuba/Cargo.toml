@@ -47,6 +47,7 @@ uuid = "1.5.0"
 parking_lot = "0.12.1"
 sentry_usage_accountant = "0.0.4"
 adler = "1.0.2"
+lazy_static = "1.4.0"
 
 
 [patch.crates-io]

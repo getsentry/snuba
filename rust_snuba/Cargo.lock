@@ -2036,6 +2036,7 @@ dependencies = [
  "ctrlc",
  "futures",
  "insta",
+ "lazy_static",
  "md5",
  "once_cell",
  "parking_lot",

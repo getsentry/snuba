@@ -1,3 +1,4 @@
+mod accountant;
 mod config;
 mod consumer;
 mod factory;

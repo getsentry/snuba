@@ -11,9 +11,10 @@ use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::{Partition, Topic};
 
+use crate::accountant::CogsAccountant;
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
-use crate::processors;
+use crate::processors::{self, get_cogs_label};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::make_rust_processor;
@@ -37,6 +38,7 @@ pub struct ConsumerStrategyFactory {
     commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
     physical_consumer_group: String,
     physical_topic_name: Topic,
+    accountant_topic_config: Option<config::TopicConfig>,
 }
 
 impl ConsumerStrategyFactory {
@@ -58,6 +60,7 @@ impl ConsumerStrategyFactory {
         commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
         physical_consumer_group: String,
         physical_topic_name: Topic,
+        accountant_topic_config: Option<config::TopicConfig>,
     ) -> Self {
         Self {
             storage_config,
@@ -76,6 +79,7 @@ impl ConsumerStrategyFactory {
             commit_log_producer,
             physical_consumer_group,
             physical_topic_name,
+            accountant_topic_config,
         }
     }
 }
@@ -128,16 +132,32 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.storage_config.message_processor.python_class_name,
             ),
         ) {
-            (true, Some(func)) => make_rust_processor(
-                next_step,
-                func,
-                &self.logical_topic_name,
-                self.enforce_schema,
-                &self.processing_concurrency,
-                config::ProcessorConfig {
-                    env_config: self.env_config.clone(),
-                },
-            ),
+            (true, Some(func)) => {
+                let cogs_label =
+                    get_cogs_label(&self.storage_config.message_processor.python_class_name);
+                let mut accountant: Option<Arc<CogsAccountant>> = Option::None;
+                if cogs_label.is_some() && !self.skip_write {
+                    accountant = self.accountant_topic_config.as_ref().map(|topic_config| {
+                        Arc::new(CogsAccountant::new(
+                            topic_config.broker_config.clone(),
+                            &topic_config.physical_topic_name,
+                        ))
+                    })
+                }
+
+                make_rust_processor(
+                    next_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                    },
+                    accountant,
+                    cogs_label,
+                )
+            }
             _ => Box::new(
                 PythonTransformStep::new(
                     next_step,

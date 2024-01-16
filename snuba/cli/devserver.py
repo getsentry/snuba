@@ -207,6 +207,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "rust-consumer",
+                    "--use-rust-processor",
                     "--storage=generic_metrics_distributions_raw",
                     "--consumer-group=snuba-gen-metrics-distributions-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
@@ -217,6 +218,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "rust-consumer",
+                    "--use-rust-processor",
                     "--storage=generic_metrics_sets_raw",
                     "--consumer-group=snuba-gen-metrics-sets-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
@@ -227,6 +229,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "rust-consumer",
+                    "--use-rust-processor",
                     "--storage=generic_metrics_counters_raw",
                     "--consumer-group=snuba-gen-metrics-counters-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
@@ -237,6 +240,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "rust-consumer",
+                    "--use-rust-processor",
                     "--storage=generic_metrics_gauges_raw",
                     "--consumer-group=snuba-gen-metrics-gauges-consumers",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,

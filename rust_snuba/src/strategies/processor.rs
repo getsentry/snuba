@@ -11,10 +11,12 @@ use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
+use crate::accountant::{COGSLabel, CogsAccountant};
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
+#[warn(clippy::too_many_arguments)]
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
     func: ProcessingFunction,
@@ -22,6 +24,8 @@ pub fn make_rust_processor(
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
+    accountant: Option<Arc<CogsAccountant>>,
+    cogs_label: Option<COGSLabel>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
@@ -30,6 +34,8 @@ pub fn make_rust_processor(
         enforce_schema,
         func,
         processor_config,
+        accountant,
+        cogs_label,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -62,6 +68,8 @@ struct MessageProcessor {
     enforce_schema: bool,
     func: ProcessingFunction,
     processor_config: ProcessorConfig,
+    accountant: Option<Arc<CogsAccountant>>,
+    cogs_label: Option<COGSLabel>,
 }
 
 impl MessageProcessor {
@@ -93,6 +101,16 @@ impl MessageProcessor {
             tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
         };
+
+        if self.cogs_label.is_some() {
+            let cogs_label = self.cogs_label.clone().unwrap();
+            let cogs_amount = payload.len() as u64;
+            self.accountant.as_deref().unwrap().record_bytes(
+                &cogs_label.resource_id,
+                &cogs_label.app_feature,
+                cogs_amount,
+            );
+        }
 
         self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
@@ -218,6 +236,8 @@ mod tests {
             true,
             &concurrency,
             ProcessorConfig::default(),
+            None,
+            None,
         );
 
         let example = "{
