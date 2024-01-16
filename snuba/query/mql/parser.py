@@ -469,6 +469,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
+
         selected_aggregate_column = SelectedExpression(
             AGGREGATE_ALIAS,
             CurriedFunctionCall(
@@ -716,6 +717,7 @@ def parse_mql_query_body(
             )
     except Exception as e:
         raise e
+
     return query
 
 
