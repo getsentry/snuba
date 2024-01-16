@@ -45,5 +45,13 @@ repos:
         additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
+  - repo: local
+    language: system
+    hooks:
+      - id: cargo-fmt
+        name: format rust code
+        language: system
+        entry: make format-rust
+        files: ^rust_snuba/
 default_language_version:
   python: python3.10

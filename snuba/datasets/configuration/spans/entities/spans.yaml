@@ -164,6 +164,7 @@ query_processors:
     args:
       project_field: project_id
 
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
