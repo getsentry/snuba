@@ -30,6 +30,7 @@ schema:
     },
     { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
     { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
+    { name: _error_ids_hashed, type: Array, args: { inner_type: { type: UInt64 } } },
     { name: fatal_id, type: UUID },
     { name: error_id, type: UUID },
     { name: warning_id, type: UUID },
