@@ -2,10 +2,11 @@ use std::collections::BTreeMap;
 
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, hex_to_u64};
