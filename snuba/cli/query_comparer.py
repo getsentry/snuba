@@ -1,10 +1,13 @@
 import csv
-from typing import Optional
+from typing import Any, Optional, Sequence
 
 import click
 import structlog
 import itertools
 from dataclasses import dataclass
+
+from snuba import settings
+from snuba.admin.notifications.slack.client import SlackClient
 
 from snuba.environment import setup_logging, setup_sentry
 
@@ -26,7 +29,6 @@ class MismatchedValues:
     base_value: int
     new_value: int
     delta: int
-    delta_percent: float
 
 
 @dataclass
@@ -38,6 +40,31 @@ class QueryMismatch:
     read_rows: MismatchedValues
     read_bytes: MismatchedValues
 
+    def performance_mismatches(self):
+        return (
+            self.query_id,
+            self.query_duration_ms.base_value,
+            self.query_duration_ms.new_value,
+            self.read_rows.base_value,
+            self.read_rows.new_value,
+            self.read_bytes.base_value,
+            self.read_bytes.new_value,
+            self.query_duration_ms.delta,
+            self.read_rows.delta,
+            self.read_bytes.delta,
+        )
+
+    def data_mismatches(self):
+        return (
+            self.query_id,
+            self.result_rows.base_value,
+            self.result_rows.new_value,
+            self.result_bytes.base_value,
+            self.result_bytes.new_value,
+            self.result_rows.delta,
+            self.result_bytes.delta,
+        )
+
 
 MEASUREMENTS = [
     "query_duration_ms",
@@ -46,6 +73,18 @@ MEASUREMENTS = [
     "read_rows",
     "read_bytes",
 ]
+
+
+def write_querylog_comparison_results_to_csv(
+    results: Sequence[Any],
+    filename: str,
+    header_row=Sequence[str],
+) -> None:
+    with open(filename, mode="w") as file:
+        writer = csv.writer(file)
+        writer.writerow(header_row)
+        for row in results:
+            writer.writerow(row)
 
 
 @click.command()
@@ -59,11 +98,17 @@ MEASUREMENTS = [
     help="Clickhouse queries results from upgrade version.",
     required=True,
 )
+@click.option(
+    "--table",
+    help="Clickhouse queries results from upgrade version.",
+    required=True,
+)
 @click.option("--log-level", help="Logging level to use.")
 def query_comparer(
     *,
     base_file: str,
     upgrade_file: str,
+    table: str,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -109,9 +154,7 @@ def query_comparer(
 
         mismatches.append(_create_mismatch(v1_data, v2_data))
 
-    print("\ntotal queries:", total_rows)
-    print("total mismatches:", len(mismatches))
-    print("percent mismatches:", len(mismatches) / total_rows)
+    _send_slack_report(total_rows, mismatches, table)
 
 
 def _create_mismatch(v1_data, v2_data):
@@ -121,12 +164,10 @@ def _create_mismatch(v1_data, v2_data):
         v2_value = v2_data.__getattribute__(m)
 
         delta = v2_value - v1_value
-        delta_percent = (delta / v1_value) * 100
         mismatched_values = MismatchedValues(
             v1_value,
             v2_value,
             delta,
-            delta_percent,
         )
         mismatch[m] = mismatched_values
     return QueryMismatch(
@@ -137,3 +178,81 @@ def _create_mismatch(v1_data, v2_data):
         read_rows=mismatch["read_rows"],
         read_bytes=mismatch["read_bytes"],
     )
+
+
+def _format_slack_overview(total_rows, mismatches, table) -> Any:
+    queries = total_rows
+    num_mismatches = len(mismatches)
+    per_mismatches = len(mismatches) / total_rows
+
+    overview_text = f"*Overview: `{table}`*\n Total Queries: `{queries}`\n Total Mismatches: `{num_mismatches}`\n% Mismatch: `{per_mismatches}`"
+    return {
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Querylog Comparison `21.8` v `22.8`*\n",
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": overview_text,
+                },
+            },
+        ]
+    }
+
+
+def _send_slack_report(total_rows, mismatches, table) -> None:
+    slack_client = SlackClient(
+        channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
+    )
+
+    p_header_row = [
+        "query_id",
+        "ms_1",
+        "ms_2",
+        "rows1",
+        "rows2",
+        "bytes1",
+        "bytes2",
+        "duration_delta",
+        "read_rows_delta",
+        "read_bytes_delta",
+    ]
+    p_results = [m.performance_mismatches() for m in mismatches]
+
+    d_header_row = [
+        "query_id",
+        "rows1",
+        "rows2",
+        "bytes1",
+        "bytes2",
+        "result_rows_delta",
+        "result_bytes_delta",
+    ]
+    d_results = [m.data_mismatches() for m in mismatches]
+
+    p_filename = f"perf_{table}.csv"
+    d_filename = f"data_{table}.csv"
+
+    slack_client.post_message(
+        message=_format_slack_overview(total_rows, mismatches, table)
+    )
+
+    for results, header_row, filename in [
+        (p_results, p_header_row, p_filename),
+        (d_results, d_header_row, d_filename),
+    ]:
+        write_querylog_comparison_results_to_csv(
+            results, f"/tmp/{filename}", header_row
+        )
+        slack_client.post_file(
+            file_name=filename,
+            file_path=f"/tmp/{filename}",
+            file_type="csv",
+            initial_comment=f"Querylog Result Report: {filename}",
+        )
