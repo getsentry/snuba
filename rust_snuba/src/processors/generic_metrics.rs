@@ -1,7 +1,6 @@
 use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
-use core::result::Result::Ok;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, vec};
