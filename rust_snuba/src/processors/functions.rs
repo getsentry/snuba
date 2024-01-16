@@ -1,48 +1,36 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::config::ProcessorConfig;
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::processors::spans::SpanStatus;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
-
-    let timestamp = match msg.timestamp {
-        Some(timestamp) => timestamp,
-        _ => SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
-    };
-    let device_classification = msg.device_class.unwrap_or_default();
 
     let functions = msg.functions.iter().map(|from| {
         Function {
             profile_id: msg.profile_id,
             project_id: msg.project_id,
+
             // Profile metadata
-            browser_name: msg.browser_name.as_deref(),
-            device_classification,
-            dist: msg.dist.as_deref(),
             environment: msg.environment.as_deref(),
-            http_method: msg.http_method.as_deref(),
             platform: &msg.platform,
             release: msg.release.as_deref(),
             retention_days: msg.retention_days,
-            timestamp,
+            timestamp: msg.timestamp,
             transaction_name: &msg.transaction_name,
-            transaction_op: &msg.transaction_op,
-            transaction_status: msg.transaction_status as u8,
 
             // Function metadata
             fingerprint: from.fingerprint,
             durations: &from.self_times_ns,
-            function: &from.function,
             package: &from.package,
             name: &from.function,
             is_application: from.in_app as u8,
@@ -50,7 +38,12 @@ pub fn process_message(
             ..Default::default()
         }
     });
-    InsertBatch::from_rows(functions)
+
+    Ok(InsertBatch {
+        origin_timestamp: DateTime::from_timestamp(msg.received, 0),
+        rows: RowData::from_rows(functions)?,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,61 +57,48 @@ struct InputFunction {
 
 #[derive(Debug, Deserialize)]
 struct InputMessage {
-    profile_id: Uuid,
-    project_id: u64,
-    #[serde(default)]
-    browser_name: Option<String>,
-    #[serde(default)]
-    device_class: Option<u32>,
-    #[serde(default)]
-    dist: Option<String>,
     #[serde(default)]
     environment: Option<String>,
     functions: Vec<InputFunction>,
-    #[serde(default)]
-    http_method: Option<String>,
     platform: String,
+    profile_id: Uuid,
+    project_id: u64,
+    received: i64,
     #[serde(default)]
     release: Option<String>,
     retention_days: u32,
-    #[serde(default)]
-    timestamp: Option<u64>,
+    timestamp: u64,
     transaction_name: String,
-    transaction_op: String,
-    transaction_status: SpanStatus,
 }
 
 #[derive(Default, Debug, Serialize)]
 struct Function<'a> {
-    profile_id: Uuid,
-    project_id: u64,
-    browser_name: Option<&'a str>,
-    device_classification: u32,
-    dist: Option<&'a str>,
     durations: &'a [u64],
     environment: Option<&'a str>,
     fingerprint: u64,
-    function: &'a str,
-    http_method: Option<&'a str>,
     is_application: u8,
     materialization_version: u8,
-    module: &'a str,
     name: &'a str,
     package: &'a str,
     platform: &'a str,
+    profile_id: Uuid,
+    project_id: u64,
     release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
     transaction_name: &'a str,
-    transaction_op: &'a str,
-    transaction_status: u8,
 
     // Deprecated fields
+    browser_name: &'a str,
     depth: u8,
+    device_classification: u32,
+    dist: &'a str,
     os_name: &'a str,
     os_version: &'a str,
     parent_fingerprint: u8,
     path: &'a str,
+    transaction_op: &'a str,
+    transaction_status: u8,
 }
 
 #[cfg(test)]
@@ -135,6 +115,7 @@ mod tests {
             "profile_id": "7329158c39964fbb9ec57c20cf4a2bb8",
             "transaction_name": "vroom-vroom",
             "timestamp": 1694447692,
+            "received": 1694447692,
             "functions": [
                 {
                     "fingerprint": 123,
@@ -168,6 +149,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

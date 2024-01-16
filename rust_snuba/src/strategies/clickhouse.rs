@@ -4,13 +4,13 @@ use std::time::{Duration, SystemTime};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    ConcurrencyConfig, RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use rust_arroyo::types::Message;
-use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
+use rust_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
@@ -19,7 +19,6 @@ const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
-    metrics: BoxMetrics,
     skip_write: bool,
 }
 
@@ -27,17 +26,18 @@ impl ClickhouseWriter {
     pub fn new(client: ClickhouseClient, skip_write: bool) -> Self {
         ClickhouseWriter {
             client: Arc::new(client),
-            metrics: get_metrics(),
             skip_write,
         }
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ClickhouseWriter {
+    fn get_task(
+        &self,
+        message: Message<BytesInsertBatch>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
-        let metrics = self.metrics;
 
         Box::pin(async move {
             let insert_batch = message.payload();
@@ -49,9 +49,9 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
                 tracing::debug!("performing write");
 
                 let response = client
-                    .send(insert_batch.encoded_rows().to_vec())
+                    .send(insert_batch.encoded_rows())
                     .await
-                    .unwrap();
+                    .map_err(RunTaskError::Other)?;
 
                 tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", insert_batch.len());
@@ -60,18 +60,10 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
             let write_finish = SystemTime::now();
 
             if let Ok(elapsed) = write_finish.duration_since(write_start) {
-                metrics.timing(
-                    "insertions.batch_write_ms",
-                    elapsed.as_millis() as u64,
-                    None,
-                );
+                timer!("insertions.batch_write_ms", elapsed);
             }
-            metrics.increment(
-                "insertions.batch_write_msgs",
-                insert_batch.len() as i64,
-                None,
-            );
-            insert_batch.record_message_latency(&metrics);
+            counter!("insertions.batch_write_msgs", insert_batch.len() as i64);
+            insert_batch.record_message_latency();
 
             Ok(message)
         })
@@ -79,7 +71,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
 }
 
 pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
 }
 
 impl ClickhouseWriterStep {
@@ -112,7 +104,7 @@ impl ClickhouseWriterStep {
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
@@ -131,7 +123,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.join(timeout)
     }
 }
@@ -166,15 +158,14 @@ impl ClickhouseClient {
         }
     }
 
-    fn chunk(&self, rows: Vec<u8>) -> Vec<Vec<u8>> {
+    fn chunked_body(rows: &[u8]) -> Vec<Result<Box<[u8]>, std::io::Error>> {
         rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
-            .map(|chunk| chunk.to_vec())
+            .map(|chunk| Ok(Box::from(chunk)))
             .collect()
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
-        let chunks: Vec<Result<_, ::std::io::Error>> =
-            self.chunk(body).into_iter().map(Ok).collect();
+    pub async fn send(&self, body: &[u8]) -> anyhow::Result<Response> {
+        let chunks = Self::chunked_body(body);
         let stream = futures::stream::iter(chunks);
 
         let res = self
@@ -209,24 +200,17 @@ mod tests {
         assert!(client.url.contains("load_balancing"));
         assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
-        let res = client.send(b"[]".to_vec()).await;
+        let res = client.send(b"[]").await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
     }
 
     #[test]
-    fn chunk() {
-        let client: ClickhouseClient = ClickhouseClient::new(
-            &std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
-            8123,
-            "querylog_local",
-            "default",
-        );
-
+    fn chunked_body() {
         let mut data: Vec<u8> = vec![0; 1_000_000];
 
-        assert_eq!(client.chunk(data.clone()).len(), 1);
+        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 1);
         data.push(0);
-        assert_eq!(client.chunk(data).len(), 2);
+        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 2);
     }
 }

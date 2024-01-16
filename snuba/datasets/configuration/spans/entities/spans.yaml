@@ -128,7 +128,7 @@ storages:
             from_column_table: null
             from_column_name: sentry_tags
             to_nested_col_table: null
-            to_nested_col_name: tags
+            to_nested_col_name: sentry_tags
             value_subcolumn_name: value
             nullable: false
         - mapper: SubscriptableMapper
@@ -164,6 +164,7 @@ query_processors:
     args:
       project_field: project_id
 
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:

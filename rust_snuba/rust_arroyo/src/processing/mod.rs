@@ -1,14 +1,10 @@
-pub mod dlq;
-mod metrics_buffer;
-pub mod strategies;
-
-use parking_lot::{Mutex, MutexGuard};
 use std::collections::HashMap;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
 
 use crate::backends::kafka::config::KafkaConfig;
@@ -16,10 +12,15 @@ use crate::backends::kafka::types::KafkaPayload;
 use crate::backends::kafka::KafkaConsumer;
 use crate::backends::{AssignmentCallbacks, CommitOffsets, Consumer, ConsumerError};
 use crate::processing::dlq::{BufferedMessages, DlqPolicy, DlqPolicyWrapper};
-use crate::processing::strategies::{MessageRejected, SubmitError};
+use crate::processing::strategies::{MessageRejected, StrategyError, SubmitError};
 use crate::types::{InnerMessage, Message, Partition, Topic};
-use crate::utils::metrics::{get_metrics, BoxMetrics};
 use crate::utils::timing::Deadline;
+use crate::{counter, timer};
+
+pub mod dlq;
+mod metrics_buffer;
+pub mod strategies;
+
 use strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 
 #[derive(Debug, Clone)]
@@ -41,6 +42,8 @@ pub enum RunError {
     Pause(#[source] ConsumerError),
     #[error("strategy panicked")]
     StrategyPanic,
+    #[error("the strategy errored")]
+    Strategy(#[source] Box<dyn std::error::Error>),
 }
 
 const BACKPRESSURE_THRESHOLD: Duration = Duration::from_secs(1);
@@ -114,33 +117,26 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
     // initialization.  But we just provide a signal back to the
     // processor to do that.
     fn on_assign(&self, partitions: HashMap<Partition, u64>) {
-        let metrics = get_metrics();
-        metrics.increment(
+        counter!(
             "arroyo.consumer.partitions_assigned.count",
-            partitions.len() as i64,
-            None,
+            partitions.len() as i64
         );
 
         let start = Instant::now();
 
         let mut state = self.0.locked_state();
+        state.processing_factory.update_partitions(&partitions);
         state.strategy = Some(state.processing_factory.create());
         state.dlq_policy.reset_dlq_limits(&partitions);
 
-        metrics.timing(
-            "arroyo.consumer.create_strategy.time",
-            start.elapsed().as_millis() as u64,
-            None,
-        );
+        timer!("arroyo.consumer.create_strategy.time", start.elapsed());
     }
 
     fn on_revoke<C: CommitOffsets>(&self, commit_offsets: C, partitions: Vec<Partition>) {
         tracing::info!("Start revoke partitions");
-        let metrics = get_metrics();
-        metrics.increment(
+        counter!(
             "arroyo.consumer.partitions_revoked.count",
             partitions.len() as i64,
-            None,
         );
 
         let start = Instant::now();
@@ -166,8 +162,8 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
                     }
                 }
 
-                Err(_) => {
-                    tracing::error!("Strategy panicked during close/join");
+                Err(err) => {
+                    tracing::error!(?err, "Strategy panicked during close/join");
                 }
             }
         }
@@ -175,11 +171,7 @@ impl<TPayload: Send + Sync + 'static> AssignmentCallbacks for Callbacks<TPayload
         self.0.set_paused(false);
         state.clear_backpressure();
 
-        metrics.timing(
-            "arroyo.consumer.join.time",
-            start.elapsed().as_millis() as u64,
-            None,
-        );
+        timer!("arroyo.consumer.join.time", start.elapsed());
 
         tracing::info!("End revoke partitions");
 
@@ -197,7 +189,6 @@ pub struct StreamProcessor<TPayload: Clone> {
     message: Option<Message<TPayload>>,
     processor_handle: ProcessorHandle,
     buffered_messages: BufferedMessages<TPayload>,
-    metrics: BoxMetrics,
     metrics_buffer: metrics_buffer::MetricsBuffer,
 }
 
@@ -236,7 +227,6 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 shutdown_requested: Arc::new(AtomicBool::new(false)),
             },
             buffered_messages: BufferedMessages::new(max_buffered_messages_per_partition),
-            metrics: get_metrics(),
             metrics_buffer: metrics_buffer::MetricsBuffer::new(),
         }
     }
@@ -249,7 +239,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
     }
 
     fn _run_once(&mut self) -> Result<(), RunError> {
-        self.metrics.increment("arroyo.consumer.run.count", 1, None);
+        counter!("arroyo.consumer.run.count");
 
         let consumer_is_paused = self.consumer_state.is_paused();
         if consumer_is_paused {
@@ -298,9 +288,8 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
             }
         };
         let processing_start = Instant::now();
-        let commit_request = strategy.poll();
 
-        match commit_request {
+        match strategy.poll() {
             Ok(None) => {}
             Ok(Some(request)) => {
                 for (partition, offset) in &request.positions {
@@ -310,15 +299,21 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
                 consumer_state.dlq_policy.flush(&request.positions);
                 self.consumer.commit_offsets(request.positions).unwrap();
             }
-            Err(e) => match self.buffered_messages.pop(&e.partition, e.offset) {
-                Some(msg) => {
-                    tracing::error!(?e, "Invalid message");
-                    consumer_state.dlq_policy.produce(msg);
+            Err(StrategyError::InvalidMessage(e)) => {
+                match self.buffered_messages.pop(&e.partition, e.offset) {
+                    Some(msg) => {
+                        tracing::error!(?e, "Invalid message");
+                        consumer_state.dlq_policy.produce(msg);
+                    }
+                    None => {
+                        tracing::error!("Could not find invalid message in buffer");
+                    }
                 }
-                None => {
-                    tracing::error!("Could not find invalid message in buffer");
-                }
-            },
+            }
+
+            Err(StrategyError::Other(error)) => {
+                return Err(RunError::Strategy(error));
+            }
         };
 
         let Some(msg_s) = self.message.take() else {
@@ -439,7 +434,7 @@ impl<TPayload: Clone + Send + Sync + 'static> StreamProcessor<TPayload> {
 #[cfg(test)]
 mod tests {
     use super::strategies::{
-        CommitRequest, InvalidMessage, ProcessingStrategy, ProcessingStrategyFactory, SubmitError,
+        CommitRequest, ProcessingStrategy, ProcessingStrategyFactory, StrategyError, SubmitError,
     };
     use super::*;
     use crate::backends::local::broker::LocalBroker;
@@ -456,7 +451,7 @@ mod tests {
     }
     impl ProcessingStrategy<String> for TestStrategy {
         #[allow(clippy::manual_map)]
-        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(self.message.as_ref().map(|message| CommitRequest {
                 positions: HashMap::from_iter(message.committable()),
             }))
@@ -471,7 +466,7 @@ mod tests {
 
         fn terminate(&mut self) {}
 
-        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+        fn join(&mut self, _: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }
@@ -552,7 +547,7 @@ mod tests {
             panic_on: &'static str, // poll, submit, join, close
         }
         impl ProcessingStrategy<String> for TestStrategy {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
                 if self.panic_on == "poll" {
                     panic!("panic in poll");
                 }
@@ -578,7 +573,7 @@ mod tests {
             fn join(
                 &mut self,
                 _: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
+            ) -> Result<Option<CommitRequest>, StrategyError> {
                 if self.panic_on == "join" {
                     panic!("panic in join");
                 }

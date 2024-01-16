@@ -46,6 +46,9 @@ class EnvConfig:
     sentry_dsn: Optional[str]
     dogstatsd_host: Optional[str]
     dogstatsd_port: Optional[int]
+    default_retention_days: int
+    lower_retention_days: int
+    valid_retention_days: list[int]
 
 
 @dataclass(frozen=True)
@@ -116,10 +119,16 @@ def _resolve_env_config() -> EnvConfig:
     sentry_dsn = settings.SENTRY_DSN
     dogstatsd_host = settings.DOGSTATSD_HOST
     dogstatsd_port = settings.DOGSTATSD_PORT
+    default_retention_days = settings.DEFAULT_RETENTION_DAYS
+    lower_retention_days = settings.LOWER_RETENTION_DAYS
+    valid_retention_days = list(settings.VALID_RETENTION_DAYS)
     return EnvConfig(
         sentry_dsn=sentry_dsn,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port,
+        default_retention_days=default_retention_days,
+        lower_retention_days=lower_retention_days,
+        valid_retention_days=valid_retention_days,
     )
 
 
@@ -161,6 +170,11 @@ def resolve_consumer_config(
 
     assert resolved_raw_topic is not None
 
+    if bootstrap_servers:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "bootstrap.servers", ",".join(bootstrap_servers)
+        )
+
     if queued_max_messages_kbytes is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
             resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
@@ -181,10 +195,24 @@ def resolve_consumer_config(
         "commit log", commit_log_topic_spec, commit_log_topic, slice_id
     )
 
+    if resolved_commit_log_topic and commit_log_bootstrap_servers:
+        resolved_commit_log_topic = _add_to_topic_broker_config(
+            resolved_commit_log_topic,
+            "bootstrap.servers",
+            ",".join(commit_log_bootstrap_servers),
+        )
+
     replacements_topic_spec = stream_loader.get_replacement_topic_spec()
     resolved_replacements_topic = _resolve_topic_config(
         "replacements topic", replacements_topic_spec, replacements_topic, slice_id
     )
+
+    if resolved_replacements_topic and replacement_bootstrap_servers:
+        resolved_replacements_topic = _add_to_topic_broker_config(
+            resolved_replacements_topic,
+            "bootstrap.servers",
+            ",".join(replacement_bootstrap_servers),
+        )
 
     resolved_env_config = _resolve_env_config()
 

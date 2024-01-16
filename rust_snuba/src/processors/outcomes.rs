@@ -1,8 +1,9 @@
+use crate::config::ProcessorConfig;
 use crate::processors::utils::ensure_valid_datetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::utils::metrics::get_metrics;
+use rust_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -11,23 +12,24 @@ const OUTCOME_CLIENT_DISCARD: u8 = 5;
 // DataCategory 1 is Error
 const DEFAULT_CATEGORY: u8 = 1;
 
-const CLIENT_DISCARD_REASONS: [&str; 11] = [
-    "queue_overflow",
-    "cache_overflow",
-    "ratelimit_backoff",
-    "network_error",
+const CLIENT_DISCARD_REASONS: &[&str] = &[
+    "backpressure",
     "before_send",
+    "cache_overflow",
     "event_processor",
+    "insufficient_data",
+    "internal_sdk_error",
+    "network_error",
+    "queue_overflow",
+    "ratelimit_backoff",
     "sample_rate",
     "send_error",
-    "internal_sdk_error",
-    "insufficient_data",
-    "backpressure",
 ];
 
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: Outcome = serde_json::from_slice(payload_bytes)?;
@@ -38,7 +40,10 @@ pub fn process_message(
     // chain.
     if msg.outcome == OUTCOME_CLIENT_DISCARD {
         if let Some(reason) = &msg.reason {
-            if !CLIENT_DISCARD_REASONS.contains(&reason.as_str()) {
+            if CLIENT_DISCARD_REASONS
+                .binary_search(&reason.as_str())
+                .is_err()
+            {
                 msg.reason = None;
             }
         }
@@ -48,13 +53,13 @@ pub fn process_message(
     if msg.category.is_none() {
         msg.category = Some(DEFAULT_CATEGORY);
         if msg.outcome != OUTCOME_ABUSE {
-            get_metrics().increment("missing_category", 1, None);
+            counter!("missing_category");
         }
     }
     if msg.quantity.is_none() {
         msg.quantity = Some(1);
         if msg.outcome != OUTCOME_ABUSE {
-            get_metrics().increment("missing_quantity", 1, None);
+            counter!("missing_quantity");
         }
     }
 
@@ -80,10 +85,10 @@ struct Outcome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::RowData;
     use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
+
     #[test]
     fn test_outcome() {
         let data = r#"{
@@ -99,13 +104,11 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let result = process_message(payload, meta).expect("The message should be processed");
+        let result = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
 
-        let expected = "{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}";
+        let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
 
-        assert_eq!(
-            result.rows,
-            RowData::from_encoded_rows(vec![expected.as_bytes().to_vec()])
-        );
+        assert_eq!(result.rows.into_encoded_rows(), expected);
     }
 }

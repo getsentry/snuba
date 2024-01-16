@@ -352,6 +352,8 @@ class SpansLoader(DirectoryLoader):
             "0006_spans_add_profile_id",
             "0007_spans_add_metrics_summary",
             "0008_spans_add_index_on_span_id",
+            "0009_spans_add_measure_hashmap",
+            "0010_spans_add_compression",
         ]
 
 

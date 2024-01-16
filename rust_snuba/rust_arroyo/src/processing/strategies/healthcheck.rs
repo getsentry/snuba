@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
+use crate::counter;
 use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use crate::types::Message;
-use crate::utils::metrics::{get_metrics, BoxMetrics};
 
 const TOUCH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -14,7 +14,6 @@ pub struct HealthCheck<Next> {
     path: PathBuf,
     interval: Duration,
     deadline: SystemTime,
-    metrics: BoxMetrics,
 }
 
 impl<Next> HealthCheck<Next> {
@@ -27,7 +26,6 @@ impl<Next> HealthCheck<Next> {
             path: path.into(),
             interval,
             deadline,
-            metrics: get_metrics(),
         }
     }
 
@@ -42,8 +40,7 @@ impl<Next> HealthCheck<Next> {
             tracing::error!(error);
         }
 
-        self.metrics
-            .increment("arroyo.processing.strategies.healthcheck.touch", 1, None);
+        counter!("arroyo.processing.strategies.healthcheck.touch");
         self.deadline = now + self.interval;
     }
 }
@@ -52,7 +49,7 @@ impl<TPayload, Next> ProcessingStrategy<TPayload> for HealthCheck<Next>
 where
     Next: ProcessingStrategy<TPayload> + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.maybe_touch_file();
 
         self.next_step.poll()
@@ -70,7 +67,7 @@ where
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.join(timeout)
     }
 }

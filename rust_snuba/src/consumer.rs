@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -6,21 +6,22 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::metrics;
 use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
-use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
 
 use crate::config;
 use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
+use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -33,6 +34,7 @@ pub fn consumer(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    enforce_schema: bool,
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
@@ -46,6 +48,7 @@ pub fn consumer(
             skip_write,
             concurrency,
             use_rust_processor,
+            enforce_schema,
             max_poll_interval_ms,
             python_max_queue_depth,
             health_check_file,
@@ -62,10 +65,11 @@ pub fn consumer_impl(
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    enforce_schema: bool,
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
-) {
+) -> usize {
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
@@ -77,9 +81,10 @@ pub fn consumer_impl(
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
-    assert!(consumer_config.commit_log_topic.is_none());
 
     let mut _sentry_guard = None;
+
+    let env_config = consumer_config.env.clone();
 
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
@@ -94,17 +99,16 @@ pub fn consumer_impl(
         consumer_config.env.dogstatsd_host,
         consumer_config.env.dogstatsd_port,
     ) {
-        let mut tags = HashMap::new();
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        tags.insert("storage", storage_name.as_str());
-        tags.insert("consumer_group", consumer_group);
+        set_global_tag("storage".to_owned(), storage_name);
+        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        configure_metrics(StatsDBackend::new(&host, port, "snuba.consumer", tags));
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
@@ -146,7 +150,9 @@ pub fn consumer_impl(
                 Topic::new(&dlq_topic_config.physical_topic_name),
             ));
 
+            let handle = ConcurrencyConfig::new(10).handle();
             DlqPolicy::new(
+                handle,
                 kafka_dlq_producer,
                 DlqLimit {
                     max_invalid_ratio: Some(0.01),
@@ -157,17 +163,35 @@ pub fn consumer_impl(
         }),
     };
 
+    let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
+        let producer_config =
+            KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
+        let producer = KafkaProducer::new(producer_config);
+        Some((
+            Arc::new(producer),
+            Topic::new(&topic_config.physical_topic_name),
+        ))
+    } else {
+        None
+    };
+
     let factory = ConsumerStrategyFactory::new(
         first_storage,
+        env_config,
         logical_topic_name,
         max_batch_size,
         max_batch_time,
         skip_write,
         ConcurrencyConfig::new(concurrency),
         ConcurrencyConfig::new(2),
+        ConcurrencyConfig::new(2),
         python_max_queue_depth,
         use_rust_processor,
         health_check_file.map(ToOwned::to_owned),
+        enforce_schema,
+        commit_log_producer,
+        consumer_group.to_owned(),
+        Topic::new(&consumer_config.raw_topic.physical_topic_name),
     );
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
@@ -180,7 +204,13 @@ pub fn consumer_impl(
     })
     .expect("Error setting Ctrl-C handler");
 
-    processor.run().unwrap();
+    if let Err(error) = processor.run() {
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error);
+        1
+    } else {
+        0
+    }
 }
 
 pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
@@ -211,14 +241,7 @@ pub fn process_message(
         timestamp,
     };
 
-    let res = func(payload, meta)
+    let res = func(payload, meta, &config::ProcessorConfig::default())
         .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
-    let batch = BytesInsertBatch::new(
-        res.rows,
-        timestamp,
-        res.origin_timestamp,
-        res.sentry_received_timestamp,
-        BTreeMap::from([(partition, (offset, timestamp))]),
-    );
-    Ok(batch.encoded_rows().to_vec())
+    Ok(res.rows.into_encoded_rows())
 }

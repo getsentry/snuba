@@ -1,23 +1,32 @@
+use crate::config::ProcessorConfig;
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::processors::utils::enforce_retention;
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: ProfileMessage = serde_json::from_slice(payload_bytes)?;
 
-    // we always want an empty string at least
-    msg.device_classification = Some(msg.device_classification.unwrap_or_default());
+    msg.retention_days = Some(enforce_retention(msg.retention_days, &config.env_config));
     msg.offset = metadata.offset;
     msg.partition = metadata.partition;
 
-    InsertBatch::from_rows([msg])
+    let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
+
+    Ok(InsertBatch {
+        origin_timestamp,
+        rows: RowData::from_rows([msg])?,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -27,7 +36,7 @@ struct ProfileMessage {
     #[serde(default)]
     architecture: Option<String>,
     #[serde(default)]
-    device_classification: Option<String>,
+    device_classification: String,
     device_locale: String,
     device_manufacturer: String,
     device_model: String,
@@ -43,7 +52,7 @@ struct ProfileMessage {
     profile_id: Uuid,
     project_id: u64,
     received: i64,
-    retention_days: u32,
+    retention_days: Option<u16>,
     trace_id: Uuid,
     transaction_id: Uuid,
     transaction_name: String,
@@ -95,6 +104,7 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }
