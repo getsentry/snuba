@@ -69,7 +69,7 @@ class PluggableEntity(Entity):
             EntityContainsColumnsValidator(
                 EntityColumnSet(self.columns),
                 mappers,
-                self.validate_data_model or ColumnValidationMode.WARN,
+                self.validate_data_model or ColumnValidationMode.ERROR,
             )
         ]
 
