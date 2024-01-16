@@ -146,6 +146,7 @@ mod tests {
           },
           "duration_ms": 1000,
           "project_id": 1,
+          "received": 1691105878.720,
           "retention_days": 90,
           "span_id": "deadbeefdeadbeef",
           "start_timestamp_ms": 1691105878720,
