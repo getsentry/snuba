@@ -1,10 +1,10 @@
 use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
+use core::result::Result::Ok;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, vec};
-use core::result::Result::Ok;
 
 use crate::{
     types::{InsertBatch, RowData},
@@ -137,9 +137,7 @@ impl Parse for CountersRawRow {
     ) -> anyhow::Result<Option<CountersRawRow>> {
         let count_value = match from.value {
             MetricValue::Counter(value) => value,
-            _ => {
-                return Ok(Option::None)
-            }
+            _ => return Ok(Option::None),
         };
 
         let timeseries_id =
@@ -233,9 +231,7 @@ impl Parse for SetsRawRow {
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
             MetricValue::Set(values) => values,
-            _ => {
-                return Ok(Option::None)
-            }
+            _ => return Ok(Option::None),
         };
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -249,7 +245,6 @@ impl Parse for SetsRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -301,9 +296,7 @@ impl Parse for DistributionsRawRow {
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let distribution_values = match from.value {
             MetricValue::Distribution(value) => value,
-            _ => {
-                return Ok(Option::None)
-            }
+            _ => return Ok(Option::None),
         };
 
         let timeseries_id =
@@ -398,9 +391,7 @@ impl Parse for GaugesRawRow {
                 gauges_values_min.push(min);
                 gauges_values_sum.push(sum);
             }
-            _ => {
-                return Ok(Option::None)
-            }
+            _ => return Ok(Option::None),
         }
 
         let timeseries_id =
