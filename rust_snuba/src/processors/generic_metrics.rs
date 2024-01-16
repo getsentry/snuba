@@ -4,6 +4,7 @@ use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, vec};
+use core::result::Result::Ok;
 
 use crate::{
     types::{InsertBatch, RowData},
@@ -50,22 +51,25 @@ struct FromGenericMetricsMessage {
     org_id: u64,
     project_id: u64,
     metric_id: u64,
-    #[serde(rename = "type")]
-    r#type: String,
     timestamp: f64,
     sentry_received_timestamp: f64,
     tags: BTreeMap<String, String>,
+    #[serde(flatten)]
     value: MetricValue,
     retention_days: u16,
     aggregation_option: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", content = "value")]
 enum MetricValue {
+    #[serde(rename = "c")]
     Counter(f64),
-    SetOrDistribution(Vec<u64>),
-    DistributionFloat(Vec<f64>),
+    #[serde(rename = "s")]
+    Set(Vec<u64>),
+    #[serde(rename = "d")]
+    Distribution(Vec<f64>),
+    #[serde(rename = "g")]
     Gauge {
         count: u64,
         last: f64,
@@ -131,9 +135,12 @@ impl Parse for CountersRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<CountersRawRow>> {
-        if from.r#type != "c" {
-            return Ok(Option::None);
-        }
+        let count_value = match from.value {
+            MetricValue::Counter(value) => value,
+            _ => {
+                return Ok(Option::None)
+            }
+        };
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -147,15 +154,6 @@ impl Parse for CountersRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let count_value = match from.value {
-            MetricValue::Counter(value) => value,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for counter metric type"
-                ))
-            }
-        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -233,10 +231,12 @@ impl Parse for SetsRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
-        if from.r#type != "s" {
-            return Ok(Option::None);
-        }
-
+        let set_values = match from.value {
+            MetricValue::Set(values) => values,
+            _ => {
+                return Ok(Option::None)
+            }
+        };
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
@@ -250,14 +250,6 @@ impl Parse for SetsRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let set_values = match from.value {
-            MetricValue::SetOrDistribution(values) => values,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for gauge metric type"
-                ))
-            }
-        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -307,9 +299,12 @@ impl Parse for DistributionsRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
-        if from.r#type != "d" {
-            return Ok(Option::None);
-        }
+        let distribution_values = match from.value {
+            MetricValue::Distribution(value) => value,
+            _ => {
+                return Ok(Option::None)
+            }
+        };
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -327,18 +322,6 @@ impl Parse for DistributionsRawRow {
             enable_histogram = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let distribution_values = match from.value {
-            MetricValue::DistributionFloat(value) => value,
-            MetricValue::SetOrDistribution(values) => {
-                values.into_iter().map(|v| v as f64).collect()
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for distribution metric type"
-                ))
-            }
-        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -396,24 +379,6 @@ impl Parse for GaugesRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<GaugesRawRow>> {
-        if from.r#type != "g" {
-            return Ok(Option::None);
-        }
-
-        let timeseries_id =
-            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let mut granularities = vec![
-            GRANULARITY_ONE_MINUTE,
-            GRANULARITY_ONE_HOUR,
-            GRANULARITY_ONE_DAY,
-        ];
-        let aggregate_option = from.aggregation_option.unwrap_or_default();
-        if aggregate_option == "ten_second" {
-            granularities.push(GRANULARITY_TEN_SECONDS);
-        }
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
         let mut gauges_values_last = vec![];
         let mut gauges_values_count = vec![];
         let mut gauges_values_max = vec![];
@@ -434,11 +399,23 @@ impl Parse for GaugesRawRow {
                 gauges_values_sum.push(sum);
             }
             _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for gauge metric type"
-                ))
+                return Ok(Option::None)
             }
         }
+
+        let timeseries_id =
+            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
+        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+        let mut granularities = vec![
+            GRANULARITY_ONE_MINUTE,
+            GRANULARITY_ONE_HOUR,
+            GRANULARITY_ONE_DAY,
+        ];
+        let aggregate_option = from.aggregation_option.unwrap_or_default();
+        if aggregate_option == "ten_second" {
+            granularities.push(GRANULARITY_TEN_SECONDS);
+        }
+        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
