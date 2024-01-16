@@ -469,7 +469,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
-
         selected_aggregate_column = SelectedExpression(
             AGGREGATE_ALIAS,
             CurriedFunctionCall(
@@ -527,9 +526,28 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_curried_arbitrary_function(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
-        raise InvalidQueryException(
-            "Curried arbitrary functions are not supported yet in AST"
+        curried_arbitrary_function_name, agg_params, zero_or_one = children
+        _, _, agg_param_list, *_ = agg_params
+        aggregate_params = agg_param_list[0] if agg_param_list else []
+        _, _, expr, _, *_ = zero_or_one
+        _, target, _ = expr
+        assert isinstance(target, InitialParseResult)
+        curried_arbitrary_function = SelectedExpression(
+            name=target.expression.name,
+            expression=CurriedFunctionCall(
+                alias=None,
+                internal_function=FunctionCall(
+                    None,
+                    curried_arbitrary_function_name,
+                    tuple(
+                        Literal(alias=None, value=param) for param in aggregate_params
+                    ),
+                ),
+                parameters=(target.expression.expression,),
+            ),
         )
+        target.expression = curried_arbitrary_function
+        return target
 
     def visit_inner_filter(
         self, node: Node, children: Sequence[Any]
@@ -717,7 +735,6 @@ def parse_mql_query_body(
             )
     except Exception as e:
         raise e
-
     return query
 
 
