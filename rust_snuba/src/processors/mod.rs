@@ -52,8 +52,8 @@ define_processing_functions! {
 mod tests {
     use std::time::SystemTime;
 
-    use pretty_assertions::assert_eq;
     use chrono::DateTime;
+    use pretty_assertions::assert_eq;
     use schemars::JsonSchema;
     use sentry_kafka_schemas::get_schema;
 
@@ -65,10 +65,9 @@ mod tests {
         let mut diff = json_schema_diff::diff(
             serde_json::from_str(old_schema.raw_schema()).unwrap(),
             serde_json::to_value(schema).unwrap(),
-        ).unwrap();
-        diff.retain(|change| {
-            change.change.is_breaking()
-        });
+        )
+        .unwrap();
+        diff.retain(|change| change.change.is_breaking());
         assert_eq!(diff, vec![]);
     }
 
