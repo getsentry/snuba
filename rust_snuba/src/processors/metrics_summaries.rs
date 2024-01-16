@@ -1,12 +1,14 @@
-use crate::config::ProcessorConfig;
 use anyhow::Context;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+
+use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, hex_to_u64};
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -45,7 +47,13 @@ pub fn process_message(
         }
     }
 
-    InsertBatch::from_rows(metrics_summaries)
+    let origin_timestamp = DateTime::from_timestamp(from.received as i64, 0);
+
+    Ok(InsertBatch {
+        origin_timestamp,
+        rows: RowData::from_rows(metrics_summaries)?,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -55,6 +63,7 @@ struct InputMessage {
     #[serde(default)]
     duration_ms: u32,
     project_id: u64,
+    received: f64,
     #[serde(default)]
     retention_days: Option<u16>,
     #[serde(deserialize_with = "hex_to_u64")]
