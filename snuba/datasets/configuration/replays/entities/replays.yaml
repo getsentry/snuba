@@ -31,6 +31,11 @@ schema:
     { name: trace_ids, type: Array, args: { inner_type: { type: UUID } } },
     { name: error_ids, type: Array, args: { inner_type: { type: UUID } } },
     { name: _error_ids_hashed, type: Array, args: { inner_type: { type: UInt, args: { size: 64 } } }},
+    {
+      name: count_errors,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 16 },
+    },
     { name: fatal_id, type: UUID },
     { name: error_id, type: UUID },
     { name: warning_id, type: UUID },
@@ -43,6 +48,11 @@ schema:
     },
     { name: url, type: String, args: { schema_modifiers: [nullable] } },
     { name: urls, type: Array, args: { inner_type: { type: String } } },
+    {
+      name: count_urls,
+      type: UInt,
+      args: { schema_modifiers: [nullable], size: 16 },
+    },
     {
       name: is_archived,
       type: UInt,
