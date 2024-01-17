@@ -1,14 +1,13 @@
 import csv
-from typing import Any, Optional, Sequence, NamedTuple, Union
+import itertools
+from dataclasses import dataclass
+from typing import Any, NamedTuple, Optional, Sequence, Union
 
 import click
 import structlog
-import itertools
-from dataclasses import dataclass
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
-
 from snuba.environment import setup_logging, setup_sentry
 
 logger = structlog.get_logger().bind(module=__name__)
