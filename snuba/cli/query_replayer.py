@@ -1,8 +1,8 @@
+import csv
 from collections import namedtuple
 from typing import Optional, Sequence
 
 import click
-import csv
 import structlog
 
 from snuba.clickhouse.native import ClickhousePool
