@@ -1,5 +1,5 @@
 import csv
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, NamedTuple, Union
 
 import click
 import structlog
@@ -31,6 +31,29 @@ class MismatchedValues:
     delta: int
 
 
+class PerformanceMismatchResult(NamedTuple):
+    query_id: str
+    duration_ms_base: int
+    duration_ms_new: int
+    read_rows_base: int
+    read_rows_new: int
+    read_bytes_base: int
+    read_bytes_new: int
+    duration_ms_delta: int
+    read_rows_delta: int
+    read_bytes_delta: int
+
+
+class DataMismatchResult(NamedTuple):
+    query_id: str
+    result_rows_base: int
+    result_rows_new: int
+    result_bytes_base: int
+    result_bytes_new: int
+    result_rows_delta: int
+    result_bytes_delta: int
+
+
 @dataclass
 class QueryMismatch:
     query_id: str
@@ -40,8 +63,8 @@ class QueryMismatch:
     read_rows: MismatchedValues
     read_bytes: MismatchedValues
 
-    def performance_mismatches(self):
-        return (
+    def performance_mismatches(self) -> PerformanceMismatchResult:
+        return PerformanceMismatchResult(
             self.query_id,
             self.query_duration_ms.base_value,
             self.query_duration_ms.new_value,
@@ -54,8 +77,8 @@ class QueryMismatch:
             self.read_bytes.delta,
         )
 
-    def data_mismatches(self):
-        return (
+    def data_mismatches(self) -> DataMismatchResult:
+        return DataMismatchResult(
             self.query_id,
             self.result_rows.base_value,
             self.result_rows.new_value,
@@ -76,9 +99,9 @@ MEASUREMENTS = [
 
 
 def write_querylog_comparison_results_to_csv(
-    results: Sequence[Any],
+    results: Union[Sequence[DataMismatchResult], Sequence[PerformanceMismatchResult]],
     filename: str,
-    header_row=Sequence[str],
+    header_row: Sequence[str],
 ) -> None:
     with open(filename, mode="w") as file:
         writer = csv.writer(file)
@@ -123,7 +146,7 @@ def query_comparer(
     base_reader = csv.reader(base)
     upgrade_reader = csv.reader(upgrade)
 
-    def query_measurement(row) -> QueryMeasurement:
+    def query_measurement(row: Any) -> QueryMeasurement:
         return QueryMeasurement(
             query_id=row[0],
             query_duration_ms=int(row[1]),
@@ -157,7 +180,9 @@ def query_comparer(
     _send_slack_report(total_rows, mismatches, table)
 
 
-def _create_mismatch(v1_data, v2_data):
+def _create_mismatch(
+    v1_data: QueryMeasurement, v2_data: QueryMeasurement
+) -> QueryMismatch:
     mismatch = {}
     for m in MEASUREMENTS:
         v1_value = v1_data.__getattribute__(m)
@@ -180,7 +205,9 @@ def _create_mismatch(v1_data, v2_data):
     )
 
 
-def _format_slack_overview(total_rows, mismatches, table) -> Any:
+def _format_slack_overview(
+    total_rows: int, mismatches: Sequence[QueryMismatch], table: str
+) -> Any:
     queries = total_rows
     num_mismatches = len(mismatches)
     per_mismatches = len(mismatches) / total_rows
@@ -206,7 +233,9 @@ def _format_slack_overview(total_rows, mismatches, table) -> Any:
     }
 
 
-def _send_slack_report(total_rows, mismatches, table) -> None:
+def _send_slack_report(
+    total_rows: int, mismatches: Sequence[QueryMismatch], table: str
+) -> None:
     slack_client = SlackClient(
         channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
     )
@@ -223,7 +252,9 @@ def _send_slack_report(total_rows, mismatches, table) -> None:
         "read_rows_delta",
         "read_bytes_delta",
     ]
-    p_results = [m.performance_mismatches() for m in mismatches]
+    p_results: Sequence[PerformanceMismatchResult] = [
+        m.performance_mismatches() for m in mismatches
+    ]
 
     d_header_row = [
         "query_id",
@@ -234,7 +265,7 @@ def _send_slack_report(total_rows, mismatches, table) -> None:
         "result_rows_delta",
         "result_bytes_delta",
     ]
-    d_results = [m.data_mismatches() for m in mismatches]
+    d_results: Sequence[DataMismatchResult] = [m.data_mismatches() for m in mismatches]
 
     p_filename = f"perf_{table}.csv"
     d_filename = f"data_{table}.csv"
@@ -247,6 +278,7 @@ def _send_slack_report(total_rows, mismatches, table) -> None:
         (p_results, p_header_row, p_filename),
         (d_results, d_header_row, d_filename),
     ]:
+        assert isinstance(results, (PerformanceMismatchResult, DataMismatchResult))
         write_querylog_comparison_results_to_csv(
             results, f"/tmp/{filename}", header_row
         )

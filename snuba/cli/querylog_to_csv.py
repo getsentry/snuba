@@ -1,10 +1,9 @@
 import csv
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, NamedTuple
 
 import click
 import structlog
 from datetime import datetime
-from dataclasses import dataclass
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
@@ -16,8 +15,7 @@ from snuba.environment import setup_logging, setup_sentry
 logger = structlog.get_logger().bind(module=__name__)
 
 
-@dataclass(frozen=True)
-class QueryMeasurement:
+class QueryMeasurementResult(NamedTuple):
     query_id: str
     query_duration_ms: int
     result_rows: int
@@ -27,7 +25,7 @@ class QueryMeasurement:
 
 
 def write_querylog_results_to_csv(
-    results: Sequence[QueryMeasurement], filename: str
+    results: Sequence[QueryMeasurementResult], filename: str
 ) -> None:
     with open(filename, mode="w") as file:
         writer = csv.writer(file)
@@ -53,7 +51,13 @@ def format_filename(table: str) -> str:
     return f"{table}_{day}_{timestamp}"
 
 
-def get_query_results(type, databases, tables, start_time, end_time):
+def get_query_results(
+    type: str,
+    databases: list[str],
+    tables: list[str],
+    start_time: str,
+    end_time: Optional[str],
+) -> str:
     if start_time and end_time:
         start = f"toDateTime('{start_time}')"
         end = f"toDateTime('{end_time}')"
@@ -128,7 +132,7 @@ def get_credentials() -> Tuple[str, str]:
     help="Ending timestamp of the query",
 )
 @click.option("--log-level", help="Logging level to use.")
-def query_comparer(
+def querylog_to_csv(
     *,
     clickhouse_host: str,
     clickhouse_port: int,
@@ -139,6 +143,11 @@ def query_comparer(
     end_time: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> None:
+    """
+    Use this command when you want to capture the results from the
+    clickhouse querylog after you have re-run queries (using the
+    `snuba query-replayer` command).
+    """
     setup_logging(log_level)
     setup_sentry()
 
