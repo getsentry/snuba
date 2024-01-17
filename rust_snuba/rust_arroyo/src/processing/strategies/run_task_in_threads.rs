@@ -14,6 +14,8 @@ use crate::processing::strategies::{
 use crate::types::Message;
 use crate::utils::timing::Deadline;
 
+use super::StrategyError;
+
 #[derive(Clone, Debug)]
 pub enum RunTaskError<TError> {
     RetryableError,
@@ -86,7 +88,7 @@ pub struct RunTaskInThreads<TPayload, TTransformed, TError> {
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError<TError>>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metric_name: String,
+    metric_strategy_name: &'static str,
 }
 
 impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TError> {
@@ -110,7 +112,7 @@ impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TE
             handles: VecDeque::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
-            metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
+            metric_strategy_name: strategy_name,
         }
     }
 }
@@ -121,12 +123,19 @@ where
     TTransformed: Send + Sync + 'static,
     TError: Into<Box<dyn std::error::Error>> + Send + Sync + 'static,
 {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let commit_request = self.next_step.poll()?;
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
-        gauge!(&self.metric_name, self.handles.len() as u64);
+        gauge!("arroyo.strategies.run_task_in_threads.threads",
+            self.handles.len() as u64,
+            "strategy_name" => self.metric_strategy_name
+        );
+        gauge!("arroyo.strategies.run_task_in_threads.concurrency",
+            self.concurrency as u64,
+            "strategy_name" => self.metric_strategy_name
+        );
 
         if let Some(message) = self.message_carried_over.take() {
             match self.next_step.submit(message) {
@@ -136,7 +145,7 @@ where
                     self.message_carried_over = Some(transformed_message);
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -156,29 +165,21 @@ where
                             self.message_carried_over = Some(transformed_message);
                         }
                         Err(SubmitError::InvalidMessage(invalid_message)) => {
-                            return Err(invalid_message);
+                            return Err(invalid_message.into());
                         }
                         Ok(_) => {}
                     },
                     Ok(Err(RunTaskError::InvalidMessage(e))) => {
-                        return Err(e);
+                        return Err(e.into());
                     }
                     Ok(Err(RunTaskError::RetryableError)) => {
                         tracing::error!("retryable error");
                     }
                     Ok(Err(RunTaskError::Other(error))) => {
-                        // XXX: at some point we should extend the error return type of poll() to
-                        // pass those errors through to the stream processor
-                        let error: Box<dyn std::error::Error> = error.into();
-                        tracing::error!(error, "the thread errored");
-                        panic!("the thread errored");
+                        return Err(StrategyError::Other(error.into()));
                     }
-                    Err(error) => {
-                        // XXX: at some point we should extend the error return type of poll() to
-                        // pass those errors through to the stream processor
-                        let error: Box<dyn std::error::Error> = error.into();
-                        tracing::error!(error, "the thread crashed");
-                        panic!("the thread crashed");
+                    Err(e) => {
+                        return Err(StrategyError::Other(e.into()));
                     }
                 }
             }
@@ -215,14 +216,14 @@ where
         self.next_step.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
 
         // Poll until there are no more messages or timeout is hit
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
             if deadline.map_or(false, |d| d.has_elapsed()) {
                 tracing::warn!(
-                    %self.metric_name,
+                    %self.metric_strategy_name,
                     "Timeout reached while waiting for tasks to finish",
                 );
                 break;
@@ -283,7 +284,7 @@ mod tests {
     }
 
     impl ProcessingStrategy<String> for Mock {
-        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+        fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
             self.0.lock().unwrap().polled = true;
             Ok(None)
         }
@@ -296,7 +297,7 @@ mod tests {
         fn join(
             &mut self,
             _timeout: Option<Duration>,
-        ) -> Result<Option<CommitRequest>, InvalidMessage> {
+        ) -> Result<Option<CommitRequest>, StrategyError> {
             Ok(None)
         }
     }

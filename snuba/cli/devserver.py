@@ -362,6 +362,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "rust-consumer",
                     "--storage=functions_raw",
+                    "--consumer-group=functions_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),

@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 
-use crate::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
-};
+use crate::processing::strategies::{CommitRequest, ProcessingStrategy, SubmitError};
 use crate::timer;
 use crate::types::{Message, Partition};
+
+use super::StrategyError;
 
 pub struct CommitOffsets {
     partitions: HashMap<Partition, u64>,
@@ -44,7 +44,7 @@ impl CommitOffsets {
 }
 
 impl<T> ProcessingStrategy<T> for CommitOffsets {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(self.commit(false))
     }
 
@@ -74,7 +74,7 @@ impl<T> ProcessingStrategy<T> for CommitOffsets {
     fn join(
         &mut self,
         _: Option<std::time::Duration>,
-    ) -> Result<Option<CommitRequest>, InvalidMessage> {
+    ) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(self.commit(true))
     }
 }

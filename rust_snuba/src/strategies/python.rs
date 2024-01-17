@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    SubmitError,
+    StrategyError, SubmitError,
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use rust_arroyo::utils::timing::Deadline;
@@ -95,7 +95,7 @@ impl PythonTransformStep {
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
             let python_strategy = self.python_strategy.lock();
             let result = python_strategy.call_method0(py, "poll")?;
@@ -119,7 +119,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     break;
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -211,7 +211,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
         let timeout_secs = timeout.map(|d| d.as_secs());
 
@@ -244,7 +244,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     }
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -281,21 +281,9 @@ mod tests {
     use super::*;
     use rust_arroyo::testutils::TestStrategy;
 
-    fn set_sys_executable() {
-        let python_executable = std::env::var("PYTHONEXECUTABLE").unwrap();
-        Python::with_gil(|py| -> PyResult<()> {
-            PyModule::import(py, "sys")?.setattr("executable", python_executable)?;
-            Ok(())
-        })
-        .unwrap();
-    }
-
     #[test]
-    // test is flaky in CI and fails 100% of the time locally with " signal only works in main
-    // thread of the main interpreter"
-    #[ignore]
     fn test_python() {
-        set_sys_executable();
+        crate::testutils::initialize_python();
 
         let sink = TestStrategy::new();
 
