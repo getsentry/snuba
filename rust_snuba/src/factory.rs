@@ -113,32 +113,30 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             };
 
         // Write to clickhouse
-        let clickhouse_write_step = ClickhouseWriterStep::new(
+        let clickhouse_write_step = Box::new(ClickhouseWriterStep::new(
             next_step,
             self.storage_config.clickhouse_cluster.clone(),
             self.storage_config.clickhouse_table_name.clone(),
             self.skip_write,
             &self.clickhouse_concurrency,
-        );
+        ));
 
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
         // Produce cogs if generic metrics and we are not skipping writes
-        let produce_cogs: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
             match (self.skip_write, cogs_label) {
                 (false, Some(resource_id)) => {
                     // TODO: accountant topic doesn't have to be an option
-                    let topic_config = self.accountant_topic_config.unwrap();
-                    let record_cogs = RecordCogs::new(
+                    let topic_config = self.accountant_topic_config.as_ref().unwrap();
+                    Box::new(RecordCogs::new(
                         clickhouse_write_step,
                         resource_id,
                         topic_config.broker_config.clone(),
                         &topic_config.physical_topic_name,
-                    );
-
-                    return Box::new(record_cogs);
+                    ))
                 }
-                _ => Box::new(clickhouse_write_step),
+                _ => clickhouse_write_step,
             };
 
         let accumulator = Arc::new(BytesInsertBatch::merge);
