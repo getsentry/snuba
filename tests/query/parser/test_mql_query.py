@@ -1922,7 +1922,7 @@ mql_test_cases = [
         id="Select metric with arbitrary function",
     ),
     pytest.param(
-        "topK(10)(sum(transaction.user))",
+        "topK(10)(sum(transaction.user), 300)",
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
@@ -1965,6 +1965,7 @@ mql_test_cases = [
                                 "sum",
                                 (Column("_snuba_value", None, "value"),),
                             ),
+                            Literal(None, 300),
                         ),
                     ),
                 ),

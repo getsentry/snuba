@@ -529,8 +529,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         curried_arbitrary_function_name, agg_params, zero_or_one = children
         _, _, agg_param_list, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
-        _, _, expr, _, *_ = zero_or_one
+        _, _, expr, params, *_ = zero_or_one
         _, target, _ = expr
+        curried_arbitrary_function_params = [
+            Literal(alias=None, value=param[-1]) for param in params
+        ]
         assert isinstance(target, InitialParseResult)
         curried_arbitrary_function = SelectedExpression(
             name=target.expression.name,
@@ -543,7 +546,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                         Literal(alias=None, value=param) for param in aggregate_params
                     ),
                 ),
-                parameters=(target.expression.expression,),
+                parameters=(
+                    target.expression.expression,
+                    *curried_arbitrary_function_params,
+                ),
             ),
         )
         target.expression = curried_arbitrary_function
