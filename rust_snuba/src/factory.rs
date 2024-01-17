@@ -13,9 +13,8 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
-use rust_arroyo::processing::strategies::InvalidMessage;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::{InnerMessage, Message};
+use rust_arroyo::types::Message;
 use rust_arroyo::types::{Partition, Topic};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::Schema;
@@ -25,7 +24,7 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
-use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
+use crate::strategies::processor::{extract_and_validate, get_schema, make_rust_processor};
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -189,31 +188,7 @@ impl SchemaValidator {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
-        let msg = match &message.inner_message {
-            InnerMessage::BrokerMessage(msg) => msg,
-            _ => {
-                return Err(RunTaskError::Other(anyhow::anyhow!(
-                    "Unexpected message type"
-                )))
-            }
-        };
-
-        let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
-            partition: msg.partition,
-            offset: msg.offset,
-        });
-
-        let kafka_payload = &msg.payload.clone();
-        let Some(payload) = kafka_payload.payload() else {
-            return Err(maybe_err);
-        };
-
-        if let Err(error) = validate_schema(&self.schema, self.enforce_schema, payload) {
-            let error: &dyn std::error::Error = &error;
-            tracing::error!(error, "Failed schema validation");
-            return Err(maybe_err);
-        };
-
+        extract_and_validate(&message, &self.schema, self.enforce_schema)?;
         Ok(message)
     }
 }
