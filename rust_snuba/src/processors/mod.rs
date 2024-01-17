@@ -8,10 +8,6 @@ mod replays;
 mod spans;
 mod utils;
 
-use lazy_static::lazy_static;
-use std::collections::HashMap;
-use std::str::FromStr;
-
 use crate::accountant::COGSResourceId;
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
@@ -53,31 +49,16 @@ define_processing_functions! {
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
 }
 
-lazy_static! {
-    static ref COGS_MAP: HashMap<&'static str, COGSResourceId> = {
-        let mut m = HashMap::new();
-        m.insert(
-            "GenericCountersMetricsProcessor",
-            COGSResourceId::from_str("generic_metrics_processor_counters").unwrap(),
-        );
-        m.insert(
-            "GenericSetsMetricsProcessor",
-            COGSResourceId::from_str("generic_metrics_processor_sets").unwrap(),
-        );
-        m.insert(
-            "GenericDistributionsMetricsProcessor",
-            COGSResourceId::from_str("generic_metrics_processor_distributions").unwrap(),
-        );
-        m.insert(
-            "GenericGaugesMetricsProcessor",
-            COGSResourceId::from_str("generic_metrics_processor_gauges").unwrap(),
-        );
-        m
-    };
-}
-
 pub fn get_cogs_label(processor_name: &str) -> Option<COGSResourceId> {
-    COGS_MAP.get(processor_name).cloned()
+    match processor_name {
+        "GenericCountersMetricsProcessor" => Some("generic_metrics_processor_counters".to_string()),
+        "GenericSetsMetricsProcessor" => Some("generic_metrics_processor_sets".to_string()),
+        "GenericDistributionsMetricsProcessor" => {
+            Some("generic_metrics_processor_distributions".to_string())
+        }
+        "GenericGaugesMetricsProcessor" => Some("generic_metrics_processor_gauges".to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
