@@ -31,3 +31,6 @@ pub use processors::{ProcessingFunction, PROCESSORS};
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;
 pub use types::KafkaMessageMetadata;
+
+#[cfg(test)]
+mod testutils;

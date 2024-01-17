@@ -8,10 +8,12 @@ from typing import Any, Callable, cast
 import pytest
 import simplejson as json
 from snuba_sdk import (
+    ArithmeticOperator,
     Column,
     Condition,
     Direction,
     Flags,
+    Formula,
     Metric,
     MetricsQuery,
     MetricsScope,
@@ -454,7 +456,9 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             end=self.end_time,
             rollup=Rollup(interval=60, totals=None, orderby=None, granularity=60),
             scope=MetricsScope(
-                org_ids=[1], project_ids=[1], use_case_id="transactions"
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id="transactions",
             ),
             indexer_mappings={
                 "d:transactions/measurements.indexer_batch.payloads.len@none": DISTRIBUTIONS.metric_id,
@@ -515,3 +519,121 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ).serialize_mql(),
         )
         assert response.status_code == 200
+
+    def test_simple_formula(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.PLUS.value,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            TRANSACTION_MRI,
+                            DISTRIBUTIONS.metric_id,
+                            DISTRIBUTIONS.entity,
+                        ),
+                        aggregate="avg",
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            TRANSACTION_MRI,
+                            DISTRIBUTIONS.metric_id,
+                            DISTRIBUTIONS.entity,
+                        ),
+                        aggregate="avg",
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, totals=None, orderby=None, granularity=60),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "status_code": resolve_str("status_code"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        assert len(data["data"]) == 180, data
+
+    @pytest.mark.xfail(reason="Needs snuba-sdk 2.0.21 or later")
+    def test_complex_formula(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.DIVIDE.value,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            TRANSACTION_MRI,
+                            DISTRIBUTIONS.metric_id,
+                            DISTRIBUTIONS.entity,
+                        ),
+                        aggregate="quantiles",
+                        aggregate_params=[0.5],
+                        filters=[
+                            Condition(
+                                Column("status_code"),
+                                Op.IN,
+                                ["200"],
+                            )
+                        ],
+                        groupby=[Column("transaction")],
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            TRANSACTION_MRI,
+                            DISTRIBUTIONS.metric_id,
+                            DISTRIBUTIONS.entity,
+                        ),
+                        aggregate="avg",
+                        groupby=[Column("transaction")],
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, totals=None, orderby=None, granularity=60),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "status_code": resolve_str("status_code"),
+                "transaction": resolve_str("transaction"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        assert len(data["data"]) == 180, data
