@@ -79,6 +79,7 @@ def get_query_results(
     AND (tables = {tables})
     AND (query_start_time >= {start})
     AND (query_start_time <= {end})
+    ORDER BY query_id
     """
 
 
@@ -127,6 +128,12 @@ def get_credentials() -> Tuple[str, str]:
     required=True,
 )
 @click.option(
+    "--notify",
+    help="Option to send saved csv file to slack",
+    is_flag=True,
+    default=False,
+)
+@click.option(
     "--end-time",
     help="Ending timestamp of the query",
 )
@@ -139,6 +146,7 @@ def querylog_to_csv(
     database: str,
     event_type: str,
     start_time: str,
+    notify: bool,
     end_time: Optional[str] = None,
     log_level: Optional[str] = None,
 ) -> None:
@@ -170,14 +178,15 @@ def querylog_to_csv(
     # TODO: save this file to GCS bucket
     write_querylog_results_to_csv(results.results, f"/tmp/{filename}.csv")
 
-    # TODO: maybe use new specific channel id
-    slack_client = SlackClient(
-        channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
-    )
+    if notify:
+        # TODO: maybe use new specific channel id
+        slack_client = SlackClient(
+            channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
+        )
 
-    slack_client.post_file(
-        file_name=f"{filename}.csv",
-        file_path=f"/tmp/{filename}.csv",
-        file_type="csv",
-        initial_comment=f"Querylog Result Report: {filename}",
-    )
+        slack_client.post_file(
+            file_name=f"{filename}.csv",
+            file_path=f"/tmp/{filename}.csv",
+            file_type="csv",
+            initial_comment=f"Querylog Result Report: {filename}",
+        )
