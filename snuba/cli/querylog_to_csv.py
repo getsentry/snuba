@@ -1,15 +1,14 @@
 import csv
-from typing import Optional, Sequence, Tuple, NamedTuple
+from datetime import datetime
+from typing import NamedTuple, Optional, Sequence, Tuple
 
 import click
 import structlog
-from datetime import datetime
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings
-
 from snuba.environment import setup_logging, setup_sentry
 
 logger = structlog.get_logger().bind(module=__name__)
