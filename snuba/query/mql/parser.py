@@ -535,6 +535,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Literal(alias=None, value=param[-1]) for param in params
         ]
         assert isinstance(target, InitialParseResult)
+        assert isinstance(target.expression, SelectedExpression)
         curried_arbitrary_function = SelectedExpression(
             name=target.expression.name,
             expression=CurriedFunctionCall(
