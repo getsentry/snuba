@@ -16,6 +16,7 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryTooLongException
 
 
 class QueryStatus(Enum):
@@ -134,6 +135,8 @@ def get_request_status(cause: Exception | None = None) -> Status:
     elif isinstance(
         cause, (StorageNotAvailable, InvalidJsonRequestException, InvalidQueryException)
     ):
+        slo_status = RequestStatus.INVALID_REQUEST
+    elif isinstance(cause, QueryTooLongException):
         slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
