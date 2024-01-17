@@ -29,7 +29,7 @@ class GCSUploader:
 
     def upload_file(
         self, source_file_name: str, destination_blob_name: Optional[str] = None
-    ):
+    ) -> None:
         """
         Upload a file to the bucket. If no destination_blob_name is specified, the source file name is used.
         """
@@ -42,7 +42,7 @@ class GCSUploader:
 
         logger.info(f"File {source_file_name} uploaded to {destination_blob_name}.")
 
-    def download_file(self, source_blob_name: str, destination_file_name: str):
+    def download_file(self, source_blob_name: str, destination_file_name: str) -> None:
         """
         Downloads a file from the bucket to the local filesystem.
         The file is downloaded to destination_file_name.
