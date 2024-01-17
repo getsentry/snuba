@@ -88,7 +88,7 @@ pub struct RunTaskInThreads<TPayload, TTransformed, TError> {
     handles: VecDeque<JoinHandle<Result<Message<TTransformed>, RunTaskError<TError>>>>,
     message_carried_over: Option<Message<TTransformed>>,
     commit_request_carried_over: Option<CommitRequest>,
-    metric_name: String,
+    metric_strategy_name: &'static str,
 }
 
 impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TError> {
@@ -112,7 +112,7 @@ impl<TPayload, TTransformed, TError> RunTaskInThreads<TPayload, TTransformed, TE
             handles: VecDeque::new(),
             message_carried_over: None,
             commit_request_carried_over: None,
-            metric_name: format!("arroyo.strategies.{strategy_name}.threads"),
+            metric_strategy_name: strategy_name,
         }
     }
 }
@@ -128,7 +128,14 @@ where
         self.commit_request_carried_over =
             merge_commit_request(self.commit_request_carried_over.take(), commit_request);
 
-        gauge!(&self.metric_name, self.handles.len() as u64);
+        gauge!("arroyo.strategies.run_task_in_threads.threads",
+            self.handles.len() as u64,
+            "strategy_name" => self.metric_strategy_name
+        );
+        gauge!("arroyo.strategies.run_task_in_threads.concurrency",
+            self.concurrency as u64,
+            "strategy_name" => self.metric_strategy_name
+        );
 
         if let Some(message) = self.message_carried_over.take() {
             match self.next_step.submit(message) {
@@ -216,7 +223,7 @@ where
         while self.message_carried_over.is_some() || !self.handles.is_empty() {
             if deadline.map_or(false, |d| d.has_elapsed()) {
                 tracing::warn!(
-                    %self.metric_name,
+                    %self.metric_strategy_name,
                     "Timeout reached while waiting for tasks to finish",
                 );
                 break;
