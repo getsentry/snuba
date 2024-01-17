@@ -1,6 +1,6 @@
 import re
 import time
-from typing import Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 import structlog
 from packaging import version
@@ -13,7 +13,8 @@ from snuba.clusters.cluster import (
     ClickhouseNode,
     UndefinedClickhouseCluster,
 )
-from snuba.clusters.storage_sets import DEV_STORAGE_SETS
+from snuba.clusters.storage_sets import DEV_STORAGE_SETS, StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.clickhouse import (
@@ -21,6 +22,7 @@ from snuba.migrations.clickhouse import (
     CLICKHOUSE_SERVER_MIN_VERSION,
 )
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
+from snuba.migrations.groups import get_group_readiness_state_from_storage_set
 from snuba.settings import ENABLE_DEV_FEATURES
 from snuba.utils.types import ColumnStatesMapType
 
@@ -28,6 +30,7 @@ logger = structlog.get_logger().bind(module=__name__)
 
 
 def check_clickhouse_connections(
+    valid_readiness_states: Sequence[ReadinessState],
     clusters: Sequence[ClickhouseCluster] = CLUSTERS,
 ) -> None:
     """
@@ -36,6 +39,18 @@ def check_clickhouse_connections(
     attempts = 0
 
     for cluster in clusters:
+        # TODO: FOr some dumb fucking reason storage sets are inaccessible here
+        storage_sets: List[StorageSetKey] = [
+            StorageSetKey(storage_set) for storage_set in cluster.storage_sets
+        ]
+        readiness_states = {
+            get_group_readiness_state_from_storage_set(storage_set_key)
+            for storage_set_key in storage_sets
+        }
+        if not set(valid_readiness_states).intersection(readiness_states):
+            # this cluster is not serving the clickhouse connections that we want to check
+            continue
+
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         while True:
