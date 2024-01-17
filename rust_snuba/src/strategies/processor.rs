@@ -11,7 +11,6 @@ use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
-use crate::accountant::CogsAccountant;
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
@@ -24,7 +23,6 @@ pub fn make_rust_processor(
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
-    accountant: Option<Arc<CogsAccountant>>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
@@ -33,7 +31,6 @@ pub fn make_rust_processor(
         enforce_schema,
         func,
         processor_config,
-        accountant,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -66,7 +63,6 @@ struct MessageProcessor {
     enforce_schema: bool,
     func: ProcessingFunction,
     processor_config: ProcessorConfig,
-    accountant: Option<Arc<CogsAccountant>>,
 }
 
 impl MessageProcessor {
@@ -233,7 +229,6 @@ mod tests {
             true,
             &concurrency,
             ProcessorConfig::default(),
-            None,
         );
 
         let example = "{

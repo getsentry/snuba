@@ -48,6 +48,7 @@ define_processing_functions! {
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
 }
 
+// COGS is recorded for these processors
 pub fn get_cogs_label(processor_name: &str) -> Option<String> {
     match processor_name {
         "GenericCountersMetricsProcessor" => Some("generic_metrics_processor_counters".to_string()),

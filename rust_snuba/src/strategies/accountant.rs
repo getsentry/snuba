@@ -46,7 +46,7 @@ pub struct RecordCogs<N> {
 }
 
 impl<N> RecordCogs<N> {
-    fn new(
+    pub fn new(
         next_step: N,
         resource_id: String,
         broker_config: HashMap<String, String>,

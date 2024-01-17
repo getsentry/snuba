@@ -11,10 +11,10 @@ use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::{Partition, Topic};
 
-use crate::accountant::CogsAccountant;
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
+use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::make_rust_processor;
@@ -93,8 +93,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+        // Commit offsets
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 
+        // Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<_>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
@@ -110,15 +112,38 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 Box::new(next_step)
             };
 
+        // Write to clickhouse
+        let clickhouse_write_step = ClickhouseWriterStep::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            self.skip_write,
+            &self.clickhouse_concurrency,
+        );
+
+        let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
+
+        // Produce cogs if generic metrics and we are not skipping writes
+        let produce_cogs: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
+            match (self.skip_write, cogs_label) {
+                (false, Some(resource_id)) => {
+                    // TODO: accountant topic doesn't have to be an option
+                    let topic_config = self.accountant_topic_config.unwrap();
+                    let record_cogs = RecordCogs::new(
+                        clickhouse_write_step,
+                        resource_id,
+                        topic_config.broker_config.clone(),
+                        &topic_config.physical_topic_name,
+                    );
+
+                    return Box::new(record_cogs);
+                }
+                _ => Box::new(clickhouse_write_step),
+            };
+
         let accumulator = Arc::new(BytesInsertBatch::merge);
         let next_step = Reduce::new(
-            Box::new(ClickhouseWriterStep::new(
-                next_step,
-                self.storage_config.clickhouse_cluster.clone(),
-                self.storage_config.clickhouse_table_name.clone(),
-                self.skip_write,
-                &self.clickhouse_concurrency,
-            )),
+            next_step,
             accumulator,
             BytesInsertBatch::default(),
             self.max_batch_size,
@@ -132,31 +157,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 &self.storage_config.message_processor.python_class_name,
             ),
         ) {
-            (true, Some(func)) => {
-                let cogs_label =
-                    get_cogs_label(&self.storage_config.message_processor.python_class_name);
-                let mut accountant: Option<Arc<CogsAccountant>> = Option::None;
-                if cogs_label.is_some() && !self.skip_write {
-                    accountant = self.accountant_topic_config.as_ref().map(|topic_config| {
-                        Arc::new(CogsAccountant::new(
-                            topic_config.broker_config.clone(),
-                            &topic_config.physical_topic_name,
-                        ))
-                    })
-                }
-
-                make_rust_processor(
-                    next_step,
-                    func,
-                    &self.logical_topic_name,
-                    self.enforce_schema,
-                    &self.processing_concurrency,
-                    config::ProcessorConfig {
-                        env_config: self.env_config.clone(),
-                    },
-                    accountant,
-                )
-            }
+            (true, Some(func)) => make_rust_processor(
+                next_step,
+                func,
+                &self.logical_topic_name,
+                self.enforce_schema,
+                &self.processing_concurrency,
+                config::ProcessorConfig {
+                    env_config: self.env_config.clone(),
+                },
+            ),
             _ => Box::new(
                 PythonTransformStep::new(
                     next_step,
