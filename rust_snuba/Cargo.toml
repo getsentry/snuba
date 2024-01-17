@@ -5,9 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace]
-members = ["rust_arroyo"]
-
 [features]
 ffi = ["pyo3/extension-module"]
 
@@ -33,7 +30,7 @@ md5 = "0.7.0"
 procspawn = { version = "1.0.0", features = ["json"] }
 pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = { version = "0.11.11", features = ["stream"] }
-rust_arroyo = { path = "./rust_arroyo" }
+rust_arroyo = { version = "*", git = "https://github.com/getsentry/arroyo" }
 sentry = { version = "0.32.0", features = ["anyhow", "tracing"] }
 sentry-kafka-schemas = "0.1.45"
 serde = { version = "1.0", features = ["derive"] }
