@@ -105,11 +105,10 @@ impl MessageProcessor {
         if self.cogs_label.is_some() {
             let cogs_label = self.cogs_label.clone().unwrap();
             let cogs_amount = payload.len() as u64;
-            self.accountant.as_deref().unwrap().record_bytes(
-                &cogs_label,
-                "something",
-                cogs_amount,
-            );
+            self.accountant
+                .as_deref()
+                .unwrap()
+                .record_bytes(&cogs_label, "something", cogs_amount);
         }
 
         self.process_payload(msg).map_err(|error| {
