@@ -11,7 +11,7 @@ use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
-use crate::accountant::{COGSResourceId, CogsAccountant};
+use crate::accountant::CogsAccountant;
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
@@ -25,7 +25,6 @@ pub fn make_rust_processor(
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
     accountant: Option<Arc<CogsAccountant>>,
-    cogs_label: Option<COGSResourceId>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
@@ -35,7 +34,6 @@ pub fn make_rust_processor(
         func,
         processor_config,
         accountant,
-        cogs_label,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -69,7 +67,6 @@ struct MessageProcessor {
     func: ProcessingFunction,
     processor_config: ProcessorConfig,
     accountant: Option<Arc<CogsAccountant>>,
-    cogs_label: Option<COGSResourceId>,
 }
 
 impl MessageProcessor {
@@ -102,14 +99,14 @@ impl MessageProcessor {
             return Err(maybe_err);
         };
 
-        if self.cogs_label.is_some() {
-            let cogs_label = self.cogs_label.clone().unwrap();
-            let cogs_amount = payload.len() as u64;
-            self.accountant
-                .as_deref()
-                .unwrap()
-                .record_bytes(&cogs_label, "something", cogs_amount);
-        }
+        // if self.cogs_label.is_some() {
+        //     let cogs_label = self.cogs_label.clone().unwrap();
+        //     let cogs_amount = payload.len() as u64;
+        //     self.accountant
+        //         .as_deref()
+        //         .unwrap()
+        //         .record_bytes(&cogs_label, "something", cogs_amount);
+        // }
 
         self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
@@ -235,7 +232,6 @@ mod tests {
             true,
             &concurrency,
             ProcessorConfig::default(),
-            None,
             None,
         );
 

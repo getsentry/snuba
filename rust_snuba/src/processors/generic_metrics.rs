@@ -196,6 +196,8 @@ where
                     rows: RowData::from_rows([row])?,
                     origin_timestamp: None,
                     sentry_received_timestamp,
+                    // TODO: Add cogs data here
+                    cogs_data: None,
                 })
             } else {
                 Ok(InsertBatch::skip())

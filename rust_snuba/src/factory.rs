@@ -155,7 +155,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         env_config: self.env_config.clone(),
                     },
                     accountant,
-                    cogs_label,
                 )
             }
             _ => Box::new(

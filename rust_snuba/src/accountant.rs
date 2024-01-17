@@ -1,8 +1,13 @@
 use std::collections::HashMap;
 
 use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, UsageUnit};
+use std::time::Duration;
 
-pub type COGSResourceId = String;
+use crate::types::BytesInsertBatch;
+use rust_arroyo::processing::strategies::{
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+};
+use rust_arroyo::types::Message;
 
 pub struct CogsAccountant {
     accountant: UsageAccountant<KafkaProducer>,
@@ -31,6 +36,67 @@ impl CogsAccountant {
                 tracing::warn!(?err, "error recording cogs");
             }
         }
+    }
+}
+
+pub struct RecordCogs<N> {
+    next_step: N,
+    resource_id: String,
+    accountant: CogsAccountant,
+}
+
+impl<N> RecordCogs<N> {
+    fn new(
+        next_step: N,
+        resource_id: String,
+        broker_config: HashMap<String, String>,
+        topic_name: &str,
+    ) -> Self
+    where
+        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+    {
+        let accountant = CogsAccountant::new(broker_config, topic_name);
+
+        Self {
+            next_step,
+            resource_id,
+            accountant,
+        }
+    }
+}
+
+impl<N> ProcessingStrategy<BytesInsertBatch> for RecordCogs<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch> + 'static,
+{
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+        self.next_step.poll()
+    }
+
+    fn submit(
+        &mut self,
+        message: Message<BytesInsertBatch>,
+    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+        if let Some(cogs_data) = message.payload().take_cogs_data() {
+            let resource_id = cogs_data.resource_id;
+            for (app_feature, bytes_len) in cogs_data.data {
+                // TODO: Record bytes
+            }
+        }
+
+        self.next_step.submit(message)
+    }
+
+    fn close(&mut self) {
+        self.next_step.close()
+    }
+
+    fn terminate(&mut self) {
+        self.next_step.terminate()
+    }
+
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
+        self.next_step.join(timeout)
     }
 }
 

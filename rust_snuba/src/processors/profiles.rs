@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::utils::enforce_retention;
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -22,11 +22,7 @@ pub fn process_message(
 
     let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
 
-    Ok(InsertBatch {
-        origin_timestamp,
-        rows: RowData::from_rows([msg])?,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows([msg], origin_timestamp)
 }
 
 #[derive(Debug, Deserialize, Serialize)]

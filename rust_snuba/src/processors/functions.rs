@@ -43,6 +43,7 @@ pub fn process_message(
         origin_timestamp: DateTime::from_timestamp(msg.received, 0),
         rows: RowData::from_rows(functions)?,
         sentry_received_timestamp: None,
+        cogs_data: None,
     })
 }
 

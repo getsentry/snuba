@@ -31,6 +31,7 @@ pub fn process_message(
         origin_timestamp,
         rows: RowData::from_rows([span])?,
         sentry_received_timestamp: None,
+        cogs_data: None,
     })
 }
 
