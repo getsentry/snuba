@@ -2,11 +2,7 @@ use std::collections::HashMap;
 
 use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, UsageUnit};
 
-#[derive(Clone, Debug)]
-pub struct COGSLabel {
-    pub resource_id: String,
-    pub app_feature: String,
-}
+pub type COGSResourceId = String;
 
 pub struct CogsAccountant {
     accountant: UsageAccountant<KafkaProducer>,

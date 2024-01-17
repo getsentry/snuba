@@ -11,7 +11,7 @@ use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
-use crate::accountant::{COGSLabel, CogsAccountant};
+use crate::accountant::{COGSResourceId, CogsAccountant};
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
@@ -25,7 +25,7 @@ pub fn make_rust_processor(
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
     accountant: Option<Arc<CogsAccountant>>,
-    cogs_label: Option<COGSLabel>,
+    cogs_label: Option<COGSResourceId>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
@@ -69,7 +69,7 @@ struct MessageProcessor {
     func: ProcessingFunction,
     processor_config: ProcessorConfig,
     accountant: Option<Arc<CogsAccountant>>,
-    cogs_label: Option<COGSLabel>,
+    cogs_label: Option<COGSResourceId>,
 }
 
 impl MessageProcessor {
@@ -106,8 +106,8 @@ impl MessageProcessor {
             let cogs_label = self.cogs_label.clone().unwrap();
             let cogs_amount = payload.len() as u64;
             self.accountant.as_deref().unwrap().record_bytes(
-                &cogs_label.resource_id,
-                &cogs_label.app_feature,
+                &cogs_label,
+                "something",
                 cogs_amount,
             );
         }

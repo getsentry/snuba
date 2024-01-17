@@ -10,8 +10,9 @@ mod utils;
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::str::FromStr;
 
-use crate::accountant::COGSLabel;
+use crate::accountant::COGSResourceId;
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -53,41 +54,29 @@ define_processing_functions! {
 }
 
 lazy_static! {
-    static ref COGS_MAP: HashMap<&'static str, COGSLabel> = {
+    static ref COGS_MAP: HashMap<&'static str, COGSResourceId> = {
         let mut m = HashMap::new();
         m.insert(
             "GenericCountersMetricsProcessor",
-            COGSLabel {
-                resource_id: "generic_metrics_processor_counters".to_string(),
-                app_feature: "counter".to_string(),
-            },
+            COGSResourceId::from_str("generic_metrics_processor_counters").unwrap(),
         );
         m.insert(
             "GenericSetsMetricsProcessor",
-            COGSLabel {
-                resource_id: "generic_metrics_processor_sets".to_string(),
-                app_feature: "set".to_string(),
-            },
+            COGSResourceId::from_str("generic_metrics_processor_sets").unwrap(),
         );
         m.insert(
             "GenericDistributionsMetricsProcessor",
-            COGSLabel {
-                resource_id: "generic_metrics_processor_distributions".to_string(),
-                app_feature: "distribution".to_string(),
-            },
+            COGSResourceId::from_str("generic_metrics_processor_distributions").unwrap(),
         );
         m.insert(
             "GenericGaugesMetricsProcessor",
-            COGSLabel {
-                resource_id: "generic_metrics_processor_gauges".to_string(),
-                app_feature: "gauge".to_string(),
-            },
+            COGSResourceId::from_str("generic_metrics_processor_gauges").unwrap(),
         );
         m
     };
 }
 
-pub fn get_cogs_label(processor_name: &str) -> Option<COGSLabel> {
+pub fn get_cogs_label(processor_name: &str) -> Option<COGSResourceId> {
     COGS_MAP.get(processor_name).cloned()
 }
 
