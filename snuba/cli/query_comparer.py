@@ -239,6 +239,13 @@ def _send_slack_report(
         channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
     )
 
+    slack_client.post_message(
+        message=_format_slack_overview(total_rows, mismatches, table)
+    )
+
+    if not mismatches:
+        return
+
     p_header_row = [
         "query_id",
         "ms_1",
@@ -268,10 +275,6 @@ def _send_slack_report(
 
     p_filename = f"perf_{table}.csv"
     d_filename = f"data_{table}.csv"
-
-    slack_client.post_message(
-        message=_format_slack_overview(total_rows, mismatches, table)
-    )
 
     for results, header_row, filename in [
         (p_results, p_header_row, p_filename),
