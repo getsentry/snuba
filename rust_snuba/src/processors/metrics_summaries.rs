@@ -8,7 +8,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, hex_to_u64};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -49,11 +49,7 @@ pub fn process_message(
 
     let origin_timestamp = DateTime::from_timestamp(from.received as i64, 0);
 
-    Ok(InsertBatch {
-        origin_timestamp,
-        rows: RowData::from_rows(metrics_summaries)?,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows(metrics_summaries, origin_timestamp)
 }
 
 #[derive(Debug, Default, Deserialize)]

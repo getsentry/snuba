@@ -623,6 +623,8 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                // TODO: Add cogs data
+                cogs_data: None,
             }
         );
     }
@@ -690,6 +692,8 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                // TODO: Add cogs data
+                cogs_data: None,
             }
         );
     }
@@ -758,6 +762,8 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                // TODO: Add cogs data
+                cogs_data: None,
             }
         );
     }
@@ -811,6 +817,8 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                // TODO: Add cogs data
+                cogs_data: None,
             }
         );
     }
@@ -882,6 +890,8 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                // TODO: Add cogs data
+                cogs_data: None,
             }
         );
     }
@@ -939,6 +949,8 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                // TODO: Add cogs data
+                cogs_data: None,
             }
         );
     }

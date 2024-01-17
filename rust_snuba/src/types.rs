@@ -9,7 +9,6 @@ pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CogsData {
-    pub resource_id: String,
     pub data: BTreeMap<String, u64>, // app_feature: bytes_len
 }
 
@@ -195,8 +194,8 @@ impl BytesInsertBatch {
         &self.commit_log_offsets
     }
 
-    pub fn take_cogs_data(&self) -> Option<CogsData> {
-        self.cogs_data.take()
+    pub fn cogs_data(&self) -> Option<&CogsData> {
+        self.cogs_data.as_ref()
     }
 }
 

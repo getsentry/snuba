@@ -30,7 +30,7 @@ pub fn process_message(
         offset: metadata.offset,
     };
 
-    InsertBatch::from_rows([querylog_msg])
+    InsertBatch::from_rows([querylog_msg], None)
 }
 
 #[derive(Debug, Deserialize, Serialize)]
