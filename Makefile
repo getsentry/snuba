@@ -102,6 +102,7 @@ test-rust:
 lint-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
+		rustup component add clippy && \
 		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 
