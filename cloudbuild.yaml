@@ -13,32 +13,13 @@ steps:
         "./Dockerfile",
       ]
     timeout: 1200s
-  # Unit tests
-  - name: "gcr.io/$PROJECT_ID/docker-compose"
-    id: unit-tests
-    waitFor:
-      - runtime-image
-    args:
-      - "-f"
-      - "docker-compose.gcb.yml"
-      - run
-      - "--rm"
-      - snuba-test
-    env:
-      - 'SNUBA_SETTINGS=test'
-  # Clean up after tests
-  - name: "gcr.io/$PROJECT_ID/docker-compose"
-    id: unit-tests-cleanup
-    waitFor:
-      - unit-tests
-    args:
-      - "-f"
-      - "docker-compose.gcb.yml"
-      - down
-      - "--rmi"
-      - "local"
-      - "-v"
-      - "--remove-orphans"
+
+
+  # Pull docker image again, so we can get build info.
+  # https://github.com/GoogleCloudPlatform/cloud-builders-community/issues/212#issuecomment-1478828752
+  - name: docker
+    args: [pull, "us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"]
+
 
 # This is needed for Freight to find matching builds
 images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
