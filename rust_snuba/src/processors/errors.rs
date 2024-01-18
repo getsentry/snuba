@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-
 use anyhow::Context;
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -18,9 +18,12 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg = serde_json::from_slice(payload_bytes)?;
-    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-    let row = None;
+    let msg: ErrorMessage = serde_json::from_slice(payload_bytes)?;
+    let origin_timestamp = DateTime::from_timestamp(msg.data.received as i64, 0);
+
+    let mut row: ErrorRow = msg.try_into()?;
+    row.partition = metadata.partition;
+    row.offset = metadata.offset;
 
     Ok(InsertBatch {
         origin_timestamp,
@@ -166,4 +169,138 @@ struct User {
     ip_address: Option<String>,
     #[serde(default)]
     username: Option<String>,
+}
+
+// Row
+
+#[derive(Debug, Default, Serialize)]
+struct ErrorRow {
+    #[serde(rename = "contexts.key")]
+    contexts_key: Vec<String>,
+    #[serde(rename = "contexts.value")]
+    contexts_value: Vec<String>,
+    culprit: String,
+    deleted: u8,
+    dist: Option<String>,
+    environment: Option<String>,
+    event_id: Uuid,
+    #[serde(rename = "exception_frames.abs_path")]
+    exception_frames_abs_path: Vec<Option<String>>,
+    #[serde(rename = "exception_frames.colno")]
+    exception_frames_colno: Vec<Option<u32>>,
+    #[serde(rename = "exception_frames.filename")]
+    exception_frames_filename: Vec<Option<String>>,
+    #[serde(rename = "exception_frames.function")]
+    exception_frames_function: Vec<Option<String>>,
+    #[serde(rename = "exception_frames.in_app")]
+    exception_frames_in_app: Vec<Option<u8>>,
+    #[serde(rename = "exception_frames.lineno")]
+    exception_frames_lineno: Vec<Option<u32>>,
+    #[serde(rename = "exception_frames.module")]
+    exception_frames_module: Vec<Option<String>>,
+    #[serde(rename = "exception_frames.package")]
+    exception_frames_package: Vec<Option<String>>,
+    #[serde(rename = "exception_frames.stack_level")]
+    exception_frames_stack_level: Vec<Option<u16>>,
+    exception_main_thread: Option<u8>,
+    #[serde(rename = "exception_stacks.mechanism_handled")]
+    exception_stacks_mechanism_handled: Vec<Option<u8>>,
+    #[serde(rename = "exception_stacks.mechanism_type")]
+    exception_stacks_mechanism_type: Vec<Option<String>>,
+    #[serde(rename = "exception_stacks.type")]
+    exception_stacks_type: Vec<Option<String>>,
+    #[serde(rename = "exception_stacks.value")]
+    exception_stacks_value: Vec<Option<String>>,
+    group_id: u64,
+    hierarchical_hashes: Vec<Uuid>,
+    http_method: Option<String>,
+    http_referer: Option<String>,
+    ip_address_v4: Option<Ipv4Addr>,
+    ip_address_v6: Option<Ipv6Addr>,
+    level: Option<String>,
+    location: Option<String>,
+    message_timestamp: f64,
+    message: String,
+    #[serde(rename = "modules.name")]
+    modules_name: Vec<String>,
+    #[serde(rename = "modules.version")]
+    modules_version: Vec<String>,
+    num_processing_errors: Option<u64>,
+    offset: u64,
+    partition: u16,
+    platform: String,
+    primary_hash: Uuid,
+    project_id: u64,
+    received: f64,
+    release: Option<String>,
+    replay_id: Option<Uuid>,
+    retention_days: u16,
+    sdk_integrations: Vec<String>,
+    sdk_name: Option<String>,
+    sdk_version: Option<String>,
+    span_id: Option<u64>,
+    #[serde(rename = "tags.key")]
+    tags_key: Vec<String>,
+    #[serde(rename = "tags.value")]
+    tags_value: Vec<String>,
+    timestamp: f64,
+    title: String,
+    trace_id: Option<Uuid>,
+    trace_sampled: Option<u8>,
+    transaction_hash: u64,
+    transaction_name: String,
+    #[serde(rename = "type")]
+    ty: String,
+    user_email: Option<String>,
+    user_hash: u64,
+    user_id: Option<String>,
+    user_name: Option<String>,
+    user: String,
+    version: Option<String>,
+}
+
+impl TryFrom<ErrorMessage> for ErrorRow {
+    type Error = anyhow::Error;
+
+    fn try_from(from: ErrorMessage) -> anyhow::Result<ErrorRow> {
+        // Tags extraction.
+        let mut transaction_name = None;
+        let mut release = None;
+        let mut dist = None;
+        let mut user = None;
+        let mut replay_id = None;
+        let mut tags_key = Vec::with_capacity(from.data.tags.len());
+        let mut tags_value = Vec::with_capacity(from.data.tags.len());
+
+        for tag in from.data.tags.into_iter() {
+            if &tag.0 == "transaction" {
+                transaction_name = tag.1.clone()
+            } else if &tag.0 == "sentry:release" {
+                release = tag.1.clone()
+            } else if &tag.0 == "sentry:dist" {
+                dist = tag.1.clone()
+            } else if &tag.0 == "sentry:user" {
+                user = tag.1.clone()
+            } else if &tag.0 == "replayId" {
+                // TODO: empty state should be null?
+                replay_id = tag
+                    .1
+                    .map(|v| Uuid::parse_str(&v).map(|v| v).unwrap_or_default())
+            } else {
+                tags_key.push(tag.0);
+                tags_value.push(tag.1.unwrap_or_default());
+            }
+        }
+
+        Ok(Self {
+            transaction_name: transaction_name.unwrap_or_default(),
+            release,
+            dist,
+            user: user.unwrap_or_default(),
+            replay_id,
+            tags_key,
+            tags_value,
+            ..Default::default()
+        })
+    }
 }
