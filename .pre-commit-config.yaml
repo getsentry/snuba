@@ -45,5 +45,14 @@ repos:
         additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: format rust code
+        language: system
+        # keep in sync with Cargo.toml. There is no way to run cargo fmt for specific files
+        # https://github.com/rust-lang/rustfmt/issues/4485
+        entry: rustfmt --edition 2021
+        files: ^rust_snuba/.*\.rs$
 default_language_version:
   python: python3.10

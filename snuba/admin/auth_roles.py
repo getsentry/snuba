@@ -81,6 +81,7 @@ TOOL_RESOURCES = {
     "tracing": ToolResource("tracing"),
     "cardinality-analyzer": ToolResource("cardinality-analyzer"),
     "production-queries": ToolResource("production-queries"),
+    "system-queries": ToolResource("system-queries"),
     "all": ToolResource("all"),
 }
 
@@ -155,6 +156,7 @@ ROLES = {
                     TOOL_RESOURCES["snql-to-sql"],
                     TOOL_RESOURCES["tracing"],
                     TOOL_RESOURCES["production-queries"],
+                    TOOL_RESOURCES["system-queries"],
                 ]
             )
         },
