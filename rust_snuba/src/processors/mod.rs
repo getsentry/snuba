@@ -1,3 +1,4 @@
+mod errors;
 mod functions;
 mod generic_metrics;
 mod metrics_summaries;
