@@ -15,7 +15,6 @@ use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
-#[warn(clippy::too_many_arguments)]
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
     func: ProcessingFunction,
