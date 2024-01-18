@@ -201,8 +201,6 @@ impl Parse for MetricsRawRow {
     }
 }
 
-
-
 fn process_message<T>(
     payload: KafkaPayload,
     config: &ProcessorConfig,
