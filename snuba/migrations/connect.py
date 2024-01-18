@@ -40,10 +40,17 @@ def get_clickhouse_clusters_for_migration_group(
     return list({get_cluster(storage_set_key) for storage_set_key in storage_set_keys})
 
 
+def get_storages_for_readiness_states(
+    readiness_states: Sequence[ReadinessState], storage_keys: Sequence[StorageKey]
+):
+    pass
+
+
 def get_clusters_for_readiness_states(
     readiness_states: Sequence[ReadinessState], clusters: Sequence[ClickhouseCluster]
 ) -> Sequence[ClickhouseCluster]:
     """Given a set of clusters, return just the ones that serve storage_sets corresponding to the provided readiness states
+    Storage sets do not have readiness states but the migration groups those storage sets are related to do
 
     E.g.
 
@@ -156,12 +163,12 @@ def _get_all_nodes_for_storage(
     return (local_nodes, distributed_nodes, query_node)
 
 
-def check_for_inactive_replicas() -> None:
+def check_for_inactive_replicas(storage_keys: List[StorageKey]) -> None:
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
 
-    storage_keys = _get_all_storage_keys()
+    # storage_keys = _get_all_storage_keys()
 
     checked_nodes = set()
     inactive_replica_info = []
