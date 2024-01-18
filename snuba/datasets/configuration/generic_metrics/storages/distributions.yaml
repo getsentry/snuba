@@ -122,6 +122,9 @@ allocation_policies:
         statistical_detectors.distributions.fetch_top_transaction_names:
           max_threads: 4
           concurrent_limit: 10
+        statistical_detectors.distributions.fetch_transaction_timeseries:
+          max_threads: 4
+          concurrent_limit: 20
 
 
 

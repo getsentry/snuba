@@ -6,6 +6,7 @@ from typing import Any, cast
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyConfig,
+    InvalidPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -54,6 +55,21 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
     @property
     def rate_limit_name(self) -> str:
         return "cross_org_query_policy"
+
+    def set_config_value(
+        self,
+        config_key: str,
+        value: Any,
+        params: dict[str, Any] = {},
+        user: str | None = None,
+    ) -> None:
+        """makes sure only registered referrers can be overridden"""
+        referrer = params.get("referrer", "")
+        if not self._referrer_is_registered(referrer):
+            raise InvalidPolicyConfig(
+                f"Referrer {referrer} is not registered in the the {self._storage_key.value} yaml. Register it first to be able to override its limits"
+            )
+        super().set_config_value(config_key, value, params, user)
 
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return super()._additional_config_definitions() + [
@@ -138,7 +154,6 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-
         if not self._referrer_is_registered(referrer) and not self.is_cross_org_query(
             tenant_ids
         ):
@@ -154,10 +169,15 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             query_id,
             RateLimitParameters(self.rate_limit_name, referrer, None, concurrent_limit),
         )
+        decision_explanation = {"reason": explanation}
+        if not self._referrer_is_registered(referrer):
+            decision_explanation[
+                "cross_org_query"
+            ] = f"This referrer is not registered for the current storage {self._storage_key.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
         return QuotaAllowance(
             can_run=can_run,
             max_threads=self._get_max_threads(referrer),
-            explanation={"reason": explanation},
+            explanation=decision_explanation,
         )
 
     def _update_quota_balance(
