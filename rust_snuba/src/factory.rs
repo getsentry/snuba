@@ -21,7 +21,8 @@ use sentry_kafka_schemas::Schema;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
-use crate::processors;
+use crate::processors::{self, get_cogs_label};
+use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
@@ -45,6 +46,7 @@ pub struct ConsumerStrategyFactory {
     commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
     physical_consumer_group: String,
     physical_topic_name: Topic,
+    accountant_topic_config: config::TopicConfig,
 }
 
 impl ConsumerStrategyFactory {
@@ -66,6 +68,7 @@ impl ConsumerStrategyFactory {
         commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
         physical_consumer_group: String,
         physical_topic_name: Topic,
+        accountant_topic_config: config::TopicConfig,
     ) -> Self {
         Self {
             storage_config,
@@ -84,6 +87,7 @@ impl ConsumerStrategyFactory {
             commit_log_producer,
             physical_consumer_group,
             physical_topic_name,
+            accountant_topic_config,
         }
     }
 }
@@ -97,8 +101,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
     }
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+        // Commit offsets
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 
+        // Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<_>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
@@ -114,15 +120,32 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 Box::new(next_step)
             };
 
+        // Write to clickhouse
+        let next_step = Box::new(ClickhouseWriterStep::new(
+            next_step,
+            self.storage_config.clickhouse_cluster.clone(),
+            self.storage_config.clickhouse_table_name.clone(),
+            self.skip_write,
+            &self.clickhouse_concurrency,
+        ));
+
+        let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
+
+        // Produce cogs if generic metrics and we are not skipping writes
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
+            match (self.skip_write, cogs_label) {
+                (false, Some(resource_id)) => Box::new(RecordCogs::new(
+                    next_step,
+                    resource_id,
+                    self.accountant_topic_config.broker_config.clone(),
+                    &self.accountant_topic_config.physical_topic_name,
+                )),
+                _ => next_step,
+            };
+
         let accumulator = Arc::new(BytesInsertBatch::merge);
         let next_step = Reduce::new(
-            Box::new(ClickhouseWriterStep::new(
-                next_step,
-                self.storage_config.clickhouse_cluster.clone(),
-                self.storage_config.clickhouse_table_name.clone(),
-                self.skip_write,
-                &self.clickhouse_concurrency,
-            )),
+            next_step,
             accumulator,
             BytesInsertBatch::default(),
             self.max_batch_size,

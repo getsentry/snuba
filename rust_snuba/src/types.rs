@@ -7,6 +7,28 @@ use serde::{Deserialize, Serialize};
 
 pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct CogsData {
+    pub data: BTreeMap<String, u64>, // app_feature: bytes_len
+}
+
+impl CogsData {
+    fn merge(mut self, other: Option<CogsData>) -> Self {
+        match other {
+            None => self,
+            Some(data) => {
+                for (k, v) in data.data {
+                    self.data
+                        .entry(k)
+                        .and_modify(|curr| *curr += v)
+                        .or_insert(v);
+                }
+                self
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct LatencyRecorder {
     sum_timestamps: f64,
@@ -70,28 +92,28 @@ impl LatencyRecorder {
 }
 
 /// The return value of message processors.
-///
-/// NOTE: In Python, this struct crosses a serialization boundary, and so this struct is somewhat
-/// sensitive to serialization speed. If there are additional things that should be returned from
-/// the Rust message processor that are not necessary in Python, it's probably best to duplicate
-/// this struct for Python as there it can be an internal type.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct InsertBatch {
     pub rows: RowData,
     pub origin_timestamp: Option<DateTime<Utc>>,
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
+    pub cogs_data: Option<CogsData>,
 }
 
 impl InsertBatch {
-    pub fn from_rows<T>(rows: impl IntoIterator<Item = T>) -> anyhow::Result<Self>
+    pub fn from_rows<T>(
+        rows: impl IntoIterator<Item = T>,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> anyhow::Result<Self>
     where
         T: Serialize,
     {
         let rows = RowData::from_rows(rows)?;
         Ok(Self {
             rows,
-            origin_timestamp: None,
+            origin_timestamp,
             sentry_received_timestamp: None,
+            cogs_data: None,
         })
     }
 
@@ -127,6 +149,8 @@ pub struct BytesInsertBatch {
 
     // For each partition we store the offset and timestamp to be produced to the commit log
     commit_log_offsets: CommitLogOffsets,
+
+    cogs_data: Option<CogsData>,
 }
 
 impl BytesInsertBatch {
@@ -136,6 +160,7 @@ impl BytesInsertBatch {
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
+        cogs_data: Option<CogsData>,
     ) -> Self {
         BytesInsertBatch {
             rows,
@@ -147,6 +172,7 @@ impl BytesInsertBatch {
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
             commit_log_offsets,
+            cogs_data,
         }
     }
 
@@ -160,6 +186,10 @@ impl BytesInsertBatch {
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
+        self.cogs_data = match self.cogs_data {
+            Some(cogs_data) => Some(cogs_data.merge(other.cogs_data)),
+            None => other.cogs_data,
+        };
         self
     }
 
@@ -184,6 +214,10 @@ impl BytesInsertBatch {
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
+
+    pub fn cogs_data(&self) -> Option<&CogsData> {
+        self.cogs_data.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
@@ -201,6 +235,7 @@ impl RowData {
         let mut num_rows = 0;
         for row in rows {
             serde_json::to_writer(&mut encoded_rows, &row)?;
+            debug_assert!(encoded_rows.ends_with(b"}"));
             encoded_rows.push(b'\n');
             num_rows += 1;
         }

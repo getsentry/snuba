@@ -5,7 +5,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -15,35 +15,35 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
-    let functions = msg.functions.iter().map(|from| {
-        Function {
-            profile_id: msg.profile_id,
-            project_id: msg.project_id,
+    let functions: Vec<Function> = msg
+        .functions
+        .iter()
+        .map(|from| {
+            Function {
+                profile_id: msg.profile_id,
+                project_id: msg.project_id,
 
-            // Profile metadata
-            environment: msg.environment.as_deref(),
-            platform: &msg.platform,
-            release: msg.release.as_deref(),
-            retention_days: msg.retention_days,
-            timestamp: msg.timestamp,
-            transaction_name: &msg.transaction_name,
+                // Profile metadata
+                environment: msg.environment.as_deref(),
+                platform: &msg.platform,
+                release: msg.release.as_deref(),
+                retention_days: msg.retention_days,
+                timestamp: msg.timestamp,
+                transaction_name: &msg.transaction_name,
 
-            // Function metadata
-            fingerprint: from.fingerprint,
-            durations: &from.self_times_ns,
-            package: &from.package,
-            name: &from.function,
-            is_application: from.in_app as u8,
+                // Function metadata
+                fingerprint: from.fingerprint,
+                durations: &from.self_times_ns,
+                package: &from.package,
+                name: &from.function,
+                is_application: from.in_app as u8,
 
-            ..Default::default()
-        }
-    });
+                ..Default::default()
+            }
+        })
+        .collect();
 
-    Ok(InsertBatch {
-        origin_timestamp: DateTime::from_timestamp(msg.received, 0),
-        rows: RowData::from_rows(functions)?,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows(functions, DateTime::from_timestamp(msg.received, 0))
 }
 
 #[derive(Debug, Deserialize)]

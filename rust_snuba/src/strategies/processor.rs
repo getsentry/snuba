@@ -131,6 +131,7 @@ impl MessageProcessor {
             transformed.origin_timestamp,
             transformed.sentry_received_timestamp,
             BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
+            transformed.cogs_data,
         );
         Ok(Message::new_broker_message(
             payload,

@@ -14,7 +14,7 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let replay_row = deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;
-    InsertBatch::from_rows(replay_row)
+    InsertBatch::from_rows(replay_row, None)
 }
 
 pub fn deserialize_message(
