@@ -51,6 +51,6 @@ repos:
         name: format rust code
         language: system
         entry: rustfmt
-        files: ^rust_snuba/
+        files: ^rust_snuba/.*\.rs$
 default_language_version:
   python: python3.10
