@@ -119,17 +119,13 @@ struct CountersRawRow {
 /// It is used to parse the incoming message into the appropriate raw row.
 /// Item represents the row into which the message should be parsed.
 trait Parse {
-    type Item;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
-    ) -> anyhow::Result<Option<Self::Item>>;
+    ) -> anyhow::Result<Option<Self>>;
 }
 
 impl Parse for CountersRawRow {
-    type Item = CountersRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
@@ -222,8 +218,6 @@ struct SetsRawRow {
 }
 
 impl Parse for SetsRawRow {
-    type Item = SetsRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
@@ -287,8 +281,6 @@ struct DistributionsRawRow {
 }
 
 impl Parse for DistributionsRawRow {
-    type Item = DistributionsRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
@@ -365,8 +357,6 @@ struct GaugesRawRow {
 }
 
 impl Parse for GaugesRawRow {
-    type Item = GaugesRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
