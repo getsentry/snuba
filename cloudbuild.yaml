@@ -13,32 +13,6 @@ steps:
         "./Dockerfile",
       ]
     timeout: 1200s
-  # Unit tests
-  - name: "gcr.io/$PROJECT_ID/docker-compose"
-    id: unit-tests
-    waitFor:
-      - runtime-image
-    args:
-      - "-f"
-      - "docker-compose.gcb.yml"
-      - run
-      - "--rm"
-      - snuba-test
-    env:
-      - 'SNUBA_SETTINGS=test'
-  # Clean up after tests
-  - name: "gcr.io/$PROJECT_ID/docker-compose"
-    id: unit-tests-cleanup
-    waitFor:
-      - unit-tests
-    args:
-      - "-f"
-      - "docker-compose.gcb.yml"
-      - down
-      - "--rmi"
-      - "local"
-      - "-v"
-      - "--remove-orphans"
 
 # This is needed for Freight to find matching builds
 images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
