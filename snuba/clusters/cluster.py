@@ -88,6 +88,8 @@ class ClickhouseClientSettings(Enum):
             "max_threads": 10,
             # Don't use up production cache for cardinality analyzer queries.
             "use_uncompressed_cache": 0,
+            # Allow longer running queries.
+            "max_execution_time": 60,
         },
         None,
     )
