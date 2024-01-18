@@ -18,9 +18,9 @@ use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcesso
 use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
-    ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
+    BrokerConfig, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
     MessageProcessorConfig, ProcessingFunction, ProcessorConfig, StatsDBackend, StorageConfig,
-    PROCESSORS,
+    TopicConfig, PROCESSORS,
 };
 use uuid::Uuid;
 
@@ -87,7 +87,11 @@ fn create_factory(
         None,
         "test-group".to_owned(),
         Topic::new("test"),
-        None,
+        TopicConfig {
+            physical_topic_name: "shared-resources-usage".to_string(),
+            logical_topic_name: "shared-resources-usage".to_string(),
+            broker_config: BrokerConfig::default(),
+        },
     );
     Box::new(factory)
 }

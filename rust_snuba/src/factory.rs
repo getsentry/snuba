@@ -38,7 +38,7 @@ pub struct ConsumerStrategyFactory {
     commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
     physical_consumer_group: String,
     physical_topic_name: Topic,
-    accountant_topic_config: Option<config::TopicConfig>,
+    accountant_topic_config: config::TopicConfig,
 }
 
 impl ConsumerStrategyFactory {
@@ -60,7 +60,7 @@ impl ConsumerStrategyFactory {
         commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
         physical_consumer_group: String,
         physical_topic_name: Topic,
-        accountant_topic_config: Option<config::TopicConfig>,
+        accountant_topic_config: config::TopicConfig,
     ) -> Self {
         Self {
             storage_config,
@@ -113,7 +113,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             };
 
         // Write to clickhouse
-        let clickhouse_write_step = Box::new(ClickhouseWriterStep::new(
+        let next_step = Box::new(ClickhouseWriterStep::new(
             next_step,
             self.storage_config.clickhouse_cluster.clone(),
             self.storage_config.clickhouse_table_name.clone(),
@@ -126,17 +126,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         // Produce cogs if generic metrics and we are not skipping writes
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
             match (self.skip_write, cogs_label) {
-                (false, Some(resource_id)) => {
-                    // TODO: accountant topic doesn't have to be an option
-                    let topic_config = self.accountant_topic_config.as_ref().unwrap();
-                    Box::new(RecordCogs::new(
-                        clickhouse_write_step,
-                        resource_id,
-                        topic_config.broker_config.clone(),
-                        &topic_config.physical_topic_name,
-                    ))
-                }
-                _ => clickhouse_write_step,
+                (false, Some(resource_id)) => Box::new(RecordCogs::new(
+                    next_step,
+                    resource_id,
+                    self.accountant_topic_config.broker_config.clone(),
+                    &self.accountant_topic_config.physical_topic_name,
+                )),
+                _ => next_step,
             };
 
         let accumulator = Arc::new(BytesInsertBatch::merge);

@@ -7,8 +7,8 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.utils.streams import Topic
 from snuba.utils.streams.configuration_builder import _get_default_topic_configuration
+from snuba.utils.streams.topics import Topic
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ class ConsumerConfig:
     max_batch_size: int
     max_batch_time_ms: int
     env: Optional[EnvConfig]
-    accountant_topic: Optional[TopicConfig] = None
+    accountant_topic: TopicConfig
 
 
 def _add_to_topic_broker_config(
@@ -228,11 +228,13 @@ def resolve_consumer_config(
     )
 
     accountant_topic = _resolve_topic_config(
-        param=Topic.COGS_SHARED_RESOURCES_USAGE.value,
-        cli_param=None,
-        topic_spec=None,
+        "accountant topic",
+        KafkaTopicSpec(Topic.COGS_SHARED_RESOURCES_USAGE),
+        None,
         slice_id=None,
     )
+    assert accountant_topic is not None
+
     return ConsumerConfig(
         storages=[
             resolve_storage_config(storage_name, storage)

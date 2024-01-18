@@ -21,6 +21,7 @@ fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 // These are exported for the benchmarks.
 // Ideally, we would have a normal rust crate we can use in examples and benchmarks,
 // plus a pyo3 specific crate as `cdylib`.
+pub use config::{BrokerConfig, TopicConfig};
 pub use config::{
     ClickhouseConfig, EnvConfig, MessageProcessorConfig, ProcessorConfig, StorageConfig,
 };
