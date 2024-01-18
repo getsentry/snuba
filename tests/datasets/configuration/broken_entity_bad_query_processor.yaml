@@ -38,14 +38,14 @@ storages:
   - storage: generic_metrics_sets
     translation_mappers:
       functions:
-      - mapper: FunctionNameMapper
-        args:
-          from_name: uniq
-          to_name: uniqCombined64Merge
-      - mapper: FunctionNameMapper
-        args:
-          from_name: uniqIf
-          to_name: uniqCombined64MergeIf
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniq
+            to_name: uniqCombined64Merge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniqIf
+            to_name: uniqCombined64MergeIf
     subscriptables:
       - mapper: subscriptable
         args:
@@ -65,14 +65,14 @@ storages:
     is_writable: true
     translation_mappers:
       functions:
-      - mapper: FunctionNameMapper
-        args:
-          from_name: uniq
-          to_name: uniqCombined64Merge
-      - mapper: FunctionNameMapper
-        args:
-          from_name: uniqIf
-          to_name: uniqCombined64MergeIf
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniq
+            to_name: uniqCombined64Merge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniqIf
+            to_name: uniqCombined64MergeIf
     subscriptables:
       - mapper: subscriptable
         args:

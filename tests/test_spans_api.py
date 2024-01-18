@@ -92,6 +92,9 @@ class TestSpansApi(BaseApiTest):
                                         self.base_time + timedelta(minutes=tick)
                                     )
                                 ),
+                                "received": datetime.timestamp(
+                                    self.base_time + timedelta(minutes=tick)
+                                ),
                                 "exclusive_time_ms": int(1000 * 0.1234),
                                 "trace_id": self.trace_id,
                                 "span_id": span_id,
@@ -128,13 +131,14 @@ class TestSpansApi(BaseApiTest):
                                     "transaction": "/api/do_things",
                                     "transaction.op": "http",
                                     "op": "http.client",
-                                    "status": "0",
+                                    "status": "unknown",
                                     "module": "sentry",
                                     "action": "POST",
                                     "domain": "sentry.io:1234",
                                     "group": self.hashes[(tock * p) % len(self.hashes)][
                                         :16
                                     ],
+                                    "sometag": "somevalue",
                                 },
                             },
                             KafkaMessageMetadata(0, 0, self.base_time),
@@ -278,3 +282,23 @@ class TestSpansApi(BaseApiTest):
         assert data["sql"].startswith(
             "SELECT (lower(hex(group_raw)) AS _snuba_group_raw)"
         )
+
+    def test_sentry_tags_column_can_be_accessed(self) -> None:
+        """
+        Validates that the sentry_tags column can be accessed
+        """
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT span_id,
+                sentry_tags[module] AS module
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                AND sentry_tags[sometag] = 'somevalue'
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) >= 1, data["data"]

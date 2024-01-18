@@ -11,6 +11,7 @@ Contents:
    architecture/datamodel
    architecture/slicing
    architecture/queryprocessing
+   architecture/consumer
    configuration/overview
    query/overview
    language/snql
@@ -20,3 +21,4 @@ Contents:
    clickhouse/topology
    clickhouse/schema_design
    clickhouse/supported_versions
+   profiler

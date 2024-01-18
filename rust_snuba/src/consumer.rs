@@ -1,75 +1,97 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
+use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::kafka::KafkaConsumer;
+use rust_arroyo::metrics;
+use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
+use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
-use rust_arroyo::utils::metrics::configure_metrics;
 
 use pyo3::prelude::*;
 
 use crate::config;
 use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
+use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
 use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 pub fn consumer(
     py: Python<'_>,
     consumer_group: &str,
     auto_offset_reset: &str,
+    no_strict_offset_reset: bool,
     consumer_config_raw: &str,
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
+    enforce_schema: bool,
+    max_poll_interval_ms: usize,
+    python_max_queue_depth: Option<usize>,
+    health_check_file: Option<&str>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
             consumer_group,
             auto_offset_reset,
+            no_strict_offset_reset,
             consumer_config_raw,
             skip_write,
             concurrency,
             use_rust_processor,
+            enforce_schema,
+            max_poll_interval_ms,
+            python_max_queue_depth,
+            health_check_file,
         )
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn consumer_impl(
     consumer_group: &str,
     auto_offset_reset: &str,
+    no_strict_offset_reset: bool,
     consumer_config_raw: &str,
     skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
-) {
+    enforce_schema: bool,
+    max_poll_interval_ms: usize,
+    python_max_queue_depth: Option<usize>,
+    health_check_file: Option<&str>,
+) -> usize {
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    log::info!("Starting Rust consumer with config: {:?}", consumer_config);
+    tracing::info!(?consumer_config, "Starting Rust consumer");
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
     assert!(consumer_config.replacements_topic.is_none());
-    assert!(consumer_config.commit_log_topic.is_none());
 
     let mut _sentry_guard = None;
 
+    let env_config = consumer_config.env.clone();
+
     // setup sentry
     if let Some(dsn) = consumer_config.env.sentry_dsn {
-        log::debug!("Using sentry dsn {:?}", dsn);
-        _sentry_guard = Some(setup_sentry(dsn));
+        tracing::debug!(sentry_dsn = dsn);
+        // this forces anyhow to record stack traces when capturing an error:
+        std::env::set_var("RUST_BACKTRACE", "1");
+        _sentry_guard = Some(setup_sentry(&dsn));
     }
 
     // setup arroyo metrics
@@ -77,22 +99,16 @@ pub fn consumer_impl(
         consumer_config.env.dogstatsd_host,
         consumer_config.env.dogstatsd_port,
     ) {
-        let mut tags = HashMap::new();
         let storage_name = consumer_config
             .storages
             .iter()
             .map(|s| s.name.clone())
             .collect::<Vec<_>>()
             .join(",");
-        tags.insert("storage", storage_name.as_str());
-        tags.insert("consumer_group", consumer_group);
+        set_global_tag("storage".to_owned(), storage_name);
+        set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        configure_metrics(Box::new(StatsDBackend::new(
-            &host,
-            port,
-            "snuba.rust_consumer",
-            tags,
-        )));
+        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
     }
 
     if !use_rust_processor {
@@ -101,47 +117,85 @@ pub fn consumer_impl(
 
     let first_storage = consumer_config.storages[0].clone();
 
-    log::info!("Starting consumer for {:?}", first_storage.name,);
-
-    let broker_config: HashMap<_, _> = consumer_config
-        .raw_topic
-        .broker_config
-        .iter()
-        .filter_map(|(k, v)| {
-            let v = v.as_ref()?;
-            if v.is_empty() {
-                return None;
-            }
-            Some((k.to_owned(), v.to_owned()))
-        })
-        .collect();
+    tracing::info!(
+        storage = first_storage.name,
+        "Starting consumer for {:?}",
+        first_storage.name,
+    );
 
     let config = KafkaConfig::new_consumer_config(
         vec![],
         consumer_group.to_owned(),
-        auto_offset_reset.to_owned(),
-        false,
-        Some(broker_config),
+        auto_offset_reset.parse().expect(
+            "Invalid value for `auto_offset_reset`. Valid values: `error`, `earliest`, `latest`",
+        ),
+        !no_strict_offset_reset,
+        max_poll_interval_ms,
+        Some(consumer_config.raw_topic.broker_config),
     );
 
-    let consumer = Arc::new(Mutex::new(KafkaConsumer::new(config)));
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
-    let mut processor = StreamProcessor::new(
-        consumer,
-        Box::new(ConsumerStrategyFactory::new(
-            first_storage,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            skip_write,
-            concurrency,
-            use_rust_processor,
-        )),
+
+    // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
+    // writing to the DLQ topics in prod.
+    let dlq_policy = match skip_write {
+        true => None,
+        false => consumer_config.dlq_topic.map(|dlq_topic_config| {
+            let producer_config =
+                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+            let producer = KafkaProducer::new(producer_config);
+
+            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+                producer,
+                Topic::new(&dlq_topic_config.physical_topic_name),
+            ));
+
+            let handle = ConcurrencyConfig::new(10).handle();
+            DlqPolicy::new(
+                handle,
+                kafka_dlq_producer,
+                DlqLimit {
+                    max_invalid_ratio: Some(0.01),
+                    max_consecutive_count: Some(1000),
+                },
+                None,
+            )
+        }),
+    };
+
+    let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
+        let producer_config =
+            KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
+        let producer = KafkaProducer::new(producer_config);
+        Some((
+            Arc::new(producer),
+            Topic::new(&topic_config.physical_topic_name),
+        ))
+    } else {
+        None
+    };
+
+    let factory = ConsumerStrategyFactory::new(
+        first_storage,
+        env_config,
+        logical_topic_name,
+        max_batch_size,
+        max_batch_time,
+        skip_write,
+        ConcurrencyConfig::new(concurrency),
+        ConcurrencyConfig::new(2),
+        ConcurrencyConfig::new(2),
+        python_max_queue_depth,
+        use_rust_processor,
+        health_check_file.map(ToOwned::to_owned),
+        enforce_schema,
+        commit_log_producer,
+        consumer_group.to_owned(),
+        Topic::new(&consumer_config.raw_topic.physical_topic_name),
     );
 
-    processor.subscribe(Topic {
-        name: consumer_config.raw_topic.physical_topic_name.to_owned(),
-    });
+    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
+    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
 
@@ -150,8 +204,16 @@ pub fn consumer_impl(
     })
     .expect("Error setting Ctrl-C handler");
 
-    processor.run().unwrap();
+    if let Err(error) = processor.run() {
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error);
+        1
+    } else {
+        0
+    }
 }
+
+pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
 
 #[pyfunction]
 pub fn process_message(
@@ -160,32 +222,26 @@ pub fn process_message(
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
-) -> Option<Vec<u8>> {
+) -> PyResult<Vec<u8>> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
-    match processors::get_processing_function(name) {
-        None => None,
-        Some(func) => {
-            let payload = KafkaPayload {
-                key: None,
-                headers: None,
-                payload: Some(value),
-            };
+    let func = processors::get_processing_function(name)
+        .ok_or(SnubaRustError::new_err("processor not found"))?;
 
-            let meta = KafkaMessageMetadata {
-                partition,
-                offset,
-                timestamp: DateTime::from_naive_utc_and_offset(
-                    NaiveDateTime::from_timestamp_millis(millis_since_epoch)
-                        .unwrap_or(NaiveDateTime::MIN),
-                    Utc,
-                ),
-            };
+    let payload = KafkaPayload::new(None, None, Some(value));
 
-            let res = func(payload, meta);
-            println!("res {:?}", res);
-            let row = res.unwrap().rows[0].clone();
-            Some(row)
-        }
-    }
+    let timestamp = DateTime::from_naive_utc_and_offset(
+        NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
+        Utc,
+    );
+
+    let meta = KafkaMessageMetadata {
+        partition,
+        offset,
+        timestamp,
+    };
+
+    let res = func(payload, meta, &config::ProcessorConfig::default())
+        .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+    Ok(res.rows.into_encoded_rows())
 }

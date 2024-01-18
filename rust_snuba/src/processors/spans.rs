@@ -1,58 +1,58 @@
-use crate::types::{BadMessage, BytesInsertBatch, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
+
+use anyhow::Context;
+use chrono::DateTime;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
+
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+
+use crate::config::ProcessorConfig;
+use crate::processors::utils::{enforce_retention, hex_to_u64};
+use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-) -> Result<BytesInsertBatch, BadMessage> {
-    if let Some(payload_bytes) = payload.payload {
-        let msg: FromSpanMessage = serde_json::from_slice(&payload_bytes).map_err(|err| {
-            log::error!("Failed to deserialize message: {}", err);
-            BadMessage
-        })?;
-        let mut span: Span = msg.try_into()?;
+    metadata: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
-        span.offset = _metadata.offset;
-        span.partition = _metadata.partition;
+    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
+    let mut span: Span = msg.try_into()?;
 
-        let serialized = serde_json::to_vec(&span).map_err(|err| {
-            log::error!("Failed to serialize processed message: {}", err);
-            BadMessage
-        })?;
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
+    span.offset = metadata.offset;
+    span.partition = metadata.partition;
 
-        return Ok(BytesInsertBatch {
-            rows: vec![serialized],
-        });
-    }
-    Err(BadMessage)
-}
-
-const DEFAULT_RETENTION_DAYS: u16 = 90;
-
-fn default_retention_days() -> Option<u16> {
-    Some(DEFAULT_RETENTION_DAYS)
+    Ok(InsertBatch {
+        origin_timestamp,
+        rows: RowData::from_rows([span])?,
+        sentry_received_timestamp: None,
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct FromSpanMessage {
     #[serde(default)]
+    _metrics_summary: Value,
+    #[serde(default)]
     description: String,
     duration_ms: u32,
-    event_id: Uuid,
+    #[serde(default)]
+    event_id: Option<Uuid>,
     exclusive_time_ms: f64,
-    #[serde(deserialize_with = "hex_to_u64")]
-    group_raw: u64,
     is_segment: bool,
-    #[serde(deserialize_with = "hex_to_u64")]
+    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
+    #[serde(default, deserialize_with = "hex_to_u64")]
     parent_span_id: u64,
     profile_id: Option<Uuid>,
     project_id: u64,
-    #[serde(default = "default_retention_days")]
+    received: f64,
     retention_days: Option<u16>,
-    #[serde(deserialize_with = "hex_to_u64")]
+    #[serde(default, deserialize_with = "hex_to_u64")]
     segment_id: u64,
     sentry_tags: FromSentryTags,
     #[serde(deserialize_with = "hex_to_u64")]
@@ -60,6 +60,11 @@ struct FromSpanMessage {
     start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FromMeasurementValue {
+    value: f64,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -79,6 +84,7 @@ struct FromSentryTags {
     transaction_method: Option<String>,
     #[serde(rename(deserialize = "transaction.op"))]
     transaction_op: Option<String>,
+    user: Option<String>,
     #[serde(flatten)]
     extra: BTreeMap<String, String>,
 }
@@ -135,14 +141,15 @@ impl FromSentryTags {
             tags.insert("status_code".into(), status_code.into());
         }
 
+        if let Some(user) = &self.user {
+            tags.insert("user".into(), user.into());
+        }
+
         for (key, value) in &self.extra {
             tags.insert(key.into(), value.into());
         }
 
-        (
-            tags.keys().cloned().collect(),
-            tags.values().cloned().collect(),
-        )
+        tags.into_iter().unzip()
     }
 }
 
@@ -159,6 +166,7 @@ struct Span {
     end_timestamp: u64,
     exclusive_time: f64,
     group: u64,
+    #[serde(default)]
     group_raw: u64,
     is_segment: u8,
     #[serde(default)]
@@ -167,6 +175,8 @@ struct Span {
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
+    #[serde(default)]
+    metrics_summary: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
@@ -174,7 +184,7 @@ struct Span {
     platform: String,
     profile_id: Option<Uuid>,
     project_id: u64,
-    retention_days: u16,
+    retention_days: Option<u16>,
     segment_id: u64,
     segment_name: String,
     #[serde(rename(serialize = "sentry_tags.key"))]
@@ -192,43 +202,40 @@ struct Span {
     #[serde(rename(serialize = "tags.value"))]
     tag_values: Vec<String>,
     trace_id: Uuid,
-    transaction_id: Uuid,
+    transaction_id: Option<Uuid>,
     transaction_op: String,
     user: String,
 }
 
 impl TryFrom<FromSpanMessage> for Span {
-    type Error = BadMessage;
+    type Error = anyhow::Error;
 
-    fn try_from(from: FromSpanMessage) -> Result<Span, BadMessage> {
+    fn try_from(from: FromSpanMessage) -> anyhow::Result<Span> {
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
         let group = if let Some(group) = &from.sentry_tags.group {
-            u64::from_str_radix(group, 16).map_err(|_| BadMessage)?
+            u64::from_str_radix(group, 16)?
         } else {
             0
         };
         let status = from.sentry_tags.status.unwrap_or_default() as u8;
+
         let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
         let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
 
-        let tags = from.tags.unwrap_or_default();
-        let mut tag_keys: Vec<String> = tags.clone().into_keys().collect();
-        let mut tag_values: Vec<String> = tags.into_values().collect();
+        let (tag_keys, tag_values): (Vec<_>, Vec<_>) =
+            from.tags.unwrap_or_default().into_iter().unzip();
 
-        if let Some(http_method) = from.sentry_tags.http_method.clone() {
-            tag_keys.push("http.method".into());
-            tag_values.push(http_method);
-        }
+        let (measurement_keys, measurement_values) = from
+            .measurements
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, v.value))
+            .unzip();
 
-        if let Some(status_code) = &from.sentry_tags.status_code {
-            tag_keys.push("status_code".into());
-            tag_values.push(status_code.into());
-        }
-
-        if let Some(transaction_method) = from.sentry_tags.transaction_method.clone() {
-            tag_keys.push("transaction.method".into());
-            tag_values.push(transaction_method);
-        }
+        let metrics_summary = match from._metrics_summary {
+            Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
+            _ => "".into(),
+        };
 
         Ok(Self {
             action: from.sentry_tags.action.unwrap_or_default(),
@@ -239,15 +246,17 @@ impl TryFrom<FromSpanMessage> for Span {
             end_timestamp: end_timestamp_ms / 1000,
             exclusive_time: from.exclusive_time_ms,
             group,
-            group_raw: from.group_raw,
             is_segment: if from.is_segment { 1 } else { 0 },
+            measurement_keys,
+            measurement_values,
+            metrics_summary,
             module: from.sentry_tags.module.unwrap_or_default(),
             op: from.sentry_tags.op.unwrap_or_default(),
             parent_span_id: from.parent_span_id,
             platform: from.sentry_tags.system.unwrap_or_default(),
             profile_id: from.profile_id,
             project_id: from.project_id,
-            retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
+            retention_days: from.retention_days,
             segment_id: from.segment_id,
             segment_name: from.sentry_tags.transaction.unwrap_or_default(),
             sentry_tag_keys,
@@ -262,17 +271,10 @@ impl TryFrom<FromSpanMessage> for Span {
             trace_id: from.trace_id,
             transaction_id: from.event_id,
             transaction_op,
+            user: from.sentry_tags.user.unwrap_or_default(),
             ..Default::default()
         })
     }
-}
-
-fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let hex = String::deserialize(deserializer)?;
-    u64::from_str_radix(&hex, 16).map_err(serde::de::Error::custom)
 }
 
 #[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
@@ -413,11 +415,11 @@ mod tests {
         duration_ms: Option<u32>,
         event_id: Option<Uuid>,
         exclusive_time_ms: Option<f64>,
-        group_raw: Option<String>,
         is_segment: Option<bool>,
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
+        received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
         sentry_tags: TestSentryTags,
@@ -433,21 +435,13 @@ mod tests {
             duration_ms: Some(1000),
             event_id: Some(Uuid::new_v4()),
             exclusive_time_ms: Some(1000.0),
-            group_raw: Some("deadbeefdeadbeef".into()),
             is_segment: Some(false),
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
             retention_days: Some(90),
+            received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
-            span_id: Some("deadbeefdeadbeef".into()),
-            start_timestamp_ms: Some(1691105878720),
-            trace_id: Some(Uuid::new_v4()),
-            tags: Some(BTreeMap::from([
-                ("tag1".into(), "value1".into()),
-                ("tag2".into(), "123".into()),
-                ("tag3".into(), "true".into()),
-            ])),
             sentry_tags: TestSentryTags {
                 action: Some("GET".into()),
                 domain: Some("targetdomain.tld:targetport".into()),
@@ -462,6 +456,14 @@ mod tests {
                 transaction_method: Some("GET".into()),
                 transaction_op: Some("navigation".into()),
             },
+            span_id: Some("deadbeefdeadbeef".into()),
+            start_timestamp_ms: Some(1691105878720),
+            tags: Some(BTreeMap::from([
+                ("tag1".into(), "value1".into()),
+                ("tag2".into(), "123".into()),
+                ("tag3".into(), "true".into()),
+            ])),
+            trace_id: Some(Uuid::new_v4()),
         }
     }
 
@@ -470,92 +472,74 @@ mod tests {
         let span = valid_span();
         let data = serde_json::to_string(&span);
         assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_null_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_empty_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Some("".into());
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_null_retention_days() {
         let mut span = valid_span();
-        span.retention_days = default_retention_days();
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        span.retention_days = None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_null_tags() {
         let mut span = valid_span();
         span.tags = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.unwrap().as_bytes().to_vec()),
-        };
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

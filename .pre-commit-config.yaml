@@ -26,7 +26,6 @@ repos:
     rev: 4.0.1
     hooks:
       - id: flake8
-        language_version: python3.8
   - repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
@@ -46,5 +45,12 @@ repos:
         additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: format rust code
+        language: system
+        entry: rustfmt
+        files: ^rust_snuba/.*\.rs$
 default_language_version:
-  python: python3.8
+  python: python3.10

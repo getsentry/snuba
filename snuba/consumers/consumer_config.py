@@ -46,6 +46,9 @@ class EnvConfig:
     sentry_dsn: Optional[str]
     dogstatsd_host: Optional[str]
     dogstatsd_port: Optional[int]
+    default_retention_days: int
+    lower_retention_days: int
+    valid_retention_days: list[int]
 
 
 @dataclass(frozen=True)
@@ -65,7 +68,7 @@ class ConsumerConfig:
 
 
 def _add_to_topic_broker_config(
-    topic_config: TopicConfig, param_key: str, param_value: str
+    topic_config: TopicConfig, param_key: str, param_value: str | int
 ) -> TopicConfig:
     """
     Add a parameter to the broker configuration of a topic.
@@ -73,6 +76,7 @@ def _add_to_topic_broker_config(
     the broker configuration.
     """
     assert isinstance(param_key, str)
+
     # copy the broker config to avoid modifying the original
     broker_config = {k: v for k, v in topic_config.broker_config.items()}
     broker_config[param_key] = param_value
@@ -115,10 +119,16 @@ def _resolve_env_config() -> EnvConfig:
     sentry_dsn = settings.SENTRY_DSN
     dogstatsd_host = settings.DOGSTATSD_HOST
     dogstatsd_port = settings.DOGSTATSD_PORT
+    default_retention_days = settings.DEFAULT_RETENTION_DAYS
+    lower_retention_days = settings.LOWER_RETENTION_DAYS
+    valid_retention_days = list(settings.VALID_RETENTION_DAYS)
     return EnvConfig(
         sentry_dsn=sentry_dsn,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port,
+        default_retention_days=default_retention_days,
+        lower_retention_days=lower_retention_days,
+        valid_retention_days=valid_retention_days,
     )
 
 
@@ -134,6 +144,8 @@ def resolve_consumer_config(
     slice_id: Optional[int],
     max_batch_size: int,
     max_batch_time_ms: int,
+    queued_max_messages_kbytes: Optional[int] = None,
+    queued_min_messages: Optional[int] = None,
     group_instance_id: Optional[str] = None,
 ) -> ConsumerConfig:
     """
@@ -155,22 +167,52 @@ def resolve_consumer_config(
     resolved_raw_topic = _resolve_topic_config(
         "main topic", default_topic_spec, raw_topic, slice_id
     )
-    if resolved_raw_topic and group_instance_id is not None:
+
+    assert resolved_raw_topic is not None
+
+    if bootstrap_servers:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "bootstrap.servers", ",".join(bootstrap_servers)
+        )
+
+    if queued_max_messages_kbytes is not None:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "queued.max.messages.kbytes", queued_max_messages_kbytes
+        )
+
+    if queued_min_messages is not None:
+        resolved_raw_topic = _add_to_topic_broker_config(
+            resolved_raw_topic, "queued.min.messages", queued_min_messages
+        )
+
+    if group_instance_id is not None:
         resolved_raw_topic = _add_to_topic_broker_config(
             resolved_raw_topic, "group.instance.id", group_instance_id
         )
-
-    assert resolved_raw_topic is not None
 
     commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
     resolved_commit_log_topic = _resolve_topic_config(
         "commit log", commit_log_topic_spec, commit_log_topic, slice_id
     )
 
+    if resolved_commit_log_topic and commit_log_bootstrap_servers:
+        resolved_commit_log_topic = _add_to_topic_broker_config(
+            resolved_commit_log_topic,
+            "bootstrap.servers",
+            ",".join(commit_log_bootstrap_servers),
+        )
+
     replacements_topic_spec = stream_loader.get_replacement_topic_spec()
     resolved_replacements_topic = _resolve_topic_config(
         "replacements topic", replacements_topic_spec, replacements_topic, slice_id
     )
+
+    if resolved_replacements_topic and replacement_bootstrap_servers:
+        resolved_replacements_topic = _add_to_topic_broker_config(
+            resolved_replacements_topic,
+            "bootstrap.servers",
+            ",".join(replacement_bootstrap_servers),
+        )
 
     resolved_env_config = _resolve_env_config()
 

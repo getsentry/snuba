@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
@@ -50,7 +52,7 @@ class PluggableEntity(Entity):
     validators: Sequence[QueryValidator]
     required_time_column: Optional[str]
     storage_selector: QueryStorageSelector
-    validate_data_model: ColumnValidationMode = ColumnValidationMode.ERROR
+    validate_data_model: ColumnValidationMode | None = None
     join_relationships: Mapping[str, JoinRelationship] = field(default_factory=dict)
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
@@ -65,7 +67,9 @@ class PluggableEntity(Entity):
         mappers = [s.translation_mappers for s in self.storages]
         return [
             EntityContainsColumnsValidator(
-                EntityColumnSet(self.columns), mappers, self.validate_data_model
+                EntityColumnSet(self.columns),
+                mappers,
+                self.validate_data_model or ColumnValidationMode.ERROR,
             )
         ]
 

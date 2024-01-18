@@ -35,12 +35,14 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         StorageKey("generic_metrics_distributions"),
         StorageKey("generic_metrics_sets"),
         StorageKey("generic_metrics_counters"),
+        StorageKey("generic_metrics_gauges"),
     }
     schemas = {get_storage(storage_key).get_schema() for storage_key in storage_keys}
     raw_tables = {
         "generic_metric_sets_raw_dist",
         "generic_metric_counters_raw_dist",
         "generic_metric_distributions_raw_dist",
+        "generic_metric_gauges_raw_dist",
     }
     validate_ro_query(
         sql_query=query,

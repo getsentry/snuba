@@ -177,6 +177,7 @@ class ReplaysLoader(DirectoryLoader):
             "0014_add_id_event_columns",
             "0015_index_frequently_accessed_columns",
             "0016_materialize_new_event_counts",
+            "0017_add_component_name_column",
         ]
 
 
@@ -249,6 +250,7 @@ class QuerylogLoader(DirectoryLoader):
             "0004_add_bytes_scanned",
             "0005_add_codec_update_settings",
             "0006_sorting_key_change",
+            "0007_add_offset_column",
         ]
 
 
@@ -311,6 +313,10 @@ class GenericMetricsLoader(DirectoryLoader):
             "0022_gauges_aggregate_table",
             "0023_gauges_raw_table",
             "0024_gauges_mv",
+            "0025_counters_add_raw_tags_hash_column",
+            "0026_gauges_add_raw_tags_hash_column",
+            "0027_sets_add_raw_tags_column",
+            "0028_distributions_add_indexed_tags_column",
         ]
 
 
@@ -344,6 +350,10 @@ class SpansLoader(DirectoryLoader):
             "0004_spans_group_raw_col",
             "0005_spans_add_sentry_tags",
             "0006_spans_add_profile_id",
+            "0007_spans_add_metrics_summary",
+            "0008_spans_add_index_on_span_id",
+            "0009_spans_add_measure_hashmap",
+            "0010_spans_add_compression",
         ]
 
 
@@ -354,4 +364,15 @@ class GroupAttributesLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_group_attributes",
+        ]
+
+
+class MetricsSummariesLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.metrics_summaries")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_metrics_summaries_create_table",
+            "0002_metrics_summaries_add_tags_hashmap",
         ]

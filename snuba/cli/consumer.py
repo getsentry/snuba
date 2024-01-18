@@ -8,11 +8,13 @@ from arroyo import configure_metrics
 
 from snuba import environment, settings
 from snuba.cogs.accountant import close_cogs_recorder
-from snuba.consumers.consumer_builder import (ConsumerBuilder, KafkaParameters,
-                                              ProcessingParameters)
+from snuba.consumers.consumer_builder import (
+    ConsumerBuilder,
+    KafkaParameters,
+    ProcessingParameters,
+)
 from snuba.consumers.consumer_config import resolve_consumer_config
-from snuba.datasets.storages.factory import (get_storage,
-                                             get_writable_storage_keys)
+from snuba.datasets.storages.factory import get_storage, get_writable_storage_keys
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.migrations.connect import check_clickhouse_connections
@@ -123,6 +125,7 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--processes",
+    "--concurrency",
     type=int,
 )
 @click.option(
@@ -133,7 +136,7 @@ logger = logging.getLogger(__name__)
     "--output-block-size",
     type=int,
 )
-@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=5)
+@click.option("--join-timeout", type=int, help="Join timeout in seconds.", default=10)
 @click.option(
     "--enforce-schema",
     type=bool,
@@ -189,16 +192,15 @@ def consumer(
     processes: Optional[int],
     input_block_size: Optional[int],
     output_block_size: Optional[int],
-    join_timeout: int = 5,
-    enforce_schema: bool = False,
-    log_level: Optional[str] = None,
-    profile_path: Optional[str] = None,
-    max_poll_interval_ms: int = 30000,
-    health_check_file: Optional[str] = None,
-    group_instance_id: Optional[str] = None,
+    join_timeout: int,
+    enforce_schema: bool,
+    log_level: Optional[str],
+    profile_path: Optional[str],
+    max_poll_interval_ms: int,
+    health_check_file: Optional[str],
+    group_instance_id: Optional[str],
     skip_write: bool,
 ) -> None:
-
     setup_logging(log_level)
     setup_sentry()
 
@@ -259,6 +261,7 @@ def consumer(
         max_insert_batch_size=max_insert_batch_size,
         max_insert_batch_time_ms=max_insert_batch_time_ms,
         metrics=metrics,
+        metrics_tags=metrics_tags,
         profile_path=profile_path,
         slice_id=slice_id,
         join_timeout=join_timeout,

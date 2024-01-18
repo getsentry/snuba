@@ -29,6 +29,7 @@ ALLOWED_OPERATORS = [
 metrics = MetricsWrapper(environment.metrics, "prewhere")
 
 
+# Changing this so all of CI runs
 class PrewhereProcessor(ClickhouseQueryProcessor):
     """
     Moves top level conditions into the pre-where clause according to

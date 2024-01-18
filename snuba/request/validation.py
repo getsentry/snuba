@@ -7,7 +7,7 @@ from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, U
 
 import sentry_sdk
 
-from snuba import state
+from snuba import environment, state
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
@@ -16,6 +16,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
+from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
 from snuba.query.query_settings import (
     HTTPQuerySettings,
     QuerySettings,
@@ -29,6 +30,9 @@ from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "snuba.validation")
 
 
 class Parser(Protocol):
@@ -53,6 +57,21 @@ def parse_snql_query(
     )
 
 
+def parse_mql_query(
+    request_parts: RequestParts,
+    settings: QuerySettings,
+    dataset: Dataset,
+    custom_processing: Optional[CustomProcessors] = None,
+) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+    return _parse_mql_query(
+        request_parts.query["query"],
+        request_parts.query["mql_context"],
+        dataset,
+        custom_processing,
+        settings,
+    )
+
+
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
     consistent_config = state.get_config("consistent_override", None)
     if isinstance(consistent_config, str):
@@ -64,6 +83,24 @@ def _consistent_override(original_setting: bool, referrer: str) -> bool:
                     return False
 
     return original_setting
+
+
+def update_attribution_info(
+    request_parts: RequestParts, referrer: str, query_project_id: Optional[int]
+) -> dict[str, Any]:
+    attribution_info = dict(request_parts.attribution_info)
+
+    attribution_info["app_id"] = get_app_id(request_parts.attribution_info["app_id"])
+    attribution_info["referrer"] = referrer
+    attribution_info["tenant_ids"] = request_parts.attribution_info["tenant_ids"]
+
+    if (
+        "project_id" not in attribution_info["tenant_ids"]
+        and query_project_id is not None
+    ):
+        attribution_info["tenant_ids"]["project_id"] = query_project_id
+
+    return attribution_info
 
 
 def build_request(
@@ -79,6 +116,20 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
+            tenant_referrer = request_parts.attribution_info["tenant_ids"].get(
+                "referrer"
+            )
+            if tenant_referrer != referrer:
+                metrics.increment(
+                    "referrer_mismatch",
+                    tags={
+                        "tenant_referrer": tenant_referrer or "none",
+                        "request_referrer": referrer,
+                    },
+                )
+            # Handle an edge case where the legacy endpoint is used.
+            referrer = tenant_referrer or referrer
+
             if settings_class == HTTPQuerySettings:
                 query_settings: MutableMapping[str, bool | str] = {
                     **request_parts.query_settings,
@@ -108,21 +159,10 @@ def build_request(
             org_ids = get_object_ids_in_query_ast(query, "org_id")
             if org_ids is not None and len(org_ids) == 1:
                 sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
-            attribution_info = dict(request_parts.attribution_info)
-            # TODO: clean this up
-            attribution_info["app_id"] = get_app_id(
-                request_parts.attribution_info["app_id"]
-            )
-            attribution_info["referrer"] = referrer
-            attribution_info["tenant_ids"] = request_parts.attribution_info[
-                "tenant_ids"
-            ]
-            if (
-                "project_id" not in attribution_info["tenant_ids"]
-                and query_project_id is not None
-            ):
-                attribution_info["tenant_ids"]["project_id"] = query_project_id
 
+            attribution_info = update_attribution_info(
+                request_parts, referrer, query_project_id
+            )
             request_id = uuid.uuid4().hex
             request = Request(
                 id=request_id,

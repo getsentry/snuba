@@ -6,6 +6,7 @@ import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
+from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.span_cardinality_analyzer import (
     SpanGroupingCardinalityResult,
     span_grouping_cardinality_query,
@@ -30,9 +31,22 @@ def write_cardnaltiy_to_csv(
 
 
 @click.command()
+@click.option(
+    "--clickhouse-host",
+    help="Clickhouse server to write to.",
+    required=True,
+)
+@click.option(
+    "--clickhouse-port",
+    type=int,
+    help="Clickhouse native port to write to.",
+    required=True,
+)
 @click.option("--log-level", help="Logging level to use.")
 def spans_cardinality_analyzer(
     *,
+    clickhouse_host: str,
+    clickhouse_port: int,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -47,9 +61,15 @@ def spans_cardinality_analyzer(
 
     storage_key = StorageKey("generic_metrics_distributions")
     storage = get_storage(storage_key)
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
-    connection = storage.get_cluster().get_query_connection(
-        ClickhouseClientSettings.CARDINALITY_ANALYZER
+    connection = ClickhousePool(
+        host=clickhouse_host,
+        port=clickhouse_port,
+        user=clickhouse_user,
+        password=clickhouse_password,
+        database=storage.get_cluster().get_database(),
+        client_settings=ClickhouseClientSettings.CARDINALITY_ANALYZER.value.settings,
     )
 
     # Get the distinct span modules we are ingesting.

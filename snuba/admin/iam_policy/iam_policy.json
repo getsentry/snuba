@@ -33,9 +33,16 @@
     {
       "members": [
           "group:team-starfish@sentry.io",
-          "group:team-ingestion-pipeline@sentry.io"
+          "group:team-ingest@sentry.io"
       ],
       "role": "roles/CardinalityAnalyzer"
+    },
+    {
+      "members": [
+        "group:team-ops@sentry.io",
+        "group:team-sns@sentry.io"
+      ],
+      "role": "roles/AllMigrationsExecutor"
     }
   ]
 }
