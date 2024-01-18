@@ -403,7 +403,7 @@ jobs:
 
       - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:${{matrix.version}}
+          export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
