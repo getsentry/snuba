@@ -5,7 +5,7 @@ import textwrap
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import MutableMapping, Optional, Set, Union
+from typing import Any, MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 
@@ -370,7 +370,7 @@ def _format_storage_query_and_run(
 
     timer.mark("prepare_query")
 
-    stats = {
+    stats: MutableMapping[str, Any] = {
         "clickhouse_table": table_names,
         "final": visitor.any_final(),
         "referrer": attribution_info.referrer,
