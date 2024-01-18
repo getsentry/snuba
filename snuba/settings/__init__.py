@@ -188,6 +188,9 @@ REDIS_CLUSTERS: RedisClusters = {
 # Query Recording Options
 RECORD_QUERIES = False
 
+# Record COGS
+RECORD_COGS = False
+
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
 CONFIG_STATE: Mapping[str, Optional[Any]] = {}
