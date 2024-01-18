@@ -118,17 +118,20 @@ impl Parse for MetricsRawRow {
             }
         };
 
+        // The way the _should_process functionality works in the Python
+        // processor today is by matching against the InputType Enum
+        // Maybe we should look into porting that Enum into Rust?
         match from.r#type.as_str() {
             "s" => Ok(Some(MetricsRawRow {
                 use_case_id: from.use_case_id,
                 org_id: from.org_id,
                 project_id: from.project_id,
-                metric_type: "counter".to_string(),
+                metric_type: "set".to_string(),
                 metric_id: from.metric_id,
                 timestamp: from.timestamp as u32,
                 retention_days,
                 tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
-                tags_value: vec![0; tag_keys.len()],
+                tags_value: tag_values,
                 set_values: match from.value {
                     MetricValue::SetOrDistribution(value) => Some(value),
                     _ => {
@@ -139,7 +142,7 @@ impl Parse for MetricsRawRow {
                 },
                 count_value: None,
                 distribution_values: None,
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id,
                 ..Default::default()
             })),
@@ -152,7 +155,7 @@ impl Parse for MetricsRawRow {
                 timestamp: from.timestamp as u32,
                 retention_days,
                 tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
-                tags_value: vec![0; tag_keys.len()],
+                tags_value: tag_values,
                 set_values: None,
                 count_value: match from.value {
                     MetricValue::Counter(value) => Some(value),
@@ -163,7 +166,7 @@ impl Parse for MetricsRawRow {
                     }
                 },
                 distribution_values: None,
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id,
                 ..Default::default()
             })),
@@ -171,29 +174,34 @@ impl Parse for MetricsRawRow {
                 use_case_id: from.use_case_id,
                 org_id: from.org_id,
                 project_id: from.project_id,
-                metric_type: "counter".to_string(),
+                metric_type: "distribution".to_string(),
                 metric_id: from.metric_id,
                 timestamp: from.timestamp as u32,
                 retention_days,
                 tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
-                tags_value: vec![0; tag_keys.len()],
+                tags_value: tag_values,
                 set_values: None,
                 count_value: None,
                 distribution_values: match from.value {
-                    MetricValue::Counter(value) => Some(value),
+                    MetricValue::DistributionFloat(value) => value,
+                    MetricValue::SetOrDistribution(values) => {
+                        values.into_iter().map(|v| v as f64).collect()
+                    }
                     _ => {
                         return Err(anyhow::anyhow!(
-                            "Unsupported values provided for counter metric type"
+                            "Unsupported values provided for distribution metric type"
                         ))
                     }
                 },
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id,
                 ..Default::default()
             })),
         }
     }
 }
+
+
 
 fn process_message<T>(
     payload: KafkaPayload,
@@ -224,272 +232,15 @@ where
     }
 }
 
-pub fn process_counter_message(
+pub fn process_metrics_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<CountersRawRow>(payload, config)
+    process_message::<MetricsRawRow>(payload, config)
 }
 
-/// The raw row that is written to clickhouse for sets.
-#[derive(Debug, Serialize, Default)]
-struct SetsRawRow {
-    #[serde(flatten)]
-    common_fields: MetricsRawRow,
-    set_values: Vec<u64>,
-}
-
-impl Parse for SetsRawRow {
-    type Item = SetsRawRow;
-
-    fn parse(
-        from: FromMetricsMessage,
-        config: &ProcessorConfig,
-    ) -> anyhow::Result<Option<SetsRawRow>> {
-        if from.r#type != "s" {
-            return Ok(Option::None);
-        }
-
-        let timeseries_id =
-            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let mut granularities = vec![
-            GRANULARITY_ONE_MINUTE,
-            GRANULARITY_ONE_HOUR,
-            GRANULARITY_ONE_DAY,
-        ];
-        if from.aggregation_option.unwrap_or_default() == "ten_second" {
-            granularities.push(GRANULARITY_TEN_SECONDS);
-        }
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let set_values = match from.value {
-            MetricValue::SetOrDistribution(values) => values,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for gauge metric type"
-                ))
-            }
-        };
-
-        let common_fields = MetricsRawRow {
-            use_case_id: from.use_case_id,
-            org_id: from.org_id,
-            project_id: from.project_id,
-            metric_type: "set".to_string(),
-            metric_id: from.metric_id,
-            timestamp: from.timestamp as u32,
-            retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
-            tags_value: vec![0; tag_keys.len()],
-            tags_raw_value: tag_values,
-            materialization_version: 2,
-            timeseries_id,
-            granularities,
-            min_retention_days: Some(retention_days as u8),
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
-            set_values,
-        }))
-    }
-}
-
-pub fn process_set_message(
-    payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
-    process_message::<SetsRawRow>(payload, config)
-}
-
-#[derive(Debug, Serialize, Default)]
-struct DistributionsRawRow {
-    #[serde(flatten)]
-    common_fields: MetricsRawRow,
-    distribution_values: Vec<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    enable_histogram: Option<u8>,
-}
-
-impl Parse for DistributionsRawRow {
-    type Item = DistributionsRawRow;
-
-    fn parse(
-        from: FromMetricsMessage,
-        config: &ProcessorConfig,
-    ) -> anyhow::Result<Option<DistributionsRawRow>> {
-        if from.r#type != "d" {
-            return Ok(Option::None);
-        }
-
-        let timeseries_id =
-            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let mut granularities = vec![
-            GRANULARITY_ONE_MINUTE,
-            GRANULARITY_ONE_HOUR,
-            GRANULARITY_ONE_DAY,
-        ];
-        let mut enable_histogram = None;
-        let aggregate_option = from.aggregation_option.unwrap_or_default();
-        if aggregate_option == "ten_second" {
-            granularities.push(GRANULARITY_TEN_SECONDS);
-        } else if aggregate_option == "hist" {
-            enable_histogram = Some(1);
-        }
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let distribution_values = match from.value {
-            MetricValue::DistributionFloat(value) => value,
-            MetricValue::SetOrDistribution(values) => {
-                values.into_iter().map(|v| v as f64).collect()
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for distribution metric type"
-                ))
-            }
-        };
-
-        let common_fields = MetricsRawRow {
-            use_case_id: from.use_case_id,
-            org_id: from.org_id,
-            project_id: from.project_id,
-            metric_type: "distribution".to_string(),
-            metric_id: from.metric_id,
-            timestamp: from.timestamp as u32,
-            retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
-            tags_value: vec![0; tag_keys.len()],
-            tags_raw_value: tag_values,
-            materialization_version: 2,
-            timeseries_id,
-            granularities,
-            min_retention_days: Some(retention_days as u8),
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
-            distribution_values,
-            enable_histogram,
-        }))
-    }
-}
-
-pub fn process_distribution_message(
-    payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
-    process_message::<DistributionsRawRow>(payload, config)
-}
-
-#[derive(Debug, Serialize, Default)]
-struct GaugesRawRow {
-    #[serde(flatten)]
-    common_fields: MetricsRawRow,
-    #[serde(rename = "gauges_values.last")]
-    gauges_values_last: Vec<f64>,
-    #[serde(rename = "gauges_values.min")]
-    gauges_values_min: Vec<f64>,
-    #[serde(rename = "gauges_values.max")]
-    gauges_values_max: Vec<f64>,
-    #[serde(rename = "gauges_values.sum")]
-    gauges_values_sum: Vec<f64>,
-    #[serde(rename = "gauges_values.count")]
-    gauges_values_count: Vec<u64>,
-}
-
-impl Parse for GaugesRawRow {
-    type Item = GaugesRawRow;
-
-    fn parse(
-        from: FromMetricsMessage,
-        config: &ProcessorConfig,
-    ) -> anyhow::Result<Option<GaugesRawRow>> {
-        if from.r#type != "g" {
-            return Ok(Option::None);
-        }
-
-        let timeseries_id =
-            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let mut granularities = vec![
-            GRANULARITY_ONE_MINUTE,
-            GRANULARITY_ONE_HOUR,
-            GRANULARITY_ONE_DAY,
-        ];
-        let aggregate_option = from.aggregation_option.unwrap_or_default();
-        if aggregate_option == "ten_second" {
-            granularities.push(GRANULARITY_TEN_SECONDS);
-        }
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let mut gauges_values_last = vec![];
-        let mut gauges_values_count = vec![];
-        let mut gauges_values_max = vec![];
-        let mut gauges_values_min = vec![];
-        let mut gauges_values_sum = vec![];
-        match from.value {
-            MetricValue::Gauge {
-                last,
-                count,
-                max,
-                min,
-                sum,
-            } => {
-                gauges_values_last.push(last);
-                gauges_values_count.push(count);
-                gauges_values_max.push(max);
-                gauges_values_min.push(min);
-                gauges_values_sum.push(sum);
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for gauge metric type"
-                ))
-            }
-        }
-
-        let common_fields = MetricsRawRow {
-            use_case_id: from.use_case_id,
-            org_id: from.org_id,
-            project_id: from.project_id,
-            metric_type: "gauge".to_string(),
-            metric_id: from.metric_id,
-            timestamp: from.timestamp as u32,
-            retention_days,
-            tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
-            tags_value: vec![0; tag_keys.len()],
-            tags_raw_value: tag_values,
-            materialization_version: 2,
-            timeseries_id,
-            granularities,
-            min_retention_days: Some(retention_days as u8),
-            ..Default::default()
-        };
-        Ok(Some(Self {
-            common_fields,
-            gauges_values_last,
-            gauges_values_count,
-            gauges_values_max,
-            gauges_values_min,
-            gauges_values_sum,
-        }))
-    }
-}
-
-pub fn process_gauge_message(
-    payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
-    process_message::<GaugesRawRow>(payload, config)
-}
-
+// Tests are not updated yet, these are still generic metrics tests
 #[cfg(test)]
 mod tests {
     use crate::processors::ProcessingFunction;
