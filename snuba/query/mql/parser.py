@@ -213,7 +213,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         node: Node,
         children: Tuple[
             InitialParseResult,
+            Any,
             Sequence[Any],
+            Any,
             Sequence[Any],
             Any,
         ],
