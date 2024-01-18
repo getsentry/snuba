@@ -43,7 +43,7 @@ pub fn process_message(
         })
         .collect();
 
-    InsertBatch::from_rows([functions], DateTime::from_timestamp(msg.received, 0))
+    InsertBatch::from_rows(functions, DateTime::from_timestamp(msg.received, 0))
 }
 
 #[derive(Debug, Deserialize)]
