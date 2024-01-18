@@ -66,10 +66,10 @@ RUN set -ex; \
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
 FROM build_base AS build_rust_snuba_base
-ARG RUST_TOOLCHAIN=1.74.1
 
 RUN set -ex; \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
+    # do not install any toolchain, as rust_snuba/rust-toolchain.toml defines that for us
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y; \
     # use git CLI to avoid OOM on ARM64
     echo '[net]' > ~/.cargo/config; \
     echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
@@ -81,6 +81,7 @@ ENV PATH="/root/.cargo/bin/:${PATH}"
 FROM build_rust_snuba_base AS build_rust_snuba_deps
 
 COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
+COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
 COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
 

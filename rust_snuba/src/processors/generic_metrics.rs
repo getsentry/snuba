@@ -118,18 +118,14 @@ struct CountersRawRow {
 /// Parse is the trait which should be implemented for all metric types.
 /// It is used to parse the incoming message into the appropriate raw row.
 /// Item represents the row into which the message should be parsed.
-trait Parse {
-    type Item;
-
+trait Parse: Sized {
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
-    ) -> anyhow::Result<Option<Self::Item>>;
+    ) -> anyhow::Result<Option<Self>>;
 }
 
 impl Parse for CountersRawRow {
-    type Item = CountersRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
@@ -181,7 +177,7 @@ fn process_message<T>(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch>
 where
-    T: Parse<Item = T> + Serialize,
+    T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
@@ -230,8 +226,6 @@ struct SetsRawRow {
 }
 
 impl Parse for SetsRawRow {
-    type Item = SetsRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
@@ -295,8 +289,6 @@ struct DistributionsRawRow {
 }
 
 impl Parse for DistributionsRawRow {
-    type Item = DistributionsRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
@@ -373,8 +365,6 @@ struct GaugesRawRow {
 }
 
 impl Parse for GaugesRawRow {
-    type Item = GaugesRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
