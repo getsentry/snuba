@@ -24,7 +24,7 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::processors;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
-use crate::strategies::processor::{extract_and_validate, get_schema, make_rust_processor};
+use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -188,7 +188,7 @@ impl SchemaValidator {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
-        extract_and_validate(&message, &self.schema, self.enforce_schema)?;
+        validate_schema(&message, &self.schema, self.enforce_schema)?;
         Ok(message)
     }
 }

@@ -69,18 +69,33 @@ impl MessageProcessor {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
-        let (msg, payload) = extract_and_validate(&message, &self.schema, self.enforce_schema)?;
+        validate_schema(&message, &self.schema, self.enforce_schema)?;
+
+        let msg = match message.inner_message {
+            InnerMessage::BrokerMessage(msg) => msg,
+            _ => {
+                return Err(RunTaskError::Other(anyhow::anyhow!(
+                    "Unexpected message type"
+                )))
+            }
+        };
+
         let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
         });
+
+        let kafka_payload = &msg.payload.clone();
+        let Some(payload) = kafka_payload.payload() else {
+            return Err(maybe_err);
+        };
 
         self.process_payload(msg).map_err(|error| {
             counter!("invalid_message");
 
             sentry::with_scope(
                 |scope| {
-                    let payload = String::from_utf8_lossy(&payload).into();
+                    let payload = String::from_utf8_lossy(payload).into();
                     scope.set_extra("payload", payload)
                 },
                 || {
@@ -139,11 +154,11 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProces
     }
 }
 
-pub fn extract_and_validate(
+pub fn validate_schema(
     message: &Message<KafkaPayload>,
     schema: &Option<Arc<Schema>>,
     enforce_schema: bool,
-) -> Result<(BrokerMessage<KafkaPayload>, Vec<u8>), RunTaskError<anyhow::Error>> {
+) -> Result<(), RunTaskError<anyhow::Error>> {
     let msg = match &message.inner_message {
         InnerMessage::BrokerMessage(msg) => msg,
         _ => {
@@ -163,17 +178,17 @@ pub fn extract_and_validate(
         return Err(maybe_err);
     };
 
-    if let Err(error) = validate_schema(schema, enforce_schema, payload) {
+    if let Err(error) = _validate_schema(schema, enforce_schema, payload) {
         let error: &dyn std::error::Error = &error;
         tracing::error!(error, "Failed schema validation");
         return Err(maybe_err);
     };
 
-    Ok((msg.clone(), payload.clone()))
+    Ok(())
 }
 
 #[tracing::instrument(skip_all)]
-pub fn validate_schema(
+fn _validate_schema(
     schema: &Option<Arc<Schema>>,
     enforce_schema: bool,
     payload: &[u8],
