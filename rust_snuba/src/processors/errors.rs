@@ -274,13 +274,13 @@ impl TryFrom<ErrorMessage> for ErrorRow {
 
         for tag in from.data.tags.into_iter() {
             if &tag.0 == "transaction" {
-                transaction_name = tag.1.clone()
+                transaction_name = tag.1
             } else if &tag.0 == "sentry:release" {
-                release = tag.1.clone()
+                release = tag.1
             } else if &tag.0 == "sentry:dist" {
-                dist = tag.1.clone()
+                dist = tag.1
             } else if &tag.0 == "sentry:user" {
-                user = tag.1.clone()
+                user = tag.1
             } else if &tag.0 == "replayId" {
                 // TODO: empty state should be null?
                 replay_id = tag
