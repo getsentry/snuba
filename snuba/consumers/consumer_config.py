@@ -231,7 +231,7 @@ def resolve_consumer_config(
         "accountant topic",
         KafkaTopicSpec(Topic.COGS_SHARED_RESOURCES_USAGE),
         None,
-        slice_id=None,
+        slice_id,
     )
     assert accountant_topic is not None
 
