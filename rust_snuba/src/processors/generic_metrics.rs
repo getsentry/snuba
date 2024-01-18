@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, vec};
 
 use crate::{
-    types::{InsertBatch, RowData},
+    types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
 
@@ -185,10 +185,12 @@ where
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp =
         DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
+
     match result {
         Ok(row) => {
             if let Some(row) = row {
@@ -196,8 +198,12 @@ where
                     rows: RowData::from_rows([row])?,
                     origin_timestamp: None,
                     sentry_received_timestamp,
-                    // TODO: Add cogs data here
-                    cogs_data: None,
+                    cogs_data: Some(CogsData {
+                        data: BTreeMap::from([(
+                            format!("genericmetrics_{use_case_id}"),
+                            payload_bytes.len() as u64,
+                        )]),
+                    }),
                 })
             } else {
                 Ok(InsertBatch::skip())
@@ -623,8 +629,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                // TODO: Add cogs data
-                cogs_data: None,
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 615)])
+                }),
             }
         );
     }
@@ -692,8 +699,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                // TODO: Add cogs data
-                cogs_data: None,
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 622)])
+                }),
             }
         );
     }
@@ -762,8 +770,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                // TODO: Add cogs data
-                cogs_data: None,
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 629)])
+                })
             }
         );
     }
@@ -817,8 +826,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                // TODO: Add cogs data
-                cogs_data: None,
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 667)])
+                })
             }
         );
     }
@@ -890,8 +900,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                // TODO: Add cogs data
-                cogs_data: None,
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 719)])
+                })
             }
         );
     }
@@ -949,8 +960,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-                // TODO: Add cogs data
-                cogs_data: None,
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 719)])
+                })
             }
         );
     }

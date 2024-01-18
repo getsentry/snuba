@@ -16,7 +16,6 @@ pub struct CogsAccountant {
 }
 
 impl CogsAccountant {
-    #[allow(dead_code)]
     pub fn new(broker_config: HashMap<String, String>, topic_name: &str) -> Self {
         let config = KafkaConfig::new_producer_config(broker_config);
 
@@ -26,7 +25,6 @@ impl CogsAccountant {
         }
     }
 
-    #[allow(dead_code)]
     pub fn record_bytes(&mut self, resource_id: &str, app_feature: &str, amount_bytes: u64) {
         if let Err(err) =
             self.accountant

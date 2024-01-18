@@ -12,6 +12,23 @@ pub struct CogsData {
     pub data: BTreeMap<String, u64>, // app_feature: bytes_len
 }
 
+impl CogsData {
+    fn merge(mut self, other: Option<CogsData>) -> Self {
+        match other {
+            None => self,
+            Some(data) => {
+                for (k, v) in data.data {
+                    self.data
+                        .entry(k)
+                        .and_modify(|curr| *curr += v)
+                        .or_insert(v);
+                }
+                self
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct LatencyRecorder {
     sum_timestamps: f64,
@@ -169,6 +186,10 @@ impl BytesInsertBatch {
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
+        self.cogs_data = match self.cogs_data {
+            Some(cogs_data) => Some(cogs_data.merge(other.cogs_data)),
+            None => other.cogs_data,
+        };
         self
     }
 
