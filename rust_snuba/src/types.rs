@@ -235,6 +235,7 @@ impl RowData {
         let mut num_rows = 0;
         for row in rows {
             serde_json::to_writer(&mut encoded_rows, &row)?;
+            debug_assert!(encoded_rows.ends_with(b"}"));
             encoded_rows.push(b'\n');
             num_rows += 1;
         }
