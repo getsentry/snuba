@@ -200,8 +200,8 @@ class ClickhouseQueryMetadata:
     status: QueryStatus
     request_status: Status
     profile: ClickhouseQueryProfile
-    trace_id: Optional[str] = None
-    result_profile: Optional[Dict[str, Any]] = None
+    trace_id: str
+    result_profile: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None
 
     def to_dict(self) -> snuba_queries_v1.QueryMetadata:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
