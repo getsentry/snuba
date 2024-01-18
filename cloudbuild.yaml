@@ -14,6 +14,13 @@ steps:
       ]
     timeout: 1200s
 
+
+  # Pull docker image again, so we can get build info.
+  # https://github.com/GoogleCloudPlatform/cloud-builders-community/issues/212#issuecomment-1478828752
+  - name: docker
+    args: [pull, "us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"]
+
+
 # This is needed for Freight to find matching builds
 images: ['us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
 timeout: 2640s
