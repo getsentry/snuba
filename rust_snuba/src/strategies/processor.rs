@@ -40,7 +40,7 @@ pub fn make_rust_processor(
     ))
 }
 
-fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
+pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
     match sentry_kafka_schemas::get_schema(schema_name, None) {
         Ok(s) => Some(Arc::new(s)),
         Err(error) => {
@@ -69,6 +69,8 @@ impl MessageProcessor {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
+        validate_schema(&message, &self.schema, self.enforce_schema)?;
+
         let msg = match message.inner_message {
             InnerMessage::BrokerMessage(msg) => msg,
             _ => {
@@ -85,12 +87,6 @@ impl MessageProcessor {
 
         let kafka_payload = &msg.payload.clone();
         let Some(payload) = kafka_payload.payload() else {
-            return Err(maybe_err);
-        };
-
-        if let Err(error) = self.validate_schema(payload) {
-            let error: &dyn std::error::Error = &error;
-            tracing::error!(error, "Failed schema validation");
             return Err(maybe_err);
         };
 
@@ -114,35 +110,6 @@ impl MessageProcessor {
 
             maybe_err
         })
-    }
-
-    #[tracing::instrument(skip_all)]
-    fn validate_schema(&self, payload: &[u8]) -> Result<(), SchemaError> {
-        let Some(schema) = &self.schema else {
-            return Ok(());
-        };
-
-        let Err(error) = schema.validate_json(payload) else {
-            return Ok(());
-        };
-        counter!("schema_validation.failed");
-
-        sentry::with_scope(
-            |scope| {
-                let payload = String::from_utf8_lossy(payload).into();
-                scope.set_extra("payload", payload)
-            },
-            || {
-                let error: &dyn std::error::Error = &error;
-                tracing::error!(error, "Validation error");
-            },
-        );
-
-        if !self.enforce_schema {
-            Ok(())
-        } else {
-            Err(error)
-        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -185,6 +152,72 @@ impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProces
                 .process_message(message)
                 .bind_hub(Hub::new_from_top(Hub::current())),
         )
+    }
+}
+
+pub fn validate_schema(
+    message: &Message<KafkaPayload>,
+    schema: &Option<Arc<Schema>>,
+    enforce_schema: bool,
+) -> Result<(), RunTaskError<anyhow::Error>> {
+    let msg = match &message.inner_message {
+        InnerMessage::BrokerMessage(msg) => msg,
+        _ => {
+            return Err(RunTaskError::Other(anyhow::anyhow!(
+                "Unexpected message type"
+            )))
+        }
+    };
+
+    let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
+        partition: msg.partition,
+        offset: msg.offset,
+    });
+
+    let kafka_payload = &msg.payload.clone();
+    let Some(payload) = kafka_payload.payload() else {
+        return Err(maybe_err);
+    };
+
+    if let Err(error) = _validate_schema(schema, enforce_schema, payload) {
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error, "Failed schema validation");
+        return Err(maybe_err);
+    };
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all)]
+fn _validate_schema(
+    schema: &Option<Arc<Schema>>,
+    enforce_schema: bool,
+    payload: &[u8],
+) -> Result<(), SchemaError> {
+    let Some(schema) = &schema else {
+        return Ok(());
+    };
+
+    let Err(error) = schema.validate_json(payload) else {
+        return Ok(());
+    };
+    counter!("schema_validation.failed");
+
+    sentry::with_scope(
+        |scope| {
+            let payload = String::from_utf8_lossy(payload).into();
+            scope.set_extra("payload", payload)
+        },
+        || {
+            let error: &dyn std::error::Error = &error;
+            tracing::error!(error, "Validation error");
+        },
+    );
+
+    if !enforce_schema {
+        Ok(())
+    } else {
+        Err(error)
     }
 }
 

@@ -7,9 +7,17 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use rust_arroyo::processing::strategies::run_task_in_threads::{
+    ConcurrencyConfig, RunTaskInThreads,
+};
+use rust_arroyo::processing::strategies::run_task_in_threads::{
+    RunTaskError, RunTaskFunc, TaskRunner,
+};
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+use rust_arroyo::types::Message;
 use rust_arroyo::types::{Partition, Topic};
+use sentry::{Hub, SentryFutureExt};
+use sentry_kafka_schemas::Schema;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
@@ -17,7 +25,7 @@ use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
-use crate::strategies::processor::make_rust_processor;
+use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
 use crate::strategies::python::PythonTransformStep;
 use crate::types::BytesInsertBatch;
 
@@ -161,15 +169,27 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     env_config: self.env_config.clone(),
                 },
             ),
-            _ => Box::new(
-                PythonTransformStep::new(
-                    next_step,
-                    self.storage_config.message_processor.clone(),
-                    self.processing_concurrency.concurrency,
-                    self.python_max_queue_depth,
-                )
-                .unwrap(),
-            ),
+            _ => {
+                let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
+
+                Box::new(RunTaskInThreads::new(
+                    Box::new(
+                        PythonTransformStep::new(
+                            next_step,
+                            self.storage_config.message_processor.clone(),
+                            self.processing_concurrency.concurrency,
+                            self.python_max_queue_depth,
+                        )
+                        .unwrap(),
+                    ),
+                    Box::new(SchemaValidator {
+                        schema,
+                        enforce_schema: self.enforce_schema,
+                    }),
+                    &self.processing_concurrency,
+                    Some("validate_schema"),
+                ))
+            }
         };
 
         if let Some(path) = &self.health_check_file {
@@ -177,5 +197,31 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         } else {
             processor
         }
+    }
+}
+
+#[derive(Clone)]
+struct SchemaValidator {
+    schema: Option<Arc<Schema>>,
+    enforce_schema: bool,
+}
+
+impl SchemaValidator {
+    async fn process_message(
+        self,
+        message: Message<KafkaPayload>,
+    ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
+        validate_schema(&message, &self.schema, self.enforce_schema)?;
+        Ok(message)
+    }
+}
+
+impl TaskRunner<KafkaPayload, KafkaPayload, anyhow::Error> for SchemaValidator {
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload, anyhow::Error> {
+        Box::pin(
+            self.clone()
+                .process_message(message)
+                .bind_hub(Hub::new_from_top(Hub::current())),
+        )
     }
 }
