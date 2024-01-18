@@ -891,7 +891,7 @@ mod tests {
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
-                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 719)])
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 679)])
                 })
             }
         );
