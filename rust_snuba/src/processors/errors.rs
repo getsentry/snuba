@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -37,11 +38,11 @@ struct ErrorMessage {
     data: ErrorData,
     datetime: String,
     event_id: Uuid,
-    group_id: Uuid,
+    group_id: u64,
     platform: String,
     project_id: u64,
     retention_days: u16,
-    timestamp: u32,
+    timestamp: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,9 +58,11 @@ struct ErrorData {
     primary_hash: String,
     received: f64,
     request: Request,
+    sdk: Sdk,
     tags: Vec<(String, Option<String>)>,
     title: String,
     ty: String,
+    user: User,
     version: String,
 }
 
@@ -164,7 +167,7 @@ struct User {
     #[serde(default)]
     email: Option<String>,
     #[serde(default)]
-    id: Option<String>,
+    user_id: Option<String>,
     #[serde(default)]
     ip_address: Option<String>,
     #[serde(default)]
@@ -243,7 +246,7 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
-    timestamp: f64,
+    timestamp: u32,
     title: String,
     trace_id: Option<Uuid>,
     trace_sampled: Option<u8>,
@@ -263,6 +266,14 @@ impl TryFrom<ErrorMessage> for ErrorRow {
     type Error = anyhow::Error;
 
     fn try_from(from: ErrorMessage) -> anyhow::Result<ErrorRow> {
+        // Unwrap the ip-address string.
+        let ip_address_string = from.data.user.ip_address.unwrap_or_default();
+        let (ip_address_v4, ip_address_v6) = match ip_address_string.parse::<IpAddr>() {
+            Err(_) => (None, None),
+            Ok(IpAddr::V4(ipv4)) => (Some(ipv4), None),
+            Ok(IpAddr::V6(ipv6)) => (None, Some(ipv6)),
+        };
+
         // Tags extraction.
         let mut transaction_name = None;
         let mut release = None;
@@ -300,7 +311,44 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             replay_id,
             tags_key,
             tags_value,
+            ip_address_v4,
+            ip_address_v6,
+            group_id: from.group_id,
+            sdk_name: from.data.sdk.name,
+            sdk_version: from.data.sdk.version,
+            sdk_integrations: from.data.sdk.integrations,
+            timestamp: datetime_to_timestamp(from.timestamp).unwrap(),
+            user_email: from.data.user.email,
+            user_id: from.data.user.user_id,
+            user_name: from.data.user.username,
             ..Default::default()
         })
+    }
+}
+
+fn datetime_to_timestamp(datetime_str: Option<String>) -> Result<u32, &'static str> {
+    let dt = match datetime_str {
+        Some(v) => v,
+        None => return Ok(Utc::now().timestamp() as u32),
+    };
+
+    // Datetimes must be provided in this format.
+    let format = "%Y-%m-%dT%H:%M:%S%.fZ";
+
+    // Parse the datetime string
+    let datetime = DateTime::parse_from_str(&dt, format);
+
+    // Check if parsing was successful
+    match datetime {
+        Ok(parsed_datetime) => {
+            let timestamp = parsed_datetime.timestamp();
+            if timestamp <= u32::MAX as i64 {
+                Ok(timestamp as u32)
+            } else {
+                // If the timestamp is larger than a u32 can hold submit the current timestamp.
+                Ok(Utc::now().timestamp() as u32)
+            }
+        }
+        Err(_) => Err("Invalid datetime format"),
     }
 }
