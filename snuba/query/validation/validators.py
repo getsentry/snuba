@@ -33,7 +33,7 @@ from snuba.query.expressions import SubscriptableReference as SubscriptableRefer
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.matchers import AnyExpression
 from snuba.query.matchers import FunctionCall as FunctionCallMatcher
-from snuba.query.matchers import Or, Param, String
+from snuba.query.matchers import MatchResult, Or, Param, String
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.schemas import ColumnSet, Date, DateTime
@@ -467,8 +467,8 @@ class IllegalAggregateInConditionValidator(QueryValidator):
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         def find_illegal_aggregate_functions(
             expression: Expression,
-        ) -> list[Expression]:
-            matches = []
+        ) -> list[MatchResult]:
+            matches: list[MatchResult] = []
             match = FunctionCallMatcher(
                 function_name=Param(
                     "aggregate",
@@ -507,7 +507,7 @@ class IllegalAggregateInConditionValidator(QueryValidator):
             return matches
 
         matches = find_illegal_aggregate_functions(query.get_condition())
-        if matches:
+        if len(matches) > 0:
             raise InvalidQueryException(
                 "Aggregate function found in WHERE clause of query"
             )
