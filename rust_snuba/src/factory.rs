@@ -151,8 +151,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,
-        );
-
+            // we need to enable this to deal with storages where we skip 100% of values, such as
+            // gen-metrics-gauges in s4s. we still need to commit there
+        )
+        .flush_empty_batches(true);
         let processor = match (
             self.use_rust_processor,
             processors::get_processing_function(
