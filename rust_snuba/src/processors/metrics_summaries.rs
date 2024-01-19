@@ -30,16 +30,16 @@ pub fn process_message(
                 .unzip();
 
             metrics_summaries.push(MetricsSummary {
-                count: summary.count,
+                count: summary.count.unwrap_or_default(),
                 deleted: 0,
                 end_timestamp: end_timestamp_ms / 1000,
-                max: summary.max,
+                max: summary.max.unwrap_or_default(),
                 metric_mri,
-                min: summary.min,
+                min: summary.min.unwrap_or_default(),
                 project_id: from.project_id,
                 retention_days: enforce_retention(from.retention_days, &config.env_config),
                 span_id: from.span_id,
-                sum: summary.sum,
+                sum: summary.sum.unwrap_or_default(),
                 tag_keys,
                 tag_values,
                 trace_id: from.trace_id,
@@ -70,10 +70,14 @@ struct InputMessage {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct FromMetricsSummary {
-    min: f64,
-    max: f64,
-    sum: f64,
-    count: u64,
+    #[serde(default)]
+    min: Option<f64>,
+    #[serde(default)]
+    max: Option<f64>,
+    #[serde(default)]
+    sum: Option<f64>,
+    #[serde(default)]
+    count: Option<u64>,
     #[serde(default)]
     tags: BTreeMap<String, String>,
 }
@@ -135,6 +139,46 @@ mod tests {
                   "event_type": "error",
                   "from_relay": "False",
                   "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+                  "transaction": "sentry.tasks.store.save_event"
+                }
+              }
+            ]
+          },
+          "duration_ms": 1000,
+          "project_id": 1,
+          "received": 1691105878.720,
+          "retention_days": 90,
+          "span_id": "deadbeefdeadbeef",
+          "start_timestamp_ms": 1691105878720,
+          "trace_id": "1f32eb1d-9caf-49ac-a21f-6823486cf581"
+        }"#;
+
+        let payload = KafkaPayload::new(None, None, Some(span.to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_null_values() {
+        let span = br#"{
+          "_metrics_summary": {
+            "c:sentry.events.outcomes@none": [
+              {
+                "min": null,
+                "sum": 1.0,
+                "count": 1,
+                "tags": {
+                  "category": "error",
+                  "environment": "unknown",
+                  "event_type": "error",
+                  "outcome": "accepted",
+                  "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+                  "topic": "outcomes-billing",
                   "transaction": "sentry.tasks.store.save_event"
                 }
               }
