@@ -76,7 +76,7 @@ struct ErrorData {
     #[serde(default)]
     sdk: Sdk,
     #[serde(default)]
-    tags: Vec<(String, Option<Unicodify>)>,
+    tags: Vec<(String, Unicodify)>,
     #[serde(default, rename = "sentry.interfaces.Threads")]
     thread_alternate: Thread,
     #[serde(default)]
@@ -130,9 +130,9 @@ struct ExceptionValue {
     #[serde(default)]
     mechanism: ExceptionMechanism,
     #[serde(default, rename = "type")]
-    ty: Option<Unicodify>,
+    ty: Unicodify,
     #[serde(default)]
-    value: Option<Unicodify>,
+    value: Unicodify,
     #[serde(default)]
     thread_id: Option<u64>,
 }
@@ -140,7 +140,7 @@ struct ExceptionValue {
 #[derive(Debug, Default, Deserialize)]
 struct ExceptionMechanism {
     #[serde(default, rename = "type")]
-    ty: Option<Unicodify>,
+    ty: Unicodify,
     #[serde(default)]
     handled: Boolify,
 }
@@ -154,15 +154,15 @@ struct StrackTrace {
 #[derive(Debug, Deserialize)]
 struct StrackFrame {
     #[serde(default)]
-    abs_path: Option<Unicodify>,
+    abs_path: Unicodify,
     #[serde(default)]
-    filename: Option<Unicodify>,
+    filename: Unicodify,
     #[serde(default)]
-    package: Option<Unicodify>,
+    package: Unicodify,
     #[serde(default)]
-    module: Option<Unicodify>,
+    module: Unicodify,
     #[serde(default)]
-    function: Option<Unicodify>,
+    function: Unicodify,
     #[serde(default)]
     in_app: Option<bool>,
     #[serde(default)]
@@ -192,11 +192,11 @@ struct ThreadValue {
 #[derive(Debug, Default, Deserialize)]
 struct Sdk {
     #[serde(default)]
-    name: Option<Unicodify>,
+    name: Unicodify,
     #[serde(default)]
-    version: Option<Unicodify>,
+    version: Unicodify,
     #[serde(default)]
-    integrations: Vec<Option<Unicodify>>,
+    integrations: Vec<Unicodify>,
 }
 
 // Request
@@ -204,9 +204,9 @@ struct Sdk {
 #[derive(Debug, Default, Deserialize)]
 struct Request {
     #[serde(default)]
-    method: Option<Unicodify>,
+    method: Unicodify,
     #[serde(default)]
-    headers: Vec<(String, Option<Unicodify>)>,
+    headers: Vec<(String, Unicodify)>,
 }
 
 // User
@@ -214,13 +214,13 @@ struct Request {
 #[derive(Debug, Deserialize)]
 struct User {
     #[serde(default)]
-    email: Option<Unicodify>,
+    email: Unicodify,
     #[serde(default)]
-    user_id: Option<Unicodify>,
+    user_id: Unicodify,
     #[serde(default)]
     ip_address: Option<String>,
     #[serde(default)]
-    username: Option<Unicodify>,
+    username: Unicodify,
 }
 
 // Row
@@ -233,43 +233,43 @@ struct ErrorRow {
     contexts_value: Vec<String>,
     culprit: Unicodify,
     deleted: u8,
-    dist: Option<Unicodify>,
-    environment: Option<Unicodify>,
+    dist: Option<String>,
+    environment: Option<String>,
     event_id: Uuid,
     #[serde(rename = "exception_frames.abs_path")]
-    exception_frames_abs_path: Vec<Option<Unicodify>>,
+    exception_frames_abs_path: Vec<Option<String>>,
     #[serde(rename = "exception_frames.colno")]
     exception_frames_colno: Vec<Option<u32>>,
     #[serde(rename = "exception_frames.filename")]
-    exception_frames_filename: Vec<Option<Unicodify>>,
+    exception_frames_filename: Vec<Option<String>>,
     #[serde(rename = "exception_frames.function")]
-    exception_frames_function: Vec<Option<Unicodify>>,
+    exception_frames_function: Vec<Option<String>>,
     #[serde(rename = "exception_frames.in_app")]
     exception_frames_in_app: Vec<Option<u8>>,
     #[serde(rename = "exception_frames.lineno")]
     exception_frames_lineno: Vec<Option<u32>>,
     #[serde(rename = "exception_frames.module")]
-    exception_frames_module: Vec<Option<Unicodify>>,
+    exception_frames_module: Vec<Option<String>>,
     #[serde(rename = "exception_frames.package")]
-    exception_frames_package: Vec<Option<Unicodify>>,
+    exception_frames_package: Vec<Option<String>>,
     #[serde(rename = "exception_frames.stack_level")]
     exception_frames_stack_level: Vec<u16>, // Schema Deviation: Why would this ever be null?
     exception_main_thread: Option<u8>,
     #[serde(rename = "exception_stacks.mechanism_handled")]
     exception_stacks_mechanism_handled: Vec<Boolify>,
     #[serde(rename = "exception_stacks.mechanism_type")]
-    exception_stacks_mechanism_type: Vec<Option<Unicodify>>,
+    exception_stacks_mechanism_type: Vec<Option<String>>,
     #[serde(rename = "exception_stacks.type")]
-    exception_stacks_type: Vec<Option<Unicodify>>,
+    exception_stacks_type: Vec<Option<String>>,
     #[serde(rename = "exception_stacks.value")]
-    exception_stacks_value: Vec<Option<Unicodify>>,
+    exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
     hierarchical_hashes: Vec<Uuid>,
-    http_method: Option<Unicodify>,
-    http_referer: Option<Unicodify>,
+    http_method: Option<String>,
+    http_referer: Option<String>,
     ip_address_v4: Option<Ipv4Addr>,
     ip_address_v6: Option<Ipv6Addr>,
-    level: Option<Unicodify>,
+    level: Option<String>,
     location: Option<String>,
     message_timestamp: u32,
     message: String,
@@ -284,30 +284,30 @@ struct ErrorRow {
     primary_hash: Uuid,
     project_id: u64,
     received: u32,
-    release: Option<Unicodify>,
+    release: Option<String>,
     replay_id: Option<Uuid>,
     retention_days: u16,
-    sdk_integrations: Vec<Unicodify>,
-    sdk_name: Option<Unicodify>,
-    sdk_version: Option<Unicodify>,
+    sdk_integrations: Vec<String>,
+    sdk_name: Option<String>,
+    sdk_version: Option<String>,
     span_id: Option<u64>,
     #[serde(rename = "tags.key")]
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
-    tags_value: Vec<Unicodify>,
+    tags_value: Vec<String>,
     timestamp: u32,
-    title: Unicodify,
+    title: String,
     trace_id: Option<Uuid>,
     trace_sampled: Option<u8>,
     transaction_hash: u64,
-    transaction_name: Unicodify,
+    transaction_name: String,
     #[serde(rename = "type")]
-    ty: Unicodify,
-    user_email: Option<Unicodify>,
+    ty: String,
+    user_email: Option<String>,
     user_hash: u64,
-    user_id: Option<Unicodify>,
-    user_name: Option<Unicodify>,
-    user: Unicodify,
+    user_id: Option<String>,
+    user_name: Option<String>,
+    user: String,
     version: Option<String>,
 }
 
@@ -315,7 +315,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
     type Error = anyhow::Error;
 
     fn try_from(from: ErrorMessage) -> anyhow::Result<ErrorRow> {
-        if from.data.ty.to_string() == "transaction" {
+        if from.data.ty.0 == Some("transaction".to_string()) {
             return Err(anyhow::Error::msg("Invalid type."));
         }
 
@@ -334,7 +334,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             .sdk
             .integrations
             .into_iter()
-            .filter_map(|v| v)
+            .filter_map(|v| v.0)
             .collect();
 
         // Unwrap the ip-address string.
@@ -349,7 +349,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut http_referer = None;
         for (key, value) in from.data.request.headers {
             if key == "Referrer" {
-                http_referer = value;
+                http_referer = value.0;
                 break;
             }
         }
@@ -375,23 +375,21 @@ impl TryFrom<ErrorMessage> for ErrorRow {
 
         for tag in from.data.tags.into_iter() {
             if &tag.0 == "environment" {
-                environment = tag.1
+                environment = tag.1 .0
             } else if &tag.0 == "level" {
-                level = tag.1
+                level = tag.1 .0
             } else if &tag.0 == "transaction" {
-                transaction_name = tag.1
+                transaction_name = tag.1 .0
             } else if &tag.0 == "sentry:release" {
-                release = tag.1
+                release = tag.1 .0
             } else if &tag.0 == "sentry:dist" {
-                dist = tag.1
+                dist = tag.1 .0
             } else if &tag.0 == "sentry:user" {
-                user = tag.1
+                user = tag.1 .0
             } else if &tag.0 == "replayId" {
                 // TODO: empty state should be null?
-                replay_id = tag
-                    .1
-                    .map(|v| Uuid::parse_str(&v.to_string()).unwrap_or_default())
-            } else if let Some(tag_value) = tag.1 {
+                replay_id = tag.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
+            } else if let Some(tag_value) = tag.1 .0 {
                 // Only tags with non-null values are stored.
                 tags_key.push(tag.0);
                 tags_value.push(tag_value);
@@ -435,17 +433,17 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut exception_main_thread = false;
 
         for stack in from.data.exception.values {
-            stack_types.push(stack.ty);
-            stack_values.push(stack.value);
-            stack_mechanism_types.push(stack.mechanism.ty);
+            stack_types.push(stack.ty.0);
+            stack_values.push(stack.value.0);
+            stack_mechanism_types.push(stack.mechanism.ty.0);
             stack_mechanism_handled.push(stack.mechanism.handled);
 
             for frame in stack.stacktrace.frames {
-                frame_abs_paths.push(frame.abs_path);
-                frame_filenames.push(frame.filename);
-                frame_packages.push(frame.package);
-                frame_modules.push(frame.module);
-                frame_functions.push(frame.function);
+                frame_abs_paths.push(frame.abs_path.0);
+                frame_filenames.push(frame.filename.0);
+                frame_packages.push(frame.package.0);
+                frame_modules.push(frame.module.0);
+                frame_functions.push(frame.function.0);
                 frame_in_app.push(frame.in_app.map(|v| v as u8));
                 frame_colnos.push(frame.colno);
                 frame_linenos.push(frame.lineno);
@@ -489,7 +487,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             exception_stacks_value: stack_values,
             group_id: from.group_id,
             hierarchical_hashes,
-            http_method: from.data.request.method,
+            http_method: from.data.request.method.0,
             http_referer,
             ip_address_v4,
             ip_address_v6,
@@ -507,20 +505,20 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             replay_id,
             retention_days: from.retention_days,
             sdk_integrations,
-            sdk_name: from.data.sdk.name,
-            sdk_version: from.data.sdk.version,
+            sdk_name: from.data.sdk.name.0,
+            sdk_version: from.data.sdk.version.0,
             span_id: from.data.contexts.trace.span_id,
             tags_key,
             tags_value,
             timestamp: datetime_to_timestamp(from.datetime).unwrap(),
-            title: from.data.title,
+            title: from.data.title.0.unwrap_or_default(),
             trace_id: from.data.contexts.trace.trace_id,
             trace_sampled: from.data.contexts.trace.sampled.map(|v| v as u8),
             transaction_name: transaction_name.unwrap_or_default(),
-            ty: from.data.ty,
-            user_email: from.data.user.email,
-            user_id: from.data.user.user_id,
-            user_name: from.data.user.username,
+            ty: from.data.ty.0.unwrap_or_default(),
+            user_email: from.data.user.email.0,
+            user_id: from.data.user.user_id.0,
+            user_name: from.data.user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
             ..Default::default()
@@ -586,20 +584,8 @@ impl<'de> Deserialize<'de> for Boolify {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize)]
 struct Unicodify(Option<String>);
-
-impl Unicodify {
-    fn to_string(&self) -> String {
-        self.0.clone().unwrap_or_default()
-    }
-}
-
-impl Default for Unicodify {
-    fn default() -> Self {
-        Self(Some("".to_string()))
-    }
-}
 
 impl<'de> Deserialize<'de> for Unicodify {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
