@@ -70,7 +70,7 @@ Would return::
 Which provides the list of columns with their type and the relationships to
 other entities defined in the data model.
 
-Preparing a query for Snuba
+Preparing a SnQL query for Snuba
 ===========================
 
 Snuba query language is called SnQL. It is documented in the :doc:`/language/snql`
@@ -102,6 +102,44 @@ The query is represented as a ``Query`` object like::
 More details on how to build a query are in the sdk documentation.
 
 Once the query object is ready it can be sent to Snuba.
+
+Preparing a MQL query for Snuba
+===========================
+
+Snuba metrics query language is called MQL. It is documented in the :doc:`/language/mql`
+section. So this section does not go into details.
+
+Similar to SnQL, there is a python sdk that can be used to build queries
+
+The metrics query is represented as a ``MetricsQuery`` object like::
+
+    query = MetricsQuery(
+        query=Formula(
+            ArithmeticOperator.DIVIDE.value,
+            [
+                Timeseries(
+                    metric=Metric(
+                        public_name="transaction.duration",
+                        entity="generic_metrics_distributions",
+                    ),
+                    aggregate="sum",
+                ),
+                1000,
+            ],
+        ),
+        start=NOW,
+        end=NOW + timedelta(days=14),
+        rollup=Rollup(interval=3600, totals=None, granularity=3600),
+        scope=MetricsScope(
+            org_ids=[1], project_ids=[11], use_case_id="transactions"
+        ),
+        limit=Limit(100),
+        offset=Offset(5),
+    )
+
+More details on how to build a query are in the sdk documentation.
+
+Once the query object is ready it can be sent to Snuba the same wasy as SnQL.
 
 Sending a query to Snuba with Sentry
 ====================================
