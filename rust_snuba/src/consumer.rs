@@ -136,6 +136,11 @@ pub fn consumer_impl(
 
     let logical_topic_name = consumer_config.raw_topic.logical_topic_name;
 
+    // XXX: this variable must live for the lifetime of the entire consumer. we should do something
+    // to ensure this statically, such as use actual Rust lifetimes or ensuring the runtime stays
+    // alive by storing it inside of the DlqPolicy
+    let dlq_concurrency_config = ConcurrencyConfig::new(10);
+
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
     let dlq_policy = match skip_write {
@@ -150,7 +155,7 @@ pub fn consumer_impl(
                 Topic::new(&dlq_topic_config.physical_topic_name),
             ));
 
-            let handle = ConcurrencyConfig::new(10).handle();
+            let handle = dlq_concurrency_config.handle();
             DlqPolicy::new(
                 handle,
                 kafka_dlq_producer,
