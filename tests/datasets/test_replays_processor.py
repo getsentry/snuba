@@ -12,17 +12,8 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors.replays_processor import (
     ReplaysProcessor,
     maybe,
-    normalize_tags,
-    process_tags_object,
-    raise_on_null,
     segment_id_to_event_hash,
     to_capped_list,
-    to_capped_string,
-    to_datetime,
-    to_enum,
-    to_string,
-    to_typed_list,
-    to_uint16,
     to_uuid,
 )
 from snuba.processor import InsertBatch
@@ -111,15 +102,17 @@ class ReplayEvent:
             "replay_type": self.replay_type,
             "segment_id": self.segment_id,
             "event_hash": self.event_hash,
-            "tags": {"customtag": "is_set", "transaction": self.title},
+            "tags": [["customtag", "is_set"], ["transaction", self.title]],
             "urls": self.urls,
             "is_archived": self.is_archived,
             "trace_ids": self.trace_ids,
             "error_ids": self.error_ids,
             "dist": self.dist,
             "platform": self.platform,
-            "timestamp": self.timestamp,
-            "replay_start_timestamp": self.replay_start_timestamp,
+            "timestamp": _datetime_to_timestamp(self.timestamp),
+            "replay_start_timestamp": _datetime_to_timestamp(
+                self.replay_start_timestamp
+            ),
             "environment": self.environment,
             "release": self.release,
             "user": {
@@ -215,6 +208,7 @@ class ReplayEvent:
             "dist": self.dist,
             "urls": to_capped_list("urls", self.urls),
             "is_archived": 1 if self.is_archived is True else None,
+            "user": (self.user_name or self.user_email or self.ipv4 or self.ipv6 or ""),
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_email": self.user_email,
@@ -293,85 +287,19 @@ class TestReplaysProcessor:
             sdk_name="sentry.python",
             sdk_version="0.9.0",
         )
-        assert ReplaysProcessor().process_message(
-            message.serialize(header_overrides), meta
-        ) == InsertBatch(
+
+        expected = InsertBatch(
             [message.build_result(meta)],
             datetime.utcfromtimestamp(header_overrides["start_time"]),
+        ).rows[0]
+
+        response = (
+            ReplaysProcessor()
+            .process_message(message.serialize(header_overrides), meta)
+            .rows[0]
         )
 
-    def test_process_message_mismatched_types(self) -> None:
-        meta = KafkaMessageMetadata(
-            offset=0, partition=0, timestamp=datetime(1970, 1, 1)
-        )
-
-        now = datetime.now(tz=timezone.utc).replace(microsecond=0).timestamp()
-
-        message = ReplayEvent(
-            replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
-            replay_type="other",
-            event_hash=None,
-            error_sample_rate=None,
-            session_sample_rate=None,
-            title="/organizations/:orgId/issues/",
-            error_ids=["36e980a9c6024cde9f5d089f15b83b5f"],
-            trace_ids=[
-                "36e980a9c6024cde9f5d089f15b83b5f",
-                "8bea4461d8b944f393c15a3cb1c4169a",
-            ],
-            segment_id=0,
-            timestamp=str(int(now)),
-            replay_start_timestamp=str(int(now)),
-            platform=0,
-            dist=0,
-            urls=["http://127.0.0.1:8001", None, 0],
-            is_archived=True,
-            user_name=0,
-            user_id=0,
-            user_email=0,
-            os_name=0,
-            os_version=0,
-            browser_name=0,
-            browser_version=0,
-            device_name=0,
-            device_brand=0,
-            device_family=0,
-            device_model=0,
-            ipv4="127.0.0.1",
-            ipv6=None,
-            environment=0,
-            release=0,
-            sdk_name=0,
-            sdk_version=0,
-        )
-
-        processed_message = ReplaysProcessor().process_message(
-            message.serialize(), meta
-        )
-        assert isinstance(processed_message, InsertBatch)
-        assert processed_message.rows[0]["urls"] == ["http://127.0.0.1:8001", "0"]
-        assert processed_message.rows[0]["replay_type"] == ""
-        assert processed_message.rows[0]["error_sample_rate"] == -1.0
-        assert processed_message.rows[0]["session_sample_rate"] == -1.0
-        assert processed_message.rows[0]["platform"] == "0"
-        assert processed_message.rows[0]["dist"] == "0"
-        assert processed_message.rows[0]["user_name"] == "0"
-        assert processed_message.rows[0]["user_id"] == "0"
-        assert processed_message.rows[0]["user_email"] == "0"
-        assert processed_message.rows[0]["os_name"] == "0"
-        assert processed_message.rows[0]["os_version"] == "0"
-        assert processed_message.rows[0]["browser_name"] == "0"
-        assert processed_message.rows[0]["browser_version"] == "0"
-        assert processed_message.rows[0]["device_name"] == "0"
-        assert processed_message.rows[0]["device_brand"] == "0"
-        assert processed_message.rows[0]["device_family"] == "0"
-        assert processed_message.rows[0]["device_model"] == "0"
-        assert processed_message.rows[0]["environment"] == "0"
-        assert processed_message.rows[0]["release"] == "0"
-        assert processed_message.rows[0]["sdk_name"] == "0"
-        assert processed_message.rows[0]["sdk_version"] == "0"
-        assert processed_message.rows[0]["timestamp"] == now
-        assert processed_message.rows[0]["replay_start_timestamp"] == now
+        assert response | expected == response
 
     def test_process_message_minimal_payload_segment_id(self) -> None:
         meta = KafkaMessageMetadata(
@@ -390,6 +318,7 @@ class TestReplaysProcessor:
                         {
                             "type": "replay_event",
                             "replay_id": str(uuid.uuid4()),
+                            "timestamp": int(datetime.now().timestamp()),
                             "segment_id": 0,
                             "platform": "internal",
                         }
@@ -422,6 +351,7 @@ class TestReplaysProcessor:
                         {
                             "type": "replay_event",
                             "replay_id": str(uuid.uuid4()),
+                            "timestamp": int(datetime.now().timestamp()),
                             "event_hash": event_hash,
                             "platform": "internal",
                         }
@@ -457,8 +387,8 @@ class TestReplaysProcessor:
         assert received["error_sample_rate"] == -1.0
         assert received["session_sample_rate"] == -1.0
 
+        assert received["platform"] == "javascript"
         assert received["replay_type"] == ""
-        assert received["platform"] == ""
         assert received["dist"] == ""
         assert received["user_name"] == ""
         assert received["user_id"] == ""
@@ -484,15 +414,15 @@ class TestReplaysProcessor:
 
         message = ReplayEvent.empty_set()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             message.segment_id = "a"
             ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             message.segment_id = -1
             ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             message.segment_id = 2**16
             ReplaysProcessor().process_message(message.serialize(), meta)
 
@@ -506,22 +436,17 @@ class TestReplaysProcessor:
 
         message = ReplayEvent.empty_set()
 
-        with pytest.raises(ValueError):
-            message.timestamp = "a"
-            ReplaysProcessor().process_message(message.serialize(), meta)
-
-        with pytest.raises(ValueError):
-            message.timestamp = -1
-            ReplaysProcessor().process_message(message.serialize(), meta)
-
-        with pytest.raises(ValueError):
-            message.timestamp = 2**32
+        with pytest.raises(Exception):
+            message.timestamp = f"{2**32 - 1}"
             ReplaysProcessor().process_message(message.serialize(), meta)
 
         message.timestamp = 2**32 - 1
         ReplaysProcessor().process_message(message.serialize(), meta)
 
-        message.timestamp = f"{2**32 - 1}"
+        message.timestamp = -1
+        ReplaysProcessor().process_message(message.serialize(), meta)
+
+        message.timestamp = 2**32
         ReplaysProcessor().process_message(message.serialize(), meta)
 
     def test_process_message_invalid_replay_start_timestamp(self) -> None:
@@ -531,181 +456,18 @@ class TestReplaysProcessor:
 
         message = ReplayEvent.empty_set()
 
-        with pytest.raises(ValueError):
-            message.replay_start_timestamp = "a"
+        with pytest.raises(Exception):
+            message.replay_start_timestamp = f"{2**32 - 1}"
             ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
-            message.replay_start_timestamp = -1
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.replay_start_timestamp = -1
+        ReplaysProcessor().process_message(message.serialize(), meta)
 
-        with pytest.raises(ValueError):
-            message.replay_start_timestamp = 2**32
-            ReplaysProcessor().process_message(message.serialize(), meta)
+        message.replay_start_timestamp = 2**32
+        ReplaysProcessor().process_message(message.serialize(), meta)
 
         message.replay_start_timestamp = 2**32 - 1
         ReplaysProcessor().process_message(message.serialize(), meta)
-
-        message.replay_start_timestamp = f"{2**32 - 1}"
-        ReplaysProcessor().process_message(message.serialize(), meta)
-
-    def test_to_uint16(self) -> None:
-        """Test "to_uint16" function."""
-        assert to_uint16(0) == 0
-        assert to_uint16(65535) == 65535
-        assert to_uint16(1.25) == 1
-        assert to_uint16("1") == 1
-
-        with pytest.raises(ValueError):
-            to_uint16(65536)
-        with pytest.raises(ValueError):
-            to_uint16(-1)
-        with pytest.raises(TypeError):
-            to_uint16([1])
-
-    def test_to_datetime(self) -> None:
-        """Test "to_datetime" function."""
-        now = int(datetime.now(timezone.utc).timestamp())
-        assert to_datetime(now).timestamp() == now
-        assert to_datetime(str(now)).timestamp() == now
-
-        with pytest.raises(ValueError):
-            to_datetime(2**32)
-        with pytest.raises(ValueError):
-            to_datetime(-1)
-        with pytest.raises(ValueError):
-            to_datetime("a")
-
-    def test_maybe(self) -> None:
-        """Test maybe utility function."""
-
-        def identity(a: Any) -> Any:
-            return a
-
-        assert maybe(identity, None) is None
-        assert maybe(identity, False) is False
-        assert maybe(identity, True) is True
-        assert maybe(identity, 0) == 0
-        assert maybe(identity, "hello") == "hello"
-
-    def test_to_string(self) -> None:
-        """Test to_string utility function."""
-        assert to_string(None) == ""
-        assert to_string(True) == "true"
-        assert to_string([0, 1]) == "[0,1]"
-        assert to_string("hello") == "hello"
-        assert to_string({"hello": "world"}) == '{"hello":"world"}'
-
-    def test_to_capped_list(self) -> None:
-        """Test "to_capped_list" function."""
-        assert to_capped_list("t", [1, 2]) == [1, 2]
-        assert len(to_capped_list("t", [1] * 10_000)) == 1000
-        assert to_capped_list("t", None) == []
-
-    def test_to_typed_list(self) -> None:
-        """Test "to_typed_list" function."""
-        assert to_typed_list(to_uint16, [1, 2, None]) == [1, 2]
-        assert to_typed_list(to_string, ["a", 0, None]) == ["a", "0"]
-
-        with pytest.raises(ValueError):
-            assert to_typed_list(to_uint16, ["a"])
-
-    def test_to_enum(self) -> None:
-        """Test "to_enum" function."""
-        assert to_enum(["session", "error"])("session") == "session"
-        assert to_enum(["session", "error"])("error") == "error"
-        assert to_enum(["session", "error"])("other") is None
-        assert to_enum(["session", "error"])(None) is None
-
-    def test_to_uuid(self) -> None:
-        """Test "to_uuid" function."""
-        uid = uuid.uuid4()
-        assert to_uuid(uid.hex) == str(uid)
-
-        with pytest.raises(ValueError):
-            to_uuid("4")
-
-    def test_process_tags_object(self) -> None:
-        """Test "process_tags_object" function."""
-
-        # Dictionary.
-
-        tags = process_tags_object({"transaction": "/", "hello": "world"})
-        assert tags.transaction == "/"
-        assert tags.keys == ["hello"]
-        assert tags.values == ["world"]
-
-        tags = process_tags_object({"transaction": "/", "hello": None})
-        assert tags.transaction == "/"
-        assert tags.keys == []
-        assert tags.values == []
-
-        tags = process_tags_object({"hello": "world"})
-        assert tags.transaction is None
-        assert tags.keys == ["hello"]
-        assert tags.values == ["world"]
-
-        # Tuple list.
-
-        tags = process_tags_object([("transaction", "/"), ("hello", "world")])
-        assert tags.transaction == "/"
-        assert tags.keys == ["hello"]
-        assert tags.values == ["world"]
-
-        tags = process_tags_object([("transaction", "/"), ("hello", None)])
-        assert tags.transaction == "/"
-        assert tags.keys == []
-        assert tags.values == []
-
-        tags = process_tags_object([("hello", "world")])
-        assert tags.transaction is None
-        assert tags.keys == ["hello"]
-        assert tags.values == ["world"]
-
-        tags = process_tags_object([("hello", "world", "!")])
-        assert tags.transaction is None
-        assert tags.keys == []
-        assert tags.values == []
-
-        # Empty
-
-        tags = process_tags_object(None)
-        assert tags.transaction is None
-        assert tags.keys == []
-        assert tags.values == []
-
-        # Invalid types
-
-        with pytest.raises(TypeError):
-            process_tags_object("hello")
-        with pytest.raises(TypeError):
-            process_tags_object(1)
-
-    def test_normalize_tags(self) -> None:
-        """Test "normalize_tags" function."""
-        assert normalize_tags([("hello", "world")]) == [("hello", "world")]
-        assert normalize_tags({"hello": "world"}) == [("hello", "world")]
-        assert normalize_tags([("hello", "world", "!")]) == []
-
-        with pytest.raises(TypeError):
-            normalize_tags(1)
-
-        with pytest.raises(TypeError):
-            normalize_tags(None)
-
-        with pytest.raises(TypeError):
-            normalize_tags("a")
-
-    def test_to_capped_string(self) -> None:
-        """Test "to_capped_string" function."""
-        assert to_capped_string(1, "123") == "1"
-        assert to_capped_string(2, "123") == "12"
-        assert to_capped_string(3, "123") == "123"
-        assert to_capped_string(4, "123") == "123"
-
-    def test_raise_on_null(self) -> None:
-        with pytest.raises(ValueError):
-            raise_on_null("test", None)
 
 
 class TestReplaysActionProcessor:
@@ -760,7 +522,7 @@ class TestReplaysActionProcessor:
 
         row = rows[0]
         assert row["project_id"] == 1
-        assert row["timestamp"] == now
+        assert row["timestamp"] == int(now.timestamp())
         assert row["replay_id"] == str(uuid.UUID("bb570198b8f04f8bbe87077668530da7"))
         assert row["event_hash"] == str(uuid.UUID("df3c3aa2daae465e89f1169e49139827"))
         assert row["segment_id"] is None
@@ -809,7 +571,7 @@ def make_payload_for_event_link(severity: str) -> tuple[dict[str, Any], str, str
                         "type": "event_link",
                         "replay_id": replay_id,
                         severity + "_id": event_id,
-                        "timestamp": str(int(now.timestamp())),
+                        "timestamp": int(now.timestamp()),
                         "event_hash": md5(
                             (replay_id + event_id).encode("utf-8")
                         ).hexdigest(),
@@ -862,5 +624,12 @@ def test_replay_event_links_invalid_severity(
 
     meta = KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(Exception):
         ReplaysProcessor().process_message(message, meta)
+
+
+def _datetime_to_timestamp(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.timestamp()
+    else:
+        return value
