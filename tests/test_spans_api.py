@@ -49,7 +49,7 @@ class TestSpansApi(BaseApiTest):
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.SPANS)
         state.set_config("log_bad_span_message_percentage", 1)
-        # self.generate_fizzbuzz_events()
+        self.generate_fizzbuzz_events()
 
         yield
 
