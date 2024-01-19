@@ -71,7 +71,7 @@ Which provides the list of columns with their type and the relationships to
 other entities defined in the data model.
 
 Preparing a SnQL query for Snuba
-===========================
+================================
 
 Snuba query language is called SnQL. It is documented in the :doc:`/language/snql`
 section. So this section does not go into details.
@@ -104,7 +104,7 @@ More details on how to build a query are in the sdk documentation.
 Once the query object is ready it can be sent to Snuba.
 
 Preparing a MQL query for Snuba
-===========================
+===============================
 
 Snuba metrics query language is called MQL. It is documented in the :doc:`/language/mql`
 section. So this section does not go into details.
