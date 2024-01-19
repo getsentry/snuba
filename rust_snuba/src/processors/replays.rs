@@ -1,4 +1,4 @@
-use crate::{config::ProcessorConfig, types::RowData};
+use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
