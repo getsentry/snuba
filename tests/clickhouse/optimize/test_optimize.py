@@ -129,6 +129,7 @@ class TestOptimize:
         partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
+        # XXX(FIX-LATER): This assertion breaks on ClickHouse 23.3
         assert partitions == []
 
         base = datetime(1999, 12, 26)  # a sunday
