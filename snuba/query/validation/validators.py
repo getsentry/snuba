@@ -20,6 +20,8 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
+    BooleanFunctions,
     ConditionFunctions,
     build_match,
     get_first_level_and_conditions,
@@ -29,7 +31,9 @@ from snuba.query.exceptions import InvalidExpressionException, InvalidQueryExcep
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.matchers import Or
+from snuba.query.matchers import AnyExpression
+from snuba.query.matchers import FunctionCall as FunctionCallMatcher
+from snuba.query.matchers import Or, Param, String
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.schemas import ColumnSet, Date, DateTime
@@ -434,3 +438,76 @@ class DatetimeConditionValidator(QueryValidator):
                                     logger.warning(
                                         f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
                                     )
+
+
+class IllegalAggregateInConditionValidator(QueryValidator):
+    """
+    Ensures that aggregate functions are not used in WHERE clause of query.
+    """
+
+    def __init__(self) -> None:
+        # This is not an exhaustive list of all aggregate functions,
+        # but should be sufficient for catching most invalid queries
+        common_aggregate_functions = [
+            "count",
+            "min",
+            "max",
+            "sum",
+            "avg",
+            "last",
+            "uniq",
+        ]
+        self.aggregate_function_names = [
+            String(func_name) for func_name in common_aggregate_functions
+        ]
+        self.aggregate_function_names.extend(
+            [String(f"{func_name}If") for func_name in common_aggregate_functions]
+        )
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        def find_illegal_aggregate_functions(
+            expression: Expression,
+        ) -> list[Expression]:
+            matches = []
+            match = FunctionCallMatcher(
+                function_name=Param(
+                    "aggregate",
+                    Or(self.aggregate_function_names),
+                ),
+                with_optionals=True,
+            ).match(expression)
+            if match is not None:
+                matches.append(match)
+
+            match = FunctionCallMatcher(
+                Param(
+                    "operator",
+                    Or(
+                        [
+                            String(BooleanFunctions.AND),
+                            String(BooleanFunctions.OR),
+                            String(OPERATOR_TO_FUNCTION["="]),
+                            String(OPERATOR_TO_FUNCTION[">"]),
+                            String(OPERATOR_TO_FUNCTION["<"]),
+                            String(OPERATOR_TO_FUNCTION[">="]),
+                            String(OPERATOR_TO_FUNCTION["<="]),
+                            String(OPERATOR_TO_FUNCTION["!="]),
+                        ]
+                    ),
+                ),
+                (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
+            ).match(expression)
+            if match is not None:
+                matches.extend(
+                    find_illegal_aggregate_functions(match.expression("lhs"))
+                )
+                matches.extend(
+                    find_illegal_aggregate_functions(match.expression("rhs"))
+                )
+            return matches
+
+        matches = find_illegal_aggregate_functions(query.get_condition())
+        if matches:
+            raise InvalidQueryException(
+                "Aggregate function found in WHERE clause of query"
+            )

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
+from snuba import state
 from snuba.clickhouse.columns import Column
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
@@ -27,6 +28,7 @@ from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityContainsColumnsValidator,
+    IllegalAggregateInConditionValidator,
     QueryValidator,
 )
 from snuba.utils.schemas import SchemaModifiers
@@ -65,13 +67,20 @@ class PluggableEntity(Entity):
 
     def _get_builtin_validators(self) -> Sequence[QueryValidator]:
         mappers = [s.translation_mappers for s in self.storages]
-        return [
+        builtin_validators = [
             EntityContainsColumnsValidator(
                 EntityColumnSet(self.columns),
                 mappers,
                 self.validate_data_model or ColumnValidationMode.ERROR,
             )
         ]
+        enable_illegal_aggregate_validator = state.get_config(
+            "enable_illegal_aggregate_in_condition_validator", 0
+        )
+        assert enable_illegal_aggregate_validator is not None
+        if int(enable_illegal_aggregate_validator) == 1:
+            builtin_validators.append(IllegalAggregateInConditionValidator())
+        return builtin_validators
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
