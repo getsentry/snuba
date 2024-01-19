@@ -129,7 +129,6 @@ class TestOptimize:
         partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        # XXX(FIX-LATER): This assertion breaks on ClickHouse 23.3
         assert partitions == []
 
         base = datetime(1999, 12, 26)  # a sunday
@@ -140,8 +139,8 @@ class TestOptimize:
         partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
-        # TODO: 23.3 Figure out why this fails for the parallel tests
-        # assert partitions == []
+        # XXX(FIX-LATER): This assertion breaks on ClickHouse 23.3
+        assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
