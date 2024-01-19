@@ -83,7 +83,7 @@ struct TraceContext {
     #[serde(default)]
     span_id: Option<u64>,
     #[serde(default)]
-    trace_id: Option<String>,
+    trace_id: Option<Uuid>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -145,7 +145,7 @@ struct Sdk {
     #[serde(default)]
     version: Option<String>,
     #[serde(default)]
-    integrations: Vec<String>,
+    integrations: Vec<Option<String>>,
 }
 
 // Request
@@ -266,6 +266,15 @@ impl TryFrom<ErrorMessage> for ErrorRow {
     type Error = anyhow::Error;
 
     fn try_from(from: ErrorMessage) -> anyhow::Result<ErrorRow> {
+        // SDK Integrations
+        let sdk_integrations = from
+            .data
+            .sdk
+            .integrations
+            .into_iter()
+            .filter_map(|v| v)
+            .collect();
+
         // Unwrap the ip-address string.
         let ip_address_string = from.data.user.ip_address.unwrap_or_default();
         let (ip_address_v4, ip_address_v6) = match ip_address_string.parse::<IpAddr>() {
@@ -294,14 +303,18 @@ impl TryFrom<ErrorMessage> for ErrorRow {
                 user = tag.1
             } else if &tag.0 == "replayId" {
                 // TODO: empty state should be null?
-                replay_id = tag
-                    .1
-                    .map(|v| Uuid::parse_str(&v).map(|v| v).unwrap_or_default())
+                replay_id = tag.1.map(|v| Uuid::parse_str(&v).unwrap_or_default())
             } else {
                 tags_key.push(tag.0);
                 tags_value.push(tag.1.unwrap_or_default());
             }
         }
+
+        // Conditionally overwrite replay_id if it was provided on the contexts object.
+        match from.data.contexts.replay.replay_id {
+            Some(rid) => replay_id = Some(rid),
+            None => {}
+        };
 
         Ok(Self {
             transaction_name: transaction_name.unwrap_or_default(),
@@ -316,7 +329,10 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             group_id: from.group_id,
             sdk_name: from.data.sdk.name,
             sdk_version: from.data.sdk.version,
-            sdk_integrations: from.data.sdk.integrations,
+            sdk_integrations,
+            trace_id: from.data.contexts.trace.trace_id,
+            span_id: from.data.contexts.trace.span_id,
+            trace_sampled: from.data.contexts.trace.sampled.map(|v| v as u8),
             timestamp: datetime_to_timestamp(from.timestamp).unwrap(),
             user_email: from.data.user.email,
             user_id: from.data.user.user_id,
@@ -345,7 +361,6 @@ fn datetime_to_timestamp(datetime_str: Option<String>) -> Result<u32, &'static s
             if timestamp <= u32::MAX as i64 {
                 Ok(timestamp as u32)
             } else {
-                // If the timestamp is larger than a u32 can hold submit the current timestamp.
                 Ok(Utc::now().timestamp() as u32)
             }
         }
