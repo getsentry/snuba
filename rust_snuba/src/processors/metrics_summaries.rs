@@ -30,16 +30,16 @@ pub fn process_message(
                 .unzip();
 
             metrics_summaries.push(MetricsSummary {
-                count: summary.count.unwrap_or_default(),
+                count: summary.count,
                 deleted: 0,
                 end_timestamp: end_timestamp_ms / 1000,
-                max: summary.max.unwrap_or_default(),
+                max: summary.max,
                 metric_mri,
-                min: summary.min.unwrap_or_default(),
+                min: summary.min,
                 project_id: from.project_id,
                 retention_days: enforce_retention(from.retention_days, &config.env_config),
                 span_id: from.span_id,
-                sum: summary.sum.unwrap_or_default(),
+                sum: summary.sum,
                 tag_keys,
                 tag_values,
                 trace_id: from.trace_id,
@@ -71,13 +71,13 @@ struct InputMessage {
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct FromMetricsSummary {
     #[serde(default)]
-    min: Option<f64>,
+    min: f64,
     #[serde(default)]
-    max: Option<f64>,
+    max: f64,
     #[serde(default)]
-    sum: Option<f64>,
+    sum: f64,
     #[serde(default)]
-    count: Option<u64>,
+    count: u64,
     #[serde(default)]
     tags: BTreeMap<String, String>,
 }
