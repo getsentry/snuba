@@ -42,7 +42,10 @@ pub fn process_message(
 struct ErrorMessage {
     data: ErrorData,
     datetime: Option<String>,
+    event_id: Uuid,
     group_id: u64,
+    message: String,
+    primary_hash: String,
     project_id: u64,
     retention_days: u16,
 }
@@ -55,8 +58,6 @@ struct ErrorData {
     culprit: Unicodify,
     #[serde(default)]
     errors: Option<Vec<Value>>,
-    #[serde(default)]
-    event_id: Uuid,
     #[serde(default, rename = "sentry.interfaces.Exception")]
     exception_alternate: Exception,
     #[serde(default)]
@@ -66,12 +67,8 @@ struct ErrorData {
     #[serde(default)]
     location: Option<String>,
     #[serde(default)]
-    message: String,
-    #[serde(default)]
     modules: HashMap<String, Option<String>>,
     platform: String,
-    #[serde(default)]
-    primary_hash: String,
     #[serde(default)]
     received: f64,
     #[serde(default)]
@@ -323,7 +320,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         }
 
         // Hashes
-        let primary_hash = to_uuid(from.data.primary_hash);
+        let primary_hash = to_uuid(from.primary_hash);
         let hierarchical_hashes: Vec<Uuid> = from
             .data
             .hierarchical_hashes
@@ -476,7 +473,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             culprit: from.data.culprit,
             dist,
             environment,
-            event_id: from.data.event_id,
+            event_id: from.event_id,
             exception_frames_abs_path: frame_abs_paths,
             exception_frames_colno: frame_colnos,
             exception_frames_filename: frame_filenames,
@@ -498,7 +495,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             ip_address_v6,
             level,
             location: from.data.location,
-            message: from.data.message,
+            message: from.message,
             modules_name: module_names,
             modules_version: module_versions,
             num_processing_errors: from.data.errors.unwrap_or_default().len() as u64,
