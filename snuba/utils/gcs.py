@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 import structlog
-from google.cloud import storage
+from google.cloud.storage.client import Client  # type: ignore
 
 logger = structlog.get_logger().bind(module=__name__)
 
@@ -20,12 +20,9 @@ class GCSUploader:
         assert (
             os.environ.get("GOOGLE_CLOUD_PROJECT") is not None
         ), "GOOGLE_CLOUD_PROJECT environment variable must be set."
-        assert (
-            os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") is not None
-        ), "GOOGLE_APPLICATION_CREDENTIALS environment variable must be set."
         self.project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
         self.bucket_name = bucket_name
-        self.storage_client = storage.Client(project=self.project_id)
+        self.storage_client = Client(project=self.project_id)
 
     def upload_file(
         self, source_file_name: str, destination_blob_name: Optional[str] = None
