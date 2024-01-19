@@ -44,6 +44,10 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
+have_generated_counters = False
+have_generated_dists = False
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestMetricsApiCounters(BaseApiTest):
@@ -88,6 +92,10 @@ class TestMetricsApiCounters(BaseApiTest):
         teardown_common()
 
     def generate_counters(self) -> None:
+        global have_generated_counters
+        if have_generated_counters:
+            return
+
         events = []
         for n in range(self.seconds):
             for p in self.project_ids:
@@ -117,6 +125,7 @@ class TestMetricsApiCounters(BaseApiTest):
                 if processed:
                     events.append(processed)
         write_processed_messages(self.storage, events)
+        have_generated_counters = True
 
     def build_simple_query(
         self,
@@ -492,6 +501,10 @@ class TestMetricsApiDistributions(BaseApiTest):
         teardown_common()
 
     def generate_uniform_distributions(self) -> None:
+        global have_generated_dists
+        if have_generated_dists:
+            return
+
         events = []
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
         value_array = list(range(self.d_range_min, self.d_range_max))
@@ -518,6 +531,7 @@ class TestMetricsApiDistributions(BaseApiTest):
                 if processed:
                     events.append(processed)
         write_processed_messages(self.storage, events)
+        have_generated_dists = True
 
     def test_dists_percentiles(self) -> None:
         query_str = """MATCH (metrics_distributions)
