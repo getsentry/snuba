@@ -30,7 +30,7 @@ def span_grouping_distinct_modules_query(time_window_hrs: int) -> SQL:
     Form the clickhouse query to get the distinct span modules we are ingesting.
     The result of this query can be used to get the cardinality of individual modules.
     """
-    if time_window_hrs > 2:
+    if time_window_hrs > 3:
         raise ValueError("Time window cannot be greater than 2 hours")
 
     query = f"""
