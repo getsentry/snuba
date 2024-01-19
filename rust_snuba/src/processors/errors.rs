@@ -28,7 +28,7 @@ pub fn process_message(
     row.offset = metadata.offset;
     row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
 
-    // TODO: Do we need this?
+    // TODO.
     // row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
 
     Ok(InsertBatch {
@@ -231,7 +231,7 @@ struct ErrorRow {
     contexts_key: Vec<String>,
     #[serde(rename = "contexts.value")]
     contexts_value: Vec<String>,
-    culprit: Unicodify,
+    culprit: String,
     deleted: u8,
     dist: Option<String>,
     environment: Option<String>,
@@ -468,7 +468,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         }
 
         Ok(Self {
-            culprit: from.data.culprit,
+            culprit: from.data.culprit.0.unwrap_or_default(),
             dist,
             environment,
             event_id: from.event_id,
