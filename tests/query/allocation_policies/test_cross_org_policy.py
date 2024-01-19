@@ -158,6 +158,11 @@ class TestCrossOrgQueryAllocationPolicy:
             6,
             {"referrer": "statistical_detectors"},
         )
+        # can still set regular configs
+        policy.set_config_value("is_enforced", False)
+        assert not policy.is_enforced
+        policy.set_config_value("is_enforced", True)
+        assert policy.is_enforced
 
     @pytest.mark.redis_db
     def test_throttle_cross_org_query_with_unregistered_referrer(self):
