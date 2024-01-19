@@ -16,11 +16,8 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let (rows, origin_timestamp) =
         deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;
-    Ok(InsertBatch {
-        rows: RowData::from_rows(rows)?,
-        origin_timestamp: DateTime::from_timestamp(origin_timestamp as i64, 0),
-        ..Default::default()
-    })
+
+    InsertBatch::from_rows(rows, DateTime::from_timestamp(origin_timestamp as i64, 0))
 }
 
 pub fn deserialize_message(

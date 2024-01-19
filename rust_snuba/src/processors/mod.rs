@@ -48,6 +48,19 @@ define_processing_functions! {
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
 }
 
+// COGS is recorded for these processors
+pub fn get_cogs_label(processor_name: &str) -> Option<String> {
+    match processor_name {
+        "GenericCountersMetricsProcessor" => Some("generic_metrics_processor_counters".to_string()),
+        "GenericSetsMetricsProcessor" => Some("generic_metrics_processor_sets".to_string()),
+        "GenericDistributionsMetricsProcessor" => {
+            Some("generic_metrics_processor_distributions".to_string())
+        }
+        "GenericGaugesMetricsProcessor" => Some("generic_metrics_processor_gauges".to_string()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::SystemTime;

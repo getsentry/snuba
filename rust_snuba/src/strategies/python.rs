@@ -81,6 +81,7 @@ impl PythonTransformStep {
                 origin_timestamp,
                 sentry_received_timestamp,
                 commit_log_offsets,
+                None,
             );
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();

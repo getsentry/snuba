@@ -16,6 +16,7 @@ pub struct ConsumerConfig {
     pub commit_log_topic: Option<TopicConfig>,
     pub replacements_topic: Option<TopicConfig>,
     pub dlq_topic: Option<TopicConfig>,
+    pub accountant_topic: TopicConfig,
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
     pub env: EnvConfig,
@@ -104,6 +105,7 @@ pub struct EnvConfig {
     pub default_retention_days: u16,
     pub lower_retention_days: u16,
     pub valid_retention_days: HashSet<u16>,
+    pub record_cogs: bool,
 }
 
 impl Default for EnvConfig {
@@ -115,6 +117,7 @@ impl Default for EnvConfig {
             default_retention_days: 90,
             lower_retention_days: 30,
             valid_retention_days: [30, 90].iter().cloned().collect(),
+            record_cogs: false,
         }
     }
 }

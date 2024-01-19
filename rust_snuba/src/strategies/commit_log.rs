@@ -302,6 +302,7 @@ mod tests {
                 None,
                 None,
                 BTreeMap::from([(0, (500, Utc::now()))]),
+                None,
             ),
             BytesInsertBatch::new(
                 RowData::default(),
@@ -309,6 +310,7 @@ mod tests {
                 None,
                 None,
                 BTreeMap::from([(0, (600, Utc::now())), (1, (100, Utc::now()))]),
+                None,
             ),
         ];
 

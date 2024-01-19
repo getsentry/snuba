@@ -192,6 +192,7 @@ pub fn consumer_impl(
         commit_log_producer,
         consumer_group.to_owned(),
         Topic::new(&consumer_config.raw_topic.physical_topic_name),
+        consumer_config.accountant_topic,
     );
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
