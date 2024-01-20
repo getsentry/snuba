@@ -299,12 +299,10 @@ struct ErrorRow {
     title: String,
     trace_id: Option<Uuid>,
     trace_sampled: Option<u8>,
-    transaction_hash: u64,
     transaction_name: String,
     #[serde(rename = "type")]
     ty: String,
     user_email: Option<String>,
-    user_hash: u64,
     user_id: Option<String>,
     user_name: Option<String>,
     user: String,
@@ -469,6 +467,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
 
         Ok(Self {
             culprit: from.data.culprit.0.unwrap_or_default(),
+            deleted: 0,
             dist,
             environment,
             event_id: from.event_id,
@@ -481,6 +480,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             exception_frames_module: frame_modules,
             exception_frames_package: frame_packages,
             exception_frames_stack_level: frame_stack_levels,
+            exception_main_thread: Some(exception_main_thread as u8),
             exception_stacks_mechanism_handled: stack_mechanism_handled,
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
