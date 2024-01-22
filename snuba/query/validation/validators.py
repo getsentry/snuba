@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Sequence, Type, cast
 
+from snuba import state
 from snuba.clickhouse.translators.snuba.allowed import DefaultNoneColumnMapper
 from snuba.clickhouse.translators.snuba.function_call_mappers import (
     AggregateCurriedFunctionMapper,
@@ -506,8 +507,14 @@ class IllegalAggregateInConditionValidator(QueryValidator):
                 )
             return matches
 
-        matches = find_illegal_aggregate_functions(query.get_condition())
-        if len(matches) > 0:
-            raise InvalidQueryException(
-                "Aggregate function found in WHERE clause of query"
-            )
+        enable_illegal_aggregate_validator = state.get_config(
+            "enable_illegal_aggregate_in_condition_validator", 0
+        )
+        assert enable_illegal_aggregate_validator is not None
+        if int(enable_illegal_aggregate_validator) == 1:
+            if query.get_condition():
+                matches = find_illegal_aggregate_functions(query.get_condition())
+                if len(matches) > 0:
+                    raise InvalidQueryException(
+                        "Aggregate function found in WHERE clause of query"
+                    )
