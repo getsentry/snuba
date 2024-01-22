@@ -512,8 +512,9 @@ class IllegalAggregateInConditionValidator(QueryValidator):
         )
         assert enable_illegal_aggregate_validator is not None
         if int(enable_illegal_aggregate_validator) == 1:
-            if query.get_condition():
-                matches = find_illegal_aggregate_functions(query.get_condition())
+            conditions = query.get_condition()
+            if conditions:
+                matches = find_illegal_aggregate_functions(conditions)
                 if len(matches) > 0:
                     raise InvalidQueryException(
                         "Aggregate function found in WHERE clause of query"
