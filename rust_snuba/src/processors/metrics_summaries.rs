@@ -68,7 +68,7 @@ struct FromSpanMessage {
     trace_id: Uuid,
 
     #[serde(default)]
-    #[warn(dead_code)]
+    #[allow(dead_code)]
     parent_span_id: String,
 }
 
