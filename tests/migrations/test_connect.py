@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import reduce
 
 import pytest
@@ -12,14 +14,14 @@ from snuba.migrations.connect import (
 from snuba.migrations.groups import MigrationGroup
 
 
-def test_get_clickhouse_clusters_for_migration_group():
+def test_get_clickhouse_clusters_for_migration_group() -> None:
     clusters = get_clickhouse_clusters_for_migration_group(MigrationGroup.EVENTS)
     assert len(clusters) == 1
     assert clusters[0] == CLUSTERS[0]
 
 
 TEST_CLUSTERS = [
-    ClickhouseCluster(**c)
+    ClickhouseCluster(**c)  # type: ignore
     for c in [
         {
             "host": "host_1",
@@ -76,7 +78,10 @@ TEST_CLUSTERS = [
     ],
 )
 def test_get_clusters_for_readiness_states(
-    readiness_states, clusters, expected_clusters, expected_storage_set_keys
+    readiness_states: list[ReadinessState],
+    clusters: list[ClickhouseCluster],
+    expected_clusters: list[ClickhouseCluster],
+    expected_storage_set_keys: set[ReadinessState],
 ) -> None:
 
     result_clusters = get_clusters_for_readiness_states(readiness_states, clusters)

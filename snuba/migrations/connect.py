@@ -40,12 +40,6 @@ def get_clickhouse_clusters_for_migration_group(
     return list({get_cluster(storage_set_key) for storage_set_key in storage_set_keys})
 
 
-def get_storages_for_readiness_states(
-    readiness_states: Sequence[ReadinessState], storage_keys: Sequence[StorageKey]
-):
-    pass
-
-
 def get_clusters_for_readiness_states(
     readiness_states: Sequence[ReadinessState], clusters: Sequence[ClickhouseCluster]
 ) -> Sequence[ClickhouseCluster]:
