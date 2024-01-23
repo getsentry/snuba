@@ -13,10 +13,10 @@ use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::types::{BytesInsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 
 pub fn make_rust_processor(
-    next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
+    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
     func: ProcessingFunction,
     schema_name: &str,
     enforce_schema: bool,
@@ -68,7 +68,7 @@ impl MessageProcessor {
     async fn process_message(
         self,
         message: Message<KafkaPayload>,
-    ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
+    ) -> Result<Message<InsertOrReplacement<BytesInsertBatch>>, RunTaskError<anyhow::Error>> {
         validate_schema(&message, &self.schema, self.enforce_schema)?;
 
         let msg = match message.inner_message {
@@ -116,7 +116,7 @@ impl MessageProcessor {
     fn process_payload(
         &self,
         msg: BrokerMessage<KafkaPayload>,
-    ) -> anyhow::Result<Message<BytesInsertBatch>> {
+    ) -> anyhow::Result<Message<InsertOrReplacement<BytesInsertBatch>>> {
         let metadata = KafkaMessageMetadata {
             partition: msg.partition.index,
             offset: msg.offset,
@@ -125,14 +125,20 @@ impl MessageProcessor {
 
         let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
 
-        let payload = BytesInsertBatch::new(
-            transformed.rows,
-            msg.timestamp,
-            transformed.origin_timestamp,
-            transformed.sentry_received_timestamp,
-            BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
-            transformed.cogs_data,
-        );
+        let payload = match transformed {
+            InsertOrReplacement::Insert(insert) => {
+                InsertOrReplacement::Insert(BytesInsertBatch::new(
+                    insert.rows,
+                    msg.timestamp,
+                    insert.origin_timestamp,
+                    insert.sentry_received_timestamp,
+                    BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
+                    insert.cogs_data,
+                ))
+            }
+            InsertOrReplacement::Replacement(d) => InsertOrReplacement::Replacement(d),
+        };
+
         Ok(Message::new_broker_message(
             payload,
             msg.partition,
@@ -142,11 +148,13 @@ impl MessageProcessor {
     }
 }
 
-impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProcessor {
+impl TaskRunner<KafkaPayload, InsertOrReplacement<BytesInsertBatch>, anyhow::Error>
+    for MessageProcessor
+{
     fn get_task(
         &self,
         message: Message<KafkaPayload>,
-    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+    ) -> RunTaskFunc<InsertOrReplacement<BytesInsertBatch>, anyhow::Error> {
         Box::pin(
             self.clone()
                 .process_message(message)
@@ -241,8 +249,8 @@ mod tests {
             _payload: KafkaPayload,
             _metadata: KafkaMessageMetadata,
             _config: &ProcessorConfig,
-        ) -> anyhow::Result<InsertBatch> {
-            Ok(InsertBatch::default())
+        ) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+            Ok(InsertOrReplacement::Insert(InsertBatch::default()))
         }
 
         let mut strategy = make_rust_processor(

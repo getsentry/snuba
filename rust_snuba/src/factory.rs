@@ -27,6 +27,7 @@ use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
 use crate::strategies::python::PythonTransformStep;
+use crate::strategies::replacements::ProduceReplacements;
 use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
@@ -39,6 +40,7 @@ pub struct ConsumerStrategyFactory {
     processing_concurrency: ConcurrencyConfig,
     clickhouse_concurrency: ConcurrencyConfig,
     commitlog_concurrency: ConcurrencyConfig,
+    replacements_concurrency: ConcurrencyConfig,
     python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
     health_check_file: Option<String>,
@@ -61,6 +63,7 @@ impl ConsumerStrategyFactory {
         processing_concurrency: ConcurrencyConfig,
         clickhouse_concurrency: ConcurrencyConfig,
         commitlog_concurrency: ConcurrencyConfig,
+        replacements_concurrency: ConcurrencyConfig,
         python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
         health_check_file: Option<String>,
@@ -80,6 +83,7 @@ impl ConsumerStrategyFactory {
             processing_concurrency,
             clickhouse_concurrency,
             commitlog_concurrency,
+            replacements_concurrency,
             python_max_queue_depth,
             use_rust_processor,
             health_check_file,
@@ -143,6 +147,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 _ => next_step,
             };
 
+        // Batch insert rows
         let accumulator = Arc::new(BytesInsertBatch::merge);
         let next_step = Reduce::new(
             next_step,
@@ -155,6 +160,19 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             // gen-metrics-gauges in s4s. we still need to commit there
         )
         .flush_empty_batches(true);
+
+        // TODO: Replacements configuration
+        let replacements_producer: Option<KafkaProducer> = None;
+        let replacements_destination = None;
+        let next_step = ProduceReplacements::new(
+            next_step,
+            replacements_producer,
+            replacements_destination,
+            &self.replacements_concurrency,
+            self.skip_write,
+        );
+
+        // Transform messages
         let processor = match (
             self.use_rust_processor,
             processors::get_processing_function(

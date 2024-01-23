@@ -9,11 +9,14 @@ mod spans;
 mod utils;
 
 use crate::config::ProcessorConfig;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
-pub type ProcessingFunction =
-    fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<InsertBatch>;
+pub type ProcessingFunction = fn(
+    KafkaPayload,
+    KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertOrReplacement<InsertBatch>>;
 
 macro_rules! define_processing_functions {
     ($(($name:literal, $logical_topic:literal, $function:path)),* $(,)*) => {
@@ -108,13 +111,21 @@ mod tests {
 
                 let payload = KafkaPayload::new(None, None, Some(example.to_vec()));
                 let processed = processor_fn(payload, metadata.clone(), &processor_config).unwrap();
-                let encoded_rows = String::from_utf8(processed.rows.into_encoded_rows()).unwrap();
-                let mut snapshot_payload = Vec::new();
-                for row in encoded_rows.lines() {
-                    let row_value: serde_json::Value = serde_json::from_str(row).unwrap();
-                    snapshot_payload.push(row_value);
+                match processed {
+                    InsertOrReplacement::Insert(insert_batch) => {
+                        let encoded_rows =
+                            String::from_utf8(insert_batch.rows.into_encoded_rows()).unwrap();
+                        let mut snapshot_payload = Vec::new();
+                        for row in encoded_rows.lines() {
+                            let row_value: serde_json::Value = serde_json::from_str(row).unwrap();
+                            snapshot_payload.push(row_value);
+                        }
+                        insta::assert_json_snapshot!(snapshot_payload);
+                    }
+                    _ => {
+                        // TODO: replacement snapshots
+                    }
                 }
-                insta::assert_json_snapshot!(snapshot_payload);
             }
         }
     }

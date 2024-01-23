@@ -9,13 +9,13 @@ use serde::{ser::Error, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
     _config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
+) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 

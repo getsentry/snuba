@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
@@ -91,6 +92,27 @@ impl LatencyRecorder {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReplacementData {}
+
+impl From<ReplacementData> for KafkaPayload {
+    fn from(_value: ReplacementData) -> KafkaPayload {
+        unimplemented!();
+    }
+}
+
+impl From<KafkaPayload> for ReplacementData {
+    fn from(_value: KafkaPayload) -> ReplacementData {
+        unimplemented!();
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InsertOrReplacement<T> {
+    Insert(T),
+    Replacement(ReplacementData),
+}
+
 /// The return value of message processors.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InsertBatch {
@@ -104,17 +126,17 @@ impl InsertBatch {
     pub fn from_rows<T>(
         rows: impl IntoIterator<Item = T>,
         origin_timestamp: Option<DateTime<Utc>>,
-    ) -> anyhow::Result<Self>
+    ) -> anyhow::Result<InsertOrReplacement<Self>>
     where
         T: Serialize,
     {
         let rows = RowData::from_rows(rows)?;
-        Ok(Self {
+        Ok(InsertOrReplacement::Insert(Self {
             rows,
             origin_timestamp,
             sentry_received_timestamp: None,
             cogs_data: None,
-        })
+        }))
     }
 
     /// In case the processing function wants to skip the message, we return an empty batch.

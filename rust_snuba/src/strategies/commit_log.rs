@@ -226,6 +226,7 @@ mod tests {
     use crate::types::RowData;
 
     use super::*;
+    use crate::testutils::TestStrategy;
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
@@ -250,30 +251,6 @@ mod tests {
 
     #[test]
     fn produce_commit_log() {
-        struct Noop {
-            pub payloads: Vec<BytesInsertBatch>,
-        }
-        impl ProcessingStrategy<BytesInsertBatch> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
-                Ok(None)
-            }
-            fn submit(
-                &mut self,
-                message: Message<BytesInsertBatch>,
-            ) -> Result<(), SubmitError<BytesInsertBatch>> {
-                self.payloads.push(message.payload().clone());
-                Ok(())
-            }
-            fn close(&mut self) {}
-            fn terminate(&mut self) {}
-            fn join(
-                &mut self,
-                _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, StrategyError> {
-                Ok(None)
-            }
-        }
-
         let produced_payloads = Arc::new(Mutex::new(Vec::new()));
 
         struct MockProducer {
@@ -318,7 +295,7 @@ mod tests {
             payloads: produced_payloads.clone(),
         };
 
-        let next_step = Noop { payloads: vec![] };
+        let next_step = TestStrategy::new();
 
         let concurrency = ConcurrencyConfig::new(1);
         let mut strategy = ProduceCommitLog::new(

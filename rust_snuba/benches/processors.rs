@@ -70,6 +70,8 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let commitlog_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let replacements_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactory::new(
         storage,
         EnvConfig::default(),
@@ -80,6 +82,7 @@ fn create_factory(
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,
+        replacements_concurrency,
         None,
         true,
         None,

@@ -1,6 +1,6 @@
 use crate::config::MessageProcessorConfig;
 
-use crate::types::{BytesInsertBatch, RowData};
+use crate::types::{BytesInsertBatch, InsertOrReplacement, RowData};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
@@ -23,9 +23,9 @@ type Committable = BTreeMap<(String, u16), u64>;
 type PyReturnValue = (ReturnValue, MessageTimestamp, Committable);
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>>>,
     python_strategy: Arc<Mutex<Py<PyAny>>>,
-    transformed_messages: VecDeque<Message<BytesInsertBatch>>,
+    transformed_messages: VecDeque<Message<InsertOrReplacement<BytesInsertBatch>>>,
     commit_request_carried_over: Option<CommitRequest>,
 }
 
@@ -37,7 +37,7 @@ impl PythonTransformStep {
         max_queue_depth: Option<usize>,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
     {
         env::set_var(
             "RUST_SNUBA_PROCESSOR_MODULE",
@@ -75,14 +75,14 @@ impl PythonTransformStep {
                 .map(|((_t, p), o)| (*p, (*o, message_timestamp)))
                 .collect();
 
-            let payload = BytesInsertBatch::new(
+            let payload = InsertOrReplacement::Insert(BytesInsertBatch::new(
                 RowData::from_encoded_rows(payload),
                 message_timestamp,
                 origin_timestamp,
                 sentry_received_timestamp,
                 commit_log_offsets,
                 None,
-            );
+            ));
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
             for ((t, p), o) in offsets {

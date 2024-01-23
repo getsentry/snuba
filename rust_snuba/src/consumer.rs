@@ -21,7 +21,7 @@ use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::KafkaMessageMetadata;
+use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -190,6 +190,7 @@ pub fn consumer_impl(
         ConcurrencyConfig::new(concurrency),
         ConcurrencyConfig::new(2),
         ConcurrencyConfig::new(2),
+        ConcurrencyConfig::new(4),
         python_max_queue_depth,
         use_rust_processor,
         health_check_file.map(ToOwned::to_owned),
@@ -249,5 +250,9 @@ pub fn process_message(
 
     let res = func(payload, meta, &config::ProcessorConfig::default())
         .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
-    Ok(res.rows.into_encoded_rows())
+
+    match res {
+        InsertOrReplacement::Insert(insert_batch) => Ok(insert_batch.rows.into_encoded_rows()),
+        _ => panic!("Could not process replacement"),
+    }
 }
