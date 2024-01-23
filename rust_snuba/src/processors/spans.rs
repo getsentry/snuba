@@ -128,11 +128,11 @@ impl TryFrom<FromSpanMessage> for Span {
         let sentry_tags = from.sentry_tags.unwrap_or_default();
         let group: u64 = sentry_tags
             .get("group")
-            .and_then(|group| Some(u64::from_str_radix(&group, 16).unwrap_or_default()))
+            .map(|group| u64::from_str_radix(group, 16).unwrap_or_default())
             .unwrap_or_default();
         let status = sentry_tags
             .get("status")
-            .and_then(|status| Some(status.as_str()))
+            .map(|status| status.as_str())
             .map_or(SpanStatus::Unknown, |status| {
                 SpanStatus::from_str(status).unwrap_or_default()
             });
