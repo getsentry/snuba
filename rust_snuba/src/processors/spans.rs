@@ -36,27 +36,21 @@ pub fn process_message(
 struct FromSpanMessage {
     #[serde(default)]
     _metrics_summary: Value,
-    #[serde(default)]
-    description: String,
+    description: Option<String>,
     duration_ms: u32,
-    #[serde(default)]
     event_id: Option<Uuid>,
     exclusive_time_ms: f64,
     is_segment: bool,
     measurements: Option<BTreeMap<String, FromMeasurementValue>>,
-    #[serde(default)]
-    parent_span_id: String,
+    parent_span_id: Option<String>,
     profile_id: Option<Uuid>,
     project_id: u64,
     received: f64,
     retention_days: Option<u16>,
-    #[serde(default)]
-    segment_id: String,
-    #[serde(default)]
+    segment_id: Option<String>,
     sentry_tags: Option<BTreeMap<String, String>>,
     span_id: String,
     start_timestamp_ms: u64,
-    #[serde(default)]
     tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
 }
@@ -159,7 +153,7 @@ impl TryFrom<FromSpanMessage> for Span {
 
         Ok(Self {
             action: sentry_tags.get("action").cloned().unwrap_or_default(),
-            description: from.description,
+            description: from.description.unwrap_or_default(),
             domain: sentry_tags.get("domain").cloned().unwrap_or_default(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
@@ -172,12 +166,16 @@ impl TryFrom<FromSpanMessage> for Span {
             metrics_summary,
             module: sentry_tags.get("module").cloned().unwrap_or_default(),
             op: sentry_tags.get("op").cloned().unwrap_or_default(),
-            parent_span_id: u64::from_str_radix(&from.parent_span_id, 16)?,
+            parent_span_id: from.parent_span_id.map_or(0, |parent_span_id| {
+                u64::from_str_radix(&parent_span_id, 16).unwrap_or_default()
+            }),
             platform: sentry_tags.get("system").cloned().unwrap_or_default(),
             profile_id: from.profile_id,
             project_id: from.project_id,
             retention_days: from.retention_days,
-            segment_id: u64::from_str_radix(&from.segment_id, 16)?,
+            segment_id: from.segment_id.map_or(0, |segment_id| {
+                u64::from_str_radix(&segment_id, 16).unwrap_or_default()
+            }),
             segment_name: sentry_tags.get("transaction").cloned().unwrap_or_default(),
             sentry_tag_keys,
             sentry_tag_values,
