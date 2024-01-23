@@ -637,3 +637,51 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
         assert len(data["data"]) == 180, data
+
+    def test_histograms(self) -> None:
+        query = MetricsQuery(
+            query=Timeseries(
+                metric=Metric(
+                    "transaction.duration",
+                    TRANSACTION_MRI,
+                    DISTRIBUTIONS.metric_id,
+                    DISTRIBUTIONS.entity,
+                ),
+                aggregate="histogram",
+                aggregate_params=[5],
+                groupby=[Column("status_code")],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60, totals=True),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction": resolve_str("transaction"),
+                "status_code": resolve_str("status_code"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        rows = data["data"]
+        assert len(rows) == 180, rows
+
+        assert rows[0]["aggregate_value"][0] > 0
+        assert rows[0]["status_code"] == "200"
+        assert data["totals"]["aggregate_value"][0] == 2.0
