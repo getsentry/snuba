@@ -131,10 +131,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
-        // Produce cogs if generic metrics and we are not skipping writes
+        // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
-            match (self.skip_write, cogs_label) {
-                (false, Some(resource_id)) => Box::new(RecordCogs::new(
+            match (self.skip_write, self.env_config.record_cogs, cogs_label) {
+                (false, true, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
                     resource_id,
                     self.accountant_topic_config.broker_config.clone(),
@@ -151,8 +151,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,
-        );
-
+            // we need to enable this to deal with storages where we skip 100% of values, such as
+            // gen-metrics-gauges in s4s. we still need to commit there
+        )
+        .flush_empty_batches(true);
         let processor = match (
             self.use_rust_processor,
             processors::get_processing_function(

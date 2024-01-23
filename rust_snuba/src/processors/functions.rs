@@ -1,9 +1,11 @@
 use crate::config::ProcessorConfig;
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
@@ -46,7 +48,7 @@ pub fn process_message(
     InsertBatch::from_rows(functions, DateTime::from_timestamp(msg.received, 0))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct InputFunction {
     fingerprint: u64,
     function: String,
@@ -55,7 +57,7 @@ struct InputFunction {
     self_times_ns: Vec<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct InputMessage {
     #[serde(default)]
     environment: Option<String>,
@@ -103,10 +105,11 @@ struct Function<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
+
+    use crate::processors::tests::run_schema_type_test;
+
+    use super::*;
 
     #[test]
     fn test_functions() {
@@ -151,5 +154,10 @@ mod tests {
         };
         process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
+    }
+
+    #[test]
+    fn schema() {
+        run_schema_type_test::<InputMessage>("profiles-call-tree");
     }
 }
