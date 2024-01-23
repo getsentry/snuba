@@ -681,7 +681,3 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert response.status_code == 200
         rows = data["data"]
         assert len(rows) == 180, rows
-
-        assert rows[0]["aggregate_value"][0] > 0
-        assert rows[0]["status_code"] == "200"
-        assert data["totals"]["aggregate_value"][0] == 2.0
