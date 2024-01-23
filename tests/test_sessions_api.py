@@ -417,6 +417,7 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
         assert len(result["data"]) > 0
         assert "bucketed_started" in result["data"][0]
 
+    @pytest.mark.xfail(reason="Won't work until Clickhouse 23.8")
     def test_sessions_tuple_check(self, get_project_id: Callable[[], int]) -> None:
         project_id = get_project_id()
         self.generate_session_events(project_id)
