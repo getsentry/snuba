@@ -19,14 +19,6 @@ pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
     retention_days
 }
 
-pub fn hex_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let hex = String::deserialize(deserializer)?;
-    u64::from_str_radix(&hex, 16).map_err(serde::de::Error::custom)
-}
-
 pub fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
