@@ -15,9 +15,11 @@ Contents:
    configuration/overview
    query/overview
    language/snql
+   language/mql
    migrations/modes
    contributing/environment
    clickhouse/death_queries
    clickhouse/topology
    clickhouse/schema_design
    clickhouse/supported_versions
+   profiler

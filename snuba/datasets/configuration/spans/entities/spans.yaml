@@ -59,30 +59,12 @@ schema:
         },
     },
     {
-      name: _tags_hash_map,
-      type: Array,
-      args:
-        {
-          inner_type: { type: UInt, args: { size: 64 } },
-          schema_modifiers: [readonly],
-        },
-    },
-    {
       name: sentry_tags,
       type: Nested,
       args:
         {
           subcolumns:
             [{ name: key, type: String }, { name: value, type: String }],
-        },
-    },
-    {
-      name: _sentry_tags_hash_map,
-      type: Array,
-      args:
-        {
-          inner_type: { type: UInt, args: { size: 64 } },
-          schema_modifiers: [readonly],
         },
     },
     {
@@ -95,6 +77,24 @@ schema:
               { name: key, type: String },
               { name: value, type: Float, args: { size: 64 } },
             ],
+        },
+    },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [readonly],
+        },
+    },
+    {
+      name: _sentry_tags_hash_map,
+      type: Array,
+      args:
+        {
+          inner_type: { type: UInt, args: { size: 64 } },
+          schema_modifiers: [readonly],
         },
     },
     { name: partition, type: UInt, args: { size: 16 } },
@@ -164,6 +164,7 @@ query_processors:
     args:
       project_field: project_id
 
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:

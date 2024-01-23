@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    SubmitError,
+    StrategyError, SubmitError,
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use rust_arroyo::utils::timing::Deadline;
@@ -81,6 +81,7 @@ impl PythonTransformStep {
                 origin_timestamp,
                 sentry_received_timestamp,
                 commit_log_offsets,
+                None,
             );
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
@@ -95,7 +96,7 @@ impl PythonTransformStep {
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
             let python_strategy = self.python_strategy.lock();
             let result = python_strategy.call_method0(py, "poll")?;
@@ -119,7 +120,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     break;
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -139,6 +140,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         }
 
         let mut apply_backpressure = false;
+        let mut invalid_message: Option<InvalidMessage> = None;
 
         Python::with_gil(|py| -> PyResult<()> {
             let python_strategy = self.python_strategy.lock();
@@ -165,13 +167,23 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                         timestamp,
                     );
 
-                    let rv: u8 = python_strategy
+                    let rv: (u8, Option<InvalidMessageMetadata>) = python_strategy
                         .call_method1(py, "submit", args)?
                         .extract(py)?;
 
                     match rv {
-                        1 => {
+                        (1, _) => {
                             apply_backpressure = true;
+                        }
+                        (2, meta) => {
+                            let metadata = meta.unwrap();
+                            invalid_message = Some(InvalidMessage {
+                                partition: Partition {
+                                    topic: Topic::new(&metadata.topic),
+                                    index: metadata.partition,
+                                },
+                                offset: metadata.offset,
+                            });
                         }
                         _ => {
                             tracing::debug!("successfully submitted to multiprocessing");
@@ -182,6 +194,10 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             Ok(())
         })
         .unwrap();
+
+        if let Some(msg) = invalid_message {
+            return Err(SubmitError::InvalidMessage(msg));
+        }
 
         if apply_backpressure {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
@@ -196,7 +212,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
         let timeout_secs = timeout.map(|d| d.as_secs());
 
@@ -229,7 +245,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     }
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -244,26 +260,31 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
     }
 }
 
+#[derive(Debug)]
+struct InvalidMessageMetadata {
+    pub topic: String,
+    pub partition: u16,
+    pub offset: u64,
+}
+
+impl FromPyObject<'_> for InvalidMessageMetadata {
+    fn extract(dict: &'_ PyAny) -> PyResult<Self> {
+        Ok(InvalidMessageMetadata {
+            topic: dict.get_item("topic")?.extract()?,
+            partition: dict.get_item("partition")?.extract()?,
+            offset: dict.get_item("offset")?.extract()?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rust_arroyo::testutils::TestStrategy;
 
-    fn set_sys_executable() {
-        let python_executable = std::env::var("PYTHONEXECUTABLE").unwrap();
-        Python::with_gil(|py| -> PyResult<()> {
-            PyModule::import(py, "sys")?.setattr("executable", python_executable)?;
-            Ok(())
-        })
-        .unwrap();
-    }
-
     #[test]
-    // test is flaky in CI and fails 100% of the time locally with " signal only works in main
-    // thread of the main interpreter"
-    #[ignore]
     fn test_python() {
-        set_sys_executable();
+        crate::testutils::initialize_python();
 
         let sink = TestStrategy::new();
 

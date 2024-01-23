@@ -1,8 +1,9 @@
+use crate::config::ProcessorConfig;
 use crate::processors::utils::ensure_valid_datetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::utils::metrics::get_metrics;
+use rust_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -28,6 +29,7 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
+    _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: Outcome = serde_json::from_slice(payload_bytes)?;
@@ -51,17 +53,17 @@ pub fn process_message(
     if msg.category.is_none() {
         msg.category = Some(DEFAULT_CATEGORY);
         if msg.outcome != OUTCOME_ABUSE {
-            get_metrics().increment("missing_category", 1, None);
+            counter!("missing_category");
         }
     }
     if msg.quantity.is_none() {
         msg.quantity = Some(1);
         if msg.outcome != OUTCOME_ABUSE {
-            get_metrics().increment("missing_quantity", 1, None);
+            counter!("missing_quantity");
         }
     }
 
-    InsertBatch::from_rows([msg])
+    InsertBatch::from_rows([msg], None)
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -102,7 +104,8 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        let result = process_message(payload, meta).expect("The message should be processed");
+        let result = process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
 
         let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
 

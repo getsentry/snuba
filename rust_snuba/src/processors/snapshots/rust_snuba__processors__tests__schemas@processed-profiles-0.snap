@@ -1,0 +1,33 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"architecture\": \"x86_64\",\n  \"device_locale\": \"\",\n  \"device_manufacturer\": \"\",\n  \"device_model\": \"\",\n  \"device_os_name\": \"Linux\",\n  \"device_os_version\": \"4.14.281-212.502.amzn2.x86_64\",\n  \"duration_ns\": 55659715,\n  \"environment\": \"staging-staging\",\n  \"profile_id\": \"f851b3c2d70d4f119b3a49ce9f630194\",\n  \"organization_id\": 1,\n  \"platform\": \"python\",\n  \"project_id\": 1,\n  \"received\": 1687971966,\n  \"retention_days\": 90,\n  \"trace_id\": \"cbf7414c931448e98ed3f9b4e239a58e\",\n  \"transaction_id\": \"6d15f5585cbd4b92945c605314f760cd\",\n  \"transaction_name\": \"GET /events\",\n  \"version_code\": \"\",\n  \"version_name\": \"\"\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "android_api_level": null,
+    "architecture": "x86_64",
+    "device_classification": "",
+    "device_locale": "",
+    "device_manufacturer": "",
+    "device_model": "",
+    "device_os_build_number": null,
+    "device_os_name": "Linux",
+    "device_os_version": "4.14.281-212.502.amzn2.x86_64",
+    "duration_ns": 55659715,
+    "environment": "staging-staging",
+    "offset": 1,
+    "organization_id": 1,
+    "partition": 0,
+    "platform": "python",
+    "profile_id": "f851b3c2-d70d-4f11-9b3a-49ce9f630194",
+    "project_id": 1,
+    "received": 1687971966,
+    "retention_days": 90,
+    "trace_id": "cbf7414c-9314-48e9-8ed3-f9b4e239a58e",
+    "transaction_id": "6d15f558-5cbd-4b92-945c-605314f760cd",
+    "transaction_name": "GET /events",
+    "version_code": "",
+    "version_name": ""
+  }
+]

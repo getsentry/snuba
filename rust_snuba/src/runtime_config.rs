@@ -20,6 +20,7 @@ mod tests {
 
     #[test]
     fn test_runtime_config() {
+        crate::testutils::initialize_python();
         let config = get_str_config("test");
         assert_eq!(config.unwrap(), None);
     }

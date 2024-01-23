@@ -2,15 +2,16 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::counter;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
-use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
+use crate::config::ProcessorConfig;
 use crate::processors::ProcessingFunction;
 use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
 
@@ -20,15 +21,15 @@ pub fn make_rust_processor(
     schema_name: &str,
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
-    let metrics = get_metrics();
 
     let task_runner = MessageProcessor {
         schema,
         enforce_schema,
-        metrics,
         func,
+        processor_config,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -39,7 +40,7 @@ pub fn make_rust_processor(
     ))
 }
 
-fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
+pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
     match sentry_kafka_schemas::get_schema(schema_name, None) {
         Ok(s) => Some(Arc::new(s)),
         Err(error) => {
@@ -59,29 +60,38 @@ fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>> {
 struct MessageProcessor {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
-    metrics: BoxMetrics,
     func: ProcessingFunction,
+    processor_config: ProcessorConfig,
 }
 
 impl MessageProcessor {
     async fn process_message(
         self,
-        msg: BrokerMessage<KafkaPayload>,
-    ) -> Result<Message<BytesInsertBatch>, RunTaskError> {
+        message: Message<KafkaPayload>,
+    ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
+        validate_schema(&message, &self.schema, self.enforce_schema)?;
+
+        let msg = match message.inner_message {
+            InnerMessage::BrokerMessage(msg) => msg,
+            _ => {
+                return Err(RunTaskError::Other(anyhow::anyhow!(
+                    "Unexpected message type"
+                )))
+            }
+        };
+
         let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
             partition: msg.partition,
             offset: msg.offset,
         });
 
         let kafka_payload = &msg.payload.clone();
-        let payload = kafka_payload.payload().ok_or(maybe_err.clone())?;
-
-        if self.validate_schema(payload).is_err() {
+        let Some(payload) = kafka_payload.payload() else {
             return Err(maybe_err);
         };
 
         self.process_payload(msg).map_err(|error| {
-            self.metrics.increment("invalid_message", 1, None);
+            counter!("invalid_message");
 
             sentry::with_scope(
                 |scope| {
@@ -103,35 +113,6 @@ impl MessageProcessor {
     }
 
     #[tracing::instrument(skip_all)]
-    fn validate_schema(&self, payload: &[u8]) -> Result<(), SchemaError> {
-        let Some(schema) = &self.schema else {
-            return Ok(());
-        };
-
-        let Err(error) = schema.validate_json(payload) else {
-            return Ok(());
-        };
-        self.metrics.increment("schema_validation.failed", 1, None);
-
-        sentry::with_scope(
-            |scope| {
-                let payload = String::from_utf8_lossy(payload).into();
-                scope.set_extra("payload", payload)
-            },
-            || {
-                let error: &dyn std::error::Error = &error;
-                tracing::error!(error, "Validation error");
-            },
-        );
-
-        if !self.enforce_schema {
-            Ok(())
-        } else {
-            Err(error)
-        }
-    }
-
-    #[tracing::instrument(skip_all)]
     fn process_payload(
         &self,
         msg: BrokerMessage<KafkaPayload>,
@@ -142,7 +123,7 @@ impl MessageProcessor {
             timestamp: msg.timestamp,
         };
 
-        let transformed = (self.func)(msg.payload, metadata)?;
+        let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
 
         let payload = BytesInsertBatch::new(
             transformed.rows,
@@ -150,6 +131,7 @@ impl MessageProcessor {
             transformed.origin_timestamp,
             transformed.sentry_received_timestamp,
             BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
+            transformed.cogs_data,
         );
         Ok(Message::new_broker_message(
             payload,
@@ -160,18 +142,82 @@ impl MessageProcessor {
     }
 }
 
-impl TaskRunner<KafkaPayload, BytesInsertBatch> for MessageProcessor {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<BytesInsertBatch> {
-        let broker_message = match message.inner_message {
-            InnerMessage::BrokerMessage(msg) => msg,
-            _ => panic!("Unexpected message type"),
-        };
-
+impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProcessor {
+    fn get_task(
+        &self,
+        message: Message<KafkaPayload>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         Box::pin(
             self.clone()
-                .process_message(broker_message)
+                .process_message(message)
                 .bind_hub(Hub::new_from_top(Hub::current())),
         )
+    }
+}
+
+pub fn validate_schema(
+    message: &Message<KafkaPayload>,
+    schema: &Option<Arc<Schema>>,
+    enforce_schema: bool,
+) -> Result<(), RunTaskError<anyhow::Error>> {
+    let msg = match &message.inner_message {
+        InnerMessage::BrokerMessage(msg) => msg,
+        _ => {
+            return Err(RunTaskError::Other(anyhow::anyhow!(
+                "Unexpected message type"
+            )))
+        }
+    };
+
+    let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
+        partition: msg.partition,
+        offset: msg.offset,
+    });
+
+    let kafka_payload = &msg.payload.clone();
+    let Some(payload) = kafka_payload.payload() else {
+        return Err(maybe_err);
+    };
+
+    if let Err(error) = _validate_schema(schema, enforce_schema, payload) {
+        let error: &dyn std::error::Error = &error;
+        tracing::error!(error, "Failed schema validation");
+        return Err(maybe_err);
+    };
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all)]
+fn _validate_schema(
+    schema: &Option<Arc<Schema>>,
+    enforce_schema: bool,
+    payload: &[u8],
+) -> Result<(), SchemaError> {
+    let Some(schema) = &schema else {
+        return Ok(());
+    };
+
+    let Err(error) = schema.validate_json(payload) else {
+        return Ok(());
+    };
+    counter!("schema_validation.failed");
+
+    sentry::with_scope(
+        |scope| {
+            let payload = String::from_utf8_lossy(payload).into();
+            scope.set_extra("payload", payload)
+        },
+        || {
+            let error: &dyn std::error::Error = &error;
+            tracing::error!(error, "Validation error");
+        },
+    );
+
+    if !enforce_schema {
+        Ok(())
+    } else {
+        Err(error)
     }
 }
 
@@ -194,12 +240,19 @@ mod tests {
         fn noop_processor(
             _payload: KafkaPayload,
             _metadata: KafkaMessageMetadata,
+            _config: &ProcessorConfig,
         ) -> anyhow::Result<InsertBatch> {
             Ok(InsertBatch::default())
         }
 
-        let mut strategy =
-            make_rust_processor(Noop, noop_processor, "outcomes", true, &concurrency);
+        let mut strategy = make_rust_processor(
+            Noop,
+            noop_processor,
+            "outcomes",
+            true,
+            &concurrency,
+            ProcessorConfig::default(),
+        );
 
         let example = "{
             \"project_id\": 1,

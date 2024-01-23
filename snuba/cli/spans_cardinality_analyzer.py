@@ -73,10 +73,12 @@ def spans_cardinality_analyzer(
     )
 
     # Get the distinct span modules we are ingesting.
+    logger.info("Getting distinct span modules")
     result = connection.execute(
-        span_grouping_distinct_modules_query(time_window_hrs=1),
+        span_grouping_distinct_modules_query(time_window_hrs=2),
     )
     distinct_span_groups = [row[0] for row in result.results]
+    logger.info(f"Got distinct span modules: {distinct_span_groups}")
 
     # Get the cardinality of each module and write to CSV file and send to Slack
     for span_group in distinct_span_groups:

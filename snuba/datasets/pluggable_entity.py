@@ -27,6 +27,7 @@ from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityContainsColumnsValidator,
+    IllegalAggregateInConditionValidator,
     QueryValidator,
 )
 from snuba.utils.schemas import SchemaModifiers
@@ -69,8 +70,9 @@ class PluggableEntity(Entity):
             EntityContainsColumnsValidator(
                 EntityColumnSet(self.columns),
                 mappers,
-                self.validate_data_model or ColumnValidationMode.WARN,
-            )
+                self.validate_data_model or ColumnValidationMode.ERROR,
+            ),
+            IllegalAggregateInConditionValidator(),
         ]
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:

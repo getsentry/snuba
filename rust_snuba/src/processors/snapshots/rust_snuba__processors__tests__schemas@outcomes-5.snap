@@ -1,0 +1,18 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"org_id\": 1,\n  \"outcome\": 4,\n  \"project_id\": 1,\n  \"quantity\": 3,\n  \"timestamp\": \"2023-03-28T18:50:49.442341621Z\"\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "category": 1,
+    "event_id": null,
+    "key_id": null,
+    "org_id": 1,
+    "outcome": 4,
+    "project_id": 1,
+    "quantity": 3,
+    "reason": null,
+    "timestamp": 1680029449
+  }
+]

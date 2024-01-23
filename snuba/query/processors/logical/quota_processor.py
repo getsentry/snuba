@@ -29,7 +29,9 @@ class ResourceQuotaProcessor(LogicalQueryProcessor):
         self.__project_field = project_field
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        enabled = get_config(ENABLED_CONFIG, 1)
+        enabled = get_config(ENABLED_CONFIG, 1) and get_config(
+            "enable_legacy_ratelimiters", 1
+        )
         if not enabled:
             return
 
