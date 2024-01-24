@@ -6,7 +6,9 @@ COMMON_CONSUMER_DEV_OPTIONS = [
     "--auto-offset-reset=latest",
     "--no-strict-offset-reset",
     "--log-level=debug",
-    "--enforce-schema",
+    # XXX(markus): there is some bug in transactions that crashes the consumer
+    # because it can't find the schema. revert once that problem is fixed and devserver actually starts
+    # "--enforce-schema",
 ]
 
 COMMON_RUST_CONSUMER_DEV_OPTIONS = COMMON_CONSUMER_DEV_OPTIONS + [

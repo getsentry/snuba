@@ -107,7 +107,6 @@ struct MetricsSummary<'a> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
     use std::time::SystemTime;
 
     use crate::processors::tests::run_schema_type_test;
