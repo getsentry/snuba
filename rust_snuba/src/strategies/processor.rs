@@ -12,11 +12,11 @@ use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::config::ProcessorConfig;
-use crate::processors::ProcessingFunction;
+use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{BytesInsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 
 pub fn make_rust_processor(
-    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
+    next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
     func: ProcessingFunction,
     schema_name: &str,
     enforce_schema: bool,
@@ -26,6 +26,31 @@ pub fn make_rust_processor(
     let schema = get_schema(schema_name, enforce_schema);
 
     let task_runner = MessageProcessor {
+        schema,
+        enforce_schema,
+        func,
+        processor_config,
+    };
+
+    Box::new(RunTaskInThreads::new(
+        next_step,
+        Box::new(task_runner),
+        concurrency,
+        Some("process_message"),
+    ))
+}
+
+pub fn make_rust_processor_with_replacements(
+    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
+    func: ProcessingFunctionWithReplacements,
+    schema_name: &str,
+    enforce_schema: bool,
+    concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
+) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+    let schema = get_schema(schema_name, enforce_schema);
+
+    let task_runner = MessageProcessorWithReplacements {
         schema,
         enforce_schema,
         func,
@@ -65,6 +90,106 @@ struct MessageProcessor {
 }
 
 impl MessageProcessor {
+    async fn process_message(
+        self,
+        message: Message<KafkaPayload>,
+    ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
+        validate_schema(&message, &self.schema, self.enforce_schema)?;
+
+        let msg = match message.inner_message {
+            InnerMessage::BrokerMessage(msg) => msg,
+            _ => {
+                return Err(RunTaskError::Other(anyhow::anyhow!(
+                    "Unexpected message type"
+                )))
+            }
+        };
+
+        let maybe_err = RunTaskError::InvalidMessage(InvalidMessage {
+            partition: msg.partition,
+            offset: msg.offset,
+        });
+
+        let kafka_payload = &msg.payload.clone();
+        let Some(payload) = kafka_payload.payload() else {
+            return Err(maybe_err);
+        };
+
+        self.process_payload(msg).map_err(|error| {
+            counter!("invalid_message");
+
+            sentry::with_scope(
+                |scope| {
+                    let payload = String::from_utf8_lossy(payload).into();
+                    scope.set_extra("payload", payload)
+                },
+                || {
+                    // FIXME: We are double-reporting errors here, as capturing
+                    // the error via `tracing::error` will not attach the anyhow
+                    // stack trace, but `capture_anyhow` will.
+                    sentry::integrations::anyhow::capture_anyhow(&error);
+                    let error: &dyn std::error::Error = error.as_ref();
+                    tracing::error!(error, "Failed processing message");
+                },
+            );
+
+            maybe_err
+        })
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn process_payload(
+        &self,
+        msg: BrokerMessage<KafkaPayload>,
+    ) -> anyhow::Result<Message<BytesInsertBatch>> {
+        let metadata = KafkaMessageMetadata {
+            partition: msg.partition.index,
+            offset: msg.offset,
+            timestamp: msg.timestamp,
+        };
+
+        let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
+
+        let payload = BytesInsertBatch::new(
+            transformed.rows,
+            msg.timestamp,
+            transformed.origin_timestamp,
+            transformed.sentry_received_timestamp,
+            BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
+            transformed.cogs_data,
+        );
+
+        Ok(Message::new_broker_message(
+            payload,
+            msg.partition,
+            msg.offset,
+            msg.timestamp,
+        ))
+    }
+}
+
+impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProcessor {
+    fn get_task(
+        &self,
+        message: Message<KafkaPayload>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+        Box::pin(
+            self.clone()
+                .process_message(message)
+                .bind_hub(Hub::new_from_top(Hub::current())),
+        )
+    }
+}
+
+#[derive(Clone)]
+struct MessageProcessorWithReplacements {
+    schema: Option<Arc<Schema>>,
+    enforce_schema: bool,
+    func: ProcessingFunctionWithReplacements,
+    processor_config: ProcessorConfig,
+}
+
+impl MessageProcessorWithReplacements {
     async fn process_message(
         self,
         message: Message<KafkaPayload>,
@@ -123,20 +248,18 @@ impl MessageProcessor {
             timestamp: msg.timestamp,
         };
 
-        let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
-
-        let payload = match transformed {
-            InsertOrReplacement::Insert(insert) => {
+        let payload = match (self.func)(msg.payload, metadata, &self.processor_config)? {
+            InsertOrReplacement::Insert(transformed) => {
                 InsertOrReplacement::Insert(BytesInsertBatch::new(
-                    insert.rows,
+                    transformed.rows,
                     msg.timestamp,
-                    insert.origin_timestamp,
-                    insert.sentry_received_timestamp,
+                    transformed.origin_timestamp,
+                    transformed.sentry_received_timestamp,
                     BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
-                    insert.cogs_data,
+                    transformed.cogs_data,
                 ))
             }
-            InsertOrReplacement::Replacement(d) => InsertOrReplacement::Replacement(d),
+            InsertOrReplacement::Replacement(r) => InsertOrReplacement::Replacement(r),
         };
 
         Ok(Message::new_broker_message(
@@ -149,7 +272,7 @@ impl MessageProcessor {
 }
 
 impl TaskRunner<KafkaPayload, InsertOrReplacement<BytesInsertBatch>, anyhow::Error>
-    for MessageProcessor
+    for MessageProcessorWithReplacements
 {
     fn get_task(
         &self,
@@ -249,8 +372,8 @@ mod tests {
             _payload: KafkaPayload,
             _metadata: KafkaMessageMetadata,
             _config: &ProcessorConfig,
-        ) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
-            Ok(InsertOrReplacement::Insert(InsertBatch::default()))
+        ) -> anyhow::Result<InsertBatch> {
+            Ok(InsertBatch::default())
         }
 
         let mut strategy = make_rust_processor(

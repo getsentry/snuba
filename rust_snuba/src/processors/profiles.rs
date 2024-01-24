@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::processors::utils::enforce_retention;
-use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 

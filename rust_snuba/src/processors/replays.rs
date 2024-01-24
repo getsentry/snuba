@@ -6,13 +6,13 @@ use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
     _config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let (rows, origin_timestamp) =
         deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;

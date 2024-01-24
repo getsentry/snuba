@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, vec};
 
 use crate::{
-    types::{CogsData, InsertBatch, InsertOrReplacement, RowData},
+    types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
 
@@ -175,7 +175,7 @@ impl Parse for CountersRawRow {
 fn process_message<T>(
     payload: KafkaPayload,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>>
+) -> anyhow::Result<InsertBatch>
 where
     T: Parse + Serialize,
 {
@@ -190,7 +190,7 @@ where
     match result {
         Ok(row) => {
             if let Some(row) = row {
-                Ok(InsertOrReplacement::Insert(InsertBatch {
+                Ok(InsertBatch {
                     rows: RowData::from_rows([row])?,
                     origin_timestamp: None,
                     sentry_received_timestamp,
@@ -200,9 +200,9 @@ where
                             payload_bytes.len() as u64,
                         )]),
                     }),
-                }))
+                })
             } else {
-                Ok(InsertOrReplacement::Insert(InsertBatch::skip()))
+                Ok(InsertBatch::skip())
             }
         }
         Err(err) => Err(err),
@@ -213,7 +213,7 @@ pub fn process_counter_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     process_message::<CountersRawRow>(payload, config)
 }
 
@@ -275,7 +275,7 @@ pub fn process_set_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     process_message::<SetsRawRow>(payload, config)
 }
 
@@ -344,7 +344,7 @@ pub fn process_distribution_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     process_message::<DistributionsRawRow>(payload, config)
 }
 
@@ -437,7 +437,7 @@ pub fn process_gauge_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     process_message::<GaugesRawRow>(payload, config)
 }
 
@@ -559,7 +559,7 @@ mod tests {
     fn test_processor_with_payload(
         f: &ProcessingFunction,
         message: &str,
-    ) -> Result<InsertOrReplacement<InsertBatch>, anyhow::Error> {
+    ) -> Result<InsertBatch, anyhow::Error> {
         let payload = KafkaPayload::new(None, None, Some(message.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
@@ -579,10 +579,8 @@ mod tests {
                     rust_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
-                ) -> std::result::Result<
-                    crate::types::InsertOrReplacement<InsertBatch>,
-                    anyhow::Error,
-                >),
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_COUNTER_MESSAGE,
         );
         let expected_row = CountersRawRow {
@@ -617,14 +615,14 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch {
+            InsertBatch {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 615)])
                 }),
-            })
+            }
         );
     }
 
@@ -637,13 +635,10 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_SET_MESSAGE,
         );
-        assert_eq!(
-            result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch::default())
-        );
+        assert_eq!(result.unwrap(), InsertBatch::default());
     }
 
     #[test]
@@ -655,7 +650,7 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_SET_MESSAGE,
         );
         let expected_row = SetsRawRow {
@@ -690,14 +685,14 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch {
+            InsertBatch {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 622)])
                 }),
-            })
+            }
         );
     }
 
@@ -710,13 +705,10 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_DISTRIBUTION_MESSAGE,
         );
-        assert_eq!(
-            result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch::skip())
-        );
+        assert_eq!(result.unwrap(), InsertBatch::skip());
     }
 
     #[test]
@@ -728,7 +720,7 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_DISTRIBUTION_MESSAGE,
         );
         let expected_row = DistributionsRawRow {
@@ -764,14 +756,14 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch {
+            InsertBatch {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 629)])
                 })
-            })
+            }
         );
     }
 
@@ -784,7 +776,7 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_DISTRIBUTION_MESSAGE_WITH_HIST_AGGREGATE_OPTION,
         );
         let expected_row = DistributionsRawRow {
@@ -820,14 +812,14 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch {
+            InsertBatch {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 667)])
                 })
-            })
+            }
         );
     }
 
@@ -840,13 +832,10 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE,
         );
-        assert_eq!(
-            result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch::skip())
-        );
+        assert_eq!(result.unwrap(), InsertBatch::skip());
     }
 
     #[test]
@@ -858,7 +847,7 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE,
         );
         let expected_row = GaugesRawRow {
@@ -897,14 +886,14 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch {
+            InsertBatch {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 679)])
                 })
-            })
+            }
         );
     }
 
@@ -917,7 +906,7 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_GAUGE_MESSAGE_WITH_TEN_SECOND_AGGREGATE_OPTION,
         );
         let expected_row = GaugesRawRow {
@@ -957,14 +946,14 @@ mod tests {
         };
         assert_eq!(
             result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch {
+            InsertBatch {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 719)])
                 })
-            })
+            }
         );
     }
 
@@ -977,12 +966,9 @@ mod tests {
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
-                    -> std::result::Result<InsertOrReplacement<InsertBatch>, anyhow::Error>),
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_COUNTER_MESSAGE,
         );
-        assert_eq!(
-            result.unwrap(),
-            InsertOrReplacement::Insert(InsertBatch::skip())
-        );
+        assert_eq!(result.unwrap(), InsertBatch::skip());
     }
 }

@@ -25,7 +25,9 @@ use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
-use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
+use crate::strategies::processor::{
+    get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
+};
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
 use crate::types::BytesInsertBatch;
@@ -161,25 +163,40 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         )
         .flush_empty_batches(true);
 
-        // TODO: Replacements configuration
-        let replacements_producer: Option<KafkaProducer> = None;
-        let replacements_destination = None;
-        let next_step = ProduceReplacements::new(
-            next_step,
-            replacements_producer,
-            replacements_destination,
-            &self.replacements_concurrency,
-            self.skip_write,
-        );
-
         // Transform messages
         let processor = match (
             self.use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
             ),
+            processors::get_processing_function_with_replacements(
+                &self.storage_config.message_processor.python_class_name,
+            ),
         ) {
-            (true, Some(func)) => make_rust_processor(
+            (true, _, Some(func)) => {
+                // TODO: Replacements configuration
+                let replacements_producer: Option<KafkaProducer> = None;
+                let replacements_destination = None;
+                let replacements_step = ProduceReplacements::new(
+                    next_step,
+                    replacements_producer,
+                    replacements_destination,
+                    &self.replacements_concurrency,
+                    self.skip_write,
+                );
+
+                return make_rust_processor_with_replacements(
+                    replacements_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                    },
+                );
+            }
+            (true, Some(func), _) => make_rust_processor(
                 next_step,
                 func,
                 &self.logical_topic_name,

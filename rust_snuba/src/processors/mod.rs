@@ -1,3 +1,4 @@
+mod errors;
 mod functions;
 mod generic_metrics;
 mod metrics_summaries;
@@ -12,11 +13,15 @@ use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
-pub type ProcessingFunction = fn(
-    KafkaPayload,
-    KafkaMessageMetadata,
-    config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>>;
+pub type ProcessingFunction =
+    fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<InsertBatch>;
+
+pub type ProcessingFunctionWithReplacements =
+    fn(
+        KafkaPayload,
+        KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<InsertOrReplacement<InsertBatch>>;
 
 macro_rules! define_processing_functions {
     ($(($name:literal, $logical_topic:literal, $function:path)),* $(,)*) => {
@@ -60,6 +65,15 @@ pub fn get_cogs_label(processor_name: &str) -> Option<String> {
             Some("generic_metrics_processor_distributions".to_string())
         }
         "GenericGaugesMetricsProcessor" => Some("generic_metrics_processor_gauges".to_string()),
+        _ => None,
+    }
+}
+
+pub fn get_processing_function_with_replacements(
+    name: &str,
+) -> Option<ProcessingFunctionWithReplacements> {
+    match name {
+        "errors" => Some(errors::process_message_with_replacement),
         _ => None,
     }
 }
@@ -111,21 +125,13 @@ mod tests {
 
                 let payload = KafkaPayload::new(None, None, Some(example.to_vec()));
                 let processed = processor_fn(payload, metadata.clone(), &processor_config).unwrap();
-                match processed {
-                    InsertOrReplacement::Insert(insert_batch) => {
-                        let encoded_rows =
-                            String::from_utf8(insert_batch.rows.into_encoded_rows()).unwrap();
-                        let mut snapshot_payload = Vec::new();
-                        for row in encoded_rows.lines() {
-                            let row_value: serde_json::Value = serde_json::from_str(row).unwrap();
-                            snapshot_payload.push(row_value);
-                        }
-                        insta::assert_json_snapshot!(snapshot_payload);
-                    }
-                    _ => {
-                        // TODO: replacement snapshots
-                    }
+                let encoded_rows = String::from_utf8(processed.rows.into_encoded_rows()).unwrap();
+                let mut snapshot_payload = Vec::new();
+                for row in encoded_rows.lines() {
+                    let row_value: serde_json::Value = serde_json::from_str(row).unwrap();
+                    snapshot_payload.push(row_value);
                 }
+                insta::assert_json_snapshot!(snapshot_payload);
             }
         }
     }

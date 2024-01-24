@@ -1,6 +1,6 @@
 use crate::config::ProcessorConfig;
 use crate::processors::utils::ensure_valid_datetime;
-use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::counter;
@@ -30,7 +30,7 @@ pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     _config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let mut msg: Outcome = serde_json::from_slice(payload_bytes)?;
 
@@ -109,13 +109,6 @@ mod tests {
 
         let expected = b"{\"org_id\":1,\"project_id\":1,\"key_id\":null,\"timestamp\":1680029444,\"outcome\":4,\"category\":1,\"quantity\":3,\"reason\":null,\"event_id\":null}\n";
 
-        match result {
-            InsertOrReplacement::Insert(data) => {
-                assert_eq!(data.rows.into_encoded_rows(), expected);
-            }
-            _ => {
-                panic!("Outcome should be inserted")
-            }
-        };
+        assert_eq!(result.rows.into_encoded_rows(), expected);
     }
 }

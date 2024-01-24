@@ -107,6 +107,7 @@ impl From<KafkaPayload> for ReplacementData {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum InsertOrReplacement<T> {
     Insert(T),
@@ -126,17 +127,17 @@ impl InsertBatch {
     pub fn from_rows<T>(
         rows: impl IntoIterator<Item = T>,
         origin_timestamp: Option<DateTime<Utc>>,
-    ) -> anyhow::Result<InsertOrReplacement<Self>>
+    ) -> anyhow::Result<Self>
     where
         T: Serialize,
     {
         let rows = RowData::from_rows(rows)?;
-        Ok(InsertOrReplacement::Insert(Self {
+        Ok(Self {
             rows,
             origin_timestamp,
             sentry_received_timestamp: None,
             cogs_data: None,
-        }))
+        })
     }
 
     /// In case the processing function wants to skip the message, we return an empty batch.

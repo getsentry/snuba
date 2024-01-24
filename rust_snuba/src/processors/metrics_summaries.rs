@@ -9,13 +9,13 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
-use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     _: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 

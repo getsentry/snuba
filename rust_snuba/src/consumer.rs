@@ -21,7 +21,7 @@ use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::KafkaMessageMetadata;
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -251,8 +251,5 @@ pub fn process_message(
     let res = func(payload, meta, &config::ProcessorConfig::default())
         .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
 
-    match res {
-        InsertOrReplacement::Insert(insert_batch) => Ok(insert_batch.rows.into_encoded_rows()),
-        _ => panic!("Could not process replacement"),
-    }
+    Ok(res.rows.into_encoded_rows())
 }
