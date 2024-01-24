@@ -80,10 +80,6 @@ storage_selector:
     storage: functions
 
 query_processors:
-  - processor: CurriedFunctionBucketTransformer
-    args:
-      curried_function: groupUniqArray
-      default_parameter: 5
   - processor: ReferrerRateLimiterProcessor
   - processor: ProjectReferrerRateLimiter
     args:
