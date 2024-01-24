@@ -4,7 +4,7 @@ mod metrics_summaries;
 mod outcomes;
 mod profiles;
 mod querylog;
-// mod release_health_metrics;
+mod release_health_metrics;
 mod replays;
 mod spans;
 mod utils;
@@ -47,6 +47,7 @@ define_processing_functions! {
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_set_message),
     ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", generic_metrics::process_distribution_message),
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
+    ("PolymorphicMetricsProcessor", "snuba-metrics", release_health_metrics::process_metrics_message)
 }
 
 // COGS is recorded for these processors
