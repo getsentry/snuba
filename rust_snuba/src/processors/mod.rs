@@ -49,16 +49,44 @@ define_processing_functions! {
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
 }
 
+// COGS is recorded for these processors
+pub fn get_cogs_label(processor_name: &str) -> Option<String> {
+    match processor_name {
+        "GenericCountersMetricsProcessor" => Some("generic_metrics_processor_counters".to_string()),
+        "GenericSetsMetricsProcessor" => Some("generic_metrics_processor_sets".to_string()),
+        "GenericDistributionsMetricsProcessor" => {
+            Some("generic_metrics_processor_distributions".to_string())
+        }
+        "GenericGaugesMetricsProcessor" => Some("generic_metrics_processor_gauges".to_string()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::SystemTime;
 
     use chrono::DateTime;
+    use pretty_assertions::assert_eq;
+    use schemars::JsonSchema;
     use sentry_kafka_schemas::get_schema;
 
     use super::*;
 
+    pub fn run_schema_type_test<M: JsonSchema>(schema_name: &str) {
+        let schema = schemars::schema_for!(M);
+        let old_schema = sentry_kafka_schemas::get_schema(schema_name, None).unwrap();
+        let mut diff = json_schema_diff::diff(
+            serde_json::from_str(old_schema.raw_schema()).unwrap(),
+            serde_json::to_value(schema).unwrap(),
+        )
+        .unwrap();
+        diff.retain(|change| change.change.is_breaking());
+        assert_eq!(diff, vec![]);
+    }
+
     #[test]
+    #[ignore]
     fn test_schemas() {
         let processor_config = ProcessorConfig::default();
         for (_python_class_name, topic_name, processor_fn) in PROCESSORS {

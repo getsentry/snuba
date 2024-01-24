@@ -293,6 +293,10 @@ storage_selector:
 
 query_processors:
   - processor: TagsTypeTransformer
+  - processor: CurriedFunctionBucketTransformer
+    args:
+      curried_function: histogram
+      default_parameter: 250
   - processor: MappedGranularityProcessor
     args:
       accepted_granularities:

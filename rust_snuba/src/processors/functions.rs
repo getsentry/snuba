@@ -1,11 +1,13 @@
 use crate::config::ProcessorConfig;
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -15,38 +17,38 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
-    let functions = msg.functions.iter().map(|from| {
-        Function {
-            profile_id: msg.profile_id,
-            project_id: msg.project_id,
+    let functions: Vec<Function> = msg
+        .functions
+        .iter()
+        .map(|from| {
+            Function {
+                profile_id: msg.profile_id,
+                project_id: msg.project_id,
 
-            // Profile metadata
-            environment: msg.environment.as_deref(),
-            platform: &msg.platform,
-            release: msg.release.as_deref(),
-            retention_days: msg.retention_days,
-            timestamp: msg.timestamp,
-            transaction_name: &msg.transaction_name,
+                // Profile metadata
+                environment: msg.environment.as_deref(),
+                platform: &msg.platform,
+                release: msg.release.as_deref(),
+                retention_days: msg.retention_days,
+                timestamp: msg.timestamp,
+                transaction_name: &msg.transaction_name,
 
-            // Function metadata
-            fingerprint: from.fingerprint,
-            durations: &from.self_times_ns,
-            package: &from.package,
-            name: &from.function,
-            is_application: from.in_app as u8,
+                // Function metadata
+                fingerprint: from.fingerprint,
+                durations: &from.self_times_ns,
+                package: &from.package,
+                name: &from.function,
+                is_application: from.in_app as u8,
 
-            ..Default::default()
-        }
-    });
+                ..Default::default()
+            }
+        })
+        .collect();
 
-    Ok(InsertBatch {
-        origin_timestamp: DateTime::from_timestamp(msg.received, 0),
-        rows: RowData::from_rows(functions)?,
-        sentry_received_timestamp: None,
-    })
+    InsertBatch::from_rows(functions, DateTime::from_timestamp(msg.received, 0))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct InputFunction {
     fingerprint: u64,
     function: String,
@@ -55,7 +57,7 @@ struct InputFunction {
     self_times_ns: Vec<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct InputMessage {
     #[serde(default)]
     environment: Option<String>,
@@ -103,10 +105,11 @@ struct Function<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
+
+    use crate::processors::tests::run_schema_type_test;
+
+    use super::*;
 
     #[test]
     fn test_functions() {
@@ -151,5 +154,10 @@ mod tests {
         };
         process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
+    }
+
+    #[test]
+    fn schema() {
+        run_schema_type_test::<InputMessage>("profiles-call-tree");
     }
 }

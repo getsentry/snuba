@@ -4,7 +4,8 @@ use std::convert::TryFrom;
 use crate::config::ProcessorConfig;
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
+use schemars::JsonSchema;
+use serde::{ser::Error, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -30,21 +31,13 @@ pub fn process_message(
         offset: metadata.offset,
     };
 
-    InsertBatch::from_rows([querylog_msg])
+    InsertBatch::from_rows([querylog_msg], None)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct RequestBody {
     #[serde(flatten)]
     fields: BTreeMap<String, Value>,
-}
-
-fn nullable_result_profile<'de, D>(deserializer: D) -> Result<ResultProfile, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt = Option::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_default())
 }
 
 fn serialize_json_str<S>(input: &RequestBody, s: S) -> Result<S::Ok, S::Error>
@@ -55,7 +48,7 @@ where
     s.serialize_str(&request_body)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct Request {
     #[serde(rename(serialize = "request_id"))]
     id: Uuid,
@@ -67,13 +60,13 @@ struct Request {
     referrer: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct Timing {
     timestamp: u64,
     duration_ms: u64,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
 struct Stats {
     #[serde(default)]
     consistent: Option<bool>,
@@ -95,7 +88,7 @@ struct Stats {
     extra: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct Profile {
     time_range: Option<u32>,
     all_columns: Vec<String>,
@@ -105,38 +98,27 @@ struct Profile {
     array_join_cols: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema, Default)]
+#[serde(default)]
 struct ResultProfile {
-    #[serde(default)]
     bytes: u64,
-    #[serde(default)]
     elapsed: f64,
 }
 
-impl Default for ResultProfile {
-    fn default() -> Self {
-        ResultProfile {
-            bytes: 0,
-            elapsed: 0.0,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct WhereProfile {
     columns: Vec<String>,
     mapping_cols: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct FromQuery {
     sql: String,
     status: String,
     trace_id: Uuid,
     stats: Stats,
     profile: Profile,
-    #[serde(default, deserialize_with = "nullable_result_profile")]
-    result_profile: ResultProfile,
+    result_profile: Option<ResultProfile>,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,8 +217,9 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             where_mapping_columns.push(q.profile.where_profile.mapping_cols);
             groupby_columns.push(q.profile.groupby_cols);
             array_join_columns.push(q.profile.array_join_cols);
-            bytes_scanned.push(q.result_profile.bytes);
-            duration_ms.push((q.result_profile.elapsed * 1000.0) as u64);
+            let result_profile = q.result_profile.unwrap_or_default();
+            bytes_scanned.push(result_profile.bytes);
+            duration_ms.push((result_profile.elapsed * 1000.0) as u64);
 
             // consistent, cache hit, max_threads and is_duplicated may not be present
             let mut sorted_stats = q.stats.extra;
@@ -289,7 +272,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct FromQuerylogMessage {
     request: Request,
     dataset: String,
@@ -318,7 +301,10 @@ struct QuerylogMessage {
 
 #[cfg(test)]
 mod tests {
+    use crate::processors::tests::run_schema_type_test;
+
     use super::*;
+
     use chrono::DateTime;
     use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
@@ -428,5 +414,10 @@ mod tests {
         };
         process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
+    }
+
+    #[test]
+    fn schema() {
+        run_schema_type_test::<FromQuerylogMessage>("snuba-queries");
     }
 }

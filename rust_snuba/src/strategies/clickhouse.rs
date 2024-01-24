@@ -41,9 +41,19 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for Clickhous
 
         Box::pin(async move {
             let insert_batch = message.payload();
+            let encoded_rows = insert_batch.encoded_rows();
+
             let write_start = SystemTime::now();
 
-            if skip_write {
+            // we can receive empty batches since we configure Reduce to flush empty batches, in
+            // order to still be able to commit. in that case we want to skip the I/O to clickhouse
+            // though.
+            if encoded_rows.is_empty() {
+                tracing::debug!(
+                    "skipping write of empty payload ({} rows)",
+                    insert_batch.len()
+                );
+            } else if skip_write {
                 tracing::info!("skipping write of {} rows", insert_batch.len());
             } else {
                 tracing::debug!("performing write");

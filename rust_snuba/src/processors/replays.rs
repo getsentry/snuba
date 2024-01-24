@@ -1,5 +1,6 @@
 use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -13,20 +14,22 @@ pub fn process_message(
     _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let replay_row = deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;
-    InsertBatch::from_rows(replay_row)
+    let (rows, origin_timestamp) =
+        deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;
+
+    InsertBatch::from_rows(rows, DateTime::from_timestamp(origin_timestamp as i64, 0))
 }
 
 pub fn deserialize_message(
     payload: &[u8],
     partition: u16,
     offset: u64,
-) -> anyhow::Result<Vec<ReplayRow>> {
+) -> anyhow::Result<(Vec<ReplayRow>, f64)> {
     let replay_message: ReplayMessage = serde_json::from_slice(payload)?;
     let replay_payload = serde_json::from_slice(&replay_message.payload)?;
 
-    match replay_payload {
-        ReplayPayload::ClickEvent(event) => Ok(event
+    let rows = match replay_payload {
+        ReplayPayload::ClickEvent(event) => event
             .clicks
             .into_iter()
             .map(|click| ReplayRow {
@@ -55,7 +58,7 @@ pub fn deserialize_message(
                 timestamp: click.timestamp as u32,
                 ..Default::default()
             })
-            .collect()),
+            .collect(),
         ReplayPayload::Event(event) => {
             let event_hash = match (event.event_hash, event.segment_id) {
                 (None, None) => Uuid::new_v4(),
@@ -107,7 +110,7 @@ pub fn deserialize_message(
             let error_sample_rate = event.contexts.replay.error_sample_rate.unwrap_or(-1.0);
             let session_sample_rate = event.contexts.replay.session_sample_rate.unwrap_or(-1.0);
 
-            Ok(vec![ReplayRow {
+            vec![ReplayRow {
                 browser_name: event.contexts.browser.name.unwrap_or_default(),
                 browser_version: event.contexts.browser.version.unwrap_or_default(),
                 device_brand: event.contexts.device.brand.unwrap_or_default(),
@@ -151,7 +154,7 @@ pub fn deserialize_message(
                     .map(|s| s.unwrap_or_default())
                     .collect(),
                 ..Default::default()
-            }])
+            }]
         }
         ReplayPayload::EventLinkEvent(event) => {
             let level_id = event
@@ -165,7 +168,7 @@ pub fn deserialize_message(
                 return Err(anyhow!("missing level id"));
             }
 
-            Ok(vec![ReplayRow {
+            vec![ReplayRow {
                 debug_id: event.debug_id.unwrap_or_default(),
                 error_id: event.error_id.unwrap_or_default(),
                 error_sample_rate: -1.0,
@@ -182,14 +185,17 @@ pub fn deserialize_message(
                 timestamp: event.timestamp as u32,
                 warning_id: event.warning_id.unwrap_or_default(),
                 ..Default::default()
-            }])
+            }]
         }
-    }
+    };
+
+    Ok((rows, replay_message.start_time))
 }
 
 #[derive(Debug, Deserialize)]
 struct ReplayMessage {
     payload: Vec<u8>,
+    start_time: f64,
     project_id: u64,
     replay_id: Uuid,
     retention_days: u16,
@@ -490,7 +496,7 @@ mod tests {
             }}"#
         );
 
-        let rows = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
         let replay_row = rows.first().unwrap();
 
         // Columns in the critical path.
@@ -629,7 +635,7 @@ mod tests {
             }}"#
         );
 
-        let rows = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
         let replay_row = rows.first().unwrap();
 
         // Columns in the critical path.
@@ -728,7 +734,7 @@ mod tests {
             }}"#
         );
 
-        let rows = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
         let replay_row = rows.first().unwrap();
 
         // Columns in the critical path.
@@ -813,7 +819,7 @@ mod tests {
             }}"#
         );
 
-        let rows = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
         let replay_row = rows.first().unwrap();
 
         // Columns in the critical path.
@@ -905,7 +911,7 @@ mod tests {
             }}"#
         );
 
-        let rows = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
         let replay_row = rows.first().unwrap();
 
         assert_eq!(replay_row.is_archived, 1);

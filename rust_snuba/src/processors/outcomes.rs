@@ -63,7 +63,7 @@ pub fn process_message(
         }
     }
 
-    InsertBatch::from_rows([msg])
+    InsertBatch::from_rows([msg], None)
 }
 
 #[derive(Debug, Deserialize, Serialize)]
