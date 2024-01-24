@@ -147,10 +147,12 @@ mod tests {
         let mut strategy =
             ProduceReplacements::new(next_step, producer, destination, &concurrency, skip_produce);
 
+        let row_data: Vec<u8> = vec![];
+
         strategy
             .submit(Message::new_any_message(
                 InsertOrReplacement::Insert(BytesInsertBatch::new(
-                    RowData::from_rows(vec![1]).unwrap(),
+                    RowData::from_rows(row_data).unwrap(),
                     Utc::now(),
                     None,
                     None,
