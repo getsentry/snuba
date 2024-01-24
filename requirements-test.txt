@@ -1,6 +1,6 @@
 --index-url https://pypi.devinfra.sentry.io/simple
 
-freezegun==1.2.2
+time-machine==2.13.0
 
 # for typing
 mypy==1.1.1

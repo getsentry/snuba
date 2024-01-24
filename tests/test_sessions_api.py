@@ -416,3 +416,31 @@ class TestSessionsApi(BaseSessionsMockTest, BaseApiTest):
         result = json.loads(response.data)
         assert len(result["data"]) > 0
         assert "bucketed_started" in result["data"][0]
+
+    @pytest.mark.xfail(reason="Won't work until Clickhouse 23.8")
+    def test_sessions_tuple_check(self, get_project_id: Callable[[], int]) -> None:
+        project_id = get_project_id()
+        self.generate_session_events(project_id)
+        response = self.post(
+            "/sessions/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (sessions)
+                    SELECT bucketed_started, users_errored, users_crashed, users, users_abnormal
+                    BY bucketed_started
+                    WHERE org_id = 1
+                    AND started >= toDateTime('{self.base_time.isoformat()}')
+                    AND started < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN tuple({project_id})
+                    AND project_id IN tuple({project_id})
+                    AND tuple(environment) IN tuple(tuple('production'), tuple('staging'))
+                    LIMIT 5000
+                """
+                }
+            ),
+        )
+
+        result = json.loads(response.data)
+        assert response.status_code == 200, result
+        assert len(result["data"]) > 0
+        assert "bucketed_started" in result["data"][0]
