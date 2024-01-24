@@ -1,6 +1,6 @@
 ---
 source: src/processors/mod.rs
-description: "{\n  \"timestamp\": \"2023-03-28T22:51:00.000000Z\",\n  \"project_id\": 1,\n  \"outcome\": 3,\n  \"reason\": \"project_id\",\n  \"source\": \"pop-us\",\n  \"category\": 1,\n  \"quantity\": 1\n}\n"
+description: "{\n  \"project_id\": 1,\n  \"logging.googleapis.com/labels\": {\n    \"host\": \"lb-6\"\n  },\n  \"org_id\": 0,\n  \"outcome\": 4,\n  \"timestamp\": \"2023-03-28T18:50:39.463685Z\"\n}\n"
 expression: snapshot_payload
 ---
 [
@@ -9,10 +9,10 @@ expression: snapshot_payload
     "event_id": null,
     "key_id": null,
     "org_id": 0,
-    "outcome": 3,
+    "outcome": 4,
     "project_id": 1,
     "quantity": 1,
-    "reason": "project_id",
-    "timestamp": 1680043860
+    "reason": null,
+    "timestamp": 1680029439
   }
 ]

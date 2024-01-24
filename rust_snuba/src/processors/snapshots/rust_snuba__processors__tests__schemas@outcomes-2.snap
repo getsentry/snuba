@@ -1,18 +1,18 @@
 ---
 source: src/processors/mod.rs
-description: "{\n  \"timestamp\": \"2023-03-24T19:28:20.605851Z\",\n  \"org_id\": 1,\n  \"project_id\": 1,\n  \"key_id\": null,\n  \"outcome\": 0,\n  \"reason\": null,\n  \"event_id\": \"1410e6d2ea534dcb9d6d15a51c9962f8\",\n  \"category\": 1,\n  \"quantity\": 1\n}\n"
+description: "{\n  \"org_id\": 1,\n  \"outcome\": 4,\n  \"project_id\": 1,\n  \"quantity\": 3,\n  \"timestamp\": \"2023-03-28T18:50:49.442341621Z\"\n}\n"
 expression: snapshot_payload
 ---
 [
   {
     "category": 1,
-    "event_id": "1410e6d2-ea53-4dcb-9d6d-15a51c9962f8",
+    "event_id": null,
     "key_id": null,
     "org_id": 1,
-    "outcome": 0,
+    "outcome": 4,
     "project_id": 1,
-    "quantity": 1,
+    "quantity": 3,
     "reason": null,
-    "timestamp": 1679686100
+    "timestamp": 1680029449
   }
 ]
