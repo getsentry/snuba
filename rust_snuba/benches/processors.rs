@@ -88,6 +88,7 @@ fn create_factory(
         None,
         false,
         None,
+        None,
         "test-group".to_owned(),
         Topic::new("test"),
         TopicConfig {

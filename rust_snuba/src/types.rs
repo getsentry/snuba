@@ -93,17 +93,23 @@ impl LatencyRecorder {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ReplacementData {}
+pub struct ReplacementData {
+    key: Vec<u8>,   // project_id
+    value: Vec<u8>, // Replacement message bytes
+}
 
 impl From<ReplacementData> for KafkaPayload {
-    fn from(_value: ReplacementData) -> KafkaPayload {
-        unimplemented!();
+    fn from(value: ReplacementData) -> KafkaPayload {
+        KafkaPayload::new(Some(value.key), None, Some(value.value))
     }
 }
 
 impl From<KafkaPayload> for ReplacementData {
-    fn from(_value: KafkaPayload) -> ReplacementData {
-        unimplemented!();
+    fn from(value: KafkaPayload) -> ReplacementData {
+        ReplacementData {
+            key: value.key().unwrap().clone(),
+            value: value.payload().unwrap().clone(),
+        }
     }
 }
 

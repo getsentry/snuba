@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
@@ -48,6 +49,7 @@ pub struct ConsumerStrategyFactory {
     health_check_file: Option<String>,
     enforce_schema: bool,
     commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
+    replacements_config: Option<(KafkaConfig, Topic)>,
     physical_consumer_group: String,
     physical_topic_name: Topic,
     accountant_topic_config: config::TopicConfig,
@@ -71,6 +73,7 @@ impl ConsumerStrategyFactory {
         health_check_file: Option<String>,
         enforce_schema: bool,
         commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
+        replacements_config: Option<(KafkaConfig, Topic)>,
         physical_consumer_group: String,
         physical_topic_name: Topic,
         accountant_topic_config: config::TopicConfig,
@@ -91,6 +94,7 @@ impl ConsumerStrategyFactory {
             health_check_file,
             enforce_schema,
             commit_log_producer,
+            replacements_config,
             physical_consumer_group,
             physical_topic_name,
             accountant_topic_config,
@@ -174,12 +178,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             ),
         ) {
             (true, _, Some(func)) => {
-                // TODO: Replacements configuration
-                let replacements_producer: Option<KafkaProducer> = None;
-                let replacements_destination = None;
+                let (replacements_config, replacements_destination) =
+                    self.replacements_config.clone().unwrap();
+
+                let producer = KafkaProducer::new(replacements_config);
                 let replacements_step = ProduceReplacements::new(
                     next_step,
-                    replacements_producer,
+                    producer,
                     replacements_destination,
                     &self.replacements_concurrency,
                     self.skip_write,

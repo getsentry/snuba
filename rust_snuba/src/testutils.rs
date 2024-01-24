@@ -61,14 +61,6 @@ pub struct MockProducer {
     pub payloads: Arc<Mutex<Vec<(String, KafkaPayload)>>>,
 }
 
-impl MockProducer {
-    pub fn new() -> Self {
-        Self {
-            payloads: Arc::new(Mutex::new(vec![])),
-        }
-    }
-}
-
 impl Producer<KafkaPayload> for MockProducer {
     fn produce(
         &self,

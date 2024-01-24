@@ -103,7 +103,6 @@ struct ProduceMessage {
 }
 
 impl ProduceMessage {
-    #[allow(dead_code)]
     pub fn new(
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
         destination: Topic,

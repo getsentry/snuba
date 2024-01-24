@@ -24,24 +24,23 @@ pub struct ProduceReplacements {
 impl ProduceReplacements {
     pub fn new<N>(
         next_step: N,
-        producer: Option<impl Producer<KafkaPayload> + 'static>,
-        destination: Option<Topic>,
+        producer: impl Producer<KafkaPayload> + 'static,
+        destination: Topic,
         concurrency: &ConcurrencyConfig,
         skip_produce: bool,
     ) -> Self
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
-        let inner: Box<dyn ProcessingStrategy<KafkaPayload>> =
-            match (producer, destination, skip_produce) {
-                (Some(p), Some(dest), false) => Box::new(Produce::new(
-                    Noop {},
-                    p,
-                    concurrency,
-                    TopicOrPartition::Topic(dest),
-                )),
-                _ => Box::new(Noop {}),
-            };
+        let inner: Box<dyn ProcessingStrategy<KafkaPayload>> = match skip_produce {
+            false => Box::new(Produce::new(
+                Noop {},
+                producer,
+                concurrency,
+                TopicOrPartition::Topic(destination),
+            )),
+            _ => Box::new(Noop {}),
+        };
 
         ProduceReplacements {
             next_step: Box::new(next_step),
@@ -136,12 +135,16 @@ mod tests {
     use crate::types::RowData;
     use chrono::Utc;
     use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn produce_replacements() {
         let next_step = TestStrategy::new();
-        let producer = Some(MockProducer::new());
-        let destination = Some(Topic::new("test"));
+        let produced_payloads = Arc::new(Mutex::new(vec![]));
+        let producer = MockProducer {
+            payloads: produced_payloads.clone(),
+        };
+        let destination = Topic::new("test");
         let concurrency = ConcurrencyConfig::new(10);
         let skip_produce = false;
         let mut strategy =
@@ -162,5 +165,6 @@ mod tests {
                 BTreeMap::new(),
             ))
             .unwrap();
+        assert_eq!(produced_payloads.lock().unwrap().len(), 0);
     }
 }

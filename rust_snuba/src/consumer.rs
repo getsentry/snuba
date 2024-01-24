@@ -180,6 +180,17 @@ pub fn consumer_impl(
         None
     };
 
+    let replacements_config = if let Some(topic_config) = consumer_config.replacements_topic {
+        let producer_config =
+            KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
+        Some((
+            producer_config,
+            Topic::new(&topic_config.physical_topic_name),
+        ))
+    } else {
+        None
+    };
+
     let factory = ConsumerStrategyFactory::new(
         first_storage,
         env_config,
@@ -196,6 +207,7 @@ pub fn consumer_impl(
         health_check_file.map(ToOwned::to_owned),
         enforce_schema,
         commit_log_producer,
+        replacements_config,
         consumer_group.to_owned(),
         Topic::new(&consumer_config.raw_topic.physical_topic_name),
         consumer_config.accountant_topic,

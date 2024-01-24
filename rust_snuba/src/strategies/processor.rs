@@ -136,7 +136,7 @@ struct MessageProcessor<TResult: Clone, TNext: Clone> {
     // Convert payload to either InsertBatch (or either insert or replacement for the errors dataset)
     func:
         fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<TResult>,
-    // Custom function that return Message<TNext> to be passed to the next strategy. Gets passed TResult,
+    // Function that return Message<TNext> to be passed to the next strategy. Gets passed TResult,
     // as well as the message's partition, offset and timestamp.
     result_to_next_msg:
         fn(TResult, Partition, u64, DateTime<Utc>) -> anyhow::Result<Message<TNext>>,
