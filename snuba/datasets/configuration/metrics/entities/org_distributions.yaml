@@ -173,6 +173,10 @@ storage_selector:
     storage: metrics_distributions
 query_processors:
   - processor: GranularityProcessor
+  - processor: CurriedFunctionBucketTransformer
+    args:
+      curried_function: histogram
+      default_parameter: 250
   - processor: TimeSeriesProcessor
     args:
       time_group_columns:
