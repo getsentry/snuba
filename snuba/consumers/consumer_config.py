@@ -8,6 +8,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.utils.streams.configuration_builder import _get_default_topic_configuration
+from snuba.utils.streams.topics import Topic
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ class EnvConfig:
     default_retention_days: int
     lower_retention_days: int
     valid_retention_days: list[int]
+    record_cogs: bool
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,7 @@ class ConsumerConfig:
     max_batch_size: int
     max_batch_time_ms: int
     env: Optional[EnvConfig]
+    accountant_topic: TopicConfig
 
 
 def _add_to_topic_broker_config(
@@ -122,6 +125,7 @@ def _resolve_env_config() -> EnvConfig:
     default_retention_days = settings.DEFAULT_RETENTION_DAYS
     lower_retention_days = settings.LOWER_RETENTION_DAYS
     valid_retention_days = list(settings.VALID_RETENTION_DAYS)
+    record_cogs = settings.RECORD_COGS
     return EnvConfig(
         sentry_dsn=sentry_dsn,
         dogstatsd_host=dogstatsd_host,
@@ -129,6 +133,7 @@ def _resolve_env_config() -> EnvConfig:
         default_retention_days=default_retention_days,
         lower_retention_days=lower_retention_days,
         valid_retention_days=valid_retention_days,
+        record_cogs=record_cogs,
     )
 
 
@@ -224,6 +229,15 @@ def resolve_consumer_config(
         None,
         slice_id,
     )
+
+    accountant_topic = _resolve_topic_config(
+        "accountant topic",
+        KafkaTopicSpec(Topic.COGS_SHARED_RESOURCES_USAGE),
+        None,
+        slice_id,
+    )
+    assert accountant_topic is not None
+
     return ConsumerConfig(
         storages=[
             resolve_storage_config(storage_name, storage)
@@ -236,6 +250,7 @@ def resolve_consumer_config(
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
         env=resolved_env_config,
+        accountant_topic=accountant_topic,
     )
 
 

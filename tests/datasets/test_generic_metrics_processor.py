@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 from usageaccountant import UsageUnit
 
-from snuba import state
+from snuba import settings
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
@@ -154,7 +154,8 @@ def test_record_cogs(dis_processor: GenericDistributionsMetricsProcessor) -> Non
         "retention_days": 22,
         "mapping_meta": MAPPING_META_COMMON,
     }
-    state.set_config("gen_metrics_processor_cogs_probability", 1.0)
+    settings.RECORD_COGS = True
+
     with mock.patch(
         "snuba.datasets.processors.generic_metrics_processor.record_cogs"
     ) as record_cogs:

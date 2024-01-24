@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, vec};
 
 use crate::{
-    types::{InsertBatch, RowData},
+    types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
 
@@ -50,22 +50,25 @@ struct FromGenericMetricsMessage {
     org_id: u64,
     project_id: u64,
     metric_id: u64,
-    #[serde(rename = "type")]
-    r#type: String,
     timestamp: f64,
     sentry_received_timestamp: f64,
     tags: BTreeMap<String, String>,
+    #[serde(flatten)]
     value: MetricValue,
     retention_days: u16,
     aggregation_option: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", content = "value")]
 enum MetricValue {
+    #[serde(rename = "c")]
     Counter(f64),
-    SetOrDistribution(Vec<u64>),
-    DistributionFloat(Vec<f64>),
+    #[serde(rename = "s")]
+    Set(Vec<u64>),
+    #[serde(rename = "d")]
+    Distribution(Vec<f64>),
+    #[serde(rename = "g")]
     Gauge {
         count: u64,
         last: f64,
@@ -115,25 +118,22 @@ struct CountersRawRow {
 /// Parse is the trait which should be implemented for all metric types.
 /// It is used to parse the incoming message into the appropriate raw row.
 /// Item represents the row into which the message should be parsed.
-trait Parse {
-    type Item;
-
+trait Parse: Sized {
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
-    ) -> anyhow::Result<Option<Self::Item>>;
+    ) -> anyhow::Result<Option<Self>>;
 }
 
 impl Parse for CountersRawRow {
-    type Item = CountersRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<CountersRawRow>> {
-        if from.r#type != "c" {
-            return Ok(Option::None);
-        }
+        let count_value = match from.value {
+            MetricValue::Counter(value) => value,
+            _ => return Ok(Option::None),
+        };
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -147,15 +147,6 @@ impl Parse for CountersRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let count_value = match from.value {
-            MetricValue::Counter(value) => value,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for counter metric type"
-                ))
-            }
-        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -186,14 +177,16 @@ fn process_message<T>(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch>
 where
-    T: Parse<Item = T> + Serialize,
+    T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp =
         DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
+
     match result {
         Ok(row) => {
             if let Some(row) = row {
@@ -201,6 +194,12 @@ where
                     rows: RowData::from_rows([row])?,
                     origin_timestamp: None,
                     sentry_received_timestamp,
+                    cogs_data: Some(CogsData {
+                        data: BTreeMap::from([(
+                            format!("genericmetrics_{use_case_id}"),
+                            payload_bytes.len() as u64,
+                        )]),
+                    }),
                 })
             } else {
                 Ok(InsertBatch::skip())
@@ -227,16 +226,14 @@ struct SetsRawRow {
 }
 
 impl Parse for SetsRawRow {
-    type Item = SetsRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
-        if from.r#type != "s" {
-            return Ok(Option::None);
-        }
-
+        let set_values = match from.value {
+            MetricValue::Set(values) => values,
+            _ => return Ok(Option::None),
+        };
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
@@ -249,15 +246,6 @@ impl Parse for SetsRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let set_values = match from.value {
-            MetricValue::SetOrDistribution(values) => values,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for gauge metric type"
-                ))
-            }
-        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -301,15 +289,14 @@ struct DistributionsRawRow {
 }
 
 impl Parse for DistributionsRawRow {
-    type Item = DistributionsRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
-        if from.r#type != "d" {
-            return Ok(Option::None);
-        }
+        let distribution_values = match from.value {
+            MetricValue::Distribution(value) => value,
+            _ => return Ok(Option::None),
+        };
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
@@ -327,18 +314,6 @@ impl Parse for DistributionsRawRow {
             enable_histogram = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let distribution_values = match from.value {
-            MetricValue::DistributionFloat(value) => value,
-            MetricValue::SetOrDistribution(values) => {
-                values.into_iter().map(|v| v as f64).collect()
-            }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for distribution metric type"
-                ))
-            }
-        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -390,30 +365,10 @@ struct GaugesRawRow {
 }
 
 impl Parse for GaugesRawRow {
-    type Item = GaugesRawRow;
-
     fn parse(
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<GaugesRawRow>> {
-        if from.r#type != "g" {
-            return Ok(Option::None);
-        }
-
-        let timeseries_id =
-            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
-        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
-        let mut granularities = vec![
-            GRANULARITY_ONE_MINUTE,
-            GRANULARITY_ONE_HOUR,
-            GRANULARITY_ONE_DAY,
-        ];
-        let aggregate_option = from.aggregation_option.unwrap_or_default();
-        if aggregate_option == "ten_second" {
-            granularities.push(GRANULARITY_TEN_SECONDS);
-        }
-        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
         let mut gauges_values_last = vec![];
         let mut gauges_values_count = vec![];
         let mut gauges_values_max = vec![];
@@ -433,12 +388,22 @@ impl Parse for GaugesRawRow {
                 gauges_values_min.push(min);
                 gauges_values_sum.push(sum);
             }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for gauge metric type"
-                ))
-            }
+            _ => return Ok(Option::None),
         }
+
+        let timeseries_id =
+            generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
+        let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+        let mut granularities = vec![
+            GRANULARITY_ONE_MINUTE,
+            GRANULARITY_ONE_HOUR,
+            GRANULARITY_ONE_DAY,
+        ];
+        let aggregate_option = from.aggregation_option.unwrap_or_default();
+        if aggregate_option == "ten_second" {
+            granularities.push(GRANULARITY_TEN_SECONDS);
+        }
+        let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -654,6 +619,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 615)])
+                }),
             }
         );
     }
@@ -721,6 +689,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 622)])
+                }),
             }
         );
     }
@@ -789,6 +760,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 629)])
+                })
             }
         );
     }
@@ -842,6 +816,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 667)])
+                })
             }
         );
     }
@@ -913,6 +890,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 679)])
+                })
             }
         );
     }
@@ -970,6 +950,9 @@ mod tests {
                 rows: RowData::from_rows([expected_row]).unwrap(),
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 719)])
+                })
             }
         );
     }

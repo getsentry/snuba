@@ -13,7 +13,7 @@ develop: install-python-dependencies install-brew-dev install-rs-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==2.18.1'
+	pip install 'pre-commit==3.6.0'
 	pre-commit install --install-hooks
 
 test:
@@ -102,6 +102,7 @@ test-rust:
 lint-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
+		rustup component add clippy && \
 		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 

@@ -213,15 +213,17 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         node: Node,
         children: Tuple[
             InitialParseResult,
+            Any,
             Sequence[Any],
+            Any,
             Sequence[Any],
             Any,
         ],
     ) -> InitialParseResult:
-        target, packed_filters, packed_groupbys, *_ = children
+        target, _, packed_filters, _, packed_groupbys, *_ = children
         if packed_filters:
             assert isinstance(packed_filters, list)
-            _, _, filter_expr, *_ = packed_filters[0]
+            _, filter_expr, *_ = packed_filters[0]
             if target.formula is not None:
 
                 def pushdown_filter(param: InitialParseResult) -> InitialParseResult:
@@ -418,6 +420,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         target = children[0]
         if isinstance(children[0], list):
             target = children[0][0]
+
         assert isinstance(target, InitialParseResult)
         return target
 
@@ -438,7 +441,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 Any,
                 Any,
                 InitialParseResult,
-                Any,
                 Any,
             ],
         ],
@@ -469,7 +471,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
-
         selected_aggregate_column = SelectedExpression(
             AGGREGATE_ALIAS,
             CurriedFunctionCall(
@@ -524,6 +525,60 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         target.expression = arbitrary_function
         return target
 
+    def visit_curried_arbitrary_function(
+        self, node: Node, children: Sequence[Any]
+    ) -> InitialParseResult:
+        curried_arbitrary_function_name, agg_params, zero_or_one = children
+        _, _, agg_param_list, *_ = agg_params
+        aggregate_params = agg_param_list[0] if agg_param_list else []
+        _, _, expr, params, *_ = zero_or_one
+        _, target, _ = expr
+        curried_arbitrary_function_params = [
+            Literal(alias=None, value=param[-1]) for param in params
+        ]
+        assert isinstance(target, InitialParseResult)
+        assert isinstance(target.expression, SelectedExpression)
+        curried_arbitrary_function = SelectedExpression(
+            name=target.expression.name,
+            expression=CurriedFunctionCall(
+                alias=None,
+                internal_function=FunctionCall(
+                    None,
+                    curried_arbitrary_function_name,
+                    tuple(
+                        Literal(alias=None, value=param) for param in aggregate_params
+                    ),
+                ),
+                parameters=(
+                    target.expression.expression,
+                    *curried_arbitrary_function_params,
+                ),
+            ),
+        )
+        target.expression = curried_arbitrary_function
+        return target
+
+    def visit_inner_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> InitialParseResult:
+        """
+        Given a metric, set its children filters and groupbys, then return a Timeseries.
+        """
+        target, _, packed_filters, _, packed_groupbys, *_ = children
+        target = target[0]
+        assert isinstance(target, InitialParseResult)
+        if not packed_filters and not packed_groupbys:
+            return target
+        if packed_filters:
+            _, filter_condition, *_ = packed_filters[0]
+            target.conditions = [filter_condition]
+        if packed_groupbys:
+            group_by = packed_groupbys[0]
+            if not isinstance(group_by, list):
+                group_by = [group_by]
+            target.groupby = group_by
+        return target
+
     def visit_param(
         self, node: Node, children: Tuple[Union[str, int, float], Any]
     ) -> Union[str, int, float]:
@@ -556,6 +611,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return node.text
 
     def visit_arbitrary_function_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_curried_arbitrary_function_name(
+        self, node: Node, children: Sequence[Any]
+    ) -> str:
         assert isinstance(node.text, str)
         return node.text
 
@@ -683,7 +744,6 @@ def parse_mql_query_body(
             )
     except Exception as e:
         raise e
-
     return query
 
 

@@ -81,6 +81,7 @@ impl PythonTransformStep {
                 origin_timestamp,
                 sentry_received_timestamp,
                 commit_log_offsets,
+                None,
             );
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
@@ -281,21 +282,9 @@ mod tests {
     use super::*;
     use rust_arroyo::testutils::TestStrategy;
 
-    fn set_sys_executable() {
-        let python_executable = std::env::var("PYTHONEXECUTABLE").unwrap();
-        Python::with_gil(|py| -> PyResult<()> {
-            PyModule::import(py, "sys")?.setattr("executable", python_executable)?;
-            Ok(())
-        })
-        .unwrap();
-    }
-
     #[test]
-    // test is flaky in CI and fails 100% of the time locally with " signal only works in main
-    // thread of the main interpreter"
-    #[ignore]
     fn test_python() {
-        set_sys_executable();
+        crate::testutils::initialize_python();
 
         let sink = TestStrategy::new();
 

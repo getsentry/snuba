@@ -84,6 +84,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
+        "block_connections": bool(
+            os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)
+        ),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
@@ -183,6 +187,9 @@ REDIS_CLUSTERS: RedisClusters = {
 
 # Query Recording Options
 RECORD_QUERIES = False
+
+# Record COGS
+RECORD_COGS = False
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
@@ -364,7 +371,7 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
@@ -372,7 +379,8 @@ PARALLEL_OPTIMIZE_JOB_START_TIME = 0
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs in
 # parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = OPTIMIZE_JOB_CUTOFF_TIME
+# Cutoff time in PST would be 6am of the next day.
+PARALLEL_OPTIMIZE_JOB_END_TIME = 14
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"

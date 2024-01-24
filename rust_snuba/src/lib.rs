@@ -22,7 +22,8 @@ fn rust_snuba(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 // Ideally, we would have a normal rust crate we can use in examples and benchmarks,
 // plus a pyo3 specific crate as `cdylib`.
 pub use config::{
-    ClickhouseConfig, EnvConfig, MessageProcessorConfig, ProcessorConfig, StorageConfig,
+    BrokerConfig, ClickhouseConfig, EnvConfig, MessageProcessorConfig, ProcessorConfig,
+    StorageConfig, TopicConfig,
 };
 pub use factory::ConsumerStrategyFactory;
 pub use metrics::statsd::StatsDBackend;
@@ -30,3 +31,6 @@ pub use processors::{ProcessingFunction, PROCESSORS};
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;
 pub use types::KafkaMessageMetadata;
+
+#[cfg(test)]
+mod testutils;

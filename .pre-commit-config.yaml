@@ -46,12 +46,13 @@ repos:
         pass_filenames: false
         files: 'snuba/datasets/configuration/.*'
   - repo: local
-    language: system
     hooks:
       - id: cargo-fmt
         name: format rust code
         language: system
-        entry: make format-rust
-        files: ^rust_snuba/
+        # keep in sync with Cargo.toml. There is no way to run cargo fmt for specific files
+        # https://github.com/rust-lang/rustfmt/issues/4485
+        entry: rustfmt --edition 2021
+        files: ^rust_snuba/.*\.rs$
 default_language_version:
   python: python3.10

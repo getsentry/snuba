@@ -49,7 +49,7 @@ Query
 =====
 
 The simplest query system is point in time. Queries are expressed in a
-the SnQL language (:doc:`/language/snql`) and are sent as post HTTP calls.
+the SnQL language (:doc:`/language/snql`) or MQL language (:doc:`/language/mql`) and are sent as post HTTP calls.
 The query engine processes the query (process described in
 :doc:`/architecture/queryprocessing`) and transforms it into a ClickHouse
 query.

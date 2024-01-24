@@ -168,10 +168,7 @@ jobs:
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
-          cache-to: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
+          # cache-to is re-implemented using the next step, to run conditionally for contributors
 
       - name: Publish images for cache
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
@@ -406,7 +403,7 @@ jobs:
 
       - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:${{matrix.version}}
+          export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
