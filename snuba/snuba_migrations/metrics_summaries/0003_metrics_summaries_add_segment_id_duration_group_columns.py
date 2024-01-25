@@ -39,7 +39,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=target,
             )
             for column in columns
-            for table_name, target in targets
+            for target, table_name in targets
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
