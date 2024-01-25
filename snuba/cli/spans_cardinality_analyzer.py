@@ -87,6 +87,10 @@ def spans_cardinality_analyzer(
             span_grouping_cardinality_query(span_group, time_window_hrs=24, limit=1000)
         )
 
+        if len(result.results) == 0:
+            logger.info(f"No high cardinality found for span group: {span_group}")
+            continue
+
         write_cardnaltiy_to_csv(result.results, f"/tmp/{span_group}.csv")
         slack_client.post_file(
             file_name=f"{span_group}.csv",
