@@ -72,10 +72,11 @@ pub fn get_cogs_label(processor_name: &str) -> Option<String> {
 pub fn get_processing_function_with_replacements(
     name: &str,
 ) -> Option<ProcessingFunctionWithReplacements> {
-    match name {
-        // "errors" => Some(errors::process_message_with_replacement),
-        _ => None,
-    }
+    None
+    // match name {
+    //     "errors" => Some(errors::process_message_with_replacement),
+    //     _ => None,
+    // }
 }
 
 #[cfg(test)]
