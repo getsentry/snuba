@@ -18,6 +18,9 @@ from snuba.datasets.processors.generic_metrics_processor import (
     GenericGaugesMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
+from snuba.datasets.processors.metrics_bucket_processor import (
+    PolymorphicMetricsProcessor,
+)
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.datasets.processors.replays_processor import ReplaysProcessor
 from snuba.processor import InsertBatch
@@ -31,6 +34,7 @@ from snuba.processor import InsertBatch
         ("snuba-generic-metrics", GenericSetsMetricsProcessor),
         ("snuba-generic-metrics", GenericDistributionsMetricsProcessor),
         ("snuba-generic-metrics", GenericGaugesMetricsProcessor),
+        ("snuba-metrics", PolymorphicMetricsProcessor),
     ],
 )
 @patch("snuba.settings.DISCARD_OLD_EVENTS", False)

@@ -1,6 +1,7 @@
 use adler::Adler32;
 use anyhow::Context;
-use chrono::DateTime;
+use chrono::{Date, DateTime, Utc};
+use core::f64;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -53,7 +54,7 @@ struct FromMetricsMessage {
     #[serde(rename = "type")]
     r#type: String,
     timestamp: f64,
-    sentry_received_timestamp: f64,
+    sentry_received_timestamp: Option<f64>,
     tags: BTreeMap<u64, u64>,
     value: MetricValue,
     retention_days: u16,
@@ -206,9 +207,14 @@ impl Parse for MetricsRawRow {
 
 fn process_message(payload: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: FromMetricsMessage = serde_json::from_slice(payload_bytes)?;
-    let sentry_received_timestamp =
-        DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
+    let msg = serde_json::from_slice::<FromMetricsMessage>(payload_bytes)?;
+
+    let sentry_received_timestamp: Option<DateTime<Utc>> = match msg.sentry_received_timestamp {
+        Some(f64) => {
+            DateTime::from_timestamp(msg.sentry_received_timestamp.unwrap_or_default() as i64, 0)
+        }
+        None => None,
+    };
 
     let result: Result<Option<MetricsRawRow>, anyhow::Error> = MetricsRawRow::parse(msg, config);
     match result {
