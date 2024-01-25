@@ -12,6 +12,7 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericCountersMetricsProcessor,
     GenericDistributionsMetricsProcessor,
@@ -26,6 +27,8 @@ from snuba.processor import InsertBatch
 @pytest.mark.parametrize(
     "topic,processor",
     [
+        ("events", ErrorsProcessor),
+        ("outcomes", OutcomesProcessor),
         ("outcomes", OutcomesProcessor),
         ("snuba-generic-metrics", GenericCountersMetricsProcessor),
         ("snuba-generic-metrics", GenericSetsMetricsProcessor),

@@ -36,6 +36,7 @@ macro_rules! define_processing_functions {
 
 define_processing_functions! {
     // python class name, schema name/logical topic, function path
+    ("ErrorsProcessor", "events", errors::process_message),
     ("FunctionsMessageProcessor", "profiles-call-tree", functions::process_message),
     ("ProfilesMessageProcessor", "processed-profiles", profiles::process_message),
     ("QuerylogProcessor", "snuba-queries", querylog::process_message),
