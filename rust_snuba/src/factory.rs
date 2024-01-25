@@ -211,6 +211,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     env_config: self.env_config.clone(),
                 },
             ),
+            (false, _, Some(_)) => {
+                panic!("Consumer with replacements cannot be run in hybrid-mode");
+            }
             _ => {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
 

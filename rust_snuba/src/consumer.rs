@@ -80,6 +80,8 @@ pub fn consumer_impl(
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
+
+    // TODO: Remove this once errors is implemented in Rust
     assert!(consumer_config.replacements_topic.is_none());
 
     let mut _sentry_guard = None;

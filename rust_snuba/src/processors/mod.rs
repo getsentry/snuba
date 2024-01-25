@@ -73,7 +73,7 @@ pub fn get_processing_function_with_replacements(
     name: &str,
 ) -> Option<ProcessingFunctionWithReplacements> {
     match name {
-        "errors" => Some(errors::process_message_with_replacement),
+        // "errors" => Some(errors::process_message_with_replacement),
         _ => None,
     }
 }
