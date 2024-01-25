@@ -210,7 +210,7 @@ struct Request {
 
 // User
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct User {
     #[serde(default)]
     email: Unicodify,
