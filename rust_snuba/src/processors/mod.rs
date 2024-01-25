@@ -70,7 +70,7 @@ pub fn get_cogs_label(processor_name: &str) -> Option<String> {
 }
 
 pub fn get_processing_function_with_replacements(
-    name: &str,
+    _name: &str,
 ) -> Option<ProcessingFunctionWithReplacements> {
     None
     // match name {
