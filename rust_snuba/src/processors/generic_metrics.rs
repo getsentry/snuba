@@ -183,9 +183,7 @@ where
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
     let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp = match msg.sentry_received_timestamp {
-        Some(f64) => {
-            DateTime::from_timestamp(msg.sentry_received_timestamp.unwrap_or_default() as i64, 0)
-        }
+        Some(_f64) => DateTime::from_timestamp(msg.sentry_received_timestamp.unwrap() as i64, 0),
         None => None,
     };
 
