@@ -4,6 +4,7 @@ use chrono::Utc;
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
@@ -27,14 +28,13 @@ pub fn process_message(
     row.partition = metadata.partition;
     row.offset = metadata.offset;
     row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
-
-    // TODO.
-    // row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+    row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
 
     Ok(InsertBatch {
         origin_timestamp,
         rows: RowData::from_rows([row])?,
         sentry_received_timestamp: None,
+        cogs_data: None,
     })
 }
 
@@ -54,6 +54,8 @@ struct ErrorMessage {
 struct ErrorData {
     #[serde(default)]
     contexts: Contexts,
+    #[serde(default, rename = "contexts")]
+    contexts_other: BTreeMap<String, BTreeMap<String, ContextStringify>>,
     #[serde(default)]
     culprit: Unicodify,
     #[serde(default)]
@@ -256,7 +258,7 @@ struct ErrorRow {
     exception_frames_stack_level: Vec<u16>, // Schema Deviation: Why would this ever be null?
     exception_main_thread: Option<u8>,
     #[serde(rename = "exception_stacks.mechanism_handled")]
-    exception_stacks_mechanism_handled: Vec<Boolify>,
+    exception_stacks_mechanism_handled: Vec<Option<u8>>,
     #[serde(rename = "exception_stacks.mechanism_type")]
     exception_stacks_mechanism_type: Vec<Option<String>>,
     #[serde(rename = "exception_stacks.type")]
@@ -394,6 +396,31 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             }
         }
 
+        // Arbitrary capacity. Could be computed exactly from the types but the types
+        // could change. This does not use so much memory and gives us significant performance
+        // improvement.
+        let mut contexts_keys = Vec::with_capacity(100);
+        let mut contexts_values = Vec::with_capacity(100);
+
+        for (container_name, container) in from.data.contexts_other.into_iter() {
+            // The replay container is not stored on the contexts array.
+            if container_name == "replay" {
+                continue;
+            }
+
+            for (key, value) in container {
+                match value.0 {
+                    Some(v) => {
+                        if key != "type" {
+                            contexts_keys.push(format!("{}.{}", container_name, key));
+                            contexts_values.push(v);
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+        }
+
         // Conditionally overwrite replay_id if it was provided on the contexts object.
         match from.data.contexts.replay.replay_id {
             Some(rid) => replay_id = Some(rid),
@@ -434,7 +461,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             stack_types.push(stack.ty.0);
             stack_values.push(stack.value.0);
             stack_mechanism_types.push(stack.mechanism.ty.0);
-            stack_mechanism_handled.push(stack.mechanism.handled);
+            stack_mechanism_handled.push(stack.mechanism.handled.0);
 
             for frame in stack.stacktrace.frames {
                 frame_abs_paths.push(frame.abs_path.0);
@@ -466,6 +493,8 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         }
 
         Ok(Self {
+            contexts_key: contexts_keys,
+            contexts_value: contexts_values,
             culprit: from.data.culprit.0.unwrap_or_default(),
             deleted: 0,
             dist,
@@ -559,7 +588,7 @@ fn datetime_to_timestamp(datetime_str: Option<String>) -> Result<u32, &'static s
     }
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default)]
 struct Boolify(Option<u8>);
 
 impl<'de> Deserialize<'de> for Boolify {
@@ -584,7 +613,7 @@ impl<'de> Deserialize<'de> for Boolify {
     }
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default)]
 struct Unicodify(Option<String>);
 
 impl<'de> Deserialize<'de> for Unicodify {
@@ -596,17 +625,29 @@ impl<'de> Deserialize<'de> for Unicodify {
             Value::Array(vs) => Ok(Unicodify(Some(
                 serde_json::to_string(&vs).map_err(de::Error::custom)?,
             ))),
-            Value::Bool(v) => Ok(Unicodify(Some(
-                serde_json::to_string(&v).map_err(de::Error::custom)?,
-            ))),
+            Value::Bool(v) => Ok(Unicodify(Some(v.to_string()))),
             Value::Null => Ok(Unicodify(None)),
-            Value::Number(v) => Ok(Unicodify(Some(
-                serde_json::to_string(&v).map_err(de::Error::custom)?,
-            ))),
+            Value::Number(v) => Ok(Unicodify(Some(v.to_string()))),
             Value::Object(v) => Ok(Unicodify(Some(
                 serde_json::to_string(&v).map_err(de::Error::custom)?,
             ))),
             Value::String(v) => Ok(Unicodify(Some(v))),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct ContextStringify(Option<String>);
+
+impl<'de> Deserialize<'de> for ContextStringify {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        match Value::deserialize(deserializer)? {
+            Value::String(v) => Ok(ContextStringify(Some(v))),
+            Value::Number(v) => Ok(ContextStringify(Some(v.to_string()))),
+            _ => Ok(ContextStringify(None)),
         }
     }
 }
