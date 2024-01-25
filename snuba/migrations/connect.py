@@ -161,9 +161,6 @@ def check_for_inactive_replicas(storage_keys: List[StorageKey]) -> None:
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
-
-    # storage_keys = _get_all_storage_keys()
-
     checked_nodes = set()
     inactive_replica_info = []
     for storage_key in storage_keys:
