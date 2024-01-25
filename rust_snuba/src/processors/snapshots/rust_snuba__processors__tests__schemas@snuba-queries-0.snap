@@ -1,98 +1,102 @@
 ---
 source: src/processors/mod.rs
-description: "{\n  \"request\": {\n    \"id\": \"db4e2fc48df34d69be0ada66ab2ed2bd\",\n    \"body\": {\n      \"legacy\": true,\n      \"query\": \"redacted\",\n      \"dataset\": \"discover\",\n      \"app_id\": \"legacy\",\n      \"tenant_ids\": {\n        \"legacy\": \"legacy\"\n      },\n      \"parent_api\": \"/api/0/organizations/{organization_slug}/issues-count/\"\n    },\n    \"referrer\": \"search\",\n    \"team\": \"<unknown>\",\n    \"feature\": \"<unknown>\",\n    \"app_id\": \"legacy\"\n  },\n  \"dataset\": \"discover\",\n  \"entity\": \"discover_events\",\n  \"start_timestamp\": 1676674553,\n  \"end_timestamp\": 1677884153,\n  \"query_list\": [\n    {\n      \"sql\": \"redacted\",\n      \"sql_anonymized\": \"redacted\",\n      \"start_timestamp\": 1676674553,\n      \"end_timestamp\": 1677884153,\n      \"stats\": {\n        \"clickhouse_table\": \"errors_dist_ro\",\n        \"final\": false,\n        \"referrer\": \"search\",\n        \"sample\": 1,\n        \"totals_mode\": \"after_having_inclusive\",\n        \"merge_tree_max_rows_to_use_cache\": 1048576,\n        \"max_query_size\": 524288,\n        \"merge_tree_coarse_index_granularity\": 8,\n        \"max_execution_time\": 30,\n        \"max_threads\": 10,\n        \"merge_tree_min_rows_for_concurrent_read\": 163840,\n        \"max_streams_to_max_threads_ratio\": 1,\n        \"query_id\": \"3c369a12aedfa413840c5449a1573575\",\n        \"triggered_rate_limiter\": \"project_referrer\"\n      },\n      \"status\": \"rate-limited\",\n      \"trace_id\": \"095488ec34424e139d3c474992b21cc8\",\n      \"profile\": {\n        \"time_range\": 14,\n        \"table\": \"errors_dist_ro\",\n        \"all_columns\": [\n          \"errors_dist_ro._tags_hash_map\",\n          \"errors_dist_ro.deleted\",\n          \"errors_dist_ro.group_id\",\n          \"errors_dist_ro.project_id\",\n          \"errors_dist_ro.timestamp\"\n        ],\n        \"multi_level_condition\": false,\n        \"where_profile\": {\n          \"columns\": [\n            \"errors_dist_ro._tags_hash_map\",\n            \"errors_dist_ro.deleted\",\n            \"errors_dist_ro.group_id\",\n            \"errors_dist_ro.timestamp\"\n          ],\n          \"mapping_cols\": []\n        },\n        \"groupby_cols\": [\"errors_dist_ro.group_id\"],\n        \"array_join_cols\": []\n      },\n      \"result_profile\": null,\n      \"request_status\": \"table-rate-limited\",\n      \"slo\": \"against\"\n    }\n  ],\n  \"status\": \"rate-limited\",\n  \"request_status\": \"table-rate-limited\",\n  \"slo\": \"against\",\n  \"timing\": {\n    \"timestamp\": 1677884153,\n    \"duration_ms\": 102,\n    \"marks_ms\": {\n      \"cache_get\": 2,\n      \"cache_set\": 2,\n      \"get_configs\": 0,\n      \"prepare_query\": 56,\n      \"validate_schema\": 40\n    },\n    \"tags\": {}\n  },\n  \"projects\": [123123123],\n  \"snql_anonymized\": \"redacted\"\n}\n"
+description: "{\n  \"request\": {\n    \"id\": \"24a78d10a0134f2aa6367ba2a393b504\",\n    \"body\": {\n      \"legacy\": true,\n      \"query\": \"MATCH (events) SELECT count() AS `count`, min(timestamp) AS `first_seen`, max(timestamp) AS `last_seen` BY tags_key, tags_value WHERE timestamp >= toDateTime('2023-02-08T21:07:12.769001') AND timestamp < toDateTime('2023-02-08T21:12:39.015094') AND project_id IN tuple(1) AND project_id IN tuple(1) AND group_id IN tuple(5) ORDER BY count DESC LIMIT 4 BY tags_key\",\n      \"dataset\": \"events\",\n      \"app_id\": \"legacy\",\n      \"parent_api\": \"/api/0/issues|groups/{issue_id}/tags/\"\n    },\n    \"referrer\": \"tagstore.__get_tag_keys_and_top_values\",\n    \"team\": \"<unknown>\",\n    \"feature\": \"<unknown>\",\n    \"app_id\": \"legacy\"\n  },\n  \"dataset\": \"events\",\n  \"entity\": \"events\",\n  \"start_timestamp\": 1675919232,\n  \"end_timestamp\": 1675919559,\n  \"query_list\": [\n    {\n      \"sql\": \"SELECT (tupleElement((arrayJoin(arrayMap((x, y -> (x, y)), tags.key, tags.value)) AS snuba_all_tags), 1) AS _snuba_tags_key), (tupleElement(snuba_all_tags, 2) AS _snuba_tags_value), (count() AS _snuba_count), (min((timestamp AS _snuba_timestamp)) AS _snuba_first_seen), (max(_snuba_timestamp) AS _snuba_last_seen) FROM errors_local PREWHERE in((group_id AS _snuba_group_id), tuple(5)) WHERE equals(deleted, 0) AND greaterOrEquals(_snuba_timestamp, toDateTime('2023-02-08T21:07:12', 'Universal')) AND less(_snuba_timestamp, toDateTime('2023-02-08T21:12:39', 'Universal')) AND in((project_id AS _snuba_project_id), tuple(1)) AND in(_snuba_project_id, tuple(1)) GROUP BY _snuba_tags_key, _snuba_tags_value ORDER BY _snuba_count DESC LIMIT 4 BY _snuba_tags_key LIMIT 1000 OFFSET 0\",\n      \"sql_anonymized\": \"SELECT (tupleElement((arrayJoin(arrayMap((x, y -> (x, y)), tags.key, tags.value)) AS snuba_all_tags), -1337) AS _snuba_tags_key), (tupleElement(snuba_all_tags, -1337) AS _snuba_tags_value), (count() AS _snuba_count), (min((timestamp AS _snuba_timestamp)) AS _snuba_first_seen), (max(_snuba_timestamp) AS _snuba_last_seen) FROM errors_local PREWHERE in((group_id AS _snuba_group_id), tuple(-1337)) WHERE equals(deleted, -1337) AND greaterOrEquals(_snuba_timestamp, toDateTime('2023-02-08T21:07:12', 'Universal')) AND less(_snuba_timestamp, toDateTime('2023-02-08T21:12:39', 'Universal')) AND in((project_id AS _snuba_project_id), tuple(-1337)) AND in(_snuba_project_id, tuple(-1337)) GROUP BY _snuba_tags_key, _snuba_tags_value ORDER BY _snuba_count DESC LIMIT 4 BY _snuba_tags_key LIMIT 1000 OFFSET 0\",\n      \"start_timestamp\": 1675919232,\n      \"end_timestamp\": 1675919559,\n      \"stats\": {\n        \"clickhouse_table\": \"errors_local\",\n        \"final\": false,\n        \"referrer\": \"tagstore.__get_tag_keys_and_top_values\",\n        \"sample\": null,\n        \"table_rate\": 0.6,\n        \"table_concurrent\": 1,\n        \"project_rate\": 0.6333333333333333,\n        \"project_concurrent\": 1,\n        \"consistent\": false,\n        \"result_rows\": 22,\n        \"result_cols\": 5,\n        \"query_id\": \"9079915acbacff0804ed45c72b865024\"\n      },\n      \"status\": \"success\",\n      \"trace_id\": \"8377f280e7eb4754a7f20df73ce2cf37\",\n      \"profile\": {\n        \"time_range\": null,\n        \"table\": \"errors_local\",\n        \"all_columns\": [\n          \"errors_local.deleted\",\n          \"errors_local.group_id\",\n          \"errors_local.project_id\",\n          \"errors_local.tags.key\",\n          \"errors_local.tags.value\",\n          \"errors_local.timestamp\"\n        ],\n        \"multi_level_condition\": false,\n        \"where_profile\": {\n          \"columns\": [\n            \"errors_local.deleted\",\n            \"errors_local.project_id\",\n            \"errors_local.timestamp\"\n          ],\n          \"mapping_cols\": []\n        },\n        \"groupby_cols\": [\"errors_local.tags.key\", \"errors_local.tags.value\"],\n        \"array_join_cols\": [\"errors_local.tags.key\", \"errors_local.tags.value\"]\n      },\n      \"result_profile\": {\n        \"bytes\": 1305,\n        \"blocks\": 1,\n        \"rows\": 22,\n        \"elapsed\": 0.009863138198852539\n      },\n      \"request_status\": \"success\",\n      \"slo\": \"for\"\n    }\n  ],\n  \"status\": \"success\",\n  \"request_status\": \"success\",\n  \"slo\": \"for\",\n  \"timing\": {\n    \"timestamp\": 1675890758,\n    \"duration_ms\": 55,\n    \"marks_ms\": {\n      \"cache_get\": 2,\n      \"cache_set\": 6,\n      \"execute\": 10,\n      \"get_configs\": 0,\n      \"prepare_query\": 15,\n      \"rate_limit\": 5,\n      \"validate_schema\": 15\n    },\n    \"tags\": {}\n  },\n  \"projects\": [1],\n  \"snql_anonymized\": \"MATCH Entity(events) SELECT tags_key, tags_value, (count() AS count), (min(timestamp) AS first_seen), (max(timestamp) AS last_seen) GROUP BY tags_key, tags_value WHERE greaterOrEquals(timestamp, toDateTime('$S')) AND less(timestamp, toDateTime('$S')) AND in(project_id, tuple(-1337)) AND in(project_id, tuple(-1337)) AND in(group_id, tuple(-1337)) ORDER BY count DESC LIMIT 4 BY tags_key LIMIT 1000 OFFSET 0\"\n}\n"
 expression: snapshot_payload
 ---
 [
   {
     "clickhouse_queries.all_columns": [
       [
-        "errors_dist_ro._tags_hash_map",
-        "errors_dist_ro.deleted",
-        "errors_dist_ro.group_id",
-        "errors_dist_ro.project_id",
-        "errors_dist_ro.timestamp"
+        "errors_local.deleted",
+        "errors_local.group_id",
+        "errors_local.project_id",
+        "errors_local.tags.key",
+        "errors_local.tags.value",
+        "errors_local.timestamp"
       ]
     ],
     "clickhouse_queries.array_join_columns": [
-      []
+      [
+        "errors_local.tags.key",
+        "errors_local.tags.value"
+      ]
     ],
     "clickhouse_queries.bytes_scanned": [
-      0
+      1305
     ],
     "clickhouse_queries.cache_hit": [
       0
     ],
     "clickhouse_queries.clickhouse_table": [
-      "errors_dist_ro"
+      "errors_local"
     ],
     "clickhouse_queries.consistent": [
       0
     ],
     "clickhouse_queries.duration_ms": [
-      0
+      9
     ],
     "clickhouse_queries.final": [
       0
     ],
     "clickhouse_queries.groupby_columns": [
       [
-        "errors_dist_ro.group_id"
+        "errors_local.tags.key",
+        "errors_local.tags.value"
       ]
     ],
     "clickhouse_queries.is_duplicate": [
       0
     ],
     "clickhouse_queries.max_threads": [
-      10
+      0
     ],
     "clickhouse_queries.num_days": [
-      14
+      0
     ],
     "clickhouse_queries.or_conditions": [
       0
     ],
     "clickhouse_queries.query_id": [
-      "3c369a12aedfa413840c5449a1573575"
+      "9079915acbacff0804ed45c72b865024"
     ],
     "clickhouse_queries.sample": [
-      1.0
+      0.0
     ],
     "clickhouse_queries.sql": [
-      "redacted"
+      "SELECT (tupleElement((arrayJoin(arrayMap((x, y -> (x, y)), tags.key, tags.value)) AS snuba_all_tags), 1) AS _snuba_tags_key), (tupleElement(snuba_all_tags, 2) AS _snuba_tags_value), (count() AS _snuba_count), (min((timestamp AS _snuba_timestamp)) AS _snuba_first_seen), (max(_snuba_timestamp) AS _snuba_last_seen) FROM errors_local PREWHERE in((group_id AS _snuba_group_id), tuple(5)) WHERE equals(deleted, 0) AND greaterOrEquals(_snuba_timestamp, toDateTime('2023-02-08T21:07:12', 'Universal')) AND less(_snuba_timestamp, toDateTime('2023-02-08T21:12:39', 'Universal')) AND in((project_id AS _snuba_project_id), tuple(1)) AND in(_snuba_project_id, tuple(1)) GROUP BY _snuba_tags_key, _snuba_tags_value ORDER BY _snuba_count DESC LIMIT 4 BY _snuba_tags_key LIMIT 1000 OFFSET 0"
     ],
     "clickhouse_queries.stats": [
-      "{\"clickhouse_table\":\"errors_dist_ro\",\"final\":false,\"max_execution_time\":30,\"max_query_size\":524288,\"max_streams_to_max_threads_ratio\":1,\"max_threads\":10,\"merge_tree_coarse_index_granularity\":8,\"merge_tree_max_rows_to_use_cache\":1048576,\"merge_tree_min_rows_for_concurrent_read\":163840,\"query_id\":\"3c369a12aedfa413840c5449a1573575\",\"referrer\":\"search\",\"sample\":1,\"totals_mode\":\"after_having_inclusive\",\"triggered_rate_limiter\":\"project_referrer\"}"
+      "{\"clickhouse_table\":\"errors_local\",\"consistent\":false,\"final\":false,\"project_concurrent\":1,\"project_rate\":0.6333333333333333,\"query_id\":\"9079915acbacff0804ed45c72b865024\",\"referrer\":\"tagstore.__get_tag_keys_and_top_values\",\"result_cols\":5,\"result_rows\":22,\"sample\":null,\"table_concurrent\":1,\"table_rate\":0.6}"
     ],
     "clickhouse_queries.status": [
-      "rate-limited"
+      "success"
     ],
     "clickhouse_queries.trace_id": [
-      "095488ec-3442-4e13-9d3c-474992b21cc8"
+      "8377f280-e7eb-4754-a7f2-0df73ce2cf37"
     ],
     "clickhouse_queries.where_columns": [
       [
-        "errors_dist_ro._tags_hash_map",
-        "errors_dist_ro.deleted",
-        "errors_dist_ro.group_id",
-        "errors_dist_ro.timestamp"
+        "errors_local.deleted",
+        "errors_local.project_id",
+        "errors_local.timestamp"
       ]
     ],
     "clickhouse_queries.where_mapping_columns": [
       []
     ],
-    "dataset": "discover",
-    "duration_ms": 102,
+    "dataset": "events",
+    "duration_ms": 55,
     "offset": 1,
     "organization": null,
     "partition": 0,
     "projects": [
-      123123123
+      1
     ],
-    "referrer": "search",
-    "request_body": "{\"app_id\":\"legacy\",\"dataset\":\"discover\",\"legacy\":true,\"parent_api\":\"/api/0/organizations/{organization_slug}/issues-count/\",\"query\":\"redacted\",\"tenant_ids\":{\"legacy\":\"legacy\"}}",
-    "request_id": "db4e2fc4-8df3-4d69-be0a-da66ab2ed2bd",
-    "status": "rate-limited",
-    "timestamp": 1677884153
+    "referrer": "tagstore.__get_tag_keys_and_top_values",
+    "request_body": "{\"app_id\":\"legacy\",\"dataset\":\"events\",\"legacy\":true,\"parent_api\":\"/api/0/issues|groups/{issue_id}/tags/\",\"query\":\"MATCH (events) SELECT count() AS `count`, min(timestamp) AS `first_seen`, max(timestamp) AS `last_seen` BY tags_key, tags_value WHERE timestamp >= toDateTime('2023-02-08T21:07:12.769001') AND timestamp < toDateTime('2023-02-08T21:12:39.015094') AND project_id IN tuple(1) AND project_id IN tuple(1) AND group_id IN tuple(5) ORDER BY count DESC LIMIT 4 BY tags_key\"}",
+    "request_id": "24a78d10-a013-4f2a-a636-7ba2a393b504",
+    "status": "success",
+    "timestamp": 1675890758
   }
 ]

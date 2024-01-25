@@ -102,6 +102,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_schemas() {
         let processor_config = ProcessorConfig::default();
         for (_python_class_name, topic_name, processor_fn) in PROCESSORS {

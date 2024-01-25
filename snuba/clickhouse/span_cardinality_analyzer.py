@@ -3,6 +3,7 @@ from typing import NamedTuple, NewType
 
 # Start index is 9223372036854775808
 METRICS_START_INDEX = 1 << 63
+CARDINALITY_LIMIT = 5000
 
 SQL = NewType("SQL", str)
 
@@ -67,6 +68,7 @@ AND (timestamp >= now() - INTERVAL {time_window_hrs} HOUR)
 AND (metric_id IN [{IndexedIDs.SPAN_DURATION_METRIC.value},
 {IndexedIDs.SPAN_EXCLUSIVE_TIME_METRIC.value}])
 AND `span.category` = '{span_category}'
+AND count_groups > {CARDINALITY_LIMIT}
 GROUP BY org_id, project_id, `span.category`
 ORDER BY count_groups DESC
 LIMIT {limit}
