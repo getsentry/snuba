@@ -1,5 +1,6 @@
 ---
 source: src/processors/mod.rs
+assertion_line: 118
 description: "{\n  \"version\": 2,\n  \"mapping_meta\": {\n    \"c\": {\n      \"1\": \"g:transactions/alerts@none\",\n      \"3\": \"environment\",\n      \"5\": \"session.status\"\n    }\n  },\n  \"metric_id\": 1,\n  \"org_id\": 1,\n  \"project_id\": 3,\n  \"retention_days\": 90,\n  \"tags\": {\n    \"3\": \"production\",\n    \"5\": \"init\"\n  },\n  \"timestamp\": 1677512412,\n  \"sentry_received_timestamp\": 1677519000.456,\n  \"type\": \"g\",\n  \"use_case_id\": \"transactions\",\n  \"value\": {\n    \"min\": 1.0,\n    \"max\": 2.0,\n    \"sum\": 3.0,\n    \"count\": 2,\n    \"last\": 1.0\n  }\n}\n"
 expression: snapshot_payload
 ---

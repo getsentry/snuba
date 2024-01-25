@@ -1,5 +1,6 @@
 ---
 source: src/processors/mod.rs
+assertion_line: 118
 description: "{\n  \"timestamp\": \"2023-03-28T22:53:00.000000Z\",\n  \"project_id\": 1,\n  \"outcome\": 3,\n  \"reason\": \"project_id\",\n  \"source\": \"relay-internal\",\n  \"category\": 1,\n  \"quantity\": 1\n}\n"
 expression: snapshot_payload
 ---
