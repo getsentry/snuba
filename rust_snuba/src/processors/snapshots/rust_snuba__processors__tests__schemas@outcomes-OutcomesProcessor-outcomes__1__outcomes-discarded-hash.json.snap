@@ -1,6 +1,5 @@
 ---
 source: src/processors/mod.rs
-assertion_line: 118
 description: "{\n  \"timestamp\": \"2023-03-28T18:50:44.000000Z\",\n  \"org_id\": 1,\n  \"project_id\": 1,\n  \"key_id\": 1,\n  \"outcome\": 1,\n  \"reason\": \"discarded-hash\",\n  \"event_id\": \"4ff942d62f3f4d5db9f53b5a015b5fd9\",\n  \"category\": 1,\n  \"quantity\": 1\n}\n"
 expression: snapshot_payload
 ---

@@ -1,6 +1,5 @@
 ---
 source: src/processors/mod.rs
-assertion_line: 118
 description: "{\n  \"project_id\": 1,\n  \"logging.googleapis.com/labels\": {\n    \"host\": \"lb-6\"\n  },\n  \"org_id\": 0,\n  \"outcome\": 4,\n  \"timestamp\": \"2023-03-28T18:50:39.463685Z\"\n}\n"
 expression: snapshot_payload
 ---

@@ -1,6 +1,5 @@
 ---
 source: src/processors/mod.rs
-assertion_line: 118
 description: "{\n  \"architecture\": \"x86_64\",\n  \"device_locale\": \"\",\n  \"device_manufacturer\": \"\",\n  \"device_model\": \"\",\n  \"device_os_name\": \"Linux\",\n  \"device_os_version\": \"4.14.281-212.502.amzn2.x86_64\",\n  \"duration_ns\": 55659715,\n  \"environment\": \"staging-staging\",\n  \"profile_id\": \"f851b3c2d70d4f119b3a49ce9f630194\",\n  \"organization_id\": 1,\n  \"platform\": \"python\",\n  \"project_id\": 1,\n  \"received\": 1687971966,\n  \"retention_days\": 90,\n  \"trace_id\": \"cbf7414c931448e98ed3f9b4e239a58e\",\n  \"transaction_id\": \"6d15f5585cbd4b92945c605314f760cd\",\n  \"transaction_name\": \"GET /events\",\n  \"version_code\": \"\",\n  \"version_name\": \"\"\n}\n"
 expression: snapshot_payload
 ---

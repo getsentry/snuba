@@ -1,6 +1,5 @@
 ---
 source: src/processors/mod.rs
-assertion_line: 118
 description: "{\n  \"timestamp\": \"2023-03-24T19:28:20.605851Z\",\n  \"org_id\": 1,\n  \"project_id\": 1,\n  \"key_id\": null,\n  \"outcome\": 0,\n  \"reason\": null,\n  \"event_id\": \"1410e6d2ea534dcb9d6d15a51c9962f8\",\n  \"category\": 1,\n  \"quantity\": 1\n}\n"
 expression: snapshot_payload
 ---
