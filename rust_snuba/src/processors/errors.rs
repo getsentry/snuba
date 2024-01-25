@@ -60,9 +60,7 @@ struct ErrorData {
     culprit: Unicodify,
     #[serde(default)]
     errors: Option<Vec<Value>>,
-    #[serde(default, rename = "sentry.interfaces.Exception")]
-    exception_alternate: Exception,
-    #[serde(default)]
+    #[serde(default, alias = "sentry.interfaces.Exception")]
     exception: Exception,
     #[serde(default)]
     hierarchical_hashes: Vec<String>,
@@ -79,15 +77,14 @@ struct ErrorData {
     sdk: Sdk,
     #[serde(default)]
     tags: Vec<(String, Unicodify)>,
-    #[serde(default, rename = "sentry.interfaces.Threads")]
-    thread_alternate: Thread,
-    #[serde(default)]
+    #[serde(default, alias = "sentry.interfaces.Threads")]
     thread: Thread,
     #[serde(default)]
     title: Unicodify,
     #[serde(default, rename = "type")]
     ty: Unicodify,
-    user: User, // Deviation: sentry.interfaces.User is not supported.
+    #[serde(default, alias = "sentry.interfaces.User")]
+    user: User,
     #[serde(default)]
     version: Option<String>,
 }
