@@ -131,8 +131,8 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> for ProduceReplac
 mod tests {
     use super::*;
     use crate::testutils::{MockProducer, TestStrategy};
-    use crate::types::InsertOrReplacement;
     use crate::types::RowData;
+    use crate::types::{InsertOrReplacement, ReplacementData};
     use chrono::Utc;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
@@ -166,5 +166,21 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(produced_payloads.lock().unwrap().len(), 0);
+
+        strategy
+            .submit(Message::new_any_message(
+                InsertOrReplacement::Replacement(ReplacementData {
+                    key: "1".as_bytes().to_vec(),
+                    value: "{\"project_id\":1}".as_bytes().to_vec(),
+                }),
+                BTreeMap::new(),
+            ))
+            .unwrap();
+
+        strategy.poll().unwrap();
+        strategy.close();
+        strategy.join(None).unwrap();
+
+        assert_eq!(produced_payloads.lock().unwrap().len(), 1);
     }
 }
