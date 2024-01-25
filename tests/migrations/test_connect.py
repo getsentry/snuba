@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import reduce
-from typing import Generator
+from typing import Any
 
 import pytest
 
@@ -18,46 +18,40 @@ _ALL_STORAGE_SET_KEYS = set([s.value for s in StorageSetKey])
 _REMAINING_STORAGE_SET_KEYS = _ALL_STORAGE_SET_KEYS - {"events", "querylog"}
 
 _QUERYLOG_CLUSTER = cluster.ClickhouseCluster(
-    **{
-        "host": "host_1",
-        "port": "1",
-        "user": "",
-        "password": "",
-        "database": "default",
-        "http_port": "420",
-        "storage_sets": {
-            "querylog",
-        },
-        "single_node": True,
-    }
+    host="host_1",
+    port=1,
+    user="",
+    password="",
+    database="default",
+    http_port=420,
+    storage_sets={
+        "querylog",
+    },
+    single_node=True,
 )
 
 _EVENTS_CLUSTER = cluster.ClickhouseCluster(
-    **{
-        "host": "host_2",
-        "port": "2",
-        "user": "",
-        "password": "",
-        "database": "default",
-        "http_port": "420",
-        "storage_sets": {
-            "events",
-        },
-        "single_node": True,
-    }
+    host="host_2",
+    port=2,
+    user="",
+    password="",
+    database="default",
+    http_port=420,
+    storage_sets={
+        "events",
+    },
+    single_node=True,
 )
 
 _REST_CLUSTER = cluster.ClickhouseCluster(
-    **{
-        "host": "host_3",
-        "port": "3",
-        "user": "",
-        "password": "",
-        "database": "default",
-        "http_port": "420",
-        "storage_sets": _REMAINING_STORAGE_SET_KEYS,
-        "single_node": True,
-    }
+    host="host_3",
+    port=3,
+    user="",
+    password="",
+    database="default",
+    http_port=420,
+    storage_sets=_REMAINING_STORAGE_SET_KEYS,
+    single_node=True,
 )
 
 
@@ -71,7 +65,7 @@ TEST_CLUSTERS = [
 @pytest.fixture
 def override_cluster(
     monkeypatch: pytest.MonkeyPatch,
-) -> Generator:
+) -> Any:
     with monkeypatch.context() as m:
         m.setattr(cluster, "CLUSTERS", TEST_CLUSTERS)
         m.setattr(
@@ -85,11 +79,10 @@ def override_cluster(
                 },
             },
         )
-
         yield
 
 
-def test_get_clickhouse_clusters_for_migration_group(override_cluster) -> None:
+def test_get_clickhouse_clusters_for_migration_group(override_cluster: Any) -> None:
     clusters = get_clickhouse_clusters_for_migration_group(MigrationGroup.QUERYLOG)
     assert len(clusters) == 1
     assert clusters[0] == _QUERYLOG_CLUSTER
