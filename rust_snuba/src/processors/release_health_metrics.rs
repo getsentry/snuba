@@ -29,7 +29,7 @@ fn generate_timeseries_id(
     org_id: u64,
     project_id: u64,
     metric_id: u64,
-    tags: &BTreeMap<u64, u64>,
+    tags: &BTreeMap<String, u64>,
 ) -> u32 {
     let mut adler = Adler32::new();
 
@@ -38,7 +38,7 @@ fn generate_timeseries_id(
     adler.write_slice(&metric_id.to_le_bytes());
 
     for (key, value) in tags {
-        adler.write_slice(&key.to_le_bytes());
+        adler.write_slice(key.as_bytes());
         adler.write_slice(&value.to_le_bytes());
     }
 
@@ -55,7 +55,7 @@ struct FromMetricsMessage {
     r#type: String,
     timestamp: f64,
     sentry_received_timestamp: Option<f64>,
-    tags: BTreeMap<u64, u64>,
+    tags: BTreeMap<String, u64>,
     value: MetricValue,
     retention_days: u16,
 }
@@ -87,7 +87,8 @@ struct MetricsRawRow {
     distribution_values: Option<Vec<f64>>,
     materialization_version: u8,
     timeseries_id: u32,
-    granularities: Vec<u8>,
+    partition: u16,
+    offset: u64,
 }
 
 /// Parse is the trait which should be implemented for all metric types.
@@ -96,6 +97,7 @@ struct MetricsRawRow {
 trait Parse {
     fn parse(
         from: FromMetricsMessage,
+        meta: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<MetricsRawRow>>;
 }
@@ -103,21 +105,13 @@ trait Parse {
 impl Parse for MetricsRawRow {
     fn parse(
         from: FromMetricsMessage,
+        meta: KafkaMessageMetadata,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<MetricsRawRow>> {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-
-        let count_value = match from.value {
-            MetricValue::Counter(value) => value,
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Unsupported values provided for counter metric type"
-                ))
-            }
-        };
 
         // The way the _should_process functionality works in the Python
         // processor today is by matching against the InputType Enum
@@ -131,7 +125,7 @@ impl Parse for MetricsRawRow {
                 metric_id: from.metric_id,
                 timestamp: from.timestamp as u32,
                 retention_days,
-                tags_key: tag_keys,
+                tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
                 tags_value: tag_values,
                 set_values: match from.value {
                     MetricValue::SetOrDistribution(value) => Some(value),
@@ -145,6 +139,8 @@ impl Parse for MetricsRawRow {
                 distribution_values: None,
                 materialization_version: 4,
                 timeseries_id,
+                partition: meta.partition,
+                offset: meta.offset,
                 ..Default::default()
             })),
             "c" => Ok(Some(MetricsRawRow {
@@ -155,7 +151,7 @@ impl Parse for MetricsRawRow {
                 metric_id: from.metric_id,
                 timestamp: from.timestamp as u32,
                 retention_days,
-                tags_key: tag_keys,
+                tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
                 tags_value: tag_values,
                 set_values: None,
                 count_value: match from.value {
@@ -169,6 +165,8 @@ impl Parse for MetricsRawRow {
                 distribution_values: None,
                 materialization_version: 4,
                 timeseries_id,
+                partition: meta.partition,
+                offset: meta.offset,
                 ..Default::default()
             })),
             "d" => Ok(Some(MetricsRawRow {
@@ -179,7 +177,7 @@ impl Parse for MetricsRawRow {
                 metric_id: from.metric_id,
                 timestamp: from.timestamp as u32,
                 retention_days,
-                tags_key: tag_keys,
+                tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
                 tags_value: tag_values,
                 set_values: None,
                 count_value: None,
@@ -196,6 +194,8 @@ impl Parse for MetricsRawRow {
                 },
                 materialization_version: 4,
                 timeseries_id,
+                partition: meta.partition,
+                offset: meta.offset,
                 ..Default::default()
             })),
             &_ => Err(anyhow::anyhow!(
@@ -205,7 +205,11 @@ impl Parse for MetricsRawRow {
     }
 }
 
-fn process_message(payload: KafkaPayload, config: &ProcessorConfig) -> anyhow::Result<InsertBatch> {
+fn process_message(
+    payload: KafkaPayload,
+    meta: KafkaMessageMetadata,
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg = serde_json::from_slice::<FromMetricsMessage>(payload_bytes)?;
 
@@ -216,7 +220,8 @@ fn process_message(payload: KafkaPayload, config: &ProcessorConfig) -> anyhow::R
         None => None,
     };
 
-    let result: Result<Option<MetricsRawRow>, anyhow::Error> = MetricsRawRow::parse(msg, config);
+    let result: Result<Option<MetricsRawRow>, anyhow::Error> =
+        MetricsRawRow::parse(msg, meta, config);
     match result {
         Ok(row) => {
             if let Some(row) = row {
@@ -236,10 +241,10 @@ fn process_message(payload: KafkaPayload, config: &ProcessorConfig) -> anyhow::R
 
 pub fn process_metrics_message(
     payload: KafkaPayload,
-    _metadata: KafkaMessageMetadata,
+    metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message(payload, config)
+    process_message(payload, metadata, config)
 }
 
 // Tests are not updated yet, these are still generic metrics tests
