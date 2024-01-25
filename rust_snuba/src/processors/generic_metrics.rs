@@ -51,7 +51,7 @@ struct FromGenericMetricsMessage {
     project_id: u64,
     metric_id: u64,
     timestamp: f64,
-    sentry_received_timestamp: f64,
+    sentry_received_timestamp: Option<f64>,
     tags: BTreeMap<String, String>,
     #[serde(flatten)]
     value: MetricValue,
@@ -182,8 +182,12 @@ where
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
     let use_case_id = msg.use_case_id.clone();
-    let sentry_received_timestamp =
-        DateTime::from_timestamp(msg.sentry_received_timestamp as i64, 0);
+    let sentry_received_timestamp = match msg.sentry_received_timestamp {
+        Some(f64) => {
+            DateTime::from_timestamp(msg.sentry_received_timestamp.unwrap_or_default() as i64, 0)
+        }
+        None => None,
+    };
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
 
