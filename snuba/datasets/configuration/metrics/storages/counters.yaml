@@ -1,5 +1,5 @@
 version: v1
-kind: writable_storage
+kind: readable_storage
 name: metrics_counters
 storage:
   key: metrics_counters
@@ -48,7 +48,3 @@ query_processors:
     args:
       column_name: tags
   - processor: TableRateLimit
-stream_loader:
-  processor: CounterAggregateProcessor
-  default_topic: snuba-metrics
-  dlq_topic: snuba-dead-letter-metrics-counters
