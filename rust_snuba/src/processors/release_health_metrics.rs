@@ -213,12 +213,10 @@ fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg = serde_json::from_slice::<FromMetricsMessage>(payload_bytes)?;
 
-    let sentry_received_timestamp: Option<DateTime<Utc>> = match msg.sentry_received_timestamp {
-        Some(f64) => {
-            DateTime::from_timestamp(msg.sentry_received_timestamp.unwrap_or_default() as i64, 0)
-        }
-        None => None,
-    };
+    let sentry_received_timestamp = msg
+        .sentry_received_timestamp
+        .map(|v| DateTime::from_timestamp(v as i64, 0))
+        .flatten();
 
     let result: Result<Option<MetricsRawRow>, anyhow::Error> =
         MetricsRawRow::parse(msg, meta, config);
