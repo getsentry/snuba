@@ -2552,8 +2552,6 @@ dependencies = [
 [[package]]
 name = "statsdproxy"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75c3ca857ffc876cad78f6c1489356c962d214fe500117c61865550e6304509d"
 dependencies = [
  "anyhow",
  "cadence",
@@ -2561,6 +2559,8 @@ dependencies = [
  "crc32fast",
  "env_logger",
  "log",
+ "rand 0.8.5",
+ "sentry",
  "serde",
  "serde_yaml",
  "signal-hook",

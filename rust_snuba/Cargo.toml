@@ -38,7 +38,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 thiserror = "1.0"
 tokio = { version = "1.19.2", features = ["full"] }
-statsdproxy = { version = "0.1.1", features = ["cadence-adapter"] }
+statsdproxy = { version = "0.1.1", features = ["cadence-adapter", "sentry"], path = "../../statsdproxy" }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
 uuid = "1.5.0"

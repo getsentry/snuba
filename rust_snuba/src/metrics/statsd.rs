@@ -1,8 +1,11 @@
 use rust_arroyo::metrics::{Metric, MetricSink, Recorder, StatsdRecorder};
 use statsdproxy::cadence::StatsdProxyMetricSink;
-use statsdproxy::config::AggregateMetricsConfig;
+use statsdproxy::config::{AggregateMetricsConfig, SampleConfig};
 use statsdproxy::middleware::aggregate::AggregateMetrics;
-use statsdproxy::middleware::Upstream;
+use statsdproxy::middleware::mirror::Mirror;
+use statsdproxy::middleware::sample::Sample;
+use statsdproxy::middleware::sentry::Sentry;
+use statsdproxy::middleware::upstream::Upstream;
 
 use crate::metrics::global_tags::AddGlobalTags;
 
@@ -30,6 +33,10 @@ impl StatsDBackend {
         let upstream_addr = format!("{}:{}", host, port);
         let aggregator_sink = StatsdProxyMetricSink::new(move || {
             let next_step = Upstream::new(upstream_addr.clone()).unwrap();
+
+            let next_step_sentry = Sample::new(SampleConfig { sample_rate: 0.01 }, Sentry::new());
+
+            let next_step = Mirror::new(next_step, next_step_sentry);
 
             // adding global tags *after* aggregation is more performant than trying to do the same
             // in cadence, as it means more bytes and more memory to deal with in
