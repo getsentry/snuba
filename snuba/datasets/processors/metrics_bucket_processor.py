@@ -139,9 +139,3 @@ class PolymorphicMetricsProcessor(MetricsBucketProcessor):
             return {"metric_type": OutputType.COUNTER.value, "count_value": value}
         else:  # message["type"] == InputType.DISTRIBUTION.value
             return values_for_distribution_message(message)
-
-
-def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
-    time_seconds = timestamp.timestamp()
-    out_seconds = interval_seconds * (time_seconds // interval_seconds)
-    return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
