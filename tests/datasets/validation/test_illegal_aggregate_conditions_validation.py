@@ -3,7 +3,6 @@ from typing import Optional
 
 import pytest
 
-from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import SelectedExpression
@@ -138,7 +137,6 @@ def test_illegal_aggregate_in_condition_validator(
     having: Optional[Expression],
     exception: Exception,
 ) -> None:
-    state.set_config("enable_illegal_aggregate_in_condition_validator", 1)
     query = LogicalQuery(
         QueryEntity(EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()),
         selected_columns=[
