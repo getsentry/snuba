@@ -2,8 +2,7 @@
   "name": "snuba-admin",
   "version": "1.0.0",
   "scripts": {
-    "build": "webpack --config webpack.config.js --mode production",
-    "watch": "webpack --config webpack.config.js --mode development --watch",
+    "build": "rollup -c",
     "test": "jest"
   },
   "dependencies": {
@@ -11,14 +10,13 @@
     "@mantine/hooks": "^6.0.15",
     "@mantine/prism": "^6.0.15",
     "@mantine/tiptap": "^6.0.15",
-    "@tiptap/extension-link": "^2.0.3",
-    "@tiptap/react": "^2.0.3",
-    "@tiptap/starter-kit": "^2.0.3",
+    "@sentry/react": "^7.88.0",
     "@tiptap/extension-code-block-lowlight": "^2.0.3",
+    "@tiptap/extension-link": "^2.0.3",
     "@tiptap/extension-placeholder": "^2.0.3",
     "@tiptap/pm": "^2.0.3",
-    "@sentry/react": "^7.88.0",
-    "@sentry/webpack-plugin": "^2.4.0",
+    "@tiptap/react": "^2.0.3",
+    "@tiptap/starter-kit": "^2.0.3",
     "@types/react": "^18.0.20",
     "@types/react-dom": "^18.2.6",
     "jest-dom": "^4.0.0",
@@ -30,13 +28,20 @@
     "typescript": "^4.8.3"
   },
   "devDependencies": {
+    "@babel/preset-react": "^7.23.3",
     "@emotion/react": "^11.11.1",
     "@jest/globals": "^29.4.3",
     "@mantine/core": "^6.0.15",
     "@mantine/hooks": "^6.0.15",
     "@mantine/prism": "^6.0.15",
     "@mantine/tiptap": "^6.0.15",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-replace": "^5.0.5",
+    "@rollup/plugin-typescript": "^11.1.6",
     "@tabler/icons-react": "^2.23.0",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-terser": "^0.4.4",
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.4.3",
     "@tiptap/extension-link": "^2.0.3",
@@ -49,10 +54,9 @@
     "jest-environment-jsdom": "^29.5.0",
     "react-bootstrap": "^2.7.4",
     "resize-observer-polyfill": "^1.5.1",
+    "rollup": "^4.9.6",
     "ts-jest": "^29.0.5",
-    "use-resize-observer": "^9.1.0",
-    "webpack": "^5.88.0",
-    "webpack-cli": "^4.10.0"
+    "use-resize-observer": "^9.1.0"
   },
   "volta": {
     "node": "20.8.1",
