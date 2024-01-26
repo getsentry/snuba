@@ -218,6 +218,8 @@ fn process_message(
         .map(|v| DateTime::from_timestamp(v as i64, 0))
         .flatten();
 
+    // dbg!(sentry_received_timestamp);
+
     let result: Result<Option<MetricsRawRow>, anyhow::Error> =
         MetricsRawRow::parse(msg, meta, config);
     match result {
