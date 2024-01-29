@@ -19,8 +19,8 @@ use rust_arroyo::types::{Partition, Topic};
 use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
     BrokerConfig, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
-    MessageProcessorConfig, ProcessingFunction, ProcessorConfig, StatsDBackend, StorageConfig,
-    TopicConfig, PROCESSORS,
+    MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
+    StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
 };
 use uuid::Uuid;
 
@@ -70,6 +70,8 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let commitlog_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
+    let replacements_concurrency =
+        ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let factory = ConsumerStrategyFactory::new(
         storage,
         EnvConfig::default(),
@@ -80,10 +82,12 @@ fn create_factory(
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,
+        replacements_concurrency,
         None,
         true,
         None,
         false,
+        None,
         None,
         "test-group".to_owned(),
         Topic::new("test"),
@@ -199,13 +203,20 @@ fn main() {
 
     let mut c = Criterion::default().configure_from_args();
 
-    for (python_class_name, topic_name, processor_fn) in PROCESSORS {
+    for (python_class_name, topic_name, processor_fn_type) in PROCESSORS {
         let mut group = c.benchmark_group(*topic_name);
-        run_fn_bench(&mut group, topic_name, *processor_fn);
-        for concurrency in [1, 4, 16] {
-            run_processor_bench(&mut group, concurrency, topic_name, python_class_name);
+        match processor_fn_type {
+            ProcessingFunctionType::ProcessingFunction(processor_fn) => {
+                run_fn_bench(&mut group, topic_name, *processor_fn);
+                for concurrency in [1, 4, 16] {
+                    run_processor_bench(&mut group, concurrency, topic_name, python_class_name);
+                }
+                group.finish();
+            }
+            _ => {
+                // TODO: Support processing function with replacements
+            }
         }
-        group.finish();
     }
 
     c.final_summary()

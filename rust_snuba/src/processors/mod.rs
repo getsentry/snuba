@@ -1,3 +1,4 @@
+mod errors;
 mod functions;
 mod generic_metrics;
 mod metrics_summaries;
@@ -9,25 +10,37 @@ mod spans;
 mod utils;
 
 use crate::config::ProcessorConfig;
-use crate::types::{InsertBatch, KafkaMessageMetadata};
+use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+
+pub enum ProcessingFunctionType {
+    ProcessingFunction(ProcessingFunction),
+    ProcessingFunctionWithReplacements(ProcessingFunctionWithReplacements),
+}
 
 pub type ProcessingFunction =
     fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<InsertBatch>;
 
+pub type ProcessingFunctionWithReplacements =
+    fn(
+        KafkaPayload,
+        KafkaMessageMetadata,
+        config: &ProcessorConfig,
+    ) -> anyhow::Result<InsertOrReplacement<InsertBatch>>;
+
 macro_rules! define_processing_functions {
-    ($(($name:literal, $logical_topic:literal, $function:path)),* $(,)*) => {
+    ($(($name:literal, $logical_topic:literal, $function:expr)),* $(,)*) => {
         // define function via macro so we can assert statically that processor names are unique.
         // if it weren't for that, it would probably be just as performant to iterate through the
         // PROCESSORS slice since it is const anyway
-        pub fn get_processing_function(name: &str) -> Option<ProcessingFunction> {
+        pub fn get_processing_function(name: &str) -> Option<ProcessingFunctionType> {
             match name {
                 $($name => Some($function),)*
                 _ => None,
             }
         }
 
-        pub const PROCESSORS: &[(&'static str, &'static str, ProcessingFunction)] = &[
+        pub const PROCESSORS: &[(&'static str, &'static str, ProcessingFunctionType)] = &[
             $(($name, $logical_topic, $function),)*
         ];
     };
@@ -35,17 +48,18 @@ macro_rules! define_processing_functions {
 
 define_processing_functions! {
     // python class name, schema name/logical topic, function path
-    ("FunctionsMessageProcessor", "profiles-call-tree", functions::process_message),
-    ("ProfilesMessageProcessor", "processed-profiles", profiles::process_message),
-    ("QuerylogProcessor", "snuba-queries", querylog::process_message),
-    ("ReplaysProcessor", "ingest-replay-events", replays::process_message),
-    ("SpansMessageProcessor", "snuba-spans", spans::process_message),
-    ("MetricsSummariesMessageProcessor", "snuba-spans", metrics_summaries::process_message),
-    ("OutcomesProcessor", "outcomes", outcomes::process_message),
-    ("GenericCountersMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_counter_message),
-    ("GenericSetsMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_set_message),
-    ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", generic_metrics::process_distribution_message),
-    ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", generic_metrics::process_gauge_message),
+    ("FunctionsMessageProcessor", "profiles-call-tree", ProcessingFunctionType::ProcessingFunction(functions::process_message)),
+    ("ProfilesMessageProcessor", "processed-profiles", ProcessingFunctionType::ProcessingFunction(profiles::process_message)),
+    ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
+    ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
+    ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
+    ("MetricsSummariesMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(metrics_summaries::process_message)),
+    ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
+    ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
+    ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
+    ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_distribution_message)),
+    ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
+    ("errors", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
 }
 
 // COGS is recorded for these processors
@@ -88,7 +102,7 @@ mod tests {
     #[ignore]
     fn test_schemas() {
         let processor_config = ProcessorConfig::default();
-        for (_python_class_name, topic_name, processor_fn) in PROCESSORS {
+        for (_python_class_name, topic_name, processor_fn_type) in PROCESSORS {
             let schema = get_schema(topic_name, None).unwrap();
             let metadata = KafkaMessageMetadata {
                 partition: 0,
@@ -108,14 +122,40 @@ mod tests {
                 let _guard = settings.bind_to_scope();
 
                 let payload = KafkaPayload::new(None, None, Some(example.to_vec()));
-                let processed = processor_fn(payload, metadata.clone(), &processor_config).unwrap();
-                let encoded_rows = String::from_utf8(processed.rows.into_encoded_rows()).unwrap();
-                let mut snapshot_payload = Vec::new();
-                for row in encoded_rows.lines() {
-                    let row_value: serde_json::Value = serde_json::from_str(row).unwrap();
-                    snapshot_payload.push(row_value);
+
+                match processor_fn_type {
+                    ProcessingFunctionType::ProcessingFunction(processor_fn) => {
+                        let processed =
+                            processor_fn(payload, metadata.clone(), &processor_config).unwrap();
+                        let encoded_rows =
+                            String::from_utf8(processed.rows.into_encoded_rows()).unwrap();
+                        let mut snapshot_payload = Vec::new();
+                        for row in encoded_rows.lines() {
+                            let row_value: serde_json::Value = serde_json::from_str(row).unwrap();
+                            snapshot_payload.push(row_value);
+                        }
+                        insta::assert_json_snapshot!(snapshot_payload);
+                    }
+                    ProcessingFunctionType::ProcessingFunctionWithReplacements(processor_fn) => {
+                        let processed =
+                            processor_fn(payload, metadata.clone(), &processor_config).unwrap();
+
+                        match processed {
+                            InsertOrReplacement::Insert(insert) => {
+                                let encoded_rows =
+                                    String::from_utf8(insert.rows.into_encoded_rows()).unwrap();
+                                let mut snapshot_payload = Vec::new();
+                                for row in encoded_rows.lines() {
+                                    let row_value: serde_json::Value =
+                                        serde_json::from_str(row).unwrap();
+                                    snapshot_payload.push(row_value);
+                                }
+                                insta::assert_json_snapshot!(snapshot_payload);
+                            }
+                            InsertOrReplacement::Replacement(_replacement) => {}
+                        }
+                    }
                 }
-                insta::assert_json_snapshot!(snapshot_payload);
             }
         }
     }
