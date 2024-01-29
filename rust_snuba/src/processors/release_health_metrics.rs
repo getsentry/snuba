@@ -197,7 +197,7 @@ impl Parse for MetricsRawRow {
     }
 }
 
-fn process_message(
+pub fn process_metrics_message(
     payload: KafkaPayload,
     meta: KafkaMessageMetadata,
     config: &ProcessorConfig,
@@ -228,14 +228,6 @@ fn process_message(
         }
         Err(err) => Err(err),
     }
-}
-
-pub fn process_metrics_message(
-    payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
-    config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
-    process_message(payload, metadata, config)
 }
 
 // Tests are not updated yet, these are still generic metrics tests
