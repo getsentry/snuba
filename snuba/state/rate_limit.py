@@ -354,6 +354,7 @@ def rate_limit_finish_request(
         try:
             pipe.zrem(query_bucket, query_id)  # not allowed / not counted
             pipe.expire(query_bucket, max_query_duration_s)
+            pipe.execute()
         except Exception as ex:
             logger.exception(ex)
     else:
@@ -361,6 +362,7 @@ def rate_limit_finish_request(
             # return the query to its start time, if the query_id was actually added.
             pipe.zincrby(query_bucket, -float(max_query_duration_s), query_id)
             pipe.expire(query_bucket, max_query_duration_s)
+            pipe.execute()
         except Exception as ex:
             logger.exception(ex)
 
