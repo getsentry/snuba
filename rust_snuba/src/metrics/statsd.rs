@@ -29,12 +29,17 @@ impl MetricSink for Wrapper {
 }
 
 impl StatsDBackend {
-    pub fn new(host: &str, port: u16, prefix: &str) -> Self {
+    pub fn new(host: &str, port: u16, prefix: &str, ddm_metrics_sample_rate: f64) -> Self {
         let upstream_addr = format!("{}:{}", host, port);
         let aggregator_sink = StatsdProxyMetricSink::new(move || {
             let next_step = Upstream::new(upstream_addr.clone()).unwrap();
 
-            let next_step_sentry = Sample::new(SampleConfig { sample_rate: 0.01 }, Sentry::new());
+            let next_step_sentry = Sample::new(
+                SampleConfig {
+                    sample_rate: ddm_metrics_sample_rate,
+                },
+                Sentry::new(),
+            );
 
             let next_step = Mirror::new(next_step, next_step_sentry);
 
