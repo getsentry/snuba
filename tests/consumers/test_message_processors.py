@@ -21,7 +21,7 @@ from snuba.datasets.processors.generic_metrics_processor import (
 )
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.datasets.processors.replays_processor import ReplaysProcessor
-from snuba.processor import InsertBatch
+from snuba.processor import InsertBatch, ReplacementBatch
 
 
 @pytest.mark.parametrize(
@@ -78,6 +78,9 @@ def test_message_processors(
         # Handle scenarios where the message needs to be skipped by the processor
         if not python_processed_message:
             assert rust_processed_message == b""
+            continue
+
+        if isinstance(python_processed_message, ReplacementBatch):
             continue
 
         assert isinstance(python_processed_message, InsertBatch)

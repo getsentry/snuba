@@ -1,6 +1,5 @@
 use anyhow::Context;
 use chrono::DateTime;
-use chrono::Utc;
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,7 +11,7 @@ use uuid::Uuid;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::enforce_retention;
+use crate::processors::utils::{enforce_retention, ensure_valid_datetime};
 use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
 
 pub fn process_message(
@@ -20,33 +19,66 @@ pub fn process_message(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
+    // DEBUG DESERIALIZER. Uncomment this if you're getting Rust errors.
+    //
+    // let payload_bytes = payload.payload().context("Expected payload")?;
+    // let msg: Vec<Value> = serde_json::from_slice(payload_bytes)?;
+    // if msg.len() == 4 {
+    //     let x = msg.get(2).unwrap();
+    //     let y = x.to_string();
+    //     let msg: ErrorMessage = serde_json::from_str(&y)?;
+    // }
+
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: ErrorMessage = serde_json::from_slice(payload_bytes)?;
-    let origin_timestamp = DateTime::from_timestamp(msg.data.received as i64, 0);
+    let msg: Message = serde_json::from_slice(payload_bytes)?;
 
-    let mut row: ErrorRow = msg.try_into()?;
-    row.partition = metadata.partition;
-    row.offset = metadata.offset;
-    row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
-    row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+    match msg {
+        Message::FourTrain(_, _, error, _) => {
+            let origin_timestamp = DateTime::from_timestamp(error.data.received as i64, 0);
 
-    Ok(InsertBatch {
-        origin_timestamp,
-        rows: RowData::from_rows([row])?,
-        sentry_received_timestamp: None,
-        cogs_data: None,
-    })
+            let mut row: ErrorRow = error.try_into()?;
+            row.partition = metadata.partition;
+            row.offset = metadata.offset;
+            row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
+            row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+
+            Ok(InsertBatch {
+                origin_timestamp,
+                rows: RowData::from_rows([row])?,
+                sentry_received_timestamp: None,
+                cogs_data: None,
+            })
+        }
+        _ => Ok(InsertBatch {
+            origin_timestamp: DateTime::from_timestamp(0, 0),
+            rows: RowData {
+                encoded_rows: [].to_vec(),
+                num_rows: 0,
+            },
+            sentry_received_timestamp: None,
+            cogs_data: None,
+        }),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Message {
+    FourTrain(u8, String, ErrorMessage, Value),
+    ThreeTrain(u8, String, Value),
 }
 
 #[derive(Debug, Deserialize)]
 struct ErrorMessage {
     data: ErrorData,
-    datetime: Option<String>,
+    #[serde(default, deserialize_with = "ensure_valid_datetime")]
+    datetime: u32,
     event_id: Uuid,
     group_id: u64,
     message: String,
     primary_hash: String,
     project_id: u64,
+    #[serde(default)]
     retention_days: u16,
 }
 
@@ -76,7 +108,7 @@ struct ErrorData {
     #[serde(default)]
     sdk: Sdk,
     #[serde(default)]
-    tags: Vec<(String, Unicodify)>,
+    tags: Vec<Option<(Unicodify, Unicodify)>>,
     #[serde(default, alias = "sentry.interfaces.Threads")]
     thread: Thread,
     #[serde(default)]
@@ -104,7 +136,7 @@ struct TraceContext {
     #[serde(default)]
     sampled: Option<bool>,
     #[serde(default)]
-    span_id: Option<u64>,
+    span_id: Option<String>,
     #[serde(default)]
     trace_id: Option<Uuid>,
 }
@@ -120,7 +152,7 @@ struct ReplayContext {
 #[derive(Debug, Default, Deserialize)]
 struct Exception {
     #[serde(default)]
-    values: Vec<ExceptionValue>, // Deviation: Apparently sent as Vec<Option<T>>.
+    values: Option<Vec<ExceptionValue>>, // Deviation: Apparently sent as Vec<Option<T>>.
 }
 
 #[derive(Debug, Deserialize)]
@@ -195,7 +227,7 @@ struct Sdk {
     #[serde(default)]
     version: Unicodify,
     #[serde(default)]
-    integrations: Vec<Unicodify>,
+    integrations: Option<Vec<Unicodify>>,
 }
 
 // Request
@@ -316,6 +348,15 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             return Err(anyhow::Error::msg("Invalid type."));
         }
 
+        // Parse the optional string to a base16 u64.
+        let span_id = from
+            .data
+            .contexts
+            .trace
+            .span_id
+            .map(|inner| u64::from_str_radix(&inner, 16).ok())
+            .unwrap_or_default();
+
         // Hashes
         let primary_hash = to_uuid(from.primary_hash);
         let hierarchical_hashes: Vec<Uuid> = from
@@ -330,6 +371,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             .data
             .sdk
             .integrations
+            .unwrap_or_default()
             .into_iter()
             .filter_map(|v| v.0)
             .collect();
@@ -371,25 +413,32 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut tags_value = Vec::with_capacity(from.data.tags.len());
 
         for tag in from.data.tags.into_iter() {
-            if &tag.0 == "environment" {
-                environment = tag.1 .0
-            } else if &tag.0 == "level" {
-                level = tag.1 .0
-            } else if &tag.0 == "transaction" {
-                transaction_name = tag.1 .0
-            } else if &tag.0 == "sentry:release" {
-                release = tag.1 .0
-            } else if &tag.0 == "sentry:dist" {
-                dist = tag.1 .0
-            } else if &tag.0 == "sentry:user" {
-                user = tag.1 .0
-            } else if &tag.0 == "replayId" {
-                // TODO: empty state should be null?
-                replay_id = tag.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
-            } else if let Some(tag_value) = tag.1 .0 {
-                // Only tags with non-null values are stored.
-                tags_key.push(tag.0);
-                tags_value.push(tag_value);
+            match tag {
+                Some(t) => {
+                    if let Some(tag_key) = &t.0 .0 {
+                        if tag_key == "environment" {
+                            environment = t.1 .0
+                        } else if tag_key == "level" {
+                            level = t.1 .0
+                        } else if tag_key == "transaction" {
+                            transaction_name = t.1 .0
+                        } else if tag_key == "sentry:release" {
+                            release = t.1 .0
+                        } else if tag_key == "sentry:dist" {
+                            dist = t.1 .0
+                        } else if tag_key == "sentry:user" {
+                            user = t.1 .0
+                        } else if tag_key == "replayId" {
+                            // TODO: empty state should be null?
+                            replay_id = t.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
+                        } else if let Some(tag_value) = t.1 .0 {
+                            // Only tags with non-null values are stored.
+                            tags_key.push(tag_key.to_owned());
+                            tags_value.push(tag_value);
+                        }
+                    }
+                }
+                None => {}
             }
         }
 
@@ -429,14 +478,10 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         // TODO: Add blacklist.
         // if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
 
-        let exception_count = from.data.exception.values.len();
-        let frame_count = from
-            .data
-            .exception
-            .values
-            .iter()
-            .map(|v| v.stacktrace.frames.len())
-            .sum();
+        let exceptions = from.data.exception.values.unwrap_or_default();
+
+        let exception_count = exceptions.len();
+        let frame_count = exceptions.iter().map(|v| v.stacktrace.frames.len()).sum();
 
         let mut stack_level: u16 = 0;
         let mut stack_types = Vec::with_capacity(exception_count);
@@ -454,7 +499,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut frame_stack_levels = Vec::with_capacity(frame_count);
         let mut exception_main_thread = false;
 
-        for stack in from.data.exception.values {
+        for stack in exceptions {
             stack_types.push(stack.ty.0);
             stack_values.push(stack.value.0);
             stack_mechanism_types.push(stack.mechanism.ty.0);
@@ -533,10 +578,10 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             sdk_integrations,
             sdk_name: from.data.sdk.name.0,
             sdk_version: from.data.sdk.version.0,
-            span_id: from.data.contexts.trace.span_id,
+            span_id,
             tags_key,
             tags_value,
-            timestamp: datetime_to_timestamp(from.datetime).unwrap(),
+            timestamp: from.datetime,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from.data.contexts.trace.trace_id,
             trace_sampled: from.data.contexts.trace.sampled.map(|v| v as u8),
@@ -556,32 +601,6 @@ fn to_uuid(uuid_string: String) -> Uuid {
     match Uuid::parse_str(&uuid_string) {
         Ok(uuid) => uuid,
         Err(_) => Uuid::from_slice(md5::compute(uuid_string.as_bytes()).as_slice()).unwrap(),
-    }
-}
-
-fn datetime_to_timestamp(datetime_str: Option<String>) -> Result<u32, &'static str> {
-    let dt = match datetime_str {
-        Some(v) => v,
-        None => return Ok(Utc::now().timestamp() as u32), // TODO: Implicit truncation.
-    };
-
-    // Datetimes must be provided in this format.
-    let format = "%Y-%m-%dT%H:%M:%S%.fZ";
-
-    // Parse the datetime string
-    let datetime = DateTime::parse_from_str(&dt, format);
-
-    // Check if parsing was successful
-    match datetime {
-        Ok(parsed_datetime) => {
-            let timestamp = parsed_datetime.timestamp();
-            if timestamp <= u32::MAX as i64 {
-                Ok(timestamp as u32)
-            } else {
-                Ok(Utc::now().timestamp() as u32)
-            }
-        }
-        Err(_) => Err("Invalid datetime format"),
     }
 }
 
