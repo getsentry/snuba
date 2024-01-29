@@ -235,6 +235,7 @@ def test_metrics_writing_e2e() -> None:
         {
             "org_id": 1,
             "project_id": 2,
+            "use_case_id": "sessions",
             "name": "sentry.transactions.transaction.duration",
             "unit": "ms",
             "type": "d",
