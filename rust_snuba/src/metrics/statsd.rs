@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn statsd_metric_backend() {
-        let backend = StatsDBackend::new("0.0.0.0", 8125, "test");
+        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", 0.0);
 
         backend.record_metric(metric!(Counter: "a", 1, "tag1" => "value1"));
         backend.record_metric(metric!(Gauge: "b", 20, "tag2" => "value2"));
