@@ -262,8 +262,15 @@ pub fn process_message(
         timestamp,
     };
 
-    let res = func(payload, meta, &config::ProcessorConfig::default())
-        .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+    match func {
+        processors::ProcessingFunctionType::ProcessingFunction(f) => {
+            let res = f(payload, meta, &config::ProcessorConfig::default())
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
 
-    Ok(res.rows.into_encoded_rows())
+            Ok(res.rows.into_encoded_rows())
+        }
+        _ => {
+            panic!("Replacements not supported in hybrid consumer");
+        }
+    }
 }

@@ -173,11 +173,11 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
             ),
-            processors::get_processing_function_with_replacements(
-                &self.storage_config.message_processor.python_class_name,
-            ),
         ) {
-            (true, _, Some(func)) => {
+            (
+                true,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(func)),
+            ) => {
                 let (replacements_config, replacements_destination) =
                     self.replacements_config.clone().unwrap();
 
@@ -201,17 +201,22 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     },
                 );
             }
-            (true, Some(func), _) => make_rust_processor(
-                next_step,
-                func,
-                &self.logical_topic_name,
-                self.enforce_schema,
-                &self.processing_concurrency,
-                config::ProcessorConfig {
-                    env_config: self.env_config.clone(),
-                },
-            ),
-            (false, _, Some(_)) => {
+            (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
+                make_rust_processor(
+                    next_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                    },
+                )
+            }
+            (
+                false,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(_)),
+            ) => {
                 panic!("Consumer with replacements cannot be run in hybrid-mode");
             }
             _ => {
