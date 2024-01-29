@@ -1,6 +1,6 @@
 use adler::Adler32;
 use anyhow::Context;
-use chrono::{Date, DateTime, Utc};
+use chrono::DateTime;
 use core::f64;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
@@ -12,11 +12,6 @@ use crate::{
 };
 
 use super::utils::enforce_retention;
-
-const GRANULARITY_TEN_SECONDS: u8 = 0;
-const GRANULARITY_ONE_MINUTE: u8 = 1;
-const GRANULARITY_ONE_HOUR: u8 = 2;
-const GRANULARITY_ONE_DAY: u8 = 3;
 
 /// Generate a timeseries ID from the given parameters. Timeseries IDs are used to
 /// uniquely identify a timeseries in the database. This implemenation is based on
@@ -141,7 +136,6 @@ impl Parse for MetricsRawRow {
                 timeseries_id,
                 partition: meta.partition,
                 offset: meta.offset,
-                ..Default::default()
             })),
             "c" => Ok(Some(MetricsRawRow {
                 use_case_id: from.use_case_id,
@@ -167,7 +161,6 @@ impl Parse for MetricsRawRow {
                 timeseries_id,
                 partition: meta.partition,
                 offset: meta.offset,
-                ..Default::default()
             })),
             "d" => Ok(Some(MetricsRawRow {
                 use_case_id: from.use_case_id,
@@ -196,7 +189,6 @@ impl Parse for MetricsRawRow {
                 timeseries_id,
                 partition: meta.partition,
                 offset: meta.offset,
-                ..Default::default()
             })),
             &_ => Err(anyhow::anyhow!(
                 "Unsupported values provided for release health metric type"
@@ -215,8 +207,7 @@ fn process_message(
 
     let sentry_received_timestamp = msg
         .sentry_received_timestamp
-        .map(|v| DateTime::from_timestamp(v as i64, 0))
-        .flatten();
+        .and_then(|v| DateTime::from_timestamp(v as i64, 0));
 
     // dbg!(sentry_received_timestamp);
 
