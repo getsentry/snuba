@@ -42,6 +42,7 @@ fn generate_timeseries_id(
 
 #[derive(Debug, Deserialize)]
 struct FromMetricsMessage {
+    #[serde(default = "default_use_case_id")]
     use_case_id: String,
     org_id: u64,
     project_id: u64,
@@ -53,6 +54,10 @@ struct FromMetricsMessage {
     tags: BTreeMap<String, u64>,
     value: MetricValue,
     retention_days: u16,
+}
+
+fn default_use_case_id() -> String {
+    "sessions".into()
 }
 
 #[derive(Debug, Deserialize)]
