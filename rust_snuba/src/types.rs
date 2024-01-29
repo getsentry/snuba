@@ -113,7 +113,6 @@ impl From<KafkaPayload> for ReplacementData {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum InsertOrReplacement<T> {
     Insert(T),
