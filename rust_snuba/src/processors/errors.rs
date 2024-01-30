@@ -40,7 +40,7 @@ pub fn process_message_with_replacement(
             row.partition = metadata.partition;
             row.offset = metadata.offset;
             row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
-            row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
+            row.retention_days = Some(enforce_retention(row.retention_days, &config.env_config));
 
             Ok(InsertOrReplacement::Insert(InsertBatch {
                 origin_timestamp,
@@ -79,7 +79,7 @@ struct ErrorMessage {
     primary_hash: String,
     project_id: u64,
     #[serde(default)]
-    retention_days: u16,
+    retention_days: Option<u16>,
     platform: String,
 }
 
@@ -321,7 +321,7 @@ struct ErrorRow {
     release: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     replay_id: Option<Uuid>,
-    retention_days: u16,
+    retention_days: Option<u16>,
     sdk_integrations: Vec<String>,
     sdk_name: String,
     sdk_version: String,
