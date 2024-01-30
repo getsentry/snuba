@@ -219,7 +219,7 @@ class TestOptimize:
         tracker.delete_all_states()
         # For ClickHouse 23.3 and 23.8 parts from previous test runs
         # interfere with following tests, so best to drop the tables
-        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table}")
+        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
 
     @pytest.mark.parametrize(
         "table,host,expected",
