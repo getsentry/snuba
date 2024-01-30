@@ -363,7 +363,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             .data
             .hierarchical_hashes
             .into_iter()
-            .map(|v| to_uuid(v))
+            .map(to_uuid)
             .collect();
 
         // SDK Integrations
@@ -412,29 +412,27 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut tags_key = Vec::with_capacity(from.data.tags.len());
         let mut tags_value = Vec::with_capacity(from.data.tags.len());
 
-        for tag in from.data.tags.into_iter() {
-            if let Some(t) = tag {
-                if let Some(tag_key) = &t.0 .0 {
-                    if tag_key == "environment" {
-                        environment = t.1 .0
-                    } else if tag_key == "level" {
-                        level = t.1 .0
-                    } else if tag_key == "transaction" {
-                        transaction_name = t.1 .0
-                    } else if tag_key == "sentry:release" {
-                        release = t.1 .0
-                    } else if tag_key == "sentry:dist" {
-                        dist = t.1 .0
-                    } else if tag_key == "sentry:user" {
-                        user = t.1 .0
-                    } else if tag_key == "replayId" {
-                        // TODO: empty state should be null?
-                        replay_id = t.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
-                    } else if let Some(tag_value) = t.1 .0 {
-                        // Only tags with non-null values are stored.
-                        tags_key.push(tag_key.to_owned());
-                        tags_value.push(tag_value);
-                    }
+        for t in from.data.tags.into_iter().flatten() {
+            if let Some(tag_key) = &t.0 .0 {
+                if tag_key == "environment" {
+                    environment = t.1 .0
+                } else if tag_key == "level" {
+                    level = t.1 .0
+                } else if tag_key == "transaction" {
+                    transaction_name = t.1 .0
+                } else if tag_key == "sentry:release" {
+                    release = t.1 .0
+                } else if tag_key == "sentry:dist" {
+                    dist = t.1 .0
+                } else if tag_key == "sentry:user" {
+                    user = t.1 .0
+                } else if tag_key == "replayId" {
+                    // TODO: empty state should be null?
+                    replay_id = t.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
+                } else if let Some(tag_value) = t.1 .0 {
+                    // Only tags with non-null values are stored.
+                    tags_key.push(tag_key.to_owned());
+                    tags_value.push(tag_value);
                 }
             }
         }
