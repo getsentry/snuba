@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
@@ -89,6 +90,33 @@ impl LatencyRecorder {
             self.avg_value_ms(write_time),
         );
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReplacementData {
+    pub key: Vec<u8>,   // Project id
+    pub value: Vec<u8>, // Replacement message bytes
+}
+
+impl From<ReplacementData> for KafkaPayload {
+    fn from(value: ReplacementData) -> KafkaPayload {
+        KafkaPayload::new(Some(value.key), None, Some(value.value))
+    }
+}
+
+impl From<KafkaPayload> for ReplacementData {
+    fn from(value: KafkaPayload) -> ReplacementData {
+        ReplacementData {
+            key: value.key().unwrap().clone(),
+            value: value.payload().unwrap().clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InsertOrReplacement<T> {
+    Insert(T),
+    Replacement(ReplacementData),
 }
 
 /// The return value of message processors.

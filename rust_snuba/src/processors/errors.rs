@@ -12,13 +12,13 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, ensure_valid_datetime};
-use crate::types::{InsertBatch, KafkaMessageMetadata, RowData};
+use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata, RowData};
 
-pub fn process_message(
+pub fn process_message_with_replacement(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
-) -> anyhow::Result<InsertBatch> {
+) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
     // DEBUG DESERIALIZER. Uncomment this if you're getting Rust errors.
     //
     // let payload_bytes = payload.payload().context("Expected payload")?;
@@ -42,14 +42,14 @@ pub fn process_message(
             row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
             row.retention_days = enforce_retention(Some(row.retention_days), &config.env_config);
 
-            Ok(InsertBatch {
+            Ok(InsertOrReplacement::Insert(InsertBatch {
                 origin_timestamp,
                 rows: RowData::from_rows([row])?,
                 sentry_received_timestamp: None,
                 cogs_data: None,
-            })
+            }))
         }
-        _ => Ok(InsertBatch {
+        _ => Ok(InsertOrReplacement::Insert(InsertBatch {
             origin_timestamp: DateTime::from_timestamp(0, 0),
             rows: RowData {
                 encoded_rows: [].to_vec(),
@@ -57,7 +57,7 @@ pub fn process_message(
             },
             sentry_received_timestamp: None,
             cogs_data: None,
-        }),
+        })),
     }
 }
 
