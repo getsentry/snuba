@@ -12,7 +12,9 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, ensure_valid_datetime};
-use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata, RowData};
+use crate::types::{
+    InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
+};
 
 pub fn process_message_with_replacement(
     payload: KafkaPayload,
@@ -32,8 +34,19 @@ pub fn process_message_with_replacement(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: Message = serde_json::from_slice(payload_bytes)?;
 
-    match msg {
-        Message::FourTrain(_, _, error, _) => {
+    let (version, msg_type, error_event, replacement_event) = match msg {
+        Message::FourTrain(version, msg_type, event, _state) => {
+            (version, msg_type, Some(event), None)
+        }
+        Message::ThreeTrain(version, msg_type, event) => (version, msg_type, None, Some(event)),
+    };
+
+    if version != 2 {
+        anyhow::bail!("Unsupported message version: {}", version);
+    }
+
+    match (msg_type.as_str(), error_event, replacement_event) {
+        ("insert", Some(error), _) => {
             let origin_timestamp = DateTime::from_timestamp(error.data.received as i64, 0);
 
             let mut row: ErrorRow = error.try_into()?;
@@ -49,15 +62,16 @@ pub fn process_message_with_replacement(
                 cogs_data: None,
             }))
         }
-        _ => Ok(InsertOrReplacement::Insert(InsertBatch {
-            origin_timestamp: DateTime::from_timestamp(0, 0),
-            rows: RowData {
-                encoded_rows: [].to_vec(),
-                num_rows: 0,
-            },
-            sentry_received_timestamp: None,
-            cogs_data: None,
+        ("insert", None, _) => {
+            anyhow::bail!("insert-event without an error payload");
+        }
+        (_, _, Some(replacement_event)) => Ok(InsertOrReplacement::Replacement(ReplacementData {
+            key: replacement_event.project_id.to_string().into_bytes(),
+            value: payload_bytes.clone(),
         })),
+        _ => {
+            anyhow::bail!("unsupported message format: {:?}", msg_type);
+        }
     }
 }
 
@@ -65,7 +79,12 @@ pub fn process_message_with_replacement(
 #[serde(untagged)]
 enum Message {
     FourTrain(u8, String, ErrorMessage, Value),
-    ThreeTrain(u8, String, Value),
+    ThreeTrain(u8, String, ReplacementEvent),
+}
+
+#[derive(Deserialize, Debug)]
+struct ReplacementEvent {
+    project_id: u64,
 }
 
 #[derive(Debug, Deserialize)]

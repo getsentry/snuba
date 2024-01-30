@@ -14,6 +14,7 @@ use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
 
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
 use crate::config;
 use crate::factory::ConsumerStrategyFactory;
@@ -244,12 +245,16 @@ pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyExceptio
 
 #[pyfunction]
 pub fn process_message(
+    py: Python,
     name: &str,
     value: Vec<u8>,
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
-) -> PyResult<Vec<u8>> {
+) -> PyResult<(
+    Option<PyObject>,             // insert: encoded rows
+    Option<(PyObject, PyObject)>, // replacement: (key/project_id, value)
+)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
     let func = processors::get_processing_function(name)
@@ -273,15 +278,24 @@ pub fn process_message(
             let res = f(payload, meta, &config::ProcessorConfig::default())
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
 
-            Ok(res.rows.into_encoded_rows())
+            let payload = PyBytes::new(py, &res.rows.into_encoded_rows()).into();
+
+            Ok((Some(payload), None))
         }
         processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(f) => {
             let res = f(payload, meta, &config::ProcessorConfig::default())
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
 
             match res {
-                InsertOrReplacement::Insert(r) => Ok(r.rows.into_encoded_rows()),
-                _ => panic!("Replacements not supported in hybrid consumer"),
+                InsertOrReplacement::Insert(r) => {
+                    let payload = PyBytes::new(py, &r.rows.into_encoded_rows()).into();
+                    Ok((Some(payload), None))
+                }
+                InsertOrReplacement::Replacement(r) => {
+                    let key_bytes = PyBytes::new(py, &r.key).into();
+                    let value_bytes = PyBytes::new(py, &r.value).into();
+                    Ok((None, Some((key_bytes, value_bytes))))
+                }
             }
         }
     }

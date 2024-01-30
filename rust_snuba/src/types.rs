@@ -94,8 +94,9 @@ impl LatencyRecorder {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReplacementData {
-    pub key: Vec<u8>,   // Project id
-    pub value: Vec<u8>, // Replacement message bytes
+    pub key: Vec<u8>, // Project id
+    // Replacement message bytes. Newline-delimited series of json payloads
+    pub value: Vec<u8>,
 }
 
 impl From<ReplacementData> for KafkaPayload {
