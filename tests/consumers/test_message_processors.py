@@ -58,14 +58,14 @@ def test_message_processors(
         processor_name = processor.__qualname__
         partition = 0
         offset = 1
-        millis_since_epoch = int(time.time() * 1000)
+        now = int(time.time())
 
         rust_processed_message = RustCompatProcessor(processor_name).process_message(
             data_json,
             KafkaMessageMetadata(
                 offset=offset,
                 partition=partition,
-                timestamp=datetime.utcfromtimestamp(millis_since_epoch / 1000),
+                timestamp=datetime.utcfromtimestamp(now),
             ),
         )
 
@@ -74,7 +74,7 @@ def test_message_processors(
             KafkaMessageMetadata(
                 offset=offset,
                 partition=partition,
-                timestamp=datetime.utcfromtimestamp(millis_since_epoch / 1000),
+                timestamp=datetime.utcfromtimestamp(now),
             ),
         )
 

@@ -52,7 +52,7 @@ pub fn process_message_with_replacement(
             let mut row: ErrorRow = error.try_into()?;
             row.partition = metadata.partition;
             row.offset = metadata.offset;
-            row.message_timestamp = metadata.timestamp.timestamp() as u32; // TODO: Implicit truncation.
+            row.message_timestamp = metadata.timestamp.timestamp() as u64;
             row.retention_days = Some(enforce_retention(row.retention_days, &config.env_config));
 
             Ok(InsertOrReplacement::Insert(InsertBatch {
@@ -330,7 +330,7 @@ struct ErrorRow {
     ip_address_v6: Option<Ipv6Addr>,
     level: Option<String>,
     location: Option<String>,
-    message_timestamp: u32,
+    message_timestamp: u64,
     message: String,
     #[serde(rename = "modules.name")]
     modules_name: Vec<String>,

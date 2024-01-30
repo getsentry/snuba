@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timezone
 from typing import Any, Optional
 
 import simplejson as json
@@ -27,7 +28,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
             json.dumps(message).encode("utf8"),
             metadata.partition,
             metadata.offset,
-            int(metadata.timestamp.timestamp() * 1000),
+            int(metadata.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
         )
 
         if insert_payload is not None:
