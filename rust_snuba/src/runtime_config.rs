@@ -1,8 +1,24 @@
 use anyhow::Error;
+use parking_lot::RwLock;
 use pyo3::prelude::{PyModule, Python};
+use std::collections::BTreeMap;
+use std::time::Duration;
 
-#[allow(dead_code)]
+use rust_arroyo::utils::timing::Deadline;
+
+static CONFIG: RwLock<BTreeMap<String, (Option<String>, Deadline)>> = RwLock::new(BTreeMap::new());
+
+/// Runtime config is cached for 10 seconds
 pub fn get_str_config(key: &str) -> Result<Option<String>, Error> {
+    let deadline = Deadline::new(Duration::from_secs(10));
+
+    if let Some(value) = CONFIG.read().get(key) {
+        let (config, deadline) = value;
+        if !deadline.has_elapsed() {
+            return Ok(config.clone());
+        }
+    }
+
     Python::with_gil(|py| {
         let snuba_state = PyModule::import(py, "snuba.state")?;
         let config = snuba_state
@@ -10,7 +26,10 @@ pub fn get_str_config(key: &str) -> Result<Option<String>, Error> {
             .call1((key,))?
             .extract::<Option<String>>()?;
 
-        Ok(config)
+        CONFIG
+            .write()
+            .insert(key.to_string(), (config.clone(), deadline));
+        Ok(CONFIG.read().get(key).unwrap().0.clone())
     })
 }
 
