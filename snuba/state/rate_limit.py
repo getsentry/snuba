@@ -37,34 +37,16 @@ def get_rate_limit_config(
     """
     This function to encapsulate how rate limit keys are fetched from Redis, since
     that is conceptually a different process from fetching normal config keys.
-
-    It currently also contains logic to read from both the new namespace and the old one,
-    until everything is properly migrated.
-
-    First step: read from the old and new namespace. If the new namespace is different from
-    the old, copy the value from old to new. Return the values from the old namespace.
     """
     ps_name, per_second_default = per_second
     ct_name, concurrent_default = concurrent
 
-    # Dual read
-    # if the value in new doesn't match value from old, copy over
-    old_per_second, old_concurrent = get_configs([(ps_name, None), (ct_name, None)])
-    new_per_second, new_concurrent = get_configs(
-        [(ps_name, None), (ct_name, None)], config_key=state.rate_limit_config_key
-    )
-
-    # This handles deletes as well, since writing None deletes the key
-    if old_per_second != new_per_second:
-        set_rate_limit_config(ps_name, old_per_second, copy=False)
-    if old_concurrent != new_concurrent:
-        set_rate_limit_config(ct_name, old_concurrent, copy=False)
-
+    per_second_value, concurrent_value = get_configs([(ps_name, None), (ct_name, None)])
     found_per_second = (
-        old_per_second if old_per_second is not None else per_second_default
+        per_second_value if per_second_value is not None else per_second_default
     )
     found_concurrent = (
-        old_concurrent if old_concurrent is not None else concurrent_default
+        concurrent_value if concurrent_value is not None else concurrent_default
     )
 
     return (found_per_second, found_concurrent)
@@ -76,18 +58,8 @@ def set_rate_limit_config(
     """
     This function to encapsulate how rate limit keys are set in Redis, since
     that is conceptually a different process from writing normal config keys.
-
-    Generally, if this function is called, data should be written to both the old
-    and new keys while the migration is happening. However, there are some instances
-    when only the new key needs to be written, so there is a flag for that case.
     """
-    set_config(
-        bucket,
-        value,
-        config_key=state.rate_limit_config_key,
-    )
-    if copy:
-        set_config(bucket, value)
+    set_config(bucket, value)
 
 
 @dataclass(frozen=True)
