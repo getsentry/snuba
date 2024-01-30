@@ -120,7 +120,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         indexed_values: MutableSequence[int] = []
         raw_values: MutableSequence[str] = []
         tags = message["tags"]
-        version = message.get("version", 1)
+        version = message.get("version", 2)
         assert isinstance(tags, Mapping), "Invalid tags type"
         raw_values_index = self._get_raw_values_index(message)
 
