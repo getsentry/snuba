@@ -21,13 +21,13 @@ pub fn process_message_with_replacement(
 ) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
     // DEBUG DESERIALIZER. Uncomment this if you're getting Rust errors.
     //
-    // let payload_bytes = payload.payload().context("Expected payload")?;
-    // let msg: Vec<Value> = serde_json::from_slice(payload_bytes)?;
-    // if msg.len() == 4 {
-    //     let x = msg.get(2).unwrap();
-    //     let y = x.to_string();
-    //     let msg: ErrorMessage = serde_json::from_str(&y)?;
-    // }
+    //let payload_bytes = payload.payload().context("Expected payload")?;
+    //let msg: Vec<Value> = serde_json::from_slice(payload_bytes)?;
+    //if msg.len() == 4 {
+    //let x = msg.get(2).unwrap();
+    //let y = x.to_string();
+    //let msg: ErrorMessage = serde_json::from_str(&y)?;
+    //}
 
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: Message = serde_json::from_slice(payload_bytes)?;
@@ -108,7 +108,7 @@ struct ErrorData {
     #[serde(default)]
     tags: Vec<Option<(Unicodify, Unicodify)>>,
     #[serde(default, alias = "sentry.interfaces.Threads")]
-    thread: Thread,
+    threads: Option<Thread>,
     #[serde(default)]
     title: Unicodify,
     #[serde(default, rename = "type")]
@@ -211,7 +211,7 @@ struct StackFrame {
 #[derive(Debug, Default, Deserialize)]
 struct Thread {
     #[serde(default)]
-    values: Vec<ThreadValue>,
+    values: Option<Vec<Option<ThreadValue>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -538,6 +538,8 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut frame_stack_levels = Vec::with_capacity(frame_count);
         let mut exception_main_thread: Option<bool> = None;
 
+        let threads = from.data.threads.unwrap_or_default();
+
         for (stack_level, stack) in exceptions.into_iter().filter_map(|x| x).enumerate() {
             stack_types.push(stack.ty.0);
             stack_values.push(stack.value.0);
@@ -559,7 +561,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             // We need to determine if the exception occurred on the main thread.
             if exception_main_thread != Some(true) {
                 if let Some(stack_thread) = stack.thread_id {
-                    for thread in &from.data.thread.values {
+                    for thread in threads.values.iter().flatten().filter_map(|x| x.as_ref()) {
                         if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
                             if thread_id == stack_thread && main {
                                 // if it's the main thread, mark it as such and stop it
