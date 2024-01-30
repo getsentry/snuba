@@ -79,7 +79,10 @@ def test_message_processors(
         )
 
         if python_processed_message is None:
-            assert rust_processed_message is None or not rust_processed_message.rows
+            assert rust_processed_message is None or (
+                isinstance(rust_processed_message, InsertBatch)
+                and not rust_processed_message.rows
+            )
         elif isinstance(python_processed_message, ReplacementBatch):
             assert isinstance(rust_processed_message, ReplacementBatch)
             assert rust_processed_message == python_processed_message

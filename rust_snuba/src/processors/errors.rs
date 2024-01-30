@@ -15,6 +15,7 @@ use crate::processors::utils::{enforce_retention, ensure_valid_datetime};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
+use crate::EnvConfig;
 
 pub fn process_message_with_replacement(
     payload: KafkaPayload,
@@ -49,7 +50,7 @@ pub fn process_message_with_replacement(
         ("insert", Some(error), _) => {
             let origin_timestamp = DateTime::from_timestamp(error.data.received as i64, 0);
 
-            let mut row: ErrorRow = error.try_into()?;
+            let mut row = ErrorRow::parse(error, &config.env_config)?;
             row.partition = metadata.partition;
             row.offset = metadata.offset;
             row.message_timestamp = metadata.timestamp.timestamp() as u64;
@@ -372,10 +373,8 @@ struct ErrorRow {
     version: Option<String>,
 }
 
-impl TryFrom<ErrorMessage> for ErrorRow {
-    type Error = anyhow::Error;
-
-    fn try_from(from: ErrorMessage) -> anyhow::Result<ErrorRow> {
+impl ErrorRow {
+    fn parse(from: ErrorMessage, config: &EnvConfig) -> anyhow::Result<ErrorRow> {
         if from.data.ty.0 == Some("transaction".to_string()) {
             return Err(anyhow::Error::msg("Invalid type."));
         }
@@ -530,9 +529,6 @@ impl TryFrom<ErrorMessage> for ErrorRow {
 
         // Stacktrace.
 
-        // TODO: Add blacklist.
-        // if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
-
         let exceptions = from.data.exception.values.unwrap_or_default();
 
         let exception_count = exceptions.len();
@@ -558,37 +554,42 @@ impl TryFrom<ErrorMessage> for ErrorRow {
 
         let threads = from.data.threads.unwrap_or_default();
 
-        for (stack_level, stack) in exceptions.into_iter().filter_map(|x| x).enumerate() {
-            stack_types.push(stack.ty.0);
-            stack_values.push(stack.value.0);
-            stack_mechanism_types.push(stack.mechanism.ty.0);
-            stack_mechanism_handled.push(stack.mechanism.handled.0);
+        if !config
+            .project_stacktrace_blacklist
+            .contains(&from.project_id)
+        {
+            for (stack_level, stack) in exceptions.into_iter().filter_map(|x| x).enumerate() {
+                stack_types.push(stack.ty.0);
+                stack_values.push(stack.value.0);
+                stack_mechanism_types.push(stack.mechanism.ty.0);
+                stack_mechanism_handled.push(stack.mechanism.handled.0);
 
-            for frame in stack.stacktrace.frames {
-                frame_abs_paths.push(frame.abs_path.0);
-                frame_filenames.push(frame.filename.0);
-                frame_packages.push(frame.package.0);
-                frame_modules.push(frame.module.0);
-                frame_functions.push(frame.function.0);
-                frame_in_app.push(frame.in_app);
-                frame_colnos.push(frame.colno);
-                frame_linenos.push(frame.lineno);
-                frame_stack_levels.push(stack_level as u16);
-            }
+                for frame in stack.stacktrace.frames {
+                    frame_abs_paths.push(frame.abs_path.0);
+                    frame_filenames.push(frame.filename.0);
+                    frame_packages.push(frame.package.0);
+                    frame_modules.push(frame.module.0);
+                    frame_functions.push(frame.function.0);
+                    frame_in_app.push(frame.in_app);
+                    frame_colnos.push(frame.colno);
+                    frame_linenos.push(frame.lineno);
+                    frame_stack_levels.push(stack_level as u16);
+                }
 
-            // We need to determine if the exception occurred on the main thread.
-            if exception_main_thread != Some(true) {
-                if let Some(stack_thread) = stack.thread_id {
-                    for thread in threads.values.iter().flatten().filter_map(|x| x.as_ref()) {
-                        if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
-                            if thread_id == stack_thread && main {
-                                // if it's the main thread, mark it as such and stop it
-                                exception_main_thread = Some(true);
-                                break;
-                            } else {
-                                // if it's NOT the main thread, mark it as such, but
-                                // keep looking for the main thread
-                                exception_main_thread = Some(false);
+                // We need to determine if the exception occurred on the main thread.
+                if exception_main_thread != Some(true) {
+                    if let Some(stack_thread) = stack.thread_id {
+                        for thread in threads.values.iter().flatten().filter_map(|x| x.as_ref()) {
+                            if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
+                                if thread_id == stack_thread && main {
+                                    // if it's the main thread, mark it as such and stop it
+                                    exception_main_thread = Some(true);
+                                    break;
+                                } else {
+                                    // if it's NOT the main thread, mark it as such, but
+                                    // keep looking for the main thread
+                                    exception_main_thread = Some(false);
+                                }
                             }
                         }
                     }

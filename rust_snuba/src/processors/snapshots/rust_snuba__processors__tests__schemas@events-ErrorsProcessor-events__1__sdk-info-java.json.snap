@@ -1,0 +1,66 @@
+---
+source: src/processors/mod.rs
+description: "[\n  2,\n  \"insert\",\n  {\n    \"group_id\": 123123,\n    \"group_ids\": [123123],\n    \"event_id\": \"dbec5c8cbcde450ca84ec0ee848e4f13\",\n    \"organization_id\": 123123,\n    \"project_id\": 123123,\n    \"message\": \"redacted\",\n    \"platform\": \"other\",\n    \"datetime\": \"2023-03-20T12:36:36.051000Z\",\n    \"data\": {\n      \"event_id\": \"dbec5c8cbcde450ca84ec0ee848e4f13\",\n      \"level\": \"error\",\n      \"version\": \"5\",\n      \"type\": \"error\",\n      \"logentry\": {\n        \"formatted\": \"Authentication failed, token expired!\",\n        \"message\": null,\n        \"params\": null\n      },\n      \"logger\": \"\",\n      \"modules\": {\n        \"my.package\": \"1.0.0\"\n      },\n      \"platform\": \"other\",\n      \"timestamp\": 1679315796.051,\n      \"received\": 1679315856.052579,\n      \"release\": \"3.0.2\",\n      \"environment\": \"production\",\n      \"sdk\": {\n        \"name\": \"sentry-java\",\n        \"version\": \"1.4.0-3ded0\",\n        \"client_ip\": \"1.1.1.1\",\n        \"integrations\": null,\n        \"packages\": null\n      },\n      \"fingerprint\": [\"{{ default }}\"],\n      \"hashes\": [\n        \"2fa1891207dfe47975e73c8d82648d02\",\n        \"16bcfa056ee73de2bc7846c8358f619d\"\n      ],\n      \"culprit\": \"redacted\",\n      \"title\": \"redacted\",\n      \"location\": \"redacted\",\n      \"_ref\": 4504870900858880,\n      \"_ref_version\": 2,\n      \"_metrics\": {\n        \"bytes.stored.event\": 30169\n      },\n      \"nodestore_insert\": 1679315856.750589\n    },\n    \"primary_hash\": \"2fa1891207dfe47975e73c8d82648d02\",\n    \"retention_days\": 90,\n    \"occurrence_id\": null,\n    \"occurrence_data\": {}\n  },\n  {\n    \"is_new\": false,\n    \"is_regression\": false,\n    \"is_new_group_environment\": false,\n    \"queue\": \"post_process_errors\",\n    \"skip_consume\": true,\n    \"group_states\": [\n      {\n        \"id\": 123123,\n        \"is_new\": false,\n        \"is_regression\": false,\n        \"is_new_group_environment\": false\n      }\n    ]\n  }\n]\n"
+expression: snapshot_payload
+---
+[
+  {
+    "contexts.key": [],
+    "contexts.value": [],
+    "culprit": "redacted",
+    "deleted": 0,
+    "dist": null,
+    "environment": null,
+    "event_id": "dbec5c8c-bcde-450c-a84e-c0ee848e4f13",
+    "exception_frames.abs_path": [],
+    "exception_frames.colno": [],
+    "exception_frames.filename": [],
+    "exception_frames.function": [],
+    "exception_frames.in_app": [],
+    "exception_frames.lineno": [],
+    "exception_frames.module": [],
+    "exception_frames.package": [],
+    "exception_frames.stack_level": [],
+    "exception_stacks.mechanism_handled": [],
+    "exception_stacks.mechanism_type": [],
+    "exception_stacks.type": [],
+    "exception_stacks.value": [],
+    "group_id": 123123,
+    "hierarchical_hashes": [],
+    "http_method": null,
+    "http_referer": null,
+    "level": null,
+    "location": "redacted",
+    "message": "redacted",
+    "message_timestamp": 1706645526,
+    "modules.name": [
+      "my.package"
+    ],
+    "modules.version": [
+      "1.0.0"
+    ],
+    "num_processing_errors": 0,
+    "offset": 1,
+    "partition": 0,
+    "platform": "other",
+    "primary_hash": "2fa18912-07df-e479-75e7-3c8d82648d02",
+    "project_id": 123123,
+    "received": 1679315856,
+    "release": null,
+    "retention_days": 90,
+    "sdk_integrations": [],
+    "sdk_name": "sentry-java",
+    "sdk_version": "1.4.0-3ded0",
+    "tags.key": [],
+    "tags.value": [],
+    "timestamp": 1679315796,
+    "title": "redacted",
+    "transaction_name": "",
+    "type": "error",
+    "user": "",
+    "user_email": null,
+    "user_id": null,
+    "user_name": null,
+    "version": "5"
+  }
+]
