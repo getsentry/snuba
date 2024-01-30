@@ -121,6 +121,8 @@ struct ErrorData {
 
 // Contexts
 
+type GenericContext = BTreeMap<String, ContextStringify>;
+
 #[derive(Debug, Default, Deserialize)]
 struct Contexts {
     #[serde(default)]
@@ -128,7 +130,7 @@ struct Contexts {
     #[serde(default)]
     trace: TraceContext,
     #[serde(flatten)]
-    other: BTreeMap<String, BTreeMap<String, ContextStringify>>,
+    other: BTreeMap<String, GenericContext>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -139,6 +141,8 @@ struct TraceContext {
     span_id: Option<String>,
     #[serde(default)]
     trace_id: Option<Uuid>,
+    #[serde(flatten)]
+    other: GenericContext,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -252,6 +256,8 @@ struct User {
     ip_address: Option<String>,
     #[serde(default)]
     username: Unicodify,
+    #[serde(default)]
+    geo: GenericContext,
 }
 
 // Row
@@ -361,6 +367,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             .contexts
             .trace
             .span_id
+            .as_ref()
             .map(|inner| u64::from_str_radix(&inner, 16).ok())
             .unwrap_or_default();
 
@@ -452,7 +459,12 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut contexts_keys = Vec::with_capacity(100);
         let mut contexts_values = Vec::with_capacity(100);
 
-        for (container_name, container) in from.data.contexts.other.into_iter() {
+        let mut other_contexts = from.data.contexts.other;
+        if !from.data.user.geo.is_empty() {
+            other_contexts.insert("geo".to_owned(), from.data.user.geo);
+        }
+
+        for (container_name, container) in other_contexts {
             for (key, value) in container {
                 if let Some(v) = value.0 {
                     if key != "type" {
@@ -461,6 +473,36 @@ impl TryFrom<ErrorMessage> for ErrorRow {
                     }
                 }
             }
+        }
+
+        // XXX: we only extract trace context into extra contexts for exact compatibility with the
+        // python processor. some fields may be used in queries, but other fields can probably go
+        // since they have already been promoted.
+        if let Some(ContextStringify(Some(value))) =
+            from.data.contexts.trace.other.get("client_sample_rate")
+        {
+            contexts_keys.push("trace.client_sample_rate".to_owned());
+            contexts_values.push(value.to_string());
+        }
+
+        if let Some(ContextStringify(Some(value))) = from.data.contexts.trace.other.get("op") {
+            contexts_keys.push("trace.op".to_owned());
+            contexts_values.push(value.to_string());
+        }
+
+        if let Some(span_id) = from.data.contexts.trace.span_id {
+            contexts_keys.push("trace.span_id".to_owned());
+            contexts_values.push(span_id.to_string());
+        }
+
+        if let Some(ContextStringify(Some(status))) = from.data.contexts.trace.other.get("status") {
+            contexts_keys.push("trace.status".to_owned());
+            contexts_values.push(status.to_string());
+        }
+
+        if let Some(trace_id) = from.data.contexts.trace.trace_id {
+            contexts_keys.push("trace.trace_id".to_owned());
+            contexts_values.push(trace_id.simple().to_string());
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
