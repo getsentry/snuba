@@ -243,6 +243,12 @@ pub fn consumer_impl(
 
 pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
 
+/// insert: encoded rows
+type PyInsert = PyObject;
+
+/// replacement: (key/project_id, value)
+type PyReplacement = (PyObject, PyObject);
+
 #[pyfunction]
 pub fn process_message(
     py: Python,
@@ -251,10 +257,7 @@ pub fn process_message(
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
-) -> PyResult<(
-    Option<PyObject>,             // insert: encoded rows
-    Option<(PyObject, PyObject)>, // replacement: (key/project_id, value)
-)> {
+) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
     let func = processors::get_processing_function(name)

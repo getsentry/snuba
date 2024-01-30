@@ -386,7 +386,7 @@ impl ErrorRow {
             .trace
             .span_id
             .as_ref()
-            .map(|inner| u64::from_str_radix(&inner, 16).ok())
+            .map(|inner| u64::from_str_radix(inner, 16).ok())
             .unwrap_or_default();
 
         // Hashes
@@ -462,7 +462,7 @@ impl ErrorRow {
                 } else if tag_key == "sentry:user" {
                     user = Some(tag_value.to_owned());
                 } else if tag_key == "replayId" {
-                    replay_id = Uuid::parse_str(&tag_value).ok();
+                    replay_id = Uuid::parse_str(tag_value).ok();
                 }
 
                 tags_key.push(tag_key.to_owned());
@@ -558,7 +558,7 @@ impl ErrorRow {
             .project_stacktrace_blacklist
             .contains(&from.project_id)
         {
-            for (stack_level, stack) in exceptions.into_iter().filter_map(|x| x).enumerate() {
+            for (stack_level, stack) in exceptions.into_iter().flatten().enumerate() {
                 stack_types.push(stack.ty.0);
                 stack_values.push(stack.value.0);
                 stack_mechanism_types.push(stack.mechanism.ty.0);
