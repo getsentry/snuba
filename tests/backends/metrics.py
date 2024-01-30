@@ -8,18 +8,28 @@ class Increment(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
+    unit: Optional[str]
 
 
 class Gauge(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
+    unit: Optional[str]
 
 
 class Timing(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
+    unit: Optional[str]
+
+
+class Distribution(NamedTuple):
+    name: str
+    value: Union[int, float]
+    tags: Optional[Tags]
+    unit: Optional[str]
 
 
 class Events(NamedTuple):
@@ -40,22 +50,45 @@ class TestingMetricsBackend(MetricsBackend):
     # TODO: This might make sense to extend the dummy metrics backend.
 
     def __init__(self) -> None:
-        self.calls: MutableSequence[Union[Increment, Gauge, Timing, Events]] = []
+        self.calls: MutableSequence[
+            Union[Increment, Gauge, Timing, Distribution, Events]
+        ] = []
 
     def increment(
-        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float] = 1,
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
-        self.calls.append(Increment(name, value, tags))
+        self.calls.append(Increment(name, value, tags, unit))
 
     def gauge(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
-        self.calls.append(Gauge(name, value, tags))
+        self.calls.append(Gauge(name, value, tags, unit))
 
     def timing(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
-        self.calls.append(Timing(name, value, tags))
+        self.calls.append(Timing(name, value, tags, unit))
+
+    def distribution(
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
+    ) -> None:
+        self.calls.append(Distribution(name, value, tags, unit))
 
     def events(
         self,
