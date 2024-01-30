@@ -661,6 +661,9 @@ impl<'de> Deserialize<'de> for ContextStringify {
         match Value::deserialize(deserializer)? {
             Value::String(v) => Ok(ContextStringify(Some(v))),
             Value::Number(v) => Ok(ContextStringify(Some(v.to_string()))),
+            Value::Bool(v) => Ok(ContextStringify(Some(
+                if v { "True" } else { "False" }.to_owned(),
+            ))),
             _ => Ok(ContextStringify(None)),
         }
     }
