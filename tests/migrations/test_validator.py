@@ -419,7 +419,7 @@ def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     cluster = get_cluster(StorageSetKey.MIGRATIONS)
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
-    def get_cluster_name():
+    def get_cluster_name() -> str:
         """
         It looks like ClickHouse changed the name of the test clusters
         and starting on 23.8+ we only have the 'default' cluster
