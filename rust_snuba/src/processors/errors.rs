@@ -86,8 +86,6 @@ struct ErrorMessage {
 struct ErrorData {
     #[serde(default)]
     contexts: Contexts,
-    #[serde(default, rename = "contexts")]
-    contexts_other: BTreeMap<String, BTreeMap<String, ContextStringify>>,
     #[serde(default)]
     culprit: Unicodify,
     #[serde(default)]
@@ -129,6 +127,8 @@ struct Contexts {
     replay: ReplayContext,
     #[serde(default)]
     trace: TraceContext,
+    #[serde(flatten)]
+    other: BTreeMap<String, BTreeMap<String, ContextStringify>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -143,7 +143,7 @@ struct TraceContext {
 
 #[derive(Debug, Default, Deserialize)]
 struct ReplayContext {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     replay_id: Option<Uuid>,
 }
 
@@ -276,7 +276,7 @@ struct ErrorRow {
     #[serde(rename = "exception_frames.function")]
     exception_frames_function: Vec<Option<String>>,
     #[serde(rename = "exception_frames.in_app")]
-    exception_frames_in_app: Vec<Option<u8>>,
+    exception_frames_in_app: Vec<Option<bool>>,
     #[serde(rename = "exception_frames.lineno")]
     exception_frames_lineno: Vec<Option<u32>>,
     #[serde(rename = "exception_frames.module")]
@@ -285,6 +285,7 @@ struct ErrorRow {
     exception_frames_package: Vec<Option<String>>,
     #[serde(rename = "exception_frames.stack_level")]
     exception_frames_stack_level: Vec<u16>, // Schema Deviation: Why would this ever be null?
+    #[serde(skip_serializing_if = "Option::is_none")]
     exception_main_thread: Option<u8>,
     #[serde(rename = "exception_stacks.mechanism_handled")]
     exception_stacks_mechanism_handled: Vec<Option<u8>>,
@@ -298,7 +299,9 @@ struct ErrorRow {
     hierarchical_hashes: Vec<Uuid>,
     http_method: Option<String>,
     http_referer: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ip_address_v4: Option<Ipv4Addr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     ip_address_v6: Option<Ipv6Addr>,
     level: Option<String>,
     location: Option<String>,
@@ -316,11 +319,13 @@ struct ErrorRow {
     project_id: u64,
     received: u32,
     release: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     replay_id: Option<Uuid>,
     retention_days: u16,
     sdk_integrations: Vec<String>,
     sdk_name: String,
     sdk_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     span_id: Option<u64>,
     #[serde(rename = "tags.key")]
     tags_key: Vec<String>,
@@ -328,7 +333,9 @@ struct ErrorRow {
     tags_value: Vec<String>,
     timestamp: u32,
     title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     trace_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     trace_sampled: Option<u8>,
     transaction_name: String,
     #[serde(rename = "type")]
@@ -443,21 +450,13 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut contexts_keys = Vec::with_capacity(100);
         let mut contexts_values = Vec::with_capacity(100);
 
-        for (container_name, container) in from.data.contexts_other.into_iter() {
-            // The replay container is not stored on the contexts array.
-            if container_name == "replay" {
-                continue;
-            }
-
+        for (container_name, container) in from.data.contexts.other.into_iter() {
             for (key, value) in container {
-                match value.0 {
-                    Some(v) => {
-                        if key != "type" {
-                            contexts_keys.push(format!("{}.{}", container_name, key));
-                            contexts_values.push(v);
-                        }
+                if let Some(v) = value.0 {
+                    if key != "type" {
+                        contexts_keys.push(format!("{}.{}", container_name, key));
+                        contexts_values.push(v);
                     }
-                    _ => continue,
                 }
             }
         }
@@ -491,7 +490,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut frame_colnos = Vec::with_capacity(frame_count);
         let mut frame_linenos = Vec::with_capacity(frame_count);
         let mut frame_stack_levels = Vec::with_capacity(frame_count);
-        let mut exception_main_thread = false;
+        let mut exception_main_thread: Option<bool> = None;
 
         for (stack_level, stack) in exceptions.into_iter().enumerate() {
             stack_types.push(stack.ty.0);
@@ -505,20 +504,25 @@ impl TryFrom<ErrorMessage> for ErrorRow {
                 frame_packages.push(frame.package.0);
                 frame_modules.push(frame.module.0);
                 frame_functions.push(frame.function.0);
-                frame_in_app.push(frame.in_app.map(|v| v as u8));
+                frame_in_app.push(frame.in_app);
                 frame_colnos.push(frame.colno);
                 frame_linenos.push(frame.lineno);
                 frame_stack_levels.push(stack_level as u16);
             }
 
             // We need to determine if the exception occurred on the main thread.
-            if !exception_main_thread {
+            if !exception_main_thread.unwrap_or_default() {
                 if let Some(tid) = stack.thread_id {
                     for thread in &from.data.thread.values {
                         if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
                             if thread_id == tid && main {
-                                exception_main_thread = true;
+                                // if it's the main thread, mark it as such and stop it
+                                exception_main_thread = Some(true);
                                 break;
+                            } else {
+                                // if it's NOT the main thread, mark it as such, but
+                                // keep looking for the main thread
+                                exception_main_thread = Some(false);
                             }
                         }
                     }
@@ -543,7 +547,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             exception_frames_module: frame_modules,
             exception_frames_package: frame_packages,
             exception_frames_stack_level: frame_stack_levels,
-            exception_main_thread: Some(exception_main_thread as u8),
+            exception_main_thread: exception_main_thread.map(|x| x as u8),
             exception_stacks_mechanism_handled: stack_mechanism_handled,
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,

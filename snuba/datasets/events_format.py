@@ -80,10 +80,10 @@ def extract_extra_contexts(
     context_keys = []
     context_values = []
     valid_types = (int, float, str)
-    for ctx_name, ctx_obj in contexts.items():
+    for ctx_name, ctx_obj in sorted(contexts.items()):
         if isinstance(ctx_obj, dict):
             ctx_obj.pop("type", None)  # ignore type alias
-            for inner_ctx_name, ctx_value in ctx_obj.items():
+            for inner_ctx_name, ctx_value in sorted(ctx_obj.items()):
                 if isinstance(ctx_value, valid_types):
                     value = _unicodify(ctx_value)
                     if value:
