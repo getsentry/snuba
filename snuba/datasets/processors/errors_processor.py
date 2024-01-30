@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, cast
 
 import _strptime  # NOQA fixes _strptime deferred import issue
@@ -158,7 +158,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition
-        processed["message_timestamp"] = metadata.timestamp
+        processed["message_timestamp"] = int(
+            metadata.timestamp.replace(tzinfo=timezone.utc).timestamp()
+        )
 
         return processed
 
@@ -307,7 +309,13 @@ class ErrorsProcessor(DatasetMessageProcessor):
         data = event.get("data", {})
         received = _collapse_uint32(int(data["received"]))
         output["received"] = (
-            datetime.utcfromtimestamp(received) if received is not None else None
+            int(
+                datetime.utcfromtimestamp(received)
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+            )
+            if received is not None
+            else None
         )
         output["version"] = _unicodify(data.get("version", None))
         output["location"] = _unicodify(data.get("location", None))
@@ -425,9 +433,14 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["group_id"] = event["group_id"] or 0
 
         # This is not ideal but it should never happen anyways
-        timestamp = _ensure_valid_date(
-            datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+        timestamp = int(
+            _ensure_valid_date(
+                datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
+            )
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
         )
+
         if timestamp is None:
             timestamp = datetime.utcnow()
 
