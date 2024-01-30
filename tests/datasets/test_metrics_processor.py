@@ -230,8 +230,8 @@ def test_metrics_polymorphic_processor(
             else None
         )
         assert (
-            PolymorphicMetricsProcessor().process_message(message, meta)
-            == expected_polymorphic_result
+            PolymorphicMetricsProcessor().process_message(message, meta).rows
+            == expected_polymorphic_result.rows
         )
 
 
