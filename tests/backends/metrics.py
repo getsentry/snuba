@@ -8,28 +8,28 @@ class Increment(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
-    unit: Optional[str]
+    unit: Optional[str] = None
 
 
 class Gauge(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
-    unit: Optional[str]
+    unit: Optional[str] = None
 
 
 class Timing(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
-    unit: Optional[str]
+    unit: Optional[str] = None
 
 
 class Distribution(NamedTuple):
     name: str
     value: Union[int, float]
     tags: Optional[Tags]
-    unit: Optional[str]
+    unit: Optional[str] = None
 
 
 class Events(NamedTuple):
