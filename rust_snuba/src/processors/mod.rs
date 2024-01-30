@@ -99,10 +99,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_schemas() {
         let processor_config = ProcessorConfig::default();
-        for (_python_class_name, topic_name, processor_fn_type) in PROCESSORS {
+        for (python_class_name, topic_name, processor_fn_type) in PROCESSORS {
             let schema = get_schema(topic_name, None).unwrap();
             let metadata = KafkaMessageMetadata {
                 partition: 0,
@@ -110,18 +109,28 @@ mod tests {
                 timestamp: DateTime::from(SystemTime::now()),
             };
 
-            for (example_i, example) in schema.examples().iter().enumerate() {
+            if *topic_name == "events" {
+                // TODO: remove
+                continue;
+            }
+
+            for example in schema.examples() {
                 let mut settings = insta::Settings::clone_current();
-                settings.set_snapshot_suffix(format!("{}-{}", topic_name, example_i));
+                settings.set_snapshot_suffix(format!(
+                    "{}-{}-{}",
+                    topic_name,
+                    python_class_name,
+                    example.name()
+                ));
 
                 if *topic_name == "ingest-replay-events" {
                     settings.add_redaction(".*.event_hash", "<event UUID>");
                 }
 
-                settings.set_description(std::str::from_utf8(example).unwrap());
+                settings.set_description(std::str::from_utf8(example.payload()).unwrap());
                 let _guard = settings.bind_to_scope();
 
-                let payload = KafkaPayload::new(None, None, Some(example.to_vec()));
+                let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));
 
                 match processor_fn_type {
                     ProcessingFunctionType::ProcessingFunction(processor_fn) => {

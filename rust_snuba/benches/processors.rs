@@ -119,7 +119,7 @@ fn create_stream_processor(
     let schema = sentry_kafka_schemas::get_schema(schema, None).unwrap();
     let payloads = schema.examples();
     for payload in payloads.iter().cycle().take(messages) {
-        let payload = KafkaPayload::new(None, None, Some(payload.to_vec()));
+        let payload = KafkaPayload::new(None, None, Some(payload.payload().to_vec()));
         broker.produce(&partition, payload).unwrap();
     }
 
@@ -155,7 +155,7 @@ fn run_fn_bench(
         .bench_function(BenchmarkId::from_parameter("-"), |b| {
             b.iter(|| {
                 for payload in payloads {
-                    let payload = KafkaPayload::new(None, None, Some(payload.to_vec()));
+                    let payload = KafkaPayload::new(None, None, Some(payload.payload().to_vec()));
                     let processed =
                         processor_fn(payload, metadata.clone(), &PROCESSOR_CONFIG).unwrap();
                     black_box(processed);
