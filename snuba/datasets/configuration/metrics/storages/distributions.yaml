@@ -1,5 +1,5 @@
 version: v1
-kind: writable_storage
+kind: readable_storage
 name: metrics_distributions
 storage:
   key: metrics_distributions
@@ -77,7 +77,3 @@ query_processors:
     args:
       column_name: tags
   - processor: TableRateLimit
-stream_loader:
-  processor: DistributionsAggregateProcessor
-  default_topic: snuba-metrics
-  dlq_topic: snuba-dead-letter-metrics-distributions

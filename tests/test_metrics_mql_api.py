@@ -56,6 +56,7 @@ SHARED_MAPPING_META = {
     },
     "h": {
         "9223372036854776010": "status_code",
+        "9223372036854776009": "event_type",
     },
 }
 
@@ -681,3 +682,46 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert response.status_code == 200
         rows = data["data"]
         assert len(rows) == 180, rows
+
+    def test_only_keys_resolved(self) -> None:
+        query = MetricsQuery(
+            query=Timeseries(
+                metric=Metric(
+                    "transaction.duration",
+                    TRANSACTION_MRI,
+                    DISTRIBUTIONS.metric_id,
+                    DISTRIBUTIONS.entity,
+                ),
+                aggregate="avg",
+                filters=[
+                    Condition(Column("event_type"), Op.EQ, "transaction"),
+                    Condition(Column("transaction"), Op.EQ, "t1"),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60, totals=True),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction": resolve_str("transaction"),
+                "event_type": resolve_str("event_type"),
+                "t1": resolve_str("t1"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200

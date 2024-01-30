@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
@@ -25,8 +26,11 @@ use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
-use crate::strategies::processor::{get_schema, make_rust_processor, validate_schema};
+use crate::strategies::processor::{
+    get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
+};
 use crate::strategies::python::PythonTransformStep;
+use crate::strategies::replacements::ProduceReplacements;
 use crate::types::BytesInsertBatch;
 
 pub struct ConsumerStrategyFactory {
@@ -39,11 +43,13 @@ pub struct ConsumerStrategyFactory {
     processing_concurrency: ConcurrencyConfig,
     clickhouse_concurrency: ConcurrencyConfig,
     commitlog_concurrency: ConcurrencyConfig,
+    replacements_concurrency: ConcurrencyConfig,
     python_max_queue_depth: Option<usize>,
     use_rust_processor: bool,
     health_check_file: Option<String>,
     enforce_schema: bool,
     commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
+    replacements_config: Option<(KafkaConfig, Topic)>,
     physical_consumer_group: String,
     physical_topic_name: Topic,
     accountant_topic_config: config::TopicConfig,
@@ -61,11 +67,13 @@ impl ConsumerStrategyFactory {
         processing_concurrency: ConcurrencyConfig,
         clickhouse_concurrency: ConcurrencyConfig,
         commitlog_concurrency: ConcurrencyConfig,
+        replacements_concurrency: ConcurrencyConfig,
         python_max_queue_depth: Option<usize>,
         use_rust_processor: bool,
         health_check_file: Option<String>,
         enforce_schema: bool,
         commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
+        replacements_config: Option<(KafkaConfig, Topic)>,
         physical_consumer_group: String,
         physical_topic_name: Topic,
         accountant_topic_config: config::TopicConfig,
@@ -80,11 +88,13 @@ impl ConsumerStrategyFactory {
             processing_concurrency,
             clickhouse_concurrency,
             commitlog_concurrency,
+            replacements_concurrency,
             python_max_queue_depth,
             use_rust_processor,
             health_check_file,
             enforce_schema,
             commit_log_producer,
+            replacements_config,
             physical_consumer_group,
             physical_topic_name,
             accountant_topic_config,
@@ -143,6 +153,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 _ => next_step,
             };
 
+        // Batch insert rows
         let accumulator = Arc::new(BytesInsertBatch::merge);
         let next_step = Reduce::new(
             next_step,
@@ -155,22 +166,59 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             // gen-metrics-gauges in s4s. we still need to commit there
         )
         .flush_empty_batches(true);
+
+        // Transform messages
         let processor = match (
             self.use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
             ),
         ) {
-            (true, Some(func)) => make_rust_processor(
-                next_step,
-                func,
-                &self.logical_topic_name,
-                self.enforce_schema,
-                &self.processing_concurrency,
-                config::ProcessorConfig {
-                    env_config: self.env_config.clone(),
-                },
-            ),
+            (
+                true,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(func)),
+            ) => {
+                let (replacements_config, replacements_destination) =
+                    self.replacements_config.clone().unwrap();
+
+                let producer = KafkaProducer::new(replacements_config);
+                let replacements_step = ProduceReplacements::new(
+                    next_step,
+                    producer,
+                    replacements_destination,
+                    &self.replacements_concurrency,
+                    self.skip_write,
+                );
+
+                return make_rust_processor_with_replacements(
+                    replacements_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                    },
+                );
+            }
+            (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
+                make_rust_processor(
+                    next_step,
+                    func,
+                    &self.logical_topic_name,
+                    self.enforce_schema,
+                    &self.processing_concurrency,
+                    config::ProcessorConfig {
+                        env_config: self.env_config.clone(),
+                    },
+                )
+            }
+            (
+                false,
+                Some(processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(_)),
+            ) => {
+                panic!("Consumer with replacements cannot be run in hybrid-mode");
+            }
             _ => {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
 

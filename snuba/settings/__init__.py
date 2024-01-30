@@ -126,6 +126,7 @@ DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
+DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.001))
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
@@ -337,11 +338,6 @@ SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV = os.environ.get(
 SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 # (entity name, buffer size)
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
-
-# Used for migrating to/from writing metrics directly to aggregate tables
-# rather than using materialized views
-WRITE_METRICS_AGG_DIRECTLY = False
-ENABLED_MATERIALIZATION_VERSION = 4
 
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)

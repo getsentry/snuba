@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.1.1
+
+### Various fixes & improvements
+
+- fix(inc-602): make migration connection checks readiness-state aware (#5414) by @volokluev
+- chore(entity): Remove runtime config for illegal aggregation validator (#5443) by @enochtangg
+- fix(gcb): Remove build steps from GCB (#5450) by @untitaker
+- build(deps): bump sentry-sdk from 1.26.0 to 1.39.2 (#5366) by @dependabot
+- fix: Bump sentry-kafka-schemas in right project (#5451) by @untitaker
+- ref(optimize): Use time-machine instead of freezegun (#5447) by @nikhars
+- chore(deps): bump sentry-relay from 0.8.39 to 0.8.44 (#5442) by @dependabot
+- fix(devserver): Enforce schemas again (#5449) by @untitaker
+- fix: Upgrading to Clickhouse 22.8 (#5445) by @evanh
+- fix(devserver): Do not enforce schema (#5446) by @untitaker
+- fix(cardinality): Add filter to cardinality report (#5439) by @nikhars
+- fix(optimize): Add parallel optimize job cutoff time (#5444) by @nikhars
+- feat(spans): Add a schema test (#5440) by @phacops
+- feat(profiles): Add test to see if the struct matches the schema (#5438) by @phacops
+- ref: bump sentry-kafka-schemas to 0.1.46 (#5441) by @getsentry-bot
+- feat(on-call): Add illegal aggregate function in conditions entity validator (#5435) by @enochtangg
+- ref(docs) Add some MQL documentation to Snuba (#5432) by @evanh
+- feat(metrics-summaries): Handle incomplete metrics summaries (#5428) by @phacops
+- fix config validation for cross org policy (#5426) by @volokluev
+- fix(rust): Deal with empty batches correctly (#5433) by @untitaker
+- ref(replays): Re-add e2e latency metric [SNS-2606] (#5420) by @untitaker
+- fix(rust): Fix broken DLQ produer in Rust (#5431) by @untitaker
+- fix(cardinality): Increase time duration for finding all modules (#5430) by @nikhars
+- feat(gcs): Allow snuba to write to gcs for tooling (#5410) by @nikhars
+
+_Plus 32 more_
+
 ## 24.1.0
 
 ### Various fixes & improvements
