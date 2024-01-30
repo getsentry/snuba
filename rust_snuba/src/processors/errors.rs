@@ -463,8 +463,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
                 } else if tag_key == "sentry:user" {
                     user = Some(tag_value.to_owned());
                 } else if tag_key == "replayId" {
-                    // TODO: empty state should be null?
-                    replay_id = Some(Uuid::parse_str(&tag_value).unwrap_or_default());
+                    replay_id = Uuid::parse_str(&tag_value).ok();
                 }
 
                 tags_key.push(tag_key.to_owned());
