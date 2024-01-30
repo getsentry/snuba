@@ -109,11 +109,6 @@ mod tests {
                 timestamp: DateTime::from(SystemTime::now()),
             };
 
-            if *topic_name == "events" {
-                // TODO: remove
-                continue;
-            }
-
             for example in schema.examples() {
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(format!(
