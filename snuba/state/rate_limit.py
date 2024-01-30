@@ -41,9 +41,13 @@ def get_rate_limit_config(
     ps_name, per_second_default = per_second
     ct_name, concurrent_default = concurrent
 
-    per_second, concurrent = get_configs([(ps_name, None), (ct_name, None)])
-    found_per_second = per_second if per_second is not None else per_second_default
-    found_concurrent = concurrent if concurrent is not None else concurrent_default
+    per_second_value, concurrent_value = get_configs([(ps_name, None), (ct_name, None)])
+    found_per_second = (
+        per_second_value if per_second_value is not None else per_second_default
+    )
+    found_concurrent = (
+        concurrent_value if concurrent_value is not None else concurrent_default
+    )
 
     return (found_per_second, found_concurrent)
 
