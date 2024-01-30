@@ -156,12 +156,12 @@ struct ReplayContext {
 #[derive(Debug, Default, Deserialize)]
 struct Exception {
     #[serde(default)]
-    values: Option<Vec<ExceptionValue>>, // Deviation: Apparently sent as Vec<Option<T>>.
+    values: Option<Vec<Option<ExceptionValue>>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ExceptionValue {
-    stacktrace: StrackTrace,
+    stacktrace: StackTrace,
     #[serde(default)]
     mechanism: ExceptionMechanism,
     #[serde(default, rename = "type")]
@@ -181,13 +181,13 @@ struct ExceptionMechanism {
 }
 
 #[derive(Debug, Deserialize)]
-struct StrackTrace {
+struct StackTrace {
     #[serde(default)]
-    frames: Vec<StrackFrame>,
+    frames: Vec<StackFrame>,
 }
 
 #[derive(Debug, Deserialize)]
-struct StrackFrame {
+struct StackFrame {
     #[serde(default)]
     abs_path: Unicodify,
     #[serde(default)]
@@ -290,9 +290,9 @@ struct ErrorRow {
     #[serde(rename = "exception_frames.package")]
     exception_frames_package: Vec<Option<String>>,
     #[serde(rename = "exception_frames.stack_level")]
-    exception_frames_stack_level: Vec<u16>, // Schema Deviation: Why would this ever be null?
+    exception_frames_stack_level: Vec<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    exception_main_thread: Option<u8>,
+    exception_main_thread: Option<bool>,
     #[serde(rename = "exception_stacks.mechanism_handled")]
     exception_stacks_mechanism_handled: Vec<Option<u8>>,
     #[serde(rename = "exception_stacks.mechanism_type")]
@@ -518,9 +518,11 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let exceptions = from.data.exception.values.unwrap_or_default();
 
         let exception_count = exceptions.len();
-        let frame_count = exceptions.iter().map(|v| v.stacktrace.frames.len()).sum();
+        let frame_count = exceptions
+            .iter()
+            .filter_map(|v| Some(v.as_ref()?.stacktrace.frames.len()))
+            .sum();
 
-        // let mut stack_level: u16 = 0;
         let mut stack_types = Vec::with_capacity(exception_count);
         let mut stack_values = Vec::with_capacity(exception_count);
         let mut stack_mechanism_types = Vec::with_capacity(exception_count);
@@ -536,7 +538,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut frame_stack_levels = Vec::with_capacity(frame_count);
         let mut exception_main_thread: Option<bool> = None;
 
-        for (stack_level, stack) in exceptions.into_iter().enumerate() {
+        for (stack_level, stack) in exceptions.into_iter().filter_map(|x| x).enumerate() {
             stack_types.push(stack.ty.0);
             stack_values.push(stack.value.0);
             stack_mechanism_types.push(stack.mechanism.ty.0);
@@ -555,11 +557,11 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             }
 
             // We need to determine if the exception occurred on the main thread.
-            if !exception_main_thread.unwrap_or_default() {
-                if let Some(tid) = stack.thread_id {
+            if exception_main_thread != Some(true) {
+                if let Some(stack_thread) = stack.thread_id {
                     for thread in &from.data.thread.values {
                         if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
-                            if thread_id == tid && main {
+                            if thread_id == stack_thread && main {
                                 // if it's the main thread, mark it as such and stop it
                                 exception_main_thread = Some(true);
                                 break;
@@ -591,7 +593,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             exception_frames_module: frame_modules,
             exception_frames_package: frame_packages,
             exception_frames_stack_level: frame_stack_levels,
-            exception_main_thread: exception_main_thread.map(|x| x as u8),
+            exception_main_thread,
             exception_stacks_mechanism_handled: stack_mechanism_handled,
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
