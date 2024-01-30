@@ -433,18 +433,14 @@ class ErrorsProcessor(DatasetMessageProcessor):
         output["group_id"] = event["group_id"] or 0
 
         # This is not ideal but it should never happen anyways
-        timestamp = int(
-            _ensure_valid_date(
-                datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-            )
-            .replace(tzinfo=timezone.utc)
-            .timestamp()
+        timestamp = _ensure_valid_date(
+            datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
         )
 
         if timestamp is None:
             timestamp = datetime.utcnow()
 
-        output["timestamp"] = timestamp
+        output["timestamp"] = int(timestamp.replace(tzinfo=timezone.utc).timestamp())
 
     def extract_sdk(
         self, output: MutableMapping[str, Any], sdk: Mapping[str, Any]
