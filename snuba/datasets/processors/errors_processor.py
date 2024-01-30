@@ -289,6 +289,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
 
         if trace_id:
             output["trace_id"] = str(uuid.UUID(trace_id))
+            del contexts["trace"]
+
         if span_id:
             output["span_id"] = int(span_id, 16)
         if trace_sampled:
