@@ -80,6 +80,7 @@ struct ErrorMessage {
     project_id: u64,
     #[serde(default)]
     retention_days: u16,
+    platform: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,7 +99,6 @@ struct ErrorData {
     location: Option<String>,
     #[serde(default)]
     modules: HashMap<String, Option<String>>,
-    platform: String,
     #[serde(default)]
     received: f64,
     #[serde(default)]
@@ -247,7 +247,7 @@ struct User {
     #[serde(default)]
     email: Unicodify,
     #[serde(default)]
-    user_id: Unicodify,
+    id: Unicodify,
     #[serde(default)]
     ip_address: Option<String>,
     #[serde(default)]
@@ -419,28 +419,30 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut tags_key = Vec::with_capacity(from.data.tags.len());
         let mut tags_value = Vec::with_capacity(from.data.tags.len());
 
-        for t in from.data.tags.into_iter().flatten() {
-            if let Some(tag_key) = &t.0 .0 {
+        let mut from_tags = from.data.tags;
+        from_tags.sort();
+
+        for t in from_tags.into_iter().flatten() {
+            if let (Some(tag_key), Some(tag_value)) = (&t.0 .0, &t.1 .0) {
                 if tag_key == "environment" {
-                    environment = t.1 .0
+                    environment = Some(tag_value.clone());
                 } else if tag_key == "level" {
-                    level = t.1 .0
+                    level = Some(tag_value.clone());
                 } else if tag_key == "transaction" {
-                    transaction_name = t.1 .0
+                    transaction_name = Some(tag_value.clone());
                 } else if tag_key == "sentry:release" {
-                    release = t.1 .0
+                    release = Some(tag_value.clone());
                 } else if tag_key == "sentry:dist" {
-                    dist = t.1 .0
+                    dist = Some(tag_value.clone());
                 } else if tag_key == "sentry:user" {
-                    user = t.1 .0
+                    user = Some(tag_value.to_owned());
                 } else if tag_key == "replayId" {
                     // TODO: empty state should be null?
-                    replay_id = t.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
-                } else if let Some(tag_value) = t.1 .0 {
-                    // Only tags with non-null values are stored.
-                    tags_key.push(tag_key.to_owned());
-                    tags_value.push(tag_value);
+                    replay_id = Some(Uuid::parse_str(&tag_value).unwrap_or_default());
                 }
+
+                tags_key.push(tag_key.to_owned());
+                tags_value.push(tag_value.clone());
             }
         }
 
@@ -564,7 +566,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             modules_name: module_names,
             modules_version: module_versions,
             num_processing_errors: from.data.errors.unwrap_or_default().len() as u64,
-            platform: from.data.platform,
+            platform: from.platform,
             primary_hash,
             project_id: from.project_id,
             received: from.data.received as u32, // TODO: Implicit truncation.
@@ -584,7 +586,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
             transaction_name: transaction_name.unwrap_or_default(),
             ty: from.data.ty.0.unwrap_or_default(),
             user_email: from.data.user.email.0,
-            user_id: from.data.user.user_id.0,
+            user_id: from.data.user.id.0,
             user_name: from.data.user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
@@ -625,7 +627,7 @@ impl<'de> Deserialize<'de> for Boolify {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 struct Unicodify(Option<String>);
 
 impl<'de> Deserialize<'de> for Unicodify {
