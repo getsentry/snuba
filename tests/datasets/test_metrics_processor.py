@@ -15,7 +15,7 @@ from snuba.datasets.processors.metrics_bucket_processor import (
     PolymorphicMetricsProcessor,
     timestamp_to_bucket,
 )
-from snuba.processor import AggregateInsertBatch, InsertBatch
+from snuba.processor import InsertBatch
 
 MATERIALIZATION_VERSION = 4
 
@@ -225,9 +225,7 @@ def test_metrics_polymorphic_processor(
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (
-            AggregateInsertBatch(
-                expected_output, None, expected_sentry_received_timestamp
-            )
+            InsertBatch(expected_output, None, expected_sentry_received_timestamp)
             if expected_output is not None
             else None
         )
