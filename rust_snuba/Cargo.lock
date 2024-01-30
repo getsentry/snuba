@@ -2332,9 +2332,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "0.1.47"
+version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6a62656afb8023e0cee1b312918be959062759d69d1834042b0ae9482b20f5f"
+checksum = "41761e478aadfd2e43db90199181b967dc8c2cb178f253b69df05753076f5838"
 dependencies = [
  "jsonschema",
  "prettyplease",
@@ -2551,9 +2551,9 @@ dependencies = [
 
 [[package]]
 name = "statsdproxy"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75c3ca857ffc876cad78f6c1489356c962d214fe500117c61865550e6304509d"
+checksum = "793ec303cef342e5a80e717016050673430851d5e3159ba8275c0f801cc83c11"
 dependencies = [
  "anyhow",
  "cadence",
@@ -2561,6 +2561,8 @@ dependencies = [
  "crc32fast",
  "env_logger",
  "log",
+ "rand 0.8.5",
+ "sentry",
  "serde",
  "serde_yaml",
  "signal-hook",

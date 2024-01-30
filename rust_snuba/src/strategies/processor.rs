@@ -1,19 +1,20 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::counter;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message};
+use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry::{Hub, SentryFutureExt};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::config::ProcessorConfig;
-use crate::processors::ProcessingFunction;
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
+use crate::types::{BytesInsertBatch, InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -25,10 +26,82 @@ pub fn make_rust_processor(
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
+    fn result_to_next_msg(
+        transformed: InsertBatch,
+        partition: Partition,
+        offset: u64,
+        timestamp: DateTime<Utc>,
+    ) -> anyhow::Result<Message<BytesInsertBatch>> {
+        let payload = BytesInsertBatch::new(
+            transformed.rows,
+            timestamp,
+            transformed.origin_timestamp,
+            transformed.sentry_received_timestamp,
+            BTreeMap::from([(partition.index, (offset, timestamp))]),
+            transformed.cogs_data,
+        );
+
+        Ok(Message::new_broker_message(
+            payload, partition, offset, timestamp,
+        ))
+    }
+
     let task_runner = MessageProcessor {
         schema,
         enforce_schema,
         func,
+        result_to_next_msg,
+        processor_config,
+    };
+
+    Box::new(RunTaskInThreads::new(
+        next_step,
+        Box::new(task_runner),
+        concurrency,
+        Some("process_message"),
+    ))
+}
+
+pub fn make_rust_processor_with_replacements(
+    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
+    func: ProcessingFunctionWithReplacements,
+    schema_name: &str,
+    enforce_schema: bool,
+    concurrency: &ConcurrencyConfig,
+    processor_config: ProcessorConfig,
+) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
+    let schema = get_schema(schema_name, enforce_schema);
+
+    fn result_to_next_msg(
+        transformed: InsertOrReplacement<InsertBatch>,
+        partition: Partition,
+        offset: u64,
+        timestamp: DateTime<Utc>,
+    ) -> anyhow::Result<Message<InsertOrReplacement<BytesInsertBatch>>> {
+        let payload = match transformed {
+            InsertOrReplacement::Insert(transformed) => {
+                InsertOrReplacement::Insert(BytesInsertBatch::new(
+                    transformed.rows,
+                    timestamp,
+                    transformed.origin_timestamp,
+                    transformed.sentry_received_timestamp,
+                    BTreeMap::from([(partition.index, (offset, timestamp))]),
+                    transformed.cogs_data,
+                ))
+            }
+            InsertOrReplacement::Replacement(r) => InsertOrReplacement::Replacement(r),
+        };
+
+        Ok(Message::new_broker_message(
+            payload, partition, offset, timestamp,
+        ))
+    }
+
+    let task_runner = MessageProcessor {
+        schema,
+        enforce_schema,
+        func,
+        result_to_next_msg,
         processor_config,
     };
 
@@ -57,18 +130,24 @@ pub fn get_schema(schema_name: &str, enforce_schema: bool) -> Option<Arc<Schema>
 }
 
 #[derive(Clone)]
-struct MessageProcessor {
+struct MessageProcessor<TResult: Clone, TNext: Clone> {
     schema: Option<Arc<Schema>>,
     enforce_schema: bool,
-    func: ProcessingFunction,
+    // Convert payload to either InsertBatch (or either insert or replacement for the errors dataset)
+    func:
+        fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<TResult>,
+    // Function that return Message<TNext> to be passed to the next strategy. Gets passed TResult,
+    // as well as the message's partition, offset and timestamp.
+    result_to_next_msg:
+        fn(TResult, Partition, u64, DateTime<Utc>) -> anyhow::Result<Message<TNext>>,
     processor_config: ProcessorConfig,
 }
 
-impl MessageProcessor {
+impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
     async fn process_message(
         self,
         message: Message<KafkaPayload>,
-    ) -> Result<Message<BytesInsertBatch>, RunTaskError<anyhow::Error>> {
+    ) -> Result<Message<TNext>, RunTaskError<anyhow::Error>> {
         validate_schema(&message, &self.schema, self.enforce_schema)?;
 
         let msg = match message.inner_message {
@@ -113,10 +192,7 @@ impl MessageProcessor {
     }
 
     #[tracing::instrument(skip_all)]
-    fn process_payload(
-        &self,
-        msg: BrokerMessage<KafkaPayload>,
-    ) -> anyhow::Result<Message<BytesInsertBatch>> {
+    fn process_payload(&self, msg: BrokerMessage<KafkaPayload>) -> anyhow::Result<Message<TNext>> {
         let metadata = KafkaMessageMetadata {
             partition: msg.partition.index,
             offset: msg.offset,
@@ -125,28 +201,14 @@ impl MessageProcessor {
 
         let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
 
-        let payload = BytesInsertBatch::new(
-            transformed.rows,
-            msg.timestamp,
-            transformed.origin_timestamp,
-            transformed.sentry_received_timestamp,
-            BTreeMap::from([(msg.partition.index, (msg.offset, msg.timestamp))]),
-            transformed.cogs_data,
-        );
-        Ok(Message::new_broker_message(
-            payload,
-            msg.partition,
-            msg.offset,
-            msg.timestamp,
-        ))
+        (self.result_to_next_msg)(transformed, msg.partition, msg.offset, msg.timestamp)
     }
 }
 
-impl TaskRunner<KafkaPayload, BytesInsertBatch, anyhow::Error> for MessageProcessor {
-    fn get_task(
-        &self,
-        message: Message<KafkaPayload>,
-    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+impl<TResult: Clone + 'static, TNext: Clone + 'static>
+    TaskRunner<KafkaPayload, TNext, anyhow::Error> for MessageProcessor<TResult, TNext>
+{
+    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<TNext, anyhow::Error> {
         Box::pin(
             self.clone()
                 .process_message(message)

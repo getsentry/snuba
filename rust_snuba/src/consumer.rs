@@ -80,6 +80,8 @@ pub fn consumer_impl(
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
+
+    // TODO: Remove this once errors is implemented in Rust
     assert!(consumer_config.replacements_topic.is_none());
 
     let mut _sentry_guard = None;
@@ -108,7 +110,13 @@ pub fn consumer_impl(
         set_global_tag("storage".to_owned(), storage_name);
         set_global_tag("consumer_group".to_owned(), consumer_group.to_owned());
 
-        metrics::init(StatsDBackend::new(&host, port, "snuba.consumer")).unwrap();
+        metrics::init(StatsDBackend::new(
+            &host,
+            port,
+            "snuba.consumer",
+            env_config.ddm_metrics_sample_rate,
+        ))
+        .unwrap();
     }
 
     if !use_rust_processor {
@@ -180,6 +188,17 @@ pub fn consumer_impl(
         None
     };
 
+    let replacements_config = if let Some(topic_config) = consumer_config.replacements_topic {
+        let producer_config =
+            KafkaConfig::new_producer_config(vec![], Some(topic_config.broker_config));
+        Some((
+            producer_config,
+            Topic::new(&topic_config.physical_topic_name),
+        ))
+    } else {
+        None
+    };
+
     let factory = ConsumerStrategyFactory::new(
         first_storage,
         env_config,
@@ -190,11 +209,13 @@ pub fn consumer_impl(
         ConcurrencyConfig::new(concurrency),
         ConcurrencyConfig::new(2),
         ConcurrencyConfig::new(2),
+        ConcurrencyConfig::new(4),
         python_max_queue_depth,
         use_rust_processor,
         health_check_file.map(ToOwned::to_owned),
         enforce_schema,
         commit_log_producer,
+        replacements_config,
         consumer_group.to_owned(),
         Topic::new(&consumer_config.raw_topic.physical_topic_name),
         consumer_config.accountant_topic,
@@ -247,7 +268,15 @@ pub fn process_message(
         timestamp,
     };
 
-    let res = func(payload, meta, &config::ProcessorConfig::default())
-        .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
-    Ok(res.rows.into_encoded_rows())
+    match func {
+        processors::ProcessingFunctionType::ProcessingFunction(f) => {
+            let res = f(payload, meta, &config::ProcessorConfig::default())
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+
+            Ok(res.rows.into_encoded_rows())
+        }
+        _ => {
+            panic!("Replacements not supported in hybrid consumer");
+        }
+    }
 }
