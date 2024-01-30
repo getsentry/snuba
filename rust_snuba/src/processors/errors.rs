@@ -413,32 +413,29 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut tags_value = Vec::with_capacity(from.data.tags.len());
 
         for tag in from.data.tags.into_iter() {
-            match tag {
-                Some(t) => {
-                    if let Some(tag_key) = &t.0 .0 {
-                        if tag_key == "environment" {
-                            environment = t.1 .0
-                        } else if tag_key == "level" {
-                            level = t.1 .0
-                        } else if tag_key == "transaction" {
-                            transaction_name = t.1 .0
-                        } else if tag_key == "sentry:release" {
-                            release = t.1 .0
-                        } else if tag_key == "sentry:dist" {
-                            dist = t.1 .0
-                        } else if tag_key == "sentry:user" {
-                            user = t.1 .0
-                        } else if tag_key == "replayId" {
-                            // TODO: empty state should be null?
-                            replay_id = t.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
-                        } else if let Some(tag_value) = t.1 .0 {
-                            // Only tags with non-null values are stored.
-                            tags_key.push(tag_key.to_owned());
-                            tags_value.push(tag_value);
-                        }
+            if let Some(t) = tag {
+                if let Some(tag_key) = &t.0 .0 {
+                    if tag_key == "environment" {
+                        environment = t.1 .0
+                    } else if tag_key == "level" {
+                        level = t.1 .0
+                    } else if tag_key == "transaction" {
+                        transaction_name = t.1 .0
+                    } else if tag_key == "sentry:release" {
+                        release = t.1 .0
+                    } else if tag_key == "sentry:dist" {
+                        dist = t.1 .0
+                    } else if tag_key == "sentry:user" {
+                        user = t.1 .0
+                    } else if tag_key == "replayId" {
+                        // TODO: empty state should be null?
+                        replay_id = t.1 .0.map(|v| Uuid::parse_str(&v).unwrap_or_default())
+                    } else if let Some(tag_value) = t.1 .0 {
+                        // Only tags with non-null values are stored.
+                        tags_key.push(tag_key.to_owned());
+                        tags_value.push(tag_value);
                     }
                 }
-                None => {}
             }
         }
 
@@ -468,10 +465,9 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
-        match from.data.contexts.replay.replay_id {
-            Some(rid) => replay_id = Some(rid),
-            None => {}
-        };
+        if let Some(rid) = from.data.contexts.replay.replay_id {
+            replay_id = Some(rid)
+        }
 
         // Stacktrace.
 
@@ -483,7 +479,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let exception_count = exceptions.len();
         let frame_count = exceptions.iter().map(|v| v.stacktrace.frames.len()).sum();
 
-        let mut stack_level: u16 = 0;
+        // let mut stack_level: u16 = 0;
         let mut stack_types = Vec::with_capacity(exception_count);
         let mut stack_values = Vec::with_capacity(exception_count);
         let mut stack_mechanism_types = Vec::with_capacity(exception_count);
@@ -499,7 +495,7 @@ impl TryFrom<ErrorMessage> for ErrorRow {
         let mut frame_stack_levels = Vec::with_capacity(frame_count);
         let mut exception_main_thread = false;
 
-        for stack in exceptions {
+        for (stack_level, stack) in exceptions.into_iter().enumerate() {
             stack_types.push(stack.ty.0);
             stack_values.push(stack.value.0);
             stack_mechanism_types.push(stack.mechanism.ty.0);
@@ -514,10 +510,8 @@ impl TryFrom<ErrorMessage> for ErrorRow {
                 frame_in_app.push(frame.in_app.map(|v| v as u8));
                 frame_colnos.push(frame.colno);
                 frame_linenos.push(frame.lineno);
-                frame_stack_levels.push(stack_level);
+                frame_stack_levels.push(stack_level as u16);
             }
-
-            stack_level += 1;
 
             // We need to determine if the exception occurred on the main thread.
             if !exception_main_thread {
