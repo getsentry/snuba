@@ -37,16 +37,17 @@ class SentryMetricsBackend(MetricsBackend):
         name: str,
         value: int | float,
         tags: Tags | None = None,
-        unit: metrics.DurationUnit | None = None,
+        unit: str | None = None,
     ) -> None:
-        metrics.timing(name, value, unit or "millisecond", tags)
+        # The Sentry SDK has strict typing on the unit, so it doesn't allow passing arbitrary units
+        metrics.timing(name, value, unit or "millisecond", tags)  # type: ignore
 
     def distribution(
         self,
         name: str,
         value: int | float,
         tags: Tags | None = None,
-        unit: metrics.MeasurementUnit | None = None,
+        unit: str | None = None,
     ) -> None:
         metrics.distribution(name, value, unit or "none", tags)
 

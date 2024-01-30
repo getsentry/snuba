@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import random
 
-from sentry_sdk import metrics
-
 from snuba import settings, state
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
@@ -54,7 +52,7 @@ class SentryDatadogMetricsBackend(MetricsBackend):
         name: str,
         value: int | float,
         tags: Tags | None = None,
-        unit: metrics.DurationUnit | None = None,
+        unit: str | None = None,
     ) -> None:
         self.datadog.timing(name, value, tags, unit)
         if self._use_sentry():
