@@ -47,11 +47,10 @@ struct FromMetricsMessage {
     org_id: u64,
     project_id: u64,
     metric_id: u64,
-    #[serde(rename = "type")]
-    r#type: String,
     timestamp: f64,
     sentry_received_timestamp: Option<f64>,
     tags: BTreeMap<String, u64>,
+    #[serde(flatten)]
     value: MetricValue,
     retention_days: u16,
 }
@@ -60,12 +59,23 @@ fn default_use_case_id() -> String {
     "sessions".into()
 }
 
+// #[derive(Debug, Deserialize)]
+// #[serde(untagged)]
+// enum MetricValue {
+//     Counter(f64),
+//     SetOrDistribution(Vec<u64>),
+//     DistributionFloat(Vec<f64>),
+// }
+
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", content = "value")]
 enum MetricValue {
+    #[serde(rename = "c")]
     Counter(f64),
-    SetOrDistribution(Vec<u64>),
-    DistributionFloat(Vec<f64>),
+    #[serde(rename = "s")]
+    Set(Vec<u64>),
+    #[serde(rename = "d")]
+    Distribution(Vec<f64>),
 }
 
 /// The raw row that is written to clickhouse.
@@ -113,11 +123,8 @@ impl Parse for MetricsRawRow {
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        // The way the _should_process functionality works in the Python
-        // processor today is by matching against the InputType Enum
-        // Maybe we should look into porting that Enum into Rust?
-        match from.r#type.as_str() {
-            "s" => Ok(Some(MetricsRawRow {
+        match from.value {
+            MetricValue::Set(value) => Ok(Some(MetricsRawRow {
                 use_case_id: from.use_case_id,
                 org_id: from.org_id,
                 project_id: from.project_id,
@@ -127,14 +134,7 @@ impl Parse for MetricsRawRow {
                 retention_days,
                 tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
                 tags_value: tag_values,
-                set_values: match from.value {
-                    MetricValue::SetOrDistribution(value) => Some(value),
-                    _ => {
-                        return Err(anyhow::anyhow!(
-                            "Unsupported values provided for set metric type"
-                        ))
-                    }
-                },
+                set_values: Some(value),
                 count_value: None,
                 distribution_values: None,
                 materialization_version: 4,
@@ -142,7 +142,7 @@ impl Parse for MetricsRawRow {
                 partition: meta.partition,
                 offset: meta.offset,
             })),
-            "c" => Ok(Some(MetricsRawRow {
+            MetricValue::Counter(value) => Ok(Some(MetricsRawRow {
                 use_case_id: from.use_case_id,
                 org_id: from.org_id,
                 project_id: from.project_id,
@@ -153,21 +153,14 @@ impl Parse for MetricsRawRow {
                 tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
                 tags_value: tag_values,
                 set_values: None,
-                count_value: match from.value {
-                    MetricValue::Counter(value) => Some(value),
-                    _ => {
-                        return Err(anyhow::anyhow!(
-                            "Unsupported values provided for counter metric type"
-                        ))
-                    }
-                },
+                count_value: Some(value),
                 distribution_values: None,
                 materialization_version: 4,
                 timeseries_id,
                 partition: meta.partition,
                 offset: meta.offset,
             })),
-            "d" => Ok(Some(MetricsRawRow {
+            MetricValue::Distribution(value) => Ok(Some(MetricsRawRow {
                 use_case_id: from.use_case_id,
                 org_id: from.org_id,
                 project_id: from.project_id,
@@ -179,25 +172,12 @@ impl Parse for MetricsRawRow {
                 tags_value: tag_values,
                 set_values: None,
                 count_value: None,
-                distribution_values: match from.value {
-                    MetricValue::DistributionFloat(value) => Some(value),
-                    MetricValue::SetOrDistribution(values) => {
-                        Some(values.into_iter().map(|v: u64| v as f64).collect())
-                    }
-                    _ => {
-                        return Err(anyhow::anyhow!(
-                            "Unsupported values provided for distribution metric type"
-                        ))
-                    }
-                },
+                distribution_values: Some(value),
                 materialization_version: 4,
                 timeseries_id,
                 partition: meta.partition,
                 offset: meta.offset,
             })),
-            &_ => Err(anyhow::anyhow!(
-                "Unsupported values provided for release health metric type"
-            )),
         }
     }
 }
