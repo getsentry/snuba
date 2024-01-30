@@ -271,7 +271,7 @@ expression: snapshot_payload
     "level": "error",
     "location": "MainActivity.java",
     "message": "hello world",
-    "message_timestamp": 1706645526,
+    "message_timestamp": "<event timestamp>",
     "modules.name": [],
     "modules.version": [],
     "num_processing_errors": 0,

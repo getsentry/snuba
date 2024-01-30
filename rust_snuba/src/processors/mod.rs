@@ -122,6 +122,10 @@ mod tests {
                     settings.add_redaction(".*.event_hash", "<event UUID>");
                 }
 
+                if *topic_name == "events" {
+                    settings.add_redaction(".*.message_timestamp", "<event timestamp>");
+                }
+
                 settings.set_description(std::str::from_utf8(example.payload()).unwrap());
                 let _guard = settings.bind_to_scope();
 
