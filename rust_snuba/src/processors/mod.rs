@@ -59,7 +59,7 @@ define_processing_functions! {
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
     ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_distribution_message)),
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
-    ("errors", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
+    ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
 }
 
 // COGS is recorded for these processors
@@ -109,11 +109,6 @@ mod tests {
                 timestamp: DateTime::from(SystemTime::now()),
             };
 
-            if *topic_name == "events" {
-                // TODO: remove
-                continue;
-            }
-
             for example in schema.examples() {
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(format!(
@@ -125,6 +120,10 @@ mod tests {
 
                 if *topic_name == "ingest-replay-events" {
                     settings.add_redaction(".*.event_hash", "<event UUID>");
+                }
+
+                if *topic_name == "events" {
+                    settings.add_redaction(".*.message_timestamp", "<event timestamp>");
                 }
 
                 settings.set_description(std::str::from_utf8(example.payload()).unwrap());
