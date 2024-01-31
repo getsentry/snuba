@@ -15,7 +15,6 @@ from snuba.state.rate_limit import (
     RateLimitParameters,
     RateLimitStats,
     RateLimitStatsContainer,
-    get_rate_limit_config,
     rate_limit,
     set_rate_limit_config,
 )
@@ -262,66 +261,6 @@ def test_rate_limit_failures(
         assert count == 0
 
 
-dual_write_tests = [
-    pytest.param(None, None, None, None),
-    pytest.param(None, None, None, 2),
-    pytest.param(None, None, 2, None),
-    pytest.param(None, None, 2, 2),
-    pytest.param(None, 1, None, None),
-    pytest.param(None, 1, None, 2),
-    pytest.param(None, 1, 2, None),
-    pytest.param(None, 1, 2, 2),
-    pytest.param(1, None, None, None),
-    pytest.param(1, None, None, 2),
-    pytest.param(1, None, 2, None),
-    pytest.param(1, None, 2, 2),
-    pytest.param(1, 1, None, None),
-    pytest.param(1, 1, None, 2),
-    pytest.param(1, 1, 2, None),
-    pytest.param(1, 1, 2, 2),
-]
-
-
-@pytest.mark.parametrize("ps_in_new, ps_in_old, ct_in_new, ct_in_old", dual_write_tests)
-@pytest.mark.redis_db
-def test_rate_limit_dual_write(
-    ps_in_new: int | None, ps_in_old: int | None, ct_in_new: bool, ct_in_old: bool
-) -> None:
-    ps_key = "project_per_second_limit_36"
-    ct_key = "project_concurrent_limit_36"
-
-    if ps_in_new is not None:
-        set_rate_limit_config(ps_key, ps_in_new, copy=False)
-    if ct_in_new is not None:
-        set_rate_limit_config(ct_key, ct_in_new, copy=False)
-    if ps_in_old is not None:
-        state.set_config(ps_key, ps_in_old)
-    if ct_in_old is not None:
-        state.set_config(ct_key, ct_in_old)
-
-    ps_default, ct_default = 76, 77
-    ps_found, ct_found = get_rate_limit_config(
-        (ps_key, ps_default), (ct_key, ct_default)
-    )
-
-    expected_ps_saved = ps_in_old
-    expected_ps_found = ps_in_old or ps_default
-    expected_ct_saved = ct_in_old
-    expected_ct_found = ct_in_old or ct_default
-
-    assert ps_found == expected_ps_found
-    assert ct_found == expected_ct_found
-
-    assert (
-        state.get_uncached_config(ps_key, config_key=state.rate_limit_config_key)
-        == expected_ps_saved
-    )
-    assert (
-        state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key)
-        == expected_ct_saved
-    )
-
-
 @pytest.mark.redis_db
 def test_rate_limit_interface() -> None:
     ps_key = "project_per_second_limit_36"
@@ -329,14 +268,6 @@ def test_rate_limit_interface() -> None:
 
     set_rate_limit_config(ps_key, 23)
     set_rate_limit_config(ct_key, 46)
-
-    # Check that the keys are in new and old
-    assert (
-        state.get_uncached_config(ps_key, config_key=state.rate_limit_config_key) == 23
-    )
-    assert (
-        state.get_uncached_config(ct_key, config_key=state.rate_limit_config_key) == 46
-    )
 
     assert state.get_uncached_config(ps_key) == 23
     assert state.get_uncached_config(ct_key) == 46

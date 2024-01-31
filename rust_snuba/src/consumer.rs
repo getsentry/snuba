@@ -14,6 +14,7 @@ use rust_arroyo::processing::StreamProcessor;
 use rust_arroyo::types::Topic;
 
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
 use crate::config;
 use crate::factory::ConsumerStrategyFactory;
@@ -21,7 +22,7 @@ use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::types::KafkaMessageMetadata;
+use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
@@ -242,14 +243,21 @@ pub fn consumer_impl(
 
 pyo3::create_exception!(rust_snuba, SnubaRustError, pyo3::exceptions::PyException);
 
+/// insert: encoded rows
+type PyInsert = PyObject;
+
+/// replacement: (key/project_id, value)
+type PyReplacement = (PyObject, PyObject);
+
 #[pyfunction]
 pub fn process_message(
+    py: Python,
     name: &str,
     value: Vec<u8>,
     partition: u16,
     offset: u64,
     millis_since_epoch: i64,
-) -> PyResult<Vec<u8>> {
+) -> PyResult<(Option<PyInsert>, Option<PyReplacement>)> {
     // XXX: Currently only takes the message payload and metadata. This assumes
     // key and headers are not used for message processing
     let func = processors::get_processing_function(name)
@@ -273,10 +281,25 @@ pub fn process_message(
             let res = f(payload, meta, &config::ProcessorConfig::default())
                 .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
 
-            Ok(res.rows.into_encoded_rows())
+            let payload = PyBytes::new(py, &res.rows.into_encoded_rows()).into();
+
+            Ok((Some(payload), None))
         }
-        _ => {
-            panic!("Replacements not supported in hybrid consumer");
+        processors::ProcessingFunctionType::ProcessingFunctionWithReplacements(f) => {
+            let res = f(payload, meta, &config::ProcessorConfig::default())
+                .map_err(|e| SnubaRustError::new_err(format!("invalid message: {:?}", e)))?;
+
+            match res {
+                InsertOrReplacement::Insert(r) => {
+                    let payload = PyBytes::new(py, &r.rows.into_encoded_rows()).into();
+                    Ok((Some(payload), None))
+                }
+                InsertOrReplacement::Replacement(r) => {
+                    let key_bytes = PyBytes::new(py, &r.key).into();
+                    let value_bytes = PyBytes::new(py, &r.value).into();
+                    Ok((None, Some((key_bytes, value_bytes))))
+                }
+            }
         }
     }
 }

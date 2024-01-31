@@ -52,6 +52,7 @@ class EnvConfig:
     valid_retention_days: list[int]
     record_cogs: bool
     ddm_metrics_sample_rate: float
+    project_stacktrace_blacklist: list[int]
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,7 @@ def _resolve_env_config() -> EnvConfig:
         valid_retention_days=valid_retention_days,
         record_cogs=record_cogs,
         ddm_metrics_sample_rate=ddm_metrics_sample_rate,
+        project_stacktrace_blacklist=list(settings.PROJECT_STACKTRACE_BLACKLIST),
     )
 
 
