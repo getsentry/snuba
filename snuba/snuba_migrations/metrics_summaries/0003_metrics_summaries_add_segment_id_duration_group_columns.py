@@ -51,5 +51,5 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=target,
             )
             for column in columns
-            for target, table_name in targets
+            for target, table_name in reversed(targets)
         ]
