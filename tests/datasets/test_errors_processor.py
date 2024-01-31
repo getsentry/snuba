@@ -270,7 +270,7 @@ class ErrorEvent:
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
         expected_result = {
             "project_id": self.project_id,
-            "timestamp": self.timestamp,
+            "timestamp": int(self.timestamp.replace(tzinfo=timezone.utc).timestamp()),
             "event_id": self.event_id,
             "platform": self.platform,
             "dist": self.dist,
@@ -312,30 +312,32 @@ class ErrorEvent:
                 "snuba",
             ],
             "contexts.key": [
-                "runtime.version",
-                "runtime.name",
-                "runtime.build",
-                "trace.trace_id",
-                "trace.span_id",
+                "geo.city",
                 "geo.country_code",
                 "geo.region",
-                "geo.city",
                 "geo.subdivision",
+                "runtime.build",
+                "runtime.name",
+                "runtime.version",
+                "trace.span_id",
+                "trace.trace_id",
             ],
             "contexts.value": [
+                "fake_city",
+                "XY",
+                "fake_region",
+                "fake_subdivision",
                 "3.7.6",
                 "CPython",
                 "3.7.6",
-                self.trace_id,
                 "deadbeef",
-                "XY",
-                "fake_region",
-                "fake_city",
-                "fake_subdivision",
+                self.trace_id,
             ],
             "partition": meta.partition,
             "offset": meta.offset,
-            "message_timestamp": self.timestamp,
+            "message_timestamp": int(
+                self.timestamp.replace(tzinfo=timezone.utc).timestamp()
+            ),
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
@@ -344,8 +346,10 @@ class ErrorEvent:
                 str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
                 str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
             ],
-            "received": self.received_timestamp.astimezone(timezone.utc).replace(
-                tzinfo=None, microsecond=0
+            "received": int(
+                self.received_timestamp.replace(tzinfo=timezone.utc)
+                .replace(tzinfo=None, microsecond=0)
+                .timestamp()
             ),
             "message": "",
             "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
@@ -389,8 +393,8 @@ class ErrorEvent:
             expected_result["tags.value"].insert(4, self.replay_id.hex)
 
         if self.trace_sampled:
-            expected_result["contexts.key"].insert(5, "trace.sampled")
-            expected_result["contexts.value"].insert(5, str(self.trace_sampled))
+            expected_result["contexts.key"].insert(7, "trace.sampled")
+            expected_result["contexts.value"].insert(7, str(self.trace_sampled))
 
         return expected_result
 
