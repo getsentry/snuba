@@ -123,62 +123,39 @@ impl Parse for MetricsRawRow {
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        match from.value {
-            MetricValue::Set(value) => Ok(Some(MetricsRawRow {
-                use_case_id: from.use_case_id,
-                org_id: from.org_id,
-                project_id: from.project_id,
+        let common = MetricsRawRow {
+            use_case_id: from.use_case_id,
+            org_id: from.org_id,
+            project_id: from.project_id,
+            metric_id: from.metric_id,
+            timestamp: from.timestamp as u32,
+            retention_days,
+            tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
+            tags_value: tag_values,
+            materialization_version: 4,
+            timeseries_id,
+            partition: meta.partition,
+            offset: meta.offset,
+            ..Default::default()
+        };
+
+        Ok(Some(match from.value {
+            MetricValue::Set(value) => MetricsRawRow {
                 metric_type: "set".to_string(),
-                metric_id: from.metric_id,
-                timestamp: from.timestamp as u32,
-                retention_days,
-                tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
-                tags_value: tag_values,
                 set_values: Some(value),
-                count_value: None,
-                distribution_values: None,
-                materialization_version: 4,
-                timeseries_id,
-                partition: meta.partition,
-                offset: meta.offset,
-            })),
-            MetricValue::Counter(value) => Ok(Some(MetricsRawRow {
-                use_case_id: from.use_case_id,
-                org_id: from.org_id,
-                project_id: from.project_id,
+                ..common
+            },
+            MetricValue::Counter(value) => MetricsRawRow {
                 metric_type: "counter".to_string(),
-                metric_id: from.metric_id,
-                timestamp: from.timestamp as u32,
-                retention_days,
-                tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
-                tags_value: tag_values,
-                set_values: None,
                 count_value: Some(value),
-                distribution_values: None,
-                materialization_version: 4,
-                timeseries_id,
-                partition: meta.partition,
-                offset: meta.offset,
-            })),
-            MetricValue::Distribution(value) => Ok(Some(MetricsRawRow {
-                use_case_id: from.use_case_id,
-                org_id: from.org_id,
-                project_id: from.project_id,
+                ..common
+            },
+            MetricValue::Distribution(value) => MetricsRawRow {
                 metric_type: "distribution".to_string(),
-                metric_id: from.metric_id,
-                timestamp: from.timestamp as u32,
-                retention_days,
-                tags_key: tag_keys.into_iter().map(|e| e.parse().unwrap()).collect(),
-                tags_value: tag_values,
-                set_values: None,
-                count_value: None,
                 distribution_values: Some(value),
-                materialization_version: 4,
-                timeseries_id,
-                partition: meta.partition,
-                offset: meta.offset,
-            })),
-        }
+                ..common
+            },
+        }))
     }
 }
 
