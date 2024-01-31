@@ -425,6 +425,7 @@ def test_max_concurrent_queries(
     total_concurrent_queries: int,
     expected_max_concurrent_queries: int,
 ) -> None:
+
     calculated = calculate_max_concurrent_queries(
         assigned_partition_count, total_partition_count, total_concurrent_queries
     )

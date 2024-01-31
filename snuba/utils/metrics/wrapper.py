@@ -30,48 +30,21 @@ class MetricsWrapper(MetricsBackend):
             return {**tags, **self.__tags}
 
     def increment(
-        self,
-        name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
     ) -> None:
         self.__backend.increment(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
+            self.__merge_name(name), value, self.__merge_tags(tags)
         )
 
     def gauge(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
-        self.__backend.gauge(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
+        self.__backend.gauge(self.__merge_name(name), value, self.__merge_tags(tags))
 
     def timing(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
-        self.__backend.timing(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
-
-    def distribution(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
-    ) -> None:
-        self.__backend.distribution(
-            self.__merge_name(name), value, self.__merge_tags(tags), unit
-        )
+        self.__backend.timing(self.__merge_name(name), value, self.__merge_tags(tags))
 
     def events(
         self,

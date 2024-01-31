@@ -26,11 +26,7 @@ class DummyMetricsBackend(MetricsBackend):
             assert isinstance(v, str)
 
     def increment(
-        self,
-        name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)
@@ -39,11 +35,7 @@ class DummyMetricsBackend(MetricsBackend):
                 self.__validate_tags(tags)
 
     def gauge(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)
@@ -52,24 +44,7 @@ class DummyMetricsBackend(MetricsBackend):
                 self.__validate_tags(tags)
 
     def timing(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
-    ) -> None:
-        if self.__strict:
-            assert isinstance(name, str)
-            assert isinstance(value, (int, float))
-            if tags is not None:
-                self.__validate_tags(tags)
-
-    def distribution(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         if self.__strict:
             assert isinstance(name, str)

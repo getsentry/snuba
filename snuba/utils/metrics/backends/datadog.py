@@ -47,11 +47,7 @@ class DatadogMetricsBackend(MetricsBackend):
             return [f"{key}:{value.replace('|', '_')}" for key, value in tags.items()]
 
     def increment(
-        self,
-        name: str,
-        value: Union[int, float] = 1,
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
     ) -> None:
         self.__client.increment(
             name,
@@ -61,11 +57,7 @@ class DatadogMetricsBackend(MetricsBackend):
         )
 
     def gauge(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         self.__client.gauge(
             name,
@@ -75,27 +67,9 @@ class DatadogMetricsBackend(MetricsBackend):
         )
 
     def timing(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
+        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
     ) -> None:
         self.__client.timing(
-            name,
-            value,
-            tags=self.__normalize_tags(tags),
-            sample_rate=self.__sample_rates.get(name, 1.0),
-        )
-
-    def distribution(
-        self,
-        name: str,
-        value: Union[int, float],
-        tags: Optional[Tags] = None,
-        unit: Optional[str] = None,
-    ) -> None:
-        self.__client.distribution(
             name,
             value,
             tags=self.__normalize_tags(tags),
