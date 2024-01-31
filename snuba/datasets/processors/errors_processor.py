@@ -131,7 +131,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
         self.extract_promoted_contexts(processed, contexts, tags)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
-            contexts
+            contexts,
+            # sort here to match behavior of rust processor, where things get accidentally sorted due to BTreeMap
+            sort=True,
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
