@@ -123,7 +123,7 @@ impl Parse for MetricsRawRow {
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let common = MetricsRawRow {
+        Ok(Some(MetricsRawRow {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
             project_id: from.project_id,
@@ -136,25 +136,23 @@ impl Parse for MetricsRawRow {
             timeseries_id,
             partition: meta.partition,
             offset: meta.offset,
-            ..Default::default()
-        };
-
-        Ok(Some(match from.value {
-            MetricValue::Set(value) => MetricsRawRow {
-                metric_type: "set".to_string(),
-                set_values: Some(value),
-                ..common
-            },
-            MetricValue::Counter(value) => MetricsRawRow {
-                metric_type: "counter".to_string(),
-                count_value: Some(value),
-                ..common
-            },
-            MetricValue::Distribution(value) => MetricsRawRow {
-                metric_type: "distribution".to_string(),
-                distribution_values: Some(value),
-                ..common
-            },
+            ..match from.value {
+                MetricValue::Set(value) => MetricsRawRow {
+                    metric_type: "set".to_string(),
+                    set_values: Some(value),
+                    ..Default::default()
+                },
+                MetricValue::Counter(value) => MetricsRawRow {
+                    metric_type: "counter".to_string(),
+                    count_value: Some(value),
+                    ..Default::default()
+                },
+                MetricValue::Distribution(value) => MetricsRawRow {
+                    metric_type: "distribution".to_string(),
+                    distribution_values: Some(value),
+                    ..Default::default()
+                },
+            }
         }))
     }
 }
