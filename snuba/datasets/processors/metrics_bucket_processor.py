@@ -5,8 +5,14 @@ from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
+from snuba.datasets.metrics_messages import (
+    INT_FLOAT_EXPECTED,
+    InputType,
+    OutputType,
+    values_for_distribution_message,
+    values_for_set_message,
+)
 from snuba.datasets.processors import DatasetMessageProcessor
-from snuba.datasets.processors.rust_compat_processor import RustCompatProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
 
 ENABLED_MATERIALIZATION_VERSION = 4
@@ -114,12 +120,28 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
         )
 
 
+class PolymorphicMetricsProcessor(MetricsBucketProcessor):
+    def _should_process(self, message: Mapping[str, Any]) -> bool:
+        return message["type"] in {
+            InputType.SET.value,
+            InputType.COUNTER.value,
+            InputType.DISTRIBUTION.value,
+        }
+
+    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
+        if message["type"] == InputType.SET.value:
+            return values_for_set_message(message)
+        elif message["type"] == InputType.COUNTER.value:
+            value = message["value"]
+            assert isinstance(
+                value, (int, float)
+            ), f"{ILLEGAL_VALUE_FOR_COUNTER} {INT_FLOAT_EXPECTED}: {value}"
+            return {"metric_type": OutputType.COUNTER.value, "count_value": value}
+        else:  # message["type"] == InputType.DISTRIBUTION.value
+            return values_for_distribution_message(message)
+
+
 def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
     time_seconds = timestamp.timestamp()
     out_seconds = interval_seconds * (time_seconds // interval_seconds)
     return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
-
-
-class PolymorphicMetricsProcessor(RustCompatProcessor):
-    def __init__(self) -> None:
-        super().__init__("PolymorphicMetricsProcessor")
