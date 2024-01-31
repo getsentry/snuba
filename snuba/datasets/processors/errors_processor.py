@@ -80,7 +80,13 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row], row["received"])
+            received = (
+                datetime.utcfromtimestamp(row["received"]).replace(tzinfo=timezone.utc)
+                if row["received"] is not None
+                else None
+            )
+
+            return InsertBatch([row], received)
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])
