@@ -7,7 +7,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.metrics_messages import InputType
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericDistributionsMetricsProcessor,
-    GenericSetsMetricsProcessor,
 )
 
 timestamp = int(datetime.now(timezone.utc).timestamp())
@@ -22,24 +21,6 @@ MAPPING_META_COMMON = {
     },
     "d": {"33": "value-3"},
 }
-
-BASE_MESSAGE = {
-    "use_case_id": "release-health",
-    "org_id": 1,
-    "project_id": 2,
-    "metric_id": 1232341,
-    "type": "s",
-    "timestamp": timestamp,
-    "tags": {"10": 11, "20": 22, "30": 33},
-    "value": [324234, 345345, 456456, 567567],
-    "retention_days": 22,
-    "mapping_meta": MAPPING_META_COMMON,
-}
-
-
-@pytest.fixture
-def processor() -> GenericSetsMetricsProcessor:
-    return GenericSetsMetricsProcessor()
 
 
 @pytest.fixture
