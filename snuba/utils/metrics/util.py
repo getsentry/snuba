@@ -38,18 +38,23 @@ def create_metrics(
     from datadog import DogStatsd
 
     from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
+    from snuba.utils.metrics.backends.dualwrite import SentryDatadogMetricsBackend
+    from snuba.utils.metrics.backends.sentry import SentryMetricsBackend
 
-    return DatadogMetricsBackend(
-        partial(
-            DogStatsd,
-            host=host,
-            port=port,
-            namespace=prefix,
-            constant_tags=[f"{key}:{value}" for key, value in tags.items()]
-            if tags is not None
-            else None,
+    return SentryDatadogMetricsBackend(
+        DatadogMetricsBackend(
+            partial(
+                DogStatsd,
+                host=host,
+                port=port,
+                namespace=prefix,
+                constant_tags=[f"{key}:{value}" for key, value in tags.items()]
+                if tags is not None
+                else None,
+            ),
+            sample_rates,
         ),
-        sample_rates,
+        SentryMetricsBackend(),
     )
 
 
