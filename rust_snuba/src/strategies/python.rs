@@ -1,368 +1,299 @@
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy, SubmitError,
-};
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
-use rust_arroyo::utils::metrics::{get_metrics, BoxMetrics};
-use rust_arroyo::utils::timing::Deadline;
+use crate::config::MessageProcessorConfig;
 
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
-use std::sync::Mutex;
-use std::thread::sleep;
-use std::time::{Duration, SystemTime};
-
+use crate::types::{BytesInsertBatch, RowData};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use pyo3::prelude::*;
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::processing::strategies::{
+    merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
+    StrategyError, SubmitError,
+};
+use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
+use rust_arroyo::utils::timing::Deadline;
+use std::collections::{BTreeMap, VecDeque};
+use std::env;
+use std::sync::Arc;
+use std::time::Duration;
 
-use crate::config::MessageProcessorConfig;
-use crate::types::{BytesInsertBatch, InsertBatch, RowData};
-
-struct MessageMeta {
-    partition: Partition,
-    offset: u64,
-    timestamp: DateTime<Utc>,
-}
-
-enum TaskHandle {
-    Procspawn {
-        original_message_meta: MessageMeta,
-        // NOTE: this `Mutex` purely exists to make `TaskHandle` `Sync`
-        join_handle: Mutex<procspawn::JoinHandle<Result<InsertBatch, String>>>,
-        submit_timestamp: SystemTime,
-    },
-    Immediate {
-        original_message_meta: MessageMeta,
-        result: Result<InsertBatch, String>,
-        submit_timestamp: SystemTime,
-    },
-}
-
-impl TaskHandle {
-    fn submit_timestamp(&self) -> SystemTime {
-        match self {
-            TaskHandle::Procspawn {
-                submit_timestamp, ..
-            } => *submit_timestamp,
-            TaskHandle::Immediate {
-                submit_timestamp, ..
-            } => *submit_timestamp,
-        }
-    }
-}
+type ReturnValue = (Vec<Vec<u8>>, Option<DateTime<Utc>>, Option<DateTime<Utc>>);
+type MessageTimestamp = DateTime<Utc>;
+type Committable = BTreeMap<(String, u16), u64>;
+type PyReturnValue = (ReturnValue, MessageTimestamp, Committable);
 
 pub struct PythonTransformStep {
     next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
-    handles: VecDeque<TaskHandle>,
-    message_carried_over: Option<Message<BytesInsertBatch>>,
-    processing_pool: Option<procspawn::Pool>,
-    max_queue_depth: usize,
-    metrics: BoxMetrics,
+    python_strategy: Arc<Mutex<Py<PyAny>>>,
+    transformed_messages: VecDeque<Message<BytesInsertBatch>>,
+    commit_request_carried_over: Option<CommitRequest>,
 }
 
 impl PythonTransformStep {
     pub fn new<N>(
-        processor_config: MessageProcessorConfig,
-        processes: usize,
-        max_queue_depth: Option<usize>,
         next_step: N,
+        processor_config: MessageProcessorConfig,
+        concurrency: usize,
+        max_queue_depth: Option<usize>,
     ) -> Result<Self, Error>
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
     {
-        let next_step = Box::new(next_step);
-        let python_module = &processor_config.python_module;
-        let python_class_name = &processor_config.python_class_name;
+        env::set_var(
+            "RUST_SNUBA_PROCESSOR_MODULE",
+            processor_config.python_module.clone(),
+        );
+        env::set_var(
+            "RUST_SNUBA_PROCESSOR_CLASSNAME",
+            processor_config.python_class_name.clone(),
+        );
 
-        let processing_pool = if processes > 1 {
-            Some(
-                procspawn::Pool::builder(processes)
-                    .env("RUST_SNUBA_PROCESSOR_MODULE", python_module)
-                    .env("RUST_SNUBA_PROCESSOR_CLASSNAME", python_class_name)
-                    .build()
-                    .expect("failed to build procspawn pool"),
-            )
-        } else {
-            Python::with_gil(|py| -> PyResult<()> {
-                let fun: Py<PyAny> = PyModule::import(py, "snuba.consumers.rust_processor")?
-                    .getattr("initialize_processor")?
-                    .into();
+        let instance = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
+            let module = PyModule::import(py, "snuba.consumers.rust_processor")?;
+            let cls: Py<PyAny> = module.getattr("RunPythonMultiprocessing")?.into();
+            cls.call1(py, (concurrency, max_queue_depth.unwrap_or(concurrency)))
+        })?;
 
-                fun.call1(py, (python_module, python_class_name))?;
-                Ok(())
-            })?;
-            None
-        };
-
-        Ok(PythonTransformStep {
-            next_step,
-            handles: VecDeque::new(),
-            message_carried_over: None,
-            processing_pool,
-            max_queue_depth: max_queue_depth.unwrap_or(processes),
-            metrics: get_metrics(),
+        Ok(Self {
+            next_step: Box::new(next_step),
+            python_strategy: Arc::new(Mutex::new(instance)),
+            transformed_messages: VecDeque::new(),
+            commit_request_carried_over: None,
         })
     }
+    fn handle_py_return_value(&mut self, messages: Vec<PyReturnValue>) {
+        // Used internally by "poll" and "join" to populate `self.transformed_messages` from Python return values
+        for py_message in messages {
+            let (
+                (payload, origin_timestamp, sentry_received_timestamp),
+                message_timestamp,
+                offsets,
+            ) = py_message;
 
-    #[tracing::instrument(skip(self))]
-    fn check_for_results(&mut self, max_queue_depth: usize) {
-        if let Some(message_carried_over) = self.message_carried_over.take() {
-            tracing::debug!("resubmitting carried over message");
-            // TODO: handle InvalidMessage here
-            if let Err(SubmitError::MessageRejected(MessageRejected { message })) =
-                self.next_step.submit(message_carried_over)
-            {
-                tracing::debug!("failed to resubmit, returning");
-                self.message_carried_over = Some(message);
-                return;
+            let commit_log_offsets = offsets
+                .iter()
+                .map(|((_t, p), o)| (*p, (*o, message_timestamp)))
+                .collect();
+
+            let payload = BytesInsertBatch::new(
+                RowData::from_encoded_rows(payload),
+                message_timestamp,
+                origin_timestamp,
+                sentry_received_timestamp,
+                commit_log_offsets,
+                None,
+            );
+
+            let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
+            for ((t, p), o) in offsets {
+                committable.insert(Partition::new(Topic::new(&t), p), o);
             }
+
+            let message = Message::new_any_message(payload, committable);
+            self.transformed_messages.push_back(message);
         }
-
-        debug_assert!(self.message_carried_over.is_none());
-
-        if !self.queue_needs_drain(max_queue_depth) {
-            tracing::debug!("queue_needs_drain=false, returning");
-            return;
-        }
-
-        let (original_message_meta, message_result) = match self.handles.pop_front() {
-            Some(TaskHandle::Procspawn {
-                original_message_meta,
-                join_handle,
-                ..
-            }) => {
-                let handle = join_handle.into_inner().unwrap();
-                tracing::debug!("joining procspawn handle");
-                let result = handle.join().expect("procspawn failed");
-                (original_message_meta, result)
-            }
-            Some(TaskHandle::Immediate {
-                original_message_meta,
-                result,
-                ..
-            }) => (original_message_meta, result),
-            None => {
-                tracing::debug!("self.handles is empty, returning");
-                return;
-            }
-        };
-
-        match message_result {
-            Ok(insert_batch) => {
-                let replacement = BytesInsertBatch::new(
-                    insert_batch.rows,
-                    original_message_meta.timestamp,
-                    insert_batch.origin_timestamp,
-                    insert_batch.sentry_received_timestamp,
-                    BTreeMap::from([(
-                        original_message_meta.partition.index,
-                        (
-                            original_message_meta.offset,
-                            original_message_meta.timestamp,
-                        ),
-                    )]),
-                );
-
-                let new_message = Message::new_broker_message(
-                    replacement,
-                    original_message_meta.partition,
-                    original_message_meta.offset,
-                    original_message_meta.timestamp,
-                );
-
-                tracing::debug!("forwarding new result to next step");
-
-                if let Err(SubmitError::MessageRejected(MessageRejected {
-                    message: transformed_message,
-                })) = self.next_step.submit(new_message)
-                {
-                    tracing::debug!("failed to forward");
-                    self.message_carried_over = Some(transformed_message);
-                }
-            }
-            Err(error) => {
-                self.metrics.increment("invalid_message", 1, None);
-                tracing::error!(error, "Invalid message");
-            }
-        }
-
-        tracing::debug!("done with check_for_results, returning");
-    }
-
-    #[tracing::instrument(skip_all)]
-    fn queue_needs_drain(&self, max_queue_depth: usize) -> bool {
-        tracing::debug!(self.handles.len = self.handles.len());
-
-        if self.handles.len() > max_queue_depth {
-            return true;
-        }
-
-        if let Some(handle) = self.handles.front() {
-            if let Ok(elapsed) = handle.submit_timestamp().elapsed() {
-                if elapsed > Duration::from_secs(10) {
-                    return true;
-                }
-            }
-        }
-
-        false
     }
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-        tracing::debug!("python poll start");
-        self.check_for_results(self.max_queue_depth);
-        tracing::debug!("python poll end");
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
+        let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
+            let python_strategy = self.python_strategy.lock();
+            let result = python_strategy.call_method0(py, "poll")?;
+            Ok(result.extract(py).unwrap())
+        })
+        .unwrap();
 
-        self.next_step.poll()
+        self.handle_py_return_value(messages);
+
+        // Attempt to submit all transformed messages
+        while let Some(msg) = self.transformed_messages.pop_front() {
+            let commit_request = self.next_step.poll()?;
+            self.commit_request_carried_over =
+                merge_commit_request(self.commit_request_carried_over.take(), commit_request);
+
+            match self.next_step.submit(msg) {
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) => {
+                    self.transformed_messages.push_front(transformed_message);
+                    break;
+                }
+                Err(SubmitError::InvalidMessage(invalid_message)) => {
+                    return Err(invalid_message.into());
+                }
+                Ok(_) => {}
+            }
+        }
+
+        let commit_request = self.next_step.poll()?;
+
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            commit_request,
+        ))
     }
 
     fn submit(&mut self, message: Message<KafkaPayload>) -> Result<(), SubmitError<KafkaPayload>> {
-        if self.message_carried_over.is_some() {
-            tracing::debug!("python strategy provides backpressure due to next_step");
+        if self.transformed_messages.len() > 100_000 {
             return Err(SubmitError::MessageRejected(MessageRejected { message }));
         }
 
-        // if there are a lot of "queued" messages (=messages waiting for a free process), let's
-        // not enqueue more.
-        if self.queue_needs_drain(self.max_queue_depth) {
-            tracing::debug!("python strategy provides backpressure due to full queue");
-            return Err(SubmitError::MessageRejected(MessageRejected { message }));
-        }
+        let mut apply_backpressure = false;
+        let mut invalid_message: Option<InvalidMessage> = None;
 
-        tracing::debug!(%message, "processing message");
-
-        match message.inner_message {
-            InnerMessage::AnyMessage(..) => {
-                // Snuba message processors, as their interface is defined in Python, expect a
-                // single, specific partition/offset combination for every payload.
-                panic!("AnyMessage cannot be processed by a message processor");
-            }
-            InnerMessage::BrokerMessage(BrokerMessage {
-                payload,
-                offset,
-                partition,
-                timestamp,
-            }) => {
-                // XXX: Python message processors do not support null payload, even though this is valid in
-                // Kafka so we convert it to an empty vec.
-                let payload_bytes = payload.payload().cloned().unwrap_or_default();
-
-                let args = (payload_bytes, offset, partition.index, timestamp);
-
-                let process_message = |args: (_, _, _, DateTime<Utc>)| {
-                    tracing::debug!(args=?(args.1, args.2, args.3), "processing message in subprocess");
-                    Python::with_gil(|py| -> PyResult<InsertBatch> {
-                        let fun: Py<PyAny> =
-                            PyModule::import(py, "snuba.consumers.rust_processor")?
-                                .getattr("process_rust_message")?
-                                .into();
-
-                        let result = fun.call1(py, args)?;
-                        let (result_decoded, origin_timestamp, sentry_received_timestamp): (
-                            Vec<Vec<u8>>,
-                            _,
-                            _,
-                        ) = result.extract(py)?;
-                        Ok(InsertBatch {
-                            rows: RowData::from_encoded_rows(result_decoded),
-                            origin_timestamp,
-                            sentry_received_timestamp,
-                        })
-                    })
-                    .map_err(|pyerr| pyerr.to_string())
-                };
-
-                let original_message_meta = MessageMeta {
-                    partition,
-                    offset,
-                    timestamp,
-                };
-
-                let submit_timestamp = SystemTime::now();
-
-                if let Some(ref processing_pool) = self.processing_pool {
-                    tracing::debug!("processing_pool.spawn start");
-                    let handle = processing_pool.spawn(args, process_message);
-                    tracing::debug!("processing_pool.spawn end");
-
-                    self.handles.push_back(TaskHandle::Procspawn {
-                        submit_timestamp,
-                        original_message_meta,
-                        join_handle: Mutex::new(handle),
-                    });
-                } else {
-                    self.handles.push_back(TaskHandle::Immediate {
-                        submit_timestamp,
-                        original_message_meta,
-                        result: process_message(args),
-                    });
+        Python::with_gil(|py| -> PyResult<()> {
+            let python_strategy = self.python_strategy.lock();
+            match message.clone().inner_message {
+                InnerMessage::AnyMessage(..) => {
+                    // Snuba message processors, as their interface is defined in Python, expect a
+                    // single, specific partition/offset combination for every payload.
+                    panic!("AnyMessage cannot be processed by a message processor");
                 }
-            }
-        };
+                InnerMessage::BrokerMessage(BrokerMessage {
+                    payload,
+                    offset,
+                    partition,
+                    timestamp,
+                }) => {
+                    // XXX: Python message processors do not support null payload, even though this is valid in
+                    // Kafka so we convert it to an empty vec.
+                    let payload_bytes = payload.payload().cloned().unwrap_or_default();
+                    let args = (
+                        payload_bytes,
+                        partition.topic.as_str(),
+                        offset,
+                        partition.index,
+                        timestamp,
+                    );
+
+                    let rv: (u8, Option<InvalidMessageMetadata>) = python_strategy
+                        .call_method1(py, "submit", args)?
+                        .extract(py)?;
+
+                    match rv {
+                        (1, _) => {
+                            apply_backpressure = true;
+                        }
+                        (2, meta) => {
+                            let metadata = meta.unwrap();
+                            invalid_message = Some(InvalidMessage {
+                                partition: Partition {
+                                    topic: Topic::new(&metadata.topic),
+                                    index: metadata.partition,
+                                },
+                                offset: metadata.offset,
+                            });
+                        }
+                        _ => {
+                            tracing::debug!("successfully submitted to multiprocessing");
+                        }
+                    }
+                }
+            };
+            Ok(())
+        })
+        .unwrap();
+
+        if let Some(msg) = invalid_message {
+            return Err(SubmitError::InvalidMessage(msg));
+        }
+
+        if apply_backpressure {
+            return Err(SubmitError::MessageRejected(MessageRejected { message }));
+        }
 
         Ok(())
     }
 
-    fn close(&mut self) {
-        self.next_step.close();
-    }
+    fn close(&mut self) {}
 
     fn terminate(&mut self) {
-        if let Some(ref processing_pool) = self.processing_pool {
-            processing_pool.kill();
-        }
-        self.next_step.terminate();
+        self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
+        let timeout_secs = timeout.map(|d| d.as_secs());
 
-        // while deadline has not yet passed
-        while !self.handles.is_empty() && !deadline.map_or(false, |d| d.has_elapsed()) {
-            self.check_for_results(0);
-            sleep(Duration::from_millis(10));
+        let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
+            let python_strategy = self.python_strategy.lock();
+            let result = python_strategy
+                .call_method1(py, "join", (timeout_secs,))
+                .unwrap();
+
+            Ok(result.extract(py).unwrap())
+        })
+        .unwrap();
+
+        self.handle_py_return_value(messages);
+
+        // Attempt to submit all transformed messages up to the deadline
+        while let Some(msg) = self.transformed_messages.pop_front() {
+            let commit_request = self.next_step.poll()?;
+            self.commit_request_carried_over =
+                merge_commit_request(self.commit_request_carried_over.take(), commit_request);
+
+            match self.next_step.submit(msg) {
+                Err(SubmitError::MessageRejected(MessageRejected {
+                    message: transformed_message,
+                })) => {
+                    self.transformed_messages.push_front(transformed_message);
+                    if deadline.map_or(false, |d| d.has_elapsed()) {
+                        tracing::warn!("Timeout reached");
+                        break;
+                    }
+                }
+                Err(SubmitError::InvalidMessage(invalid_message)) => {
+                    return Err(invalid_message.into());
+                }
+                Ok(_) => {}
+            }
         }
 
-        // TODO: we need to shut down the python module properly in order to avoid dataloss in
-        // sentry sdk or similar things that run in python's atexit
-        self.next_step.join(deadline.map(|d| d.remaining()))
+        self.next_step.close();
+        let next_commit = self.next_step.join(timeout)?;
+        Ok(merge_commit_request(
+            self.commit_request_carried_over.take(),
+            next_commit,
+        ))
+    }
+}
+
+#[derive(Debug)]
+struct InvalidMessageMetadata {
+    pub topic: String,
+    pub partition: u16,
+    pub offset: u64,
+}
+
+impl FromPyObject<'_> for InvalidMessageMetadata {
+    fn extract(dict: &'_ PyAny) -> PyResult<Self> {
+        Ok(InvalidMessageMetadata {
+            topic: dict.get_item("topic")?.extract()?,
+            partition: dict.get_item("partition")?.extract()?,
+            offset: dict.get_item("offset")?.extract()?,
+        })
     }
 }
 
 #[cfg(test)]
-procspawn::enable_test_support!();
-
-#[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
-
     use super::*;
+    use rust_arroyo::testutils::TestStrategy;
 
-    use chrono::Utc;
+    #[test]
+    fn test_python() {
+        crate::testutils::initialize_python();
 
-    use rust_arroyo::{
-        testutils::TestStrategy,
-        types::{Partition, Topic},
-    };
-
-    fn run_basic(processes: usize) {
         let sink = TestStrategy::new();
 
-        let mut step = PythonTransformStep::new(
-            MessageProcessorConfig {
-                python_class_name: "OutcomesProcessor".to_owned(),
-                python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
-            },
-            processes,
-            None,
-            sink.clone(),
-        )
-        .unwrap();
+        let processor_config = MessageProcessorConfig {
+            python_class_name: "OutcomesProcessor".to_owned(),
+            python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
+        };
 
+        let mut step = PythonTransformStep::new(sink.clone(), processor_config, 1, None).unwrap();
         let _ = step.poll();
         step.submit(Message::new_broker_message(
             KafkaPayload::new(
@@ -375,113 +306,10 @@ mod tests {
             Utc::now(),
         ))
         .unwrap();
+        step.poll().unwrap();
 
         let _ = step.join(Some(Duration::from_secs(10)));
 
         assert_eq!(sink.messages.lock().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn test_basic() {
-        let handle = procspawn::spawn((), |()| {
-            run_basic(1);
-        });
-        // on macos, this test is polluting something in the global process state causing
-        // test_basic_two_processes to hang, therefore isolate it in another subprocess of its own.
-        handle.join().unwrap();
-    }
-
-    #[test]
-    fn test_basic_two_processes() {
-        run_basic(2);
-    }
-
-    #[derive(Clone)]
-    struct Backpressure(Arc<AtomicUsize>);
-
-    impl<T> ProcessingStrategy<T> for Backpressure {
-        fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-            Ok(None)
-        }
-
-        fn submit(&mut self, message: Message<T>) -> Result<(), SubmitError<T>> {
-            if self.0.load(Ordering::Relaxed) > 0 {
-                self.0.fetch_sub(1, Ordering::Relaxed);
-                Err(SubmitError::MessageRejected(MessageRejected { message }))
-            } else {
-                Ok(())
-            }
-        }
-
-        fn close(&mut self) {}
-        fn terminate(&mut self) {}
-        fn join(
-            &mut self,
-            _timeout: Option<Duration>,
-        ) -> Result<Option<CommitRequest>, InvalidMessage> {
-            Ok(None)
-        }
-    }
-
-    #[test]
-    fn test_backpressure() {
-        let backpressure = Backpressure(Arc::new(2.into()));
-
-        let mut step = PythonTransformStep::new(
-            MessageProcessorConfig {
-                python_class_name: "OutcomesProcessor".to_owned(),
-                python_module: "snuba.datasets.processors.outcomes_processor".to_owned(),
-            },
-            2,
-            None,
-            backpressure.clone(),
-        )
-        .unwrap();
-
-        step.poll().unwrap();
-        step.submit(Message::new_broker_message(
-            KafkaPayload::new(
-                None,
-                None,
-                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
-            ),
-            Partition::new(Topic::new("test"), 1),
-            1,
-            Utc::now(),
-        )).unwrap();
-
-        step.join(None).unwrap();
-
-        assert_eq!(backpressure.0.load(Ordering::Relaxed), 1);
-
-        step.poll().unwrap();
-        assert!(matches!(step.submit(Message::new_broker_message(
-            KafkaPayload::new(
-                None,
-                None,
-                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
-            ),
-            Partition::new(Topic::new("test"), 1),
-            1,
-            Utc::now(),
-        )).unwrap_err(), SubmitError::MessageRejected(_)));
-
-        step.join(None).unwrap();
-
-        assert_eq!(backpressure.0.load(Ordering::Relaxed), 0);
-
-        step.poll().unwrap();
-
-        // assert that after backpressure.0 has hit zero, we are able to submit messages again
-        step.submit(Message::new_broker_message(
-            KafkaPayload::new(
-                None,
-                None,
-                Some(br#"{ "timestamp": "2023-03-28T18:50:44.000000Z", "org_id": 1, "project_id": 1, "key_id": 1, "outcome": 1, "reason": "discarded-hash", "event_id": "4ff942d62f3f4d5db9f53b5a015b5fd9", "category": 1, "quantity": 1 }"#.to_vec()),
-            ),
-            Partition::new(Topic::new("test"), 1),
-            1,
-            Utc::now(),
-        )).unwrap();
     }
 }

@@ -1,4 +1,5 @@
 import json
+import sys
 from dataclasses import asdict
 from typing import Optional, Sequence
 
@@ -35,6 +36,18 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--no-strict-offset-reset",
     is_flag=True,
     help="Forces the kafka consumer auto offset reset.",
+)
+@click.option(
+    "--queued-max-messages-kbytes",
+    default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+    type=int,
+    help="Maximum number of kilobytes per topic+partition in the local consumer queue.",
+)
+@click.option(
+    "--queued-min-messages",
+    default=settings.DEFAULT_QUEUED_MIN_MESSAGES,
+    type=int,
+    help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
@@ -103,7 +116,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "use_rust_processor",
     is_flag=True,
     help="Use the Rust (if available) or Python message processor",
-    default=False,
+    default=True,
 )
 @click.option(
     "--group-instance-id",
@@ -128,12 +141,21 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=str,
     help="Arroyo will touch this file at intervals to indicate health. If not provided, no health check is performed.",
 )
+@click.option(
+    "--enforce-schema",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Enforce schema on the raw events topic.",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
     consumer_group: str,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
     raw_events_topic: Optional[str],
     commit_log_topic: Optional[str],
     replacements_topic: Optional[str],
@@ -151,6 +173,7 @@ def rust_consumer(
     max_poll_interval_ms: int,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
+    enforce_schema: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -166,6 +189,8 @@ def rust_consumer(
         replacement_bootstrap_servers=replacement_bootstrap_servers,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
         slice_id=slice_id,
         group_instance_id=group_instance_id,
     )
@@ -176,8 +201,7 @@ def rust_consumer(
 
     import rust_snuba
 
-    # TODO: remove after debugging
-    os.environ["RUST_LOG"] = "debug" if not use_rust_processor else log_level.lower()
+    os.environ["RUST_LOG"] = log_level.lower()
 
     # XXX: Temporary way to quickly test different values for concurrency
     # Should be removed before this is put into  prod
@@ -185,7 +209,7 @@ def rust_consumer(
         f"rust_consumer.{storage_names[0]}.concurrency"
     )
 
-    rust_snuba.consumer(  # type: ignore
+    exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
@@ -193,7 +217,10 @@ def rust_consumer(
         skip_write,
         concurrency_override or concurrency or 1,
         use_rust_processor,
+        enforce_schema,
         max_poll_interval_ms,
         python_max_queue_depth,
         health_check_file,
     )
+
+    sys.exit(exitcode)

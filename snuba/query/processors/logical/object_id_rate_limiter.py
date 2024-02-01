@@ -4,6 +4,7 @@ from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
+from snuba.state import get_config
 from snuba.state.rate_limit import (
     ORGANIZATION_RATE_LIMIT_NAME,
     PROJECT_RATE_LIMIT_NAME,
@@ -69,6 +70,8 @@ class ObjectIDRateLimiterProcessor(LogicalQueryProcessor):
         return self.concurrent_name
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        if not get_config("enable_legacy_ratelimiters", 1):
+            return
         # If the settings don't already have an object rate limit, add one
         if self._is_already_applied(query_settings):
             return

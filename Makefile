@@ -1,13 +1,19 @@
 .PHONY: develop setup-git test install-python-dependencies install-py-dev
 
-pyenv-setup:
-	@./scripts/pyenv_setup.sh
+apply-migrations:
+	snuba migrations migrate --force
+.PHONY: apply-migrations
 
-develop: install-python-dependencies install-rs-dev install-brew-dev setup-git
+reset-python:
+	pre-commit clean
+	rm -rf .venv
+.PHONY: reset-python
+
+develop: install-python-dependencies install-brew-dev install-rs-dev setup-git
 
 setup-git:
 	mkdir -p .git/hooks && cd .git/hooks && ln -sf ../../config/hooks/* ./
-	pip install 'pre-commit==2.18.1'
+	pip install 'pre-commit==3.6.0'
 	pre-commit install --install-hooks
 
 test:
@@ -47,7 +53,7 @@ install-python-dependencies:
 
 # install-rs-dev/install-py-dev mimick sentry's naming conventions
 install-rs-dev:
-	which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
+	@which cargo || (echo "!!! You need an installation of Rust in order to develop snuba. Go to https://rustup.rs to get one." && exit 1)
 	. scripts/rust-envvars && cd rust_snuba/ && maturin develop
 .PHONY: install-rs-dev
 
@@ -96,6 +102,7 @@ test-rust:
 lint-rust:
 	. scripts/rust-envvars && \
 		cd rust_snuba && \
+		rustup component add clippy && \
 		cargo clippy --workspace --all-targets --no-deps -- -D warnings
 .PHONY: lint-rust
 

@@ -351,6 +351,9 @@ class SpansLoader(DirectoryLoader):
             "0005_spans_add_sentry_tags",
             "0006_spans_add_profile_id",
             "0007_spans_add_metrics_summary",
+            "0008_spans_add_index_on_span_id",
+            "0009_spans_add_measure_hashmap",
+            "0010_spans_add_compression",
         ]
 
 
@@ -372,4 +375,5 @@ class MetricsSummariesLoader(DirectoryLoader):
         return [
             "0001_metrics_summaries_create_table",
             "0002_metrics_summaries_add_tags_hashmap",
+            "0003_metrics_summaries_add_segment_id_duration_group_columns",
         ]

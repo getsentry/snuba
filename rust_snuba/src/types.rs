@@ -1,11 +1,34 @@
 use std::cmp::min;
-
-use chrono::{DateTime, Utc};
-use rust_arroyo::utils::metrics::BoxMetrics;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use chrono::{DateTime, Utc};
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::timer;
+use serde::{Deserialize, Serialize};
+
 pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CogsData {
+    pub data: BTreeMap<String, u64>, // app_feature: bytes_len
+}
+
+impl CogsData {
+    fn merge(mut self, other: Option<CogsData>) -> Self {
+        match other {
+            None => self,
+            Some(data) => {
+                for (k, v) in data.data {
+                    self.data
+                        .entry(k)
+                        .and_modify(|curr| *curr += v)
+                        .or_insert(v);
+                }
+                self
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct LatencyRecorder {
@@ -52,49 +75,83 @@ impl LatencyRecorder {
         (write_time as f64 - (self.sum_timestamps / self.num_values as f64)) as u64
     }
 
-    fn send_metric(&self, metrics: &BoxMetrics, write_time: DateTime<Utc>, metric_name: &str) {
+    fn send_metric(&self, write_time: DateTime<Utc>, metric_name: &str) {
         if self.num_values == 0 {
             return;
         }
 
-        metrics.timing(
-            &format!("insertions.max_{}_ms", metric_name),
-            self.max_value_ms(write_time),
-            None,
+        timer!(
+            format_args!("insertions.max_{}_ms", metric_name),
+            self.max_value_ms(write_time)
         );
 
-        metrics.timing(
-            &format!("insertions.{}_ms", metric_name),
+        timer!(
+            format_args!("insertions.{}_ms", metric_name),
             self.avg_value_ms(write_time),
-            None,
         );
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReplacementData {
+    pub key: Vec<u8>, // Project id
+    // Replacement message bytes. Newline-delimited series of json payloads
+    pub value: Vec<u8>,
+}
+
+impl From<ReplacementData> for KafkaPayload {
+    fn from(value: ReplacementData) -> KafkaPayload {
+        KafkaPayload::new(Some(value.key), None, Some(value.value))
+    }
+}
+
+impl From<KafkaPayload> for ReplacementData {
+    fn from(value: KafkaPayload) -> ReplacementData {
+        ReplacementData {
+            key: value.key().unwrap().clone(),
+            value: value.payload().unwrap().clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InsertOrReplacement<T> {
+    Insert(T),
+    Replacement(ReplacementData),
+}
+
 /// The return value of message processors.
-///
-/// NOTE: In Python, this struct crosses a serialization boundary, and so this struct is somewhat
-/// sensitive to serialization speed. If there are additional things that should be returned from
-/// the Rust message processor that are not necessary in Python, it's probably best to duplicate
-/// this struct for Python as there it can be an internal type.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct InsertBatch {
     pub rows: RowData,
     pub origin_timestamp: Option<DateTime<Utc>>,
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
+    pub cogs_data: Option<CogsData>,
 }
 
 impl InsertBatch {
-    pub fn from_rows<T>(rows: impl IntoIterator<Item = T>) -> anyhow::Result<Self>
+    pub fn from_rows<T>(
+        rows: impl IntoIterator<Item = T>,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> anyhow::Result<Self>
     where
         T: Serialize,
     {
         let rows = RowData::from_rows(rows)?;
         Ok(Self {
             rows,
-            origin_timestamp: None,
+            origin_timestamp,
             sentry_received_timestamp: None,
+            cogs_data: None,
         })
+    }
+
+    /// In case the processing function wants to skip the message, we return an empty batch.
+    /// But instead of having the caller send an empty batch, lets make an explicit api for
+    /// skipping. This way we can change the implementation later if we want to. Skipping ensures
+    /// that the message is committed but not processed.
+    pub fn skip() -> Self {
+        Self::default()
     }
 }
 
@@ -121,6 +178,8 @@ pub struct BytesInsertBatch {
 
     // For each partition we store the offset and timestamp to be produced to the commit log
     commit_log_offsets: CommitLogOffsets,
+
+    cogs_data: Option<CogsData>,
 }
 
 impl BytesInsertBatch {
@@ -130,6 +189,7 @@ impl BytesInsertBatch {
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
+        cogs_data: Option<CogsData>,
     ) -> Self {
         BytesInsertBatch {
             rows,
@@ -141,6 +201,7 @@ impl BytesInsertBatch {
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
             commit_log_offsets,
+            cogs_data,
         }
     }
 
@@ -154,18 +215,21 @@ impl BytesInsertBatch {
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
+        self.cogs_data = match self.cogs_data {
+            Some(cogs_data) => Some(cogs_data.merge(other.cogs_data)),
+            None => other.cogs_data,
+        };
         self
     }
 
-    pub fn record_message_latency(&self, metrics: &BoxMetrics) {
+    pub fn record_message_latency(&self) {
         let write_time = Utc::now();
 
-        self.message_timestamp
-            .send_metric(metrics, write_time, "latency");
+        self.message_timestamp.send_metric(write_time, "latency");
         self.origin_timestamp
-            .send_metric(metrics, write_time, "end_to_end_latency");
+            .send_metric(write_time, "end_to_end_latency");
         self.sentry_received_timestamp
-            .send_metric(metrics, write_time, "sentry_received_latency");
+            .send_metric(write_time, "sentry_received_latency");
     }
 
     pub fn len(&self) -> usize {
@@ -179,12 +243,16 @@ impl BytesInsertBatch {
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
+
+    pub fn cogs_data(&self) -> Option<&CogsData> {
+        self.cogs_data.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
-    encoded_rows: Vec<u8>,
-    num_rows: usize,
+    pub encoded_rows: Vec<u8>,
+    pub num_rows: usize,
 }
 
 impl RowData {
@@ -196,6 +264,7 @@ impl RowData {
         let mut num_rows = 0;
         for row in rows {
             serde_json::to_writer(&mut encoded_rows, &row)?;
+            debug_assert!(encoded_rows.ends_with(b"}"));
             encoded_rows.push(b'\n');
             num_rows += 1;
         }
@@ -219,6 +288,10 @@ impl RowData {
             encoded_rows,
             num_rows,
         }
+    }
+
+    pub fn into_encoded_rows(self) -> Vec<u8> {
+        self.encoded_rows
     }
 }
 

@@ -13,8 +13,12 @@ schema:
     [
       { name: project_id, type: UInt, args: { size: 64 } },
       { name: metric_mri, type: String },
-      { name: span_id, type: UInt, args: { size: 64 } },
       { name: trace_id, type: UUID},
+      { name: segment_id, type: UInt, args: { size: 64 } },
+      { name: span_id, type: UInt, args: { size: 64 } },
+      { name: group, type: UInt, args: { size: 64 } },
+      { name: duration_ms, type: UInt, args: { size: 32 } },
+      { name: is_segment, type: UInt, args: { size: 8 } },
       { name: min, type: Float, args: { size: 64 } },
       { name: max, type: Float, args: { size: 64 } },
       { name: sum, type: Float, args: { size: 64 } },
@@ -69,7 +73,7 @@ query_processors:
       columns: [trace_id]
   - processor: HexIntColumnProcessor
     args:
-      columns: [span_id]
+      columns: [span_id, segment_id, group]
   - processor: MappingOptimizer
     args:
       column_name: tags
@@ -89,7 +93,7 @@ query_processors:
 query_splitters:
   - splitter: TimeSplitQueryStrategy
     args:
-      timestamp_col: start_timestamp
+      timestamp_col: end_timestamp
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

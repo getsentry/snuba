@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass, replace
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
 from parsimonious.nodes import Node, NodeVisitor
@@ -49,18 +49,27 @@ from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
-MQLSTUFF = Dict[str, Union[str, List[SelectedExpression], List[Expression]]]
+MQLSTUFF = Dict[str, Union[str, list[SelectedExpression], list[Expression]]]
 logger = logging.getLogger("snuba.mql.parser")
 
 
 @dataclass
 class InitialParseResult:
-    aggregate: SelectedExpression | None = None
-    groupby: List[SelectedExpression] | None = None
-    conditions: List[Expression] | None = None
+    expression: SelectedExpression | None = None
+    formula: str | None = None
+    parameters: list[InitialParseResult] | None = None
+    groupby: list[SelectedExpression] | None = None
+    conditions: list[Expression] | None = None
     mri: str | None = None
     public_name: str | None = None
-    metric_id: int | None = None
+
+
+ARITHMETIC_OPERATORS_MAPPING = {
+    "+": "plus",
+    "-": "minus",
+    "*": "multiply",
+    "/": "divide",
+}
 
 
 class MQLVisitor(NodeVisitor):  # type: ignore
@@ -76,12 +85,106 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Any,
         ],
     ) -> InitialParseResult:
-        # zero_or_more_others is used for formulas, which aren't supported yet
-        args, zero_or_more_others = children
-        return args
+        term, zero_or_more_others = children
+        if zero_or_more_others:
+            _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
+            return self._visit_formula(term_operator, term, coefficient)
+        return term
 
     def visit_expr_op(self, node: Node, children: Sequence[Any]) -> Any:
-        raise InvalidQueryException("Arithmetic function not supported yet")
+        return ARITHMETIC_OPERATORS_MAPPING[node.text]
+
+    def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
+        return ARITHMETIC_OPERATORS_MAPPING[node.text]
+
+    def _build_timeseries_formula_param(
+        self, param: InitialParseResult
+    ) -> SelectedExpression:
+        """
+        Timeseries inside a formula need to have three things done to them:
+        1. Add the -If suffix to their aggregate function
+        2. Put all the filters for the timeseries inside the aggregate expression
+        3. Add a metric_id condition to the conditions in the aggregate
+
+        Given an input parse result from `sum(mri){x:y}`, this should output
+        an expression like `sumIf(value, x = y AND metric_id = mri)`.
+        """
+        assert param.expression is not None
+        exp = param.expression.expression
+        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
+
+        conditions = param.conditions or []
+        metric_id_condition = binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "metric_id"),
+            Literal(None, param.mri or param.public_name),
+        )
+        conditions.append(metric_id_condition)
+        value_column = exp.parameters[0]
+        if isinstance(exp, FunctionCall):
+            return SelectedExpression(
+                None,
+                FunctionCall(
+                    None,
+                    f"{exp.function_name}If",
+                    parameters=(
+                        value_column,
+                        combine_and_conditions(conditions),
+                    ),
+                ),
+            )
+        else:
+            return SelectedExpression(
+                None,
+                CurriedFunctionCall(
+                    None,
+                    FunctionCall(
+                        exp.internal_function.alias,
+                        f"{exp.internal_function.function_name}If",
+                        exp.internal_function.parameters,
+                    ),
+                    (
+                        value_column,
+                        combine_and_conditions(conditions),
+                    ),
+                ),
+            )
+
+    def _visit_formula(
+        self,
+        term_operator: str,
+        term: InitialParseResult,
+        coefficient: InitialParseResult,
+    ) -> InitialParseResult:
+        # TODO: If the formula has filters/group by, where do those appear?
+
+        # If the parameters of the query are timeseries, extract the expressions from the result
+        if isinstance(term, InitialParseResult) and term.expression is not None:
+            term = replace(term, expression=self._build_timeseries_formula_param(term))
+        if (
+            isinstance(coefficient, InitialParseResult)
+            and coefficient.expression is not None
+        ):
+            coefficient = replace(
+                coefficient,
+                expression=self._build_timeseries_formula_param(coefficient),
+            )
+
+        if (
+            isinstance(term, InitialParseResult)
+            and isinstance(coefficient, InitialParseResult)
+            and term.groupby != coefficient.groupby
+        ):
+            raise InvalidQueryException(
+                "All terms in a formula must have the same groupby"
+            )
+
+        return InitialParseResult(
+            expression=None,
+            formula=term_operator,
+            parameters=[term, coefficient],
+            groupby=term.groupby,
+        )
 
     def visit_term(
         self,
@@ -90,11 +193,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
-            raise InvalidQueryException("Arithmetic function not supported yet")
-        return term
+            _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
+            return self._visit_formula(term_operator, term, coefficient)
 
-    def visit_term_op(self, node: Node, children: Sequence[Any]) -> str:
-        raise InvalidQueryException("Arithmetic function not supported yet")
+        return term
 
     def visit_coefficient(
         self,
@@ -111,19 +213,48 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         node: Node,
         children: Tuple[
             InitialParseResult,
+            Any,
             Sequence[Any],
+            Any,
             Sequence[Any],
             Any,
         ],
     ) -> InitialParseResult:
-        target, packed_filters, packed_groupbys, *_ = children
+        target, _, packed_filters, _, packed_groupbys, *_ = children
         if packed_filters:
             assert isinstance(packed_filters, list)
-            _, _, filter_expr, *_ = packed_filters[0]
-            if target.conditions is not None:
-                target.conditions = target.conditions + [filter_expr]
+            _, filter_expr, *_ = packed_filters[0]
+            if target.formula is not None:
+
+                def pushdown_filter(param: InitialParseResult) -> InitialParseResult:
+                    if param.formula is not None:
+                        parameters = param.parameters or []
+                        for p in parameters:
+                            pushdown_filter(p)
+                    elif param.expression is not None:
+                        exp = param.expression.expression
+                        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
+                        exp = replace(
+                            exp,
+                            parameters=(
+                                exp.parameters[0],
+                                binary_condition("and", filter_expr, exp.parameters[1]),
+                            ),
+                        )
+                        param.expression = replace(param.expression, expression=exp)
+                    else:
+                        raise InvalidQueryException("Could not parse formula")
+
+                    return param
+
+                if target.parameters is not None:
+                    for param in target.parameters:
+                        pushdown_filter(param)
             else:
-                target.conditions = [filter_expr]
+                if target.conditions is not None:
+                    target.conditions = target.conditions + [filter_expr]
+                else:
+                    target.conditions = [filter_expr]
 
         if packed_groupbys:
             assert isinstance(packed_groupbys, list)
@@ -158,7 +289,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[Sequence[Union[str, Sequence[str]]], Any],
+        children: Tuple[Sequence[Union[str, Sequence[str]]] | FunctionCall, Any],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
@@ -264,7 +395,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_quoted_string(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
-        return str(node.text[1:-1])
+        match = str(node.text[1:-1]).replace('\\"', '"')
+        return match
 
     def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
         _, _, first, zero_or_more_others, _, _ = children
@@ -288,6 +420,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         target = children[0]
         if isinstance(children[0], list):
             target = children[0][0]
+
         assert isinstance(target, InitialParseResult)
         return target
 
@@ -309,7 +442,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 Any,
                 InitialParseResult,
                 Any,
-                Any,
             ],
         ],
     ) -> InitialParseResult:
@@ -323,7 +455,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 parameters=tuple(Column(None, None, "value")),
             ),
         )
-        target.aggregate = selected_aggregate
+        target.expression = selected_aggregate
         return target
 
     def visit_curried_aggregate(
@@ -339,7 +471,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         _, _, target, _, *_ = zero_or_one
         _, _, agg_param_list, _, *_ = agg_params
         aggregate_params = agg_param_list[0] if agg_param_list else []
-
         selected_aggregate_column = SelectedExpression(
             AGGREGATE_ALIAS,
             CurriedFunctionCall(
@@ -354,7 +485,98 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 (Column(None, None, "value"),),
             ),
         )
-        target.aggregate = selected_aggregate_column
+        target.expression = selected_aggregate_column
+        return target
+
+    def visit_arbitrary_function(
+        self,
+        node: Node,
+        children: Tuple[
+            str,
+            Tuple[
+                Any,
+                Sequence[InitialParseResult],
+                Sequence[Sequence[Union[str, int, float]]],
+                Any,
+            ],
+        ],
+    ) -> InitialParseResult:
+        arbitrary_function_name, zero_or_one = children
+        _, expr, params, *_ = zero_or_one
+        _, target, _ = expr
+        arbitrary_function_params = [
+            Literal(alias=None, value=param[-1]) for param in params
+        ]
+        assert isinstance(target.expression, SelectedExpression)
+        assert isinstance(target.expression.expression, FunctionCall)
+        aggregate = FunctionCall(
+            alias=None,
+            function_name=target.expression.expression.function_name,
+            parameters=target.expression.expression.parameters,
+        )
+        arbitrary_function = SelectedExpression(
+            name=target.expression.name,
+            expression=FunctionCall(
+                alias=target.expression.name,
+                function_name=arbitrary_function_name,
+                parameters=(aggregate, *arbitrary_function_params),
+            ),
+        )
+        target.expression = arbitrary_function
+        return target
+
+    def visit_curried_arbitrary_function(
+        self, node: Node, children: Sequence[Any]
+    ) -> InitialParseResult:
+        curried_arbitrary_function_name, agg_params, zero_or_one = children
+        _, _, agg_param_list, *_ = agg_params
+        aggregate_params = agg_param_list[0] if agg_param_list else []
+        _, _, expr, params, *_ = zero_or_one
+        _, target, _ = expr
+        curried_arbitrary_function_params = [
+            Literal(alias=None, value=param[-1]) for param in params
+        ]
+        assert isinstance(target, InitialParseResult)
+        assert isinstance(target.expression, SelectedExpression)
+        curried_arbitrary_function = SelectedExpression(
+            name=target.expression.name,
+            expression=CurriedFunctionCall(
+                alias=None,
+                internal_function=FunctionCall(
+                    None,
+                    curried_arbitrary_function_name,
+                    tuple(
+                        Literal(alias=None, value=param) for param in aggregate_params
+                    ),
+                ),
+                parameters=(
+                    target.expression.expression,
+                    *curried_arbitrary_function_params,
+                ),
+            ),
+        )
+        target.expression = curried_arbitrary_function
+        return target
+
+    def visit_inner_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> InitialParseResult:
+        """
+        Given a metric, set its children filters and groupbys, then return a Timeseries.
+        """
+        target, _, packed_filters, _, packed_groupbys, *_ = children
+        target = target[0]
+        assert isinstance(target, InitialParseResult)
+        if not packed_filters and not packed_groupbys:
+            return target
+        if packed_filters:
+            _, filter_condition, *_ = packed_filters[0]
+            target.conditions = [filter_condition]
+        if packed_groupbys:
+            group_by = packed_groupbys[0]
+            if not isinstance(group_by, list):
+                group_by = [group_by]
+            target.groupby = group_by
         return target
 
     def visit_param(
@@ -381,6 +603,20 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return agg_params
 
     def visit_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_curried_aggregate_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_arbitrary_function_name(self, node: Node, children: Sequence[Any]) -> str:
+        assert isinstance(node.text, str)
+        return node.text
+
+    def visit_curried_arbitrary_function_name(
+        self, node: Node, children: Sequence[Any]
+    ) -> str:
         assert isinstance(node.text, str)
         return node.text
 
@@ -438,36 +674,76 @@ def parse_mql_query_body(
         """
         exp_tree = MQL_GRAMMAR.parse(body)
         parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
-        if not parsed.aggregate:
-            raise ParsingException("No aggregate specified in MQL query")
-
-        selected_columns = [parsed.aggregate]
-        if parsed.groupby:
-            selected_columns.extend(parsed.groupby)
-        groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
-
-        id_value = parsed.metric_id or parsed.mri or parsed.public_name
-        metric_id_condition = binary_condition(
-            ConditionFunctions.EQ,
-            Column(None, None, "metric_id"),
-            Literal(None, id_value),
-        )
-        if parsed.conditions:
-            conditions = combine_and_conditions(
-                [metric_id_condition, *parsed.conditions]
+        if not parsed.expression and not parsed.formula:
+            raise ParsingException(
+                "No aggregate/expression or formula specified in MQL query"
             )
-        else:
-            conditions = metric_id_condition
 
-        query = LogicalQuery(
-            from_clause=None,
-            selected_columns=selected_columns,
-            condition=conditions,
-            groupby=groupby,
-        )
+        if parsed.formula:
+
+            def extract_expression(param: InitialParseResult | Any) -> Expression:
+                if not isinstance(param, InitialParseResult):
+                    return Literal(None, param)
+                elif param.expression is not None:
+                    return param.expression.expression
+                elif param.formula:
+                    parameters = param.parameters or []
+                    return FunctionCall(
+                        None,
+                        param.formula,
+                        tuple(extract_expression(p) for p in parameters),
+                    )
+                else:
+                    raise InvalidQueryException("Could not parse formula")
+
+            parameters = parsed.parameters or []
+            selected_columns = [
+                SelectedExpression(
+                    name=AGGREGATE_ALIAS,
+                    expression=FunctionCall(
+                        alias=AGGREGATE_ALIAS,
+                        function_name=parsed.formula,
+                        parameters=tuple(extract_expression(p) for p in parameters),
+                    ),
+                )
+            ]
+            if parsed.groupby:
+                selected_columns.extend(parsed.groupby)
+            groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+            query = LogicalQuery(
+                from_clause=None,
+                selected_columns=selected_columns,
+                groupby=groupby,
+            )
+        if parsed.expression:
+            selected_columns = [parsed.expression]
+            if parsed.groupby:
+                selected_columns.extend(parsed.groupby)
+            groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+            metric_value = parsed.mri or parsed.public_name
+            conditions: list[Expression] = [
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, None, "metric_id"),
+                    Literal(None, metric_value),
+                )
+            ]
+            if parsed.conditions:
+                conditions.extend(parsed.conditions)
+
+            final_conditions = (
+                combine_and_conditions(conditions) if conditions else None
+            )
+
+            query = LogicalQuery(
+                from_clause=None,
+                selected_columns=selected_columns,
+                condition=final_conditions,
+                groupby=groupby,
+            )
     except Exception as e:
         raise e
-
     return query
 
 
@@ -674,7 +950,7 @@ def parse_mql_query(
     ):
         query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
     with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
-        resolve_mappings(query, mql_context.indexer_mappings)
+        resolve_mappings(query, mql_context.indexer_mappings, dataset)
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
@@ -708,4 +984,5 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
+
     return query, snql_anonymized

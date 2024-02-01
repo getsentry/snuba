@@ -1,78 +1,81 @@
-use cadence::prelude::*;
-use cadence::{BufferedUdpMetricSink, MetricBuilder, MetricError, QueuingMetricSink, StatsdClient};
-use rust_arroyo::utils::metrics::Metrics as ArroyoMetrics;
-use std::collections::HashMap;
-use std::net::UdpSocket;
+use rust_arroyo::metrics::{Metric, MetricSink, Recorder, StatsdRecorder};
+use statsdproxy::cadence::StatsdProxyMetricSink;
+use statsdproxy::config::{AggregateMetricsConfig, SampleConfig};
+use statsdproxy::middleware::aggregate::AggregateMetrics;
+use statsdproxy::middleware::mirror::Mirror;
+use statsdproxy::middleware::sample::Sample;
+use statsdproxy::middleware::sentry::Sentry;
+use statsdproxy::middleware::upstream::Upstream;
+
+use crate::metrics::global_tags::AddGlobalTags;
 
 #[derive(Debug)]
 pub struct StatsDBackend {
-    client: StatsdClient,
+    recorder: StatsdRecorder<Wrapper>,
+}
+
+impl Recorder for StatsDBackend {
+    fn record_metric(&self, metric: Metric<'_>) {
+        self.recorder.record_metric(metric)
+    }
+}
+
+struct Wrapper(Box<dyn cadence::MetricSink + Send + Sync + 'static>);
+
+impl MetricSink for Wrapper {
+    fn emit(&self, metric: &str) {
+        let _ = self.0.emit(metric);
+    }
 }
 
 impl StatsDBackend {
-    pub fn new(host: &str, port: u16, prefix: &str, global_tags: HashMap<&str, &str>) -> Self {
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        socket.set_nonblocking(true).unwrap();
-        let sink_addr = (host, port);
-        let buffered = BufferedUdpMetricSink::from(sink_addr, socket).unwrap();
-        let queuing_sink = QueuingMetricSink::from(buffered);
+    pub fn new(host: &str, port: u16, prefix: &str, ddm_metrics_sample_rate: f64) -> Self {
+        let upstream_addr = format!("{}:{}", host, port);
+        let aggregator_sink = StatsdProxyMetricSink::new(move || {
+            let next_step = Upstream::new(upstream_addr.clone()).unwrap();
 
-        let mut client_builder = StatsdClient::builder(prefix, queuing_sink);
-        for (k, v) in global_tags {
-            client_builder = client_builder.with_tag(k, v);
-        }
+            let next_step_sentry = Sample::new(
+                SampleConfig {
+                    sample_rate: ddm_metrics_sample_rate,
+                },
+                Sentry::new(),
+            );
 
-        Self {
-            client: client_builder.build(),
-        }
-    }
+            let next_step = Mirror::new(next_step, next_step_sentry);
 
-    fn send_with_tags<'t, T: cadence::Metric + From<String>>(
-        &self,
-        mut builder: MetricBuilder<'t, '_, T>,
-        tags: Option<HashMap<&'t str, &'t str>>,
-    ) -> Result<T, MetricError> {
-        if let Some(t) = tags {
-            for (key, value) in t {
-                builder = builder.with_tag(key, value);
-            }
-        }
+            // adding global tags *after* aggregation is more performant than trying to do the same
+            // in cadence, as it means more bytes and more memory to deal with in
+            // AggregateMetricsConfig
+            let next_step = AddGlobalTags::new(next_step);
 
-        builder.try_send()
-    }
-}
+            let config = AggregateMetricsConfig {
+                aggregate_counters: true,
+                flush_offset: 0,
+                flush_interval: 1,
+                aggregate_gauges: true,
+                max_map_size: None,
+            };
+            AggregateMetrics::new(config, next_step)
+        });
 
-impl ArroyoMetrics for StatsDBackend {
-    fn increment(&self, key: &str, value: i64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(error) = self.send_with_tags(self.client.count_with_tags(key, value), tags) {
-            tracing::debug!(%error, "Error sending metric");
-        }
-    }
+        let recorder = StatsdRecorder::new(prefix, Wrapper(Box::new(aggregator_sink)));
 
-    fn gauge(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(error) = self.send_with_tags(self.client.gauge_with_tags(key, value), tags) {
-            tracing::debug!(%error, "Error sending metric");
-        }
-    }
-
-    fn timing(&self, key: &str, value: u64, tags: Option<HashMap<&str, &str>>) {
-        if let Err(error) = self.send_with_tags(self.client.time_with_tags(key, value), tags) {
-            tracing::debug!(%error, "Error sending metric");
-        }
+        Self { recorder }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use rust_arroyo::metric;
+
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn statsd_metric_backend() {
-        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", HashMap::from([("env", "prod")]));
+        let backend = StatsDBackend::new("0.0.0.0", 8125, "test", 0.0);
 
-        backend.increment("a", 1, Some(HashMap::from([("tag1", "value1")])));
-        backend.gauge("b", 20, Some(HashMap::from([("tag2", "value2")])));
-        backend.timing("c", 30, Some(HashMap::from([("tag3", "value3")])));
+        backend.record_metric(metric!(Counter: "a", 1, "tag1" => "value1"));
+        backend.record_metric(metric!(Gauge: "b", 20, "tag2" => "value2"));
+        backend.record_metric(metric!(Timer: "c", 30, "tag3" => "value3"));
     }
 }

@@ -15,8 +15,18 @@ import importlib
 import logging
 import os
 from collections import deque
-from datetime import datetime
-from typing import Deque, Mapping, Optional, Sequence, Tuple, Type, Union, cast
+from datetime import datetime, timezone
+from typing import (
+    Deque,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypedDict,
+    Union,
+    cast,
+)
 
 import rapidjson
 from arroyo.dlq import InvalidMessage
@@ -57,6 +67,12 @@ def initialize_processor(
 initialize_processor()
 
 
+def ensure_utc(value: Optional[datetime]) -> Optional[datetime]:
+    if value and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 def process_rust_message(
     message: bytes, offset: int, partition: int, timestamp: datetime
 ) -> Tuple[Sequence[bytes], Optional[datetime], Optional[datetime]]:
@@ -74,8 +90,8 @@ def process_rust_message(
 
     return (
         [json_row_encoder.encode(row) for row in rv.rows],
-        rv.origin_timestamp,
-        rv.sentry_received_timestamp,
+        ensure_utc(rv.origin_timestamp),
+        ensure_utc(rv.sentry_received_timestamp),
     )
 
 
@@ -93,10 +109,12 @@ def wrap_process_message(
 ) -> Union[FilteredPayload, ReturnValue]:
     value = message.value
     assert isinstance(value, BrokerValue)
-
-    return process_rust_message(
-        value.payload, value.offset, value.partition.index, value.timestamp
-    )
+    try:
+        return process_rust_message(
+            value.payload, value.offset, value.partition.index, value.timestamp
+        )
+    except Exception:
+        raise InvalidMessage(value.partition, value.offset)
 
 
 class TransformedMessages:
@@ -130,6 +148,12 @@ class Next(ProcessingStrategy[Union[FilteredPayload, ReturnValue]]):
         self.__transformed_messages = transformed_messages
 
     def submit(self, message: Message[Union[FilteredPayload, ReturnValue]]) -> None:
+        # XXX: Filtered payload are created by the multiprocessing strategy in place
+        # of invalid messages so their offsets get committed. They are not currently
+        # supported in the hybrid consumer. This means the offsets of invalid messages
+        # do not get committed
+        if isinstance(message.payload, FilteredPayload):
+            return
         self.__transformed_messages.append(cast(Message[ReturnValue], message))
 
     def poll(self) -> None:
@@ -146,6 +170,11 @@ class Next(ProcessingStrategy[Union[FilteredPayload, ReturnValue]]):
 
 
 DEFAULT_BLOCK_SIZE = int(32 * 1e6)
+
+
+InvalidMessageMetadata = TypedDict(
+    "InvalidMessageMetadata", {"topic": str, "partition": int, "offset": int}
+)
 
 
 class RunPythonMultiprocessing:
@@ -181,25 +210,31 @@ class RunPythonMultiprocessing:
         offset: int,
         partition: int,
         timestamp: datetime,
-    ) -> int:
+    ) -> Tuple[int, Optional[InvalidMessageMetadata]]:
         # HACK: There is probably a better way to handle exceptions in Rust
         # 0 means message successfully submitted
         # 1 means backpressure
-        # Invalid message is not currently supported
+        # 2 means invalid message
         if self.__carried_over_message is not None:
-            return 1
+            return (1, None)
 
         message = Message(
             BrokerValue(payload, Partition(Topic(topic), partition), offset, timestamp)
         )
         try:
             self.__inner.submit(message)
-        except InvalidMessage:
-            logger.warning("Dropping invalid message", exc_info=True)
+        except InvalidMessage as exc:
+            return (
+                2,
+                {
+                    "topic": exc.partition.topic.name,
+                    "partition": exc.partition.index,
+                    "offset": exc.offset,
+                },
+            )
         except MessageRejected:
             self.__carried_over_message = message
-
-        return 0
+        return (0, None)
 
     def __get_transformed_messages(self) -> Sequence[ReturnValueWithCommittable]:
         return [
@@ -222,6 +257,14 @@ class RunPythonMultiprocessing:
             self.__inner.poll()
         except InvalidMessage:
             logger.warning("Dropping invalid message", exc_info=True)
+
+        # If there is a carried over message we should attempt to submit and clear it
+        if self.__carried_over_message is not None:
+            try:
+                self.__inner.submit(self.__carried_over_message)
+                self.__carried_over_message = None
+            except MessageRejected:
+                pass
 
         return self.__get_transformed_messages()
 

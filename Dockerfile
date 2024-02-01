@@ -28,9 +28,13 @@ RUN set -ex; \
         g++ \
         gnupg \
     '; \
+    runtimeDeps=' \
+        libjemalloc2 \
+    '; \
     apt-get update; \
-    apt-get install -y $buildDeps --no-install-recommends; \
+    apt-get install -y $buildDeps $runtimeDeps --no-install-recommends; \
     pip install -r requirements-build.txt; \
+    ln -s /usr/lib/*/libjemalloc.so.2 /usr/src/snuba/libjemalloc.so.2; \
     echo "$buildDeps" > /tmp/build-deps.txt
 
 FROM build_base AS base
@@ -61,36 +65,49 @@ RUN set -ex; \
 # There are optimizations we can make in the future to split building of Rust
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
-FROM build_base AS build_rust_snuba
-ARG RUST_TOOLCHAIN=1.74.1
-ARG SHOULD_BUILD_RUST=true
+FROM build_base AS build_rust_snuba_base
 
-COPY ./rust_snuba/ ./rust_snuba/
 RUN set -ex; \
-    cd ./rust_snuba/; \
-    mkdir -p ./target/wheels/; \
-    [ "$SHOULD_BUILD_RUST" = "true" ] || exit 0; \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
-    export PATH="$HOME/.cargo/bin/:$PATH"; \
+    # do not install any toolchain, as rust_snuba/rust-toolchain.toml defines that for us
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y; \
     # use git CLI to avoid OOM on ARM64
     echo '[net]' > ~/.cargo/config; \
     echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
     echo '[registries.crates-io]' >> ~/.cargo/config; \
-    echo 'protocol = "sparse"' >> ~/.cargo/config; \
-    maturin build --release --compatibility linux --locked --strip
+    echo 'protocol = "sparse"' >> ~/.cargo/config
+
+ENV PATH="/root/.cargo/bin/:${PATH}"
+
+FROM build_rust_snuba_base AS build_rust_snuba_deps
+
+COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
+COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
+COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
+COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
+
+RUN set -ex; \
+    sh scripts/rust-dummy-build.sh; \
+    cd ./rust_snuba/; \
+    maturin build --release --compatibility linux --locked
+
+FROM build_rust_snuba_base AS build_rust_snuba
+COPY ./rust_snuba/ ./rust_snuba/
+COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba/target/
+COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
+RUN set -ex; \
+    cd ./rust_snuba/; \
+    maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
-ARG SHOULD_BUILD_ADMIN_UI=true
 ENV NODE_VERSION=19
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
     mkdir -p snuba/admin/dist/; \
-    [ "$SHOULD_BUILD_ADMIN_UI" = "true" ] || exit 0; \
     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
     echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - &&\
+    curl -SLO https://deb.nodesource.com/nsolid_setup_deb.sh | bash -s -- ${NODE_VERSION} &&\
     apt-get update && \
     apt-get install -y yarn nodejs --no-install-recommends && \
     cd snuba/admin && \
@@ -103,7 +120,6 @@ FROM base AS application_base
 COPY . ./
 COPY --from=build_rust_snuba /usr/src/snuba/rust_snuba/target/wheels/ /tmp/rust_wheels/
 COPY --from=build_admin_ui /usr/src/snuba/snuba/admin/dist/ ./snuba/admin/dist/
-RUN apt-get install -y libjemalloc2 --no-install-recommends
 RUN set -ex; \
     groupadd -r snuba --gid 1000; \
     useradd -r -g snuba --uid 1000 snuba; \
@@ -117,7 +133,7 @@ RUN set -ex; \
     snuba --help
 
 ARG SOURCE_COMMIT
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 \
+ENV LD_PRELOAD=/usr/src/snuba/libjemalloc.so.2 \
     SNUBA_RELEASE=$SOURCE_COMMIT \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1 \
@@ -145,8 +161,9 @@ FROM application_base AS testing
 USER 0
 RUN pip install -r requirements-test.txt
 
-ARG RUST_TOOLCHAIN=1.74.1
 COPY ./rust_snuba/ ./rust_snuba/
-RUN bash -c "set -o pipefail && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y"
+# re-"install" rust for the testing image
+COPY --from=build_rust_snuba /root/.cargo/ /root/.cargo/
+COPY --from=build_rust_snuba /root/.rustup/ /root/.rustup/
 ENV PATH="${PATH}:/root/.cargo/bin/"
 USER snuba

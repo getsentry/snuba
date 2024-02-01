@@ -1,19 +1,20 @@
 import re
 import time
-from typing import Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 import structlog
 from packaging import version
 
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
-    CLUSTERS,
     ClickhouseClientSettings,
     ClickhouseCluster,
     ClickhouseNode,
     UndefinedClickhouseCluster,
+    get_cluster,
 )
 from snuba.clusters.storage_sets import DEV_STORAGE_SETS
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.clickhouse import (
@@ -21,14 +22,55 @@ from snuba.migrations.clickhouse import (
     CLICKHOUSE_SERVER_MIN_VERSION,
 )
 from snuba.migrations.errors import InactiveClickhouseReplica, InvalidClickhouseVersion
+from snuba.migrations.groups import (
+    MigrationGroup,
+    get_group_readiness_state_from_storage_set,
+    get_storage_set_keys,
+)
 from snuba.settings import ENABLE_DEV_FEATURES
 from snuba.utils.types import ColumnStatesMapType
 
 logger = structlog.get_logger().bind(module=__name__)
 
 
+def get_clickhouse_clusters_for_migration_group(
+    migration_group: MigrationGroup,
+) -> List[ClickhouseCluster]:
+    storage_set_keys = get_storage_set_keys(migration_group)
+    return list({get_cluster(storage_set_key) for storage_set_key in storage_set_keys})
+
+
+def get_clusters_for_readiness_states(
+    readiness_states: Sequence[ReadinessState], clusters: Sequence[ClickhouseCluster]
+) -> Sequence[ClickhouseCluster]:
+    """Given a set of clusters, return just the ones that serve storage_sets corresponding to the provided readiness states
+    Storage sets do not have readiness states but the migration groups those storage sets are related to do
+
+    E.g.
+
+    # Get all the configured clusters which have partial or complete readiness states located on them
+    from snuba.clusters.cluster import CLUSTERS
+
+    get_clusters_for_readiness_states(
+        [ReadinessState.PARTIAL, readiness_state.COMPLETE],
+        CLUSTERS
+    )
+
+    """
+    res = []
+    for cluster in clusters:
+        storage_sets = cluster.get_storage_set_keys()
+        cluster_readiness_states = {
+            get_group_readiness_state_from_storage_set(storage_set_key)
+            for storage_set_key in storage_sets
+        }
+        if set(readiness_states).intersection(cluster_readiness_states):
+            res.append(cluster)
+    return res
+
+
 def check_clickhouse_connections(
-    clusters: Sequence[ClickhouseCluster] = CLUSTERS,
+    clusters: Sequence[ClickhouseCluster],
 ) -> None:
     """
     Ensure that we can establish a connection with every cluster.
@@ -115,13 +157,10 @@ def _get_all_nodes_for_storage(
     return (local_nodes, distributed_nodes, query_node)
 
 
-def check_for_inactive_replicas() -> None:
+def check_for_inactive_replicas(storage_keys: List[StorageKey]) -> None:
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
-
-    storage_keys = _get_all_storage_keys()
-
     checked_nodes = set()
     inactive_replica_info = []
     for storage_key in storage_keys:

@@ -198,6 +198,10 @@ def get_group_loader(group: MigrationGroup) -> GroupLoader:
     return _REGISTERED_MIGRATION_GROUPS[group].loader
 
 
+def get_storage_set_keys(group: MigrationGroup) -> Set[StorageSetKey]:
+    return _REGISTERED_MIGRATION_GROUPS[group].storage_set_keys
+
+
 def get_group_readiness_state_from_storage_set(
     storage_set_key: StorageSetKey,
 ) -> ReadinessState:

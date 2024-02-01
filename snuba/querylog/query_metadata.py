@@ -16,6 +16,7 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.state.cache.abstract import ExecutionTimeoutError
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitExceeded
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryTooLongException
 
 
 class QueryStatus(Enum):
@@ -110,6 +111,8 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.ILLEGAL_COLUMN: RequestStatus.INVALID_REQUEST,
     ErrorCodes.UNKNOWN_FUNCTION: RequestStatus.INVALID_REQUEST,
     ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
+    ErrorCodes.CANNOT_PARSE_UUID: RequestStatus.INVALID_REQUEST,
+    ErrorCodes.ILLEGAL_AGGREGATION: RequestStatus.INVALID_REQUEST,
 }
 
 
@@ -132,6 +135,8 @@ def get_request_status(cause: Exception | None = None) -> Status:
     elif isinstance(
         cause, (StorageNotAvailable, InvalidJsonRequestException, InvalidQueryException)
     ):
+        slo_status = RequestStatus.INVALID_REQUEST
+    elif isinstance(cause, QueryTooLongException):
         slo_status = RequestStatus.INVALID_REQUEST
     else:
         slo_status = RequestStatus.ERROR
@@ -198,8 +203,8 @@ class ClickhouseQueryMetadata:
     status: QueryStatus
     request_status: Status
     profile: ClickhouseQueryProfile
-    trace_id: Optional[str] = None
-    result_profile: Optional[Dict[str, Any]] = None
+    trace_id: str
+    result_profile: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None
 
     def to_dict(self) -> snuba_queries_v1.QueryMetadata:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None

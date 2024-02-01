@@ -762,15 +762,15 @@ class TestReplaysActionProcessor:
         assert row["project_id"] == 1
         assert row["timestamp"] == now
         assert row["replay_id"] == str(uuid.UUID("bb570198b8f04f8bbe87077668530da7"))
-        assert row["event_hash"] == "df3c3aa2daae465e89f1169e49139827"
+        assert row["event_hash"] == str(uuid.UUID("df3c3aa2daae465e89f1169e49139827"))
         assert row["segment_id"] is None
         assert row["trace_ids"] == []
         assert row["error_ids"] == []
         assert row["urls"] == []
         assert row["platform"] == "javascript"
-        assert row["user"] is None
-        assert row["sdk_name"] is None
-        assert row["sdk_version"] is None
+        assert row["user"] == ""
+        assert row["sdk_name"] == ""
+        assert row["sdk_version"] == ""
         assert row["retention_days"] == 30
         assert row["partition"] == 0
         assert row["offset"] == 0
@@ -842,9 +842,8 @@ def test_replay_event_links(
     assert "timestamp" in row
     assert row[severity + "_id"] == str(uuid.UUID(event_id))
     assert row["replay_id"] == str(uuid.UUID(message["replay_id"]))
-    assert (
-        row["event_hash"]
-        == md5((message["replay_id"] + event_id).encode("utf-8")).hexdigest()
+    assert row["event_hash"] == str(
+        uuid.UUID(md5((message["replay_id"] + event_id).encode("utf-8")).hexdigest())
     )
     assert row["segment_id"] is None
     assert row["retention_days"] == 30

@@ -2,8 +2,7 @@ import logging
 import pickle
 import zlib
 from abc import ABC, abstractmethod, abstractproperty
-from datetime import datetime
-from random import random
+from datetime import datetime, timezone
 from typing import (
     Any,
     Iterable,
@@ -18,6 +17,7 @@ from typing import (
 from sentry_kafka_schemas.schema_types.snuba_generic_metrics_v1 import GenericMetric
 from usageaccountant import UsageUnit
 
+from snuba import settings
 from snuba.cogs.accountant import record_cogs
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
@@ -37,7 +37,6 @@ from snuba.datasets.metrics_messages import (
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
-from snuba.state import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +145,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "metric_id": message["metric_id"],
-            "timestamp": timestamp,
+            "timestamp": int(timestamp.replace(tzinfo=timezone.utc).timestamp()),
             "tags.key": keys,
             "tags.raw_value": raw_values,
             "tags.indexed_value": indexed_values,
@@ -167,7 +166,7 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
         )
 
     def __record_cogs(self, message: GenericMetric) -> None:
-        if random() < (get_config("gen_metrics_processor_cogs_probability") or 0):
+        if settings.RECORD_COGS:
             record_cogs(
                 resource_id=self._resource_id,
                 app_feature=f"genericmetrics_{message['use_case_id']}",

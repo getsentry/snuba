@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import timezone
 from typing import Any, Optional
 
 import simplejson as json
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
-from snuba.processor import InsertBatch, ProcessedMessage
+from snuba.processor import InsertBatch, ProcessedMessage, ReplacementBatch
 
 logger = logging.getLogger(__name__)
 
@@ -22,24 +23,37 @@ class RustCompatProcessor(DatasetMessageProcessor):
     def process_message(
         self, message: Any, metadata: KafkaMessageMetadata
     ) -> Optional[ProcessedMessage]:
-        rust_processed_message = bytes(
-            self.__process_message(
-                self.__processor_name,
-                json.dumps(message).encode("utf8"),
-                metadata.partition,
-                metadata.offset,
-                int(metadata.timestamp.timestamp() * 1000),
+        insert_payload, replacement_payload = self.__process_message(
+            self.__processor_name,
+            json.dumps(message).encode("utf8"),
+            metadata.partition,
+            metadata.offset,
+            int(metadata.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
+        )
+
+        if insert_payload is not None:
+            assert replacement_payload is None
+
+            rows = [
+                json.loads(line)
+                for line in insert_payload.rstrip(b"\n").split(b"\n")
+                if line
+            ]
+
+            return InsertBatch(
+                rows=rows,
+                origin_timestamp=None,
+                sentry_received_timestamp=None,
             )
-        )
+        elif replacement_payload is not None:
+            assert insert_payload is None
+            key, values_bytes = replacement_payload
 
-        rows = [
-            json.loads(line)
-            for line in rust_processed_message.rstrip(b"\n").split(b"\n")
-            if line
-        ]
-
-        return InsertBatch(
-            rows=rows,
-            origin_timestamp=None,
-            sentry_received_timestamp=None,
-        )
+            values = [
+                json.loads(line)
+                for line in values_bytes.rstrip(b"\n").split(b"\n")
+                if line
+            ]
+            return ReplacementBatch(key=key.decode("utf8"), values=values)
+        else:
+            raise ValueError("unsupported return value from snuba_rust")

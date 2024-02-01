@@ -1,5 +1,67 @@
 # Changelog
 
+## 24.1.1
+
+### Various fixes & improvements
+
+- fix(inc-602): make migration connection checks readiness-state aware (#5414) by @volokluev
+- chore(entity): Remove runtime config for illegal aggregation validator (#5443) by @enochtangg
+- fix(gcb): Remove build steps from GCB (#5450) by @untitaker
+- build(deps): bump sentry-sdk from 1.26.0 to 1.39.2 (#5366) by @dependabot
+- fix: Bump sentry-kafka-schemas in right project (#5451) by @untitaker
+- ref(optimize): Use time-machine instead of freezegun (#5447) by @nikhars
+- chore(deps): bump sentry-relay from 0.8.39 to 0.8.44 (#5442) by @dependabot
+- fix(devserver): Enforce schemas again (#5449) by @untitaker
+- fix: Upgrading to Clickhouse 22.8 (#5445) by @evanh
+- fix(devserver): Do not enforce schema (#5446) by @untitaker
+- fix(cardinality): Add filter to cardinality report (#5439) by @nikhars
+- fix(optimize): Add parallel optimize job cutoff time (#5444) by @nikhars
+- feat(spans): Add a schema test (#5440) by @phacops
+- feat(profiles): Add test to see if the struct matches the schema (#5438) by @phacops
+- ref: bump sentry-kafka-schemas to 0.1.46 (#5441) by @getsentry-bot
+- feat(on-call): Add illegal aggregate function in conditions entity validator (#5435) by @enochtangg
+- ref(docs) Add some MQL documentation to Snuba (#5432) by @evanh
+- feat(metrics-summaries): Handle incomplete metrics summaries (#5428) by @phacops
+- fix config validation for cross org policy (#5426) by @volokluev
+- fix(rust): Deal with empty batches correctly (#5433) by @untitaker
+- ref(replays): Re-add e2e latency metric [SNS-2606] (#5420) by @untitaker
+- fix(rust): Fix broken DLQ produer in Rust (#5431) by @untitaker
+- fix(cardinality): Increase time duration for finding all modules (#5430) by @nikhars
+- feat(gcs): Allow snuba to write to gcs for tooling (#5410) by @nikhars
+
+_Plus 32 more_
+
+## 24.1.0
+
+### Various fixes & improvements
+
+- fix(rust): Actually drop before exiting (#5394) by @untitaker
+- ref(rust): Bump cogs accountant library (#5391) by @lynnagara
+- fix(mql): Properly encode/decode double quotes in MQL strings (#5338) by @evanh
+- fix(rust-consumers): Define consumer group for functions consumer (#5389) by @Zylphrex
+- ref(rust): Don't panic in RunTaskInThreads::poll (#5387) by @loewenheim
+- deps(rust): Change rdkafka dep to upstream master (#5386) by @loewenheim
+- fix(rust): Don't produce commit log in --skip-write mode (#5385) by @lynnagara
+- feat(spans): add migration to add compression to spans (#4726) by @dbanda
+- feat: Add snapshot tests for processors (#5379) by @untitaker
+- ref(metrics): Refactor how global tags work, and introduce min_partition tag (#5346) by @untitaker
+- fix(devenv): Make post-merge hook exactly like sentry's (#5378) by @untitaker
+- fix(Makefile): Change ordering for Rust dev setup (#5384) by @ayirr7
+- Validate at least one event link was sent (#5383) by @cmanallen
+- ref: speed up .github/workflows/image.yml (#5382) by @asottile-sentry
+- feat(rust): Port generic metrics to rust consumer (#5360) by @nikhars
+- fix(rust): Remove noise from output of make install-rs-dev (#5373) by @untitaker
+- feat(spans): Set origin_timestamp for spans (#5372) by @phacops
+- feat(rust): Cogs recording utility for generic metrics (#5362) by @lynnagara
+- fix(ci): Add ddm_meta test to "full tests" (#5370) by @untitaker
+- feat(MQL): Bump snuba-sdk to 2.0.18 and support arbitrary functions in MQL parser (#5358) by @enochtangg
+- fix(ci): Wait for healthcheck to succeed before running test_distributed (#5363) by @untitaker
+- ref(docker): Remove obsolete build args (#5369) by @untitaker
+- Revert "feat(spans): Set origin_timestamp for spans (#5367)" (1c963c3e) by @getsentry-bot
+- ref: Remove experimental consumers from gocd deployment (#5368) by @lynnagara
+
+_Plus 108 more_
+
 ## 23.12.1
 
 ### Various fixes & improvements

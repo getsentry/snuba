@@ -6,7 +6,7 @@ use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use rust_arroyo::types::{Message, Topic, TopicOrPartition};
 use serde::{Deserialize, Serialize};
@@ -18,10 +18,11 @@ use thiserror::Error;
 #[derive(Debug)]
 struct Commit {
     topic: String,
+    group: String,
     partition: u16,
-    consumer_group: String,
-    orig_message_ts: DateTime<Utc>,
     offset: u64,
+    orig_message_ts: DateTime<Utc>,
+    // TODO: port received_p99
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -51,9 +52,9 @@ impl TryFrom<KafkaPayload> for Commit {
             return Err(CommitLogError::InvalidKey);
         }
 
-        let topic = data[0].to_string();
+        let topic = data[0].to_owned();
         let partition = data[1].parse::<u16>().unwrap();
-        let consumer_group = data[2].to_string();
+        let consumer_group = data[2].to_owned();
 
         let d: Payload =
             serde_json::from_slice(payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
@@ -68,7 +69,7 @@ impl TryFrom<KafkaPayload> for Commit {
         Ok(Commit {
             topic,
             partition,
-            consumer_group,
+            group: consumer_group,
             orig_message_ts,
             offset: d.offset,
         })
@@ -79,13 +80,8 @@ impl TryFrom<Commit> for KafkaPayload {
     type Error = CommitLogError;
 
     fn try_from(commit: Commit) -> Result<Self, CommitLogError> {
-        let key = Some(
-            format!(
-                "{}:{}:{}",
-                commit.topic, commit.partition, commit.consumer_group
-            )
-            .into_bytes(),
-        );
+        let key =
+            Some(format!("{}:{}:{}", commit.topic, commit.partition, commit.group).into_bytes());
 
         let orig_message_ts = commit.orig_message_ts.timestamp_millis() as f64 / 1000.0;
 
@@ -100,35 +96,38 @@ impl TryFrom<Commit> for KafkaPayload {
 
 struct ProduceMessage {
     producer: Arc<dyn Producer<KafkaPayload>>,
+    destination: Topic,
     topic: Topic,
-    destination: Arc<TopicOrPartition>,
     consumer_group: String,
     skip_produce: bool,
 }
 
 impl ProduceMessage {
-    #[allow(dead_code)]
     pub fn new(
-        producer: impl Producer<KafkaPayload> + 'static,
+        producer: Arc<dyn Producer<KafkaPayload> + 'static>,
+        destination: Topic,
         topic: Topic,
         consumer_group: String,
         skip_produce: bool,
     ) -> Self {
         ProduceMessage {
-            producer: Arc::new(producer),
+            producer,
+            destination,
             topic,
-            destination: Arc::new(TopicOrPartition::Topic(topic)),
             consumer_group,
             skip_produce,
         }
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMessage {
+    fn get_task(
+        &self,
+        message: Message<BytesInsertBatch>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         let producer = self.producer.clone();
-        let destination = self.destination.clone();
-        let topic = self.topic.as_str().to_string();
+        let destination: TopicOrPartition = self.destination.into();
+        let topic = self.topic;
         let skip_produce = self.skip_produce;
         let consumer_group = self.consumer_group.clone();
 
@@ -141,9 +140,9 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
 
             for (partition, (offset, orig_message_ts)) in commit_log_offsets {
                 let commit = Commit {
-                    topic: topic.clone(),
+                    topic: topic.to_string(),
                     partition,
-                    consumer_group: consumer_group.clone(),
+                    group: consumer_group.clone(),
                     orig_message_ts,
                     offset,
                 };
@@ -163,17 +162,17 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ProduceMessage {
 }
 
 pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
 }
 
 impl ProduceCommitLog {
-    #[allow(dead_code)]
     pub fn new<N>(
         next_step: N,
-        producer: impl Producer<KafkaPayload> + 'static,
-        concurrency: &ConcurrencyConfig,
+        producer: Arc<dyn Producer<KafkaPayload> + 'static>,
+        destination: Topic,
         topic: Topic,
         consumer_group: String,
+        concurrency: &ConcurrencyConfig,
         skip_produce: bool,
     ) -> Self
     where
@@ -183,6 +182,7 @@ impl ProduceCommitLog {
             next_step,
             Box::new(ProduceMessage::new(
                 producer,
+                destination,
                 topic,
                 consumer_group,
                 skip_produce,
@@ -196,7 +196,7 @@ impl ProduceCommitLog {
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
@@ -215,7 +215,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.join(timeout)
     }
 }
@@ -225,6 +225,7 @@ mod tests {
     use crate::types::RowData;
 
     use super::*;
+    use crate::testutils::TestStrategy;
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
@@ -249,43 +250,23 @@ mod tests {
 
     #[test]
     fn produce_commit_log() {
-        struct Noop {
-            pub payloads: Vec<BytesInsertBatch>,
-        }
-        impl ProcessingStrategy<BytesInsertBatch> for Noop {
-            fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-            fn submit(
-                &mut self,
-                message: Message<BytesInsertBatch>,
-            ) -> Result<(), SubmitError<BytesInsertBatch>> {
-                self.payloads.push(message.payload().clone());
-                Ok(())
-            }
-            fn close(&mut self) {}
-            fn terminate(&mut self) {}
-            fn join(
-                &mut self,
-                _timeout: Option<Duration>,
-            ) -> Result<Option<CommitRequest>, InvalidMessage> {
-                Ok(None)
-            }
-        }
-
         let produced_payloads = Arc::new(Mutex::new(Vec::new()));
 
         struct MockProducer {
-            pub payloads: Arc<Mutex<Vec<KafkaPayload>>>,
+            pub payloads: Arc<Mutex<Vec<(String, KafkaPayload)>>>,
         }
 
         impl Producer<KafkaPayload> for MockProducer {
             fn produce(
                 &self,
-                _topic: &TopicOrPartition,
+                topic: &TopicOrPartition,
                 payload: KafkaPayload,
             ) -> Result<(), ProducerError> {
-                self.payloads.lock().unwrap().push(payload);
+                assert_eq!(topic.topic().as_str(), "test-commitlog");
+                self.payloads.lock().unwrap().push((
+                    str::from_utf8(payload.key().unwrap()).unwrap().to_owned(),
+                    payload,
+                ));
                 Ok(())
             }
         }
@@ -297,6 +278,7 @@ mod tests {
                 None,
                 None,
                 BTreeMap::from([(0, (500, Utc::now()))]),
+                None,
             ),
             BytesInsertBatch::new(
                 RowData::default(),
@@ -304,6 +286,7 @@ mod tests {
                 None,
                 None,
                 BTreeMap::from([(0, (600, Utc::now())), (1, (100, Utc::now()))]),
+                None,
             ),
         ];
 
@@ -311,15 +294,16 @@ mod tests {
             payloads: produced_payloads.clone(),
         };
 
-        let next_step = Noop { payloads: vec![] };
+        let next_step = TestStrategy::new();
 
         let concurrency = ConcurrencyConfig::new(1);
         let mut strategy = ProduceCommitLog::new(
             next_step,
-            producer,
-            &concurrency,
+            Arc::new(producer),
+            Topic::new("test-commitlog"),
             Topic::new("test"),
             "group1".to_string(),
+            &concurrency,
             false,
         );
 
@@ -333,6 +317,11 @@ mod tests {
         strategy.close();
         strategy.join(None).unwrap();
 
-        assert_eq!(produced_payloads.lock().unwrap().len(), 3);
+        let produced = produced_payloads.lock().unwrap();
+
+        assert_eq!(produced.len(), 3);
+        assert_eq!(produced[0].0, "test:0:group1");
+        assert_eq!(produced[1].0, "test:0:group1");
+        assert_eq!(produced[2].0, "test:1:group1");
     }
 }

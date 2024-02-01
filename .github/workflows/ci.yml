@@ -159,8 +159,6 @@ jobs:
           context: .
           # push: true
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           tags: |
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -170,10 +168,7 @@ jobs:
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
-          cache-to: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
+          # cache-to is re-implemented using the next step, to run conditionally for contributors
 
       - name: Publish images for cache
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
@@ -217,8 +212,6 @@ jobs:
           push: false
           tags: snuba-test
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -296,8 +289,6 @@ jobs:
           push: false
           tags: snuba-test
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -367,6 +358,8 @@ jobs:
               tests/sentry/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
+              tests/sentry/api/endpoints/test_organization_ddm_meta.py \
+              tests/sentry/api/endpoints/test_organization_profiling_functions.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
@@ -382,7 +375,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["22.3.15.34.altinitystable", "22.8.15.25.altinitystable"]
+        version:
+          [
+            "21.8.13.1.altinitystable",
+            "22.8.15.25.altinitystable",
+            "23.3.13.7.altinitystable",
+            "23.8.8.21.altinitystable",
+          ]
 
     steps:
       - uses: actions/checkout@v2
@@ -398,8 +397,6 @@ jobs:
           push: false
           tags: snuba-test
           load: true
-          build-args: |
-            SHOULD_BUILD_RUST=true
           target: testing
           cache-from: |
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
@@ -412,7 +409,7 @@ jobs:
 
       - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:${{matrix.version}}
+          export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
           SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
