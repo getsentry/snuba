@@ -142,9 +142,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         # Create tag values for the test data
         self.mapping_meta = SHARED_MAPPING_META
 
-        self.tags = {
-            str(resolve_str(k)): resolve_str(v) for k, v in SHARED_TAGS.items()
-        }
+        self.tags = {str(resolve_str(k)): v for k, v in SHARED_TAGS.items()}
         self.skew = timedelta(seconds=self.seconds)
         self.base_time = utc_yesterday_12_15()
         self.start_time = self.base_time - self.skew
