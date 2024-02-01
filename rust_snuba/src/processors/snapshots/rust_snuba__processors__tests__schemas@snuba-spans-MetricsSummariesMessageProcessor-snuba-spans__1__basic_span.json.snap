@@ -7,12 +7,16 @@ expression: snapshot_payload
   {
     "count": 1,
     "deleted": 0,
+    "duration_ms": 1000,
     "end_timestamp": 1691105879,
+    "group": 16045690984833335023,
+    "is_segment": 0,
     "max": 1.0,
     "metric_mri": "c:sentry.events.outcomes@none",
     "min": 1.0,
     "project_id": 1,
     "retention_days": 90,
+    "segment_id": 16045690984833335023,
     "span_id": 16045690984833335023,
     "sum": 1.0,
     "tags.key": [
@@ -38,12 +42,16 @@ expression: snapshot_payload
   {
     "count": 1,
     "deleted": 0,
+    "duration_ms": 1000,
     "end_timestamp": 1691105879,
+    "group": 16045690984833335023,
+    "is_segment": 0,
     "max": 0.0,
     "metric_mri": "c:sentry.events.post_save.normalize.errors@none",
     "min": 0.0,
     "project_id": 1,
     "retention_days": 90,
+    "segment_id": 16045690984833335023,
     "span_id": 16045690984833335023,
     "sum": 0.0,
     "tags.key": [
