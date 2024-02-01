@@ -113,7 +113,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
     def generate_sets(
         self,
-        tags: Mapping[str, int],
+        tags: Mapping[str, str],
         mapping_meta: Mapping[str, Mapping[str, str]],
         int_source: Iterable[int],
     ) -> None:

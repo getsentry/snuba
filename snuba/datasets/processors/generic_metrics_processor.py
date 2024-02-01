@@ -129,14 +129,14 @@ class GenericMetricsBucketProcessor(DatasetMessageProcessor, ABC):
             assert key.isdigit(), "Tag key invalid"
             keys.append(int(key))
 
-            if version == 1:
-                assert isinstance(value, int), "Tag value invalid"
-                indexed_values.append(value)
-                raw_values.append(raw_values_index.get(str(value), ""))
-            elif version == 2:
+            if version == 2:
                 assert isinstance(value, str), "Tag value invalid"
                 indexed_values.append(0)
                 raw_values.append(value)
+            elif version == 1:
+                assert isinstance(value, int), "Tag value invalid"
+                indexed_values.append(value)
+                raw_values.append(raw_values_index.get(str(value), ""))
 
         processed = {
             "use_case_id": message["use_case_id"],
