@@ -23,14 +23,11 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
 from snuba.datasets.metrics_messages import (
     aggregation_options_for_counter_message,
-    aggregation_options_for_distribution_message,
     aggregation_options_for_gauge_message,
     is_counter_message,
-    is_distribution_message,
     is_gauge_message,
     value_for_counter_message,
     value_for_gauge_message,
-    values_for_distribution_message,
 )
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.rust_compat_processor import RustCompatProcessor
@@ -178,21 +175,9 @@ class GenericSetsMetricsProcessor(RustCompatProcessor):
         super().__init__("GenericSetsMetricsProcessor")
 
 
-class GenericDistributionsMetricsProcessor(GenericMetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_distribution_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return values_for_distribution_message(message)
-
-    def _aggregation_options(
-        self, message: Mapping[str, Any], retention_days: int
-    ) -> Mapping[str, Any]:
-        return aggregation_options_for_distribution_message(message, retention_days)
-
-    @property
-    def _resource_id(self) -> str:
-        return "generic_metrics_processor_distributions"
+class GenericDistributionsMetricsProcessor(RustCompatProcessor):
+    def __init__(self) -> None:
+        super().__init__("GenericDistributionsMetricsProcessor")
 
 
 class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
