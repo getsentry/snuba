@@ -97,11 +97,11 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         self.seconds = 180 * 60
 
         self.mapping_meta = SHARED_MAPPING_META
+        self.default_tags: dict[str, str | int] = SHARED_TAGS
 
         # This is a little confusing, but these values are the ones that should be used in the tests
         # Depending on the dataset, the values could be raw strings or indexed ints, so handle those cases
         if tag_value_indexed:
-            self.default_tags: dict[str, str | int] = SHARED_TAGS
             self.tags: list[tuple[str, str | int]] = [
                 (k, v) for k, v in self.default_tags.items()
             ]
