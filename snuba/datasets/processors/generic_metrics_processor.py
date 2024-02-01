@@ -21,14 +21,6 @@ from snuba import settings
 from snuba.cogs.accountant import record_cogs
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.events_format import EventTooOld, enforce_retention
-from snuba.datasets.metrics_messages import (
-    aggregation_options_for_counter_message,
-    aggregation_options_for_gauge_message,
-    is_counter_message,
-    is_gauge_message,
-    value_for_counter_message,
-    value_for_gauge_message,
-)
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.processors.rust_compat_processor import RustCompatProcessor
 from snuba.processor import InsertBatch, ProcessedMessage, _ensure_valid_date
@@ -180,35 +172,11 @@ class GenericDistributionsMetricsProcessor(RustCompatProcessor):
         super().__init__("GenericDistributionsMetricsProcessor")
 
 
-class GenericCountersMetricsProcessor(GenericMetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_counter_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return value_for_counter_message(message)
-
-    def _aggregation_options(
-        self, message: Mapping[str, Any], retention_days: int
-    ) -> Mapping[str, Any]:
-        return aggregation_options_for_counter_message(message, retention_days)
-
-    @property
-    def _resource_id(self) -> str:
-        return "generic_metrics_processor_counters"
+class GenericCountersMetricsProcessor(RustCompatProcessor):
+    def __init__(self) -> None:
+        super().__init__("GenericCountersMetricsProcessor")
 
 
-class GenericGaugesMetricsProcessor(GenericMetricsBucketProcessor):
-    def _should_process(self, message: Mapping[str, Any]) -> bool:
-        return is_gauge_message(message)
-
-    def _process_values(self, message: Mapping[str, Any]) -> Mapping[str, Any]:
-        return value_for_gauge_message(message)
-
-    def _aggregation_options(
-        self, message: Mapping[str, Any], retention_days: int
-    ) -> Mapping[str, Any]:
-        return aggregation_options_for_gauge_message(message, retention_days)
-
-    @property
-    def _resource_id(self) -> str:
-        return "generic_metrics_processor_gauges"
+class GenericGaugesMetricsProcessor(RustCompatProcessor):
+    def __init__(self) -> None:
+        super().__init__("GenericGaugesMetricsProcessor")
