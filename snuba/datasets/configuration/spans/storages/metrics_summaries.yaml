@@ -71,6 +71,9 @@ query_processors:
   - processor: UUIDColumnProcessor
     args:
       columns: [trace_id]
+  - processor: HexIntColumnProcessor
+    args:
+      columns: [span_id, segment_id, group]
   - processor: MappingOptimizer
     args:
       column_name: tags
