@@ -39,7 +39,7 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
-SHARED_TAGS: dict[str, int] = {
+SHARED_TAGS: dict[str, str | int] = {
     "65546": 65536,
     "9223372036854776010": 65593,
 }
@@ -96,12 +96,12 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         self.project_ids = [1, 2]  # 2 projects
         self.seconds = 180 * 60
 
-        self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
 
         # This is a little confusing, but these values are the ones that should be used in the tests
         # Depending on the dataset, the values could be raw strings or indexed ints, so handle those cases
         if tag_value_indexed:
+            self.default_tags: dict[str, str | int] = SHARED_TAGS
             self.tags: list[tuple[str, str | int]] = [
                 (k, v) for k, v in self.default_tags.items()
             ]
@@ -111,6 +111,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                 mapping.update(v)
 
             self.tags = [(k, mapping[str(v)]) for k, v in self.default_tags.items()]
+            self.default_tags = {k: mapping[str(v)] for (k, v) in SHARED_TAGS.items()}
 
         self.skew = timedelta(seconds=self.seconds)
         self.base_time = utc_yesterday_12_15()
