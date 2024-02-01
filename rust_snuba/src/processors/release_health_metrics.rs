@@ -112,6 +112,9 @@ impl Parse for MetricsRawRow {
     ) -> anyhow::Result<Option<MetricsRawRow>> {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
+
+        dbg!(timeseries_id);
+
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
@@ -226,35 +229,35 @@ mod tests {
         "value": 1
     }"#;
 
-    // const DUMMY_SET_MESSAGE: &str = r#"{
-    //     "version": 2,
-    //     "use_case_id": "sessions",
-    //     "org_id": 1,
-    //     "project_id": 3,
-    //     "metric_id": 65562,
-    //     "timestamp": 1704614940,
-    //     "sentry_received_timestamp": 1704614940,
-    //     "tags": {"9223372036854776010":"production","9223372036854776017":"errored","65690":"metric_e2e_spans_set_v_VUW93LMS"},
-    //     "retention_days": 90,
-    //     "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65690":"metric_e2e_spans_set_k_VUW93LMS"},"d":{"65562":"s:spans/error@none"}},
-    //     "type": "s",
-    //     "value": [0, 1, 2, 3, 4, 5]
-    // }"#;
+    const DUMMY_SET_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "sessions",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65562,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":1,"9223372036854776017":2,"65690":3},
+        "retention_days": 90,
+        "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65690":"metric_e2e_spans_set_k_VUW93LMS"},"d":{"65562":"s:spans/error@none"}},
+        "type": "s",
+        "value": [0, 1, 2, 3, 4, 5]
+    }"#;
 
-    // const DUMMY_DISTRIBUTION_MESSAGE: &str = r#"{
-    //     "version": 2,
-    //     "use_case_id": "sessions",
-    //     "org_id": 1,
-    //     "project_id": 3,
-    //     "metric_id": 65563,
-    //     "timestamp": 1704614940,
-    //     "sentry_received_timestamp": 1704614940,
-    //     "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
-    //     "retention_days": 90,
-    //     "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
-    //     "type": "d",
-    //     "value": [0, 1, 2, 3, 4, 5]
-    // }"#;
+    const DUMMY_DISTRIBUTION_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "sessions",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":1,"9223372036854776017":2,"65690":3},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": [0, 1, 2, 3, 4, 5]
+    }"#;
 
     #[cfg(test)]
     fn test_processor_with_payload(
@@ -309,124 +312,77 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_counter_processor_with_set_message() {
-    //     let result = test_processor_with_payload(
-    //         &(process_counter_message
-    //             as fn(
-    //                 rust_arroyo::backends::kafka::types::KafkaPayload,
-    //                 crate::types::KafkaMessageMetadata,
-    //                 &crate::ProcessorConfig,
-    //             )
-    //                 -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
-    //         DUMMY_SET_MESSAGE,
-    //     );
-    //     assert_eq!(result.unwrap(), InsertBatch::default());
-    // }
+    #[test]
+    fn test_set_processor_with_set_message() {
+        let result = test_processor_with_payload(
+            &(process_metrics_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_SET_MESSAGE,
+        );
+        let expected_row = MetricsRawRow {
+            use_case_id: "sessions".to_string(),
+            org_id: 1,
+            project_id: 3,
+            metric_id: 65562,
+            timestamp: 1704614940,
+            retention_days: 90,
+            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+            tags_value: vec![3, 1, 2],
+            metric_type: "set".to_string(),
+            set_values: vec![0, 1, 2, 3, 4, 5].into(),
+            materialization_version: 4,
+            timeseries_id: 1101007085,
+            ..Default::default()
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                ..Default::default()
+            }
+        );
+    }
 
-    // #[test]
-    // fn test_set_processor_with_set_message() {
-    //     let result = test_processor_with_payload(
-    //         &(process_set_message
-    //             as fn(
-    //                 rust_arroyo::backends::kafka::types::KafkaPayload,
-    //                 crate::types::KafkaMessageMetadata,
-    //                 &crate::ProcessorConfig,
-    //             )
-    //                 -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
-    //         DUMMY_SET_MESSAGE,
-    //     );
-    //     let expected_row = SetsRawRow {
-    //         common_fields: MetricsRawRow {
-    //             use_case_id: "spans".to_string(),
-    //             org_id: 1,
-    //             project_id: 3,
-    //             metric_id: 65562,
-    //             timestamp: 1704614940,
-    //             retention_days: 90,
-    //             tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-    //             tags_value: vec![0; 3],
-    //             tags_raw_value: vec![
-    //                 "metric_e2e_spans_set_v_VUW93LMS".to_string(),
-    //                 "production".to_string(),
-    //                 "errored".to_string(),
-    //             ],
-    //             metric_type: "set".to_string(),
-    //             materialization_version: 2,
-    //             timeseries_id: 828906429,
-    //             granularities: vec![
-    //                 GRANULARITY_ONE_MINUTE,
-    //                 GRANULARITY_ONE_HOUR,
-    //                 GRANULARITY_ONE_DAY,
-    //             ],
-    //             decasecond_retention_days: None,
-    //             min_retention_days: Some(90),
-    //             hr_retention_days: None,
-    //             day_retention_days: None,
-    //         },
-    //         set_values: vec![0, 1, 2, 3, 4, 5],
-    //     };
-    //     assert_eq!(
-    //         result.unwrap(),
-    //         InsertBatch {
-    //             rows: RowData::from_rows([expected_row]).unwrap(),
-    //             origin_timestamp: None,
-    //             sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-    //         }
-    //     );
-    // }
-
-    // #[test]
-    // fn test_set_processor_with_distribution_message() {
-    //     let result = test_processor_with_payload(
-    //         &(process_counter_message
-    //             as fn(
-    //                 rust_arroyo::backends::kafka::types::KafkaPayload,
-    //                 crate::types::KafkaMessageMetadata,
-    //                 &crate::ProcessorConfig,
-    //             )
-    //                 -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
-    //         DUMMY_DISTRIBUTION_MESSAGE,
-    //     );
-    //     assert_eq!(result.unwrap(), InsertBatch::skip());
-    // }
-
-    // #[test]
-    // fn test_distribution_processor_with_distribution_message() {
-    //     let result = test_processor_with_payload(
-    //         &(process_distribution_message
-    //             as fn(
-    //                 rust_arroyo::backends::kafka::types::KafkaPayload,
-    //                 crate::types::KafkaMessageMetadata,
-    //                 &crate::ProcessorConfig,
-    //             )
-    //                 -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
-    //         DUMMY_DISTRIBUTION_MESSAGE,
-    //     );
-    //     let expected_row = DistributionsRawRow {
-    //         common_fields: MetricsRawRow {
-    //             use_case_id: "spans".to_string(),
-    //             org_id: 1,
-    //             project_id: 3,
-    //             metric_id: 65563,
-    //             timestamp: 1704614940,
-    //             retention_days: 90,
-    //             tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
-    //             tags_value: vec![0; 3],
-    //             metric_type: "distribution".to_string(),
-    //             materialization_version: 2,
-    //             timeseries_id: 1436359714,
-    //         },
-    //         distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
-    //         enable_histogram: None,
-    //     };
-    //     assert_eq!(
-    //         result.unwrap(),
-    //         InsertBatch {
-    //             rows: RowData::from_rows([expected_row]).unwrap(),
-    //             origin_timestamp: None,
-    //             sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
-    //         }
-    //     );
-    // }
+    #[test]
+    fn test_dist_processor_with_dist_message() {
+        let result = test_processor_with_payload(
+            &(process_metrics_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_DISTRIBUTION_MESSAGE,
+        );
+        let expected_row = MetricsRawRow {
+            use_case_id: "sessions".to_string(),
+            org_id: 1,
+            project_id: 3,
+            metric_id: 65563,
+            timestamp: 1704614940,
+            retention_days: 90,
+            tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+            tags_value: vec![3, 1, 2],
+            metric_type: "distribution".to_string(),
+            distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0].into(),
+            materialization_version: 4,
+            timeseries_id: 1105922286,
+            ..Default::default()
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                ..Default::default()
+            }
+        );
+    }
 }
