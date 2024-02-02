@@ -1,6 +1,6 @@
 import zlib
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Iterable, Mapping, Optional, Tuple, Union
 
 from snuba.consumers.types import KafkaMessageMetadata
@@ -41,7 +41,7 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
         buffer = bytearray()
         for field in [org_id, project_id, metric_id]:
             buffer.extend(field.to_bytes(length=8, byteorder="little"))
-        for key, value in sorted_tag_items:
+        for (key, value) in sorted_tag_items:
             buffer.extend(bytes(key, "utf-8"))
             if isinstance(value, int):
                 buffer.extend(value.to_bytes(length=8, byteorder="little"))
@@ -96,12 +96,9 @@ class MetricsBucketProcessor(DatasetMessageProcessor, ABC):
             "project_id": message["project_id"],
             "metric_id": message["metric_id"],
             "use_case_id": message.get("use_case_id", "sessions"),
-            "timestamp": int(timestamp.replace(tzinfo=timezone.utc).timestamp()),
+            "timestamp": timestamp,
             "tags.key": keys,
             "tags.value": values,
-            "count_value": None,
-            "distribution_values": None,
-            "set_values": None,
             **self._process_values(message),
             "materialization_version": mat_version,
             "retention_days": retention_days,

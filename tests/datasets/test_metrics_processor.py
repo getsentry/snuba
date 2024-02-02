@@ -15,16 +15,13 @@ from snuba.datasets.processors.metrics_bucket_processor import (
     PolymorphicMetricsProcessor,
     timestamp_to_bucket,
 )
-from snuba.processor import InsertBatch
+from snuba.processor import AggregateInsertBatch, InsertBatch
 
 MATERIALIZATION_VERSION = 4
 
 timestamp = int(datetime.now(timezone.utc).timestamp())
 # expects that test is run in utc local time
-intermediate_timestamp = datetime.utcfromtimestamp(timestamp)
-expected_timestamp = int(
-    intermediate_timestamp.replace(tzinfo=timezone.utc).timestamp()
-)
+expected_timestamp = datetime.utcfromtimestamp(timestamp)
 
 sentry_received_timestamp = datetime.now(timezone.utc).timestamp()
 expected_sentry_received_timestamp = datetime.utcfromtimestamp(
@@ -148,8 +145,6 @@ TEST_CASES_POLYMORPHIC = [
                 "tags.value": [11, 22, 33],
                 "metric_type": "set",
                 "set_values": [324234, 345345, 456456, 567567],
-                "count_value": None,
-                "distribution_values": None,
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "timeseries_id": ANY,
@@ -171,8 +166,6 @@ TEST_CASES_POLYMORPHIC = [
                 "tags.value": [11, 22, 33],
                 "metric_type": "counter",
                 "count_value": 123.123,
-                "distribution_values": None,
-                "set_values": None,
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 30,
                 "timeseries_id": ANY,
@@ -193,9 +186,7 @@ TEST_CASES_POLYMORPHIC = [
                 "tags.key": [10, 20, 30],
                 "tags.value": [11, 22, 33],
                 "metric_type": "distribution",
-                "distribution_values": [324.12, 345.23, 4564.56, 567567.0],
-                "count_value": None,
-                "set_values": None,
+                "distribution_values": [324.12, 345.23, 4564.56, 567567],
                 "materialization_version": MATERIALIZATION_VERSION,
                 "retention_days": 90,
                 "timeseries_id": ANY,
@@ -225,13 +216,15 @@ def test_metrics_polymorphic_processor(
         lambda _, __: MOCK_TIME_BUCKET,
     ):
         expected_polymorphic_result = (
-            InsertBatch(expected_output, None, expected_sentry_received_timestamp)
+            AggregateInsertBatch(
+                expected_output, None, expected_sentry_received_timestamp
+            )
             if expected_output is not None
             else None
         )
         assert (
-            PolymorphicMetricsProcessor().process_message(message, meta).rows
-            == expected_polymorphic_result.rows
+            PolymorphicMetricsProcessor().process_message(message, meta)
+            == expected_polymorphic_result
         )
 
 
