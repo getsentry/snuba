@@ -173,7 +173,6 @@ def test_metrics_writing_e2e() -> None:
             "metric_id": 8,
             "retention_days": 90,
             "sentry_received_timestamp": datetime.now().timestamp(),
-            "use_case_id": "performance",
             "mapping_meta": {},
         }
     )
