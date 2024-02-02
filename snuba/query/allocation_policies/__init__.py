@@ -759,7 +759,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
         except InvalidTenantsForAllocationPolicy as e:
-            allowance = QuotaAllowance(False, 0, e.to_dict())  # type: ignore
+            allowance = QuotaAllowance(False, 0, cast(dict[str, Any], e.to_dict()))
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
