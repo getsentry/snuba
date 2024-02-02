@@ -5,6 +5,7 @@ mod metrics_summaries;
 mod outcomes;
 mod profiles;
 mod querylog;
+mod release_health_metrics;
 mod replays;
 mod spans;
 mod utils;
@@ -59,6 +60,7 @@ define_processing_functions! {
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
     ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_distribution_message)),
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
+    ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
     ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
 }
 

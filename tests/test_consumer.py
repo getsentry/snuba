@@ -163,6 +163,7 @@ def test_metrics_writing_e2e() -> None:
         {
             "org_id": 1,
             "project_id": 2,
+            "use_case_id": "sessions",
             "name": "sentry.transactions.transaction.duration",
             "unit": "ms",
             "type": "d",
@@ -172,7 +173,6 @@ def test_metrics_writing_e2e() -> None:
             "metric_id": 8,
             "retention_days": 90,
             "sentry_received_timestamp": datetime.now().timestamp(),
-            "use_case_id": "performance",
             "mapping_meta": {},
         }
     )
