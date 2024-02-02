@@ -741,6 +741,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 allowance = QuotaAllowance(True, self.max_threads, {})
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
+        except AllocationPolicyViolation:
+            raise
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -786,7 +788,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 return
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
         except Exception:
-            # FIXME: Remove this
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )

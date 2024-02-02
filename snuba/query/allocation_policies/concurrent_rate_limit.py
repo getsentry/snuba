@@ -241,5 +241,9 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
     ) -> None:
         if self.is_cross_org_query(tenant_ids):
             return
-        rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
+        try:
+            rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
+        except AllocationPolicyViolation:
+            # this request was never valid in the first place, return
+            return
         self._end_query(query_id, rate_limit_params, result_or_error)

@@ -92,6 +92,11 @@ class BadlyWrittenAllocationPolicy(PassthroughPolicy):
         raise ValueError("you messed up AGAIN")
 
 
+class ProperRejectingAllocationPolicy(PassthroughPolicy):
+    def _get_quota_allowance(self, tenant_ids: dict[str, str | int], query_id: str):
+        raise AllocationPolicyViolation("Nope")
+
+
 def test_passes_through_on_error() -> None:
     with pytest.raises(AttributeError):
         BadlyWrittenAllocationPolicy(
@@ -114,6 +119,11 @@ def test_passes_through_on_error() -> None:
         ).update_quota_balance(
             None, None, None  # type: ignore
         )
+
+        with pytest.raises(AllocationPolicyViolation):
+            ProperRejectingAllocationPolicy(
+                StorageKey("Something"), [], {}
+            ).get_quota_allowance({"some": "tenant"}, "12345")
 
 
 @pytest.mark.redis_db
