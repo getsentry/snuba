@@ -174,17 +174,21 @@ class SpanEventExample:
 
     def build_metrics_summary_result(self) -> Sequence[Mapping[str, Any]]:
         common_fields = {
-            "project_id": 1,
-            "trace_id": str(UUID(self.trace_id)),
-            "span_id": int(self.span_id, 16),
+            "deleted": 0,
+            "duration_ms": self.duration_ms,
             "end_timestamp": int(
                 datetime.fromtimestamp(
                     (self.start_timestamp_ms + self.duration_ms) / 1000,
                     tz=timezone.utc,
                 ).timestamp()
             ),
-            "deleted": 0,
+            "group": int(self.group, 16),
+            "is_segment": self.parent_span_id == "",
+            "project_id": 1,
             "retention_days": 90,
+            "segment_id": int(self.segment_id, 16),
+            "span_id": int(self.span_id, 16),
+            "trace_id": str(UUID(self.trace_id)),
         }
         return [
             {
