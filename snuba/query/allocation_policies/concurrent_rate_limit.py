@@ -9,6 +9,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicyConfig,
     AllocationPolicyViolation,
     AllocationPolicyViolations,
+    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -183,8 +184,10 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             return "project_id", tenant_ids["project_id"]
         if "organization_id" in tenant_ids:
             return "organization_id", tenant_ids["organization_id"]
-        raise AllocationPolicyViolation(
-            "Queries must have a project id or organization id"
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            tenant_ids,
+            self.__class__.__name__,
+            "tenant_ids must include organization_id or project id",
         )
 
     @property
@@ -241,9 +244,5 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
     ) -> None:
         if self.is_cross_org_query(tenant_ids):
             return
-        try:
-            rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
-        except AllocationPolicyViolation:
-            # this request was never valid in the first place, return
-            return
+        rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)

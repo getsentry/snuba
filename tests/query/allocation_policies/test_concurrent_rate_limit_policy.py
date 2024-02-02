@@ -9,6 +9,7 @@ from snuba.datasets.storage import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyViolation,
     AllocationPolicyViolations,
+    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
@@ -166,7 +167,7 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
         "organization_id",
         123,
     )
-    with pytest.raises(AllocationPolicyViolation):
+    with pytest.raises(InvalidTenantsForAllocationPolicy):
         policy._get_tenant_key_and_value({})
 
 
