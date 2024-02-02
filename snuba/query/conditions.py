@@ -322,13 +322,14 @@ def build_match(
     param_type: Optional[Any] = None,
     alias: Optional[str] = None,
     key: Optional[str] = None,
+    rhs_function_call: bool = False,
 ) -> Or[Expression]:
     """
     There is a common use case of matching a specific condition in our code base.
     This function provides a simplified interface to creating those types of patterns.
-    The specific pattern is <column/subscriptable> <op> <literal(s)>. The column/subscriptable
-    name is provided, along with the specific ops to check and optional parameter type, alias
-    and subscriptable key.
+    The specific pattern is <column/subscriptable> <op> <literal(s)/functioncall>.
+    The column/subscriptable name is provided, along with the specific ops to check and
+    optional parameter type, alias and subscriptable key.
     If ops/array_ops are not provided, they default to EQ and IN respectively. If param_type
     is not provided, the matcher will match a Literal with any type.
     The returned matcher will also tag the left and right expressions with `column` and `rhs`
@@ -360,22 +361,25 @@ def build_match(
     rhs_param = None
     if param_type is not None:
         rhs_param = AnyPattern(param_type)
+    rhs_pattern = LiteralPattern
+    if rhs_function_call:
+        rhs_pattern = FunctionCallPattern
 
     return Or(
         [
             FunctionCallPattern(
-                Or([String(op) for op in ops]),
-                (column_match, Param("rhs", LiteralPattern(rhs_param))),
+                function_name=Or([String(op) for op in ops]),
+                parameters=(column_match, Param("rhs", rhs_pattern(rhs_param))),
             ),
             FunctionCallPattern(
-                Or([String(op) for op in array_ops]),
-                (
+                function_name=Or([String(op) for op in array_ops]),
+                parameters=(
                     column_match,
                     Param(
                         "rhs",
                         FunctionCallPattern(
                             Or([String("array"), String("tuple")]),
-                            all_parameters=LiteralPattern(rhs_param),
+                            all_parameters=rhs_pattern(rhs_param),
                         ),
                     ),
                 ),

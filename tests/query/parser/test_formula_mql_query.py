@@ -9,7 +9,15 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinType,
+)
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import divide, multiply, plus
 from snuba.query.expressions import (
@@ -186,36 +194,43 @@ mql_context = {
 
 
 def timeseries(
-    agg: str, metric_id: int, condition: FunctionCall | None = None
+    agg: str, metric_id: int | None = None, condition: FunctionCall | None = None
 ) -> FunctionCall:
-    metric_condition = FunctionCall(
-        None,
-        "equals",
-        (
-            Column(
-                "_snuba_metric_id",
-                None,
-                "metric_id",
-            ),
-            Literal(None, metric_id),
-        ),
-    )
-    if condition:
+    if metric_id:
         metric_condition = FunctionCall(
             None,
-            "and",
+            "equals",
             (
-                condition,
+                Column(
+                    "_snuba_metric_id",
+                    None,
+                    "metric_id",
+                ),
+                Literal(None, metric_id),
+            ),
+        )
+        if condition:
+            metric_condition = FunctionCall(
+                None,
+                "and",
+                (
+                    condition,
+                    metric_condition,
+                ),
+            )
+        return FunctionCall(
+            None,
+            agg,
+            (
+                Column("_snuba_value", None, "value"),
                 metric_condition,
             ),
         )
-
-    return FunctionCall(
-        None,
-        agg,
-        (
-            Column("_snuba_value", None, "value"),
-            metric_condition,
+    return (
+        FunctionCall(
+            "_snuba_aggregate_value",
+            agg,
+            (Column("_snuba_value", None, "value"),),
         ),
     )
 
@@ -744,6 +759,230 @@ def test_arbitrary_functions_with_formula_and_filters() -> None:
                 direction=OrderByDirection.ASC,
                 expression=time_expression,
             )
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_multi_type_formula() -> None:
+    query_body = "(sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/measurements.fp@millisecond`)) + count(`s:transactions/user@none`)"
+    mql_context = {
+        "entity": {
+            "d:transactions/duration@millisecond": "generic_metrics_distributions",
+            "d:transactions/measurements.fp@millisecond": "generic_metrics_distributions",
+            "s:transactions/user@none": "generic_metrics_sets",
+        },
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [11],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 234567,
+            "s:transactions/user@none": 789012,
+            "status_code": 111111,
+        },
+        "limit": None,
+        "offset": None,
+    }
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        plus(
+            divide(
+                FunctionCall(
+                    "_snuba_aggregate_value",
+                    "sumIf",
+                    (
+                        Column(
+                            "_snuba_generic_metrics_distributions_value",
+                            "generic_metrics_distributions",
+                            "value",
+                        ),
+                        FunctionCall(
+                            None,
+                            "and",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "equals",
+                                    (
+                                        SubscriptableReference(
+                                            alias="_snuba_tags_raw[111111]",
+                                            column=Column(
+                                                alias="_snuba_tags_raw",
+                                                table_name=None,
+                                                column_name="tags_raw",
+                                            ),
+                                            key=Literal(alias=None, value="111111"),
+                                        ),
+                                        Literal(None, 200),
+                                    ),
+                                ),
+                                FunctionCall(
+                                    None,
+                                    "equals",
+                                    (
+                                        Column(
+                                            "_snuba_generic_metrics_distributions_metric_id",
+                                            "generic_metrics_distributions",
+                                            "metric_id",
+                                        ),
+                                        Literal(None, 123456),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                FunctionCall(
+                    "_snuba_aggregate_value",
+                    "sumIf",
+                    (
+                        Column(
+                            "_snuba_generic_metrics_distributions_value",
+                            "generic_metrics_distributions",
+                            "value",
+                        ),
+                        FunctionCall(
+                            None,
+                            "equals",
+                            (
+                                Column(
+                                    "_snuba_generic_metrics_distributions_metric_id",
+                                    "generic_metrics_distributions",
+                                    "metric_id",
+                                ),
+                                Literal(None, 234567),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            FunctionCall(
+                "_snuba_aggregate_value",
+                "count",
+                (
+                    Column(
+                        "_snuba_generic_metrics_sets_value",
+                        "generic_metrics_sets",
+                        "value",
+                    ),
+                ),
+            ),
+            "_snuba_aggregate_value",
+        ),
+    )
+    expected = CompositeQuery(
+        from_clause=JoinClause(
+            left_node=IndividualNode(
+                "generic_metrics_distributions",
+                QueryEntity(
+                    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+                    get_entity(
+                        EntityKey.GENERIC_METRICS_DISTRIBUTIONS
+                    ).get_data_model(),
+                ),
+            ),
+            right_node=IndividualNode(
+                "generic_metrics_sets",
+                QueryEntity(
+                    EntityKey.GENERIC_METRICS_SETS,
+                    get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+                ),
+            ),
+            keys=[
+                JoinCondition(
+                    JoinConditionExpression(
+                        "generic_metrics_distributions", "timestamp"
+                    ),
+                    JoinConditionExpression("generic_metrics_sets", "timestamp"),
+                )
+            ],
+            join_type=JoinType.INNER,
+        ),
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                FunctionCall(
+                    "_snuba_time",
+                    "toStartOfInterval",
+                    (
+                        Column(
+                            "_snuba_timestamp",
+                            "generic_metrics_distributions",
+                            "timestamp",
+                        ),
+                        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+                        Literal(None, "Universal"),
+                    ),
+                ),
+            ),
+            SelectedExpression(
+                "time",
+                FunctionCall(
+                    "_snuba_time",
+                    "toStartOfInterval",
+                    (
+                        Column(
+                            "_snuba_timestamp",
+                            "generic_metrics_sets",
+                            "timestamp",
+                        ),
+                        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+                        Literal(None, "Universal"),
+                    ),
+                ),
+            ),
+        ],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=FunctionCall(
+                    "_snuba_time",
+                    "toStartOfInterval",
+                    (
+                        Column(
+                            "_snuba_timestamp",
+                            "generic_metrics_distributions",
+                            "timestamp",
+                        ),
+                        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+                        Literal(None, "Universal"),
+                    ),
+                ),
+            ),
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=FunctionCall(
+                    "_snuba_time",
+                    "toStartOfInterval",
+                    (
+                        Column("_snuba_timestamp", "generic_metrics_sets", "timestamp"),
+                        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+                        Literal(None, "Universal"),
+                    ),
+                ),
+            ),
         ],
         limit=1000,
         offset=0,
