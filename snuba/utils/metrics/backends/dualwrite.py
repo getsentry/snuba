@@ -23,7 +23,7 @@ class SentryDatadogMetricsBackend(MetricsBackend):
     def _use_sentry(self) -> bool:
         from snuba import state
 
-        if state.get_config("use_sentry_metrics", "0") == "1":
+        if str(state.get_config("use_sentry_metrics", "0")) == "1":
             return bool(random.random() < settings.DDM_METRICS_SAMPLE_RATE)
         return False
 
