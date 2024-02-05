@@ -51,6 +51,8 @@ class EnvConfig:
     lower_retention_days: int
     valid_retention_days: list[int]
     record_cogs: bool
+    ddm_metrics_sample_rate: float
+    project_stacktrace_blacklist: list[int]
 
 
 @dataclass(frozen=True)
@@ -122,6 +124,7 @@ def _resolve_env_config() -> EnvConfig:
     sentry_dsn = settings.SENTRY_DSN
     dogstatsd_host = settings.DOGSTATSD_HOST
     dogstatsd_port = settings.DOGSTATSD_PORT
+    ddm_metrics_sample_rate = settings.DDM_METRICS_SAMPLE_RATE
     default_retention_days = settings.DEFAULT_RETENTION_DAYS
     lower_retention_days = settings.LOWER_RETENTION_DAYS
     valid_retention_days = list(settings.VALID_RETENTION_DAYS)
@@ -134,6 +137,8 @@ def _resolve_env_config() -> EnvConfig:
         lower_retention_days=lower_retention_days,
         valid_retention_days=valid_retention_days,
         record_cogs=record_cogs,
+        ddm_metrics_sample_rate=ddm_metrics_sample_rate,
+        project_stacktrace_blacklist=list(settings.PROJECT_STACKTRACE_BLACKLIST),
     )
 
 

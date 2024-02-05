@@ -27,7 +27,7 @@ pub use config::{
 };
 pub use factory::ConsumerStrategyFactory;
 pub use metrics::statsd::StatsDBackend;
-pub use processors::{ProcessingFunction, PROCESSORS};
+pub use processors::{ProcessingFunction, ProcessingFunctionType, PROCESSORS};
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;
 pub use types::KafkaMessageMetadata;

@@ -5,9 +5,13 @@ name: metrics_summaries
 schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
-    { name: span_id, type: UInt, args: { size: 64 } },
-    { name: trace_id, type: UUID },
     { name: metric_mri, type: String },
+    { name: trace_id, type: UUID },
+    { name: segment_id, type: UInt, args: { size: 64 } },
+    { name: span_id, type: UInt, args: { size: 64 } },
+    { name: group, type: UInt, args: { size: 64 } },
+    { name: duration_ms, type: UInt, args: { size: 32 } },
+    { name: is_segment, type: UInt, args: { size: 8 } },
     { name: min, type: Float, args: { size: 64 } },
     { name: max, type: Float, args: { size: 64 } },
     { name: sum, type: Float, args: { size: 64 } },
