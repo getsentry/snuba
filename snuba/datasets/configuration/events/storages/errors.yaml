@@ -246,8 +246,6 @@ allocation_policies:
         - organization_id
         - referrer
         - project_id
-      default_config_overrides:
-        is_enforced: 1
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
