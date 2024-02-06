@@ -10,6 +10,8 @@ snuba admin
 
 The server should be running on http://127.0.0.1:1219
 
+note: please ensure that sentry devservices are up via `sentry devservices up --exclude=snuba` from within the sentry repository
+
 # Developing the Javascript
 
 You must have node and yarn installed. To do so:
