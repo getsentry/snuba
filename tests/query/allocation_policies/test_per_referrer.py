@@ -4,10 +4,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicyViolation,
     QueryResultOrError,
 )
-from snuba.query.allocation_policies.per_referrer import (
-    _PASS_THROUGH_REFERRERS,
-    ReferrerGuardRailPolicy,
-)
+from snuba.query.allocation_policies.per_referrer import ReferrerGuardRailPolicy
 from snuba.web import QueryResult
 
 _RESULT_SUCCESS = QueryResultOrError(
@@ -91,17 +88,3 @@ class TestCrossOrgQueryAllocationPolicy:
             policy.get_quota_allowance(
                 tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
             )
-
-    @pytest.mark.redis_db
-    def test_pass_through(self):
-        policy = ReferrerGuardRailPolicy.from_kwargs(
-            **{
-                "storage_key": "generic_metrics_distributions",
-                "required_tenant_types": ["referrer"],
-            }
-        )
-        policy.set_config_value("default_concurrent_request_per_referrer", 0)
-        for i, referrer in enumerate(_PASS_THROUGH_REFERRERS):
-            assert policy.get_quota_allowance(
-                {"referrer": referrer}, query_id=str(i)
-            ).can_run
