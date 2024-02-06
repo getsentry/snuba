@@ -13,9 +13,6 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
 
-DEFAULT_CONCURRENT_QUERIES_LIMIT = 22
-DEFAULT_PER_SECOND_QUERIES_LIMIT = 50
-
 rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
 logger = logging.getLogger("snuba.query.allocation_policy_per_referrer")
