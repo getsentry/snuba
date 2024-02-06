@@ -43,6 +43,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="spans-consumer" \
   --container-name="rust-querylog-consumer" \
   --container-name="rust-errors-consumer" \
+  --container-name="rust-metrics-consumer" \
   --container-name="spans-exp-static-off" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
