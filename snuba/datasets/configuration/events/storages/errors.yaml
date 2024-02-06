@@ -261,7 +261,7 @@ allocation_policies:
       required_tenant_types:
         - referrer
       default_config_overrides:
-            is_enforced: 0
+        is_enforced: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

@@ -21,11 +21,6 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 logger = logging.getLogger("snuba.query.allocation_policy_per_referrer")
 
 _DEFAULT_MAX_THREADS = 10
-_PASS_THROUGH_REFERRERS = set(
-    [
-        "subscriptions_executor",
-    ]
-)
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -95,12 +90,6 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        if referrer in _PASS_THROUGH_REFERRERS:
-            return QuotaAllowance(
-                True,
-                _DEFAULT_MAX_THREADS,
-                {"reason": f"{referrer} is a pass through referrer"},
-            )
         concurrent_limit = self._get_concurrent_limit(referrer)
         can_run, explanation = self._is_within_rate_limit(
             query_id,
@@ -124,9 +113,6 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        if referrer in _PASS_THROUGH_REFERRERS:
-            return
-
         rate_limit_params = RateLimitParameters(
             self.rate_limit_name,
             referrer,
