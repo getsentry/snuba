@@ -12,6 +12,7 @@ from snuba_sdk.mql.mql import MQL_GRAMMAR
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset_name
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -61,7 +62,6 @@ class InitialParseResult:
     groupby: list[SelectedExpression] | None = None
     conditions: list[Expression] | None = None
     mri: str | None = None
-    public_name: str | None = None
 
 
 ARITHMETIC_OPERATORS_MAPPING = {
@@ -76,6 +76,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     """
     Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
+
+    def __init__(self, indexer_mappings: dict[str, str | int]) -> None:
+        self.indexer_mappings = indexer_mappings
+        super().__init__()
 
     def visit_expression(
         self,
@@ -117,7 +121,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         metric_id_condition = binary_condition(
             ConditionFunctions.EQ,
             Column(None, None, "metric_id"),
-            Literal(None, param.mri or param.public_name),
+            Literal(None, param.mri),
         )
         conditions.append(metric_id_condition)
         value_column = exp.parameters[0]
@@ -636,13 +640,22 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return InitialParseResult(public_name=str(node.text[1:-1]))
+        # Look up the MRI for this public name, so we onlt deal with MRIs
+        pname = str(node.text[1:-1])
+        mri = self.indexer_mappings.get(pname)
+        if mri is None:
+            raise ParsingException(f"MRI not found for public name '{node.text}'")
+        return InitialParseResult(mri=str(mri))
 
     def visit_unquoted_public_name(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return InitialParseResult(public_name=str(node.text))
+        # Look up the MRI for this public name, so we onlt deal with MRIs
+        mri = self.indexer_mappings.get(node.text)
+        if mri is None:
+            raise ParsingException(f"MRI not found for public name '{node.text}'")
+        return InitialParseResult(mri=str(mri))
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -654,7 +667,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
 
 def parse_mql_query_body(
-    body: str,
+    body: str, indexer_mappings: dict[str, str | int], dataset: Dataset
 ) -> LogicalQuery:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
@@ -673,7 +686,7 @@ def parse_mql_query_body(
         )
         """
         exp_tree = MQL_GRAMMAR.parse(body)
-        parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
+        parsed: InitialParseResult = MQLVisitor(indexer_mappings).visit(exp_tree)
         if not parsed.expression and not parsed.formula:
             raise ParsingException(
                 "No aggregate/expression or formula specified in MQL query"
@@ -710,8 +723,25 @@ def parse_mql_query_body(
             if parsed.groupby:
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+            def extract_mri(param: InitialParseResult) -> str:
+                if param.mri:
+                    return param.mri
+                elif param.formula:
+                    for p in param.parameters or []:
+                        mri = extract_mri(p)
+                        if mri:
+                            return mri
+
+                raise ParsingException("formula does not contain any MRIs")
+
+            mri = extract_mri(parsed)  # Only works for single type formulas
+            entity_key = select_entity(mri, dataset)
+
             query = LogicalQuery(
-                from_clause=None,
+                from_clause=QueryEntity(
+                    key=entity_key, schema=get_entity(entity_key).get_data_model()
+                ),
                 selected_columns=selected_columns,
                 groupby=groupby,
             )
@@ -721,7 +751,10 @@ def parse_mql_query_body(
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
 
-            metric_value = parsed.mri or parsed.public_name
+            metric_value = parsed.mri
+            if not metric_value:
+                raise ParsingException("no MRI specified in MQL query")
+
             conditions: list[Expression] = [
                 binary_condition(
                     ConditionFunctions.EQ,
@@ -736,8 +769,12 @@ def parse_mql_query_body(
                 combine_and_conditions(conditions) if conditions else None
             )
 
+            entity_key = select_entity(metric_value, dataset)
+
             query = LogicalQuery(
-                from_clause=None,
+                from_clause=QueryEntity(
+                    key=entity_key, schema=get_entity(entity_key).get_data_model()
+                ),
                 selected_columns=selected_columns,
                 condition=final_conditions,
                 groupby=groupby,
@@ -745,6 +782,34 @@ def parse_mql_query_body(
     except Exception as e:
         raise e
     return query
+
+
+METRICS_ENTITIES = {
+    "c": EntityKey.METRICS_COUNTERS,
+    "d": EntityKey.METRICS_DISTRIBUTIONS,
+    "s": EntityKey.METRICS_SETS,
+}
+
+GENERIC_ENTITIES = {
+    "c": EntityKey.GENERIC_METRICS_COUNTERS,
+    "d": EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    "s": EntityKey.GENERIC_METRICS_SETS,
+    "g": EntityKey.GENERIC_METRICS_GAUGES,
+}
+
+
+def select_entity(mri: str, dataset: Dataset) -> EntityKey:
+    """
+    Given an MRI, select the entity that it belongs to.
+    """
+    if get_dataset_name(dataset) == "metrics":
+        if entity := METRICS_ENTITIES.get(mri[0]):
+            return entity
+    elif get_dataset_name(dataset) == "generic_metrics":
+        if entity := GENERIC_ENTITIES.get(mri[0]):
+            return entity
+
+    raise ParsingException(f"invalid metric type {mri[0]}")
 
 
 def populate_start_end_time(
@@ -913,14 +978,7 @@ def populate_query_from_mql_context(
     query: LogicalQuery, mql_context_dict: dict[str, Any]
 ) -> tuple[LogicalQuery, MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
-
-    try:
-        entity_key = EntityKey(mql_context.entity)
-        query.set_from_clause(
-            QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model())
-        )
-    except Exception as e:
-        raise ParsingException(f"Invalid entity {mql_context.entity}") from e
+    entity_key = query.get_from_clause().key
 
     populate_start_end_time(query, mql_context, entity_key)
     populate_scope(query, mql_context)
@@ -944,7 +1002,9 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_body(body)
+        query = parse_mql_query_body(
+            body, mql_context_dict["indexer_mappings"], dataset
+        )
     with sentry_sdk.start_span(
         op="parser", description="populate_query_from_mql_context"
     ):

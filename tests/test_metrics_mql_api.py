@@ -31,7 +31,8 @@ from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
-TRANSACTION_MRI = "d:transactions/duration@millisecond"
+DISTRIBUTIONS_MRI = "d:transactions/duration@millisecond"
+COUNTERS_MRI = "c:transactions/count_per_root_project@none"
 USE_CASE_ID = "performance"
 RETENTION_DAYS = 90
 
@@ -195,10 +196,9 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
-                    "transaction.duration",
-                    TRANSACTION_MRI,
-                    COUNTERS.metric_id,
-                    COUNTERS.entity,
+                    None,
+                    COUNTERS_MRI,
+                    entity=COUNTERS.entity,
                 ),
                 aggregate="sum",
             ),
@@ -211,7 +211,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: COUNTERS.metric_id,
+                COUNTERS_MRI: COUNTERS.metric_id,
             },
         )
         response = self.app.post(
@@ -222,7 +222,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 query=query,
                 flags=Flags(debug=True),
                 tenant_ids={"referrer": "tests", "organization_id": self.org_id},
-            ).serialize_mql(),
+            ).serialize(),
         )
         data = json.loads(response.data)
 
@@ -234,7 +234,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    COUNTERS_MRI,
                     COUNTERS.metric_id,
                     COUNTERS.entity,
                 ),
@@ -257,7 +257,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: COUNTERS.metric_id,
+                "transaction.duration": COUNTERS_MRI,
+                COUNTERS_MRI: COUNTERS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "status_code": resolve_str("status_code"),
             },
@@ -287,7 +288,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    COUNTERS_MRI,
                     COUNTERS.metric_id,
                     COUNTERS.entity,
                 ),
@@ -310,7 +311,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: COUNTERS.metric_id,
+                "transaction.duration": COUNTERS_MRI,
+                COUNTERS_MRI: COUNTERS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "status_code": resolve_str("status_code"),
             },
@@ -343,7 +345,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
                     DISTRIBUTIONS.entity,
                 ),
@@ -360,7 +362,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "status_code": resolve_str("status_code"),
             },
@@ -391,7 +394,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
                     DISTRIBUTIONS.entity,
                 ),
@@ -408,7 +411,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "status_code": resolve_str("status_code"),
             },
@@ -462,6 +466,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id="transactions",
             ),
             indexer_mappings={
+                "transaction.duration": "d:transactions/measurements.indexer_batch.payloads.len@none",
                 "d:transactions/measurements.indexer_batch.payloads.len@none": DISTRIBUTIONS.metric_id,
                 "status_code": resolve_str("status_code"),
             },
@@ -529,7 +534,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     Timeseries(
                         metric=Metric(
                             "transaction.duration",
-                            TRANSACTION_MRI,
+                            DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
                             DISTRIBUTIONS.entity,
                         ),
@@ -538,7 +543,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     Timeseries(
                         metric=Metric(
                             "transaction.duration",
-                            TRANSACTION_MRI,
+                            DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
                             DISTRIBUTIONS.entity,
                         ),
@@ -555,7 +560,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "status_code": resolve_str("status_code"),
             },
         )
@@ -583,7 +589,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     Timeseries(
                         metric=Metric(
                             "transaction.duration",
-                            TRANSACTION_MRI,
+                            DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
                             DISTRIBUTIONS.entity,
                         ),
@@ -601,7 +607,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     Timeseries(
                         metric=Metric(
                             "transaction.duration",
-                            TRANSACTION_MRI,
+                            DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
                             DISTRIBUTIONS.entity,
                         ),
@@ -619,7 +625,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "status_code": resolve_str("status_code"),
                 "transaction": resolve_str("transaction"),
             },
@@ -644,7 +651,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
                     DISTRIBUTIONS.entity,
                 ),
@@ -661,7 +668,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "status_code": resolve_str("status_code"),
             },
@@ -688,7 +696,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
                     DISTRIBUTIONS.entity,
                 ),
@@ -707,7 +715,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 use_case_id=USE_CASE_ID,
             ),
             indexer_mappings={
-                TRANSACTION_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "transaction": resolve_str("transaction"),
                 "event_type": resolve_str("event_type"),
                 "t1": resolve_str("t1"),
