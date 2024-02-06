@@ -20,6 +20,15 @@ pub fn process_message(
     let from: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
     let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
+    let sentry_tags = from.sentry_tags.unwrap_or_default();
+    let group: u64 = sentry_tags
+        .get("group")
+        .map(|group| u64::from_str_radix(group, 16).unwrap_or_default())
+        .unwrap_or_default();
+    let span_id = u64::from_str_radix(&from.span_id, 16)?;
+    let segment_id = from.segment_id.map_or(span_id, |segment_id| {
+        u64::from_str_radix(&segment_id, 16).unwrap_or_default()
+    });
 
     let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
     for (metric_mri, summaries) in &from._metrics_summary {
@@ -33,13 +42,17 @@ pub fn process_message(
             metrics_summaries.push(MetricsSummary {
                 count: summary.count as u64,
                 deleted: 0,
+                duration_ms: from.duration_ms,
                 end_timestamp: end_timestamp_ms / 1000,
+                group,
+                is_segment: if from.is_segment { 1 } else { 0 },
                 max: summary.max,
                 metric_mri,
                 min: summary.min,
                 project_id: from.project_id,
                 retention_days: enforce_retention(from.retention_days, &config.env_config),
-                span_id: u64::from_str_radix(&from.span_id, 16)?,
+                segment_id,
+                span_id,
                 sum: summary.sum,
                 tag_keys,
                 tag_values,
@@ -57,12 +70,13 @@ pub fn process_message(
 struct FromSpanMessage {
     #[serde(default)]
     _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
-    #[serde(default)]
     duration_ms: u32,
+    is_segment: bool,
     project_id: u64,
     received: f64,
-    #[serde(default)]
     retention_days: Option<u16>,
+    segment_id: Option<String>,
+    sentry_tags: Option<BTreeMap<String, String>>,
     span_id: String,
     start_timestamp_ms: u64,
     trace_id: Uuid,
@@ -90,12 +104,16 @@ struct FromMetricsSummary {
 struct MetricsSummary<'a> {
     count: u64,
     deleted: u8,
+    duration_ms: u32,
     end_timestamp: u64,
+    group: u64,
+    is_segment: u8,
     max: f64,
     metric_mri: &'a str,
     min: f64,
     project_id: u64,
     retention_days: u16,
+    segment_id: u64,
     span_id: u64,
     sum: f64,
     #[serde(rename(serialize = "tags.key"))]
@@ -151,6 +169,7 @@ mod tests {
             ]
           },
           "duration_ms": 1000,
+          "is_segment": false,
           "project_id": 1,
           "received": 1691105878.720,
           "retention_days": 90,
@@ -190,6 +209,7 @@ mod tests {
             ]
           },
           "duration_ms": 1000,
+          "is_segment": false,
           "project_id": 1,
           "received": 1691105878.720,
           "retention_days": 90,

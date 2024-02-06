@@ -139,6 +139,7 @@ class TestOptimize:
         partitions = optimize.get_partitions_to_optimize(
             clickhouse, storage, database, table
         )
+        # XXX(FIX-LATER): This assertion breaks on ClickHouse 23.3
         assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
@@ -216,6 +217,9 @@ class TestOptimize:
         assert partitions == []
 
         tracker.delete_all_states()
+        # For ClickHouse 23.3 and 23.8 parts from previous test runs
+        # interfere with following tests, so best to drop the tables
+        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
 
     @pytest.mark.parametrize(
         "table,host,expected",

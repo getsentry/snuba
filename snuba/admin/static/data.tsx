@@ -32,7 +32,7 @@ const NAV_ITEMS = [
     component: SnubaExplain,
   },
   {
-    id: "clickhouse",
+    id: "system-queries",
     display: "🏚️ System Queries",
     component: ClickhouseQueries,
   },
