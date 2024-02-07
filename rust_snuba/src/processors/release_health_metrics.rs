@@ -20,7 +20,6 @@ use super::utils::enforce_retention;
 ///
 /// Upstream sends the tag keys and values as strings. Which is surprising since the
 /// tag keys are indexed so they should be integers. But we have to deal with it.
-/// asdf
 fn generate_timeseries_id(
     org_id: u64,
     project_id: u64,
