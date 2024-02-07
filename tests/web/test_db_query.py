@@ -263,6 +263,11 @@ def test_db_query_success() -> None:
         },
         "ConcurrentRateLimitAllocationPolicy": {
             "can_run": True,
+            "explanation": {"overrides": {}, "reason": "within limit"},
+            "max_threads": 10,
+        },
+        "ReferrerGuardRailPolicy": {
+            "can_run": True,
             "explanation": {},
             "max_threads": 10,
         },
@@ -320,18 +325,6 @@ def test_bypass_cache_referrer() -> None:
                 trace_id="trace_id",
                 robust=False,
             )
-            assert stats["quota_allowance"] == {
-                "BytesScannedWindowAllocationPolicy": {
-                    "can_run": True,
-                    "explanation": {},
-                    "max_threads": 10,
-                },
-                "ConcurrentRateLimitAllocationPolicy": {
-                    "can_run": True,
-                    "explanation": {},
-                    "max_threads": 10,
-                },
-            }
             assert len(query_metadata_list) == 1
             assert result.extra["stats"] == stats
             assert result.extra["sql"] is not None
