@@ -9,6 +9,7 @@ htmlcov/
 snuba.egg-info/
 .DS_Store
 .idea/
+.hypothesis/
 node_modules
 .vscode/*.log
 snuba/admin/dist/bundle.js*
