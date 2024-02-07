@@ -61,52 +61,6 @@ TESTS = [
         id="Transactions subscription",
     ),
     pytest.param(
-        EntityKey.SESSIONS,
-        Query(
-            QueryEntity(
-                EntityKey.SESSIONS,
-                get_entity(EntityKey.SESSIONS).get_data_model(),
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
-            ],
-            condition=binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-        ),
-        {"organization": 1},
-        None,
-        5,
-        id="Sessions subscription",
-    ),
-    pytest.param(
-        EntityKey.SESSIONS,
-        Query(
-            QueryEntity(
-                EntityKey.SESSIONS,
-                get_entity(EntityKey.SESSIONS).get_data_model(),
-            ),
-            selected_columns=[
-                SelectedExpression(
-                    "time", Column("_snuba_timestamp", None, "timestamp")
-                ),
-            ],
-            condition=binary_condition(
-                "equals",
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-        ),
-        {},
-        InvalidQueryException,
-        5,
-        id="Sessions subscription",
-    ),
-    pytest.param(
         EntityKey.METRICS_COUNTERS,
         Query(
             QueryEntity(
