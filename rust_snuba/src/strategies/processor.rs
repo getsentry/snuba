@@ -174,8 +174,10 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
             sentry::with_scope(
                 |scope| {
-                    let payload = String::from_utf8_lossy(payload).into();
-                    scope.set_extra("payload", payload)
+                    let payload = String::from_utf8_lossy(payload);
+                    let payload_as_value: serde_json::Value =
+                        serde_json::from_str(&payload).unwrap_or(payload.into());
+                    scope.set_extra("payload", payload_as_value);
                 },
                 || {
                     // FIXME: We are double-reporting errors here, as capturing
