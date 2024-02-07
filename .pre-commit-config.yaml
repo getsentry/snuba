@@ -55,4 +55,4 @@ repos:
         entry: rustfmt --edition 2021
         files: ^rust_snuba/.*\.rs$
 default_language_version:
-  python: python3.11
+  python: python3.10
