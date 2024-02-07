@@ -441,6 +441,7 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     provide a full absolute path such as `/foo/bar/my_settings.py`."""
 
     import importlib
+    import importlib.abc
     import importlib.util
     import os
 
