@@ -22,24 +22,22 @@ pub fn process_message_with_replacement(
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
-    // DEBUG DESERIALIZER. Uncomment this if you're getting Rust errors.
-    //
-    //let payload_bytes = payload.payload().context("Expected payload")?;
-    //let msg: Vec<Value> = serde_json::from_slice(payload_bytes)?;
-    //if msg.len() == 4 {
-    //let x = msg.get(2).unwrap();
-    //let y = x.to_string();
-    //let msg: ErrorMessage = serde_json::from_str(&y)?;
-    //}
-
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: Message = serde_json::from_slice(payload_bytes)?;
+    let msg: Message = serde_json::from_slice(payload_bytes)
+        .with_context(|| {
+            let four = serde_json::from_slice(payload_bytes).map(|_: FourTrain| ());
+            let three = serde_json::from_slice(payload_bytes).map(|_: ThreeTrain| ());
+
+            format!("payload start: {}\n\nerror trying to deserialize as event: {:?}\n\nerror trying to deserialize as replacement: {:?}", String::from_utf8_lossy(&payload_bytes[..50]), four, three)
+        })?;
 
     let (version, msg_type, error_event, replacement_event) = match msg {
-        Message::FourTrain(version, msg_type, event, _state) => {
+        Message::FourTrain(FourTrain(version, msg_type, event, _state)) => {
             (version, msg_type, Some(event), None)
         }
-        Message::ThreeTrain(version, msg_type, event) => (version, msg_type, None, Some(event)),
+        Message::ThreeTrain(ThreeTrain(version, msg_type, event)) => {
+            (version, msg_type, None, Some(event))
+        }
     };
 
     if version != 2 {
@@ -79,9 +77,15 @@ pub fn process_message_with_replacement(
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum Message {
-    FourTrain(u8, String, ErrorMessage, Value),
-    ThreeTrain(u8, String, ReplacementEvent),
+    FourTrain(FourTrain),
+    ThreeTrain(ThreeTrain),
 }
+
+#[derive(Debug, Deserialize)]
+struct FourTrain(u8, String, ErrorMessage, Value);
+
+#[derive(Debug, Deserialize)]
+struct ThreeTrain(u8, String, ReplacementEvent);
 
 #[derive(Deserialize, Debug)]
 struct ReplacementEvent {
