@@ -77,10 +77,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
 
-    def __init__(self, indexer_mappings: dict[str, str | int]) -> None:
-        self.indexer_mappings = indexer_mappings
-        super().__init__()
-
     def visit_expression(
         self,
         node: Node,
@@ -639,23 +635,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_quoted_public_name(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
-        assert isinstance(node.text, str)
-        # Look up the MRI for this public name, so we onlt deal with MRIs
-        pname = str(node.text[1:-1])
-        mri = self.indexer_mappings.get(pname)
-        if mri is None:
-            raise ParsingException(f"MRI not found for public name '{node.text}'")
-        return InitialParseResult(mri=str(mri))
+        raise ParsingException("MQL endpoint only supports MRIs")
 
     def visit_unquoted_public_name(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
-        assert isinstance(node.text, str)
-        # Look up the MRI for this public name, so we onlt deal with MRIs
-        mri = self.indexer_mappings.get(node.text)
-        if mri is None:
-            raise ParsingException(f"MRI not found for public name '{node.text}'")
-        return InitialParseResult(mri=str(mri))
+        raise ParsingException("MQL endpoint only supports MRIs")
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -666,9 +651,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
-def parse_mql_query_body(
-    body: str, indexer_mappings: dict[str, str | int], dataset: Dataset
-) -> LogicalQuery:
+def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
     information provided.
@@ -686,7 +669,7 @@ def parse_mql_query_body(
         )
         """
         exp_tree = MQL_GRAMMAR.parse(body)
-        parsed: InitialParseResult = MQLVisitor(indexer_mappings).visit(exp_tree)
+        parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
         if not parsed.expression and not parsed.formula:
             raise ParsingException(
                 "No aggregate/expression or formula specified in MQL query"
@@ -1002,9 +985,7 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_body(
-            body, mql_context_dict["indexer_mappings"], dataset
-        )
+        query = parse_mql_query_body(body, dataset)
     with sentry_sdk.start_span(
         op="parser", description="populate_query_from_mql_context"
     ):

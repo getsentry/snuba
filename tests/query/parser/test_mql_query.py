@@ -761,7 +761,7 @@ mql_test_cases = [
         id="Select metric with empty filter",
     ),
     pytest.param(
-        'quantiles(0.5, 0.75)(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
+        'quantiles(0.5, 0.75)(s:transactions/user@none{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
@@ -2129,7 +2129,7 @@ mql_test_cases = [
         id="Select metric with arbitrary function",
     ),
     pytest.param(
-        "topK(10)(sum(transaction.user), 300)",
+        "topK(10)(sum(s:transactions/user@none), 300)",
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
