@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from snuba import settings
+from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 from snuba.settings import validation
 from snuba.settings.validation import (
     InvalidTopicError,
@@ -127,3 +128,106 @@ def test_validation_catches_unmapped_topic_pair() -> None:
         validate_slicing_settings(all_settings)
 
     del sliced_topics[("events", 1)]
+
+
+CLUSTERS_CONFIG = [
+    {
+        "host": "host",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "default",
+        "http_port": 8122,
+        "storage_sets": {"generic_metrics_distributions"},
+        "single_node": False,
+    },
+]
+
+SLICED_CLUSTERS_CONFIG = [
+    {
+        "host": "host_slice",
+        "port": 9000,
+        "user": "default",
+        "password": "",
+        "database": "slice_0_default",
+        "http_port": 8123,
+        "storage_set_slices": {("generic_metrics_distributions", 0)},
+        "single_node": True,
+    },
+    {
+        "host": "host_slice",
+        "port": 9001,
+        "user": "default",
+        "password": "",
+        "database": "slice_1_default",
+        "http_port": 8124,
+        "storage_set_slices": {("generic_metrics_distributions", 1)},
+        "single_node": True,
+    },
+]
+
+
+@patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
+def test_sliced_clusters() -> None:
+    importlib.reload(validation)
+
+    all_settings = build_settings_dict()
+    sliced_storage_sets = all_settings["SLICED_STORAGE_SETS"]
+
+    # All (storage set, slice id) pairs are not assigned
+    # a cluster in SLICED_CLUSTERS
+    sliced_storage_sets["generic_metrics_distributions"] = 3
+
+    partitions = {
+        logical_part: 0 for logical_part in range(SENTRY_LOGICAL_PARTITIONS // 2)
+    }
+    remaining_partitions = {
+        logical_part: 1
+        for logical_part in range(
+            SENTRY_LOGICAL_PARTITIONS // 2, SENTRY_LOGICAL_PARTITIONS
+        )
+    }
+
+    partitions.update(remaining_partitions)
+    all_settings["LOGICAL_PARTITION_MAPPING"] = {
+        "generic_metrics_distributions": partitions
+    }
+
+    with pytest.raises(AssertionError):
+        validate_slicing_settings(all_settings)
+
+    del sliced_storage_sets["generic_metrics_distributions"]
+    del all_settings["LOGICAL_PARTITION_MAPPING"]["generic_metrics_distributions"]
+
+
+@patch("snuba.settings.SLICED_CLUSTERS", SLICED_CLUSTERS_CONFIG)
+@patch("snuba.settings.CLUSTERS", CLUSTERS_CONFIG)
+def test_single_node_vals() -> None:
+    importlib.reload(validation)
+
+    all_settings = build_settings_dict()
+    sliced_storage_sets = all_settings["SLICED_STORAGE_SETS"]
+    sliced_storage_sets["generic_metrics_distributions"] = 2
+
+    partitions = {
+        logical_part: 0 for logical_part in range(SENTRY_LOGICAL_PARTITIONS // 2)
+    }
+    remaining_partitions = {
+        logical_part: 1
+        for logical_part in range(
+            SENTRY_LOGICAL_PARTITIONS // 2, SENTRY_LOGICAL_PARTITIONS
+        )
+    }
+
+    partitions.update(remaining_partitions)
+    all_settings["LOGICAL_PARTITION_MAPPING"] = {
+        "generic_metrics_distributions": partitions
+    }
+
+    # single_node values for this storage set key
+    # are not the same across all clusters
+    with pytest.raises(AssertionError):
+        validate_slicing_settings(all_settings)
+
+    del sliced_storage_sets["generic_metrics_distributions"]
+    del all_settings["LOGICAL_PARTITION_MAPPING"]["generic_metrics_distributions"]

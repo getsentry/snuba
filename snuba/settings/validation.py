@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Set, Tuple
 
 from snuba.datasets.slicing import SENTRY_LOGICAL_PARTITIONS
 
@@ -128,3 +128,54 @@ def validate_slicing_settings(locals: Mapping[str, Any]) -> None:
         assert (
             topic_tuple in locals["SLICED_KAFKA_BROKER_CONFIG"]
         ), f"missing broker config definition for sliced Kafka topic {topic_tuple[0]} on slice {topic_tuple[1]}"
+
+    _STORAGE_SET_CLUSTER_MAP = {
+        storage_set: cluster
+        for cluster in locals["CLUSTERS"]
+        for storage_set in cluster["storage_sets"]
+    }
+
+    StorageSet_SliceID_Tuple = Tuple[str, int]
+    Cluster_Mapping = Mapping[str, Any]
+
+    _SLICED_STORAGE_SET_CLUSTER_MAP: MutableMapping[
+        StorageSet_SliceID_Tuple, Cluster_Mapping
+    ] = {}
+
+    for sliced_cluster in locals["SLICED_CLUSTERS"]:
+        for storage_set_tuple in sliced_cluster["storage_set_slices"]:
+            _SLICED_STORAGE_SET_CLUSTER_MAP[
+                (storage_set_tuple[0], storage_set_tuple[1])
+            ] = sliced_cluster
+
+    for storage_set in locals["SLICED_STORAGE_SETS"]:
+        num_slices = locals["SLICED_STORAGE_SETS"][storage_set]
+
+        for slice_id in range(num_slices):
+            assert (
+                storage_set,
+                slice_id,
+            ) in _SLICED_STORAGE_SET_CLUSTER_MAP, f"storage set, slice id pair ({storage_set}, {slice_id}) is not assigned any cluster in SLICED_CLUSTERS in settings"
+
+    all_storage_set_keys = set()
+    all_storage_set_keys = set(_STORAGE_SET_CLUSTER_MAP.keys()).union(
+        {key[0] for key in _SLICED_STORAGE_SET_CLUSTER_MAP.keys()}
+    )
+
+    for storage_set_key in all_storage_set_keys:
+        single_node_vals: Set[bool] = set()
+
+        if storage_set_key in _STORAGE_SET_CLUSTER_MAP:
+            single_node_vals.add(
+                _STORAGE_SET_CLUSTER_MAP[storage_set_key]["single_node"]
+            )
+
+        for storage_set_tuple in _SLICED_STORAGE_SET_CLUSTER_MAP.keys():
+            if storage_set_key in storage_set_tuple:
+                single_node_vals.add(
+                    _SLICED_STORAGE_SET_CLUSTER_MAP[storage_set_tuple]["single_node"]
+                )
+
+        assert (
+            len(single_node_vals) == 1
+        ), f"Storage set key {storage_set_key} must have the same single_node value for all of its associated clusters"
