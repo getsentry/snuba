@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
+from parsimonious.exceptions import IncompleteParseError
 from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
@@ -339,9 +340,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -668,8 +667,31 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
             'groupby': [SelectedExpression(name='transaction', Column('transaction')],
         )
         """
-        exp_tree = MQL_GRAMMAR.parse(body)
-        parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
+        try:
+            exp_tree = MQL_GRAMMAR.parse(body)
+            parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
+        except ParsingException as e:
+            logger.warning(f"Invalid MQL query ({e}): {body}")
+            raise e
+        except IncompleteParseError as e:
+            lines = body.split("\n")
+            if e.line() > len(lines):
+                line = body
+            else:
+                line = lines[e.line() - 1]
+
+            idx = e.column()
+            prefix = line[max(0, idx - 3) : idx]
+            suffix = line[idx : (idx + 10)]
+            raise ParsingException(
+                f"Parsing error on line {e.line()} at '{prefix}{suffix}'"
+            )
+        except Exception as e:
+            message = str(e)
+            if "\n" in message:
+                message, _ = message.split("\n", 1)
+            raise ParsingException(message)
+
         if not parsed.expression and not parsed.formula:
             raise ParsingException(
                 "No aggregate/expression or formula specified in MQL query"
