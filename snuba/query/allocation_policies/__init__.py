@@ -140,6 +140,23 @@ class AllocationPolicyViolation(SerializableException):
         return f"{self.message}, explanation: {self.explanation}"
 
 
+class InvalidTenantsForAllocationPolicy(SerializableException):
+    """Individual policies can raise this exception if they are given invalid tenant_ids."""
+
+    @classmethod
+    def from_args(
+        cls,
+        tenant_ids: dict[str, str | int],
+        policy_name: str,
+        description: str | None = None,
+    ) -> "InvalidTenantsForAllocationPolicy":
+        return cls(
+            description or "Invalid tenants for allocation policy",
+            tenant_ids=tenant_ids,
+            policy_name=policy_name,
+        )
+
+
 class AllocationPolicyViolations(SerializableException):
     """
     An exception class which is used to collect multiple AllocationPolicyViolation
@@ -741,6 +758,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 allowance = QuotaAllowance(True, self.max_threads, {})
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
+        except InvalidTenantsForAllocationPolicy as e:
+            allowance = QuotaAllowance(False, 0, cast(dict[str, Any], e.to_dict()))
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -785,8 +804,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             if not self.is_active:
                 return
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
+        except InvalidTenantsForAllocationPolicy:
+            # the policy did not do anything because the tenants were invalid, updating is also not necessary
+            pass
         except Exception:
-            # FIXME: Remove this
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )

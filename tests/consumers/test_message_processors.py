@@ -12,25 +12,33 @@ import sentry_kafka_schemas
 
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.processors import DatasetMessageProcessor
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.datasets.processors.generic_metrics_processor import (
     GenericCountersMetricsProcessor,
     GenericDistributionsMetricsProcessor,
     GenericGaugesMetricsProcessor,
     GenericSetsMetricsProcessor,
 )
+from snuba.datasets.processors.metrics_bucket_processor import (
+    PolymorphicMetricsProcessor,
+)
 from snuba.datasets.processors.outcomes_processor import OutcomesProcessor
 from snuba.datasets.processors.replays_processor import ReplaysProcessor
-from snuba.processor import InsertBatch
+from snuba.datasets.processors.rust_compat_processor import RustCompatProcessor
+from snuba.processor import InsertBatch, ReplacementBatch
 
 
 @pytest.mark.parametrize(
     "topic,processor",
     [
+        ("events", ErrorsProcessor),
+        ("outcomes", OutcomesProcessor),
         ("outcomes", OutcomesProcessor),
         ("snuba-generic-metrics", GenericCountersMetricsProcessor),
         ("snuba-generic-metrics", GenericSetsMetricsProcessor),
         ("snuba-generic-metrics", GenericDistributionsMetricsProcessor),
         ("snuba-generic-metrics", GenericGaugesMetricsProcessor),
+        ("snuba-metrics", PolymorphicMetricsProcessor),
     ],
 )
 @patch("snuba.settings.DISCARD_OLD_EVENTS", False)
@@ -51,39 +59,40 @@ def test_message_processors(
             data_json["start_timestamp_ms"] = int(time.time()) * 1000
             data_json.pop("group_raw", None)
 
-        data_bytes = json.dumps(data_json).encode("utf-8")
-
         processor_name = processor.__qualname__
         partition = 0
         offset = 1
-        millis_since_epoch = int(time.time() * 1000)
+        now = int(time.time())
 
-        rust_processed_message = bytes(
-            rust_snuba.process_message(  # type: ignore
-                processor_name, data_bytes, partition, offset, millis_since_epoch
-            )
+        rust_processed_message = RustCompatProcessor(processor_name).process_message(
+            data_json,
+            KafkaMessageMetadata(
+                offset=offset,
+                partition=partition,
+                timestamp=datetime.utcfromtimestamp(now),
+            ),
         )
+
         python_processed_message = processor().process_message(
             data_json,
             KafkaMessageMetadata(
                 offset=offset,
                 partition=partition,
-                timestamp=datetime.utcfromtimestamp(millis_since_epoch / 1000),
+                timestamp=datetime.utcfromtimestamp(now),
             ),
         )
 
-        # Handle scenarios where the message needs to be skipped by the processor
-        if not python_processed_message:
-            assert rust_processed_message == b""
-            continue
-
-        assert isinstance(python_processed_message, InsertBatch)
-
-        assert [
-            json.loads(line)
-            for line in rust_processed_message.rstrip(b"\n").split(b"\n")
-            if line
-        ] == python_processed_message.rows
+        if python_processed_message is None:
+            assert rust_processed_message is None or (
+                isinstance(rust_processed_message, InsertBatch)
+                and not rust_processed_message.rows
+            )
+        elif isinstance(python_processed_message, ReplacementBatch):
+            assert isinstance(rust_processed_message, ReplacementBatch)
+            assert rust_processed_message == python_processed_message
+        else:
+            assert isinstance(rust_processed_message, InsertBatch)
+            assert python_processed_message.rows == rust_processed_message.rows
 
 
 def test_replays_message_processor() -> None:
@@ -105,7 +114,7 @@ def test_replays_message_processor() -> None:
         rust_processed_message = bytes(
             rust_snuba.process_message(  # type: ignore
                 processor_name, data_bytes, partition, offset, millis_since_epoch
-            )
+            )[0]
         )
         python_processed_message = processor().process_message(
             data_json,

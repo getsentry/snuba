@@ -6,7 +6,6 @@ from typing import Any, Callable, Tuple, Union, cast
 import pytest
 import simplejson as json
 from snuba_sdk import (
-    AliasedExpression,
     Column,
     Condition,
     Entity,
@@ -89,7 +88,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         tag_value_indexed: bool,
     ) -> None:
         self.post = _build_snql_post_methods
-        self.snql_route = f"/{test_dataset}/snql"
+        self.mql_route = f"/{test_dataset}/mql"
         # values for test data
         self.metric_id = 1001
         self.org_id = 101
@@ -99,6 +98,21 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         self.mapping_meta = SHARED_MAPPING_META
         self.default_tags: dict[str, str | int] = SHARED_TAGS
 
+        def intstr(v: str | int) -> str | int:
+            try:
+                return int(v)
+            except ValueError:
+                return str(v)
+
+        self.indexer_mappings = {}
+        for mapping in self.mapping_meta.values():
+            self.indexer_mappings.update(
+                {str(v): intstr(k) for k, v in mapping.items()}
+            )
+
+        self.indexer_mappings.update(
+            {"transaction.duration": TRANSACTION_MRI, TRANSACTION_MRI: self.metric_id}
+        )
         # This is a little confusing, but these values are the ones that should be used in the tests
         # Depending on the dataset, the values could be raw strings or indexed ints, so handle those cases
         if tag_value_indexed:
@@ -177,20 +191,20 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                 project_ids=self.project_ids,
                 use_case_id=USE_CASE_ID,
             ),
+            indexer_mappings=self.indexer_mappings,
         )
         response = self.app.post(
-            self.snql_route,
-            data=json.dumps(
-                {
-                    "query": query.serialize(),
-                    "dataset": test_dataset,
-                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
-                }
-            ),
+            self.mql_route,
+            data=Request(
+                query=query,
+                dataset=test_dataset,
+                app_id="test",
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize(),
         )
         data = json.loads(response.data)
 
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         assert len(data["data"]) == 180, data
 
     def test_retrieval_complex(
@@ -205,18 +219,8 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                     test_entity,
                 ),
                 aggregate="sum",
-                filters=[
-                    Condition(
-                        Column(f"{tag_column}[{self.tags[0][0]}]"),
-                        Op.EQ,
-                        self.tags[0][1],
-                    )
-                ],
-                groupby=[
-                    AliasedExpression(
-                        Column(f"{tag_column}[{self.tags[1][0]}]"), "status_code"
-                    )
-                ],
+                filters=[Condition(Column("transaction"), Op.EQ, "t1")],
+                groupby=[Column("status_code")],
             ),
             start=self.start_time,
             end=self.end_time,
@@ -226,17 +230,17 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                 project_ids=self.project_ids,
                 use_case_id=USE_CASE_ID,
             ),
+            indexer_mappings=self.indexer_mappings,
         )
 
         response = self.app.post(
-            self.snql_route,
-            data=json.dumps(
-                {
-                    "query": query.serialize(),
-                    "dataset": test_dataset,
-                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
-                }
-            ),
+            self.mql_route,
+            data=Request(
+                query=query,
+                dataset=test_dataset,
+                app_id="test",
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize(),
         )
         data = json.loads(response.data)
 
@@ -259,18 +263,8 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                     test_entity,
                 ),
                 aggregate="sum",
-                filters=[
-                    Condition(
-                        Column(f"{tag_column}[{self.tags[0][0]}]"),
-                        Op.EQ,
-                        self.tags[0][1],
-                    )
-                ],
-                groupby=[
-                    AliasedExpression(
-                        Column(f"{tag_column}[{self.tags[1][0]}]"), "status_code"
-                    )
-                ],
+                filters=[Condition(Column("transaction"), Op.EQ, "t1")],
+                groupby=[Column("status_code")],
             ),
             start=self.start_time,
             end=self.end_time,
@@ -280,17 +274,17 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                 project_ids=self.project_ids,
                 use_case_id=USE_CASE_ID,
             ),
+            indexer_mappings=self.indexer_mappings,
         )
 
         response = self.app.post(
-            self.snql_route,
-            data=json.dumps(
-                {
-                    "query": query.serialize(),
-                    "dataset": test_dataset,
-                    "tenant_ids": {"referrer": "tests", "organization_id": self.org_id},
-                }
-            ),
+            self.mql_route,
+            data=Request(
+                query=query,
+                dataset=test_dataset,
+                app_id="test",
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize(),
         )
         data = json.loads(response.data)
 
@@ -323,7 +317,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         )
 
         response = self.app.post(
-            self.snql_route,
+            f"{test_dataset}/snql",  # Not an MQL query
             data=Request(
                 dataset=test_dataset,
                 app_id="test",

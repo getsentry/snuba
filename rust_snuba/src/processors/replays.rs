@@ -69,11 +69,12 @@ pub fn deserialize_message(
             };
 
             // Tags normalization and title extraction.
+            let tags = event.tags.unwrap_or_default();
             let mut title = None;
-            let mut tags_key = Vec::with_capacity(event.tags.len());
-            let mut tags_value = Vec::with_capacity(event.tags.len());
+            let mut tags_key = Vec::with_capacity(tags.len());
+            let mut tags_value = Vec::with_capacity(tags.len());
 
-            for tag in event.tags.into_iter() {
+            for tag in tags.into_iter() {
                 if &tag.0 == "transaction" {
                     title = tag.1.clone()
                 } else {
@@ -283,7 +284,7 @@ struct ReplayEvent {
     #[serde(default)]
     error_ids: Option<Vec<Uuid>>,
     #[serde(default)]
-    tags: Vec<(String, Option<String>)>,
+    tags: Option<Vec<(String, Option<String>)>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -1004,5 +1005,34 @@ mod tests {
         };
         process_message(payload, meta, &ProcessorConfig::default())
             .expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_parse_replay_null_tags() {
+        let payload = r#"{
+            "is_archived": true,
+            "timestamp": 1702659277,
+            "tags": null,
+            "type": "replay_event",
+            "replay_id": "048aa04be40243948eb3b57089c519ee"
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+        assert_eq!(replay_row.tags_key, [] as [String; 0]);
+        assert_eq!(replay_row.tags_value, [] as [String; 0]);
     }
 }

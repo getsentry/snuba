@@ -5,6 +5,7 @@ mod metrics_summaries;
 mod outcomes;
 mod profiles;
 mod querylog;
+mod release_health_metrics;
 mod replays;
 mod spans;
 mod utils;
@@ -59,7 +60,8 @@ define_processing_functions! {
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
     ("GenericDistributionsMetricsProcessor" , "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_distribution_message)),
     ("GenericGaugesMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_gauge_message)),
-    ("errors", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
+    ("PolymorphicMetricsProcessor", "snuba-metrics", ProcessingFunctionType::ProcessingFunction(release_health_metrics::process_metrics_message)),
+    ("ErrorsProcessor", "events", ProcessingFunctionType::ProcessingFunctionWithReplacements(errors::process_message_with_replacement)),
 }
 
 // COGS is recorded for these processors
@@ -99,10 +101,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_schemas() {
         let processor_config = ProcessorConfig::default();
-        for (_python_class_name, topic_name, processor_fn_type) in PROCESSORS {
+        for (python_class_name, topic_name, processor_fn_type) in PROCESSORS {
             let schema = get_schema(topic_name, None).unwrap();
             let metadata = KafkaMessageMetadata {
                 partition: 0,
@@ -110,18 +111,27 @@ mod tests {
                 timestamp: DateTime::from(SystemTime::now()),
             };
 
-            for (example_i, example) in schema.examples().iter().enumerate() {
+            for example in schema.examples() {
                 let mut settings = insta::Settings::clone_current();
-                settings.set_snapshot_suffix(format!("{}-{}", topic_name, example_i));
+                settings.set_snapshot_suffix(format!(
+                    "{}-{}-{}",
+                    topic_name,
+                    python_class_name,
+                    example.name()
+                ));
 
                 if *topic_name == "ingest-replay-events" {
                     settings.add_redaction(".*.event_hash", "<event UUID>");
                 }
 
-                settings.set_description(std::str::from_utf8(example).unwrap());
+                if *topic_name == "events" {
+                    settings.add_redaction(".*.message_timestamp", "<event timestamp>");
+                }
+
+                settings.set_description(std::str::from_utf8(example.payload()).unwrap());
                 let _guard = settings.bind_to_scope();
 
-                let payload = KafkaPayload::new(None, None, Some(example.to_vec()));
+                let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));
 
                 match processor_fn_type {
                     ProcessingFunctionType::ProcessingFunction(processor_fn) => {

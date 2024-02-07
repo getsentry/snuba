@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, cast
 
 import _strptime  # NOQA fixes _strptime deferred import issue
@@ -80,7 +80,13 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if row is None:  # the processor cannot/does not handle this input
                 return None
 
-            return InsertBatch([row], row["received"])
+            received = (
+                datetime.utcfromtimestamp(row["received"]).replace(tzinfo=timezone.utc)
+                if row["received"] is not None
+                else None
+            )
+
+            return InsertBatch([row], received)
         elif type_ in REPLACEMENT_EVENT_TYPES:
             # pass raw events along to republish
             return ReplacementBatch(str(event["project_id"]), [message])
@@ -125,7 +131,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
         self.extract_promoted_contexts(processed, contexts, tags)
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
-            contexts
+            contexts,
+            # sort here to match behavior of rust processor, where things get accidentally sorted due to BTreeMap
+            sort=True,
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
@@ -158,7 +166,9 @@ class ErrorsProcessor(DatasetMessageProcessor):
 
         processed["offset"] = metadata.offset
         processed["partition"] = metadata.partition
-        processed["message_timestamp"] = metadata.timestamp
+        processed["message_timestamp"] = int(
+            metadata.timestamp.replace(tzinfo=timezone.utc).timestamp()
+        )
 
         return processed
 
@@ -307,7 +317,13 @@ class ErrorsProcessor(DatasetMessageProcessor):
         data = event.get("data", {})
         received = _collapse_uint32(int(data["received"]))
         output["received"] = (
-            datetime.utcfromtimestamp(received) if received is not None else None
+            int(
+                datetime.utcfromtimestamp(received)
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+            )
+            if received is not None
+            else None
         )
         output["version"] = _unicodify(data.get("version", None))
         output["location"] = _unicodify(data.get("location", None))
@@ -428,10 +444,11 @@ class ErrorsProcessor(DatasetMessageProcessor):
         timestamp = _ensure_valid_date(
             datetime.strptime(event["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
         )
+
         if timestamp is None:
             timestamp = datetime.utcnow()
 
-        output["timestamp"] = timestamp
+        output["timestamp"] = int(timestamp.replace(tzinfo=timezone.utc).timestamp())
 
     def extract_sdk(
         self, output: MutableMapping[str, Any], sdk: Mapping[str, Any]
