@@ -22,11 +22,15 @@ _DEFAULT_MAX_THREADS = 10
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
     """
-    A policy to prevent runaway referrers from consuming too many queries. This concern is orthogonal to customer rate limits.
+    A policy to prevent runaway referrers from consuming too many queries.
 
-    For example, a product team may push out a feature that sends 20 snuba queries every 5 seconds on the UI. In that case, that feature should break,
-    not all of clickhouse.
+    This concern is orthogonal to customer rate limits in its purpose. This rate limiter being tripped is a problem
+    caused by sentry developers, not customer abuse. It either means that a feature was release that queries this referrer
+    too much or that an appropriate rate limit was not set somewhere upstream. It affects customers randomly and basically
+    acts as a load shedder.
 
+    For example, a product team may push out a feature that sends 20 snuba queries every 5 seconds on the UI.
+    In that case, that feature should break but others should continue to be served.
     """
 
     @property
