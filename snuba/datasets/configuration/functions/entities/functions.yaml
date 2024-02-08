@@ -79,17 +79,7 @@ storage_selector:
   args:
     storage: functions
 
-query_processors:
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
+query_processors: []
 
 validate_data_model: error
 validators:

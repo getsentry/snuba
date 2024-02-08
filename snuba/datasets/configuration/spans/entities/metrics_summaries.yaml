@@ -58,16 +58,6 @@ storage_selector:
 
 query_processors:
   - processor: BasicFunctionsProcessor
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
 
 validators:
   - validator: EntityRequiredColumnValidator

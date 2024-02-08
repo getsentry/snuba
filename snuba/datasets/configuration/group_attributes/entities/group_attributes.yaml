@@ -35,16 +35,6 @@ storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
-  - processor: ReferrerRateLimiterProcessor
-#  - processor: ProjectReferrerRateLimiter
-#    args:
-#      project_column: project_id
-#  - processor: ProjectRateLimiterProcessor
-#    args:
-#      project_column: project_id
-#  - processor: ResourceQuotaProcessor
-#    args:
-#      project_field: project_id
   - processor: BasicFunctionsProcessor
 
 validate_data_model: error

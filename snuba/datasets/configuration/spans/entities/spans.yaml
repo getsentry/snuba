@@ -153,16 +153,6 @@ query_processors:
         - end_timestamp
         - timestamp
   - processor: BasicFunctionsProcessor
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
 
 validate_data_model: error
 validators:

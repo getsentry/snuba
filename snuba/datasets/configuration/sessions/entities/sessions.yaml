@@ -242,12 +242,6 @@ query_processors:
       time_parse_columns:
         - started
         - received
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: org_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
 validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
