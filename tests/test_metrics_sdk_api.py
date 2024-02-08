@@ -38,7 +38,7 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
-SHARED_TAGS: dict[str, int] = {
+SHARED_TAGS: dict[str, str | int] = {
     "65546": 65536,
     "9223372036854776010": 65593,
 }
@@ -95,8 +95,8 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         self.project_ids = [1, 2]  # 2 projects
         self.seconds = 180 * 60
 
-        self.default_tags = SHARED_TAGS
         self.mapping_meta = SHARED_MAPPING_META
+        self.default_tags: dict[str, str | int] = SHARED_TAGS
 
         def intstr(v: str | int) -> str | int:
             try:
@@ -125,6 +125,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                 mapping.update(v)
 
             self.tags = [(k, mapping[str(v)]) for k, v in self.default_tags.items()]
+            self.default_tags = {k: mapping[str(v)] for (k, v) in SHARED_TAGS.items()}
 
         self.skew = timedelta(seconds=self.seconds)
         self.base_time = utc_yesterday_12_15()
