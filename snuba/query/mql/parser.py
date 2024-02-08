@@ -340,7 +340,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[InitialParseResult,],
+            Tuple[
+                InitialParseResult,
+            ],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
