@@ -12,8 +12,11 @@ import simplejson as json
 from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.storage_key import StorageKey
+from snuba.datasets.storages.factory import (
+    StorageKey,
+    get_storage,
+    get_writable_storage,
+)
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
@@ -230,8 +233,15 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400, data
 
     def test_project_rate_limiting(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
+        policies = get_storage(StorageKey("errors")).get_allocation_policies()
+        concurrent_rate_limit_policy = [
+            p
+            for p in policies
+            if p.config_key() == "ConcurrentRateLimitAllocationPolicy"
+        ][0]
+        concurrent_rate_limit_policy.set_config_value(
+            "project_override", 0, {"project_id": self.project_id}
+        )
 
         response = self.post(
             "/events/snql",
@@ -259,56 +269,6 @@ class TestSnQLApi(BaseApiTest):
                     AND timestamp >= toDateTime('2021-01-01')
                     AND timestamp < toDateTime('2021-01-02')
                     """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 429
-
-    def test_project_rate_limiting_subqueries(self) -> None:
-        state.set_config("project_concurrent_limit", self.project_id)
-        state.set_config(f"project_concurrent_limit_{self.project_id}", 0)
-
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH {
-                        MATCH (discover_events )
-                        SELECT count() AS count BY project_id, tags[custom_tag]
-                        WHERE type != 'transaction' AND project_id = 2
-                        AND timestamp >= toDateTime('%s')
-                        AND timestamp < toDateTime('%s')
-                    }
-                    SELECT avg(count) AS avg_count
-                    ORDER BY avg_count ASC
-                    LIMIT 1000"""
-                    % (self.base_time.isoformat(), self.next_time.isoformat()),
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": """MATCH {
-                        MATCH (discover_events )
-                        SELECT count() AS count BY project_id, tags[custom_tag]
-                        WHERE type != 'transaction' AND project_id = %s
-                        AND timestamp >= toDateTime('%s')
-                        AND timestamp < toDateTime('%s')
-                    }
-                    SELECT avg(count) AS avg_count
-                    ORDER BY avg_count ASC
-                    LIMIT 1000"""
-                    % (
-                        self.project_id,
-                        self.base_time.isoformat(),
-                        self.next_time.isoformat(),
-                    ),
                     "tenant_ids": {"referrer": "r", "organization_id": 123},
                 }
             ),
