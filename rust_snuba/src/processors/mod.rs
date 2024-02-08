@@ -82,7 +82,6 @@ mod tests {
     use std::time::SystemTime;
 
     use chrono::DateTime;
-    use pretty_assertions::assert_eq;
     use schemars::JsonSchema;
     use sentry_kafka_schemas::get_schema;
 
