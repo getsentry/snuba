@@ -2748,6 +2748,33 @@ invalid_mql_test_cases = [
         ParsingException("MQL endpoint only supports MRIs"),
         id="only mris",
     ),
+    pytest.param(
+        "sum(`transaction.duration",
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": None,
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
+            },
+            "scope": {
+                "org_ids": [1],
+                "project_ids": [1],
+                "use_case_id": "transactions",
+            },
+            "limit": 1000000,
+            "offset": None,
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                "dist": 888,
+            },
+        },
+        ParsingException("Parsing error on line 1 at 'um(`transacti'"),
+        id="incomplete error test",
+    ),
 ]
 
 
