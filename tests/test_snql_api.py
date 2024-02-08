@@ -233,15 +233,17 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400, data
 
     def test_project_rate_limiting(self) -> None:
-        policies = get_storage(StorageKey("errors")).get_allocation_policies()
-        concurrent_rate_limit_policy = [
+        policies = (
+            get_storage(StorageKey("errors")).get_allocation_policies()
+            + get_storage(StorageKey("errors_ro")).get_allocation_policies()
+        )
+        concurrent_rate_limit_policies = [
             p
             for p in policies
             if p.config_key() == "ConcurrentRateLimitAllocationPolicy"
-        ][0]
-        concurrent_rate_limit_policy.set_config_value(
-            "project_override", 0, {"project_id": self.project_id}
-        )
+        ]
+        for p in concurrent_rate_limit_policies:
+            p.set_config_value("project_override", 0, {"project_id": self.project_id})
 
         response = self.post(
             "/events/snql",
