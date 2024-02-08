@@ -1,5 +1,8 @@
+use std::borrow::Cow;
+
 use anyhow::Context;
 use chrono::DateTime;
+use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -74,25 +77,25 @@ pub fn process_message_with_replacement(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum Message {
     FourTrain(FourTrain),
     ThreeTrain(ThreeTrain),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct FourTrain(u8, String, ErrorMessage, Value);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ThreeTrain(u8, String, ReplacementEvent);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, JsonSchema)]
 struct ReplacementEvent {
     project_id: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ErrorMessage {
     data: ErrorData,
     #[serde(default, deserialize_with = "ensure_valid_datetime")]
@@ -107,7 +110,7 @@ struct ErrorMessage {
     platform: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ErrorData {
     #[serde(default)]
     contexts: Contexts,
@@ -147,7 +150,7 @@ struct ErrorData {
 
 type GenericContext = BTreeMap<String, ContextStringify>;
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
     #[serde(default)]
     replay: ReplayContext,
@@ -157,7 +160,7 @@ struct Contexts {
     other: BTreeMap<String, GenericContext>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct TraceContext {
     #[serde(default)]
     sampled: Option<bool>,
@@ -169,7 +172,7 @@ struct TraceContext {
     other: GenericContext,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct ReplayContext {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     replay_id: Option<Uuid>,
@@ -177,13 +180,13 @@ struct ReplayContext {
 
 // Stacktraces
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Exception {
     #[serde(default)]
     values: Option<Vec<Option<ExceptionValue>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ExceptionValue {
     stacktrace: StackTrace,
     #[serde(default)]
@@ -196,7 +199,7 @@ struct ExceptionValue {
     thread_id: Option<u64>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct ExceptionMechanism {
     #[serde(default, rename = "type")]
     ty: Unicodify,
@@ -204,13 +207,13 @@ struct ExceptionMechanism {
     handled: Boolify,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct StackTrace {
     #[serde(default)]
     frames: Vec<StackFrame>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct StackFrame {
     #[serde(default)]
     abs_path: Unicodify,
@@ -232,13 +235,13 @@ struct StackFrame {
 
 // Threads
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Thread {
     #[serde(default)]
     values: Option<Vec<Option<ThreadValue>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, JsonSchema)]
 struct ThreadValue {
     #[serde(default)]
     id: Option<u64>,
@@ -248,7 +251,7 @@ struct ThreadValue {
 
 // SDK
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Sdk {
     #[serde(default)]
     name: Unicodify,
@@ -260,7 +263,7 @@ struct Sdk {
 
 // Request
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Request {
     #[serde(default)]
     method: Unicodify,
@@ -270,7 +273,7 @@ struct Request {
 
 // User
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct User {
     #[serde(default)]
     email: Unicodify,
@@ -286,7 +289,7 @@ struct User {
 
 // Row
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, JsonSchema)]
 struct ErrorRow {
     #[serde(rename = "contexts.key")]
     contexts_key: Vec<String>,
@@ -696,6 +699,22 @@ impl<'de> Deserialize<'de> for Boolify {
     }
 }
 
+impl JsonSchema for Boolify {
+    fn schema_name() -> String {
+        "Boolify".to_owned()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        // Include the module, in case a type with the same name is in another module/crate
+        Cow::Borrowed(concat!(module_path!(), "::Boolify"))
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        // basically doesn't error on any type
+        Value::json_schema(gen)
+    }
+}
+
 #[derive(Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 struct Unicodify(Option<String>);
 
@@ -719,8 +738,40 @@ impl<'de> Deserialize<'de> for Unicodify {
     }
 }
 
+impl JsonSchema for Unicodify {
+    fn schema_name() -> String {
+        "Unicodify".to_owned()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        // Include the module, in case a type with the same name is in another module/crate
+        Cow::Borrowed(concat!(module_path!(), "::Unicodify"))
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        // basically doesn't error on any type
+        Value::json_schema(gen)
+    }
+}
+
 #[derive(Debug, Default)]
 struct ContextStringify(Option<String>);
+
+impl JsonSchema for ContextStringify {
+    fn schema_name() -> String {
+        "ContextStringify".to_owned()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        // Include the module, in case a type with the same name is in another module/crate
+        Cow::Borrowed(concat!(module_path!(), "::ContextStringify"))
+    }
+
+    fn json_schema(gen: &mut SchemaGenerator) -> Schema {
+        // basically doesn't error on any type
+        Value::json_schema(gen)
+    }
+}
 
 impl<'de> Deserialize<'de> for ContextStringify {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -735,5 +786,19 @@ impl<'de> Deserialize<'de> for ContextStringify {
             ))),
             _ => Ok(ContextStringify(None)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::processors::tests::run_schema_type_test;
+
+    #[test]
+    fn schema_insert_event() {
+        // run schema validation only for a subset of the payload, json-schema-diff gets too
+        // confused by our untagged enum/anyOf wrapper
+        run_schema_type_test::<ErrorData>("events", Some("Event"));
     }
 }

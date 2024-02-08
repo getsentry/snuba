@@ -121,6 +121,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<InputMessage>("processed-profiles");
+        run_schema_type_test::<InputMessage>("processed-profiles", None);
     }
 }
