@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Sequence, Set, Tuple, Union, cast
 
-from snuba.query import ProcessableQuery
+from snuba.query import FromClauseNotSet, ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
-from snuba.query.data_source.simple import Entity, Table
+from snuba.query.data_source.simple import Entity, SimpleDataSource, Table
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
@@ -26,9 +26,63 @@ from snuba.query.matchers import (
 )
 
 
-def get_object_ids_in_query_ast(
-    query: AbstractQuery, object_column: str
-) -> Optional[Set[int]]:
+def get_object_ids_in_condition(condition: Expression, object_column: str) -> Set[int]:
+    """
+    Extract project ids from an expression. Returns None if no project
+    if condition is found. It returns an empty set of conflicting project_id
+    conditions are found.
+    """
+    match = FunctionCall(
+        String(ConditionFunctions.EQ),
+        (
+            Column(column_name=String(object_column)),
+            Literal(value=Param("object_id", Any(int))),
+        ),
+    ).match(condition)
+    if match is not None:
+        return {match.integer("object_id")}
+
+    match = is_in_condition_pattern(Column(column_name=String(object_column))).match(
+        condition
+    )
+    if match is not None:
+        objects = match.expression("sequence")
+        assert isinstance(objects, FunctionCallExpr)
+        return {
+            lit.value
+            for lit in objects.parameters
+            if isinstance(lit, LiteralExpr) and isinstance(lit.value, int)
+        }
+
+    match = FunctionCall(
+        Param(
+            "operator",
+            Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)]),
+        ),
+        (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
+    ).match(condition)
+    if match is not None:
+        lhs_objects = get_object_ids_in_condition(
+            match.expression("lhs"), object_column
+        )
+        rhs_objects = get_object_ids_in_condition(
+            match.expression("rhs"), object_column
+        )
+        if not lhs_objects:
+            return rhs_objects
+        elif not rhs_objects:
+            return lhs_objects
+        else:
+            return (
+                lhs_objects & rhs_objects
+                if match.string("operator") == BooleanFunctions.AND
+                else lhs_objects | rhs_objects
+            )
+
+    return set()
+
+
+def get_object_ids_in_query_ast(query: AbstractQuery, object_column: str) -> Set[int]:
     """
     Finds the object ids (e.g. project ids) this query is filtering according to the AST
     query representation.
@@ -36,60 +90,21 @@ def get_object_ids_in_query_ast(
     It works like get_project_ids_in_query with the exception that
     boolean functions are supported here.
     """
-
-    def get_object_ids_in_condition(condition: Expression) -> Optional[Set[int]]:
-        """
-        Extract project ids from an expression. Returns None if no project
-        if condition is found. It returns an empty set of conflicting project_id
-        conditions are found.
-        """
-        match = FunctionCall(
-            String(ConditionFunctions.EQ),
-            (
-                Column(column_name=String(object_column)),
-                Literal(value=Param("object_id", Any(int))),
-            ),
-        ).match(condition)
-        if match is not None:
-            return {match.integer("object_id")}
-
-        match = is_in_condition_pattern(
-            Column(column_name=String(object_column))
-        ).match(condition)
-        if match is not None:
-            objects = match.expression("sequence")
-            assert isinstance(objects, FunctionCallExpr)
-            return {
-                lit.value
-                for lit in objects.parameters
-                if isinstance(lit, LiteralExpr) and isinstance(lit.value, int)
-            }
-
-        match = FunctionCall(
-            Param(
-                "operator",
-                Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)]),
-            ),
-            (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
-        ).match(condition)
-        if match is not None:
-            lhs_objects = get_object_ids_in_condition(match.expression("lhs"))
-            rhs_objects = get_object_ids_in_condition(match.expression("rhs"))
-            if lhs_objects is None:
-                return rhs_objects
-            elif rhs_objects is None:
-                return lhs_objects
-            else:
-                return (
-                    lhs_objects & rhs_objects
-                    if match.string("operator") == BooleanFunctions.AND
-                    else lhs_objects | rhs_objects
-                )
-
-        return None
-
     condition = query.get_condition()
-    return get_object_ids_in_condition(condition) if condition is not None else None
+    if not condition:
+        return set()
+    this_query_object_ids = get_object_ids_in_condition(condition, object_column)
+
+    try:
+        from_clause = query.get_from_clause()
+    except FromClauseNotSet:
+        return this_query_object_ids
+    if isinstance(from_clause, SimpleDataSource):
+        return this_query_object_ids
+    elif isinstance(from_clause, AbstractQuery):
+        subquery_project_ids = get_object_ids_in_query_ast(from_clause, object_column)
+        return subquery_project_ids.union(this_query_object_ids)
+    return set()
 
 
 def get_time_range_expressions(

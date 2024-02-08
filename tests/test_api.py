@@ -208,6 +208,7 @@ class TestApi(SimpleAPITest):
                     ),
                 ).data
             )
+            assert "data" in result, result
             buckets = self.minutes / rollup_mins
             for b in range(int(buckets)):
                 bucket_time = parse_datetime(result["data"][b]["time"]).replace(
@@ -1907,23 +1908,22 @@ class TestApi(SimpleAPITest):
     def test_consistent(self, disable_query_cache: Callable[..., Any]) -> None:
         state.set_config("consistent_override", "test_override=0;another=0.5")
         state.set_config("read_through_cache.short_circuit", 1)
-        query = json.dumps(
-            {
-                "project": 2,
-                "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                "aggregations": [["count()", "", "aggregate"]],
-                "consistent": True,
-                "debug": True,
-                "from_date": self.base_time.isoformat(),
-                "to_date": (
-                    self.base_time + timedelta(minutes=self.minutes)
-                ).isoformat(),
-            }
-        )
+        query_data = {
+            "project": 2,
+            "tenant_ids": {"referrer": "test_query", "organization_id": 1234},
+            "aggregations": [["count()", "", "aggregate"]],
+            "consistent": True,
+            "debug": True,
+            "from_date": self.base_time.isoformat(),
+            "to_date": (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+        }
+        query = json.dumps(query_data)
 
         response = json.loads(self.post(query, referrer="test_query").data)
         assert response["stats"]["consistent"]
 
+        query_data["tenant_ids"]["referrer"] = "test_override"  # type: ignore
+        query = json.dumps(query_data)
         response = json.loads(self.post(query, referrer="test_override").data)
         assert response["stats"]["consistent"] == False
 
@@ -2150,7 +2150,7 @@ class TestApi(SimpleAPITest):
                     json.dumps(
                         {
                             "project": 1,
-                            "tenant_ids": {"referrer": "r", "organization_id": 1234},
+                            "tenant_ids": {"referrer": "test", "organization_id": 1234},
                             "selected_columns": [
                                 "event_id",
                                 "title",

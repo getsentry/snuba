@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -17,25 +19,25 @@ added_condition = build_cond("")
 
 test_cases = [
     pytest.param(
-        f"MATCH (events) SELECT 4-5, c,d,e WHERE {added_condition} LIMIT 5 BY c,d,e",
+        f"MATCH (events) SELECT 4-5, event_id,title,culprit WHERE {added_condition} LIMIT 5 BY event_id,title,culprit",
         (
             "MATCH Entity(events) "
-            "SELECT (minus(-1337, -1337) AS `4-5`), c, d, e "
+            "SELECT (minus(-1337, -1337) AS `4-5`), event_id, title, culprit "
             "WHERE equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
-            "LIMIT 5 BY c,d,e "
+            "LIMIT 5 BY event_id,title,culprit "
             "LIMIT 1000 OFFSET 0"
         ),
         id="limit by multiple columns",
     ),
     pytest.param(
-        f"MATCH (events) SELECT count() AS count BY tags[key], measurements[lcp.elementSize] WHERE measurements[lcp.elementSize] > 1 AND {added_condition}",
+        f"MATCH (events) SELECT count() AS count BY tags[key], contexts[lcp.elementSize] WHERE contexts[lcp.elementSize] > 1 AND {added_condition}",
         (
             "MATCH Entity(events) "
-            "SELECT `tags[key]`, `measurements[lcp.elementSize]`, (count() AS count) "
-            "GROUP BY `tags[key]`, `measurements[lcp.elementSize]` "
-            "WHERE greater(`measurements[lcp.elementSize]`, -1337) "
+            "SELECT `tags[key]`, `contexts[lcp.elementSize]`, (count() AS count) "
+            "GROUP BY `tags[key]`, `contexts[lcp.elementSize]` "
+            "WHERE greater(`contexts[lcp.elementSize]`, -1337) "
             "AND equals(project_id, -1337) AND "
             "greaterOrEquals(timestamp, toDateTime('$S')) AND "
             "less(timestamp, toDateTime('$S')) "
@@ -44,14 +46,14 @@ test_cases = [
         id="Basic query with subscriptables",
     ),
     pytest.param(
-        f"MATCH (events) SELECT a WHERE (name!=bob OR last_seen<afternoon AND (location=gps(x,y,z) OR times_seen>0)) AND {added_condition}",
+        f"MATCH (events) SELECT event_id WHERE (event_id!='bob' OR group_id<2 AND (location='here' OR partition>0)) AND {added_condition}",
         (
             "MATCH Entity(events) "
-            "SELECT a "
-            "WHERE (notEquals(name, bob) "
-            "OR less(last_seen, afternoon) "
-            "AND (equals(location, gps(x, y, z)) "
-            "OR greater(times_seen, -1337))) "
+            "SELECT event_id "
+            "WHERE (notEquals(event_id, '$S') "
+            "OR less(group_id, -1337) "
+            "AND (equals(location, '$S') "
+            "OR greater(partition, -1337))) "
             "AND equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
@@ -61,13 +63,13 @@ test_cases = [
     ),
     pytest.param(
         """MATCH (events)
-        SELECT a, b[c]
+        SELECT event_id, tags[c]
         WHERE project_id IN tuple( 2 , 3)
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')""",
         (
             "MATCH Entity(events) "
-            "SELECT a, `b[c]` "
+            "SELECT event_id, `tags[c]` "
             "WHERE in(project_id, (-1337, -1337)) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
@@ -77,13 +79,13 @@ test_cases = [
     ),
     pytest.param(
         f"""MATCH (events)
-        SELECT 4-5,3*foo(c) AS foo,c
-        WHERE or(equals(arrayExists(a, '=', 'RuntimeException'), 1), equals(arrayAll(b, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
+        SELECT 4-5,3*foo(project_id) AS foo,project_id
+        WHERE or(equals(arrayExists(exception_stacks.mechanism_handled, '=', 'RuntimeException'), 1), equals(arrayAll(exception_stacks.type, 'NOT IN', tuple('Stack', 'Arithmetic')), 1)) = 1 AND {added_condition}""",
         (
             "MATCH Entity(events) "
-            "SELECT (minus(-1337, -1337) AS `4-5`), (multiply(-1337, (foo(c) AS foo)) AS `3*foo(c) AS foo`), c "
-            "WHERE equals((equals(arrayExists(a, '$S', '$S'), -1337) "
-            "OR equals(arrayAll(b, '$S', ('$S', '$S')), -1337)), -1337) "
+            "SELECT (minus(-1337, -1337) AS `4-5`), (multiply(-1337, (foo(project_id) AS foo)) AS `3*foo(project_id) AS foo`), project_id "
+            "WHERE equals((equals(arrayExists(exception_stacks.mechanism_handled, '$S', '$S'), -1337) "
+            "OR equals(arrayAll(exception_stacks.type, '$S', ('$S', '$S')), -1337)), -1337) "
             "AND equals(project_id, -1337) "
             "AND greaterOrEquals(timestamp, toDateTime('$S')) "
             "AND less(timestamp, toDateTime('$S')) "
@@ -95,7 +97,7 @@ test_cases = [
         f"""MATCH
             (e: events) -[contains]-> (t: transactions),
             (e: events) -[assigned]-> (ga: groupassignee)
-        SELECT 4-5, ga.c
+        SELECT 4-5, ga.offset
         WHERE {build_cond('e')} AND {build_cond('t')}""",
         (
             "MATCH "
@@ -103,7 +105,7 @@ test_cases = [
             "LEFT e, Entity(events) "
             "TYPE JoinType.INNER RIGHT ga, Entity(groupassignee)\n ON e.event_id ga.group_id "
             "TYPE JoinType.INNER RIGHT t, Entity(transactions)\n ON e.event_id t.event_id "
-            "SELECT (minus(-1337, -1337) AS `4-5`), ga.c "
+            "SELECT (minus(-1337, -1337) AS `4-5`), ga.offset "
             "WHERE equals(e.project_id, -1337) "
             "AND greaterOrEquals(e.timestamp, toDateTime('$S')) "
             "AND less(e.timestamp, toDateTime('$S')) "
@@ -169,8 +171,7 @@ def test_format_expressions(query_body: str, expected_snql_anonymized: str) -> N
         )
 
     events_entity = get_entity(EntityKey.EVENTS)
-    setattr(events_entity, "get_join_relationship", events_mock)
-
-    _, snql_anonymized = parse_snql_query(query_body, events)
+    with mock.patch.object(events_entity, "get_join_relationship", events_mock):
+        _, snql_anonymized = parse_snql_query(query_body, events)
 
     assert snql_anonymized == expected_snql_anonymized

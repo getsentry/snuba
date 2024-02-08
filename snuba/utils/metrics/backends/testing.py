@@ -11,6 +11,7 @@ from snuba.utils.metrics.types import Tags
 class RecordedMetricCall:
     value: int | float
     tags: Tags
+    unit: str | None
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,11 @@ RECORDED_EVENT_CALLS: MutableMapping[str, List[RecordedEventCall]] = {}
 
 
 def record_metric_call(
-    mtype: str, name: str, value: int | float, tags: Optional[Tags]
+    mtype: str,
+    name: str,
+    value: int | float,
+    tags: Optional[Tags],
+    unit: Optional[str] = None,
 ) -> None:
     if mtype not in RECORDED_METRIC_CALLS:
         RECORDED_METRIC_CALLS[mtype] = {}
@@ -39,7 +44,7 @@ def record_metric_call(
 
     if tags is None:
         tags = {}
-    RECORDED_METRIC_CALLS[mtype][name].append(RecordedMetricCall(value, tags))
+    RECORDED_METRIC_CALLS[mtype][name].append(RecordedMetricCall(value, tags, unit))
 
 
 def record_event_call(
@@ -87,7 +92,11 @@ class TestingMetricsBackend(MetricsBackend):
             assert isinstance(v, str)
 
     def increment(
-        self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float] = 1,
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
         record_metric_call("increment", name, value, tags)
         if self.__strict:
@@ -97,7 +106,11 @@ class TestingMetricsBackend(MetricsBackend):
                 self.__validate_tags(tags)
 
     def gauge(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
         record_metric_call("gauge", name, value, tags)
         if self.__strict:
@@ -107,9 +120,27 @@ class TestingMetricsBackend(MetricsBackend):
                 self.__validate_tags(tags)
 
     def timing(
-        self, name: str, value: Union[int, float], tags: Optional[Tags] = None
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
     ) -> None:
         record_metric_call("timing", name, value, tags)
+        if self.__strict:
+            assert isinstance(name, str)
+            assert isinstance(value, (int, float))
+            if tags is not None:
+                self.__validate_tags(tags)
+
+    def distribution(
+        self,
+        name: str,
+        value: Union[int, float],
+        tags: Optional[Tags] = None,
+        unit: Optional[str] = None,
+    ) -> None:
+        record_metric_call("distribution", name, value, tags)
         if self.__strict:
             assert isinstance(name, str)
             assert isinstance(value, (int, float))

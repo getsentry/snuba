@@ -1,37 +1,46 @@
+use crate::config::ProcessorConfig;
 use anyhow::Context;
+use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use crate::processors::utils::enforce_retention;
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> anyhow::Result<BytesInsertBatch> {
-    let payload_bytes = payload.payload.context("Expected payload")?;
-    let mut msg: ProfileMessage = serde_json::from_slice(&payload_bytes)?;
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
-    // we always want an empty string at least
-    msg.device_classification = Some(msg.device_classification.unwrap_or_default());
-    msg.offset = metadata.offset;
-    msg.partition = metadata.partition;
+    let mut row = Profile {
+        profile: msg,
+        offset: metadata.offset,
+        partition: metadata.partition,
+    };
 
-    let serialized = serde_json::to_vec(&msg)?;
+    row.profile.retention_days = Some(enforce_retention(
+        row.profile.retention_days,
+        &config.env_config,
+    ));
 
-    Ok(BytesInsertBatch {
-        rows: vec![serialized],
-    })
+    let origin_timestamp = DateTime::from_timestamp(row.profile.received, 0);
+
+    InsertBatch::from_rows([row], origin_timestamp)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct ProfileMessage {
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct InputMessage {
     #[serde(default)]
     android_api_level: Option<u32>,
     #[serde(default)]
     architecture: Option<String>,
     #[serde(default)]
-    device_classification: Option<String>,
+    device_classification: String,
     device_locale: String,
     device_manufacturer: String,
     device_model: String,
@@ -47,12 +56,18 @@ struct ProfileMessage {
     profile_id: Uuid,
     project_id: u64,
     received: i64,
-    retention_days: u32,
+    retention_days: Option<u16>,
     trace_id: Uuid,
     transaction_id: Uuid,
     transaction_name: String,
     version_code: String,
     version_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct Profile {
+    #[serde(flatten)]
+    profile: InputMessage,
 
     #[serde(default)]
     offset: u64,
@@ -62,10 +77,11 @@ struct ProfileMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
+
+    use crate::processors::tests::run_schema_type_test;
+
+    use super::*;
 
     #[test]
     fn test_profile() {
@@ -93,16 +109,18 @@ mod tests {
             "version_code": "1337",
             "version_name": "v42.0.0"
         }"#;
-        let payload = KafkaPayload {
-            key: None,
-            headers: None,
-            payload: Some(data.as_bytes().to_vec()),
-        };
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+    }
+
+    #[test]
+    fn schema() {
+        run_schema_type_test::<InputMessage>("processed-profiles");
     }
 }

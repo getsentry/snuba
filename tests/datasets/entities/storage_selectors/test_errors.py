@@ -58,7 +58,7 @@ TEST_CASES = [
     pytest.param(
         """
         MATCH (events)
-        SELECT col1
+        SELECT event_id
         WHERE project_id IN tuple(2 , 3)
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')
@@ -80,7 +80,7 @@ TEST_CASES = [
     pytest.param(
         """
         MATCH (events)
-        SELECT col1
+        SELECT event_id
         WHERE project_id IN tuple(2 , 3)
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')
@@ -130,7 +130,7 @@ def test_assert_raises() -> None:
     query, _ = parse_snql_query(
         """
         MATCH (events)
-        SELECT col1
+        SELECT event_id
         WHERE project_id IN tuple(2 , 3)
         AND timestamp>=toDateTime('2021-01-01')
         AND timestamp<toDateTime('2021-01-02')

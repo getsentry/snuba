@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import (
     Any,
     Callable,
+    Iterable,
     Mapping,
     MutableMapping,
     Optional,
@@ -75,15 +76,22 @@ def extract_nested(
 
 
 def extract_extra_contexts(
-    contexts: Mapping[str, Any]
+    contexts: Mapping[str, Any],
+    sort: bool = False,
 ) -> Tuple[Sequence[str], Sequence[str]]:
     context_keys = []
     context_values = []
     valid_types = (int, float, str)
-    for ctx_name, ctx_obj in contexts.items():
+    contexts_iter: Iterable[Tuple[str, Any]] = contexts.items()
+    if sort:
+        contexts_iter = sorted(contexts_iter)
+    for ctx_name, ctx_obj in contexts_iter:
         if isinstance(ctx_obj, dict):
             ctx_obj.pop("type", None)  # ignore type alias
-            for inner_ctx_name, ctx_value in ctx_obj.items():
+            ctx_iter: Iterable[Tuple[str, Any]] = ctx_obj.items()
+            if sort:
+                ctx_iter = sorted(ctx_iter)
+            for inner_ctx_name, ctx_value in ctx_iter:
                 if isinstance(ctx_value, valid_types):
                     value = _unicodify(ctx_value)
                     if value:

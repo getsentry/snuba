@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from unittest import mock
 
 import pytest
 
@@ -8,6 +9,7 @@ from snuba.datasets.storage import StorageKey
 from snuba.query.allocation_policies import (
     AllocationPolicyViolation,
     AllocationPolicyViolations,
+    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
@@ -165,7 +167,7 @@ def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
         "organization_id",
         123,
     )
-    with pytest.raises(AllocationPolicyViolation):
+    with pytest.raises(InvalidTenantsForAllocationPolicy):
         policy._get_tenant_key_and_value({})
 
 
@@ -353,3 +355,14 @@ def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
     # make sure that this can be called with cross org queries
     # and nothing raises
     policy.update_quota_balance(tenant_ids, "c", None)  # type: ignore
+
+
+@pytest.mark.redis_db
+def test_bad_tenants(policy: ConcurrentRateLimitAllocationPolicy):
+    bad_tenant_ids: dict[str, str | int] = {"referrer": "abcd"}
+    with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
+        with pytest.raises(AllocationPolicyViolation):
+            policy.get_quota_allowance(bad_tenant_ids, "1234")
+
+        # does not raise
+        policy.update_quota_balance(bad_tenant_ids, "1234", _RESULT_SUCCESS)

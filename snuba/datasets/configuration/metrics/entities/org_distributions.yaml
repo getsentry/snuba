@@ -8,6 +8,8 @@ schema:
     { name: metric_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
+    { name: granularity, type: UInt, args: { size: 32 } },
+    { name: use_case_id, type: String },
     {
       name: tags,
       type: Nested,
@@ -171,6 +173,10 @@ storage_selector:
     storage: metrics_distributions
 query_processors:
   - processor: GranularityProcessor
+  - processor: CurriedFunctionBucketTransformer
+    args:
+      curried_function: histogram
+      default_parameter: 250
   - processor: TimeSeriesProcessor
     args:
       time_group_columns:

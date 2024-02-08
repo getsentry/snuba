@@ -1,18 +1,21 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, Response};
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskFunc, RunTaskInThreads, TaskRunner,
+    ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
 use rust_arroyo::processing::strategies::{
-    CommitRequest, InvalidMessage, ProcessingStrategy, SubmitError,
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use rust_arroyo::types::Message;
+use rust_arroyo::{counter, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
+
+const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
 struct ClickhouseWriter {
     client: Arc<ClickhouseClient>,
@@ -28,38 +31,57 @@ impl ClickhouseWriter {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch> for ClickhouseWriter {
-    fn get_task(&self, message: Message<BytesInsertBatch>) -> RunTaskFunc<BytesInsertBatch> {
+impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ClickhouseWriter {
+    fn get_task(
+        &self,
+        message: Message<BytesInsertBatch>,
+    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
         let skip_write = self.skip_write;
         let client = self.client.clone();
 
         Box::pin(async move {
-            let rows = &message.payload().rows;
+            let insert_batch = message.payload();
+            let encoded_rows = insert_batch.encoded_rows();
 
-            let len = rows.len();
-            let mut data = vec![];
-            for row in rows {
-                data.extend(row);
-                data.extend(b"\n");
+            let write_start = SystemTime::now();
+
+            // we can receive empty batches since we configure Reduce to flush empty batches, in
+            // order to still be able to commit. in that case we want to skip the I/O to clickhouse
+            // though.
+            if encoded_rows.is_empty() {
+                tracing::debug!(
+                    "skipping write of empty payload ({} rows)",
+                    insert_batch.len()
+                );
+            } else if skip_write {
+                tracing::info!("skipping write of {} rows", insert_batch.len());
+            } else {
+                tracing::debug!("performing write");
+
+                let response = client
+                    .send(insert_batch.encoded_rows())
+                    .await
+                    .map_err(RunTaskError::Other)?;
+
+                tracing::debug!(?response);
+                tracing::info!("Inserted {} rows", insert_batch.len());
             }
 
-            if skip_write {
-                log::info!("skipping write of {} rows", len);
-                return Ok(message);
+            let write_finish = SystemTime::now();
+
+            if let Ok(elapsed) = write_finish.duration_since(write_start) {
+                timer!("insertions.batch_write_ms", elapsed);
             }
+            counter!("insertions.batch_write_msgs", insert_batch.len() as i64);
+            insert_batch.record_message_latency();
 
-            log::debug!("performing write");
-            let response = client.send(data).await.unwrap();
-
-            log::debug!("response: {:?}", response);
-            log::info!("Inserted {} rows", len);
             Ok(message)
         })
     }
 }
 
 pub struct ClickhouseWriterStep {
-    inner: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
 }
 
 impl ClickhouseWriterStep {
@@ -68,7 +90,7 @@ impl ClickhouseWriterStep {
         cluster_config: ClickhouseConfig,
         table: String,
         skip_write: bool,
-        concurrency: usize,
+        concurrency: &ConcurrencyConfig,
     ) -> Self
     where
         N: ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -77,7 +99,7 @@ impl ClickhouseWriterStep {
         let http_port = cluster_config.http_port;
         let database = cluster_config.database;
 
-        let inner = Box::new(RunTaskInThreads::new(
+        let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ClickhouseWriter::new(
                 ClickhouseClient::new(&hostname, http_port, &table, &database),
@@ -85,14 +107,14 @@ impl ClickhouseWriterStep {
             )),
             concurrency,
             Some("clickhouse"),
-        ));
+        );
 
         ClickhouseWriterStep { inner }
     }
 }
 
 impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
@@ -111,7 +133,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.terminate();
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.join(timeout)
     }
 }
@@ -134,7 +156,8 @@ impl ClickhouseClient {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        let url = format!("http://{hostname}:{http_port}");
+        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
+        let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
         ClickhouseClient {
@@ -145,13 +168,22 @@ impl ClickhouseClient {
         }
     }
 
-    pub async fn send(&self, body: Vec<u8>) -> anyhow::Result<Response> {
+    fn chunked_body(rows: &[u8]) -> Vec<Result<Box<[u8]>, std::io::Error>> {
+        rows.chunks(CLICKHOUSE_HTTP_CHUNK_SIZE)
+            .map(|chunk| Ok(Box::from(chunk)))
+            .collect()
+    }
+
+    pub async fn send(&self, body: &[u8]) -> anyhow::Result<Response> {
+        let chunks = Self::chunked_body(body);
+        let stream = futures::stream::iter(chunks);
+
         let res = self
             .client
             .post(&self.url)
             .headers(self.headers.clone())
             .query(&[("query", &self.query)])
-            .body(body)
+            .body(reqwest::Body::wrap_stream(stream))
             .send()
             .await?;
 
@@ -175,9 +207,20 @@ mod tests {
             "default",
         );
 
+        assert!(client.url.contains("load_balancing"));
+        assert!(client.url.contains("insert_distributed_sync"));
         println!("running test");
-        let res = client.send(b"[]".to_vec()).await;
+        let res = client.send(b"[]").await;
         println!("Response status {}", res.unwrap().status());
         Ok(())
+    }
+
+    #[test]
+    fn chunked_body() {
+        let mut data: Vec<u8> = vec![0; 1_000_000];
+
+        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 1);
+        data.push(0);
+        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 2);
     }
 }

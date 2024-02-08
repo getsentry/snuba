@@ -1,15 +1,30 @@
+use sentry::integrations::tracing::EventFilter;
 use sentry::ClientInitGuard;
+use tracing::Level;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 pub fn setup_logging() {
-    let mut log_builder = pretty_env_logger::formatted_builder();
-    log_builder.parse_env("RUST_LOG");
-    let logger = sentry::integrations::log::SentryLogger::with_dest(log_builder.build());
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
 
-    log::set_boxed_logger(Box::new(logger)).unwrap();
-    log::set_max_level(log::LevelFilter::Trace);
+    // Capture errors & warnings as exceptions
+    let sentry_layer =
+        sentry::integrations::tracing::layer().event_filter(|metadata| match metadata.level() {
+            &Level::ERROR | &Level::WARN => EventFilter::Exception,
+            &Level::INFO => EventFilter::Breadcrumb,
+            &Level::DEBUG | &Level::TRACE => EventFilter::Ignore,
+        });
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().json())
+        .with(filter_layer)
+        .with(sentry_layer)
+        .init();
 }
 
-pub fn setup_sentry(sentry_dsn: String) -> ClientInitGuard {
+pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
     sentry::init((
         sentry_dsn,
         sentry::ClientOptions {

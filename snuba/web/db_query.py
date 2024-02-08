@@ -7,20 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import (
-    Any,
-    Dict,
-    Mapping,
-    MutableMapping,
-    MutableSequence,
-    Optional,
-    Union,
-    cast,
-)
+from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Union, cast
 
 import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
@@ -124,10 +116,10 @@ def update_query_metadata_and_stats(
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
-    trace_id: Optional[str],
+    trace_id: str,
     status: QueryStatus,
     request_status: Status,
-    profile_data: Optional[Dict[str, Any]] = None,
+    profile_data: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
 ) -> MutableMapping[str, Any]:
@@ -681,7 +673,7 @@ def db_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
+    trace_id: str,
     robust: bool = False,
 ) -> QueryResult:
     """This function is responsible for:

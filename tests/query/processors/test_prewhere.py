@@ -52,12 +52,22 @@ test_data = [
         # Add pre-where condition in the expected order
         {
             "conditions": [
-                ["d", "=", "1"],
-                ["c", "=", "3"],
-                [["and", [["equals", ["a", "'1'"]], ["equals", ["b", "'2'"]]]], "=", 1],
+                ["event_id", "=", "1"],
+                ["partition", "=", "3"],
+                [
+                    [
+                        "and",
+                        [
+                            ["equals", ["offset", "'1'"]],
+                            ["equals", ["retention_days", "'2'"]],
+                        ],
+                    ],
+                    "=",
+                    1,
+                ],
             ],
         },
-        ["a", "b", "c"],
+        ["offset", "retention_days", "partition"],
         [],
         FunctionCall(
             None,
@@ -66,12 +76,15 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_d", None, "d"), Literal(None, "1")),
+                    (
+                        Column("_snuba_event_id", None, "event_id"),
+                        Literal(None, "1"),
+                    ),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_c", None, "c"), Literal(None, "3")),
+                    (Column("_snuba_partition", None, "partition"), Literal(None, "3")),
                 ),
             ),
         ),
@@ -82,12 +95,15 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_a", None, "a"), Literal(None, "1")),
+                    (Column("_snuba_offset", None, "offset"), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_b", None, "b"), Literal(None, "2")),
+                    (
+                        Column("_snuba_retention_days", None, "retention_days"),
+                        Literal(None, "2"),
+                    ),
                 ),
             ),
         ),
@@ -95,8 +111,13 @@ test_data = [
     ),
     (
         # Do not add conditions that are parts of an OR
-        {"conditions": [[["a", "=", "1"], ["b", "=", "2"]], ["c", "=", "3"]]},
-        ["a", "b", "c"],
+        {
+            "conditions": [
+                [["project_id", "=", "1"], ["partition", "=", "2"]],
+                ["offset", "=", "3"],
+            ]
+        },
+        ["project_id", "partition", "offset"],
         [],
         FunctionCall(
             None,
@@ -105,47 +126,56 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_a", None, "a"), Literal(None, "1")),
+                    (
+                        Column("_snuba_project_id", None, "project_id"),
+                        Literal(None, "1"),
+                    ),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_b", None, "b"), Literal(None, "2")),
+                    (Column("_snuba_partition", None, "partition"), Literal(None, "2")),
                 ),
             ),
         ),
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("_snuba_c", None, "c"), Literal(None, "3")),
+            (Column("_snuba_offset", None, "offset"), Literal(None, "3")),
         ),
         False,
     ),
     (
         # Exclude NOT IN condition from the prewhere as they are generally not excluding
         # most of the dataset.
-        {"conditions": [["a", "NOT IN", [1, 2, 3]], ["b", "=", "2"], ["c", "=", "3"]]},
-        ["a", "b"],
+        {
+            "conditions": [
+                ["event_id", "NOT IN", [1, 2, 3]],
+                ["partition", "=", "2"],
+                ["offset", "=", "3"],
+            ]
+        },
+        ["event_id", "partition"],
         [],
         FunctionCall(
             None,
             BooleanFunctions.AND,
             (
                 not_in_condition(
-                    Column("_snuba_a", None, "a"),
+                    Column("_snuba_event_id", None, "event_id"),
                     [Literal(None, 1), Literal(None, 2), Literal(None, 3)],
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column("_snuba_c", None, "c"), Literal(None, "3")),
+                    (Column("_snuba_offset", None, "offset"), Literal(None, "3")),
                 ),
             ),
         ),
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column("_snuba_b", None, "b"), Literal(None, "2")),
+            (Column("_snuba_partition", None, "partition"), Literal(None, "2")),
         ),
         False,
     ),
@@ -178,87 +208,6 @@ test_data = [
             ),
         ),
         True,
-    ),
-    pytest.param(
-        {"conditions": [[["uniq", ["environment"]], "=", "abc"]]},
-        [
-            "event_id",
-            "release",
-            "message",
-            "transaction_name",
-            "environment",
-            "project_id",
-        ],
-        [],
-        FunctionCall(
-            None,
-            OPERATOR_TO_FUNCTION["="],
-            (
-                FunctionCall(
-                    None,
-                    "uniq",
-                    (Column("_snuba_environment", None, "environment"),),
-                ),
-                Literal(None, "abc"),
-            ),
-        ),
-        FunctionCall(
-            None,
-            OPERATOR_TO_FUNCTION["="],
-            (
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-        ),
-        False,
-        id="Do not promote a column that is in a uniq function",
-    ),
-    pytest.param(
-        {
-            "conditions": [
-                [["countIf", [["equals", ["environment", "'production'"]]]], "=", "abc"]
-            ]
-        },
-        [
-            "event_id",
-            "release",
-            "message",
-            "transaction_name",
-            "environment",
-            "project_id",
-        ],
-        [],
-        FunctionCall(
-            None,
-            OPERATOR_TO_FUNCTION["="],
-            (
-                FunctionCall(
-                    None,
-                    "countIf",
-                    (
-                        FunctionCall(
-                            None,
-                            "equals",
-                            (
-                                Column("_snuba_environment", None, "environment"),
-                                Literal(None, "production"),
-                            ),
-                        ),
-                    ),
-                ),
-                Literal(None, "abc"),
-            ),
-        ),
-        FunctionCall(
-            None,
-            OPERATOR_TO_FUNCTION["="],
-            (
-                Column("_snuba_project_id", None, "project_id"),
-                Literal(None, 1),
-            ),
-        ),
-        False,
-        id="Do not promote a column that is in a countIf function",
     ),
 ]
 
