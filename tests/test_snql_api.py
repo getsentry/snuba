@@ -20,11 +20,12 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+from snuba.query.validation.validators import ColumnValidationMode
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.fixtures import get_raw_event, get_raw_transaction
-from tests.helpers import write_unprocessed_events
+from tests.helpers import override_entity_column_validator, write_unprocessed_events
 
 
 class RejectAllocationPolicy123(AllocationPolicy):
@@ -76,6 +77,30 @@ class TestSnQLApi(BaseApiTest):
             get_writable_storage(StorageKey.TRANSACTIONS),
             [get_raw_transaction()],
         )
+
+    def test_avg_gauges(self) -> None:
+        # est that `avg(value)` works on gauges even thouh that agregate function doesn't exist on the table
+        query = """MATCH (generic_metrics_gauges) SELECT avg(value) AS
+        `aggregate_value` BY toStartOfInterval(timestamp, toIntervalSecond(1800), 'Universal') AS `time`
+        WHERE granularity = 60 AND metric_id = 87269488 AND (org_id IN array(1) AND project_id IN array(1)
+        AND use_case_id = 'custom') AND timestamp >= toDateTime('2023-11-27T14:00:00') AND timestamp <
+        toDateTime('2023-11-28T14:30:00') ORDER BY time ASC"""
+        response = self.post(
+            "/generic_metrics/snql",
+            data=json.dumps(
+                {
+                    "query": query,
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
 
     def test_simple_query(self) -> None:
         response = self.post(
@@ -307,7 +332,7 @@ class TestSnQLApi(BaseApiTest):
                             AND timestamp < toDateTime('{self.next_time.isoformat()}')
                             AND project_id IN tuple({self.project_id})
                             LIMIT 5""",
-                            "tenant_ids": {"referrer": "r", "organization_id": 123},
+                            "tenant_ids": {"referrer": "test", "organization_id": 123},
                         }
                     ),
                 ).data
@@ -839,7 +864,7 @@ class TestSnQLApi(BaseApiTest):
                     """,
                     "app_id": "something-good",
                     "parent_api": "some/endpoint",
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                    "tenant_ids": {"referrer": "test", "organization_id": 123},
                 }
             ),
         )
@@ -917,6 +942,7 @@ class TestSnQLApi(BaseApiTest):
         assert {"name": "http.url", "type": "String"} in result["meta"]
 
     def test_invalid_column(self) -> None:
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.ERROR)
         response = self.post(
             "/outcomes/snql",
             data=json.dumps(
@@ -935,15 +961,12 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        # TODO: when validation mode is ERROR this should be:
-        # assert response.status_code == 400
-        # assert (
-        #     json.loads(response.data)["error"]["message"]
-        #     == "validation failed for entity outcomes: query column(s) fake_column do not exist"
-        # )
-
-        # For now it's 500 since it's just a clickhouse error
-        assert response.status_code == 500
+        override_entity_column_validator(EntityKey.OUTCOMES, ColumnValidationMode.WARN)
+        assert response.status_code == 400
+        assert (
+            json.loads(response.data)["error"]["message"]
+            == "validation failed for entity outcomes: Entity outcomes: Query column 'fake_column' does not exist"
+        )
 
     def test_valid_columns_composite_query(self) -> None:
         response = self.post(
@@ -976,8 +999,18 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fsdfsd do not exist",
+            "validation failed for entity events: Query column 'fsdfsd' does not exist",
             id="Invalid first Select column",
+        ),
+        pytest.param(
+            f"""{MATCH}
+                    SELECT e.fsdfsd, e.fake_col, gm.status, avg(e.retention_days) AS avg BY e.group_id, gm.status
+                    {WHERE}
+                    {TIMESTAMPS}
+                    """,
+            400,
+            "validation failed for entity events: query columns (fsdfsd, fake_col) do not exist",
+            id="Invalid multiple Select columns",
         ),
         pytest.param(
             f"""{MATCH}
@@ -986,7 +1019,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid second Select column",
         ),
         pytest.param(
@@ -996,7 +1029,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid By column",
         ),
         pytest.param(
@@ -1007,7 +1040,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity groupedmessage: query column(s) fsdfsd do not exist",
+            "validation failed for entity groupedmessage: Query column 'fsdfsd' does not exist",
             id="Invalid Where column",
         ),
         pytest.param(
@@ -1017,7 +1050,7 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) status do not exist",
+            "validation failed for entity events: Query column 'status' does not exist",
             id="Mismatched Select columns",
         ),
         pytest.param(
@@ -1027,24 +1060,30 @@ class TestSnQLApi(BaseApiTest):
                     {TIMESTAMPS}
                     """,
             400,
-            "validation failed for entity events: query column(s) fdsdsf do not exist",
+            "validation failed for entity events: Query column 'fdsdsf' does not exist",
             id="Invalid nested column",
         ),
     ]
 
+    @pytest.fixture()
     @pytest.mark.parametrize(
         "query, response_code, error_message", invalid_columns_composite_query_tests
     )
     def test_invalid_columns_composite_query(
         self, query: str, response_code: int, error_message: str
     ) -> None:
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.ERROR
+        )
         response = self.post("/events/snql", data=json.dumps({"query": query}))
+        override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.WARN)
+        override_entity_column_validator(
+            EntityKey.GROUPEDMESSAGE, ColumnValidationMode.WARN
+        )
 
-        # TODO: when validation mode for events and groupedmessage is ERROR this should be:
-        # assert response.status_code == response_code
-        # assert json.loads(response.data)["error"]["message"] == error_message
-
-        assert response.status_code == 500
+        assert response.status_code == response_code
+        assert json.loads(response.data)["error"]["message"] == error_message
 
     def test_wrap_log_fn_with_ifnotfinite(self) -> None:
         """
@@ -1211,6 +1250,36 @@ class TestSnQLApi(BaseApiTest):
         assert (
             response.status_code == 500 or response.status_code == 400
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
+
+    def test_timeseries_processor_join_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (events: events) -[attributes]-> (ga: group_attributes)
+                    SELECT count() AS `count` BY events.time
+                    WHERE ga.group_status IN array(0)
+                    AND events.timestamp >= toDateTime('2023-11-27T10:00:00')
+                    AND events.timestamp < toDateTime('2023-11-27T13:00:00')
+                    AND events.project_id IN array({self.project_id})
+                    AND ga.project_id IN array({self.project_id})
+                    ORDER BY events.time ASC
+                    LIMIT 10000
+                    GRANULARITY 300""",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert (
+            "(toDateTime(multiply(intDiv(toUInt32(timestamp), 300), 300), 'Universal') AS `_snuba_events.time`)"
+            in data["sql"]
+        )
 
     def test_allocation_policy_violation(self) -> None:
         with patch(

@@ -501,8 +501,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
 
-        # two policies
-        assert response.json is not None and len(response.json) == 2
+        # three policies
+        assert response.json is not None and len(response.json) == 3
         policy_configs = response.json
         bytes_scanned_policy = [
             policy
@@ -542,7 +542,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 2
+        assert response.json is not None and len(response.json) == 3
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "

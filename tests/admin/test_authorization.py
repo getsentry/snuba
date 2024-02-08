@@ -37,5 +37,6 @@ def test_product_tools_role(
     assert len(data["tools"]) > 0
     assert "snql-to-sql" in data["tools"]
     assert "tracing" in data["tools"]
+    assert "system-queries" in data["tools"]
     assert "production-queries" in data["tools"]
     assert "all" not in data["tools"]

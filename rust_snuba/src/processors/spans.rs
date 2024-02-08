@@ -1,137 +1,63 @@
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use anyhow::Context;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use chrono::DateTime;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
-use crate::processors::utils::{default_retention_days, hex_to_u64, DEFAULT_RETENTION_DAYS};
-use crate::types::{BytesInsertBatch, KafkaMessageMetadata};
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+
+use crate::config::ProcessorConfig;
+use crate::processors::utils::enforce_retention;
+use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
-) -> anyhow::Result<BytesInsertBatch> {
+    config: &ProcessorConfig,
+) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
+    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: Span = msg.try_into()?;
 
+    span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
     span.offset = metadata.offset;
     span.partition = metadata.partition;
 
-    let serialized = serde_json::to_vec(&span)?;
-
-    Ok(BytesInsertBatch {
-        rows: vec![serialized],
-    })
+    InsertBatch::from_rows([span], origin_timestamp)
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FromSpanMessage {
     #[serde(default)]
-    description: String,
+    _metrics_summary: Value,
+    description: Option<String>,
     duration_ms: u32,
-    event_id: Uuid,
+    event_id: Option<Uuid>,
     exclusive_time_ms: f64,
-    #[serde(deserialize_with = "hex_to_u64")]
-    group_raw: u64,
     is_segment: bool,
-    #[serde(deserialize_with = "hex_to_u64")]
-    parent_span_id: u64,
+    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
+    parent_span_id: Option<String>,
     profile_id: Option<Uuid>,
     project_id: u64,
-    #[serde(default = "default_retention_days")]
+    received: f64,
     retention_days: Option<u16>,
-    #[serde(deserialize_with = "hex_to_u64")]
-    segment_id: u64,
-    sentry_tags: FromSentryTags,
-    #[serde(deserialize_with = "hex_to_u64")]
-    span_id: u64,
+    segment_id: Option<String>,
+    sentry_tags: Option<BTreeMap<String, String>>,
+    span_id: String,
     start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
 }
 
-#[derive(Debug, Default, Deserialize)]
-struct FromSentryTags {
-    action: Option<String>,
-    domain: Option<String>,
-    group: Option<String>,
-    #[serde(rename(deserialize = "http.method"))]
-    http_method: Option<String>,
-    module: Option<String>,
-    op: Option<String>,
-    status: Option<SpanStatus>,
-    status_code: Option<String>,
-    system: Option<String>,
-    transaction: Option<String>,
-    #[serde(rename(deserialize = "transaction.method"))]
-    transaction_method: Option<String>,
-    #[serde(rename(deserialize = "transaction.op"))]
-    transaction_op: Option<String>,
-    #[serde(flatten)]
-    extra: BTreeMap<String, String>,
-}
-
-impl FromSentryTags {
-    fn to_keys_values(&self) -> (Vec<String>, Vec<String>) {
-        let mut tags: BTreeMap<String, String> = BTreeMap::new();
-
-        if let Some(action) = &self.action {
-            tags.insert("action".into(), action.into());
-        }
-
-        if let Some(domain) = &self.domain {
-            tags.insert("domain".into(), domain.into());
-        }
-
-        if let Some(group) = &self.group {
-            tags.insert("group".into(), group.into());
-        }
-
-        if let Some(module) = &self.module {
-            tags.insert("module".into(), module.into());
-        }
-
-        if let Some(op) = &self.op {
-            tags.insert("op".into(), op.into());
-        }
-
-        if let Some(status) = &self.status {
-            tags.insert("status".into(), status.as_str().to_string());
-        }
-
-        if let Some(system) = &self.system {
-            tags.insert("system".into(), system.into());
-        }
-
-        if let Some(transaction) = &self.transaction {
-            tags.insert("transaction".into(), transaction.into());
-        }
-
-        if let Some(transaction_op) = &self.transaction_op {
-            tags.insert("transaction.op".into(), transaction_op.into());
-        }
-
-        if let Some(http_method) = &self.http_method {
-            tags.insert("http.method".into(), http_method.into());
-        }
-
-        if let Some(transaction_method) = &self.transaction_method {
-            tags.insert("transaction.method".into(), transaction_method.into());
-        }
-
-        if let Some(status_code) = &self.status_code {
-            tags.insert("status_code".into(), status_code.into());
-        }
-
-        for (key, value) in &self.extra {
-            tags.insert(key.into(), value.into());
-        }
-
-        tags.into_iter().unzip()
-    }
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FromMeasurementValue {
+    value: f64,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -147,6 +73,7 @@ struct Span {
     end_timestamp: u64,
     exclusive_time: f64,
     group: u64,
+    #[serde(default)]
     group_raw: u64,
     is_segment: u8,
     #[serde(default)]
@@ -155,6 +82,8 @@ struct Span {
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
+    #[serde(default)]
+    metrics_summary: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
@@ -162,7 +91,7 @@ struct Span {
     platform: String,
     profile_id: Option<Uuid>,
     project_id: u64,
-    retention_days: u16,
+    retention_days: Option<u16>,
     segment_id: u64,
     segment_name: String,
     #[serde(rename(serialize = "sentry_tags.key"))]
@@ -180,7 +109,7 @@ struct Span {
     #[serde(rename(serialize = "tags.value"))]
     tag_values: Vec<String>,
     trace_id: Uuid,
-    transaction_id: Uuid,
+    transaction_id: Option<Uuid>,
     transaction_op: String,
     user: String,
 }
@@ -190,71 +119,83 @@ impl TryFrom<FromSpanMessage> for Span {
 
     fn try_from(from: FromSpanMessage) -> anyhow::Result<Span> {
         let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
-        let group = if let Some(group) = &from.sentry_tags.group {
-            u64::from_str_radix(group, 16)?
-        } else {
-            0
+        let sentry_tags = from.sentry_tags.unwrap_or_default();
+        let group: u64 = sentry_tags
+            .get("group")
+            .map(|group| u64::from_str_radix(group, 16).unwrap_or_default())
+            .unwrap_or_default();
+        let status = sentry_tags
+            .get("status")
+            .map(|status| status.as_str())
+            .map_or(SpanStatus::Unknown, |status| {
+                SpanStatus::from_str(status).unwrap_or_default()
+            });
+        let transaction_op = sentry_tags
+            .get("transaction.op")
+            .cloned()
+            .unwrap_or("".to_string());
+
+        let (sentry_tag_keys, sentry_tag_values) = sentry_tags.clone().into_iter().unzip();
+        let (tag_keys, tag_values): (Vec<_>, Vec<_>) =
+            from.tags.unwrap_or_default().into_iter().unzip();
+
+        let (measurement_keys, measurement_values) = from
+            .measurements
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, v.value))
+            .unzip();
+
+        let metrics_summary = match from._metrics_summary {
+            Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
+            _ => "".into(),
         };
-        let status = from.sentry_tags.status.unwrap_or_default() as u8;
-        let (sentry_tag_keys, sentry_tag_values) = from.sentry_tags.to_keys_values();
-        let transaction_op = from.sentry_tags.transaction_op.unwrap_or_default();
-
-        let tags = from.tags.unwrap_or_default();
-        let (mut tag_keys, mut tag_values): (Vec<_>, Vec<_>) = tags.into_iter().unzip();
-
-        if let Some(http_method) = from.sentry_tags.http_method.clone() {
-            tag_keys.push("http.method".into());
-            tag_values.push(http_method);
-        }
-
-        if let Some(status_code) = &from.sentry_tags.status_code {
-            tag_keys.push("status_code".into());
-            tag_values.push(status_code.into());
-        }
-
-        if let Some(transaction_method) = from.sentry_tags.transaction_method.clone() {
-            tag_keys.push("transaction.method".into());
-            tag_values.push(transaction_method);
-        }
 
         Ok(Self {
-            action: from.sentry_tags.action.unwrap_or_default(),
-            description: from.description,
-            domain: from.sentry_tags.domain.unwrap_or_default(),
+            action: sentry_tags.get("action").cloned().unwrap_or_default(),
+            description: from.description.unwrap_or_default(),
+            domain: sentry_tags.get("domain").cloned().unwrap_or_default(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
             exclusive_time: from.exclusive_time_ms,
             group,
-            group_raw: from.group_raw,
             is_segment: if from.is_segment { 1 } else { 0 },
-            module: from.sentry_tags.module.unwrap_or_default(),
-            op: from.sentry_tags.op.unwrap_or_default(),
-            parent_span_id: from.parent_span_id,
-            platform: from.sentry_tags.system.unwrap_or_default(),
+            measurement_keys,
+            measurement_values,
+            metrics_summary,
+            module: sentry_tags.get("module").cloned().unwrap_or_default(),
+            op: sentry_tags.get("op").cloned().unwrap_or_default(),
+            parent_span_id: from.parent_span_id.map_or(0, |parent_span_id| {
+                u64::from_str_radix(&parent_span_id, 16).unwrap_or_default()
+            }),
+            platform: sentry_tags.get("system").cloned().unwrap_or_default(),
             profile_id: from.profile_id,
             project_id: from.project_id,
-            retention_days: from.retention_days.unwrap_or(DEFAULT_RETENTION_DAYS),
-            segment_id: from.segment_id,
-            segment_name: from.sentry_tags.transaction.unwrap_or_default(),
+            retention_days: from.retention_days,
+            segment_id: from.segment_id.map_or(0, |segment_id| {
+                u64::from_str_radix(&segment_id, 16).unwrap_or_default()
+            }),
+            segment_name: sentry_tags.get("transaction").cloned().unwrap_or_default(),
             sentry_tag_keys,
             sentry_tag_values,
-            span_id: from.span_id,
-            span_status: status,
+            span_id: u64::from_str_radix(&from.span_id, 16)?,
+            span_status: status as u8,
             start_ms: (from.start_timestamp_ms % 1000) as u16,
             start_timestamp: from.start_timestamp_ms / 1000,
-            status: status.into(),
+            status: status as u32,
             tag_keys,
             tag_values,
             trace_id: from.trace_id,
             transaction_id: from.event_id,
             transaction_op,
+            user: sentry_tags.get("user").cloned().unwrap_or_default(),
             ..Default::default()
         })
     }
 }
 
-#[derive(Clone, Copy, Default, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[repr(u8)] // size limit in clickhouse
 pub enum SpanStatus {
@@ -336,36 +277,44 @@ pub enum SpanStatus {
     Unauthenticated = 16,
 }
 
-impl SpanStatus {
-    /// Returns the string representation of the status.
-    pub fn as_str(&self) -> &'static str {
-        match *self {
-            SpanStatus::Ok => "ok",
-            SpanStatus::DeadlineExceeded => "deadline_exceeded",
-            SpanStatus::Unauthenticated => "unauthenticated",
-            SpanStatus::PermissionDenied => "permission_denied",
-            SpanStatus::NotFound => "not_found",
-            SpanStatus::ResourceExhausted => "resource_exhausted",
-            SpanStatus::InvalidArgument => "invalid_argument",
-            SpanStatus::Unimplemented => "unimplemented",
-            SpanStatus::Unavailable => "unavailable",
-            SpanStatus::InternalError => "internal_error",
-            SpanStatus::Unknown => "unknown",
-            SpanStatus::Cancelled => "cancelled",
-            SpanStatus::AlreadyExists => "already_exists",
-            SpanStatus::FailedPrecondition => "failed_precondition",
-            SpanStatus::Aborted => "aborted",
-            SpanStatus::OutOfRange => "out_of_range",
-            SpanStatus::DataLoss => "data_loss",
-        }
+pub struct ParseSpanStatusError;
+
+impl FromStr for SpanStatus {
+    type Err = ParseSpanStatusError;
+
+    fn from_str(string: &str) -> Result<SpanStatus, Self::Err> {
+        Ok(match string {
+            "ok" => SpanStatus::Ok,
+            "success" => SpanStatus::Ok, // Backwards compat with initial schema
+            "deadline_exceeded" => SpanStatus::DeadlineExceeded,
+            "unauthenticated" => SpanStatus::Unauthenticated,
+            "permission_denied" => SpanStatus::PermissionDenied,
+            "not_found" => SpanStatus::NotFound,
+            "resource_exhausted" => SpanStatus::ResourceExhausted,
+            "invalid_argument" => SpanStatus::InvalidArgument,
+            "unimplemented" => SpanStatus::Unimplemented,
+            "unavailable" => SpanStatus::Unavailable,
+            "internal_error" => SpanStatus::InternalError,
+            "failure" => SpanStatus::InternalError, // Backwards compat with initial schema
+            "unknown" | "unknown_error" => SpanStatus::Unknown,
+            "cancelled" => SpanStatus::Cancelled,
+            "already_exists" => SpanStatus::AlreadyExists,
+            "failed_precondition" => SpanStatus::FailedPrecondition,
+            "aborted" => SpanStatus::Aborted,
+            "out_of_range" => SpanStatus::OutOfRange,
+            "data_loss" => SpanStatus::DataLoss,
+            _ => return Err(ParseSpanStatusError),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use chrono::DateTime;
     use std::time::SystemTime;
+
+    use crate::processors::tests::run_schema_type_test;
+
+    use super::*;
 
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
@@ -392,11 +341,11 @@ mod tests {
         duration_ms: Option<u32>,
         event_id: Option<Uuid>,
         exclusive_time_ms: Option<f64>,
-        group_raw: Option<String>,
         is_segment: Option<bool>,
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
+        received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
         sentry_tags: TestSentryTags,
@@ -412,21 +361,13 @@ mod tests {
             duration_ms: Some(1000),
             event_id: Some(Uuid::new_v4()),
             exclusive_time_ms: Some(1000.0),
-            group_raw: Some("deadbeefdeadbeef".into()),
             is_segment: Some(false),
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
             retention_days: Some(90),
+            received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
-            span_id: Some("deadbeefdeadbeef".into()),
-            start_timestamp_ms: Some(1691105878720),
-            trace_id: Some(Uuid::new_v4()),
-            tags: Some(BTreeMap::from([
-                ("tag1".into(), "value1".into()),
-                ("tag2".into(), "123".into()),
-                ("tag3".into(), "true".into()),
-            ])),
             sentry_tags: TestSentryTags {
                 action: Some("GET".into()),
                 domain: Some("targetdomain.tld:targetport".into()),
@@ -441,6 +382,14 @@ mod tests {
                 transaction_method: Some("GET".into()),
                 transaction_op: Some("navigation".into()),
             },
+            span_id: Some("deadbeefdeadbeef".into()),
+            start_timestamp_ms: Some(1691105878720),
+            tags: Some(BTreeMap::from([
+                ("tag1".into(), "value1".into()),
+                ("tag2".into(), "123".into()),
+                ("tag3".into(), "true".into()),
+            ])),
+            trace_id: Some(Uuid::new_v4()),
         }
     }
 
@@ -455,66 +404,58 @@ mod tests {
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
-    }
-
-    #[test]
-    fn test_null_status_value() {
-        let mut span = valid_span();
-        span.sentry_tags.status = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_empty_status_value() {
         let mut span = valid_span();
         span.sentry_tags.status = Some("".into());
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_null_retention_days() {
         let mut span = valid_span();
-        span.retention_days = default_retention_days();
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        span.retention_days = None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 
     #[test]
     fn test_null_tags() {
         let mut span = valid_span();
         span.tags = Option::None;
-        let data = serde_json::to_string(&span);
-        assert!(data.is_ok());
-        let payload = KafkaPayload::new(None, None, Some(data.unwrap().as_bytes().to_vec()));
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
             timestamp: DateTime::from(SystemTime::now()),
         };
-        process_message(payload, meta).expect("The message should be processed");
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+    }
+
+    #[test]
+    fn schema() {
+        run_schema_type_test::<FromSpanMessage>("snuba-spans");
     }
 }

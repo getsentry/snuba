@@ -49,7 +49,9 @@ ADMIN_IAM_POLICY_FILE = os.environ.get(
 )
 
 ADMIN_FRONTEND_DSN = os.environ.get("ADMIN_FRONTEND_DSN", "")
+ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS: list[str] | None = None
 ADMIN_TRACE_SAMPLE_RATE = float(os.environ.get("ADMIN_TRACE_SAMPLE_RATE", 1.0))
+ADMIN_PROFILES_SAMPLE_RATE = float(os.environ.get("ADMIN_PROFILES_SAMPLE_RATE", 1.0))
 ADMIN_REPLAYS_SAMPLE_RATE = float(os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE", 0.1))
 ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
     os.environ.get("ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR", 1.0)
@@ -70,6 +72,7 @@ MAX_MIGRATIONS_REVERT_TIME_WINDOW_HRS = 24
 
 ENABLE_DEV_FEATURES = os.environ.get("ENABLE_DEV_FEATURES", False)
 
+ALLOCATION_POLICY_ENABLED = True
 DEFAULT_DATASET_NAME = "events"
 DISABLED_ENTITIES: Set[str] = set()
 DISABLED_DATASETS: Set[str] = set()
@@ -81,6 +84,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
+        "block_connections": bool(
+            os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)
+        ),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
@@ -106,18 +113,20 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "spans",
             "group_attributes",
             "generic_metrics_gauges",
+            "metrics_summaries",
         },
         "single_node": True,
     },
 ]
 
 # Dogstatsd Options
-DOGSTATSD_HOST: str | None = None
-DOGSTATSD_PORT: int | None = None
+DOGSTATSD_HOST: str | None = os.environ.get("SNUBA_STATSD_HOST") or None
+DOGSTATSD_PORT: int | None = int(os.environ.get("SNUBA_STATSD_PORT") or 0) or None
 DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
+DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
@@ -180,6 +189,9 @@ REDIS_CLUSTERS: RedisClusters = {
 # Query Recording Options
 RECORD_QUERIES = False
 
+# Record COGS
+RECORD_COGS = False
+
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
 CONFIG_STATE: Mapping[str, Optional[Any]] = {}
@@ -194,7 +206,7 @@ SNUBA_SLACK_CHANNEL_ID = os.environ.get("SNUBA_SLACK_CHANNEL_ID")
 STARFISH_SLACK_CHANNEL_ID = os.environ.get("STARFISH_SLACK_CHANNEL_ID")
 
 # Snuba Options
-
+SNUBA_PROFILES_SAMPLE_RATE = float(os.environ.get("SNUBA_PROFILES_SAMPLE_RATE", 0.0))
 SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
@@ -256,7 +268,7 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
-PRETTY_FORMAT_EXPRESSIONS = True
+PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
 
 # Capacity Management
 # HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
@@ -291,7 +303,13 @@ COLUMN_SPLIT_MAX_RESULTS = 5000
 SKIPPED_MIGRATION_GROUPS: Set[str] = set()
 
 # Dataset readiness states supported in this environment
-SUPPORTED_STATES: Set[str] = {"deprecate", "limited", "partial", "complete"}
+SUPPORTED_STATES: Set[str] = {
+    "deprecate",
+    "limited",
+    "experimental",
+    "partial",
+    "complete",
+}
 # [04-18-2023] These two readiness state settings are temporary and used to facilitate the rollout of readiness states.
 # We expect to remove them after all storages and migration groups have been migrated.
 READINESS_STATE_FAIL_QUERIES: bool = True
@@ -321,11 +339,6 @@ SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 # (entity name, buffer size)
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
-# Used for migrating to/from writing metrics directly to aggregate tables
-# rather than using materialized views
-WRITE_METRICS_AGG_DIRECTLY = False
-ENABLED_MATERIALIZATION_VERSION = 4
-
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
@@ -336,9 +349,6 @@ ENABLE_REPLAYS_CONSUMER = os.environ.get("ENABLE_REPLAYS_CONSUMER", False)
 ENABLE_ISSUE_OCCURRENCE_CONSUMER = os.environ.get(
     "ENABLE_ISSUE_OCCURRENCE_CONSUMER", False
 )
-
-# Enable spans ingestion
-ENABLE_SPANS_CONSUMER = os.environ.get("ENABLE_SPANS_CONSUMER", False)
 
 # Enable group attributes consumer
 ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
@@ -357,7 +367,7 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
@@ -365,7 +375,8 @@ PARALLEL_OPTIMIZE_JOB_START_TIME = 0
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs in
 # parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = OPTIMIZE_JOB_CUTOFF_TIME
+# Cutoff time in PST would be 6am of the next day.
+PARALLEL_OPTIMIZE_JOB_END_TIME = 14
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
@@ -430,6 +441,7 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     provide a full absolute path such as `/foo/bar/my_settings.py`."""
 
     import importlib
+    import importlib.abc
     import importlib.util
     import os
 

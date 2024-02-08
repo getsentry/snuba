@@ -207,8 +207,8 @@ class ReplayEvent:
             "error_ids": list(
                 map(to_uuid, to_capped_list("trace_ids", self.error_ids))
             ),
-            "timestamp": maybe(to_datetime, self.timestamp),
-            "replay_start_timestamp": maybe(to_datetime, self.replay_start_timestamp),
+            "timestamp": maybe(int, self.timestamp),
+            "replay_start_timestamp": maybe(int, self.replay_start_timestamp),
             "platform": self.platform,
             "environment": self.environment,
             "release": self.release,
@@ -305,7 +305,7 @@ class TestReplaysProcessor:
             offset=0, partition=0, timestamp=datetime(1970, 1, 1)
         )
 
-        now = datetime.now(tz=timezone.utc).replace(microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(microsecond=0).timestamp()
 
         message = ReplayEvent(
             replay_id="e5e062bf2e1d4afd96fd2f90b6770431",
@@ -320,8 +320,8 @@ class TestReplaysProcessor:
                 "8bea4461d8b944f393c15a3cb1c4169a",
             ],
             segment_id=0,
-            timestamp=str(int(now.timestamp())),
-            replay_start_timestamp=str(int(now.timestamp())),
+            timestamp=str(int(now)),
+            replay_start_timestamp=str(int(now)),
             platform=0,
             dist=0,
             urls=["http://127.0.0.1:8001", None, 0],
@@ -740,6 +740,7 @@ class TestReplaysActionProcessor:
                                     "testid": "",
                                     "title": "",
                                     "text": "text",
+                                    "component_name": "SignUpButton",
                                     "timestamp": int(now.timestamp()),
                                     "event_hash": "df3c3aa2daae465e89f1169e49139827",
                                     "is_dead": 0,
@@ -761,15 +762,15 @@ class TestReplaysActionProcessor:
         assert row["project_id"] == 1
         assert row["timestamp"] == now
         assert row["replay_id"] == str(uuid.UUID("bb570198b8f04f8bbe87077668530da7"))
-        assert row["event_hash"] == "df3c3aa2daae465e89f1169e49139827"
+        assert row["event_hash"] == str(uuid.UUID("df3c3aa2daae465e89f1169e49139827"))
         assert row["segment_id"] is None
         assert row["trace_ids"] == []
         assert row["error_ids"] == []
         assert row["urls"] == []
         assert row["platform"] == "javascript"
-        assert row["user"] is None
-        assert row["sdk_name"] is None
-        assert row["sdk_version"] is None
+        assert row["user"] == ""
+        assert row["sdk_name"] == ""
+        assert row["sdk_version"] == ""
         assert row["retention_days"] == 30
         assert row["partition"] == 0
         assert row["offset"] == 0
@@ -783,6 +784,7 @@ class TestReplaysActionProcessor:
         assert row["click_alt"] == ""
         assert row["click_testid"] == ""
         assert row["click_title"] == ""
+        assert row["click_component_name"] == "SignUpButton"
         assert row["click_is_dead"] == 0
         assert row["click_is_rage"] == 1
 
@@ -840,9 +842,8 @@ def test_replay_event_links(
     assert "timestamp" in row
     assert row[severity + "_id"] == str(uuid.UUID(event_id))
     assert row["replay_id"] == str(uuid.UUID(message["replay_id"]))
-    assert (
-        row["event_hash"]
-        == md5((message["replay_id"] + event_id).encode("utf-8")).hexdigest()
+    assert row["event_hash"] == str(
+        uuid.UUID(md5((message["replay_id"] + event_id).encode("utf-8")).hexdigest())
     )
     assert row["segment_id"] is None
     assert row["retention_days"] == 30

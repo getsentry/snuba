@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, Union
+from typing import Callable, Mapping, MutableMapping, Optional, Protocol, Union
 
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.commit import ONCE_PER_SECOND
@@ -14,6 +14,9 @@ from arroyo.processing.strategies import (
 )
 from arroyo.processing.strategies.commit import CommitOffsets
 from arroyo.processing.strategies.healthcheck import Healthcheck
+from arroyo.processing.strategies.run_task_with_multiprocessing import (
+    MultiprocessingPool,
+)
 from arroyo.types import BaseValue, Commit, FilteredPayload, Message, Partition
 
 from snuba.consumers.consumer import BytesInsertBatch, ProcessedMessageBatchWriter
@@ -67,6 +70,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         output_block_size: Optional[int],
         max_insert_batch_size: Optional[int],
         max_insert_batch_time: Optional[float],
+        metrics_tags: MutableMapping[str, str],
         skip_write: bool = False,
         # Passed in the case of DLQ consumer which exits after a certain number of messages
         # is processed
@@ -98,6 +102,12 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         self.__output_block_size = output_block_size
         self.__initialize_parallel_transform = initialize_parallel_transform
         self.__health_check_file = health_check_file
+        self.__pool = (
+            MultiprocessingPool(self.__processes, self.__initialize_parallel_transform)
+            if self.__processes
+            else None
+        )
+        self.__metrics_tags = metrics_tags
 
     def __should_accept(self, message: Message[KafkaPayload]) -> bool:
         assert self.__prefilter is not None
@@ -108,6 +118,12 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         commit: Commit,
         partitions: Mapping[Partition, int],
     ) -> ProcessingStrategy[KafkaPayload]:
+
+        if partitions:
+            self.__metrics_tags["min_partition"] = str(min(x.index for x in partitions))
+        else:
+            self.__metrics_tags.pop("min_partition", None)
+
         def accumulator(
             batch_writer: ProcessedMessageBatchWriter,
             message: BaseValue[ProcessedMessage],
@@ -145,18 +161,17 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
         transform_function = self.__process_message
 
         strategy: ProcessingStrategy[Union[FilteredPayload, KafkaPayload]]
-        if self.__processes is None:
+        if self.__pool is None:
             strategy = RunTask(transform_function, collect)
         else:
             strategy = RunTaskWithMultiprocessing(
                 transform_function,
                 collect,
-                self.__processes,
                 max_batch_size=self.__max_batch_size,
                 max_batch_time=self.__max_batch_time,
+                pool=self.__pool,
                 input_block_size=self.__input_block_size,
                 output_block_size=self.__output_block_size,
-                initializer=self.__initialize_parallel_transform,
             )
 
         if self.__prefilter is not None:
@@ -173,3 +188,7 @@ class KafkaConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
             strategy = Healthcheck(self.__health_check_file, strategy)
 
         return strategy
+
+    def shutdown(self) -> None:
+        if self.__pool:
+            self.__pool.close()

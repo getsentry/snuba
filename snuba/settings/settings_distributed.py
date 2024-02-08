@@ -4,6 +4,10 @@ CLUSTERS = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
+        "block_connections": bool(
+            os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)
+        ),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
@@ -29,6 +33,7 @@ CLUSTERS = [
             "spans",
             "group_attributes",
             "generic_metrics_gauges",
+            "metrics_summaries",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",

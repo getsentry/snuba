@@ -9,6 +9,8 @@ schema:
     { name: metric_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
+    { name: granularity, type: UInt, args: { size: 8 } },
+    { name: use_case_id, type: String },
     {
       name: tags,
       type: Nested,
@@ -19,6 +21,15 @@ schema:
               { name: key, type: UInt, args: { size: 64 } },
               { name: value, type: UInt, args: { size: 64 } },
             ],
+        },
+    },
+    {
+      name: tags.raw_value,
+      type: Array,
+      args:
+        {
+          schema_modifiers: [readonly],
+          inner_type: { type: String },
         },
     },
     {
@@ -282,6 +293,10 @@ storage_selector:
 
 query_processors:
   - processor: TagsTypeTransformer
+  - processor: CurriedFunctionBucketTransformer
+    args:
+      curried_function: histogram
+      default_parameter: 250
   - processor: MappedGranularityProcessor
     args:
       accepted_granularities:

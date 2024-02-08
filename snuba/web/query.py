@@ -5,7 +5,7 @@ import textwrap
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import MutableMapping, Optional, Set, Union
+from typing import Any, MutableMapping, Optional, Set, Union
 
 import sentry_sdk
 
@@ -31,7 +31,11 @@ from snuba.query.exceptions import QueryPlanException
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
-from snuba.querylog.query_metadata import SnubaQueryMetadata
+from snuba.querylog.query_metadata import (
+    QueryStatus,
+    SnubaQueryMetadata,
+    get_request_status,
+)
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.subscriptions.data import SUBSCRIPTION_REFERRER
@@ -46,7 +50,7 @@ from snuba.web import (
     QueryTooLongException,
     transform_column_names,
 )
-from snuba.web.db_query import db_query
+from snuba.web.db_query import db_query, update_query_metadata_and_stats
 
 logger = logging.getLogger("snuba.query")
 
@@ -370,7 +374,7 @@ def _format_storage_query_and_run(
 
     timer.mark("prepare_query")
 
-    stats = {
+    stats: MutableMapping[str, Any] = {
         "clickhouse_table": table_names,
         "final": visitor.any_final(),
         "referrer": attribution_info.referrer,
@@ -384,7 +388,16 @@ def _format_storage_query_and_run(
             "which is too long for ClickHouse to process. "
             f"Max size is {MAX_QUERY_SIZE_BYTES} bytes."
         )
-
+        stats = update_query_metadata_and_stats(
+            query=clickhouse_query,
+            sql=formatted_query.get_sql(),
+            stats=stats,
+            query_metadata_list=query_metadata.query_list,
+            query_settings={},
+            trace_id="",
+            status=QueryStatus.INVALID_REQUEST,
+            request_status=get_request_status(cause),
+        )
         raise QueryException.from_args(
             cause.__class__.__name__,
             str(cause),

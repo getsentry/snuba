@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from datetime import datetime, timedelta
 from enum import Enum
@@ -57,11 +59,11 @@ def tuplify(nested: Any) -> Any:
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def time_request(name: str) -> Callable[[F], F]:
+def time_request(name: str, tags: dict[str, str] | None = None) -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            kwargs["timer"] = Timer(name)
+            kwargs["timer"] = Timer(name, tags=tags)
             return func(*args, **kwargs)
 
         return cast(F, wrapper)

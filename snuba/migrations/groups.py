@@ -11,6 +11,7 @@ from snuba.migrations.group_loader import (
     GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
+    MetricsSummariesLoader,
     OutcomesLoader,
     ProfilesLoader,
     QuerylogLoader,
@@ -41,6 +42,7 @@ class MigrationGroup(Enum):
     SEARCH_ISSUES = "search_issues"
     SPANS = "spans"
     GROUP_ATTRIBUTES = "group_attributes"
+    METRICS_SUMMARIES = "metrics_summaries"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -57,6 +59,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.SPANS,
     MigrationGroup.GROUP_ATTRIBUTES,
+    MigrationGroup.METRICS_SUMMARIES,
 }
 
 
@@ -162,6 +165,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
         readiness_state=ReadinessState.PARTIAL,
     ),
+    MigrationGroup.METRICS_SUMMARIES: _MigrationGroup(
+        loader=MetricsSummariesLoader(),
+        storage_sets_keys={StorageSetKey.METRICS_SUMMARIES},
+        readiness_state=ReadinessState.PARTIAL,
+    ),
 }
 
 
@@ -188,6 +196,10 @@ _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[
 
 def get_group_loader(group: MigrationGroup) -> GroupLoader:
     return _REGISTERED_MIGRATION_GROUPS[group].loader
+
+
+def get_storage_set_keys(group: MigrationGroup) -> Set[StorageSetKey]:
+    return _REGISTERED_MIGRATION_GROUPS[group].storage_set_keys
 
 
 def get_group_readiness_state_from_storage_set(

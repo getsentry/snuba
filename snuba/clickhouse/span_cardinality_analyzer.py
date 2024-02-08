@@ -3,6 +3,7 @@ from typing import NamedTuple, NewType
 
 # Start index is 9223372036854775808
 METRICS_START_INDEX = 1 << 63
+CARDINALITY_LIMIT = 5000
 
 SQL = NewType("SQL", str)
 
@@ -30,7 +31,7 @@ def span_grouping_distinct_modules_query(time_window_hrs: int) -> SQL:
     Form the clickhouse query to get the distinct span modules we are ingesting.
     The result of this query can be used to get the cardinality of individual modules.
     """
-    if time_window_hrs > 2:
+    if time_window_hrs > 3:
         raise ValueError("Time window cannot be greater than 2 hours")
 
     query = f"""
@@ -68,6 +69,7 @@ AND (metric_id IN [{IndexedIDs.SPAN_DURATION_METRIC.value},
 {IndexedIDs.SPAN_EXCLUSIVE_TIME_METRIC.value}])
 AND `span.category` = '{span_category}'
 GROUP BY org_id, project_id, `span.category`
+HAVING count_groups > {CARDINALITY_LIMIT}
 ORDER BY count_groups DESC
 LIMIT {limit}
 """

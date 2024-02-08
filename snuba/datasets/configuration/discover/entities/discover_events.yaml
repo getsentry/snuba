@@ -5,6 +5,8 @@ schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: timestamp, type: DateTime },
+    { name: time, type: DateTime },
+    { name: rtime, type: DateTime },
     { name: event_id, type: UUID },
     { name: platform, type: String },
     { name: environment, type: String, args: { schema_modifiers: [nullable] } },
@@ -195,12 +197,12 @@ schema:
     {
       name: trace_sampled,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 8 },
+      args: { schema_modifiers: [nullable], size: 8 },
     },
     {
       name: num_processing_errors,
       type: UInt,
-      args: { schema_modifiers: [ nullable ], size: 64 },
+      args: { schema_modifiers: [nullable], size: 64 },
     },
     { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
   ]
@@ -519,6 +521,8 @@ query_processors:
   - processor: ResourceQuotaProcessor
     args:
       project_field: project_id
+
+validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator
     args:
@@ -537,7 +541,6 @@ subscription_validators:
         - having
         - orderby
       required_time_column: timestamp
-
 
 join_relationships:
   grouped:

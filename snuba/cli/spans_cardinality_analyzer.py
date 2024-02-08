@@ -6,6 +6,7 @@ import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
+from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.span_cardinality_analyzer import (
     SpanGroupingCardinalityResult,
     span_grouping_cardinality_query,
@@ -30,9 +31,22 @@ def write_cardnaltiy_to_csv(
 
 
 @click.command()
+@click.option(
+    "--clickhouse-host",
+    help="Clickhouse server to write to.",
+    required=True,
+)
+@click.option(
+    "--clickhouse-port",
+    type=int,
+    help="Clickhouse native port to write to.",
+    required=True,
+)
 @click.option("--log-level", help="Logging level to use.")
 def spans_cardinality_analyzer(
     *,
+    clickhouse_host: str,
+    clickhouse_port: int,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -47,23 +61,35 @@ def spans_cardinality_analyzer(
 
     storage_key = StorageKey("generic_metrics_distributions")
     storage = get_storage(storage_key)
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
-    connection = storage.get_cluster().get_query_connection(
-        ClickhouseClientSettings.CARDINALITY_ANALYZER
+    connection = ClickhousePool(
+        host=clickhouse_host,
+        port=clickhouse_port,
+        user=clickhouse_user,
+        password=clickhouse_password,
+        database=storage.get_cluster().get_database(),
+        client_settings=ClickhouseClientSettings.CARDINALITY_ANALYZER.value.settings,
     )
 
     # Get the distinct span modules we are ingesting.
+    logger.info("Getting distinct span modules")
     result = connection.execute(
-        span_grouping_distinct_modules_query(time_window_hrs=1),
+        span_grouping_distinct_modules_query(time_window_hrs=2),
     )
-    distinct_span_groups = [row[0] for row in result.results]
+    high_cardinality_span_groups = [row[0] for row in result.results]
+    logger.info(f"Span modules with high cardinality: {high_cardinality_span_groups}")
 
     # Get the cardinality of each module and write to CSV file and send to Slack
-    for span_group in distinct_span_groups:
+    for span_group in high_cardinality_span_groups:
         logger.info(f"Getting cardinality for span group: {span_group}")
         result = connection.execute(
             span_grouping_cardinality_query(span_group, time_window_hrs=24, limit=1000)
         )
+
+        if len(result.results) == 0:
+            logger.info(f"No high cardinality found for span group: {span_group}")
+            continue
 
         write_cardnaltiy_to_csv(result.results, f"/tmp/{span_group}.csv")
         slack_client.post_file(

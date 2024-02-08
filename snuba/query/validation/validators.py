@@ -6,21 +6,34 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Sequence, Type, cast
 
-from snuba.clickhouse.translators.snuba.mappers import ColumnToExpression
+from snuba.clickhouse.translators.snuba.allowed import DefaultNoneColumnMapper
+from snuba.clickhouse.translators.snuba.function_call_mappers import (
+    AggregateCurriedFunctionMapper,
+    AggregateFunctionMapper,
+)
+from snuba.clickhouse.translators.snuba.mappers import (
+    ColumnToExpression,
+    SubscriptableMapper,
+)
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
+    BooleanFunctions,
     ConditionFunctions,
     build_match,
     get_first_level_and_conditions,
 )
+from snuba.query.data_source.simple import Entity as SimpleEntity
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.matchers import Or
+from snuba.query.matchers import AnyExpression
+from snuba.query.matchers import FunctionCall as FunctionCallMatcher
+from snuba.query.matchers import MatchResult, Or, Param, String
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass
 from snuba.utils.schemas import ColumnSet, Date, DateTime
@@ -121,9 +134,20 @@ class EntityContainsColumnsValidator(QueryValidator):
         # Parse and store those mappings as well
         self.mapped_columns = set()
         for mapper in mappers:
-            for colmapping in mapper.columns:
-                if isinstance(colmapping, ColumnToExpression):
-                    self.mapped_columns.add(colmapping.from_col_name)
+            for func_mapping in mapper.functions:
+                if isinstance(func_mapping, AggregateFunctionMapper):
+                    self.mapped_columns.add(func_mapping.column_to_map)
+            for curried_mapping in mapper.curried_functions:
+                if isinstance(curried_mapping, AggregateCurriedFunctionMapper):
+                    self.mapped_columns.add(curried_mapping.column_to_map)
+            for sub_mapping in mapper.subscriptables:
+                if isinstance(sub_mapping, SubscriptableMapper):
+                    self.mapped_columns.add(sub_mapping.from_column_name)
+            for col_mapping in mapper.columns:
+                if isinstance(col_mapping, ColumnToExpression):
+                    self.mapped_columns.add(col_mapping.from_col_name)
+                elif isinstance(col_mapping, DefaultNoneColumnMapper):
+                    self.mapped_columns.update(col_mapping.column_names)
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         if self.validation_mode == ColumnValidationMode.DO_NOTHING:
@@ -141,7 +165,14 @@ class EntityContainsColumnsValidator(QueryValidator):
                 missing.add(column.column_name)
 
         if missing:
-            error_message = f"query column(s) {', '.join(missing)} do not exist"
+            prefix = ""
+            if isinstance(entity := query.get_from_clause(), SimpleEntity):
+                prefix = f"Entity {entity.key.value}: "
+            error_message = (
+                f"{prefix}query columns ({', '.join(missing)}) do not exist"
+                if len(missing) > 1
+                else f"{prefix}Query column '{missing.pop()}' does not exist"
+            )
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
             elif self.validation_mode == ColumnValidationMode.WARN:
@@ -407,3 +438,78 @@ class DatetimeConditionValidator(QueryValidator):
                                     logger.warning(
                                         f"{lhs} requires datetime conditions: '{param.value}' is not a valid datetime"
                                     )
+
+
+class IllegalAggregateInConditionValidator(QueryValidator):
+    """
+    Ensures that aggregate functions are not used in WHERE clause of query.
+    """
+
+    def __init__(self) -> None:
+        # This is not an exhaustive list of all aggregate functions,
+        # but should be sufficient for catching most invalid queries
+        common_aggregate_functions = [
+            "count",
+            "min",
+            "max",
+            "sum",
+            "avg",
+            "last",
+            "uniq",
+        ]
+        self.aggregate_function_names = [
+            String(func_name) for func_name in common_aggregate_functions
+        ]
+        self.aggregate_function_names.extend(
+            [String(f"{func_name}If") for func_name in common_aggregate_functions]
+        )
+
+    def validate(self, query: Query, alias: Optional[str] = None) -> None:
+        def find_illegal_aggregate_functions(
+            expression: Expression,
+        ) -> list[MatchResult]:
+            matches: list[MatchResult] = []
+            match = FunctionCallMatcher(
+                function_name=Param(
+                    "aggregate",
+                    Or(self.aggregate_function_names),
+                ),
+                with_optionals=True,
+            ).match(expression)
+            if match is not None:
+                matches.append(match)
+
+            match = FunctionCallMatcher(
+                Param(
+                    "operator",
+                    Or(
+                        [
+                            String(BooleanFunctions.AND),
+                            String(BooleanFunctions.OR),
+                            String(OPERATOR_TO_FUNCTION["="]),
+                            String(OPERATOR_TO_FUNCTION[">"]),
+                            String(OPERATOR_TO_FUNCTION["<"]),
+                            String(OPERATOR_TO_FUNCTION[">="]),
+                            String(OPERATOR_TO_FUNCTION["<="]),
+                            String(OPERATOR_TO_FUNCTION["!="]),
+                        ]
+                    ),
+                ),
+                (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
+            ).match(expression)
+            if match is not None:
+                matches.extend(
+                    find_illegal_aggregate_functions(match.expression("lhs"))
+                )
+                matches.extend(
+                    find_illegal_aggregate_functions(match.expression("rhs"))
+                )
+            return matches
+
+        conditions = query.get_condition()
+        if conditions:
+            matches = find_illegal_aggregate_functions(conditions)
+            if len(matches) > 0:
+                raise InvalidQueryException(
+                    "Aggregate function found in WHERE clause of query"
+                )

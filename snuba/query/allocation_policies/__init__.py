@@ -140,6 +140,23 @@ class AllocationPolicyViolation(SerializableException):
         return f"{self.message}, explanation: {self.explanation}"
 
 
+class InvalidTenantsForAllocationPolicy(SerializableException):
+    """Individual policies can raise this exception if they are given invalid tenant_ids."""
+
+    @classmethod
+    def from_args(
+        cls,
+        tenant_ids: dict[str, str | int],
+        policy_name: str,
+        description: str | None = None,
+    ) -> "InvalidTenantsForAllocationPolicy":
+        return cls(
+            description or "Invalid tenants for allocation policy",
+            tenant_ids=tenant_ids,
+            policy_name=policy_name,
+        )
+
+
 class AllocationPolicyViolations(SerializableException):
     """
     An exception class which is used to collect multiple AllocationPolicyViolation
@@ -353,6 +370,16 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         section of this docstring for more info.
     """
 
+    # This component builds redis strings that are delimited by dots, commas, colons
+    # in order to allow those characters to exist in config we replace them with their
+    # counterparts on write/read. It may be better to just replace our serialization with JSON
+    # instead of what we're doing but this is where we're at rn 1/10/24
+    __KEY_DELIMITERS_TO_ESCAPE_SEQUENCES = {
+        ".": "__dot_literal__",
+        ",": "__comma_literal__",
+        ":": "__colon_literal__",
+    }
+
     def __init__(
         self,
         storage_key: StorageKey,
@@ -404,7 +431,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_active(self) -> bool:
-        return bool(self.get_config_value(IS_ACTIVE))
+        return (
+            bool(self.get_config_value(IS_ACTIVE))
+            and settings.ALLOCATION_POLICY_ENABLED
+        )
 
     @property
     def is_enforced(self) -> bool:
@@ -599,7 +629,9 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         """
         parameters = "."
         for param in sorted(list(params.keys())):
-            parameters += f"{param}:{params[param]},"
+            param_sanitized = self.__escape_delimiter_chars(param)
+            value_sanitized = self.__escape_delimiter_chars(params[param])
+            parameters += f"{param_sanitized}:{value_sanitized},"
         parameters = parameters[:-1]
         return f"{self.runtime_config_prefix}.{config}{parameters}"
 
@@ -625,11 +657,35 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             params_split = params_string.split(",")
             for param_string in params_split:
                 param_key, param_value = param_string.split(":")
+                param_key = self.__unescape_delimiter_chars(param_key)
+                param_value = self.__unescape_delimiter_chars(param_value)
                 params_dict[param_key] = param_value
 
         self.__validate_config_params(config_key=config_key, params=params_dict)
 
         return config_key, params_dict
+
+    def __escape_delimiter_chars(self, key: str) -> str:
+        if not isinstance(key, str):
+            return key
+        for (
+            delimiter_char,
+            escape_sequence,
+        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+            if escape_sequence in str(key):
+                raise InvalidPolicyConfig(
+                    f"{escape_sequence} is not a valid string for a policy config"
+                )
+            key = key.replace(delimiter_char, escape_sequence)
+        return key
+
+    def __unescape_delimiter_chars(self, key: str) -> str:
+        for (
+            delimiter_char,
+            escape_sequence,
+        ) in self.__KEY_DELIMITERS_TO_ESCAPE_SEQUENCES.items():
+            key = key.replace(escape_sequence, delimiter_char)
+        return key
 
     def __validate_config_params(
         self, config_key: str, params: dict[str, Any], value: Any = None
@@ -702,6 +758,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 allowance = QuotaAllowance(True, self.max_threads, {})
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
+        except InvalidTenantsForAllocationPolicy as e:
+            allowance = QuotaAllowance(False, 0, cast(dict[str, Any], e.to_dict()))
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -746,8 +804,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             if not self.is_active:
                 return
             return self._update_quota_balance(tenant_ids, query_id, result_or_error)
+        except InvalidTenantsForAllocationPolicy:
+            # the policy did not do anything because the tenants were invalid, updating is also not necessary
+            pass
         except Exception:
-            # FIXME: Remove this
             logger.exception(
                 "Allocation policy failed to update quota balance, this is a bug, fix it"
             )

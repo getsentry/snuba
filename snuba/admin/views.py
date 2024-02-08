@@ -62,11 +62,11 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
@@ -107,6 +107,12 @@ def authorize() -> None:
             g.user = user
 
 
+@application.after_request
+def set_profiling_header(response: Response) -> Response:
+    response.headers["Document-Policy"] = "js-profiling"
+    return response
+
+
 @application.route("/")
 def root() -> Response:
     return application.send_static_file("index.html")
@@ -129,6 +135,8 @@ def settings_endpoint() -> Response:
             {
                 "dsn": settings.ADMIN_FRONTEND_DSN,
                 "tracesSampleRate": settings.ADMIN_TRACE_SAMPLE_RATE,
+                "profilesSampleRate": settings.ADMIN_PROFILES_SAMPLE_RATE,
+                "tracePropagationTargets": settings.ADMIN_FRONTEND_TRACE_PROPAGATION_TARGETS,
                 "replaysSessionSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE,
                 "replaysOnErrorSampleRate": settings.ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR,
                 "userEmail": g.user.email,
@@ -213,7 +221,7 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     except ValueError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
-
+    readiness_state = get_group_readiness_state(migration_group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
@@ -234,7 +242,9 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                 else AuditLogAction.REVERSED_MIGRATION_STARTED,
                 {"migration": str(migration_key), "force": force, "fake": fake},
             )
-            check_for_inactive_replicas()
+            check_for_inactive_replicas(
+                get_all_storage_keys(readiness_states=[readiness_state])
+            )
 
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)

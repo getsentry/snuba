@@ -240,8 +240,8 @@ column_set = ColumnSet(
         ("project_id", String()),
         ("timestamp", String()),
         ("level", String()),
-        ("logger", String()),
-        ("server_name", String()),
+        ("release", String()),
+        ("platform", String()),
         ("transaction", String()),
     ]
 )
@@ -255,8 +255,8 @@ column_split_tests = [
             "selected_columns": [
                 "event_id",
                 "level",
-                "logger",
-                "server_name",
+                "release",
+                "platform",
                 "transaction",
                 "timestamp",
                 "project_id",
@@ -279,8 +279,8 @@ column_split_tests = [
             "selected_columns": [
                 "event_id",
                 "level",
-                "logger",
-                "server_name",
+                "release",
+                "platform",
                 "transaction",
                 "timestamp",
                 "project_id",
@@ -299,7 +299,7 @@ column_split_tests = [
         "project_id",
         "timestamp",
         {
-            "selected_columns": ["event_id", "level", "logger", "server_name"],
+            "selected_columns": ["event_id", "level", "release", "platform"],
             "conditions": [
                 ("timestamp", ">=", "2019-09-19T10:00:00"),
                 ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -317,8 +317,8 @@ column_split_tests = [
             "selected_columns": [
                 "event_id",
                 "level",
-                "logger",
-                "server_name",
+                "release",
+                "platform",
                 "transaction",
                 "timestamp",
                 "project_id",
@@ -341,8 +341,8 @@ column_split_tests = [
             "selected_columns": [
                 "event_id",
                 "level",
-                "logger",
-                "server_name",
+                "release",
+                "platform",
                 "transaction",
                 "timestamp",
                 "project_id",
@@ -365,8 +365,8 @@ column_split_tests = [
             "selected_columns": [
                 "event_id",
                 "level",
-                "logger",
-                "server_name",
+                "release",
+                "platform",
                 "transaction",
                 "timestamp",
                 "project_id",
@@ -441,7 +441,7 @@ def test_time_split_ast() -> None:
 
     body = """
         MATCH (events)
-        SELECT event_id, level, logger, server_name, transaction, timestamp, project_id
+        SELECT event_id, level, offset, partition, transaction, timestamp, project_id
         WHERE timestamp >= toDateTime('2019-09-18T10:00:00')
         AND timestamp < toDateTime('2019-09-19T12:00:00')
         AND project_id IN tuple(1)

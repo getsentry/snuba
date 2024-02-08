@@ -57,11 +57,11 @@ class ReplaysProcessor(DatasetMessageProcessor):
         processed["replay_id"] = to_uuid(replay_event["replay_id"])
         processed["segment_id"] = maybe(to_uint16, replay_event.get("segment_id"))
         processed["timestamp"] = default(
-            lambda: datetime.now(timezone.utc),
-            maybe(to_datetime, replay_event.get("timestamp")),
+            lambda: int(datetime.now(timezone.utc).timestamp()),
+            maybe(to_uint32, replay_event.get("timestamp")),
         )
         processed["replay_start_timestamp"] = maybe(
-            to_datetime, replay_event.get("replay_start_timestamp")
+            to_uint32, replay_event.get("replay_start_timestamp")
         )
         processed["urls"] = self.__extract_urls(replay_event)
         processed["trace_ids"] = self.__process_trace_ids(replay_event.get("trace_ids"))
@@ -73,14 +73,16 @@ class ReplaysProcessor(DatasetMessageProcessor):
             str, maybe(to_string, replay_event.get("environment"))
         )
         processed["dist"] = default(str, maybe(to_string, replay_event.get("dist")))
-        processed["platform"] = default(str, maybe(to_string, replay_event["platform"]))
+        processed["platform"] = default(
+            str, maybe(to_string, replay_event.get("platform", "javascript"))
+        )
         processed["replay_type"] = default(
             str,
             maybe(
                 to_enum(["buffer", "session", "error"]), replay_event.get("replay_type")
             ),
         )
-        processed["is_archived"] = default(int, replay_event.get("is_archived"))
+        processed["is_archived"] = int(default(int, replay_event.get("is_archived")))
 
     def _process_tags(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -104,6 +106,8 @@ class ReplaysProcessor(DatasetMessageProcessor):
             if field in user_data and user_data[field]:
                 processed["user"] = user_data[field]
                 return
+
+        processed["user"] = ""
 
     def _process_user(
         self, processed: MutableMapping[str, Any], replay_event: ReplayEventDict
@@ -188,7 +192,7 @@ class ReplaysProcessor(DatasetMessageProcessor):
     ) -> None:
         event_hash = replay_event.get("event_hash")
         if event_hash is None:
-            event_hash = segment_id_to_event_hash(replay_event["segment_id"])
+            event_hash = segment_id_to_event_hash(replay_event.get("segment_id", None))
 
         processed["event_hash"] = str(uuid.UUID(event_hash))
 
@@ -249,15 +253,15 @@ def process_replay_actions(
             ),
             "replay_id": to_uuid(payload["replay_id"]),
             "segment_id": None,
-            "event_hash": click["event_hash"],
+            "event_hash": str(uuid.UUID(click["event_hash"])),
             # Default values for non-nullable columns.
             "trace_ids": [],
             "error_ids": [],
             "urls": [],
             "platform": "javascript",
-            "user": None,
-            "sdk_name": None,
-            "sdk_version": None,
+            "user": "",
+            "sdk_name": "",
+            "sdk_version": "",
             # Kafka columns.
             "retention_days": processed["retention_days"],
             "partition": metadata.partition,
@@ -275,6 +279,7 @@ def process_replay_actions(
             "click_testid": to_string(click["testid"])[:64],
             "click_aria_label": to_string(click["aria_label"])[:64],
             "click_title": to_string(click["title"])[:64],
+            "click_component_name": to_string(click.get("component_name", ""))[:64],
             "click_is_dead": to_uint1(click["is_dead"]),
             "click_is_rage": to_uint1(click["is_rage"]),
         }
@@ -302,7 +307,7 @@ def process_replay_event_link(
         "project_id": processed["project_id"],
         "replay_id": to_uuid(payload["replay_id"]),
         "segment_id": None,
-        "event_hash": payload["event_hash"],
+        "event_hash": str(uuid.UUID(payload["event_hash"])),
         "timestamp": raise_on_null(
             "timestamp", maybe(to_datetime, payload["timestamp"])
         ),
@@ -349,6 +354,10 @@ def to_datetime(value: Any) -> datetime:
     Datetimes for the replays schema standardize on 32 bit dates.
     """
     return _timestamp_to_datetime(_collapse_or_err(_collapse_uint32, int(value)))
+
+
+def to_uint32(value: Any) -> int:
+    return _collapse_or_err(_collapse_uint32, int(value))
 
 
 def to_uint1(value: Any) -> int:

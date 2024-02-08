@@ -150,7 +150,6 @@ class RedisCache(Cache[TValue]):
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
-
             # If we were the first in line, we need to execute the function.
             # We'll also get back the task identity to use for sending
             # notifications and approximately how long we have to run the
@@ -175,7 +174,7 @@ class RedisCache(Cache[TValue]):
                 )
             except concurrent.futures.TimeoutError as error:
                 metrics.increment("execute_timeout", tags=metric_tags)
-                raise TimeoutError("timed out waiting for value") from error
+                raise TimeoutError("timed out while running query") from error
             except Exception as e:
                 metrics.increment("execute_error", tags=metric_tags)
                 error_value = SerializableException.from_standard_exception_instance(e)

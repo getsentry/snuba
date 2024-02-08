@@ -279,8 +279,6 @@ def test_run_optimize_with_ongoing_merges() -> None:
             assert num_optimized == original_num_partitions
             assert mock_merge_ids.call_count == 3
 
-            sleep_mock.assert_called_with(settings.OPTIMIZE_BASE_SLEEP_TIME)
-            assert sleep_mock.call_count == 2  # twice for first and second
             assert sleep_mock.call_args_list == [
                 call(settings.OPTIMIZE_BASE_SLEEP_TIME),
                 call(settings.OPTIMIZE_BASE_SLEEP_TIME),
