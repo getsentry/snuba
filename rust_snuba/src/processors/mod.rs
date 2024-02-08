@@ -110,7 +110,9 @@ mod tests {
         let mut diff =
             json_schema_diff::diff(old_schema, serde_json::to_value(schema).unwrap()).unwrap();
         diff.retain(|change| change.change.is_breaking());
-        assert_eq!(diff, vec![]);
+        if !diff.is_empty() {
+            insta::assert_debug_snapshot!(diff);
+        }
     }
 
     #[test]

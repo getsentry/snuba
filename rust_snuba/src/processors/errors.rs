@@ -49,7 +49,8 @@ pub fn process_message_with_replacement(
 
     match (msg_type.as_str(), error_event, replacement_event) {
         ("insert", Some(error), _) => {
-            let origin_timestamp = DateTime::from_timestamp(error.data.received as i64, 0);
+            let origin_timestamp =
+                DateTime::from_timestamp(error.data.received.unwrap_or_default() as i64, 0);
 
             let mut row = ErrorRow::parse(error, &config.env_config)?;
             row.partition = metadata.partition;
@@ -113,27 +114,27 @@ struct ErrorMessage {
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ErrorData {
     #[serde(default)]
-    contexts: Contexts,
+    contexts: Option<Contexts>,
     #[serde(default)]
     culprit: Unicodify,
     #[serde(default)]
     errors: Option<Vec<Value>>,
     #[serde(default, alias = "sentry.interfaces.Exception")]
-    exception: Exception,
+    exception: Option<Exception>,
     #[serde(default)]
     hierarchical_hashes: Vec<String>,
     #[serde(default)]
     location: Option<String>,
     #[serde(default)]
-    modules: HashMap<String, Option<String>>,
+    modules: Option<HashMap<String, Option<String>>>,
     #[serde(default)]
-    received: f64,
+    received: Option<f64>,
     #[serde(default)]
-    request: Request,
+    request: Option<Request>,
     #[serde(default)]
-    sdk: Sdk,
+    sdk: Option<Sdk>,
     #[serde(default)]
-    tags: Vec<Option<(Unicodify, Unicodify)>>,
+    tags: Option<Vec<Option<(Unicodify, Unicodify)>>>,
     #[serde(default, alias = "sentry.interfaces.Threads")]
     threads: Option<Thread>,
     #[serde(default)]
@@ -141,7 +142,7 @@ struct ErrorData {
     #[serde(default, rename = "type")]
     ty: Unicodify,
     #[serde(default, alias = "sentry.interfaces.User")]
-    user: User,
+    user: Option<User>,
     #[serde(default)]
     version: Option<String>,
 }
@@ -268,7 +269,7 @@ struct Request {
     #[serde(default)]
     method: Unicodify,
     #[serde(default)]
-    headers: Vec<(String, Unicodify)>,
+    headers: Option<Vec<(String, Unicodify)>>,
 }
 
 // User
@@ -386,10 +387,10 @@ impl ErrorRow {
             return Err(anyhow::Error::msg("Invalid type."));
         }
 
+        let from_context = from.data.contexts.unwrap_or_default();
+
         // Parse the optional string to a base16 u64.
-        let span_id = from
-            .data
-            .contexts
+        let span_id = from_context
             .trace
             .span_id
             .as_ref()
@@ -406,9 +407,8 @@ impl ErrorRow {
             .collect();
 
         // SDK Integrations
-        let sdk_integrations = from
-            .data
-            .sdk
+        let from_sdk = from.data.sdk.unwrap_or_default();
+        let sdk_integrations = from_sdk
             .integrations
             .unwrap_or_default()
             .into_iter()
@@ -416,16 +416,19 @@ impl ErrorRow {
             .collect();
 
         // Unwrap the ip-address string.
-        let ip_address_string = from.data.user.ip_address.unwrap_or_default();
+        let from_user = from.data.user.unwrap_or_default();
+        let ip_address_string = from_user.ip_address.unwrap_or_default();
         let (ip_address_v4, ip_address_v6) = match ip_address_string.parse::<IpAddr>() {
             Err(_) => (None, None),
             Ok(IpAddr::V4(ipv4)) => (Some(ipv4), None),
             Ok(IpAddr::V6(ipv6)) => (None, Some(ipv6)),
         };
 
+        let from_request = from.data.request.unwrap_or_default();
+
         // Extract HTTP referrer from the headers list.
         let mut http_referer = None;
-        for (key, value) in from.data.request.headers {
+        for (key, value) in from_request.headers.unwrap_or_default() {
             if key == "Referrer" {
                 http_referer = value.0;
                 break;
@@ -433,9 +436,10 @@ impl ErrorRow {
         }
 
         // Modules.
-        let mut module_names = Vec::with_capacity(from.data.modules.len());
-        let mut module_versions = Vec::with_capacity(from.data.modules.len());
-        for (name, version) in from.data.modules {
+        let from_modules = from.data.modules.unwrap_or_default();
+        let mut module_names = Vec::with_capacity(from_modules.len());
+        let mut module_versions = Vec::with_capacity(from_modules.len());
+        for (name, version) in from_modules {
             module_names.push(name);
             module_versions.push(version.unwrap_or_default());
         }
@@ -448,11 +452,12 @@ impl ErrorRow {
         let mut dist = None;
         let mut user = None;
         let mut replay_id = None;
-        let mut tags_key = Vec::with_capacity(from.data.tags.len());
-        let mut tags_value = Vec::with_capacity(from.data.tags.len());
 
-        let mut from_tags = from.data.tags;
+        let mut from_tags = from.data.tags.unwrap_or_default();
         from_tags.sort();
+
+        let mut tags_key = Vec::with_capacity(from_tags.len());
+        let mut tags_value = Vec::with_capacity(from_tags.len());
 
         for t in from_tags.into_iter().flatten() {
             if let (Some(tag_key), Some(tag_value)) = (&t.0 .0, &t.1 .0) {
@@ -483,9 +488,9 @@ impl ErrorRow {
         let mut contexts_keys = Vec::with_capacity(100);
         let mut contexts_values = Vec::with_capacity(100);
 
-        let mut other_contexts = from.data.contexts.other;
-        if !from.data.user.geo.is_empty() {
-            other_contexts.insert("geo".to_owned(), from.data.user.geo);
+        let mut other_contexts = from_context.other;
+        if !from_user.geo.is_empty() {
+            other_contexts.insert("geo".to_owned(), from_user.geo);
         }
 
         for (container_name, container) in other_contexts {
@@ -503,40 +508,45 @@ impl ErrorRow {
         // python processor. some fields may be used in queries, but other fields can probably go
         // since they have already been promoted.
         if let Some(ContextStringify(Some(value))) =
-            from.data.contexts.trace.other.get("client_sample_rate")
+            from_context.trace.other.get("client_sample_rate")
         {
             contexts_keys.push("trace.client_sample_rate".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(ContextStringify(Some(value))) = from.data.contexts.trace.other.get("op") {
+        if let Some(ContextStringify(Some(value))) = from_context.trace.other.get("op") {
             contexts_keys.push("trace.op".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(span_id) = from.data.contexts.trace.span_id {
+        if let Some(span_id) = from_context.trace.span_id {
             contexts_keys.push("trace.span_id".to_owned());
             contexts_values.push(span_id.to_string());
         }
 
-        if let Some(ContextStringify(Some(status))) = from.data.contexts.trace.other.get("status") {
+        if let Some(ContextStringify(Some(status))) = from_context.trace.other.get("status") {
             contexts_keys.push("trace.status".to_owned());
             contexts_values.push(status.to_string());
         }
 
-        if let Some(trace_id) = from.data.contexts.trace.trace_id {
+        if let Some(trace_id) = from_context.trace.trace_id {
             contexts_keys.push("trace.trace_id".to_owned());
             contexts_values.push(trace_id.simple().to_string());
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
-        if let Some(rid) = from.data.contexts.replay.replay_id {
+        if let Some(rid) = from_context.replay.replay_id {
             replay_id = Some(rid)
         }
 
         // Stacktrace.
 
-        let exceptions = from.data.exception.values.unwrap_or_default();
+        let exceptions = from
+            .data
+            .exception
+            .unwrap_or_default()
+            .values
+            .unwrap_or_default();
 
         let exception_count = exceptions.len();
         let frame_count = exceptions
@@ -628,7 +638,7 @@ impl ErrorRow {
             exception_stacks_value: stack_values,
             group_id: from.group_id,
             hierarchical_hashes,
-            http_method: from.data.request.method.0,
+            http_method: from_request.method.0,
             http_referer,
             ip_address_v4,
             ip_address_v6,
@@ -641,25 +651,25 @@ impl ErrorRow {
             platform: from.platform,
             primary_hash,
             project_id: from.project_id,
-            received: from.data.received as u32, // TODO: Implicit truncation.
+            received: from.data.received.unwrap_or_default() as u32, // TODO: Implicit truncation.
             release,
             replay_id,
             retention_days: from.retention_days,
             sdk_integrations,
-            sdk_name: from.data.sdk.name.0.unwrap_or_default(),
-            sdk_version: from.data.sdk.version.0.unwrap_or_default(),
+            sdk_name: from_sdk.name.0.unwrap_or_default(),
+            sdk_version: from_sdk.version.0.unwrap_or_default(),
             span_id,
             tags_key,
             tags_value,
             timestamp: from.datetime,
             title: from.data.title.0.unwrap_or_default(),
-            trace_id: from.data.contexts.trace.trace_id,
-            trace_sampled: from.data.contexts.trace.sampled.map(|v| v as u8),
+            trace_id: from_context.trace.trace_id,
+            trace_sampled: from_context.trace.sampled.map(|v| v as u8),
             transaction_name: transaction_name.unwrap_or_default(),
             ty: from.data.ty.0.unwrap_or_default(),
-            user_email: from.data.user.email.0,
-            user_id: from.data.user.id.0,
-            user_name: from.data.user.username.0,
+            user_email: from_user.email.0,
+            user_id: from_user.id.0,
+            user_name: from_user.username.0,
             user: user.unwrap_or_default(),
             version: from.data.version,
             ..Default::default()
