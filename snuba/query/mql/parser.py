@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import sentry_sdk
+from parsimonious.exceptions import IncompleteParseError
 from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
@@ -12,6 +13,7 @@ from snuba_sdk.mql.mql import MQL_GRAMMAR
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset_name
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -61,7 +63,6 @@ class InitialParseResult:
     groupby: list[SelectedExpression] | None = None
     conditions: list[Expression] | None = None
     mri: str | None = None
-    public_name: str | None = None
 
 
 ARITHMETIC_OPERATORS_MAPPING = {
@@ -117,7 +118,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         metric_id_condition = binary_condition(
             ConditionFunctions.EQ,
             Column(None, None, "metric_id"),
-            Literal(None, param.mri or param.public_name),
+            Literal(None, param.mri),
         )
         conditions.append(metric_id_condition)
         value_column = exp.parameters[0]
@@ -635,14 +636,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_quoted_public_name(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
-        assert isinstance(node.text, str)
-        return InitialParseResult(public_name=str(node.text[1:-1]))
+        raise ParsingException("MQL endpoint only supports MRIs")
 
     def visit_unquoted_public_name(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
-        assert isinstance(node.text, str)
-        return InitialParseResult(public_name=str(node.text))
+        raise ParsingException("MQL endpoint only supports MRIs")
 
     def visit_identifier(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -653,9 +652,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
-def parse_mql_query_body(
-    body: str,
-) -> LogicalQuery:
+def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
     information provided.
@@ -672,8 +669,31 @@ def parse_mql_query_body(
             'groupby': [SelectedExpression(name='transaction', Column('transaction')],
         )
         """
-        exp_tree = MQL_GRAMMAR.parse(body)
-        parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
+        try:
+            exp_tree = MQL_GRAMMAR.parse(body)
+            parsed: InitialParseResult = MQLVisitor().visit(exp_tree)
+        except ParsingException as e:
+            logger.warning(f"Invalid MQL query ({e}): {body}")
+            raise e
+        except IncompleteParseError as e:
+            lines = body.split("\n")
+            if e.line() > len(lines):
+                line = body
+            else:
+                line = lines[e.line() - 1]
+
+            idx = e.column()
+            prefix = line[max(0, idx - 3) : idx]
+            suffix = line[idx : (idx + 10)]
+            raise ParsingException(
+                f"Parsing error on line {e.line()} at '{prefix}{suffix}'"
+            )
+        except Exception as e:
+            message = str(e)
+            if "\n" in message:
+                message, _ = message.split("\n", 1)
+            raise ParsingException(message)
+
         if not parsed.expression and not parsed.formula:
             raise ParsingException(
                 "No aggregate/expression or formula specified in MQL query"
@@ -710,8 +730,25 @@ def parse_mql_query_body(
             if parsed.groupby:
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+            def extract_mri(param: InitialParseResult) -> str:
+                if param.mri:
+                    return param.mri
+                elif param.formula:
+                    for p in param.parameters or []:
+                        mri = extract_mri(p)
+                        if mri:
+                            return mri
+
+                raise ParsingException("formula does not contain any MRIs")
+
+            mri = extract_mri(parsed)  # Only works for single type formulas
+            entity_key = select_entity(mri, dataset)
+
             query = LogicalQuery(
-                from_clause=None,
+                from_clause=QueryEntity(
+                    key=entity_key, schema=get_entity(entity_key).get_data_model()
+                ),
                 selected_columns=selected_columns,
                 groupby=groupby,
             )
@@ -721,7 +758,10 @@ def parse_mql_query_body(
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
 
-            metric_value = parsed.mri or parsed.public_name
+            metric_value = parsed.mri
+            if not metric_value:
+                raise ParsingException("no MRI specified in MQL query")
+
             conditions: list[Expression] = [
                 binary_condition(
                     ConditionFunctions.EQ,
@@ -736,8 +776,12 @@ def parse_mql_query_body(
                 combine_and_conditions(conditions) if conditions else None
             )
 
+            entity_key = select_entity(metric_value, dataset)
+
             query = LogicalQuery(
-                from_clause=None,
+                from_clause=QueryEntity(
+                    key=entity_key, schema=get_entity(entity_key).get_data_model()
+                ),
                 selected_columns=selected_columns,
                 condition=final_conditions,
                 groupby=groupby,
@@ -745,6 +789,34 @@ def parse_mql_query_body(
     except Exception as e:
         raise e
     return query
+
+
+METRICS_ENTITIES = {
+    "c": EntityKey.METRICS_COUNTERS,
+    "d": EntityKey.METRICS_DISTRIBUTIONS,
+    "s": EntityKey.METRICS_SETS,
+}
+
+GENERIC_ENTITIES = {
+    "c": EntityKey.GENERIC_METRICS_COUNTERS,
+    "d": EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    "s": EntityKey.GENERIC_METRICS_SETS,
+    "g": EntityKey.GENERIC_METRICS_GAUGES,
+}
+
+
+def select_entity(mri: str, dataset: Dataset) -> EntityKey:
+    """
+    Given an MRI, select the entity that it belongs to.
+    """
+    if get_dataset_name(dataset) == "metrics":
+        if entity := METRICS_ENTITIES.get(mri[0]):
+            return entity
+    elif get_dataset_name(dataset) == "generic_metrics":
+        if entity := GENERIC_ENTITIES.get(mri[0]):
+            return entity
+
+    raise ParsingException(f"invalid metric type {mri[0]}")
 
 
 def populate_start_end_time(
@@ -913,14 +985,7 @@ def populate_query_from_mql_context(
     query: LogicalQuery, mql_context_dict: dict[str, Any]
 ) -> tuple[LogicalQuery, MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
-
-    try:
-        entity_key = EntityKey(mql_context.entity)
-        query.set_from_clause(
-            QueryEntity(key=entity_key, schema=get_entity(entity_key).get_data_model())
-        )
-    except Exception as e:
-        raise ParsingException(f"Invalid entity {mql_context.entity}") from e
+    entity_key = query.get_from_clause().key
 
     populate_start_end_time(query, mql_context, entity_key)
     populate_scope(query, mql_context)
@@ -944,7 +1009,7 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_body(body)
+        query = parse_mql_query_body(body, dataset)
     with sentry_sdk.start_span(
         op="parser", description="populate_query_from_mql_context"
     ):

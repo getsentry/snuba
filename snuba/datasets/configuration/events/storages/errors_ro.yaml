@@ -243,8 +243,6 @@ allocation_policies:
         - organization_id
         - referrer
         - project_id
-      default_config_overrides:
-        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -254,6 +252,13 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 10000000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

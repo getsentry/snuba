@@ -418,6 +418,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<FromQuerylogMessage>("snuba-queries");
+        run_schema_type_test::<FromQuerylogMessage>("snuba-queries", None);
     }
 }

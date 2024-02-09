@@ -548,6 +548,7 @@ def test_composite_planner(
         clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         report = clickhouse_query.equals(processed_query)
         assert report[0], f"Mismatch: {report[1]}"

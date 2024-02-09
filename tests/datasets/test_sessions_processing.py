@@ -60,7 +60,10 @@ def test_sessions_processing() -> None:
     )
 
     def query_runner(
-        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
+        clickhouse_query: Query,
+        query_settings: QuerySettings,
+        reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         quantiles = tuple(
             Literal(None, quant) for quant in [0.5, 0.75, 0.9, 0.95, 0.99, 1]
@@ -235,7 +238,10 @@ def test_select_storage(
     )
 
     def query_runner(
-        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
+        clickhouse_query: Query,
+        query_settings: QuerySettings,
+        reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         assert clickhouse_query.get_from_clause().table_name == expected_table
         return QueryResult({}, {})

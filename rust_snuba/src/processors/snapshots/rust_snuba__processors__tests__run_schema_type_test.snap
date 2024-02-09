@@ -1,0 +1,352 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "location",
+        },
+    },
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "title",
+        },
+    },
+    Change {
+        path: ".contexts.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "replay",
+        },
+    },
+    Change {
+        path: ".contexts.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "trace",
+        },
+    },
+    Change {
+        path: ".contexts",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".contexts",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".contexts",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".contexts",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".contexts",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".exception.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "values",
+        },
+    },
+    Change {
+        path: ".exception",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".exception",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".exception",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".exception",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".exception",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".received",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".received",
+        change: TypeRemove {
+            removed: Object,
+        },
+    },
+    Change {
+        path: ".received",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".received",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".request.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "headers",
+        },
+    },
+    Change {
+        path: ".request.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "method",
+        },
+    },
+    Change {
+        path: ".request",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".request",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".request",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".request",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".request",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".sdk.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "integrations",
+        },
+    },
+    Change {
+        path: ".sdk.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "name",
+        },
+    },
+    Change {
+        path: ".sdk.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "version",
+        },
+    },
+    Change {
+        path: ".sdk",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".sdk",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".sdk",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".sdk",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".sdk",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".tags",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".tags",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".tags",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".tags",
+        change: TypeRemove {
+            removed: Object,
+        },
+    },
+    Change {
+        path: ".tags",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".threads.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "values",
+        },
+    },
+    Change {
+        path: ".threads",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".threads",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".threads",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".threads",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".threads",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+    Change {
+        path: ".user.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "email",
+        },
+    },
+    Change {
+        path: ".user.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "geo",
+        },
+    },
+    Change {
+        path: ".user.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "id",
+        },
+    },
+    Change {
+        path: ".user.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "ip_address",
+        },
+    },
+    Change {
+        path: ".user.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "username",
+        },
+    },
+    Change {
+        path: ".user",
+        change: TypeRemove {
+            removed: String,
+        },
+    },
+    Change {
+        path: ".user",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".user",
+        change: TypeRemove {
+            removed: Integer,
+        },
+    },
+    Change {
+        path: ".user",
+        change: TypeRemove {
+            removed: Array,
+        },
+    },
+    Change {
+        path: ".user",
+        change: TypeRemove {
+            removed: Boolean,
+        },
+    },
+]

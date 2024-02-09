@@ -158,6 +158,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<InputMessage>("profiles-call-tree");
+        run_schema_type_test::<InputMessage>("profiles-call-tree", None);
     }
 }

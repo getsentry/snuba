@@ -230,6 +230,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<FromSpanMessage>("snuba-spans");
+        run_schema_type_test::<FromSpanMessage>("snuba-spans", None);
     }
 }

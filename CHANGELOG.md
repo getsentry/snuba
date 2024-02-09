@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.1.2
+
+### Various fixes & improvements
+
+- feat(generic-metrics): Add DLQ back to generic metrics storages (#4964) by @ayirr7
+- feat(rust): Generic metrics compat processor (#5469) by @lynnagara
+- ref(rust): Add better error messages (#5508) by @untitaker
+- Reapply "ref: Python 3.11.6 (#5476)" (#5505) by @getsentry-bot
+- fix(py311): Explicitly import importlib.abc (#5507) by @untitaker
+- Revert "ref: Python 3.11.6 (#5476)" (#5505) by @volokluev
+- feat(capman): Referrer guard rail policy (#5481) by @volokluev
+- ref: Python 3.11.6 (#5476) by @untitaker
+- Bumping GoCD jsonnet to include de (#5493) by @IanWoodard
+- fix(rust): Work around poor error messages by serde (#5503) by @untitaker
+- Tags can be submitted as null (#5504) by @cmanallen
+- fix(capman): Fix invalid tenant ids exception in allocation policy (#5489) by @volokluev
+- admin nav bug fix (#5499) by @kylemumma
+- feat: Deploy release health rust consumer (#5500) by @lynnagara
+- ref: Add rust-errors-consumer to deploys, remove a bunch of already-removed deployments (#5478) by @untitaker
+- fix(cardinality): Fix the query run for cardinality (#5498) by @nikhars
+- ref(ddm): Disable metrics in Snuba (#5497) by @evanh
+- fix: Use the working link to the MQL repository (#5495) by @olksdr
+- Take 2: Port PolymorphicMetricsProcessor to Rust (#5492) by @ayirr7
+- Revert "Revert "Revert "feat(rust): Port PolymorphicMetricsProcessor to Rust (#5419)""" (#5491) by @john-z-yang
+- Revert "Revert "feat(rust): Port PolymorphicMetricsProcessor to Rust (#5419)"" (7446c1ad) by @john-z-yang
+- Revert "feat(rust): Port PolymorphicMetricsProcessor to Rust (#5419)" (871e509f) by @getsentry-bot
+- feat(rust): Port PolymorphicMetricsProcessor to Rust (#5419) by @ayirr7
+- fix(ddm): Fix config bug (#5488) by @evanh
+
+_Plus 28 more_
+
 ## 24.1.1
 
 ### Various fixes & improvements
