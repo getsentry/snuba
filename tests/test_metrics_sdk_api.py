@@ -27,7 +27,7 @@ from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
-TRANSACTION_MRI = "d:transactions/duration@millisecond"
+COUNTERS_MRI = "c:transactions/count_per_root_project@none"
 USE_CASE_ID = "performance"
 RETENTION_DAYS = 90
 
@@ -111,7 +111,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             )
 
         self.indexer_mappings.update(
-            {"transaction.duration": TRANSACTION_MRI, TRANSACTION_MRI: self.metric_id}
+            {"transaction.duration": COUNTERS_MRI, COUNTERS_MRI: self.metric_id}
         )
         # This is a little confusing, but these values are the ones that should be used in the tests
         # Depending on the dataset, the values could be raw strings or indexed ints, so handle those cases
@@ -177,7 +177,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    COUNTERS_MRI,
                     self.metric_id,
                     test_entity,
                 ),
@@ -214,7 +214,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    COUNTERS_MRI,
                     self.metric_id,
                     test_entity,
                 ),
@@ -258,7 +258,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     "transaction.duration",
-                    TRANSACTION_MRI,
+                    COUNTERS_MRI,
                     self.metric_id,
                     test_entity,
                 ),

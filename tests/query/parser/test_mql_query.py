@@ -761,7 +761,7 @@ mql_test_cases = [
         id="Select metric with empty filter",
     ),
     pytest.param(
-        'quantiles(0.5, 0.75)(transaction.user{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
+        'quantiles(0.5, 0.75)(s:transactions/user@none{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
@@ -2129,7 +2129,7 @@ mql_test_cases = [
         id="Select metric with arbitrary function",
     ),
     pytest.param(
-        "topK(10)(sum(transaction.user), 300)",
+        "topK(10)(sum(s:transactions/user@none), 300)",
         {
             "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
@@ -2720,6 +2720,60 @@ invalid_mql_test_cases = [
         },
         ParsingException("queries cannot have a limit higher than 10000"),
         id="missing limit",
+    ),
+    pytest.param(
+        'sum(`transaction.duration`){dist:["dist1", "dist2"]}',
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": None,
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
+            },
+            "scope": {
+                "org_ids": [1],
+                "project_ids": [1],
+                "use_case_id": "transactions",
+            },
+            "limit": 1000000,
+            "offset": None,
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                "dist": 888,
+            },
+        },
+        ParsingException("MQL endpoint only supports MRIs"),
+        id="only mris",
+    ),
+    pytest.param(
+        "sum(`transaction.duration",
+        {
+            "entity": "generic_metrics_distributions",
+            "start": "2021-01-01T00:00:00",
+            "end": "2021-01-02T00:00:00",
+            "rollup": {
+                "orderby": None,
+                "granularity": 60,
+                "interval": 60,
+                "with_totals": None,
+            },
+            "scope": {
+                "org_ids": [1],
+                "project_ids": [1],
+                "use_case_id": "transactions",
+            },
+            "limit": 1000000,
+            "offset": None,
+            "indexer_mappings": {
+                "d:transactions/duration@millisecond": 123456,
+                "dist": 888,
+            },
+        },
+        ParsingException("Parsing error on line 1 at 'um(`transacti'"),
+        id="incomplete error test",
     ),
 ]
 
