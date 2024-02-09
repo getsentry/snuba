@@ -451,6 +451,7 @@ class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table
             clickhouse_query=query,
             query_settings=query_settings,
             reader=self.__cluster.get_reader(),
+            cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
         )
 
 

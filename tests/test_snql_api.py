@@ -376,6 +376,32 @@ class TestSnQLApi(BaseApiTest):
         metadata = record_query_mock.call_args[0][0]
         assert metadata["query_list"][0]["stats"]["error_code"] == 1123
 
+    def test_record_queries_cogs(self) -> None:
+        state.set_config("snuba_api_cogs_probability", 1.0)
+        with patch("snuba.querylog._record_cogs") as record_cogs_mock:
+            result = json.loads(
+                self.post(
+                    "/events/snql",
+                    data=json.dumps(
+                        {
+                            "query": f"""MATCH (events)
+                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                            AND project_id IN tuple({self.project_id})
+                            LIMIT 5""",
+                            "tenant_ids": {"referrer": "r", "organization_id": 123},
+                        }
+                    ),
+                ).data
+            )
+
+            assert len(result["data"]) == 1
+            assert record_cogs_mock.call_count == 1
+            metadata = record_cogs_mock.call_args[0][1]
+            # Don't test the actual value for this because it will change between different test envs (e.g. distributed)
+            assert "cluster_name" in metadata.query_list[0].stats
+
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
         from redis.exceptions import ClusterDownError
