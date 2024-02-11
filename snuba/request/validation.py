@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import random
 import textwrap
-import uuid
 from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
@@ -25,9 +24,11 @@ from snuba.query.query_settings import (
 from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
+from snuba.querylog.factory import get_snuba_query_metadata
 from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
-from snuba.request.exceptions import InvalidJsonRequestException
+from snuba.request.exceptions import InvalidJsonRequestException, PostProcessingError
+from snuba.request.factory import create_request
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -39,7 +40,7 @@ class Parser(Protocol):
     def __call__(
         self,
         request_parts: RequestParts,
-        settings: QuerySettings,
+        settings: QuerySettings | None,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
     ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -48,7 +49,7 @@ class Parser(Protocol):
 
 def parse_snql_query(
     request_parts: RequestParts,
-    settings: QuerySettings,
+    settings: QuerySettings | None,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -59,7 +60,7 @@ def parse_snql_query(
 
 def parse_mql_query(
     request_parts: RequestParts,
-    settings: QuerySettings,
+    settings: QuerySettings | None,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -116,64 +117,24 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate") as span:
         try:
             request_parts = schema.validate(body)
-            tenant_referrer = request_parts.attribution_info["tenant_ids"].get(
-                "referrer"
-            )
-            if tenant_referrer != referrer:
-                metrics.increment(
-                    "referrer_mismatch",
-                    tags={
-                        "tenant_referrer": tenant_referrer or "none",
-                        "request_referrer": referrer,
-                    },
+            referrer = _get_referrer(request_parts, referrer)
+            settings_obj = _get_settings_object(settings_class, request_parts, referrer)
+            try:
+                query, snql_anonymized = parser(
+                    request_parts, settings_obj, dataset, custom_processing
                 )
-            # Handle an edge case where the legacy endpoint is used.
-            referrer = tenant_referrer or referrer
-
-            if settings_class == HTTPQuerySettings:
-                query_settings: MutableMapping[str, bool | str] = {
-                    **request_parts.query_settings,
-                    "consistent": _consistent_override(
-                        request_parts.query_settings.get("consistent", False), referrer
-                    ),
-                }
-                query_settings["referrer"] = referrer
-                # TODO: referrer probably doesn't need to be passed in, it should be from the body
-                settings_obj: Union[HTTPQuerySettings, SubscriptionQuerySettings]
-                # the parameters accept either `str` or `bool` but we pass in `str | bool`
-                settings_obj = settings_class(**query_settings)  # type: ignore
-            elif settings_class == SubscriptionQuerySettings:
-                settings_obj = settings_class(
-                    consistent=_consistent_override(True, referrer),
+            except PostProcessingError as exception:
+                query = exception.query
+                snql_anonymized = exception.snql_anonymized
+                request = _build_request(
+                    body, request_parts, referrer, settings_obj, query, snql_anonymized
                 )
-            query, snql_anonymized = parser(
-                request_parts, settings_obj, dataset, custom_processing
-            )
+                query_metadata = get_snuba_query_metadata(request, dataset, timer)
+                state.record_query(query_metadata.to_dict())
+                raise exception.e
 
-            project_ids = get_object_ids_in_query_ast(query, "project_id")
-            query_project_id = None
-            if project_ids is not None and len(project_ids) == 1:
-                query_project_id = project_ids.pop()
-                sentry_sdk.set_tag("snuba_project_id", query_project_id)
-
-            org_ids = get_object_ids_in_query_ast(query, "org_id")
-            if org_ids is not None and len(org_ids) == 1:
-                sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
-
-            attribution_info = update_attribution_info(
-                request_parts, referrer, query_project_id
-            )
-            request_id = uuid.uuid4().hex
-            request = Request(
-                id=request_id,
-                # TODO: Replace this with the actual query raw body.
-                # this can have an impact on subscriptions so we need
-                # to be careful with the change.
-                original_body=body,
-                query=query,
-                attribution_info=AttributionInfo(**attribution_info),
-                query_settings=settings_obj,
-                snql_anonymized=snql_anonymized,
+            request = _build_request(
+                body, request_parts, referrer, settings_obj, query, snql_anonymized
             )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
@@ -215,3 +176,82 @@ def build_request(
 
         timer.mark("validate_schema")
         return request
+
+
+def _get_referrer(request_parts: RequestParts, referrer: str) -> str:
+    tenant_referrer = request_parts.attribution_info["tenant_ids"].get("referrer")
+    if tenant_referrer != referrer:
+        metrics.increment(
+            "referrer_mismatch",
+            tags={
+                "tenant_referrer": tenant_referrer or "none",
+                "request_referrer": referrer,
+            },
+        )
+    # Handle an edge case where the legacy endpoint is used.
+    return tenant_referrer or referrer
+
+
+def _get_settings_object(
+    settings_class: Type[HTTPQuerySettings] | Type[SubscriptionQuerySettings],
+    request_parts: RequestParts,
+    referrer: str,
+) -> HTTPQuerySettings | SubscriptionQuerySettings:
+    if settings_class == HTTPQuerySettings:
+        query_settings: MutableMapping[str, bool | str] = {
+            **request_parts.query_settings,
+            "consistent": _consistent_override(
+                request_parts.query_settings.get("consistent", False), referrer
+            ),
+        }
+        # TODO: referrer probably doesn't need to be passed in, it should be from the body
+        query_settings["referrer"] = referrer
+        # the parameters accept either `str` or `bool` but we pass in `str | bool`
+        return settings_class(**query_settings)  # type: ignore
+    elif settings_class == SubscriptionQuerySettings:
+        return settings_class(
+            consistent=_consistent_override(True, referrer),
+        )
+    return None  # type: ignore
+
+
+def _get_project_id(query: Query | CompositeQuery[Entity]) -> int | None:
+    project_ids = get_object_ids_in_query_ast(query, "project_id")
+    if project_ids is not None and len(project_ids) == 1:
+        return project_ids.pop()
+    return None
+
+
+def _get_attribution_info(
+    request_parts: RequestParts, referrer: str, query_project_id: int | None
+):
+    return AttributionInfo(
+        **update_attribution_info(request_parts, referrer, query_project_id)
+    )
+
+
+def _build_request(
+    original_body: dict[str, Any],
+    request_parts: RequestParts,
+    referrer: str,
+    settings: QuerySettings,
+    query: Query | CompositeQuery[Entity],
+    snql_anonymized: str,
+) -> Request:
+    org_ids = get_object_ids_in_query_ast(query, "org_id")
+    if org_ids is not None and len(org_ids) == 1:
+        sentry_sdk.set_tag("snuba_org_id", org_ids.pop())
+
+    query_project_id = _get_project_id(query)
+    if query_project_id:
+        sentry_sdk.set_tag("snuba_project_id", query_project_id)
+
+    attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
+
+    return create_request(
+        original_body=original_body,
+        query=query,
+        attribution_info=attribution_info,
+        query_settings=settings,
+        snql_anonymized=snql_anonymized,
+    )
