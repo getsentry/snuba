@@ -224,7 +224,7 @@ def _get_project_id(query: Query | CompositeQuery[Entity]) -> int | None:
 
 def _get_attribution_info(
     request_parts: RequestParts, referrer: str, query_project_id: int | None
-):
+) -> AttributionInfo:
     return AttributionInfo(
         **update_attribution_info(request_parts, referrer, query_project_id)
     )

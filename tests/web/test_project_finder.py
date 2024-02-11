@@ -8,11 +8,11 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
+from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.utils.schemas import Column as EntityColumn
-from snuba.web.query import ProjectsFinder
 
 EVENTS_SCHEMA = EntityColumnSet(
     [
