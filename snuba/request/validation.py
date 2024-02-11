@@ -40,7 +40,7 @@ class Parser(Protocol):
     def __call__(
         self,
         request_parts: RequestParts,
-        settings: QuerySettings | None,
+        settings: QuerySettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
     ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -49,7 +49,7 @@ class Parser(Protocol):
 
 def parse_snql_query(
     request_parts: RequestParts,
-    settings: QuerySettings | None,
+    settings: QuerySettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
@@ -60,7 +60,7 @@ def parse_snql_query(
 
 def parse_mql_query(
     request_parts: RequestParts,
-    settings: QuerySettings | None,
+    settings: QuerySettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
