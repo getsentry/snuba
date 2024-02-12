@@ -16,6 +16,7 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
+from snuba.query.parser.exceptions import PostProcessingError
 from snuba.query.query_settings import (
     HTTPQuerySettings,
     QuerySettings,
@@ -27,7 +28,7 @@ from snuba.querylog import record_error_building_request, record_invalid_request
 from snuba.querylog.factory import get_snuba_query_metadata
 from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
-from snuba.request.exceptions import InvalidJsonRequestException, PostProcessingError
+from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.factory import create_request
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
@@ -131,7 +132,7 @@ def build_request(
                 )
                 query_metadata = get_snuba_query_metadata(request, dataset, timer)
                 state.record_query(query_metadata.to_dict())
-                raise exception.e
+                raise
 
             request = _build_request(
                 body, request_parts, referrer, settings_obj, query, snql_anonymized

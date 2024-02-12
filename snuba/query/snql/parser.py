@@ -71,7 +71,7 @@ from snuba.query.parser import (
     parse_subscriptables,
     validate_aliases,
 )
-from snuba.query.parser.exceptions import ParsingException
+from snuba.query.parser.exceptions import ParsingException, PostProcessingError
 from snuba.query.parser.validation import validate_query
 from snuba.query.query_settings import QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
@@ -100,7 +100,6 @@ from snuba.query.snql.expression_visitor import (
     visit_quoted_literal,
 )
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
-from snuba.request.exceptions import PostProcessingError
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
 
@@ -1015,7 +1014,6 @@ def _treeify_or_and_conditions(
         else:
             return exp
 
-    # raise RecursionError()
     query.transform_expressions(transform)
 
 
@@ -1510,6 +1508,7 @@ def parse_snql_query(
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
+    snql_anonymized = ""
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
@@ -1548,7 +1547,7 @@ def parse_snql_query(
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
         return query, snql_anonymized
-    except Exception as e:
-        if not snql_anonymized:
-            snql_anonymized = ""
-        raise PostProcessingError(query, snql_anonymized, e)
+    except ParsingException:
+        raise
+    except Exception:
+        raise PostProcessingError(query, snql_anonymized)
