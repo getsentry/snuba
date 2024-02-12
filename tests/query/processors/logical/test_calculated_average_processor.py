@@ -42,6 +42,31 @@ SUM_OVER_COUNT_EXPRESSION = FunctionCall(
 )
 
 
+def sumif_over_countif(condition: FunctionCall) -> FunctionCall:
+    return FunctionCall(
+        alias=None,
+        function_name="divide",
+        parameters=(
+            FunctionCall(
+                alias=None,
+                function_name="sumIf",
+                parameters=(
+                    Column(alias="_snuba_value", table_name=None, column_name="value"),
+                    condition,
+                ),
+            ),
+            FunctionCall(
+                alias=None,
+                function_name="countIf",
+                parameters=(
+                    Column(alias="_snuba_value", table_name=None, column_name="value"),
+                    condition,
+                ),
+            ),
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     ("input_query", "expected_query"),
     [
@@ -145,9 +170,81 @@ SUM_OVER_COUNT_EXPRESSION = FunctionCall(
             ),
             id="no remap non-average functions",
         ),
+        pytest.param(
+            Query(
+                query_entity,
+                selected_columns=[
+                    SelectedExpression(
+                        name="aggregate_value",
+                        expression=FunctionCall(
+                            alias="_snuba_aggregate_value",
+                            function_name="multiply",
+                            parameters=(
+                                FunctionCall(
+                                    alias=None,
+                                    function_name="avgIf",
+                                    parameters=(
+                                        Column(
+                                            alias="_snuba_value",
+                                            table_name=None,
+                                            column_name="value",
+                                        ),
+                                        FunctionCall(
+                                            alias="_snuba_metric_id",
+                                            function_name="equals",
+                                            parameters=(
+                                                Column(
+                                                    alias=None,
+                                                    table_name=None,
+                                                    column_name="metric_id",
+                                                ),
+                                                Literal(None, 11235813),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                Literal(None, 2.0),
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+            Query(
+                query_entity,
+                selected_columns=[
+                    SelectedExpression(
+                        name="aggregate_value",
+                        expression=FunctionCall(
+                            alias="_snuba_aggregate_value",
+                            function_name="multiply",
+                            parameters=(
+                                sumif_over_countif(
+                                    FunctionCall(
+                                        alias="_snuba_metric_id",
+                                        function_name="equals",
+                                        parameters=(
+                                            Column(
+                                                alias=None,
+                                                table_name=None,
+                                                column_name="metric_id",
+                                            ),
+                                            Literal(None, 11235813),
+                                        ),
+                                    )
+                                ),
+                                Literal(None, 2.0),
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+            id="formulas query",
+        ),
     ],
 )
-def test_calculated_average_processor(input_query: Query, expected_query: Query):
+def test_calculated_average_processor(
+    input_query: Query, expected_query: Query
+) -> None:
     # TODO: Don't use the guages entity in this test, it shouldn't be necessary
     CalculatedAverageProcessor().process_query(input_query, HTTPQuerySettings())
     assert input_query == expected_query
