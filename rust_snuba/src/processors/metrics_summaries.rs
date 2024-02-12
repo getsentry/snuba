@@ -3,7 +3,6 @@ use chrono::DateTime;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
@@ -17,87 +16,64 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let from: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
+    let from: FromMetricsSummariesMessage = serde_json::from_slice(payload_bytes)?;
 
-    let mut metrics_summaries: Vec<MetricsSummary> = Vec::new();
-    let sentry_tags = from.sentry_tags.unwrap_or_default();
-    let group: u64 = sentry_tags
-        .get("group")
-        .map(|group| u64::from_str_radix(group, 16).unwrap_or_default())
-        .unwrap_or_default();
+    let group: u64 = u64::from_str_radix(&from.group, 16)?;
     let span_id = u64::from_str_radix(&from.span_id, 16)?;
-    let segment_id = from.segment_id.map_or(span_id, |segment_id| {
-        u64::from_str_radix(&segment_id, 16).unwrap_or_default()
-    });
-
-    let end_timestamp_ms = from.start_timestamp_ms + from.duration_ms as u64;
-    for (metric_mri, summaries) in &from._metrics_summary {
-        for summary in summaries {
-            let (tag_keys, tag_values) = summary
-                .tags
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
-                .unzip();
-
-            metrics_summaries.push(MetricsSummary {
-                count: summary.count as u64,
-                deleted: 0,
-                duration_ms: from.duration_ms,
-                end_timestamp: end_timestamp_ms / 1000,
-                group,
-                is_segment: if from.is_segment { 1 } else { 0 },
-                max: summary.max,
-                metric_mri,
-                min: summary.min,
-                project_id: from.project_id,
-                retention_days: enforce_retention(from.retention_days, &config.env_config),
-                segment_id,
-                span_id,
-                sum: summary.sum,
-                tag_keys,
-                tag_values,
-                trace_id: from.trace_id,
-            })
-        }
-    }
+    let segment_id = u64::from_str_radix(&from.segment_id, 16)?;
+    let (tag_keys, tag_values) = from
+        .tags
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .unzip();
 
     let origin_timestamp = DateTime::from_timestamp(from.received as i64, 0);
+    let row = MetricsSummary {
+        count: from.count,
+        deleted: 0,
+        duration_ms: from.duration_ms,
+        end_timestamp: from.end_timestamp,
+        group,
+        is_segment: if from.is_segment { 1 } else { 0 },
+        max: from.max,
+        metric_mri: from.mri,
+        min: from.min,
+        project_id: from.project_id,
+        retention_days: enforce_retention(from.retention_days, &config.env_config),
+        segment_id,
+        span_id,
+        sum: from.sum,
+        tag_keys,
+        tag_values,
+        trace_id: from.trace_id,
+    };
 
-    InsertBatch::from_rows(metrics_summaries, origin_timestamp)
+    InsertBatch::from_rows([row], origin_timestamp)
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
-struct FromSpanMessage {
+struct FromMetricsSummariesMessage<'a> {
     #[serde(default)]
-    _metrics_summary: BTreeMap<String, Vec<FromMetricsSummary>>,
+    count: u64,
     duration_ms: u32,
+    end_timestamp: f64,
+    group: &'a str,
     is_segment: bool,
-    project_id: u64,
-    received: f64,
-    retention_days: Option<u16>,
-    segment_id: Option<String>,
-    sentry_tags: Option<BTreeMap<String, String>>,
-    span_id: String,
-    start_timestamp_ms: u64,
-    trace_id: Uuid,
-
-    #[serde(default)]
-    #[allow(dead_code)]
-    parent_span_id: String,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
-struct FromMetricsSummary {
-    #[serde(default)]
-    min: f64,
     #[serde(default)]
     max: f64,
     #[serde(default)]
+    min: f64,
+    mri: &'a str,
+    project_id: u64,
+    received: f64,
+    retention_days: Option<u16>,
+    segment_id: &'a str,
+    span_id: &'a str,
+    #[serde(default)]
     sum: f64,
     #[serde(default)]
-    count: f64,
-    #[serde(default)]
     tags: BTreeMap<String, String>,
+    trace_id: &'a str,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -105,7 +81,7 @@ struct MetricsSummary<'a> {
     count: u64,
     deleted: u8,
     duration_ms: u32,
-    end_timestamp: u64,
+    end_timestamp: f64,
     group: u64,
     is_segment: u8,
     max: f64,
@@ -120,7 +96,7 @@ struct MetricsSummary<'a> {
     tag_keys: Vec<&'a str>,
     #[serde(rename(serialize = "tags.value"))]
     tag_values: Vec<&'a str>,
-    trace_id: Uuid,
+    trace_id: &'a str,
 }
 
 #[cfg(test)]
@@ -132,93 +108,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_valid_span() {
-        let span = br#"{
-          "_metrics_summary": {
-            "c:sentry.events.outcomes@none": [
-              {
-                "min": 1.0,
-                "max": 1.0,
-                "sum": 1.0,
-                "count": 1,
-                "tags": {
-                  "category": "error",
-                  "environment": "unknown",
-                  "event_type": "error",
-                  "outcome": "accepted",
-                  "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
-                  "topic": "outcomes-billing",
-                  "transaction": "sentry.tasks.store.save_event"
-                }
-              }
-            ],
-            "c:sentry.events.post_save.normalize.errors@none": [
-              {
-                "min": 0.0,
-                "max": 0.0,
-                "sum": 0.0,
-                "count": 1,
-                "tags": {
-                  "environment": "unknown",
-                  "event_type": "error",
-                  "from_relay": "False",
-                  "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
-                  "transaction": "sentry.tasks.store.save_event"
-                }
-              }
-            ]
-          },
+    fn test_valid_summary() {
+        let summary = br#"{
           "duration_ms": 1000,
+          "end_timestamp": 1691105878.72,
+          "group": "deadbeefdeadbeef",
           "is_segment": false,
+          "mri": "c:sentry.events.outcomes@none",
           "project_id": 1,
-          "received": 1691105878.720,
+          "received": 169110587919.123,
           "retention_days": 90,
+          "segment_id": "deadbeefdeadbeef",
           "span_id": "deadbeefdeadbeef",
-          "start_timestamp_ms": 1691105878720,
-          "trace_id": "1f32eb1d-9caf-49ac-a21f-6823486cf581"
+          "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+          "count": 1,
+          "max": 1.0,
+          "min": 1.0,
+          "sum": 1.0,
+          "tags": {
+            "category": "error",
+            "environment": "unknown",
+            "event_type": "error",
+            "outcome": "accepted",
+            "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+            "topic": "outcomes-billing",
+            "transaction": "sentry.tasks.store.save_event"
+          }
         }"#;
 
-        let payload = KafkaPayload::new(None, None, Some(span.to_vec()));
-        let meta = KafkaMessageMetadata {
-            partition: 0,
-            offset: 1,
-            timestamp: DateTime::from(SystemTime::now()),
-        };
-        process_message(payload, meta, &ProcessorConfig::default())
-            .expect("The message should be processed");
-    }
-
-    #[test]
-    fn test_missing_values() {
-        let span = br#"{
-          "_metrics_summary": {
-            "c:sentry.events.outcomes@none": [
-              {
-                "sum": 1.0,
-                "count": 1,
-                "tags": {
-                  "category": "error",
-                  "environment": "unknown",
-                  "event_type": "error",
-                  "outcome": "accepted",
-                  "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
-                  "topic": "outcomes-billing",
-                  "transaction": "sentry.tasks.store.save_event"
-                }
-              }
-            ]
-          },
-          "duration_ms": 1000,
-          "is_segment": false,
-          "project_id": 1,
-          "received": 1691105878.720,
-          "retention_days": 90,
-          "span_id": "deadbeefdeadbeef",
-          "start_timestamp_ms": 1691105878720,
-          "trace_id": "1f32eb1d-9caf-49ac-a21f-6823486cf581"
-        }"#;
-
-        let payload = KafkaPayload::new(None, None, Some(span.to_vec()));
+        let payload = KafkaPayload::new(None, None, Some(summary.to_vec()));
         let meta = KafkaMessageMetadata {
             partition: 0,
             offset: 1,
@@ -230,6 +148,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<FromSpanMessage>("snuba-spans", None);
+        run_schema_type_test::<FromMetricsSummariesMessage>("snuba-metrics-summaries", None);
     }
 }
