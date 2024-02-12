@@ -15,7 +15,7 @@ class QueryByID(QuerylogQuery):
 
     sql = """
     SELECT {{fields}}
-    FROM querylog_local
+    FROM querylog_dist
     WHERE has(clickhouse_queries.query_id, '{{UUID}}')
     AND timestamp > (now() - 60)
     AND timestamp < toDateTime('{{time}}')
@@ -28,7 +28,7 @@ class SQLQueriesForRequestID(QuerylogQuery):
 
     sql = """
     SELECT arrayJoin(clickhouse_queries.sql)
-    FROM querylog_local
+    FROM querylog_dist
     WHERE request_id = '{{UUID}}'
     AND timestamp > (now() - 60)
     AND timestamp < now()
@@ -46,7 +46,7 @@ class DurationForReferrerByProject(QuerylogQuery):
             toStartOfTenMinutes(timestamp) AS time,
             arrayJoin(projects) as projects,
             sum(duration_ms) AS c
-        FROM querylog_local
+        FROM querylog_dist
         WHERE referrer = '{{referrer}}'
         AND time > (now() - (1 * 3600))
         AND time < now()
@@ -72,7 +72,7 @@ class BytesScannedForReferrerByProject(QuerylogQuery):
             toStartOfTenMinutes(timestamp) AS time,
             arrayJoin(projects) as projects,
             sum(arraySum(clickhouse_queries.bytes_scanned)) AS c
-        FROM querylog_local
+        FROM querylog_dist
         WHERE referrer = '{{referrer}}'
         AND time > (now() - ({{duration}}))
         AND time < now()
@@ -98,7 +98,7 @@ class QueryDurationForReferrerByProject(QuerylogQuery):
             toStartOfTenMinutes(timestamp) AS time,
             arrayJoin(projects) as projects,
             sum(arraySum(clickhouse_queries.duration_ms)) AS c
-        FROM querylog_local
+        FROM querylog_dist
         WHERE referrer = '{{referrer}}'
         AND time > (now() - ({{duration}}))
         AND time < now()
@@ -122,7 +122,7 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
     FROM
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as after_scanned
-        FROM querylog_local
+        FROM querylog_dist
         WHERE timestamp >= toDateTime('{{after_scanned_duration_start}}')
         AND timestamp <= toDateTime('{{after_scanned_duration_end}}')
         AND dataset IN ('{{dataset}}')
@@ -130,7 +130,7 @@ class BeforeAfterBytesScannedComparison(QuerylogQuery):
     ) `after` LEFT OUTER JOIN
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) as before_scanned
-        FROM querylog_local
+        FROM querylog_dist
         WHERE timestamp >= toDateTime('{{before_scanned_duration_start}}')
         AND timestamp <= toDateTime('{{before_scanned_duration_end}}')
         AND dataset IN ('{{dataset}}')
@@ -149,7 +149,7 @@ class BeforeAfterDurationComparison(QuerylogQuery):
     FROM
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as after_duration
-        FROM querylog_local
+        FROM querylog_dist
         WHERE timestamp >= toDateTime('{{after_duration_start}}')
         AND timestamp <= toDateTime('{{after_duration_end}}')
         AND dataset IN ('{{dataset}}')
@@ -157,7 +157,7 @@ class BeforeAfterDurationComparison(QuerylogQuery):
     ) `after` LEFT OUTER JOIN
     (
         SELECT referrer, sum(arrayReduce('sum', clickhouse_queries.duration_ms)) as before_duration
-        FROM querylog_local
+        FROM querylog_dist
         WHERE timestamp >= toDateTime('{{before_duartion_start}}')
         AND timestamp <= toDateTime('{{before_duartion_end}}')
         AND dataset IN ('{{dataset}}')
@@ -175,7 +175,7 @@ class TopNReferrerBytotalByteScannedPercentage(QuerylogQuery):
     WITH
     (
         SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
-        FROM querylog_local
+        FROM querylog_dist
         WHERE (timestamp > ({{from}})) AND (timestamp < {{to}})
         AND dataset IN ('{{dataset}}')
     ) AS all_bytes_scanned
@@ -184,7 +184,7 @@ class TopNReferrerBytotalByteScannedPercentage(QuerylogQuery):
         sum(arrayReduce('sum', clickhouse_queries.bytes_scanned)) AS bytes_scanned,
         all_bytes_scanned,
         round((bytes_scanned / all_bytes_scanned) * 100, 3) AS pct
-    FROM querylog_local
+    FROM querylog_dist
     WHERE (timestamp > ({{from}})) AND (timestamp < {{to}})
     AND dataset IN ('{{dataset}}')
     GROUP BY referrer
@@ -200,21 +200,21 @@ class ChangeInTotalByteScannedPercentage(QuerylogQuery):
     WITH
     (
         SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
-        FROM querylog_local
+        FROM querylog_dist
         WHERE (timestamp > ({{t0}}))
         AND (timestamp < {{t0}} + {{delta_t}})
         AND dataset IN ('{{dataset}}')
     ) AS all_bytes_scanned_p0,
     (
         SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
-        FROM querylog_local
+        FROM querylog_dist
         WHERE (timestamp > ({{t1}}))
         AND (timestamp < {{t1}} + {{delta_t}})
         AND dataset IN ('{{dataset}}')
     ) AS all_bytes_scanned_p1,
     (
         SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
-        FROM querylog_local
+        FROM querylog_dist
         WHERE organization = {{org}}
         AND (timestamp > ({{t0}}))
         AND (timestamp < {{t0}} + {{delta_t}})
@@ -222,7 +222,7 @@ class ChangeInTotalByteScannedPercentage(QuerylogQuery):
     ) AS bytes_scanned_p0,
     (
         SELECT sum(arrayReduce('sum', clickhouse_queries.bytes_scanned))
-        FROM querylog_local
+        FROM querylog_dist
         WHERE organization = {{org}}
         AND (timestamp > ({{t1}}))
         AND (timestamp < {{t1}} + {{delta_t}})
@@ -249,7 +249,7 @@ class DurationForReferrerByOrganizations(QuerylogQuery):
             toStartOfTenMinutes(timestamp) AS time,
             sum(duration_ms) AS c,
             organization
-        FROM querylog_local
+        FROM querylog_dist
         WHERE referrer = '{{referrer}}'
         AND time > (now() - ({{duration}}))
         AND time < now()
@@ -275,7 +275,7 @@ class BytesScannedForReferrerByOrganization(QuerylogQuery):
             toStartOfTenMinutes(timestamp) AS time,
             sum(arraySum(clickhouse_queries.bytes_scanned)) AS c,
             organization
-        FROM querylog_local
+        FROM querylog_dist
         WHERE referrer = '{{referrer}}'
         AND time > (now() - ({{duration}}))
         AND time < now()
@@ -300,7 +300,7 @@ class MostThrottledOrgs(QuerylogQuery):
     FROM
     (
         SELECT organization, count(*) as throttled_queries
-        FROM querylog_local
+        FROM querylog_dist
         WHERE
             timestamp > (now() - {{duration}})
             AND JSONExtractRaw(JSONExtractRaw(arrayJoin(clickhouse_queries.stats), 'quota_allowance'), 'explanation') != '{}'
@@ -312,7 +312,7 @@ class MostThrottledOrgs(QuerylogQuery):
     INNER JOIN
     (
         SELECT organization, count(*) as total_queries
-        FROM querylog_local
+        FROM querylog_dist
         WHERE
             timestamp > (now() - {{duration}})
             AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
@@ -339,7 +339,7 @@ class OrgQueryDurationQuantiles(QuerylogQuery):
     FROM
     (
         SELECT organization, count(*) as c, arrayJoin(clickhouse_queries.duration_ms) as duration_ms
-        FROM querylog_local
+        FROM querylog_dist
         WHERE
             timestamp < now()
             AND arrayJoin(clickhouse_queries.query_id) != 'bad_id_xyz'
