@@ -1547,7 +1547,7 @@ def parse_snql_query(
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
         return query, snql_anonymized
-    except ParsingException:
+    except InvalidQueryException:
         raise
     except Exception:
         raise PostProcessingError(query, snql_anonymized)
