@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Tuple, Union, cast
 
@@ -179,7 +180,6 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                     "transaction.duration",
                     COUNTERS_MRI,
                     self.metric_id,
-                    test_entity,
                 ),
                 aggregate="sum",
             ),
@@ -216,7 +216,6 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                     "transaction.duration",
                     COUNTERS_MRI,
                     self.metric_id,
-                    test_entity,
                 ),
                 aggregate="sum",
                 filters=[Condition(Column("transaction"), Op.EQ, "t1")],
@@ -260,7 +259,6 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                     "transaction.duration",
                     COUNTERS_MRI,
                     self.metric_id,
-                    test_entity,
                 ),
                 aggregate="sum",
                 filters=[Condition(Column("transaction"), Op.EQ, "t1")],
@@ -334,6 +332,39 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             "tags.key": [int(k) for k in SHARED_TAGS.keys()],
             "tags.raw_value": ["t1", "200"],
         }
+
+    def test_raw_mql_string(
+        self, test_entity: str, test_dataset: str, tag_column: str
+    ) -> None:
+        query = MetricsQuery(
+            query=f"((sum({COUNTERS_MRI}{{transaction:t1}}) / sum({COUNTERS_MRI})){{transaction:t2}} + sum({COUNTERS_MRI}){{transaction:t3}}) by transaction",
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60, totals=True),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings=self.indexer_mappings,
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                query=query,
+                dataset=test_dataset,
+                app_id="test",
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize(),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200, data
+        rows = data["data"]
+        assert len(rows) == 180, rows
+
+        assert math.isnan(rows[0]["aggregate_value"])  # division by zero
 
 
 @pytest.mark.clickhouse_db

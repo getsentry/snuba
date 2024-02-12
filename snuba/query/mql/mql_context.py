@@ -19,7 +19,6 @@ class MQLContext:
     the request itself. It should not do any validation beyond type checks.
     """
 
-    entity: str
     start: str
     end: str
     rollup: Rollup
@@ -32,9 +31,10 @@ class MQLContext:
         self.validate()
 
     def validate(self) -> None:
-        for field in ["entity", "start", "end"]:
+        for field in ["start", "end"]:
             if not isinstance(getattr(self, field), str) or getattr(self, field) == "":
                 raise ParsingException(f"MQL context: {field} must be a str")
+
         if not isinstance(self.rollup, Rollup):
             raise ParsingException("MQL context: rollup must be a Rollup")
         if not isinstance(self.scope, MetricsScope):
@@ -50,7 +50,6 @@ class MQLContext:
     def from_dict(mql_context_dict: dict[str, Any]) -> MQLContext:
         try:
             return MQLContext(
-                entity=mql_context_dict["entity"],
                 start=mql_context_dict["start"],
                 end=mql_context_dict["end"],
                 rollup=Rollup(**mql_context_dict["rollup"]),
