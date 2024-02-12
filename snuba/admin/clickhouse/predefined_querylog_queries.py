@@ -350,3 +350,24 @@ class OrgQueryDurationQuantiles(QuerylogQuery):
     ORDER BY p99 DESC
     LIMIT 20
 """
+
+
+class TotalBytesScannedByReferrerAndProject(QuerylogQuery):
+    """
+    Returns the list of top 10 projects causing the most bytes scanned for a specific referrer for a given time window.
+    """
+
+    sql = """
+    SELECT
+        arrayJoin(projects) as projects,
+        formatReadableSize(sum(arraySum(clickhouse_queries.bytes_scanned)) AS total_bytes) AS bytes_scanned
+    FROM querylog_dist
+    WHERE referrer = '{{referrer}}'
+    AND timestamp > (now() - ({{duration}}))
+    AND timestamp < now()
+    GROUP BY
+        projects
+    ORDER BY
+       total_bytes DESC
+    LIMIT 10
+"""
