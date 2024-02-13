@@ -13,7 +13,6 @@ COPY requirements-build.txt ./
 RUN set -ex; \
     \
     buildDeps=' \
-        curl \
         git \
         gcc \
         libc6-dev \
@@ -29,6 +28,7 @@ RUN set -ex; \
         gnupg \
     '; \
     runtimeDeps=' \
+        curl \
         libjemalloc2 \
     '; \
     apt-get update; \

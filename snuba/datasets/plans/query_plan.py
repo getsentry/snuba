@@ -22,6 +22,7 @@ class QueryRunner(Protocol):
         clickhouse_query: Union[Query, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         ...
 

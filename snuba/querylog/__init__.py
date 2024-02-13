@@ -101,29 +101,35 @@ def _record_cogs(
     result: Union[QueryResult, QueryException, QueryPlanException],
 ) -> None:
     """
-    Record bytes scanned for Generic Metrics Queries per use case.
+    Record bytes scanned for the clickhouse compute of resource of a query.
     """
 
-    if (
-        not isinstance(result, QueryResult)
-        or query_metadata.dataset != "generic_metrics"
-    ):
+    if not isinstance(result, QueryResult):
         return
 
     profile = result.result.get("profile")
     if not profile or (bytes_scanned := profile.get("progress_bytes")) is None:
         return
 
-    if (use_case_id := request.attribution_info.tenant_ids.get("use_case_id")) is None:
-        return
+    app_feature = query_metadata.dataset.replace("_", "")
+    if (
+        query_metadata.dataset == "generic_metrics"
+        and (use_case_id := request.attribution_info.tenant_ids.get("use_case_id"))
+        is not None
+    ):
+        app_feature += f"_{use_case_id}"
 
-    if random() < (state.get_config("gen_metrics_query_cogs_probability") or 0):
+    cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
+    if random() < (state.get_config("snuba_api_cogs_probability") or 0):
         record_cogs(
-            resource_id="snuba_api_bytes_scanned",
-            app_feature=f"genericmetrics_{use_case_id}",
+            resource_id=f"{cluster_name}_snuba_api_bytes_scanned",
+            app_feature=app_feature,
             amount=bytes_scanned,
             usage_type=UsageUnit.BYTES,
         )
+
+        # TODO: Record the time spent in the API compared to time spent running the
+        # Clickhouse query, so we can track usage of the API pods themselves.
 
 
 def record_query(

@@ -256,6 +256,7 @@ def _dry_run_query_runner(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
+    cluster_name: str,
 ) -> QueryResult:
     # NOTE (Volo) : this is misleading behavior. If this runner is used with a split query,
     # you will only see the sql reported that the first of the split queries ran. Since this returns
@@ -270,7 +271,7 @@ def _dry_run_query_runner(
     return QueryResult(
         {"data": [], "meta": []},
         {
-            "stats": {},
+            "stats": {"cluster_name": cluster_name},
             "sql": formatted_query.get_sql(),
             "experiments": clickhouse_query.get_experiments(),
         },
@@ -286,6 +287,7 @@ def _run_and_apply_column_names(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
+    cluster_name: str,
 ) -> QueryResult:
     """
     Executes the query and, after that, replaces the column names in
@@ -305,6 +307,7 @@ def _run_and_apply_column_names(
         reader,
         robust,
         concurrent_queries_gauge,
+        cluster_name,
     )
 
     alias_name_mapping: MutableMapping[str, list[str]] = {}
@@ -338,6 +341,7 @@ def _format_storage_query_and_run(
     reader: Reader,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge] = None,
+    cluster_name: str = "",
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -375,6 +379,7 @@ def _format_storage_query_and_run(
         "final": visitor.any_final(),
         "referrer": attribution_info.referrer,
         "sample": visitor.get_sample_rate(),
+        "cluster_name": cluster_name,
     }
 
     if query_size_bytes > MAX_QUERY_SIZE_BYTES:

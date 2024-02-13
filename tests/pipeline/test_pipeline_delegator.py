@@ -114,6 +114,7 @@ def test() -> None:
         clickhouse_query: Union[Query, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         nonlocal runner_call_count
         nonlocal runner_settings

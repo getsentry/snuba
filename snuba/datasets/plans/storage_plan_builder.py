@@ -86,6 +86,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 clickhouse_query=query,
                 query_settings=query_settings,
                 reader=self.__cluster.get_reader(),
+                cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
             )
 
         use_split = state.get_config("use_split", 1)

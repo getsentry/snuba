@@ -148,7 +148,10 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
         self,
         message: Message<KafkaPayload>,
     ) -> Result<Message<TNext>, RunTaskError<anyhow::Error>> {
-        validate_schema(&message, &self.schema, self.enforce_schema)?;
+        if let Err(error) = validate_schema(&message, &self.schema, self.enforce_schema) {
+            counter!("snuba.consumer.schema_validation.failed");
+            return Err(error);
+        };
 
         let msg = match message.inner_message {
             InnerMessage::BrokerMessage(msg) => msg,
