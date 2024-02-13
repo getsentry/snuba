@@ -155,11 +155,11 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
     #[serde(default)]
-    replay: ReplayContext,
+    replay: Option<ReplayContext>,
     #[serde(default)]
-    trace: TraceContext,
+    trace: Option<TraceContext>,
     #[serde(flatten)]
-    other: BTreeMap<String, GenericContext>,
+    other: BTreeMap<String, Option<GenericContext>>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -294,7 +294,7 @@ struct User {
     #[serde(default)]
     username: Unicodify,
     #[serde(default)]
-    geo: GenericContext,
+    geo: Option<GenericContext>,
 }
 
 // Row
@@ -397,10 +397,10 @@ impl ErrorRow {
         }
 
         let from_context = from.data.contexts.unwrap_or_default();
+        let from_trace_context = from_context.trace.unwrap_or_default();
 
         // Parse the optional string to a base16 u64.
-        let span_id = from_context
-            .trace
+        let span_id = from_trace_context
             .span_id
             .as_ref()
             .map(|inner| u64::from_str_radix(inner, 16).ok())
@@ -498,12 +498,13 @@ impl ErrorRow {
         let mut contexts_values = Vec::with_capacity(100);
 
         let mut other_contexts = from_context.other;
-        if !from_user.geo.is_empty() {
-            other_contexts.insert("geo".to_owned(), from_user.geo);
+        let from_geo = from_user.geo.unwrap_or_default();
+        if !from_geo.is_empty() {
+            other_contexts.insert("geo".to_owned(), Some(from_geo));
         }
 
         for (container_name, container) in other_contexts {
-            for (key, value) in container {
+            for (key, value) in container.unwrap_or_default() {
                 if let Some(v) = value.0 {
                     if key != "type" {
                         contexts_keys.push(format!("{}.{}", container_name, key));
@@ -517,34 +518,34 @@ impl ErrorRow {
         // python processor. some fields may be used in queries, but other fields can probably go
         // since they have already been promoted.
         if let Some(ContextStringify(Some(value))) =
-            from_context.trace.other.get("client_sample_rate")
+            from_trace_context.other.get("client_sample_rate")
         {
             contexts_keys.push("trace.client_sample_rate".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(ContextStringify(Some(value))) = from_context.trace.other.get("op") {
+        if let Some(ContextStringify(Some(value))) = from_trace_context.other.get("op") {
             contexts_keys.push("trace.op".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(span_id) = from_context.trace.span_id {
+        if let Some(span_id) = from_trace_context.span_id {
             contexts_keys.push("trace.span_id".to_owned());
             contexts_values.push(span_id.to_string());
         }
 
-        if let Some(ContextStringify(Some(status))) = from_context.trace.other.get("status") {
+        if let Some(ContextStringify(Some(status))) = from_trace_context.other.get("status") {
             contexts_keys.push("trace.status".to_owned());
             contexts_values.push(status.to_string());
         }
 
-        if let Some(trace_id) = from_context.trace.trace_id {
+        if let Some(trace_id) = from_trace_context.trace_id {
             contexts_keys.push("trace.trace_id".to_owned());
             contexts_values.push(trace_id.simple().to_string());
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
-        if let Some(rid) = from_context.replay.replay_id {
+        if let Some(rid) = from_context.replay.unwrap_or_default().replay_id {
             replay_id = Some(rid)
         }
 
@@ -677,8 +678,8 @@ impl ErrorRow {
             tags_value,
             timestamp: from.datetime,
             title: from.data.title.0.unwrap_or_default(),
-            trace_id: from_context.trace.trace_id,
-            trace_sampled: from_context.trace.sampled.map(|v| v as u8),
+            trace_id: from_trace_context.trace_id,
+            trace_sampled: from_trace_context.sampled.map(|v| v as u8),
             transaction_name: transaction_name.unwrap_or_default(),
             ty: from.data.ty.0.unwrap_or_default(),
             user_email: from_user.email.0,
