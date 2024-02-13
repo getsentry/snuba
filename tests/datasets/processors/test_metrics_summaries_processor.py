@@ -48,22 +48,22 @@ def build_metrics_summary_result(
 ) -> Sequence[Mapping[str, Any]]:
     return [
         {
-            "count": 1,
+            "count": summary.get("count", 0),
             "deleted": 0,
             "duration_ms": summary["duration_ms"],
             "end_timestamp": summary["end_timestamp"],
             "group": int(summary["group"], 16),
             "is_segment": summary["is_segment"],
-            "max": 1.0,
-            "metric_mri": "c:sentry.events.outcomes@none",
-            "min": 1.0,
+            "max": summary.get("max", 0.0),
+            "metric_mri": summary["mri"],
+            "min": summary.get("min", 0.0),
             "project_id": summary["project_id"],
             "retention_days": summary["retention_days"],
             "segment_id": int(summary["segment_id"], 16),
             "span_id": int(summary["span_id"], 16),
-            "sum": 1.0,
-            "tags.key": summary.get("tags", {}).keys(),
-            "tags.value": summary.get("tags", {}).values(),
+            "sum": summary.get("sum", 0.0),
+            "tags.key": list(summary.get("tags", {}).keys()),
+            "tags.value": list(summary.get("tags", {}).values()),
             "trace_id": summary["trace_id"],
         }
     ]
@@ -78,7 +78,7 @@ class TestMetricsSummaryProcessor:
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
         actual_result = MetricsSummariesMessageProcessor().process_message(
-            METRICS_SUMMARY_SCHEMA.encode(metrics_summary), meta
+            metrics_summary, meta
         )
         assert isinstance(actual_result, InsertBatch)
         rows = actual_result.rows
@@ -98,7 +98,7 @@ class TestMetricsSummaryProcessor:
             offset=1, partition=2, timestamp=datetime(1970, 1, 1)
         )
         actual_result = MetricsSummariesMessageProcessor().process_message(
-            METRICS_SUMMARY_SCHEMA.encode(metrics_summary), meta
+            metrics_summary, meta
         )
 
         assert isinstance(actual_result, InsertBatch)
