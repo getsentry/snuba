@@ -108,7 +108,8 @@ struct ErrorMessage {
     project_id: u64,
     #[serde(default)]
     retention_days: Option<u16>,
-    platform: String,
+    #[serde(default)]
+    platform: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -212,7 +213,7 @@ struct ExceptionMechanism {
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 struct StackTrace {
     #[serde(default)]
-    frames: Vec<StackFrame>,
+    frames: Option<Vec<StackFrame>>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -356,7 +357,7 @@ struct ErrorRow {
     num_processing_errors: u64,
     offset: u64,
     partition: u16,
-    platform: String,
+    platform: Option<String>,
     primary_hash: Uuid,
     project_id: u64,
     received: u32,
@@ -559,7 +560,7 @@ impl ErrorRow {
         let exception_count = exceptions.len();
         let frame_count = exceptions
             .iter()
-            .filter_map(|v| Some(v.as_ref()?.stacktrace.as_ref()?.frames.len()))
+            .filter_map(|v| Some(v.as_ref()?.stacktrace.as_ref()?.frames.as_ref()?.len()))
             .sum();
 
         let mut stack_types = Vec::with_capacity(exception_count);
@@ -589,7 +590,12 @@ impl ErrorRow {
                 stack_mechanism_types.push(stack.mechanism.ty.0);
                 stack_mechanism_handled.push(stack.mechanism.handled.0);
 
-                for frame in stack.stacktrace.unwrap_or_default().frames {
+                for frame in stack
+                    .stacktrace
+                    .unwrap_or_default()
+                    .frames
+                    .unwrap_or_default()
+                {
                     frame_abs_paths.push(frame.abs_path.0);
                     frame_filenames.push(frame.filename.0);
                     frame_packages.push(frame.package.0);
