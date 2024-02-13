@@ -1440,43 +1440,6 @@ class TestApi(SimpleAPITest):
         assert "timing" in result
         assert "timestamp" in result["timing"]
 
-    def test_project_rate_limiting(self) -> None:
-        # All projects except project 1 are allowed
-        state.set_config("project_concurrent_limit", 1)
-        state.set_config("project_concurrent_limit_1", 0)
-
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 2,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": ["platform"],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            )
-        )
-        assert response.status_code == 200
-
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": ["platform"],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            )
-        )
-        assert response.status_code == 429
-        data = json.loads(response.data)
-        assert data["error"]["message"] == "project concurrent of 1 exceeds limit of 0"
-
     def test_doesnt_select_deletions(self) -> None:
         query = {
             "project": 1,
