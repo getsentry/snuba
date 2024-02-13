@@ -8,7 +8,6 @@ pipelines:
             GCP_PROJECT: internal-sentry
             GKE_CLUSTER: zdpwkxst
             GKE_REGION: us-central1
-            GKE_CLUSTER_ZONE: b
             GKE_BASTION_ZONE: b
             # Required for checkruns.
             GITHUB_TOKEN: "{{SECRET:[devinfra-github][token]}}"
@@ -71,7 +70,6 @@ pipelines:
                               - script: |
                                     /devinfra/scripts/k8s/k8stunnel \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba,is_canary=true" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
@@ -103,7 +101,6 @@ pipelines:
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba,is_canary=true" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
@@ -129,7 +126,6 @@ pipelines:
                               - script: |
                                     /devinfra/scripts/k8s/k8stunnel \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
@@ -161,7 +157,6 @@ pipelines:
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
-                                    --context="gke_${GCP_PROJECT}_${GKE_REGION}-${GKE_CLUSTER_ZONE}_${GKE_CLUSTER}" \
                                     --label-selector="service=snuba" \
                                     --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
