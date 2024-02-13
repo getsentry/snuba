@@ -213,7 +213,7 @@ struct ExceptionMechanism {
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 struct StackTrace {
     #[serde(default)]
-    frames: Option<Vec<StackFrame>>,
+    frames: Option<Vec<Option<StackFrame>>>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -278,7 +278,7 @@ struct Request {
     #[serde(default)]
     method: Unicodify,
     #[serde(default)]
-    headers: Option<Vec<(String, Unicodify)>>,
+    headers: Option<Vec<Option<(String, Unicodify)>>>,
 }
 
 // User
@@ -437,7 +437,12 @@ impl ErrorRow {
 
         // Extract HTTP referrer from the headers list.
         let mut http_referer = None;
-        for (key, value) in from_request.headers.unwrap_or_default() {
+        for (key, value) in from_request
+            .headers
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+        {
             if key == "Referrer" {
                 http_referer = value.0;
                 break;
@@ -596,6 +601,8 @@ impl ErrorRow {
                     .unwrap_or_default()
                     .frames
                     .unwrap_or_default()
+                    .into_iter()
+                    .flatten()
                 {
                     frame_abs_paths.push(frame.abs_path.0);
                     frame_filenames.push(frame.filename.0);
