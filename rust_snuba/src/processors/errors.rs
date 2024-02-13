@@ -108,7 +108,8 @@ struct ErrorMessage {
     project_id: u64,
     #[serde(default)]
     retention_days: Option<u16>,
-    platform: String,
+    #[serde(default)]
+    platform: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -154,11 +155,11 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
     #[serde(default)]
-    replay: ReplayContext,
+    replay: Option<ReplayContext>,
     #[serde(default)]
-    trace: TraceContext,
+    trace: Option<TraceContext>,
     #[serde(flatten)]
-    other: BTreeMap<String, GenericContext>,
+    other: BTreeMap<String, Option<GenericContext>>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -189,7 +190,8 @@ struct Exception {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ExceptionValue {
-    stacktrace: StackTrace,
+    #[serde(default)]
+    stacktrace: Option<StackTrace>,
     #[serde(default)]
     mechanism: ExceptionMechanism,
     #[serde(default, rename = "type")]
@@ -197,7 +199,7 @@ struct ExceptionValue {
     #[serde(default)]
     value: Unicodify,
     #[serde(default)]
-    thread_id: Option<u64>,
+    thread_id: Option<ThreadId>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -208,10 +210,10 @@ struct ExceptionMechanism {
     handled: Boolify,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Default)]
 struct StackTrace {
     #[serde(default)]
-    frames: Vec<StackFrame>,
+    frames: Option<Vec<Option<StackFrame>>>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -245,9 +247,16 @@ struct Thread {
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ThreadValue {
     #[serde(default)]
-    id: Option<u64>,
+    id: Option<ThreadId>,
     #[serde(default)]
     main: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema, Eq, PartialEq)]
+#[serde(untagged)]
+enum ThreadId {
+    Int(u64),
+    String(String),
 }
 
 // SDK
@@ -269,7 +278,7 @@ struct Request {
     #[serde(default)]
     method: Unicodify,
     #[serde(default)]
-    headers: Option<Vec<(String, Unicodify)>>,
+    headers: Option<Vec<Option<(String, Unicodify)>>>,
 }
 
 // User
@@ -285,7 +294,7 @@ struct User {
     #[serde(default)]
     username: Unicodify,
     #[serde(default)]
-    geo: GenericContext,
+    geo: Option<GenericContext>,
 }
 
 // Row
@@ -348,7 +357,7 @@ struct ErrorRow {
     num_processing_errors: u64,
     offset: u64,
     partition: u16,
-    platform: String,
+    platform: Option<String>,
     primary_hash: Uuid,
     project_id: u64,
     received: u32,
@@ -388,10 +397,10 @@ impl ErrorRow {
         }
 
         let from_context = from.data.contexts.unwrap_or_default();
+        let from_trace_context = from_context.trace.unwrap_or_default();
 
         // Parse the optional string to a base16 u64.
-        let span_id = from_context
-            .trace
+        let span_id = from_trace_context
             .span_id
             .as_ref()
             .map(|inner| u64::from_str_radix(inner, 16).ok())
@@ -428,7 +437,12 @@ impl ErrorRow {
 
         // Extract HTTP referrer from the headers list.
         let mut http_referer = None;
-        for (key, value) in from_request.headers.unwrap_or_default() {
+        for (key, value) in from_request
+            .headers
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+        {
             if key == "Referrer" {
                 http_referer = value.0;
                 break;
@@ -489,12 +503,13 @@ impl ErrorRow {
         let mut contexts_values = Vec::with_capacity(100);
 
         let mut other_contexts = from_context.other;
-        if !from_user.geo.is_empty() {
-            other_contexts.insert("geo".to_owned(), from_user.geo);
+        let from_geo = from_user.geo.unwrap_or_default();
+        if !from_geo.is_empty() {
+            other_contexts.insert("geo".to_owned(), Some(from_geo));
         }
 
         for (container_name, container) in other_contexts {
-            for (key, value) in container {
+            for (key, value) in container.unwrap_or_default() {
                 if let Some(v) = value.0 {
                     if key != "type" {
                         contexts_keys.push(format!("{}.{}", container_name, key));
@@ -508,34 +523,34 @@ impl ErrorRow {
         // python processor. some fields may be used in queries, but other fields can probably go
         // since they have already been promoted.
         if let Some(ContextStringify(Some(value))) =
-            from_context.trace.other.get("client_sample_rate")
+            from_trace_context.other.get("client_sample_rate")
         {
             contexts_keys.push("trace.client_sample_rate".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(ContextStringify(Some(value))) = from_context.trace.other.get("op") {
+        if let Some(ContextStringify(Some(value))) = from_trace_context.other.get("op") {
             contexts_keys.push("trace.op".to_owned());
             contexts_values.push(value.to_string());
         }
 
-        if let Some(span_id) = from_context.trace.span_id {
+        if let Some(span_id) = from_trace_context.span_id {
             contexts_keys.push("trace.span_id".to_owned());
             contexts_values.push(span_id.to_string());
         }
 
-        if let Some(ContextStringify(Some(status))) = from_context.trace.other.get("status") {
+        if let Some(ContextStringify(Some(status))) = from_trace_context.other.get("status") {
             contexts_keys.push("trace.status".to_owned());
             contexts_values.push(status.to_string());
         }
 
-        if let Some(trace_id) = from_context.trace.trace_id {
+        if let Some(trace_id) = from_trace_context.trace_id {
             contexts_keys.push("trace.trace_id".to_owned());
             contexts_values.push(trace_id.simple().to_string());
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
-        if let Some(rid) = from_context.replay.replay_id {
+        if let Some(rid) = from_context.replay.unwrap_or_default().replay_id {
             replay_id = Some(rid)
         }
 
@@ -551,7 +566,7 @@ impl ErrorRow {
         let exception_count = exceptions.len();
         let frame_count = exceptions
             .iter()
-            .filter_map(|v| Some(v.as_ref()?.stacktrace.frames.len()))
+            .filter_map(|v| Some(v.as_ref()?.stacktrace.as_ref()?.frames.as_ref()?.len()))
             .sum();
 
         let mut stack_types = Vec::with_capacity(exception_count);
@@ -581,7 +596,14 @@ impl ErrorRow {
                 stack_mechanism_types.push(stack.mechanism.ty.0);
                 stack_mechanism_handled.push(stack.mechanism.handled.0);
 
-                for frame in stack.stacktrace.frames {
+                for frame in stack
+                    .stacktrace
+                    .unwrap_or_default()
+                    .frames
+                    .unwrap_or_default()
+                    .into_iter()
+                    .flatten()
+                {
                     frame_abs_paths.push(frame.abs_path.0);
                     frame_filenames.push(frame.filename.0);
                     frame_packages.push(frame.package.0);
@@ -597,8 +619,8 @@ impl ErrorRow {
                 if exception_main_thread != Some(true) {
                     if let Some(stack_thread) = stack.thread_id {
                         for thread in threads.values.iter().flatten().filter_map(|x| x.as_ref()) {
-                            if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
-                                if thread_id == stack_thread && main {
+                            if let (Some(thread_id), Some(main)) = (&thread.id, thread.main) {
+                                if *thread_id == stack_thread && main {
                                     // if it's the main thread, mark it as such and stop it
                                     exception_main_thread = Some(true);
                                     break;
@@ -663,8 +685,8 @@ impl ErrorRow {
             tags_value,
             timestamp: from.datetime,
             title: from.data.title.0.unwrap_or_default(),
-            trace_id: from_context.trace.trace_id,
-            trace_sampled: from_context.trace.sampled.map(|v| v as u8),
+            trace_id: from_trace_context.trace_id,
+            trace_sampled: from_trace_context.sampled.map(|v| v as u8),
             transaction_name: transaction_name.unwrap_or_default(),
             ty: from.data.ty.0.unwrap_or_default(),
             user_email: from_user.email.0,
