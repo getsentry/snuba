@@ -126,7 +126,7 @@ query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: [transaction_id, trace_id]
+      columns: [transaction_id, trace_id, profile_id]
   - processor: HexIntColumnProcessor
     args:
       columns: [span_id, parent_span_id, segment_id, group, group_raw]
