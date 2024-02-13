@@ -189,7 +189,8 @@ struct Exception {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ExceptionValue {
-    stacktrace: StackTrace,
+    #[serde(default)]
+    stacktrace: Option<StackTrace>,
     #[serde(default)]
     mechanism: ExceptionMechanism,
     #[serde(default, rename = "type")]
@@ -208,7 +209,7 @@ struct ExceptionMechanism {
     handled: Boolify,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, JsonSchema, Default)]
 struct StackTrace {
     #[serde(default)]
     frames: Vec<StackFrame>,
@@ -551,7 +552,7 @@ impl ErrorRow {
         let exception_count = exceptions.len();
         let frame_count = exceptions
             .iter()
-            .filter_map(|v| Some(v.as_ref()?.stacktrace.frames.len()))
+            .filter_map(|v| Some(v.as_ref()?.stacktrace.as_ref()?.frames.len()))
             .sum();
 
         let mut stack_types = Vec::with_capacity(exception_count);
@@ -581,7 +582,7 @@ impl ErrorRow {
                 stack_mechanism_types.push(stack.mechanism.ty.0);
                 stack_mechanism_handled.push(stack.mechanism.handled.0);
 
-                for frame in stack.stacktrace.frames {
+                for frame in stack.stacktrace.unwrap_or_default().frames {
                     frame_abs_paths.push(frame.abs_path.0);
                     frame_filenames.push(frame.filename.0);
                     frame_packages.push(frame.package.0);
