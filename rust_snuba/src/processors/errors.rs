@@ -198,7 +198,7 @@ struct ExceptionValue {
     #[serde(default)]
     value: Unicodify,
     #[serde(default)]
-    thread_id: Option<u64>,
+    thread_id: Option<ThreadId>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -246,9 +246,16 @@ struct Thread {
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ThreadValue {
     #[serde(default)]
-    id: Option<u64>,
+    id: Option<ThreadId>,
     #[serde(default)]
     main: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema, Eq, PartialEq)]
+#[serde(untagged)]
+enum ThreadId {
+    Int(u64),
+    String(String),
 }
 
 // SDK
@@ -598,8 +605,8 @@ impl ErrorRow {
                 if exception_main_thread != Some(true) {
                     if let Some(stack_thread) = stack.thread_id {
                         for thread in threads.values.iter().flatten().filter_map(|x| x.as_ref()) {
-                            if let (Some(thread_id), Some(main)) = (thread.id, thread.main) {
-                                if thread_id == stack_thread && main {
+                            if let (Some(thread_id), Some(main)) = (&thread.id, thread.main) {
+                                if *thread_id == stack_thread && main {
                                     // if it's the main thread, mark it as such and stop it
                                     exception_main_thread = Some(true);
                                     break;
