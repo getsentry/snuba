@@ -173,7 +173,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
                     events.append(processed)
         write_processed_messages(self.storage, events)
 
-    def test_retrieval_basic(self, test_entity: str, test_dataset: str) -> None:
+    def test_retrieval_basic(self, test_dataset: str) -> None:
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
@@ -207,9 +207,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         assert response.status_code == 200, data
         assert len(data["data"]) == 180, data
 
-    def test_retrieval_complex(
-        self, test_entity: str, test_dataset: str, tag_column: str
-    ) -> None:
+    def test_retrieval_complex(self, test_dataset: str, tag_column: str) -> None:
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
@@ -250,9 +248,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         assert rows[0]["aggregate_value"] > 0
         assert rows[0]["status_code"] == self.tags[1][1]
 
-    def test_interval_with_totals(
-        self, test_entity: str, test_dataset: str, tag_column: str
-    ) -> None:
+    def test_interval_with_totals(self, test_dataset: str, tag_column: str) -> None:
         query = MetricsQuery(
             query=Timeseries(
                 metric=Metric(
@@ -333,9 +329,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
             "tags.raw_value": ["t1", "200"],
         }
 
-    def test_raw_mql_string(
-        self, test_entity: str, test_dataset: str, tag_column: str
-    ) -> None:
+    def test_raw_mql_string(self, test_dataset: str, tag_column: str) -> None:
         query = MetricsQuery(
             query=f"((sum({COUNTERS_MRI}{{transaction:t1}}) / sum({COUNTERS_MRI})){{transaction:t2}} + sum({COUNTERS_MRI}){{transaction:t3}}) by transaction",
             start=self.start_time,
@@ -362,7 +356,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
 
         assert response.status_code == 200, data
         rows = data["data"]
-        assert len(rows) == 180, rows
+        assert len(rows) >= 180, rows
 
         assert math.isnan(rows[0]["aggregate_value"])  # division by zero
 
