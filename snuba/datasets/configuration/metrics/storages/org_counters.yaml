@@ -16,5 +16,13 @@ schema:
     ]
   local_table_name: metrics_counters_v2_local
   dist_table_name: metrics_counters_v2_dist
+allocation_policies:
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 query_processors:
   - processor: TableRateLimit
