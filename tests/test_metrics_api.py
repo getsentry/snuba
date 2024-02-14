@@ -10,7 +10,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_messages import InputType
-from snuba.datasets.processors.metrics_bucket_processor import timestamp_to_bucket
 from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
@@ -26,6 +25,12 @@ TAG_3_VALUE_1 = 159
 TAG_4_KEY = "5"
 TAG_4_VALUE_1 = 34
 RETENTION_DAYS = 90
+
+
+def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
+    time_seconds = timestamp.timestamp()
+    out_seconds = interval_seconds * (time_seconds // interval_seconds)
+    return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
 
 
 def teardown_common() -> None:
