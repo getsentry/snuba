@@ -51,7 +51,7 @@ def build_metrics_summary_result(
             "count": summary.get("count", 0),
             "deleted": 0,
             "duration_ms": summary["duration_ms"],
-            "end_timestamp": summary["end_timestamp"],
+            "end_timestamp": int(summary["end_timestamp"]),
             "group": int(summary["group"], 16),
             "is_segment": summary["is_segment"],
             "max": summary.get("max", 0.0),
