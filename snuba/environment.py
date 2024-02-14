@@ -84,6 +84,8 @@ def setup_sentry() -> None:
             RedisIntegration(),
             ThreadingIntegration(propagate_hub=True),
         ],
+        # the value for release is also computed in rust-snuba, please keep the
+        # logic in sync
         release=os.getenv("SNUBA_RELEASE"),
         traces_sample_rate=settings.SENTRY_TRACE_SAMPLE_RATE,
         profiles_sample_rate=settings.SNUBA_PROFILES_SAMPLE_RATE,
