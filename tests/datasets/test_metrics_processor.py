@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
-from unittest.mock import ANY, patch
+from unittest.mock import ANY
 
 import pytest
 
@@ -10,9 +10,7 @@ from snuba.datasets.processors.generic_metrics_processor import (
     GenericSetsMetricsProcessor,
 )
 from snuba.datasets.processors.metrics_bucket_processor import (
-    MetricsBucketProcessor,
     PolymorphicMetricsProcessor,
-    timestamp_to_bucket,
 )
 from snuba.processor import InsertBatch
 
@@ -114,25 +112,6 @@ DIST_MESSAGE_SHARED = {
 MOCK_TIME_BUCKET = expected_timestamp
 
 
-def test_time_bucketing() -> None:
-    # Verified these output timestamps as rounding down properly
-    # from today's date at time of writing
-    base_timestamp = 1644349789
-    base_datetime = datetime.fromtimestamp(base_timestamp)
-
-    ten_s_bucket = timestamp_to_bucket(base_datetime, 10)
-    assert ten_s_bucket.timestamp() == 1644349780
-
-    one_min_bucket = timestamp_to_bucket(base_datetime, 60)
-    assert one_min_bucket.timestamp() == 1644349740
-
-    one_hour_bucket = timestamp_to_bucket(base_datetime, 3600)
-    assert one_hour_bucket.timestamp() == 1644346800
-
-    one_day_bucket = timestamp_to_bucket(base_datetime, 86400)
-    assert one_day_bucket.timestamp() == 1644278400
-
-
 TEST_CASES_POLYMORPHIC = [
     pytest.param(
         SET_MESSAGE_SHARED,
@@ -217,21 +196,10 @@ def test_metrics_polymorphic_processor(
     settings.DISABLED_DATASETS = set()
 
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
-    # test_time_bucketing tests the bucket function, parameterizing the output times here
-    # would require repeating the code in the class we're testing
-    with patch(
-        "snuba.datasets.processors.metrics_bucket_processor.timestamp_to_bucket",
-        lambda _, __: MOCK_TIME_BUCKET,
-    ):
-        expected_polymorphic_result = (
-            InsertBatch(expected_output, None, expected_sentry_received_timestamp)
-            if expected_output is not None
-            else None
-        )
-        assert (
-            PolymorphicMetricsProcessor().process_message(message, meta).rows
-            == expected_polymorphic_result.rows
-        )
+    assert (
+        PolymorphicMetricsProcessor().process_message(message, meta).rows
+        == expected_output
+    )
 
 
 @pytest.mark.parametrize(
@@ -274,11 +242,6 @@ def test_generic_metrics_sets_processor(
         GenericSetsMetricsProcessor().process_message(message, meta)
         == expected_polymorphic_result
     )
-
-
-@pytest.fixture
-def processor() -> MetricsBucketProcessor:
-    return GenericSetsMetricsProcessor()
 
 
 def sorted_tag_items(message: Mapping[str, Any]) -> Iterable[Tuple[str, int]]:

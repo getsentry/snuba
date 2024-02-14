@@ -33,6 +33,25 @@ def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
     return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
 
 
+def test_time_bucketing() -> None:
+    # Verified these output timestamps as rounding down properly
+    # from today's date at time of writing
+    base_timestamp = 1644349789
+    base_datetime = datetime.fromtimestamp(base_timestamp)
+
+    ten_s_bucket = timestamp_to_bucket(base_datetime, 10)
+    assert ten_s_bucket.timestamp() == 1644349780
+
+    one_min_bucket = timestamp_to_bucket(base_datetime, 60)
+    assert one_min_bucket.timestamp() == 1644349740
+
+    one_hour_bucket = timestamp_to_bucket(base_datetime, 3600)
+    assert one_hour_bucket.timestamp() == 1644346800
+
+    one_day_bucket = timestamp_to_bucket(base_datetime, 86400)
+    assert one_day_bucket.timestamp() == 1644278400
+
+
 def teardown_common() -> None:
     # Reset rate limits
     state.delete_config("global_concurrent_limit")
