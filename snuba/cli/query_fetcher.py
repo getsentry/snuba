@@ -17,7 +17,7 @@ QueryToRerun = namedtuple("QueryToRerun", ["query_str", "query_id"])
 
 
 class QueriesFileSaver:
-    def __init__(self, gcs_bucket: Optional[GCSUploader] = None) -> None:
+    def __init__(self, gcs_bucket: Optional[str] = None) -> None:
         self.uploader = None
         if gcs_bucket:
             try:
@@ -39,7 +39,7 @@ class QueriesFileSaver:
         hour = date.hour
         return f"queries/{day}/{hour}/{table}"
 
-    def _full_path(self, filename) -> str:
+    def _full_path(self, filename: str) -> str:
         return f"/tmp/{filename}.csv"
 
     def _save_to_csv(self, filename: str, results: Sequence[QueryToRerun]) -> None:
@@ -51,14 +51,19 @@ class QueriesFileSaver:
         logger.info(f"File {self._full_path(filename)} saved")
 
     def _save_to_gcs(self, filename: str, blob_name: str) -> None:
-        self.uploader.upload_file(self._full_path(filename), blob_name)
+        if self.uploader:
+            self.uploader.upload_file(self._full_path(filename), blob_name)
 
-    def save(self, table, date, results) -> None:
+    def save(self, table: str, date: datetime, results: Sequence[QueryToRerun]) -> None:
+        """
+        First save the results to local csv file,
+        then upload the file to gcs bucket.
+        """
         filename = self._format_filename(table, date)
         self._save_to_csv(filename, results)
-        if self.uploader:
-            blob_name = self._format_blob_name(table, date)
-            self._save_to_gcs(filename, blob_name)
+
+        blob_name = self._format_blob_name(table, date)
+        self._save_to_gcs(filename, blob_name)
 
 
 def get_querylog_query(
@@ -164,7 +169,9 @@ def query_fetcher(
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
 
-    def get_queries_from_querylog(table, start, end) -> Sequence[QueryToRerun]:
+    def get_queries_from_querylog(
+        table: str, start: datetime, end: datetime
+    ) -> Sequence[QueryToRerun]:
         queries = []
         q = get_querylog_query([database], [f"{database}.{table}"], start, end)
         q_results = connection.execute(q)
