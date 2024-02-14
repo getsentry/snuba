@@ -128,7 +128,6 @@ def get_credentials() -> Tuple[str, str]:
 )
 @click.option(
     "--gcs-bucket",
-    # todo: only putting this default for now
     help="Name of gcs bucket to save query files to",
 )
 @click.option("--log-level", help="Logging level to use.")
@@ -143,12 +142,23 @@ def query_fetcher(
     log_level: Optional[str] = None,
 ) -> None:
     """
-    We don't need the results of the query because we'll
-    be using the query_log to compare results. We just
-    need to replay all the queries and map the original
-    query_id to the new query id so that when we compare
-    results later we can make sure we are comparing the
-    same query.
+    For a given number of hours (window_hours) in the past,
+    fetch those queries run for each hour from the querylog.
+    These queries will be saved to a GCS bucket for future
+    use by the query_replayer cli command.
+
+    e.g.
+    Assuming window_hours is 2, table is `test_table`, and
+    the job is running at 00:01:00 (random time in hour 0)
+
+        Queries fetched (rounded to the hour):
+        * 2hours ago - 1hour ago
+        * 1hour ago - now
+
+        will be saved as:
+        queries/2024_01_16/22/test_table - first hour
+        queries/2024_01_16/23/test_table- second hour
+
     """
     setup_logging(log_level)
     setup_sentry()
