@@ -20,7 +20,8 @@
     },
     {
       "members": [
-        "group:team-sns@sentry.io"
+        "group:team-sns@sentry.io",
+        "group:team-ops@sentry.io"
       ],
       "role": "roles/AllTools"
     },
