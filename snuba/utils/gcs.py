@@ -61,7 +61,8 @@ class GCSUploader:
     ) -> Blobs:
         """
         List blob names. If the prefix is provided, it will list blob names that exists
-        under that prefix only.
+        under that prefix only. Delimiter is used if you want to get back prefixes. See
+        https://cloud.google.com/storage/docs/listing-objects#list-objects for deats
         """
         blobs = self.storage_client.list_blobs(
             self.bucket_name, prefix=prefix, delimiter=delimiter
