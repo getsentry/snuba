@@ -1,10 +1,15 @@
 import os
-from typing import Optional
+from typing import NamedTuple, Optional, Sequence
 
 import structlog
 from google.cloud.storage.client import Client  # type: ignore
 
 logger = structlog.get_logger().bind(module=__name__)
+
+
+class Blobs(NamedTuple):
+    names: Sequence[str]
+    prefixes: Sequence[str]
 
 
 class GCSUploader:
@@ -50,3 +55,30 @@ class GCSUploader:
         blob.download_to_filename(destination_file_name)
 
         logger.info(f"File {source_blob_name} downloaded to {destination_file_name}.")
+
+    def list_blobs(
+        self, prefix: Optional[str] = None, delimiter: Optional[str] = None
+    ) -> Blobs:
+        """
+        List blob names. If the prefix is provided, it will list blob names that exists
+        under that prefix only. Delimiter is used if you want to get back prefixes. See
+        https://cloud.google.com/storage/docs/listing-objects#list-objects for deats
+        """
+        blobs = self.storage_client.list_blobs(
+            self.bucket_name, prefix=prefix, delimiter=delimiter
+        )
+
+        names = [blob.name for blob in blobs]
+        prefixes = []
+        if delimiter:
+            prefixes = [prefix for prefix in blobs.prefixes]
+
+        return Blobs(names, prefixes)
+
+    def blob_exists(self, source_blob_name: str) -> bool:
+        """
+        Given a source blob name return whether or not it exists.
+        """
+        bucket = self.storage_client.bucket(self.bucket_name)
+        blob = bucket.blob(source_blob_name)
+        return True if blob.exists() else False  # satisfy mypy
