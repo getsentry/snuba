@@ -261,6 +261,7 @@ class HTTPWriteBatch:
             # https://github.com/yandex/ClickHouse/issues/6272 is available.
             content = response.data.decode("utf8")
             details = CLICKHOUSE_ERROR_RE.match(content)
+            print(content)
             if not details:
                 # Error messages looks a bit different in newer versions e.g 22.8
                 # so try a different way of parsing the content
