@@ -48,6 +48,8 @@ SHARED_MAPPING_META = {
     "c": {
         "65546": "transaction",
         "65536": "t1",
+        "65537": "t2",
+        "65538": "t3",
         "65593": "200",
     },
     "h": {
@@ -330,6 +332,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         }
 
     def test_raw_mql_string(self, test_dataset: str, tag_column: str) -> None:
+        print(self.indexer_mappings)
         query = MetricsQuery(
             query=f"((sum({COUNTERS_MRI}{{transaction:t1}}) / sum({COUNTERS_MRI})){{transaction:t2}} + sum({COUNTERS_MRI}){{transaction:t3}}) by transaction",
             start=self.start_time,
