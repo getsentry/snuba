@@ -79,8 +79,8 @@ def get_querylog_query(
     FROM system.query_log
     WHERE (query_kind = 'Select')
     AND (type = 'QueryFinish')
-    AND (databases = {databases})
-    AND (tables = {tables})
+    AND (databases IN {databases})
+    AND (tables IN {tables})
     AND (query_start_time >= toDateTime('{start_time}'))
     AND (query_start_time <= toDateTime('{end_time}'))
     LIMIT 100
