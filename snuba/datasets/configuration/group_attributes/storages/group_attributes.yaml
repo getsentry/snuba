@@ -46,10 +46,13 @@ allocation_policies:
         - project_id
       default_config_overrides:
         is_enforced: 0
-  - name: PassthroughPolicy
+  - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:
-        - blank
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 
 query_processors:
   - processor: TableRateLimit
