@@ -26,18 +26,18 @@ class QueriesFileSaver:
                 logger.info(f"Couldn't set up gcs for bucket {gcs_bucket}: {str(e)}")
 
     def _format_filename(self, table: str, date: datetime) -> str:
-        # Example: queries_2024_01_16_1_errors_local - first hour
-        #          queries_2024_01_16_2_errors_local- second hour
+        # Example: queries_2024_01_16_errors_local_1 - first hour
+        #          queries_2024_01_16_errors_local_2 - second hour
         day = datetime.strftime(date, "%Y_%m_%d")
         hour = date.hour
-        return f"queries_{day}_{hour}_{table}"
+        return f"queries_{day}_{table}_{hour}"
 
     def _format_blob_name(self, table: str, date: datetime) -> str:
-        # Example: queries/2024_01_16/1/errors_local - first hour
-        #          queries/2024_01_16/2/errors_local- second hour
+        # Example: queries/2024_01_16/errors_local_1 - first hour
+        #          queries/2024_01_16/errors_local_2- second hour
         day = datetime.strftime(date, "%Y_%m_%d")
         hour = date.hour
-        return f"queries/{day}/{hour}/{table}"
+        return f"queries/{day}/{table}_{hour}.csv"
 
     def _full_path(self, filename: str) -> str:
         return f"/tmp/{filename}.csv"
@@ -156,8 +156,8 @@ def query_fetcher(
         * 1hour ago - now
 
         will be saved as:
-        queries/2024_01_16/22/test_table - first hour
-        queries/2024_01_16/23/test_table- second hour
+        queries/2024_01_16/test_table_22.csv - first hour
+        queries/2024_01_16/test_table_22.csv - second hour
 
     """
     setup_logging(log_level)
