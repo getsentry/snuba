@@ -193,7 +193,7 @@ struct ExceptionValue {
     #[serde(default)]
     stacktrace: Option<StackTrace>,
     #[serde(default)]
-    mechanism: ExceptionMechanism,
+    mechanism: Option<ExceptionMechanism>,
     #[serde(default, rename = "type")]
     ty: Unicodify,
     #[serde(default)]
@@ -593,8 +593,9 @@ impl ErrorRow {
             for (stack_level, stack) in exceptions.into_iter().flatten().enumerate() {
                 stack_types.push(stack.ty.0);
                 stack_values.push(stack.value.0);
-                stack_mechanism_types.push(stack.mechanism.ty.0);
-                stack_mechanism_handled.push(stack.mechanism.handled.0);
+                let from_mechanism = stack.mechanism.unwrap_or_default();
+                stack_mechanism_types.push(from_mechanism.ty.0);
+                stack_mechanism_handled.push(from_mechanism.handled.0);
 
                 for frame in stack
                     .stacktrace
