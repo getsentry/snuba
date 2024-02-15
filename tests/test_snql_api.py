@@ -21,7 +21,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.validation.validators import ColumnValidationMode
-from snuba.querylog import QueryStatus
+from snuba.querylog.query_metadata import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
