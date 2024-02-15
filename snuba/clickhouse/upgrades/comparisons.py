@@ -1,8 +1,13 @@
 import csv
+<<<<<<< HEAD
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, NamedTuple, Sequence, Type, Union
+=======
+from datetime import datetime
+from typing import NamedTuple, Sequence, Union
+>>>>>>> cbb78bd39 (pull out stuff)
 
 import structlog
 
@@ -11,14 +16,22 @@ from snuba.utils.gcs import GCSUploader
 logger = structlog.get_logger().bind(module=__name__)
 
 
+<<<<<<< HEAD
 @dataclass
 class QueryInfoResult:
+=======
+class QueryInfoResult(NamedTuple):
+>>>>>>> cbb78bd39 (pull out stuff)
     query_str: str
     query_id: str
 
 
+<<<<<<< HEAD
 @dataclass
 class QueryMeasurementResult:
+=======
+class QueryMeasurementResult(NamedTuple):
+>>>>>>> cbb78bd39 (pull out stuff)
     query_id: str
     query_duration_ms: int
     result_rows: int
@@ -29,12 +42,17 @@ class QueryMeasurementResult:
 
 Results = Union[QueryInfoResult, QueryMeasurementResult]
 
+<<<<<<< HEAD
 DIRECTORY_RESULT_TYPES: Dict[str, Type[Results]] = {
+=======
+DIRECTORY_RESULT_TYPES = {
+>>>>>>> cbb78bd39 (pull out stuff)
     "queries": QueryInfoResult,
     "results": QueryMeasurementResult,
 }
 
 
+<<<<<<< HEAD
 class FileFormat(NamedTuple):
     directory: str
     date: datetime
@@ -46,6 +64,13 @@ def type_for_directory(directory: str) -> Type[Results]:
     if directory.startswith("results"):
         # remove the versioning e.g. results-22-8
         directory = "results"
+=======
+def type_for_directory(directory) -> Results:
+    if directory.startswith("results"):
+        # remove the versioning e.g. results-22-8
+        directory = "results"
+
+>>>>>>> cbb78bd39 (pull out stuff)
     return DIRECTORY_RESULT_TYPES[directory]
 
 
@@ -53,6 +78,7 @@ class FileManager:
     def __init__(self, uploader: GCSUploader) -> None:
         self.uploader = uploader
 
+<<<<<<< HEAD
     def _result_type(self, filename: str) -> Type[Results]:
         directory = filename.split("_", 1)[0]
         return type_for_directory(directory)
@@ -69,6 +95,24 @@ class FileManager:
         #          {dir}/2024_01_16/errors_local_2- second hour
         directory, date, table, hour = file_format
         day = datetime.strftime(date, "%Y_%m_%d")
+=======
+    def _result_type(self, filename) -> Results:
+        directory = filename.split("_", 1)[0]
+        return type_for_directory(directory)
+
+    def _format_filename(self, table: str, date: datetime, directory: str) -> str:
+        # Example: {dir}_2024_01_16_errors_local_1 - first hour
+        #          {dir}_2024_01_16_errors_local_2 - second hour
+        day = datetime.strftime(date, "%Y_%m_%d")
+        hour = date.hour
+        return f"{directory}_{day}_{table}_{hour}.csv"
+
+    def _format_blob_name(self, table: str, date: datetime, directory: str) -> str:
+        # Example: {dir}/2024_01_16/errors_local_1 - first hour
+        #          {dir}/2024_01_16/errors_local_2- second hour
+        day = datetime.strftime(date, "%Y_%m_%d")
+        hour = date.hour
+>>>>>>> cbb78bd39 (pull out stuff)
         return f"{directory}/{day}/{table}_{hour}.csv"
 
     def _full_path(self, filename: str) -> str:
@@ -81,6 +125,7 @@ class FileManager:
         with open(self._full_path(filename), mode="w") as file:
             writer = csv.writer(file)
             if header_row:
+<<<<<<< HEAD
                 fields = list(dataclasses.fields(result_type))  # mypy ig
                 writer.writerow(fields)
             for row in results:
@@ -107,6 +152,22 @@ class FileManager:
                         int(row[5]),
                     )
                 results.append(result)
+=======
+                fields = list(result_type._fields)
+                writer.writerow(fields)
+            for row in results:
+                writer.writerow(row)
+
+        logger.info(f"File {self._full_path(filename)} saved")
+
+    def _download_from_csv(self, filename) -> Results:
+        result_type = self._result_type(filename)
+        results: Sequence[Results] = []
+        with open(self._full_path(filename), mode="r") as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                results.append(result_type(*row))
+>>>>>>> cbb78bd39 (pull out stuff)
         return results
 
     def _save_to_gcs(self, filename: str, blob_name: str) -> None:
@@ -118,6 +179,7 @@ class FileManager:
     def filename_from_blob_name(self, blob_name: str) -> str:
         return blob_name.replace("/", "_")
 
+<<<<<<< HEAD
     def parse_blob_name(self, blob_name: str) -> FileFormat:
         directory, date, _ = blob_name.split("/")
         table, hour = blob_name.split("/")[-1].rsplit("_", 1)
@@ -127,10 +189,16 @@ class FileManager:
         )
 
     def save(self, file_format: FileFormat, results: Sequence[Results]) -> None:
+=======
+    def save(
+        self, table: str, date: datetime, directory: str, results: Sequence[Results]
+    ) -> None:
+>>>>>>> cbb78bd39 (pull out stuff)
         """
         First save the results to local csv file,
         then upload the file to gcs bucket.
         """
+<<<<<<< HEAD
         filename = self._format_filename(file_format)
         self._save_to_csv(filename, results)
 
@@ -139,5 +207,15 @@ class FileManager:
 
     def download(self, blob_name: str) -> Sequence[Results]:
         filename = self.filename_from_blob_name(blob_name)
+=======
+        filename = self._format_filename(table, date, directory)
+        self._save_to_csv(filename, results)
+
+        blob_name = self._format_blob_name(table, date, directory)
+        self._save_to_gcs(filename, blob_name)
+
+    def download(self, blob_name: str) -> Sequence[Results]:
+        filename = self._filename_from_blob_name(blob_name)
+>>>>>>> cbb78bd39 (pull out stuff)
         self._download_from_gcs(blob_name, filename)
         return self._download_from_csv(filename)
