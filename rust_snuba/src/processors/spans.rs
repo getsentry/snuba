@@ -5,7 +5,6 @@ use anyhow::Context;
 use chrono::DateTime;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -34,8 +33,6 @@ pub fn process_message(
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FromSpanMessage {
-    #[serde(default)]
-    _metrics_summary: Value,
     description: Option<String>,
     duration_ms: u32,
     event_id: Option<Uuid>,
@@ -82,8 +79,6 @@ struct Span {
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
-    #[serde(default)]
-    metrics_summary: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
@@ -146,11 +141,6 @@ impl TryFrom<FromSpanMessage> for Span {
             .map(|(k, v)| (k, v.value))
             .unzip();
 
-        let metrics_summary = match from._metrics_summary {
-            Value::Object(v) => serde_json::to_string(&v).unwrap_or_default(),
-            _ => "".into(),
-        };
-
         Ok(Self {
             action: sentry_tags.get("action").cloned().unwrap_or_default(),
             description: from.description.unwrap_or_default(),
@@ -163,7 +153,6 @@ impl TryFrom<FromSpanMessage> for Span {
             is_segment: if from.is_segment { 1 } else { 0 },
             measurement_keys,
             measurement_values,
-            metrics_summary,
             module: sentry_tags.get("module").cloned().unwrap_or_default(),
             op: sentry_tags.get("op").cloned().unwrap_or_default(),
             parent_span_id: from.parent_span_id.map_or(0, |parent_span_id| {

@@ -58,7 +58,9 @@ class Topic(Enum):
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
+
     SPANS = "snuba-spans"
+    METRICS_SUMMARIES = "snuba-metrics-summaries"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
