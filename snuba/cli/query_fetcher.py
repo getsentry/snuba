@@ -5,7 +5,11 @@ import click
 import structlog
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.upgrades.comparisons import FileManager, QueryInfoResult
+from snuba.clickhouse.upgrades.comparisons import (
+    FileFormat,
+    FileManager,
+    QueryInfoResult,
+)
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.gcs import GCSUploader
@@ -14,7 +18,7 @@ logger = structlog.get_logger().bind(module=__name__)
 
 
 def get_querylog_query(
-    databases: list[str], tables: list[str], start: datetime, end: datetime
+    database: str, table: str, start: datetime, end: datetime
 ) -> str:
     start_time = datetime.strftime(start, "%Y-%m-%d %H:%M:%S")
     end_time = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
@@ -26,8 +30,8 @@ def get_querylog_query(
     FROM system.query_log
     WHERE (query_kind = 'Select')
     AND (type = 'QueryFinish')
-    AND (databases IN {databases})
-    AND (tables IN {tables})
+    AND (has(databases, '{database}'))
+    AND (has(tables, '{table}'))
     AND (query_start_time >= toDateTime('{start_time}'))
     AND (query_start_time <= toDateTime('{end_time}'))
     """
@@ -130,7 +134,7 @@ def query_fetcher(
         table: str, start: datetime, end: datetime
     ) -> Sequence[QueryInfoResult]:
         queries = []
-        q = get_querylog_query([database], [f"{database}.{table}"], start, end)
+        q = get_querylog_query(database, f"{database}.{table}", start, end)
         q_results = connection.execute(q)
         for querylog_data in q_results.results:
             query_id, query = querylog_data
@@ -153,7 +157,9 @@ def query_fetcher(
             end_time = start_time + interval
             logger.info(f"Fetching queries to run from {table}...")
             queries = get_queries_from_querylog(table, start_time, end_time)
-
-            file_saver.save(table, start_time, "queries", queries)
+            file_format = FileFormat(
+                directory="queries", date=start_time, table=table, hour=start_time.hour
+            )
+            file_saver.save(file_format, queries)
             logger.info(f"Saved {len(queries)} queries from {table}")
             start_time = end_time

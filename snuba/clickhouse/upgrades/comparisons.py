@@ -31,11 +31,17 @@ DIRECTORY_RESULT_TYPES = {
 }
 
 
+class FileFormat(NamedTuple):
+    directory: str
+    date: datetime
+    table: str
+    hour: int
+
+
 def type_for_directory(directory) -> Results:
     if directory.startswith("results"):
         # remove the versioning e.g. results-22-8
         directory = "results"
-
     return DIRECTORY_RESULT_TYPES[directory]
 
 
@@ -47,18 +53,18 @@ class FileManager:
         directory = filename.split("_", 1)[0]
         return type_for_directory(directory)
 
-    def _format_filename(self, table: str, date: datetime, directory: str) -> str:
+    def _format_filename(self, file_format: FileFormat) -> str:
         # Example: {dir}_2024_01_16_errors_local_1 - first hour
         #          {dir}_2024_01_16_errors_local_2 - second hour
+        directory, date, table, hour = file_format
         day = datetime.strftime(date, "%Y_%m_%d")
-        hour = date.hour
         return f"{directory}_{day}_{table}_{hour}.csv"
 
-    def _format_blob_name(self, table: str, date: datetime, directory: str) -> str:
+    def _format_blob_name(self, file_format: FileFormat) -> str:
         # Example: {dir}/2024_01_16/errors_local_1 - first hour
         #          {dir}/2024_01_16/errors_local_2- second hour
+        directory, date, table, hour = file_format
         day = datetime.strftime(date, "%Y_%m_%d")
-        hour = date.hour
         return f"{directory}/{day}/{table}_{hour}.csv"
 
     def _full_path(self, filename: str) -> str:
@@ -96,20 +102,24 @@ class FileManager:
     def filename_from_blob_name(self, blob_name: str) -> str:
         return blob_name.replace("/", "_")
 
-    def save(
-        self, table: str, date: datetime, directory: str, results: Sequence[Results]
-    ) -> None:
+    def parse_blob_name(self, blob_name) -> FileFormat:
+        directory, date, _ = blob_name.split("/")
+        table, hour = blob_name.split("/")[-1].rsplit("_", 1)
+        hour = hour.replace(".csv", "")
+        return FileFormat(directory, datetime.strptime(date, "%Y_%m_%d"), table, hour)
+
+    def save(self, file_format: FileFormat, results: Sequence[Results]) -> None:
         """
         First save the results to local csv file,
         then upload the file to gcs bucket.
         """
-        filename = self._format_filename(table, date, directory)
+        filename = self._format_filename(file_format)
         self._save_to_csv(filename, results)
 
-        blob_name = self._format_blob_name(table, date, directory)
+        blob_name = self._format_blob_name(file_format)
         self._save_to_gcs(filename, blob_name)
 
     def download(self, blob_name: str) -> Sequence[Results]:
-        filename = self._filename_from_blob_name(blob_name)
+        filename = self.filename_from_blob_name(blob_name)
         self._download_from_gcs(blob_name, filename)
         return self._download_from_csv(filename)
