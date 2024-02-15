@@ -9,7 +9,7 @@ from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 
 
-def get_snuba_query_metadata(
+def create_snuba_query_metadata(
     request: Request, dataset: Dataset, timer: Timer
 ) -> SnubaQueryMetadata:
     start, end = None, None

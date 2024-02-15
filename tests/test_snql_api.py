@@ -21,6 +21,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.validation.validators import ColumnValidationMode
+from snuba.querylog import QueryStatus
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
@@ -133,6 +134,36 @@ class TestSnQLApi(BaseApiTest):
                 "project_id": self.project_id,
             }
         ]
+
+    @patch("snuba.state.record_query")
+    @patch("snuba.query.snql.parser._treeify_or_and_conditions")
+    def test_recursion_error_in_treeify(
+        self, mock_treeify: MagicMock, mock_record_query: MagicMock
+    ) -> None:
+        mock_treeify.side_effect = RecursionError()
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "query": f"""MATCH (discover_events )
+                    SELECT count() AS count BY project_id, tags[custom_tag]
+                    WHERE type != 'transaction' AND project_id = {self.project_id}
+                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    ORDER BY count ASC
+                    LIMIT 1000""",
+                    "referrer": "myreferrer",
+                    "turbo": False,
+                    "consistent": True,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        assert response.status_code == 500
+        mock_record_query.assert_called_once()
+        metadata = mock_record_query.call_args.args[0]
+        assert metadata["status"] == QueryStatus.ERROR.value and "request" in metadata
 
     def test_sessions_query(self) -> None:
         response = self.post(
