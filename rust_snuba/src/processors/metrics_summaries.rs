@@ -18,9 +18,21 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let from: FromMetricsSummariesMessage = serde_json::from_slice(payload_bytes)?;
 
-    let group: u64 = u64::from_str_radix(from.group, 16)?;
-    let span_id = u64::from_str_radix(from.span_id, 16)?;
-    let segment_id = u64::from_str_radix(from.segment_id, 16)?;
+    let group = if !from.group.is_empty() {
+        u64::from_str_radix(from.group, 16)?
+    } else {
+        0
+    };
+    let span_id = if !from.span_id.is_empty() {
+        u64::from_str_radix(from.span_id, 16)?
+    } else {
+        0
+    };
+    let segment_id = if !from.segment_id.is_empty() {
+        u64::from_str_radix(from.segment_id, 16)?
+    } else {
+        0
+    };
     let (tag_keys, tag_values) = from
         .tags
         .iter()
