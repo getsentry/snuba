@@ -1,119 +1,133 @@
-import csv
-from collections import namedtuple
-from typing import Optional, Sequence
+from datetime import datetime
+from typing import List, Optional, Sequence, Tuple
 
 import click
+import sentry_sdk
 import structlog
 
+from snuba import settings
+from snuba.admin.notifications.slack.client import SlackClient
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.upgrades.comparisons import (
+    FileFormat,
+    FileManager,
+    QueryInfoResult,
+)
 from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
+from snuba.utils.gcs import GCSUploader
 
 logger = structlog.get_logger().bind(module=__name__)
 
-QueryToRerun = namedtuple("QueryToRerun", ["query_str", "query_id"])
+
+class BlobGetter:
+    def __init__(self, uploader: GCSUploader) -> None:
+        self.uploader = uploader
+
+    def get_prefixes(self, prefix: str) -> Sequence[str]:
+        _, prefixes = self.uploader.list_blobs(prefix=prefix, delimiter="/")
+        return [p.replace(prefix, "") for p in prefixes]
+
+    def get_all_names(self, prefix: str) -> Sequence[str]:
+        blob_names, _ = self.uploader.list_blobs(prefix=prefix, delimiter="")
+        return blob_names
+
+    def get_prefix_diffs(self, prefixes: Tuple[str, str]) -> Sequence[str]:
+        p1, p2 = prefixes
+        return list(set(self.get_prefixes(p1)).difference(set(self.get_prefixes(p2))))
+
+    def get_name_diffs(self, prefixes: Tuple[str, str]) -> Sequence[str]:
+        blob_diffs: List[str] = []
+        prefix_diffs = self.get_prefix_diffs(prefixes)
+        p = prefixes[0]
+        for prefix in prefix_diffs:
+            full_prefix = f"{p}{prefix}"
+            blob_diffs += self.get_all_names(full_prefix)
+        return blob_diffs
 
 
-def get_queries_from_file(filename: str) -> Sequence[QueryToRerun]:
-    """
-    Assumes there is a local csv file first, if not attempts to
-    get a file from GCS.
-    """
-
-    def get_from_gcs(filename: str) -> Sequence[QueryToRerun]:
-        # TODO if needed
-        return []
-
-    queries: Sequence[QueryToRerun] = []
-    try:
-        base = open(filename)
-        base_reader = csv.reader(base)
-        queries = [QueryToRerun(row[0], row[1]) for row in base_reader]
-    except FileNotFoundError:
-        logger.debug("No local CSV file")
-        queries = get_from_gcs(filename)
-
-    return queries
-
-
-def save_to_csv(results: Sequence[QueryToRerun], filename: str) -> None:
-    with open(filename, mode="w") as file:
-        writer = csv.writer(file)
-        for row in results:
-            writer.writerow(row)
-
-
-def get_querylog_query(
-    databases: list[str], tables: list[str], window: Optional[int]
+def format_results_query(
+    type: str,
+    database: str,
+    table: str,
+    start: datetime,
+    end: datetime,
 ) -> str:
-    if not window:
-        window = 3600
-    start = f"toDateTime(now() - {window})"
-
+    start_time = datetime.strftime(start, "%Y-%m-%d %H:%M:%S")
+    end_time = datetime.strftime(end, "%Y-%m-%d %H:%M:%S")
     return rf"""
     SELECT
         query_id,
-        query
+        query_duration_ms,
+        result_rows,
+        result_bytes,
+        read_rows,
+        read_bytes
     FROM system.query_log
     WHERE (query_kind = 'Select')
-    AND (type = 'QueryFinish')
-    AND (databases = {databases})
-    AND (tables = {tables})
-    AND (query_start_time >= {start})
-    AND (query_start_time <= toDateTime(now()))
-    LIMIT 100
+    AND (type = '{type}')
+    AND (has(databases, '{database}'))
+    AND (has(tables, '{table}'))
+    AND (query_start_time >= '{start_time}')
+    AND (query_start_time <= '{end_time}')
+    ORDER BY query_id
     """
+
+
+def get_credentials() -> Tuple[str, str]:
+    # TOOO don't hardcode credentials, use settings
+    return ("default", "")
 
 
 @click.command()
 @click.option(
     "--clickhouse-host",
     help="Clickhouse server to write to.",
+    default="localhost",
     required=True,
 )
 @click.option(
     "--clickhouse-port",
     type=int,
+    default=9000,
     help="Clickhouse native port to write to.",
     required=True,
 )
 @click.option(
-    "--filename",
-    help="If querying direcly, file to save to and replay from, otherwise just to replay from",
+    "--event-type",
+    help="Type of event that occured while executing query.",
+    type=click.Choice(
+        ["QueryFinish", "ExceptionBeforeStart", "ExceptionWhileProcessing"]
+    ),
     required=True,
-    default="/tmp/queries_to_rerun.csv",
+    default="QueryFinish",
 )
 @click.option(
-    "--querylog-host",
-    help="If querying directly which host for the querylog.",
+    "--override",
+    help="Option to override any previously re-run results",
+    is_flag=True,
+    default=False,
 )
 @click.option(
-    "--querylog-port",
-    type=int,
-    help="If querying directly which port for the querylog",
+    "--notify",
+    help="Option to send saved csv file to slack",
+    is_flag=True,
+    default=False,
 )
 @click.option(
-    "--window",
-    type=int,
-    help="Time window to re-run queries, in seconds",
-)
-@click.option(
-    "--storage-name",
-    type=str,
-    help="If querying directly which port for the querylog",
+    "--gcs-bucket",
+    help="Name of gcs bucket to save query files to",
+    required=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 def query_replayer(
     *,
     clickhouse_host: str,
     clickhouse_port: int,
-    filename: str,
-    querylog_host: Optional[str],
-    querylog_port: Optional[int],
-    window: Optional[int],
-    storage_name: Optional[str],
+    event_type: str,
+    override: bool,
+    notify: bool,
+    gcs_bucket: str,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -127,59 +141,106 @@ def query_replayer(
     setup_logging(log_level)
     setup_sentry()
 
-    if querylog_host and querylog_port and storage_name:
-        logger.info("Fetching queries to run from ClickHouse...")
-        storage_key = StorageKey(storage_name)
-        storage = get_storage(storage_key)
-        (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
-        db = storage.get_cluster().get_database()
-        connection = ClickhousePool(
-            host=querylog_host,
-            port=querylog_port,
-            user=clickhouse_user,
-            password=clickhouse_password,
-            database=db,
-            client_settings=ClickhouseClientSettings.QUERY.value.settings,
-        )
-        table_names = connection.execute("SHOW TABLES")
-
-        def get_queries_from_querylog() -> Sequence[QueryToRerun]:
-            queries = []
-            for (table,) in table_names.results:
-                q = get_querylog_query([db], [f"{db}.{table}"], window)
-                q_results = connection.execute(q)
-                for querylog_data in q_results.results:
-                    query_id, query = querylog_data
-                    queries.append(QueryToRerun(query_id=query_id, query_str=query))
-            return queries
-
-        queries = get_queries_from_querylog()
-        save_to_csv(queries, filename)
-    else:
-        queries = get_queries_from_file(filename)
-
+    database = "default"
+    (clickhouse_user, clickhouse_password) = get_credentials()
     connection = ClickhousePool(
         host=clickhouse_host,
         port=clickhouse_port,
-        user="default",  # todo
-        password="",  # todo
-        database="default",  # todo
+        user=clickhouse_user,
+        password=clickhouse_password,
+        database=database,  # todo
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
 
-    reran_queries = 0
-    logger.info("Re-running queries...")
-    for q in queries:
-        try:
-            connection.execute(
-                q.query_str,
-                query_id=q.query_id,
-            )
-            reran_queries += 1
-        except Exception:
-            logger.debug(
-                f"Re-ran {reran_queries} queries before failing on {q.query_id}"
-            )
-            return
+    def get_version() -> str:
+        [(version,)] = connection.execute("SELECT version()").results
+        major, minor, _ = version.split(".", 2)
+        return f"{major}-{minor}"
 
-    logger.info(f"Successfully re-ran {reran_queries} queries")
+    uploader = GCSUploader(gcs_bucket)
+    blob_getter = BlobGetter(uploader)
+    file_manager = FileManager(uploader)
+
+    results_directory = f"results-{get_version()}"
+    if override:
+        blobs_to_replay = blob_getter.get_all_names(prefix="queries")
+    else:
+        blobs_to_replay = blob_getter.get_name_diffs(
+            ("queries/", f"{results_directory}/")
+        )
+
+    def rerun_queries_for_blob(blob: str) -> Tuple[int, int]:
+        queries = file_manager.download(blob)
+        reran_queries = 0
+        total_queries = len(queries)
+        logger.info(f"Re-running queries for {blob}")
+        for q in queries:
+            assert isinstance(q, QueryInfoResult)
+            try:
+                connection.execute(
+                    q.query_str,
+                    query_id=q.query_id,
+                )
+                reran_queries += 1
+            except Exception as e:
+                logger.info(
+                    f"Re-ran {reran_queries}/{total_queries} queries before failing on {q.query_id}"
+                )
+                # capturing the execption so that we can debug,
+                # but not re-raising because we don't want one
+                # blob to prevent others from being processed
+                sentry_sdk.capture_exception(e)
+        logger.info(f"Re-ran {reran_queries}/{total_queries} queries")
+        return (total_queries, reran_queries)
+
+    for blob_name in blobs_to_replay:
+        rerun_start = datetime.utcnow()
+        total, reran = rerun_queries_for_blob(blob_name)
+        rerun_end = datetime.utcnow()
+
+        if total == 0:
+            logger.info(f"No queries to re-run for {blob_name}")
+            continue
+
+        if reran != total:
+            logger.info(f"Incomplete re-run for {blob_name}")
+            continue
+
+        queries_file_format = file_manager.parse_blob_name(blob_name)
+        query = format_results_query(
+            event_type,
+            database,
+            f"{database}.{queries_file_format.table}",
+            rerun_start,
+            rerun_end,
+        )
+        results = connection.execute(query)
+
+        # File format is the same except for the directory
+        file_manager.save(
+            FileFormat(
+                directory=results_directory,
+                date=queries_file_format.date,
+                table=queries_file_format.table,
+                hour=queries_file_format.hour,
+            ),
+            results.results,
+        )
+
+        if notify:
+            # TODO: maybe use new specific channel id
+            filename = file_manager.filename_from_blob_name(blob_name)
+            slack_client = SlackClient(
+                channel_id=settings.SNUBA_SLACK_CHANNEL_ID,
+                token=settings.SLACK_API_TOKEN,
+            )
+
+            slack_client.post_file(
+                file_name=f"{filename}",
+                file_path=f"/tmp/{filename}",
+                file_type="csv",
+                initial_comment=f"Querylog Result Report: {filename}",
+            )
+
+    # clear out the query_log table after we re-ran queries
+    connection.execute("TRUNCATE TABLE system.query_log")
