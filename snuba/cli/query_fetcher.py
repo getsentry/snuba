@@ -1,5 +1,3 @@
-import csv
-from collections import namedtuple
 from datetime import datetime, timedelta
 from typing import Optional, Sequence, Tuple
 
@@ -7,63 +5,12 @@ import click
 import structlog
 
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.upgrades.comparisons import FileManager, QueryInfoResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.gcs import GCSUploader
 
 logger = structlog.get_logger().bind(module=__name__)
-
-QueryToRerun = namedtuple("QueryToRerun", ["query_str", "query_id"])
-
-
-class QueriesFileSaver:
-    def __init__(self, gcs_bucket: Optional[str] = None) -> None:
-        self.uploader = None
-        if gcs_bucket:
-            try:
-                self.uploader = GCSUploader(gcs_bucket)
-            except Exception as e:
-                logger.info(f"Couldn't set up gcs for bucket {gcs_bucket}: {str(e)}")
-
-    def _format_filename(self, table: str, date: datetime) -> str:
-        # Example: queries_2024_01_16_errors_local_1 - first hour
-        #          queries_2024_01_16_errors_local_2 - second hour
-        day = datetime.strftime(date, "%Y_%m_%d")
-        hour = date.hour
-        return f"queries_{day}_{table}_{hour}"
-
-    def _format_blob_name(self, table: str, date: datetime) -> str:
-        # Example: queries/2024_01_16/errors_local_1 - first hour
-        #          queries/2024_01_16/errors_local_2- second hour
-        day = datetime.strftime(date, "%Y_%m_%d")
-        hour = date.hour
-        return f"queries/{day}/{table}_{hour}.csv"
-
-    def _full_path(self, filename: str) -> str:
-        return f"/tmp/{filename}.csv"
-
-    def _save_to_csv(self, filename: str, results: Sequence[QueryToRerun]) -> None:
-        with open(self._full_path(filename), mode="w") as file:
-            writer = csv.writer(file)
-            for row in results:
-                writer.writerow(row)
-
-        logger.info(f"File {self._full_path(filename)} saved")
-
-    def _save_to_gcs(self, filename: str, blob_name: str) -> None:
-        if self.uploader:
-            self.uploader.upload_file(self._full_path(filename), blob_name)
-
-    def save(self, table: str, date: datetime, results: Sequence[QueryToRerun]) -> None:
-        """
-        First save the results to local csv file,
-        then upload the file to gcs bucket.
-        """
-        filename = self._format_filename(table, date)
-        self._save_to_csv(filename, results)
-
-        blob_name = self._format_blob_name(table, date)
-        self._save_to_gcs(filename, blob_name)
 
 
 def get_querylog_query(
@@ -83,7 +30,6 @@ def get_querylog_query(
     AND (tables IN {tables})
     AND (query_start_time >= toDateTime('{start_time}'))
     AND (query_start_time <= toDateTime('{end_time}'))
-    LIMIT 100
     """
 
 
@@ -157,7 +103,7 @@ def query_fetcher(
 
         will be saved as:
         queries/2024_01_16/test_table_22.csv - first hour
-        queries/2024_01_16/test_table_22.csv - second hour
+        queries/2024_01_16/test_table_23.csv - second hour
 
     """
     setup_logging(log_level)
@@ -167,7 +113,8 @@ def query_fetcher(
         # enforce max of 24
         window_hours = 24
 
-    file_saver = QueriesFileSaver(gcs_bucket=gcs_bucket)
+    uploader = GCSUploader(gcs_bucket)
+    file_saver = FileManager(uploader)
 
     (clickhouse_user, clickhouse_password) = get_credentials()
     connection = ClickhousePool(
@@ -181,22 +128,23 @@ def query_fetcher(
 
     def get_queries_from_querylog(
         table: str, start: datetime, end: datetime
-    ) -> Sequence[QueryToRerun]:
+    ) -> Sequence[QueryInfoResult]:
         queries = []
         q = get_querylog_query([database], [f"{database}.{table}"], start, end)
         q_results = connection.execute(q)
         for querylog_data in q_results.results:
             query_id, query = querylog_data
-            queries.append(QueryToRerun(query_id=query_id, query_str=query))
+            queries.append(QueryInfoResult(query_id=query_id, query_str=query))
         return queries
 
     table_names = [t for t in tables.split(",")]
-    now = datetime.utcnow()
-    window_hours_ago_ts = now.replace(
+    # rounded to the hour
+    now = datetime.utcnow().replace(
         microsecond=0,
         second=0,
         minute=0,
-    ) - timedelta(hours=window_hours)
+    )
+    window_hours_ago_ts = now - timedelta(hours=window_hours)
     interval = timedelta(hours=1)
 
     start_time = window_hours_ago_ts
@@ -205,6 +153,7 @@ def query_fetcher(
             end_time = start_time + interval
             logger.info(f"Fetching queries to run from {table}...")
             queries = get_queries_from_querylog(table, start_time, end_time)
-            file_saver.save(table, start_time, queries)
+
+            file_saver.save(table, start_time, "queries", queries)
             logger.info(f"Saved {len(queries)} queries from {table}")
             start_time = end_time
