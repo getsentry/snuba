@@ -7,6 +7,9 @@ use statsdproxy::types::Metric;
 static GLOBAL_TAGS: RwLock<BTreeMap<String, String>> = RwLock::new(BTreeMap::new());
 
 pub fn set_global_tag(key: String, value: String) {
+    sentry::configure_scope(|scope| {
+        scope.set_tag(&key, &value);
+    });
     GLOBAL_TAGS.write().insert(key, value);
 }
 
