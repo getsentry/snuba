@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Mapping
 
+from sentry_kafka_schemas import SchemaNotFound, get_topic
+
 
 # These are the default topic names, they can be changed via settings
 class Topic(Enum):
@@ -66,51 +68,8 @@ class Topic(Enum):
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
-    config = {
-        Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.REPLAYEVENTS: {
-            "message.timestamp.type": "LogAppendTime",
-            "max.message.bytes": "15000000",
-        },
-        Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.QUERYLOG: {"max.message.bytes": "2000000"},
-        Topic.GROUP_ATTRIBUTES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.TRANSACTIONS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.SESSIONS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.METRICS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_METRICS_SETS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_METRICS_COUNTERS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_EVENTS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-    }
-
-    return config.get(topic, {})
+    try:
+        return get_topic(topic.value)["topic_creation_config"]
+    # TODO: Remove this once all topics needed by snuba are registered in sentry-kafka-schemas
+    except SchemaNotFound:
+        return {}
