@@ -14,21 +14,18 @@ from snuba import settings as snuba_settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import get_time_range
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import QueryPlanException
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import (
     QueryStatus,
     SnubaQueryMetadata,
+    create_snuba_query_metadata,
     get_request_status,
 )
 from snuba.reader import Reader
@@ -66,26 +63,7 @@ def parse_and_run_query(
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
     # from_clause = request.query.get_from_clause()
-    start, end = None, None
-    entity_name = "unknown"
-    if isinstance(request.query, LogicalQuery):
-        entity_key = request.query.get_from_clause().key
-        entity = get_entity(entity_key)
-        entity_name = entity_key.value
-        if entity.required_time_column is not None:
-            start, end = get_time_range(request.query, entity.required_time_column)
-
-    query_metadata = SnubaQueryMetadata(
-        request=request,
-        start_timestamp=start,
-        end_timestamp=end,
-        dataset=get_dataset_name(dataset),
-        entity=entity_name,
-        timer=timer,
-        query_list=[],
-        projects=ProjectsFinder().visit(request.query),
-        snql_anonymized=request.snql_anonymized,
-    )
+    query_metadata = create_snuba_query_metadata(request, dataset, timer)
 
     try:
         result = _run_query_pipeline(

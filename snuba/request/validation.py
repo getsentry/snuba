@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import textwrap
+import uuid
 from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, Union
 
 import sentry_sdk
@@ -25,11 +26,12 @@ from snuba.query.query_settings import (
 from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
-from snuba.querylog.factory import create_snuba_query_metadata
-from snuba.querylog.query_metadata import get_request_status
+from snuba.querylog.query_metadata import (
+    create_snuba_query_metadata,
+    get_request_status,
+)
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
-from snuba.request.factory import create_request
 from snuba.request.schema import RequestParts, RequestSchema
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -249,7 +251,8 @@ def _build_request(
 
     attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
 
-    return create_request(
+    return Request(
+        id=uuid.uuid4().hex,
         original_body=original_body,
         query=query,
         attribution_info=attribution_info,

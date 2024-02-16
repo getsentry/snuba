@@ -9,8 +9,14 @@ from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.query_dsl.accessors import get_time_range
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.storage import StorageNotAvailable
+from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.state.cache.abstract import ExecutionTimeoutError
@@ -299,3 +305,28 @@ class SnubaQueryMetadata:
         # even one error counts the request against
         failure = any(q.request_status.slo != SLO.FOR for q in self.query_list)
         return SLO.AGAINST if failure else SLO.FOR
+
+
+def create_snuba_query_metadata(
+    request: Request, dataset: Dataset, timer: Timer
+) -> SnubaQueryMetadata:
+    start, end = None, None
+    entity_name = "unknown"
+    if isinstance(request.query, LogicalQuery):
+        entity_key = request.query.get_from_clause().key
+        entity = get_entity(entity_key)
+        entity_name = entity_key.value
+        if entity.required_time_column is not None:
+            start, end = get_time_range(request.query, entity.required_time_column)
+
+    return SnubaQueryMetadata(
+        request=request,
+        start_timestamp=start,
+        end_timestamp=end,
+        dataset=get_dataset_name(dataset),
+        entity=entity_name,
+        timer=timer,
+        query_list=[],
+        projects=ProjectsFinder().visit(request.query),
+        snql_anonymized=request.snql_anonymized,
+    )
