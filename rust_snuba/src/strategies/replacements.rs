@@ -131,7 +131,7 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> for ProduceReplac
 mod tests {
     use super::*;
     use crate::testutils::{MockProducer, TestStrategy};
-    use crate::types::RowData;
+    use crate::types::{CogsData, CommitLogOffsets, RowData};
     use crate::types::{InsertOrReplacement, ReplacementData};
     use chrono::Utc;
     use std::collections::BTreeMap;
@@ -159,8 +159,8 @@ mod tests {
                     Utc::now(),
                     None,
                     None,
-                    BTreeMap::new(),
-                    None,
+                    CommitLogOffsets::default(),
+                    CogsData::default(),
                 )),
                 BTreeMap::new(),
             ))

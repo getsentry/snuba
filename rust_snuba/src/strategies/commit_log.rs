@@ -22,13 +22,14 @@ struct Commit {
     partition: u16,
     offset: u64,
     orig_message_ts: DateTime<Utc>,
-    // TODO: port received_p99
+    received_p99: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Payload {
     offset: u64,
     orig_message_ts: f64,
+    received_p99: Option<f64>,
 }
 
 #[derive(Error, Debug)]
@@ -41,6 +42,7 @@ enum CommitLogError {
     InvalidPayload,
 }
 
+#[cfg(test)]
 impl TryFrom<KafkaPayload> for Commit {
     type Error = CommitLogError;
 
@@ -72,6 +74,7 @@ impl TryFrom<KafkaPayload> for Commit {
             group: consumer_group,
             orig_message_ts,
             offset: d.offset,
+            received_p99: None,
         })
     }
 }
@@ -84,10 +87,14 @@ impl TryFrom<Commit> for KafkaPayload {
             Some(format!("{}:{}:{}", commit.topic, commit.partition, commit.group).into_bytes());
 
         let orig_message_ts = commit.orig_message_ts.timestamp_millis() as f64 / 1000.0;
+        let received_p99 = commit
+            .received_p99
+            .map(|t| t.timestamp_millis() as f64 / 1000.0);
 
         let payload = Some(serde_json::to_vec(&Payload {
             offset: commit.offset,
             orig_message_ts,
+            received_p99,
         })?);
 
         Ok(KafkaPayload::new(key, None, payload))
@@ -138,13 +145,18 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMe
                 return Ok(message);
             }
 
-            for (partition, (offset, orig_message_ts)) in commit_log_offsets {
+            for (partition, entry) in commit_log_offsets.0 {
+                let received_p99 = entry
+                    .received_p99
+                    .get((entry.received_p99.len() as f64 * 0.99) as usize)
+                    .copied();
                 let commit = Commit {
                     topic: topic.to_string(),
                     partition,
                     group: consumer_group.clone(),
-                    orig_message_ts,
-                    offset,
+                    orig_message_ts: entry.orig_message_ts,
+                    offset: entry.offset,
+                    received_p99,
                 };
 
                 let payload = commit.try_into().unwrap();
@@ -222,7 +234,7 @@ impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::RowData;
+    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets, RowData};
 
     use super::*;
     use crate::testutils::TestStrategy;
@@ -236,7 +248,7 @@ mod tests {
         let payload = KafkaPayload::new(
             Some(b"topic:0:group1".to_vec()),
             None,
-            Some(b"{\"offset\":5,\"orig_message_ts\":1696381946.0}".to_vec()),
+            Some(b"{\"offset\":5,\"orig_message_ts\":1696381946.0,\"received_p99\":null}".to_vec()),
         );
 
         let payload_clone = payload.clone();
@@ -245,7 +257,10 @@ mod tests {
         assert_eq!(commit.partition, 0);
         let transformed: KafkaPayload = commit.try_into().unwrap();
         assert_eq!(transformed.key(), payload_clone.key());
-        assert_eq!(transformed.payload(), payload_clone.payload());
+        assert_eq!(
+            std::str::from_utf8(transformed.payload().unwrap()).unwrap(),
+            std::str::from_utf8(payload_clone.payload().unwrap()).unwrap()
+        );
     }
 
     #[test]
@@ -277,16 +292,40 @@ mod tests {
                 Utc::now(),
                 None,
                 None,
-                BTreeMap::from([(0, (500, Utc::now()))]),
-                None,
+                CommitLogOffsets(BTreeMap::from([(
+                    0,
+                    CommitLogEntry {
+                        offset: 500,
+                        orig_message_ts: Utc::now(),
+                        received_p99: Vec::new(),
+                    },
+                )])),
+                CogsData::default(),
             ),
             BytesInsertBatch::new(
                 RowData::default(),
                 Utc::now(),
                 None,
                 None,
-                BTreeMap::from([(0, (600, Utc::now())), (1, (100, Utc::now()))]),
-                None,
+                CommitLogOffsets(BTreeMap::from([
+                    (
+                        0,
+                        CommitLogEntry {
+                            offset: 600,
+                            orig_message_ts: Utc::now(),
+                            received_p99: Vec::new(),
+                        },
+                    ),
+                    (
+                        1,
+                        CommitLogEntry {
+                            offset: 100,
+                            orig_message_ts: Utc::now(),
+                            received_p99: Vec::new(),
+                        },
+                    ),
+                ])),
+                CogsData::default(),
             ),
         ];
 
