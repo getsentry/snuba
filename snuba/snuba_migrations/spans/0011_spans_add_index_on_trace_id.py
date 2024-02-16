@@ -17,7 +17,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=f"{table_name_prefix}_local",
                 index_name=f"bf_{column_name}",
                 index_expression=column_name,
-                index_type="bloom_filter()",
+                index_type="bloom_filter(0)",
                 granularity=1,
                 target=operations.OperationTarget.LOCAL,
             ),
