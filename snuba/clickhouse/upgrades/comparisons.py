@@ -2,7 +2,7 @@ import csv
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, NamedTuple, Sequence, Type, Union, cast
+from typing import Dict, List, NamedTuple, Sequence, Type, Union
 
 import structlog
 
@@ -46,7 +46,7 @@ def type_for_directory(directory: str) -> Type[Results]:
     if directory.startswith("results"):
         # remove the versioning e.g. results-22-8
         directory = "results"
-    return cast(Type[Results], DIRECTORY_RESULT_TYPES[directory])
+    return DIRECTORY_RESULT_TYPES[directory]
 
 
 class FileManager:
