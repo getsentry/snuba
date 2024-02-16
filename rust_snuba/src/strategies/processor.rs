@@ -180,10 +180,6 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
                     scope.set_extra("payload", payload_as_value);
                 },
                 || {
-                    // FIXME: We are double-reporting errors here, as capturing
-                    // the error via `tracing::error` will not attach the anyhow
-                    // stack trace, but `capture_anyhow` will.
-                    sentry::integrations::anyhow::capture_anyhow(&error);
                     let error: &dyn std::error::Error = error.as_ref();
                     tracing::error!(error, "Failed processing message");
                 },
