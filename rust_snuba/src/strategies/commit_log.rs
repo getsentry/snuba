@@ -146,6 +146,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMe
             }
 
             for (partition, entry) in commit_log_offsets.0 {
+                entry.received_p99.sort();
                 let received_p99 = entry
                     .received_p99
                     .get((entry.received_p99.len() as f64 * 0.99) as usize)
