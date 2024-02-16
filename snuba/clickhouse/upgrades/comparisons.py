@@ -1,4 +1,6 @@
 import csv
+import dataclasses
+from dataclasses import dataclass
 from datetime import datetime
 from typing import List, NamedTuple, Sequence, Union
 
@@ -9,12 +11,14 @@ from snuba.utils.gcs import GCSUploader
 logger = structlog.get_logger().bind(module=__name__)
 
 
-class QueryInfoResult(NamedTuple):
+@dataclass
+class QueryInfoResult:
     query_str: str
     query_id: str
 
 
-class QueryMeasurementResult(NamedTuple):
+@dataclass
+class QueryMeasurementResult:
     query_id: str
     query_duration_ms: int
     result_rows: int
@@ -77,10 +81,10 @@ class FileManager:
         with open(self._full_path(filename), mode="w") as file:
             writer = csv.writer(file)
             if header_row:
-                fields = list(result_type._fields)
+                fields = list(dataclasses.fields(result_type))  # mypy ig
                 writer.writerow(fields)
             for row in results:
-                writer.writerow(row)
+                writer.writerow(dataclasses.astuple(row))
 
         logger.info(f"File {self._full_path(filename)} saved")
 
@@ -90,7 +94,8 @@ class FileManager:
         with open(self._full_path(filename), mode="r") as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
-                results.append(result_type(*row))
+                result = result_type(*row)
+                results.append(result)
         return results
 
     def _save_to_gcs(self, filename: str, blob_name: str) -> None:
