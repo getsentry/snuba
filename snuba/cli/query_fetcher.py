@@ -79,6 +79,7 @@ def get_credentials() -> Tuple[str, str]:
 @click.option(
     "--gcs-bucket",
     help="Name of gcs bucket to save query files to",
+    required=True,
 )
 @click.option("--log-level", help="Logging level to use.")
 def query_fetcher(
@@ -88,7 +89,7 @@ def query_fetcher(
     window_hours: int,
     tables: str,
     database: str,
-    gcs_bucket: Optional[str],
+    gcs_bucket: str,
     log_level: Optional[str] = None,
 ) -> None:
     """

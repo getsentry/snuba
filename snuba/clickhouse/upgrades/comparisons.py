@@ -1,6 +1,6 @@
 import csv
 from datetime import datetime
-from typing import NamedTuple, Sequence, Union
+from typing import List, NamedTuple, Sequence, Union
 
 import structlog
 
@@ -38,7 +38,7 @@ class FileFormat(NamedTuple):
     hour: int
 
 
-def type_for_directory(directory) -> Results:
+def type_for_directory(directory: str) -> Results:
     if directory.startswith("results"):
         # remove the versioning e.g. results-22-8
         directory = "results"
@@ -49,7 +49,7 @@ class FileManager:
     def __init__(self, uploader: GCSUploader) -> None:
         self.uploader = uploader
 
-    def _result_type(self, filename) -> Results:
+    def _result_type(self, filename: str) -> Results:
         directory = filename.split("_", 1)[0]
         return type_for_directory(directory)
 
@@ -84,9 +84,9 @@ class FileManager:
 
         logger.info(f"File {self._full_path(filename)} saved")
 
-    def _download_from_csv(self, filename) -> Results:
+    def _download_from_csv(self, filename: str) -> Sequence[Results]:
         result_type = self._result_type(filename)
-        results: Sequence[Results] = []
+        results: List[Results] = []
         with open(self._full_path(filename), mode="r") as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
@@ -102,11 +102,13 @@ class FileManager:
     def filename_from_blob_name(self, blob_name: str) -> str:
         return blob_name.replace("/", "_")
 
-    def parse_blob_name(self, blob_name) -> FileFormat:
+    def parse_blob_name(self, blob_name: str) -> FileFormat:
         directory, date, _ = blob_name.split("/")
         table, hour = blob_name.split("/")[-1].rsplit("_", 1)
         hour = hour.replace(".csv", "")
-        return FileFormat(directory, datetime.strptime(date, "%Y_%m_%d"), table, hour)
+        return FileFormat(
+            directory, datetime.strptime(date, "%Y_%m_%d"), table, int(hour)
+        )
 
     def save(self, file_format: FileFormat, results: Sequence[Results]) -> None:
         """
