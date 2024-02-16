@@ -2,7 +2,7 @@ import csv
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, NamedTuple, Sequence, Union
+from typing import Dict, List, NamedTuple, Sequence, Type, Union, cast
 
 import structlog
 
@@ -29,7 +29,7 @@ class QueryMeasurementResult:
 
 Results = Union[QueryInfoResult, QueryMeasurementResult]
 
-DIRECTORY_RESULT_TYPES = {
+DIRECTORY_RESULT_TYPES: Dict[str, Type[Results]] = {
     "queries": QueryInfoResult,
     "results": QueryMeasurementResult,
 }
@@ -42,18 +42,18 @@ class FileFormat(NamedTuple):
     hour: int
 
 
-def type_for_directory(directory: str) -> Results:
+def type_for_directory(directory: str) -> Type[Results]:
     if directory.startswith("results"):
         # remove the versioning e.g. results-22-8
         directory = "results"
-    return DIRECTORY_RESULT_TYPES[directory]
+    return cast(Type[Results], DIRECTORY_RESULT_TYPES[directory])
 
 
 class FileManager:
     def __init__(self, uploader: GCSUploader) -> None:
         self.uploader = uploader
 
-    def _result_type(self, filename: str) -> Results:
+    def _result_type(self, filename: str) -> Type[Results]:
         directory = filename.split("_", 1)[0]
         return type_for_directory(directory)
 
@@ -94,7 +94,18 @@ class FileManager:
         with open(self._full_path(filename), mode="r") as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
-                result = result_type(*row)
+                result: Results
+                if result_type == QueryInfoResult:
+                    result = QueryInfoResult(*row)
+                else:
+                    result = QueryMeasurementResult(
+                        row[0],
+                        int(row[1]),
+                        int(row[2]),
+                        int(row[3]),
+                        int(row[4]),
+                        int(row[5]),
+                    )
                 results.append(result)
         return results
 
