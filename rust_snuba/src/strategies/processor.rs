@@ -43,7 +43,7 @@ pub fn make_rust_processor(
             CommitLogOffsets(BTreeMap::from([(
                 partition.index,
                 CommitLogEntry {
-                    offset: offset,
+                    offset,
                     orig_message_ts: timestamp,
                     received_p99: transformed.origin_timestamp.into_iter().collect(),
                 },

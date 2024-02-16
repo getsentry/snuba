@@ -1,5 +1,5 @@
 use crate::types::BytesInsertBatch;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::backends::Producer;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
@@ -36,47 +36,12 @@ struct Payload {
 enum CommitLogError {
     #[error("json error")]
     JsonError(#[from] serde_json::Error),
+    #[cfg(test)]
     #[error("invalid message key")]
     InvalidKey,
+    #[cfg(test)]
     #[error("invalid message payload")]
     InvalidPayload,
-}
-
-#[cfg(test)]
-impl TryFrom<KafkaPayload> for Commit {
-    type Error = CommitLogError;
-
-    fn try_from(payload: KafkaPayload) -> Result<Self, CommitLogError> {
-        let key = payload.key().unwrap();
-
-        let data: Vec<&str> = str::from_utf8(key).unwrap().split(':').collect();
-        if data.len() != 3 {
-            return Err(CommitLogError::InvalidKey);
-        }
-
-        let topic = data[0].to_owned();
-        let partition = data[1].parse::<u16>().unwrap();
-        let consumer_group = data[2].to_owned();
-
-        let d: Payload =
-            serde_json::from_slice(payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
-
-        let time_millis = (d.orig_message_ts * 1000.0) as i64;
-
-        let orig_message_ts = DateTime::from_naive_utc_and_offset(
-            NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
-            Utc,
-        );
-
-        Ok(Commit {
-            topic,
-            partition,
-            group: consumer_group,
-            orig_message_ts,
-            offset: d.offset,
-            received_p99: None,
-        })
-    }
 }
 
 impl TryFrom<Commit> for KafkaPayload {
@@ -145,7 +110,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMe
                 return Ok(message);
             }
 
-            for (partition, entry) in commit_log_offsets.0 {
+            for (partition, mut entry) in commit_log_offsets.0 {
                 entry.received_p99.sort();
                 let received_p99 = entry
                     .received_p99
@@ -239,10 +204,47 @@ mod tests {
 
     use super::*;
     use crate::testutils::TestStrategy;
+    use chrono::NaiveDateTime;
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
+
+    impl TryFrom<KafkaPayload> for Commit {
+        type Error = CommitLogError;
+
+        fn try_from(payload: KafkaPayload) -> Result<Self, CommitLogError> {
+            let key = payload.key().unwrap();
+
+            let data: Vec<&str> = str::from_utf8(key).unwrap().split(':').collect();
+            if data.len() != 3 {
+                return Err(CommitLogError::InvalidKey);
+            }
+
+            let topic = data[0].to_owned();
+            let partition = data[1].parse::<u16>().unwrap();
+            let consumer_group = data[2].to_owned();
+
+            let d: Payload =
+                serde_json::from_slice(payload.payload().ok_or(CommitLogError::InvalidPayload)?)?;
+
+            let time_millis = (d.orig_message_ts * 1000.0) as i64;
+
+            let orig_message_ts = DateTime::from_naive_utc_and_offset(
+                NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
+                Utc,
+            );
+
+            Ok(Commit {
+                topic,
+                partition,
+                group: consumer_group,
+                orig_message_ts,
+                offset: d.offset,
+                received_p99: None,
+            })
+        }
+    }
 
     #[test]
     fn commit() {
