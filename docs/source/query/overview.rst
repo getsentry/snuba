@@ -120,7 +120,6 @@ The metrics query is represented as a ``MetricsQuery`` object like::
                 Timeseries(
                     metric=Metric(
                         public_name="transaction.duration",
-                        entity="generic_metrics_distributions",
                     ),
                     aggregate="sum",
                 ),
