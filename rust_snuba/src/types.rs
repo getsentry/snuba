@@ -6,26 +6,43 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
-pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
-
 #[derive(Clone, Debug, PartialEq)]
+pub struct CommitLogEntry {
+    pub offset: u64,
+    pub orig_message_ts: DateTime<Utc>,
+    pub received_p99: Vec<DateTime<Utc>>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct CommitLogOffsets(pub BTreeMap<u16, CommitLogEntry>);
+
+impl CommitLogOffsets {
+    fn merge(&mut self, other: CommitLogOffsets) {
+        for (partition, other_entry) in other.0 {
+            self.0
+                .entry(partition)
+                .and_modify(|entry| {
+                    entry.offset = other_entry.offset;
+                    entry.orig_message_ts = other_entry.orig_message_ts;
+                    entry.received_p99.extend(&other_entry.received_p99);
+                })
+                .or_insert(other_entry);
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct CogsData {
     pub data: BTreeMap<String, u64>, // app_feature: bytes_len
 }
 
 impl CogsData {
-    fn merge(mut self, other: Option<CogsData>) -> Self {
-        match other {
-            None => self,
-            Some(data) => {
-                for (k, v) in data.data {
-                    self.data
-                        .entry(k)
-                        .and_modify(|curr| *curr += v)
-                        .or_insert(v);
-                }
-                self
-            }
+    fn merge(&mut self, other: CogsData) {
+        for (k, v) in other.data {
+            self.data
+                .entry(k)
+                .and_modify(|curr| *curr += v)
+                .or_insert(v);
         }
     }
 }
@@ -179,7 +196,7 @@ pub struct BytesInsertBatch {
     // For each partition we store the offset and timestamp to be produced to the commit log
     commit_log_offsets: CommitLogOffsets,
 
-    cogs_data: Option<CogsData>,
+    cogs_data: CogsData,
 }
 
 impl BytesInsertBatch {
@@ -189,7 +206,7 @@ impl BytesInsertBatch {
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
-        cogs_data: Option<CogsData>,
+        cogs_data: CogsData,
     ) -> Self {
         BytesInsertBatch {
             rows,
@@ -209,16 +226,13 @@ impl BytesInsertBatch {
         self.rows
             .encoded_rows
             .extend_from_slice(&other.rows.encoded_rows);
-        self.commit_log_offsets.extend(other.commit_log_offsets);
+        self.commit_log_offsets.merge(other.commit_log_offsets);
         self.rows.num_rows += other.rows.num_rows;
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
-        self.cogs_data = match self.cogs_data {
-            Some(cogs_data) => Some(cogs_data.merge(other.cogs_data)),
-            None => other.cogs_data,
-        };
+        self.cogs_data.merge(other.cogs_data);
         self
     }
 
@@ -244,8 +258,8 @@ impl BytesInsertBatch {
         &self.commit_log_offsets
     }
 
-    pub fn cogs_data(&self) -> Option<&CogsData> {
-        self.cogs_data.as_ref()
+    pub fn cogs_data(&self) -> &CogsData {
+        &self.cogs_data
     }
 }
 
