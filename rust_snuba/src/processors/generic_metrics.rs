@@ -2,8 +2,11 @@ use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, vec};
+use serde::{
+    de::value::{MapAccessDeserializer, SeqAccessDeserializer},
+    Deserialize, Deserializer, Serialize,
+};
+use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
     types::{CogsData, InsertBatch, RowData},
@@ -65,9 +68,9 @@ enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
     #[serde(rename = "s")]
-    Set(Vec<u64>),
+    Set(EncodedSeries<u64>),
     #[serde(rename = "d")]
-    Distribution(Vec<f64>),
+    Distribution(EncodedSeries<f64>),
     #[serde(rename = "g")]
     Gauge {
         count: u64,
@@ -76,6 +79,54 @@ enum MetricValue {
         min: f64,
         sum: f64,
     },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "format", rename_all = "lowercase")]
+enum EncodedSeries<T> {
+    Array { data: Vec<T> },
+}
+
+impl<T> EncodedSeries<T> {
+    fn into_float_array(self) -> Vec<T> {
+        match self {
+            EncodedSeries::Array { data } => data,
+        }
+    }
+}
+
+fn encoded_series_deserializer<'de, D, T>(deserializer: D) -> Result<EncodedSeries<T>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct Visitor<U> where U: Deserialize<'de> {
+        phantom: PhantomData<U>,
+    }
+
+    impl<'de, U> serde::de::Visitor<'de> for Visitor<U> where U: Deserialize<'de> {
+        type Value = EncodedSeries<U>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("expected either old or new distribution value format")
+        }
+
+        fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let data = Vec::<U>::deserialize(SeqAccessDeserializer::new(seq))?;
+            Ok(EncodedSeries::Array { data })
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            EncodedSeries::deserialize(MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_any(Visitor {phantom: PhantomData::<T>})
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -231,7 +282,7 @@ impl Parse for SetsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
-            MetricValue::Set(values) => values,
+            MetricValue::Set(values) => values.into_float_array(),
             _ => return Ok(Option::None),
         };
         let timeseries_id =
@@ -266,7 +317,7 @@ impl Parse for SetsRawRow {
         };
         Ok(Some(Self {
             common_fields,
-            set_values,
+            set_values.into_float_array(),
         }))
     }
 }
