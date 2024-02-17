@@ -67,9 +67,9 @@ struct FromGenericMetricsMessage {
 enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
-    #[serde(rename = "s")]
+    #[serde(rename = "s", deserialize_with = "encoded_series_deserializer")]
     Set(EncodedSeries<u64>),
-    #[serde(rename = "d")]
+    #[serde(rename = "d", deserialize_with = "encoded_series_deserializer")]
     Distribution(EncodedSeries<f64>),
     #[serde(rename = "g")]
     Gauge {
@@ -88,22 +88,26 @@ enum EncodedSeries<T> {
 }
 
 impl<T> EncodedSeries<T> {
-    fn into_float_array(self) -> Vec<T> {
+    fn into_vec(self) -> Vec<T> {
         match self {
             EncodedSeries::Array { data } => data,
         }
     }
 }
 
-fn encoded_series_deserializer<'de, D, T>(deserializer: D) -> Result<EncodedSeries<T>, D::Error>
+fn encoded_series_deserializer<'de, T, D>(deserializer: D) -> Result<EncodedSeries<T>, D::Error>
 where
+    T: Deserialize<'de>,
     D: Deserializer<'de>,
 {
-    struct Visitor<U> where U: Deserialize<'de> {
+    struct Visitor<U> {
         phantom: PhantomData<U>,
     }
 
-    impl<'de, U> serde::de::Visitor<'de> for Visitor<U> where U: Deserialize<'de> {
+    impl<'de, U> serde::de::Visitor<'de> for Visitor<U>
+    where
+        U: Deserialize<'de>,
+    {
         type Value = EncodedSeries<U>;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -126,7 +130,9 @@ where
         }
     }
 
-    deserializer.deserialize_any(Visitor {phantom: PhantomData::<T>})
+    deserializer.deserialize_any(Visitor {
+        phantom: PhantomData::<T>,
+    })
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -282,7 +288,7 @@ impl Parse for SetsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
-            MetricValue::Set(values) => values.into_float_array(),
+            MetricValue::Set(values) => values.into_vec(),
             _ => return Ok(Option::None),
         };
         let timeseries_id =
@@ -317,7 +323,7 @@ impl Parse for SetsRawRow {
         };
         Ok(Some(Self {
             common_fields,
-            set_values.into_float_array(),
+            set_values,
         }))
     }
 }
@@ -345,7 +351,7 @@ impl Parse for DistributionsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let distribution_values = match from.value {
-            MetricValue::Distribution(value) => value,
+            MetricValue::Distribution(value) => value.into_vec(),
             _ => return Ok(Option::None),
         };
 
