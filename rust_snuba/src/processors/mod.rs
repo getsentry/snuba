@@ -94,23 +94,33 @@ mod tests {
         let mut old_schema: serde_json::Value =
             serde_json::from_str(old_schema.raw_schema()).unwrap();
         if let Some(subschema) = subschema {
-            old_schema = old_schema
+            let definitions = old_schema
                 .as_object()
                 .unwrap()
                 .get("definitions")
                 .unwrap()
                 .as_object()
                 .unwrap()
-                .get(subschema)
-                .unwrap()
                 .clone();
+
+            old_schema = definitions.get(subschema).unwrap().clone();
+
+            old_schema
+                .as_object_mut()
+                .unwrap()
+                .insert("definitions".to_owned(), definitions.into());
         }
+
+        println!("{}", serde_json::to_string(&schema).unwrap());
 
         let mut diff =
             json_schema_diff::diff(old_schema, serde_json::to_value(schema).unwrap()).unwrap();
         diff.retain(|change| change.change.is_breaking());
         if !diff.is_empty() {
-            insta::assert_debug_snapshot!(diff);
+            insta::assert_debug_snapshot!(
+                format!("{}-{}", schema_name, subschema.unwrap_or("")),
+                diff
+            );
         }
     }
 
