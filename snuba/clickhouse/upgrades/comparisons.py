@@ -2,7 +2,7 @@ import csv
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, NamedTuple, Sequence, Type, Union
+from typing import Dict, List, NamedTuple, Sequence, Tuple, Type, Union
 
 import structlog
 
@@ -141,3 +141,73 @@ class FileManager:
         filename = self.filename_from_blob_name(blob_name)
         self._download_from_gcs(blob_name, filename)
         return self._download_from_csv(filename)
+
+
+class BlobGetter:
+    def __init__(self, uploader: GCSUploader) -> None:
+        self.uploader = uploader
+
+    def _get_sub_dir_prefixes(self, prefix: str) -> Sequence[str]:
+        """
+        Given a prefix 'queries/', this returns the following part of the
+        prefix (if any).
+
+        e.g Take the following blob names:
+            * 'queries/2024_02_15/meredith_test_1.csv
+            * 'queries/2024_02_16/meredith_test_1.csv
+
+        calling _get_following_prefixes with 'queries/' would return
+            * 2024_02_15/
+            * 2024_02_16/
+        """
+        _, prefixes = self.uploader.list_blobs(prefix=prefix, delimiter="/")
+        return [p.replace(prefix, "") for p in prefixes]
+
+    def _get_sub_dir_diffs(self, prefixes: Tuple[str, str]) -> Sequence[str]:
+        """
+        Given two prefixes ('queries/', 'results-{version}/'), return the difference
+        in the sub-directories from the first prefix. Basically, return the sub-
+        directories that the first prefix has ('queries/') that are not present in
+        the second prefix ('results-{version}') sub-directories.
+        """
+        p1, p2 = prefixes
+        return list(
+            set(self._get_sub_dir_prefixes(p1)).difference(
+                set(self._get_sub_dir_prefixes(p2))
+            )
+        )
+
+    def get_all_names(self, prefix: str) -> Sequence[str]:
+        """
+        Returns the full blob names for a given prefix, such as 'queries/'.
+        e g. ['queries/2024_02_15/meredith_test_1.csv']
+        """
+        blob_names, _ = self.uploader.list_blobs(prefix=prefix, delimiter="")
+        return blob_names
+
+    def get_name_diffs(self, prefixes: Tuple[str, str]) -> Sequence[str]:
+        """
+        Get this difference of blobs between two prefixes. This is used to check whether
+        query replay results need to be added ('queries/' vs. 'results-{version}/')
+        or whether results need to be compared ('results-{verion}/' vs. 'compared/').
+
+        The prefixes tuple order matters -> ('queries/', 'results-{version}/'), this will
+        check which of the queries sub-directories are not present in the results.
+
+        e.g Take the following blob names:
+            * 'queries/2024_02_15/meredith_test_1.csv'
+            * 'queries/2024_02_16/meredith_test_1.csv'
+
+            * 'results-21-8/2024_02_15/meredith_test_1.csv'
+
+            input: ('queries/', 'results-21-8/')
+            output: [queries/2024_02_16/meredith_test_1.csv']
+        """
+        blob_diffs: List[str] = []
+        primary_prefix = prefixes[0]
+
+        sub_dir_diffs = self._get_sub_dir_diffs(prefixes)
+        for sub_dir_prefix in sub_dir_diffs:
+            full_prefix = f"{primary_prefix}{sub_dir_prefix}"
+            blob_diffs += self.get_all_names(full_prefix)
+        return blob_diffs
