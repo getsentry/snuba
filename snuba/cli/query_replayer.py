@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 import click
 import sentry_sdk
@@ -9,6 +9,7 @@ from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.upgrades.comparisons import (
+    BlobGetter,
     FileFormat,
     FileManager,
     QueryInfoResult,
@@ -18,32 +19,6 @@ from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.gcs import GCSUploader
 
 logger = structlog.get_logger().bind(module=__name__)
-
-
-class BlobGetter:
-    def __init__(self, uploader: GCSUploader) -> None:
-        self.uploader = uploader
-
-    def get_prefixes(self, prefix: str) -> Sequence[str]:
-        _, prefixes = self.uploader.list_blobs(prefix=prefix, delimiter="/")
-        return [p.replace(prefix, "") for p in prefixes]
-
-    def get_all_names(self, prefix: str) -> Sequence[str]:
-        blob_names, _ = self.uploader.list_blobs(prefix=prefix, delimiter="")
-        return blob_names
-
-    def get_prefix_diffs(self, prefixes: Tuple[str, str]) -> Sequence[str]:
-        p1, p2 = prefixes
-        return list(set(self.get_prefixes(p1)).difference(set(self.get_prefixes(p2))))
-
-    def get_name_diffs(self, prefixes: Tuple[str, str]) -> Sequence[str]:
-        blob_diffs: List[str] = []
-        prefix_diffs = self.get_prefix_diffs(prefixes)
-        p = prefixes[0]
-        for prefix in prefix_diffs:
-            full_prefix = f"{p}{prefix}"
-            blob_diffs += self.get_all_names(full_prefix)
-        return blob_diffs
 
 
 def format_results_query(
@@ -141,14 +116,14 @@ def query_replayer(
     setup_logging(log_level)
     setup_sentry()
 
-    database = "default"
+    database = "default"  # todo
     (clickhouse_user, clickhouse_password) = get_credentials()
     connection = ClickhousePool(
         host=clickhouse_host,
         port=clickhouse_port,
         user=clickhouse_user,
         password=clickhouse_password,
-        database=database,  # todo
+        database=database,
         client_settings=ClickhouseClientSettings.QUERY.value.settings,
     )
 
