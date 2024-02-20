@@ -11,7 +11,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -44,7 +43,6 @@ mql_test_cases = [
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2023-11-23T18:30:00",
             "end": "2023-11-23T22:30:00",
             "rollup": {
@@ -310,7 +308,6 @@ mql_test_cases = [
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -556,7 +553,6 @@ mql_test_cases = [
     pytest.param(
         "sum(`d:transactions/duration@millisecond`){}",
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -763,7 +759,6 @@ mql_test_cases = [
     pytest.param(
         'quantiles(0.5, 0.75)(s:transactions/user@none{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
         {
-            "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
             "end": "2021-01-05T04:15:00",
             "rollup": {
@@ -1044,7 +1039,6 @@ mql_test_cases = [
     pytest.param(
         'quantiles(0.5)(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2023-11-23T18:30:00",
             "end": "2023-11-23T22:30:00",
             "rollup": {
@@ -1314,7 +1308,6 @@ mql_test_cases = [
     pytest.param(
         'sum(`d:sessions/duration@second`){release:["foo", "bar"]} by release',
         {
-            "entity": "metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -1584,7 +1577,6 @@ mql_test_cases = [
     pytest.param(
         'max(d:transactions/duration@millisecond){bar:" !\\"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2024-01-07T13:35:00+00:00",
             "end": "2024-01-08T13:40:00+00:00",
             "indexer_mappings": {
@@ -1879,7 +1871,6 @@ mql_test_cases = [
     pytest.param(
         'apdex(sum(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -2131,7 +2122,6 @@ mql_test_cases = [
     pytest.param(
         "topK(10)(sum(s:transactions/user@none), 300)",
         {
-            "entity": "generic_metrics_sets",
             "start": "2021-01-01T01:36:00",
             "end": "2021-01-05T04:15:00",
             "rollup": {
@@ -2328,7 +2318,6 @@ mql_test_cases = [
     pytest.param(
         'avg(d:custom/sentry.event_manager.save_transactions.fetch_organizations@second){(event_type:"transaction" AND transaction:"sentry.tasks.store.save_event_transaction")}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -2591,7 +2580,6 @@ invalid_mql_test_cases = [
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -2618,7 +2606,6 @@ invalid_mql_test_cases = [
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -2645,33 +2632,6 @@ invalid_mql_test_cases = [
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
         {
-            "start": "2021-01-01T00:00:00",
-            "end": "2021-01-02T00:00:00",
-            "rollup": {
-                "orderby": None,
-                "granularity": 60,
-                "interval": 60,
-                "with_totals": None,
-            },
-            "scope": {
-                "org_ids": [1],
-                "project_ids": [1],
-                "use_case_id": "transactions",
-            },
-            "limit": None,
-            "offset": None,
-            "indexer_mappings": {
-                "d:transactions/duration@millisecond": 123456,
-                "dist": 888,
-            },
-        },
-        InvalidQueryException("MQL context: missing required field 'entity'"),
-        id="missing entity",
-    ),
-    pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-        {
-            "entity": "generic_metrics_distributions",
             "end": "2021-01-02T00:00:00",
             "rollup": {
                 "orderby": None,
@@ -2697,7 +2657,6 @@ invalid_mql_test_cases = [
     pytest.param(
         'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -2724,7 +2683,6 @@ invalid_mql_test_cases = [
     pytest.param(
         'sum(`transaction.duration`){dist:["dist1", "dist2"]}',
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {
@@ -2751,7 +2709,6 @@ invalid_mql_test_cases = [
     pytest.param(
         "sum(`transaction.duration",
         {
-            "entity": "generic_metrics_distributions",
             "start": "2021-01-01T00:00:00",
             "end": "2021-01-02T00:00:00",
             "rollup": {

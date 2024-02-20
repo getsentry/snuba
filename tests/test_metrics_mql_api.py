@@ -196,7 +196,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 metric=Metric(
                     None,
                     COUNTERS_MRI,
-                    entity=COUNTERS.entity,
                 ),
                 aggregate="sum",
             ),
@@ -234,7 +233,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     COUNTERS_MRI,
                     COUNTERS.metric_id,
-                    COUNTERS.entity,
                 ),
                 aggregate="sum",
                 filters=[
@@ -288,7 +286,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     COUNTERS_MRI,
                     COUNTERS.metric_id,
-                    COUNTERS.entity,
                 ),
                 aggregate="sum",
                 filters=[
@@ -345,7 +342,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
-                    DISTRIBUTIONS.entity,
                 ),
                 aggregate="quantiles",
                 aggregate_params=[0.5],
@@ -394,7 +390,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
-                    DISTRIBUTIONS.entity,
                 ),
                 aggregate="max",
                 groupby=[Column("status_code")],
@@ -442,7 +437,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     "d:transactions/measurements.indexer_batch.payloads.len@none",
                     DISTRIBUTIONS.metric_id,
-                    DISTRIBUTIONS.entity,
                 ),
                 aggregate="avg",
                 aggregate_params=None,
@@ -487,7 +481,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             query=Timeseries(
                 metric=Metric(
                     mri="d:transactions/duration@millisecond",
-                    entity="generic_metrics_distributions",
                 ),
                 aggregate="max",
                 aggregate_params=None,
@@ -534,7 +527,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                             "transaction.duration",
                             DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
-                            DISTRIBUTIONS.entity,
                         ),
                         aggregate="avg",
                     ),
@@ -543,7 +535,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                             "transaction.duration",
                             DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
-                            DISTRIBUTIONS.entity,
                         ),
                         aggregate="avg",
                     ),
@@ -578,7 +569,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 180, data
 
-    @pytest.mark.xfail(reason="Needs snuba-sdk 2.0.21 or later")
     def test_complex_formula(self) -> None:
         query = MetricsQuery(
             query=Formula(
@@ -589,10 +579,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                             "transaction.duration",
                             DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
-                            DISTRIBUTIONS.entity,
                         ),
-                        aggregate="quantiles",
-                        aggregate_params=[0.5],
+                        aggregate="sum",
                         filters=[
                             Condition(
                                 Column("status_code"),
@@ -607,7 +595,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                             "transaction.duration",
                             DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
-                            DISTRIBUTIONS.entity,
                         ),
                         aggregate="avg",
                         groupby=[Column("transaction")],
@@ -627,6 +614,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "status_code": resolve_str("status_code"),
                 "transaction": resolve_str("transaction"),
+                "200": resolve_str("200"),
             },
         )
 
@@ -651,7 +639,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
-                    DISTRIBUTIONS.entity,
                 ),
                 aggregate="histogram",
                 aggregate_params=[5],
@@ -696,7 +683,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                     "transaction.duration",
                     DISTRIBUTIONS_MRI,
                     DISTRIBUTIONS.metric_id,
-                    DISTRIBUTIONS.entity,
                 ),
                 aggregate="avg",
                 filters=[

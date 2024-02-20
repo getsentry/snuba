@@ -75,11 +75,9 @@ where
         &mut self,
         message: Message<BytesInsertBatch>,
     ) -> Result<(), SubmitError<BytesInsertBatch>> {
-        if let Some(cogs_data) = message.payload().cogs_data() {
-            for (app_feature, amount_bytes) in cogs_data.data.iter() {
-                self.accountant
-                    .record_bytes(&self.resource_id, app_feature, *amount_bytes)
-            }
+        for (app_feature, amount_bytes) in message.payload().cogs_data().data.iter() {
+            self.accountant
+                .record_bytes(&self.resource_id, app_feature, *amount_bytes)
         }
 
         self.next_step.submit(message)

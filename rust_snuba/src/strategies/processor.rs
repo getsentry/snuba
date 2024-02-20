@@ -14,7 +14,10 @@ use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
-use crate::types::{BytesInsertBatch, InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
+use crate::types::{
+    BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
+    KafkaMessageMetadata,
+};
 
 pub fn make_rust_processor(
     next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
@@ -37,8 +40,15 @@ pub fn make_rust_processor(
             timestamp,
             transformed.origin_timestamp,
             transformed.sentry_received_timestamp,
-            BTreeMap::from([(partition.index, (offset, timestamp))]),
-            transformed.cogs_data,
+            CommitLogOffsets(BTreeMap::from([(
+                partition.index,
+                CommitLogEntry {
+                    offset,
+                    orig_message_ts: timestamp,
+                    received_p99: transformed.origin_timestamp.into_iter().collect(),
+                },
+            )])),
+            transformed.cogs_data.unwrap_or_default(),
         );
 
         Ok(Message::new_broker_message(
@@ -85,8 +95,15 @@ pub fn make_rust_processor_with_replacements(
                     timestamp,
                     transformed.origin_timestamp,
                     transformed.sentry_received_timestamp,
-                    BTreeMap::from([(partition.index, (offset, timestamp))]),
-                    transformed.cogs_data,
+                    CommitLogOffsets(BTreeMap::from([(
+                        partition.index,
+                        CommitLogEntry {
+                            offset,
+                            orig_message_ts: timestamp,
+                            received_p99: transformed.origin_timestamp.into_iter().collect(),
+                        },
+                    )])),
+                    transformed.cogs_data.unwrap_or_default(),
                 ))
             }
             InsertOrReplacement::Replacement(r) => InsertOrReplacement::Replacement(r),
@@ -180,10 +197,6 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
                     scope.set_extra("payload", payload_as_value);
                 },
                 || {
-                    // FIXME: We are double-reporting errors here, as capturing
-                    // the error via `tracing::error` will not attach the anyhow
-                    // stack trace, but `capture_anyhow` will.
-                    sentry::integrations::anyhow::capture_anyhow(&error);
                     let error: &dyn std::error::Error = error.as_ref();
                     tracing::error!(error, "Failed processing message");
                 },

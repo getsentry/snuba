@@ -22,7 +22,6 @@ expression: snapshot_payload
     "measurements.value": [
       100.0
     ],
-    "metrics_summary": "{\"c:sentry.events.outcomes@none\":[{\"count\":1,\"max\":1.0,\"min\":1.0,\"sum\":1.0,\"tags\":{\"category\":\"error\",\"environment\":\"unknown\",\"event_type\":\"error\",\"outcome\":\"accepted\",\"release\":\"backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8\",\"topic\":\"outcomes-billing\",\"transaction\":\"sentry.tasks.store.save_event\"}}],\"c:sentry.events.post_save.normalize.errors@none\":[{\"count\":1,\"max\":0.0,\"min\":0.0,\"sum\":0.0,\"tags\":{\"environment\":\"unknown\",\"event_type\":\"error\",\"from_relay\":\"False\",\"release\":\"backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8\",\"transaction\":\"sentry.tasks.store.save_event\"}}]}",
     "module": "http",
     "offset": 1,
     "op": "http.client",

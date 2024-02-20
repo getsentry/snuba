@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.2.0
+
+### Various fixes & improvements
+
+- Revert "feat(rust): Count schema validation failures (#5515)" (b597627c) by @getsentry-bot
+- ref(gcs): add list_blobs and blob_exists (#5545) by @MeredithAnya
+- add referrer guard rail policy to every storage (#5536) by @volokluev
+- ref: Remove PolymorphicMetricsProcessor (#5541) by @untitaker
+- fix(rust): Use the same release as in Python (#5543) by @untitaker
+- ref: Make ExceptionMechanism nullable (#5542) by @untitaker
+- feat: Add team-ops to snuba admin (#5540) by @lynnagara
+- ref(rust): Remove concurrency override (#5538) by @lynnagara
+- ref: Remove unused topics (#5537) by @lynnagara
+- cleanup(capman): remove legacy rate limit configs (#5513) by @volokluev
+- fix(spans): Profile id need UUIDColumnProcessor in indexed spans (#5533) by @Zylphrex
+- ref: bump sentry-kafka-schemas to 0.1.49 (#5534) by @getsentry-bot
+- fix(rust): Nullability around headers and frames (#5532) by @untitaker
+- fix(gocd): remove explicit context flag from snuba-stable (#5529) by @bmckerry
+- fix(rust): Fix a few more nullability issues (#5531) by @untitaker
+- fix(rust-errors): Make stacktrace nullable as well (#5527) by @untitaker
+- change: Move curl from buildDep to runtimeDep (#5528) by @dmajere
+- fix: xfail optimize test again :( (#5506) by @MeredithAnya
+- feat(querylog): Add query to get project scanning most bytes (#5530) by @nikhars
+- fix(metrics): Update gauges to handle avgIf functions (#5523) by @evanh
+- fix(querylog): Use _dist table (#5526) by @nikhars
+- build(deps): bump sentry-arroyo from 2.16.0 to 2.16.1 (#5516) by @dependabot
+- feat(rust): Count schema validation failures (#5515) by @phacops
+- feat(mql): Parse the entity from the MRI (#5501) by @evanh
+
+_Plus 4 more_
+
 ## 24.1.2
 
 ### Various fixes & improvements
