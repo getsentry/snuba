@@ -10,9 +10,7 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query_dsl.accessors import get_time_range
-from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.exceptions import InvalidQueryException
@@ -230,21 +228,67 @@ class ClickhouseQueryMetadata:
         }
 
 
-@dataclass(frozen=True)
 class SnubaQueryMetadata:
     """
     Metadata about a Snuba query for recording on the querylog dataset.
     """
 
-    request: Request
-    start_timestamp: Optional[datetime]
-    end_timestamp: Optional[datetime]
-    dataset: str
-    entity: str
-    timer: Timer
-    query_list: MutableSequence[ClickhouseQueryMetadata]
-    projects: Set[int]
-    snql_anonymized: str
+    def __init__(
+        self,
+        request: Request,
+        dataset: str,
+        timer: Timer,
+        start_timestamp: datetime | None = None,
+        end_timestamp: datetime | None = None,
+        entity: str | None = None,
+        query_list: MutableSequence[ClickhouseQueryMetadata] | None = None,
+        projects: Set[int] | None = None,
+        snql_anonymized: str | None = None,
+    ):
+        if not (
+            (start_timestamp is None)
+            == (end_timestamp is None)
+            == (entity is None)
+            == (query_list is None)
+            == (projects is None)
+            == (snql_anonymized is None)
+        ):
+            raise ValueError("Must provide all or none of the optional parameters")
+
+        self.request = request
+        self.dataset = dataset
+        self.timer = timer
+
+        if start_timestamp is None:
+            start, end = None, None
+            entity_name = "unknown"
+            if isinstance(request.query, LogicalQuery):
+                entity_key = request.query.get_from_clause().key
+                entity_obj = get_entity(entity_key)
+                entity_name = entity_key.value
+                if entity_obj.required_time_column is not None:
+                    start, end = get_time_range(
+                        request.query, entity_obj.required_time_column
+                    )
+            self.start_timestamp = start
+            self.end_timestamp = end
+            self.entity = entity_name
+            self.query_list: MutableSequence[ClickhouseQueryMetadata] = []
+            self.projects = ProjectsFinder().visit(request.query)
+            self.snql_anonymized = request.snql_anonymized
+        else:
+            self.start_timestamp = start_timestamp
+            self.end_timestamp = end_timestamp
+            assert (
+                entity is not None
+                and query_list is not None
+                and projects is not None
+                and snql_anonymized is not None
+            )  # mypy sucks
+            self.entity = entity
+            self.query_list = query_list
+            self.projects = projects
+            self.snql_anonymized = snql_anonymized
 
     def to_dict(self) -> snuba_queries_v1.Querylog:
         start = int(self.start_timestamp.timestamp()) if self.start_timestamp else None
@@ -305,28 +349,3 @@ class SnubaQueryMetadata:
         # even one error counts the request against
         failure = any(q.request_status.slo != SLO.FOR for q in self.query_list)
         return SLO.AGAINST if failure else SLO.FOR
-
-
-def create_snuba_query_metadata(
-    request: Request, dataset: Dataset, timer: Timer
-) -> SnubaQueryMetadata:
-    start, end = None, None
-    entity_name = "unknown"
-    if isinstance(request.query, LogicalQuery):
-        entity_key = request.query.get_from_clause().key
-        entity = get_entity(entity_key)
-        entity_name = entity_key.value
-        if entity.required_time_column is not None:
-            start, end = get_time_range(request.query, entity.required_time_column)
-
-    return SnubaQueryMetadata(
-        request=request,
-        start_timestamp=start,
-        end_timestamp=end,
-        dataset=get_dataset_name(dataset),
-        entity=entity_name,
-        timer=timer,
-        query_list=[],
-        projects=ProjectsFinder().visit(request.query),
-        snql_anonymized=request.snql_anonymized,
-    )

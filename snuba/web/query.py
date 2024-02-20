@@ -25,7 +25,6 @@ from snuba.querylog import record_query
 from snuba.querylog.query_metadata import (
     QueryStatus,
     SnubaQueryMetadata,
-    create_snuba_query_metadata,
     get_request_status,
 )
 from snuba.reader import Reader
@@ -63,7 +62,7 @@ def parse_and_run_query(
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
     # from_clause = request.query.get_from_clause()
-    query_metadata = create_snuba_query_metadata(request, dataset, timer)
+    query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
 
     try:
         result = _run_query_pipeline(

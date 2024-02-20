@@ -12,6 +12,7 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset_name
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
@@ -26,10 +27,7 @@ from snuba.query.query_settings import (
 from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
-from snuba.querylog.query_metadata import (
-    create_snuba_query_metadata,
-    get_request_status,
-)
+from snuba.querylog.query_metadata import SnubaQueryMetadata, get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
@@ -132,7 +130,9 @@ def build_request(
                 request = _build_request(
                     body, request_parts, referrer, settings_obj, query, snql_anonymized
                 )
-                query_metadata = create_snuba_query_metadata(request, dataset, timer)
+                query_metadata = SnubaQueryMetadata(
+                    request, get_dataset_name(dataset), timer
+                )
                 state.record_query(query_metadata.to_dict())
                 raise
 
