@@ -6,7 +6,7 @@ storage:
   key: group_attributes
   set_key: group_attributes
 
-readiness_state: partial
+readiness_state: complete
 
 schema:
   columns:
