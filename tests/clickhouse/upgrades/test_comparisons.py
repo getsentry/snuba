@@ -12,6 +12,7 @@ from snuba.utils.gcs import Blobs
 
 class MockUploader(Mock):
     def __init__(self, bucket: str) -> None:
+        super().__init__()
         self.bucket = bucket
 
     def upload_file(
