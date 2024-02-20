@@ -66,8 +66,9 @@ def parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> No
             return exp
         col_name = match[1]
         key_name = match[2]
+
         return SubscriptableReference(
-            alias=exp.column_name,
+            alias=exp.alias or exp.column_name,
             column=Column(None, None, col_name),
             key=Literal(None, key_name),
         )

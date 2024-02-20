@@ -79,7 +79,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "transaction",
                     SubscriptableReference(
-                        "_snuba_tags_raw[111111]",
+                        "_snuba_transaction",
                         Column("_snuba_tags_raw", None, "tags_raw"),
                         Literal(None, "111111"),
                     ),
@@ -87,7 +87,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "status_code",
                     SubscriptableReference(
-                        "_snuba_tags_raw[222222]",
+                        "_snuba_status_code",
                         Column("_snuba_tags_raw", None, "tags_raw"),
                         Literal(None, "222222"),
                     ),
@@ -99,12 +99,12 @@ mql_test_cases = [
             ],
             groupby=[
                 SubscriptableReference(
-                    "_snuba_tags_raw[111111]",
+                    "_snuba_transaction",
                     Column("_snuba_tags_raw", None, "tags_raw"),
                     Literal(None, "111111"),
                 ),
                 SubscriptableReference(
-                    "_snuba_tags_raw[222222]",
+                    "_snuba_status_code",
                     Column("_snuba_tags_raw", None, "tags_raw"),
                     Literal(None, "222222"),
                 ),
@@ -801,7 +801,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "transaction",
                     SubscriptableReference(
-                        "_snuba_tags_raw[111111]",
+                        "_snuba_transaction",
                         Column(
                             "_snuba_tags_raw",
                             None,
@@ -1021,7 +1021,7 @@ mql_test_cases = [
             order_by=[],
             groupby=[
                 SubscriptableReference(
-                    "_snuba_tags_raw[111111]",
+                    "_snuba_transaction",
                     Column(
                         "_snuba_tags_raw",
                         None,
@@ -1079,7 +1079,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "transaction",
                     SubscriptableReference(
-                        "_snuba_tags_raw[111111]",
+                        "_snuba_transaction",
                         Column("_snuba_tags_raw", None, "tags_raw"),
                         Literal(None, "111111"),
                     ),
@@ -1087,7 +1087,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "status_code",
                     SubscriptableReference(
-                        "_snuba_tags_raw[222222]",
+                        "_snuba_status_code",
                         Column("_snuba_tags_raw", None, "tags_raw"),
                         Literal(None, "222222"),
                     ),
@@ -1099,12 +1099,12 @@ mql_test_cases = [
             ],
             groupby=[
                 SubscriptableReference(
-                    "_snuba_tags_raw[111111]",
+                    "_snuba_transaction",
                     Column("_snuba_tags_raw", None, "tags_raw"),
                     Literal(None, "111111"),
                 ),
                 SubscriptableReference(
-                    "_snuba_tags_raw[222222]",
+                    "_snuba_status_code",
                     Column("_snuba_tags_raw", None, "tags_raw"),
                     Literal(None, "222222"),
                 ),
@@ -1347,7 +1347,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "release",
                     SubscriptableReference(
-                        "_snuba_tags[111]",
+                        "_snuba_release",
                         Column(
                             "_snuba_tags",
                             None,
@@ -1542,7 +1542,7 @@ mql_test_cases = [
             ),
             groupby=[
                 SubscriptableReference(
-                    "_snuba_tags[111]",
+                    "_snuba_release",
                     Column(
                         "_snuba_tags",
                         None,
@@ -1616,7 +1616,7 @@ mql_test_cases = [
                 SelectedExpression(
                     "transaction",
                     SubscriptableReference(
-                        "_snuba_tags_raw[141516]",
+                        "_snuba_transaction",
                         Column("_snuba_tags_raw", None, "tags_raw"),
                         Literal(None, "141516"),
                     ),
@@ -1815,7 +1815,7 @@ mql_test_cases = [
             ),
             groupby=[
                 SubscriptableReference(
-                    "_snuba_tags_raw[141516]",
+                    "_snuba_transaction",
                     Column(
                         "_snuba_tags_raw",
                         None,

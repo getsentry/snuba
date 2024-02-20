@@ -854,7 +854,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
-        return SelectedExpression(self.__extract_alias_from_match(alias), column)
+        ex_alias = self.__extract_alias_from_match(alias)
+        return SelectedExpression(ex_alias, replace(column, alias=ex_alias))
 
     def visit_aliased_subscriptable(
         self,
@@ -862,7 +863,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
-        return SelectedExpression(self.__extract_alias_from_match(alias), column)
+        ex_alias = self.__extract_alias_from_match(alias)
+        return SelectedExpression(ex_alias, replace(column, alias=ex_alias))
 
     def visit_aliased_column_name(
         self,
@@ -870,7 +872,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         visited_children: Tuple[Column, Any, Any, Any, Node],
     ) -> SelectedExpression:
         column, _, _, _, alias = visited_children
-        return SelectedExpression(self.__extract_alias_from_match(alias), column)
+        ex_alias = self.__extract_alias_from_match(alias)
+        return SelectedExpression(ex_alias, replace(column, alias=ex_alias))
 
     def visit_identifier(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
