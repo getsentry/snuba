@@ -1095,4 +1095,59 @@ mod tests {
         );
         assert_eq!(result.unwrap(), InsertBatch::skip());
     }
+
+    #[test]
+    fn test_set_processor_with_v1_set_message() {
+        let result = test_processor_with_payload(
+            &(process_set_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_ARR_ENCODED_SET_MESSAGE,
+        );
+        let expected_row = SetsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65562,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_set_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "errored".to_string(),
+                ],
+                metric_type: "set".to_string(),
+                materialization_version: 2,
+                timeseries_id: 828906429,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
+            set_values: vec![0, 1, 2, 3, 4, 5],
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 651)])
+                })
+            }
+        );
+    }
 }
