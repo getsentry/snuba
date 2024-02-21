@@ -169,11 +169,6 @@ query_processors:
   - processor: TableRateLimit
   - processor: TupleUnaliaser
 
-query_splitters:
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: end_timestamp
-
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 

@@ -2105,40 +2105,37 @@ class TestApi(SimpleAPITest):
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock: MagicMock) -> None:
-        for use_split, expected_query_count in [(0, 1), (1, 2)]:
-            state.set_config("use_split", use_split)
-            record_query_mock.reset_mock()
-            result = json.loads(
-                self.post(
-                    json.dumps(
-                        {
-                            "project": 1,
-                            "tenant_ids": {"referrer": "test", "organization_id": 1234},
-                            "selected_columns": [
-                                "event_id",
-                                "title",
-                                "transaction",
-                                "tags[a]",
-                                "tags[b]",
-                                "message",
-                                "project_id",
-                            ],
-                            "limit": 5,
-                            "from_date": self.base_time.isoformat(),
-                            "to_date": (
-                                self.base_time + timedelta(minutes=self.minutes)
-                            ).isoformat(),
-                        }
-                    ),
-                ).data
-            )
+        record_query_mock.reset_mock()
+        result = json.loads(
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "tenant_ids": {"referrer": "test", "organization_id": 1234},
+                        "selected_columns": [
+                            "event_id",
+                            "title",
+                            "transaction",
+                            "tags[a]",
+                            "tags[b]",
+                            "message",
+                            "project_id",
+                        ],
+                        "limit": 5,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
+        )
 
-            assert len(result["data"]) == 5
-            assert record_query_mock.call_count == 1
-            metadata = record_query_mock.call_args[0][0]
-            assert metadata["dataset"] == "events"
-            assert metadata["request"]["referrer"] == "test"
-            assert len(metadata["query_list"]) == expected_query_count
+        assert len(result["data"]) == 5
+        assert record_query_mock.call_count == 1
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["dataset"] == "events"
+        assert metadata["request"]["referrer"] == "test"
 
     @patch("snuba.web.query._run_query_pipeline")
     def test_error_handler(self, pipeline_mock: MagicMock) -> None:
