@@ -532,6 +532,21 @@ mod tests {
         "value": [0, 1, 2, 3, 4, 5]
     }"#;
 
+    const DUMMY_ARR_ENCODED_SET_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65562,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"errored","65690":"metric_e2e_spans_set_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65690":"metric_e2e_spans_set_k_VUW93LMS"},"d":{"65562":"s:spans/error@none"}},
+        "type": "s",
+        "value": {"format": "array", "data": [0, 1, 2, 3, 4, 5]}
+    }"#;
+
     const DUMMY_LEGACY_DISTRIBUTION_MESSAGE: &str = r#"{
         "version": 2,
         "use_case_id": "spans",
