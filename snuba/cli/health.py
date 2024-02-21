@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import logging
+import sys
 import time
 from collections import defaultdict
 from typing import Any, List, Mapping, MutableMapping, Set, Union, cast
@@ -20,9 +21,11 @@ from snuba.clusters.cluster import (
 from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
+from snuba.environment import setup_logging
 from snuba.web.views import check_down_file_exists, metrics
 
-logger = logging.getLogger("snuba.api")
+setup_logging(None)
+logger = logging.getLogger("snuba.health")
 
 
 @click.command()
@@ -68,7 +71,10 @@ def health(
     )
 
     logger.info(json.dumps(body))
-    return status
+    if status == 200:
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 
 def filter_checked_storages() -> List[Storage]:
