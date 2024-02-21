@@ -69,3 +69,4 @@ REDIS_CLUSTERS = {
         (9, "admin_auth"),
     ]
 }
+VALIDATE_DATASET_YAMLS_ON_STARTUP = True
