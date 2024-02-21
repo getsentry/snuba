@@ -288,6 +288,8 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
+        allocation_policies = response.json["allocation_policies"]
+        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
             "/events/snql",
@@ -303,6 +305,8 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
+        allocation_policies = response.json["error"]["allocation_policies_violations"]
+        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
         assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)

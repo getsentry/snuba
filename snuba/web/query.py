@@ -148,11 +148,12 @@ def _run_query_pipeline(
     record_missing_use_case_id(request, dataset)
     record_subscription_created_missing_tenant_ids(request)
 
-    return (
+    result = (
         dataset.get_query_pipeline_builder()
         .build_execution_pipeline(request, query_runner)
         .execute()
     )
+    return result
 
 
 def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
