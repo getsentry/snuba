@@ -305,7 +305,6 @@ def execute_query_with_query_id(
     robust: bool,
     referrer: str,
 ) -> Result:
-
     if state.get_config("randomize_query_id", False):
         query_id = uuid.uuid4().hex
     else:
@@ -365,7 +364,6 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-
     span = Hub.current.scope.span
 
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
@@ -799,34 +797,45 @@ def _apply_allocation_policies_quota(
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
     violations: dict[str, AllocationPolicyViolation] = {}
-    for allocation_policy in allocation_policies:
-        try:
-            quota_allowances[
-                allocation_policy.config_key()
-            ] = allocation_policy.get_quota_allowance(
-                attribution_info.tenant_ids, query_id
+    with sentry_sdk.start_span(
+        op="allocation_policy", description="_apply_allocation_policies_quota"
+    ) as span:
+        for allocation_policy in allocation_policies:
+            with sentry_sdk.start_span(
+                op="allocation_policy.get_quota_allowance",
+                description=str(allocation_policy.__class__),
+            ) as span:
+                try:
+                    quota_allowances[
+                        allocation_policy.config_key()
+                    ] = allocation_policy.get_quota_allowance(
+                        attribution_info.tenant_ids, query_id
+                    )
+                    span.set_data(
+                        "quota_allowance",
+                        quota_allowances[allocation_policy.config_key()],
+                    )
+                except AllocationPolicyViolation as e:
+                    violations[allocation_policy.config_key()] = e
+        if violations:
+            span.set_data("violations", ",".join(violations.keys()))
+            stats["quota_allowance"] = {
+                k: v.quota_allowance for k, v in violations.items()
+            }
+            # HACK: This is because our SLOs are calculated weirdly
+            raise AllocationPolicyViolations(
+                "Query cannot be run due to allocation policies", violations
             )
 
-        except AllocationPolicyViolation as e:
-            violations[allocation_policy.config_key()] = e
-    if violations:
-        stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
-        # HACK: This is because our SLOs are calculated weirdly
-        raise AllocationPolicyViolations(
-            "Query cannot be run due to allocation policies", violations
-        )
+        stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
 
-    stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
-
-    # Before allocation policies were a thing, the query pipeline would apply
-    # thread limits in a query processor. That is not necessary if there
-    # is an allocation_policy in place but nobody has removed that code yet.
-    # Therefore, the least permissive thread limit is taken
-    query_settings.set_resource_quota(
-        ResourceQuota(
-            max_threads=min(
-                min(quota_allowances.values()).max_threads,
-                getattr(query_settings.get_resource_quota(), "max_threads", 10),
-            )
+        # Before allocation policies were a thing, the query pipeline would apply
+        # thread limits in a query processor. That is not necessary if there
+        # is an allocation_policy in place but nobody has removed that code yet.
+        # Therefore, the least permissive thread limit is taken
+        max_threads = min(
+            min(quota_allowances.values()).max_threads,
+            getattr(query_settings.get_resource_quota(), "max_threads", 10),
         )
-    )
+        span.set_data("max_threads", max_threads)
+        query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

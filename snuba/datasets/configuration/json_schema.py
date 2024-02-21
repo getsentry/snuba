@@ -6,6 +6,8 @@ from typing import Any
 import fastjsonschema
 import sentry_sdk
 
+from snuba import settings
+
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
 # please ensure you add a description key in the same level and succinctly describe the property.
 
@@ -742,19 +744,23 @@ V1_MIGRATION_GROUP_SCHEMA = {
     "additionalProperties": False,
 }
 
-with sentry_sdk.start_span(op="compile", description="Storage Validators"):
-    STORAGE_VALIDATORS = {
-        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
-        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
-        "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
-    }
+if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
+    with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+        STORAGE_VALIDATORS = {
+            "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+            "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+            "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
+        }
 
-with sentry_sdk.start_span(op="compile", description="Entity Validators"):
-    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+    with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+        ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
-
-with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
-    DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+    with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+        DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+else:
+    STORAGE_VALIDATORS = {}
+    ENTITY_VALIDATORS = {}
+    DATASET_VALIDATORS = {}
 
 
 ALL_VALIDATORS = {

@@ -20,16 +20,24 @@ use crate::types::{
 };
 use crate::EnvConfig;
 
+/// A version of serde_json::from_slice that also prints the JSON path at which the error occurred
+fn from_slice<'a, T: Deserialize<'a>>(
+    payload: &'a [u8],
+) -> Result<T, serde_path_to_error::Error<serde_json::Error>> {
+    let jd = &mut serde_json::Deserializer::from_slice(payload);
+    serde_path_to_error::deserialize(jd)
+}
+
 pub fn process_message_with_replacement(
     payload: KafkaPayload,
     metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertOrReplacement<InsertBatch>> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: Message = serde_json::from_slice(payload_bytes)
+    let msg: Message = from_slice(payload_bytes)
         .with_context(|| {
-            let four = serde_json::from_slice(payload_bytes).map(|_: FourTrain| ());
-            let three = serde_json::from_slice(payload_bytes).map(|_: ThreeTrain| ());
+            let four = from_slice(payload_bytes).map(|_: FourTrain| ());
+            let three = from_slice(payload_bytes).map(|_: ThreeTrain| ());
 
             format!("payload start: {}\n\nerror trying to deserialize as event: {:?}\n\nerror trying to deserialize as replacement: {:?}", String::from_utf8_lossy(&payload_bytes[..50]), four, three)
         })?;

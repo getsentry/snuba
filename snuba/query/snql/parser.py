@@ -71,7 +71,7 @@ from snuba.query.parser import (
     parse_subscriptables,
     validate_aliases,
 )
-from snuba.query.parser.exceptions import ParsingException
+from snuba.query.parser.exceptions import ParsingException, PostProcessingError
 from snuba.query.parser.validation import validate_query
 from snuba.query.query_settings import QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
@@ -1508,40 +1508,46 @@ def parse_snql_query(
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
+    snql_anonymized = ""
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
 
-    # NOTE (volo): The anonymizer that runs after this function call chokes on
-    # OR and AND clauses with multiple parameters so we have to treeify them
-    # before we run the anonymizer and the rest of the post processors
-    with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
-        _post_process(query, [_treeify_or_and_conditions], settings)
+    try:
+        # NOTE (volo): The anonymizer that runs after this function call chokes on
+        # OR and AND clauses with multiple parameters so we have to treeify them
+        # before we run the anonymizer and the rest of the post processors
+        with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
+            _post_process(query, [_treeify_or_and_conditions], settings)
 
-    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
-        snql_anonymized = format_snql_anonymized(query).get_sql()
+        with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+            snql_anonymized = format_snql_anonymized(query).get_sql()
 
-    with sentry_sdk.start_span(op="processor", description="post_processors"):
-        _post_process(
-            query,
-            POST_PROCESSORS,
-            settings,
-        )
+        with sentry_sdk.start_span(op="processor", description="post_processors"):
+            _post_process(
+                query,
+                POST_PROCESSORS,
+                settings,
+            )
 
-    # Custom processing to tweak the AST before validation
-    with sentry_sdk.start_span(op="processor", description="custom_processing"):
-        if custom_processing is not None:
-            _post_process(query, custom_processing, settings)
+        # Custom processing to tweak the AST before validation
+        with sentry_sdk.start_span(op="processor", description="custom_processing"):
+            if custom_processing is not None:
+                _post_process(query, custom_processing, settings)
 
-    # Time based processing
-    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
-        _post_process(query, [_replace_time_condition], settings)
+        # Time based processing
+        with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+            _post_process(query, [_replace_time_condition], settings)
 
-    # XXX: Select the entity to be used for the query. This step is temporary. Eventually
-    # entity selection will be moved to Sentry and specified for all SnQL queries.
-    _post_process(query, [_select_entity_for_dataset(dataset)], settings)
+        # XXX: Select the entity to be used for the query. This step is temporary. Eventually
+        # entity selection will be moved to Sentry and specified for all SnQL queries.
+        _post_process(query, [_select_entity_for_dataset(dataset)], settings)
 
-    # Validating
-    with sentry_sdk.start_span(op="validate", description="expression_validators"):
-        _post_process(query, VALIDATORS)
-    return query, snql_anonymized
+        # Validating
+        with sentry_sdk.start_span(op="validate", description="expression_validators"):
+            _post_process(query, VALIDATORS)
+        return query, snql_anonymized
+    except InvalidQueryException:
+        raise
+    except Exception:
+        raise PostProcessingError(query, snql_anonymized)

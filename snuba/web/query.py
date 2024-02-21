@@ -5,7 +5,7 @@ import textwrap
 from dataclasses import replace
 from functools import partial
 from math import floor
-from typing import Any, MutableMapping, Optional, Set, Union
+from typing import Any, MutableMapping, Optional, Union
 
 import sentry_sdk
 
@@ -14,21 +14,12 @@ from snuba import settings as snuba_settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.query_dsl.accessors import (
-    get_object_ids_in_query_ast,
-    get_time_range,
-)
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
-from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
-from snuba.query.data_source.simple import Entity, Table
-from snuba.query.data_source.visitor import DataSourceVisitor
+from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import QueryPlanException
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import (
@@ -59,34 +50,6 @@ metrics = MetricsWrapper(environment.metrics, "api")
 MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
-class ProjectsFinder(
-    DataSourceVisitor[Set[int], Entity], JoinVisitor[Set[int], Entity]
-):
-    """
-    Traverses a query to find project_id conditions
-    """
-
-    def _visit_simple_source(self, data_source: Entity) -> Set[int]:
-        return set()
-
-    def _visit_join(self, data_source: JoinClause[Entity]) -> Set[int]:
-        return self.visit_join_clause(data_source)
-
-    def _visit_simple_query(self, data_source: ProcessableQuery[Entity]) -> Set[int]:
-        return get_object_ids_in_query_ast(data_source, "project_id") or set()
-
-    def _visit_composite_query(self, data_source: CompositeQuery[Entity]) -> Set[int]:
-        return self.visit(data_source.get_from_clause())
-
-    def visit_individual_node(self, node: IndividualNode[Entity]) -> Set[int]:
-        return self.visit(node.data_source)
-
-    def visit_join_clause(self, node: JoinClause[Entity]) -> Set[int]:
-        left = node.left_node.accept(self)
-        right = node.right_node.accept(self)
-        return left | right
-
-
 @with_span()
 def parse_and_run_query(
     dataset: Dataset,
@@ -99,26 +62,7 @@ def parse_and_run_query(
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
     # from_clause = request.query.get_from_clause()
-    start, end = None, None
-    entity_name = "unknown"
-    if isinstance(request.query, LogicalQuery):
-        entity_key = request.query.get_from_clause().key
-        entity = get_entity(entity_key)
-        entity_name = entity_key.value
-        if entity.required_time_column is not None:
-            start, end = get_time_range(request.query, entity.required_time_column)
-
-    query_metadata = SnubaQueryMetadata(
-        request=request,
-        start_timestamp=start,
-        end_timestamp=end,
-        dataset=get_dataset_name(dataset),
-        entity=entity_name,
-        timer=timer,
-        query_list=[],
-        projects=ProjectsFinder().visit(request.query),
-        snql_anonymized=request.snql_anonymized,
-    )
+    query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
 
     try:
         result = _run_query_pipeline(

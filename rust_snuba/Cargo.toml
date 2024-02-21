@@ -47,6 +47,7 @@ sentry_usage_accountant = "0.0.4"
 adler = "1.0.2"
 schemars = { version = "0.8.16", features = ["uuid1"] }
 json-schema-diff = "0.1.7"
+serde_path_to_error = "0.1.15"
 
 
 [patch.crates-io]
