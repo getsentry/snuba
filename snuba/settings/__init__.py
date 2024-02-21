@@ -433,6 +433,13 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 # This is only for sliced Kafka topics
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
+# When dataset yamls (i.e. dataset, storages, entities) are loaded into memory, should we validate
+# the jsonschema or not? In production we shouldn't need to do it, in CI we should. This is for performance
+# reasons. The json schemas take around a second to compile and they add time to the load of every
+# yaml file as well because we validate them. By skipping these steps in production environments
+# we save ~2s on startup time
+VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

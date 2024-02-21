@@ -5,6 +5,8 @@ from typing import Any
 import sentry_sdk
 from yaml import safe_load
 
+from snuba import settings
+
 
 def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, Any]:
     """
@@ -16,6 +18,7 @@ def load_configuration_data(path: str, validators: dict[str, Any]) -> dict[str, 
         with open(path) as file:
             config = safe_load(file)
         assert isinstance(config, dict)
-        validators[config["kind"]](config)
+        if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
+            validators[config["kind"]](config)
         span.description = config["name"]
         return config
