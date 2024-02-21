@@ -13,6 +13,7 @@ from snuba.clickhouse.upgrades.comparisons import (
     FileFormat,
     FileManager,
     QueryInfoResult,
+    QueryMeasurementResult,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.environment import setup_logging, setup_sentry
@@ -191,6 +192,27 @@ def query_replayer(
         )
         results = connection.execute(query)
 
+        replay_results = []
+        for replay_result in results.results:
+            (
+                query_id,
+                query_duration_ms,
+                result_rows,
+                result_bytes,
+                read_rows,
+                read_bytes,
+            ) = replay_result
+            replay_results.append(
+                QueryMeasurementResult(
+                    query_id=query_id,
+                    query_duration_ms=query_duration_ms,
+                    result_rows=result_rows,
+                    result_bytes=result_bytes,
+                    read_rows=read_rows,
+                    read_bytes=read_bytes,
+                )
+            )
+
         # File format is the same except for the directory
         file_manager.save(
             FileFormat(
@@ -199,7 +221,7 @@ def query_replayer(
                 table=queries_file_format.table,
                 hour=queries_file_format.hour,
             ),
-            results.results,
+            replay_results,
         )
 
         if notify:
