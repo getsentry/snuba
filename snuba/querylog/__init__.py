@@ -121,18 +121,16 @@ def _record_cogs(
 
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
-    if not cluster_name.startswith("snuba_gen_metrics"):
+    if not cluster_name.startswith("snuba-gen-metrics"):
         return  # Only track shared clusters
 
     # Sanitize the cluster name to line up with the resource_id naming convention
-    cluster_name = (
-        cluster_name.replace("-", "_")
-        .replace("snuba_gen_metrics", "generic_metrics_clickhouse")
-        .replace("_0", "")
+    cluster_name = cluster_name.replace("-", "_").replace(
+        "snuba_gen_metrics", "generic_metrics_clickhouse"
     )
     if random() < (state.get_config("snuba_api_cogs_probability") or 0):
         record_cogs(
-            resource_id=f"{cluster_name}_snuba_api_bytes_scanned",
+            resource_id=f"{cluster_name}",
             app_feature=app_feature,
             amount=bytes_scanned,
             usage_type=UsageUnit.BYTES,
