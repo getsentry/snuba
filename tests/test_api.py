@@ -2010,6 +2010,7 @@ class TestApi(SimpleAPITest):
     def test_test_endpoints(self) -> None:
         project_id = 73
         group_id = 74
+        state: object = {}
         event = (
             2,
             "insert",
@@ -2025,7 +2026,7 @@ class TestApi(SimpleAPITest):
                 "message": "message",
                 "data": {"received": time.mktime(self.base_time.timetuple())},
             },
-            {},
+            state,
         )
         response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
         assert response.status_code == 200
@@ -2045,7 +2046,7 @@ class TestApi(SimpleAPITest):
         result = json.loads(self.post(json.dumps(query)).data)
         assert result["data"] == [{"count": 1, "project_id": project_id}]
 
-        event = (
+        replacement = (
             2,
             ReplacementType.END_DELETE_GROUPS,
             {
@@ -2057,7 +2058,9 @@ class TestApi(SimpleAPITest):
                 ),
             },
         )
-        response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
+        response = self.app.post(
+            "/tests/events/eventstream", data=json.dumps(replacement)
+        )
         assert response.status_code == 200
 
         result = json.loads(self.post(json.dumps(query)).data)
