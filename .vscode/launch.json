@@ -8,7 +8,8 @@
             "name": "Pytest Current File",
             "type": "python",
             "request": "launch",
-            "program": ".venv/bin/pytest -vv ${file}",
+            "module": "pytest",
+            "args": ["-vv", "${file}"],
             "console": "integratedTerminal"
         }
     ]

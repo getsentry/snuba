@@ -9,7 +9,6 @@ from typing import Any, List, Mapping, MutableMapping, Set, Union, cast
 
 import click
 import simplejson as json
-from flask import Response
 
 from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
@@ -24,9 +23,6 @@ from snuba.datasets.storage import Storage
 from snuba.environment import setup_logging
 from snuba.web.views import check_down_file_exists, metrics
 
-setup_logging(None)
-logger = logging.getLogger("snuba.health")
-
 
 @click.command()
 @click.option(
@@ -38,7 +34,10 @@ logger = logging.getLogger("snuba.health")
 def health(
     *,
     thorough: bool,
-) -> Response:
+) -> int:
+
+    setup_logging(None)
+    logger = logging.getLogger("snuba.health")
 
     start = time.time()
     down_file_exists = check_down_file_exists()
@@ -94,6 +93,10 @@ def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     TODO: Eventually, when we fully migrate to readiness_states, we can remove DISABLED_DATASETS.
     """
+
+    setup_logging(None)
+    logger = logging.getLogger("snuba.health")
+
     try:
         storages = filter_checked_storages()
         connection_grouped_table_names: MutableMapping[
