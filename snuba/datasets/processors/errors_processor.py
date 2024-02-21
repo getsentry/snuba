@@ -4,15 +4,6 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, cast
 
 import _strptime  # NOQA fixes _strptime deferred import issue
-from sentry_kafka_schemas.schema_types.events_v1 import (
-    ClientSdkInfo,
-    EventStreamMessage,
-    InsertEvent,
-    SentryExceptionChain,
-    SentryRequest,
-    SentryThreadChain,
-    SentryUser,
-)
 
 from snuba import settings
 from snuba.consumers.types import KafkaMessageMetadata
@@ -43,6 +34,13 @@ from snuba.processor import (
 )
 
 logger = logging.getLogger(__name__)
+
+# XXX(markus): hack around sentry-kafka-schemas upgrade by removing all types. this processor should be deleted soon anyway
+ClientSdkInfo = (
+    EventStreamMessage
+) = (
+    InsertEvent
+) = SentryExceptionChain = SentryRequest = SentryThreadChain = SentryUser = Any
 
 
 class ErrorsProcessor(DatasetMessageProcessor):
