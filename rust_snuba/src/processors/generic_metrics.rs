@@ -100,9 +100,7 @@ where
     T: Deserialize<'de>,
     D: Deserializer<'de>,
 {
-    struct Visitor<U> {
-        phantom: PhantomData<U>,
-    }
+    struct Visitor<U>(PhantomData<U>);
 
     impl<'de, U> serde::de::Visitor<'de> for Visitor<U>
     where
@@ -130,9 +128,7 @@ where
         }
     }
 
-    deserializer.deserialize_any(Visitor {
-        phantom: PhantomData::<T>,
-    })
+    deserializer.deserialize_any(Visitor(PhantomData))
 }
 
 #[derive(Debug, Serialize, Default)]
