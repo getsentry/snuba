@@ -191,6 +191,21 @@ class String(Pattern[str]):
 
 
 @dataclass(frozen=True)
+class StringWithSuffix(Pattern[str]):
+    """
+    Matches any string with the given suffix.
+    """
+
+    value: str
+
+    def match(self, node: AnyType) -> Optional[MatchResult]:
+        if isinstance(node, str) and node.endswith(self.value):
+            return MatchResult()
+        else:
+            return None
+
+
+@dataclass(frozen=True)
 class Integer(Pattern[int]):
     """
     Matches one specific integer.
