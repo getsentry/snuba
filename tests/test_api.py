@@ -2025,6 +2025,7 @@ class TestApi(SimpleAPITest):
                 "message": "message",
                 "data": {"received": time.mktime(self.base_time.timetuple())},
             },
+            {},
         )
         response = self.app.post("/tests/events/eventstream", data=json.dumps(event))
         assert response.status_code == 200
