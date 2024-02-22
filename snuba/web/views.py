@@ -3,7 +3,6 @@ from __future__ import annotations
 import atexit
 import functools
 import logging
-import os
 import random
 import time
 from datetime import datetime
@@ -14,7 +13,6 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
-    Optional,
     Sequence,
     Text,
     Tuple,
@@ -32,7 +30,7 @@ from flask import request as http_request
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
-from snuba import environment, settings, util
+from snuba import settings, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -58,52 +56,25 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
+from snuba.utils.health_info import (
+    IS_SHUTTING_DOWN,
+    check_down_file_exists,
+    get_health_info,
+    metrics,
+    shutdown_time,
+)
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
-from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
-metrics = MetricsWrapper(environment.metrics, "api")
-
 logger = logging.getLogger("snuba.api")
 
 # Flask wants a Dict, not a Mapping
 RespTuple = Tuple[Text, int, Dict[Any, Any]]
-
-
-def shutdown_time() -> Optional[float]:
-    try:
-        return os.stat("/tmp/snuba.down").st_mtime
-    except OSError:
-        return None
-
-
-try:
-    IS_SHUTTING_DOWN = False
-    import uwsgi
-except ImportError:
-
-    def check_down_file_exists() -> bool:
-        return False
-
-else:
-
-    def check_down_file_exists() -> bool:
-        global IS_SHUTTING_DOWN
-        try:
-            m_time = shutdown_time()
-            if m_time is None:
-                return False
-
-            start_time: float = uwsgi.started_on
-            IS_SHUTTING_DOWN = m_time > start_time
-            return IS_SHUTTING_DOWN
-        except OSError:
-            return False
 
 
 def truncate_dataset(dataset: Dataset) -> None:
@@ -244,6 +215,15 @@ def health_envoy() -> Response:
     if status != 200:
         metrics.increment("healthcheck_envoy_failed")
     return Response(json.dumps({}), status, {"Content-Type": "application/json"})
+
+
+@application.route("/health")
+def health() -> Response:
+
+    thorough = http_request.args.get("thorough", False)
+    health_body, health_status, health_content_type = get_health_info(thorough)
+
+    return Response(health_body, health_status, health_content_type)
 
 
 def parse_request_body(http_request: Request) -> Dict[str, Any]:
