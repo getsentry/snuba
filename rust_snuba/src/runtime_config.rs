@@ -6,9 +6,11 @@ use std::time::Duration;
 
 use rust_arroyo::utils::timing::Deadline;
 
+#[allow(dead_code)]
 static CONFIG: RwLock<BTreeMap<String, (Option<String>, Deadline)>> = RwLock::new(BTreeMap::new());
 
 /// Runtime config is cached for 10 seconds
+#[allow(dead_code)]
 pub fn get_str_config(key: &str) -> Result<Option<String>, Error> {
     let deadline = Deadline::new(Duration::from_secs(10));
 
