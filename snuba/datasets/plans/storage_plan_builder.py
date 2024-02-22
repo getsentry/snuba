@@ -5,7 +5,6 @@ from typing import Optional, Sequence
 import sentry_sdk
 
 from snuba import settings as snuba_settings
-from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
@@ -17,7 +16,6 @@ from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
 )
-from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -54,11 +52,9 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
         self,
         cluster: ClickhouseCluster,
         db_query_processors: Sequence[ClickhouseQueryProcessor],
-        splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__cluster = cluster
         self.__query_processors = db_query_processors
-        self.__splitters = splitters or []
 
     @with_span()
     def execute(
@@ -88,18 +84,6 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 reader=self.__cluster.get_reader(),
                 cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
             )
-
-        use_split = state.get_config("use_split", 1)
-        if use_split:
-            for splitter in self.__splitters:
-                with sentry_sdk.start_span(
-                    description=type(splitter).__name__, op="splitter"
-                ):
-                    result = splitter.execute(
-                        query, query_settings, process_and_run_query
-                    )
-                    if result is not None:
-                        return result
 
         return process_and_run_query(query, query_settings)
 
@@ -241,7 +225,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 execution_strategy=SimpleQueryPlanExecutionStrategy(
                     cluster=cluster,
                     db_query_processors=db_query_processors,
-                    splitters=storage.get_query_splitters(),
                 ),
             )
         ]
