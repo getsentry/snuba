@@ -69,7 +69,7 @@ else:
             return False
 
 
-def get_health_info(thorough: bool) -> Tuple[str, int, Dict[str, str]]:
+def get_health_info(thorough: Union[bool, str]) -> Tuple[str, int, Dict[str, str]]:
 
     start = time.time()
     down_file_exists = check_down_file_exists()
