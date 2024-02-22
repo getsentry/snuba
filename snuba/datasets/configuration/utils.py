@@ -13,6 +13,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.utils.schemas import (
@@ -30,6 +31,11 @@ class QueryProcessorDefinition(TypedDict):
     args: dict[str, Any]
 
 
+class QuerySplitterDefinition(TypedDict):
+    splitter: str
+    args: dict[str, Any]
+
+
 class MandatoryConditionCheckerDefinition(TypedDict):
     condition: str
     args: dict[str, Any]
@@ -43,6 +49,17 @@ def get_query_processors(
             **qp.get("args", {})
         )
         for qp in query_processor_objects
+    ]
+
+
+def get_query_splitters(
+    query_splitter_objects: list[QuerySplitterDefinition],
+) -> list[QuerySplitStrategy]:
+    return [
+        QuerySplitStrategy.get_from_name(qs["splitter"]).from_kwargs(
+            **qs.get("args", {})
+        )
+        for qs in query_splitter_objects
     ]
 
 

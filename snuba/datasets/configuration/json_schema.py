@@ -87,7 +87,6 @@ STREAM_LOADER_SCHEMA = {
     "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
 }
 
-
 ######
 # Column specific json schemas
 def make_column_schema(
@@ -333,6 +332,11 @@ STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_array_schema(
     "QueryProcessor",
     "Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.",
 )
+STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_array_schema(
+    "splitter",
+    "QuerySplitStrategy",
+    "Name of QuerySplitStrategy class config key. Responsible for splitting a query into two at runtime and combining the results.",
+)
 STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "condition",
     "ConditionChecker",
@@ -538,6 +542,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
     },
@@ -564,6 +569,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
@@ -601,6 +607,7 @@ V1_CDC_STORAGE_SCHEMA = {
         "postgres_table": TYPE_STRING,
         "row_processor": CDC_STORAGE_ROW_PROCESSOR_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
