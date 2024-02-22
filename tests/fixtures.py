@@ -357,23 +357,15 @@ def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
     }
 
 
-def get_raw_error_message() -> Tuple[int, str, InsertEvent]:
+def get_raw_error_message() -> Tuple[int, str, InsertEvent, Any]:
     """
     Get an error message which can be passed to the processors.
     """
-    return (
-        2,
-        "insert",
-        get_raw_event(),
-    )
+    return (2, "insert", get_raw_event(), {})
 
 
 def get_raw_transaction_message() -> Tuple[int, str, Mapping[str, Any]]:
     """
     Get a transaction message which can be passed to the processors.
     """
-    return (
-        2,
-        "insert",
-        get_raw_transaction(),
-    )
+    return (2, "insert", get_raw_transaction())
