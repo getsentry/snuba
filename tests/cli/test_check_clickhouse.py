@@ -6,11 +6,11 @@ from unittest import mock
 
 import pytest
 
+from snuba.cli.health import check_clickhouse, filter_checked_storages
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.web.views import check_clickhouse, filter_checked_storages
 
 
 class BadStorage(mock.MagicMock):
