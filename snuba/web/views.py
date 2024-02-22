@@ -42,7 +42,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import StorageNotAvailable
+from snuba.datasets.storage import ReadableTableStorage, StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -67,7 +67,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
-from snuba.web.converters import DatasetConverter, EntityConverter
+from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -104,6 +104,7 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 application.url_map.converters["entity"] = EntityConverter
+application.url_map.converters["storage"] = StorageConverter
 atexit.register(close_cogs_recorder)
 
 
@@ -261,6 +262,18 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
+@application.route("/storages/<storage:storage>/snql", methods=["POST"])
+@util.time_request("query")
+def snql_storage_query_view(
+    *, storage: ReadableTableStorage, timer: Timer
+) -> Union[Response, str]:
+    if http_request.method == "POST":
+        body = parse_request_body(http_request)
+        return storage_query(storage, body, timer)
+    else:
+        assert False, "unexpected fallthrough"
+
+
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
@@ -340,6 +353,35 @@ def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
         logger.info(f"Received referrer: {request.attribution_info.referrer}")
         if request.attribution_info.referrer == "<unknown>":
             logger.info(f"Received unknown referrer from request: {request}, {body}")
+
+
+@with_span()
+def storage_query(
+    storage: ReadableTableStorage,
+    body: dict[str, Any],
+    timer: Timer,
+    is_mql: bool = False,
+):
+    pass
+    """
+    assert http_request.method == "POST"
+    referrer = http_request.referrer or "<unknown>"  # mypy
+
+    schema = RequestSchema.build(HTTPQuerySettings, is_mql)
+    # These 3 lines are the meat of what needs to change, idk about schema
+    parse_function = (
+        parse_snql_query if not is_mql else parse_mql_query
+    )  # dataset, query stuff --> logical query
+    request = build_request(
+        body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
+    )  # query stuff, functions to use --> Request
+    result = parse_and_run_query(
+        dataset, request, timer
+    )  #  Dataset, Request --> Result
+
+    payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
+    return Response(dump_payload(payload), 200, {"Content-Type": "application/json"})
+    """
 
 
 @with_span()
