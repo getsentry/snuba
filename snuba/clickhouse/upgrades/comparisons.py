@@ -26,6 +26,19 @@ class QueryMeasurementResult:
     read_rows: int
     read_bytes: int
 
+    def __eq__(self, other: object) -> bool:
+        if self.query_duration_ms != other.query_duration_ms:
+            return False
+        if self.result_rows != other.result_rows:
+            return False
+        if self.result_bytes != other.result_bytes:
+            return False
+        if self.read_rows != other.read_rows:
+            return False
+        if self.read_bytes != other.read_bytes:
+            return False
+        return True
+
 
 Results = Union[QueryInfoResult, QueryMeasurementResult]
 
