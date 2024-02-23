@@ -67,9 +67,9 @@ struct FromGenericMetricsMessage {
 enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
-    #[serde(rename = "s", deserialize_with = "encoded_series_deserializer")]
+    #[serde(rename = "s", deserialize_with = "encoded_series_compat_deserializer")]
     Set(EncodedSeries<u64>),
-    #[serde(rename = "d", deserialize_with = "encoded_series_deserializer")]
+    #[serde(rename = "d", deserialize_with = "encoded_series_compat_deserializer")]
     Distribution(EncodedSeries<f64>),
     #[serde(rename = "g")]
     Gauge {
@@ -95,7 +95,9 @@ impl<T> EncodedSeries<T> {
     }
 }
 
-fn encoded_series_deserializer<'de, T, D>(deserializer: D) -> Result<EncodedSeries<T>, D::Error>
+fn encoded_series_compat_deserializer<'de, T, D>(
+    deserializer: D,
+) -> Result<EncodedSeries<T>, D::Error>
 where
     T: Deserialize<'de>,
     D: Deserializer<'de>,
@@ -109,7 +111,7 @@ where
         type Value = EncodedSeries<U>;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("expected either old or new distribution value format")
+            formatter.write_str("expected either legacy or new distribution value format")
         }
 
         fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
