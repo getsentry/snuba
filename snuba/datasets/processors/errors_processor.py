@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, cast
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, cast
 
 import _strptime  # NOQA fixes _strptime deferred import issue
 from sentry_kafka_schemas.schema_types.events_v1 import (
@@ -124,7 +124,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
         self.extract_sdk(processed, sdk)
 
         # XXX(markus): tags should actually only be of the array form
-        tags = _as_dict_safe(data.get("tags", None))
+        tags_raw: Optional[Sequence[Optional[Tuple[Any, Any]]]] = data.get("tags", None)
+        tags: MutableMapping[Any, Any] = _as_dict_safe(tags_raw)
         self.extract_promoted_tags(processed, tags)
         self.extract_tags_custom(processed, event, tags, metadata)
 
@@ -222,7 +223,7 @@ class ErrorsProcessor(DatasetMessageProcessor):
             elif ip_address.version == 6:
                 output["ip_address_v6"] = str(ip_address)
 
-        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))
+        contexts: MutableMapping[str, Any] = _as_dict_safe(data.get("contexts", None))  # type: ignore
         geo = user_dict.get("geo", None) or {}
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
