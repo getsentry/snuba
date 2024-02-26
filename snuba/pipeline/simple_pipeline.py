@@ -96,3 +96,25 @@ class SimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
         settings: QuerySettings,
     ) -> EntityQueryPlanner:
         return EntityQueryPlanner(query, settings, self.__query_plan_builder)
+
+
+class KylesSimplePipelineBuilder(QueryPipelineBuilder[ClickhouseQueryPlan]):
+    def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
+        self.__query_plan_builder = query_plan_builder
+
+    def build_execution_pipeline(
+        self, request: Request, runner: QueryRunner
+    ) -> QueryExecutionPipeline:
+        assert isinstance(request.query, LogicalQuery)
+        return SimpleExecutionPipeline(
+            request,
+            runner,
+            self.build_planner(request.query, request.query_settings),
+        )
+
+    def build_planner(
+        self,
+        query: LogicalQuery,
+        settings: QuerySettings,
+    ) -> EntityQueryPlanner:
+        return EntityQueryPlanner(query, settings, self.__query_plan_builder)

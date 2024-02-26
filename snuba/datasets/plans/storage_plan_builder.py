@@ -14,6 +14,7 @@ from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelecto
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
+    KylesClickhouseQueryPlanBuilder,
     QueryPlanExecutionStrategy,
     QueryRunner,
 )
@@ -28,6 +29,7 @@ from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageNotAvailable,
 )
+from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
@@ -235,6 +237,57 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         return [
             ClickhouseQueryPlan(
                 query=clickhouse_query,
+                plan_query_processors=[],
+                db_query_processors=db_query_processors,
+                storage_set_key=storage.get_storage_set_key(),
+                execution_strategy=SimpleQueryPlanExecutionStrategy(
+                    cluster=cluster,
+                    db_query_processors=db_query_processors,
+                    splitters=storage.get_query_splitters(),
+                ),
+            )
+        ]
+
+
+class StorageOnlyQueryPlanBuilder:
+    """
+    Builds the Clickhouse Query Execution Plan for a dataset which supports single storages,
+    multiple storages, unsliced storages, and sliced storages.
+    """
+
+    def get_cluster(
+        self, storage: ReadableStorage, query: AbstractQuery, settings: QuerySettings
+    ) -> ClickhouseCluster:
+        if is_storage_set_sliced(storage.get_storage_set_key()):
+            raise NotImplementedError()
+        return storage.get_cluster()
+
+    @with_span()
+    def build_and_rank_plans(
+        self, query: Query, storage: ReadableTableStorage, settings: QuerySettings
+    ) -> Sequence[ClickhouseQueryPlan]:
+        # Return failure if storage readiness state is not supported in current environment
+        if snuba_settings.READINESS_STATE_FAIL_QUERIES:
+            assert isinstance(storage, ReadableTableStorage)
+            readiness_state = storage.get_readiness_state()
+            if readiness_state.value not in snuba_settings.SUPPORTED_STATES:
+                raise StorageNotAvailable(
+                    StorageNotAvailable.__name__,
+                    f"The selected storage={storage.get_storage_key().value} is not available in this environment yet. To enable it, consider bumping the storage's readiness_state.",
+                )
+
+        # If storage is supported in this environment, we can safely check get the existing cluster.
+        cluster = self.get_cluster(storage, query, settings)
+
+        db_query_processors = [
+            *storage.get_query_processors(),
+            MandatoryConditionApplier(),
+            MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
+        ]
+
+        return [
+            ClickhouseQueryPlan(
+                query=query,
                 plan_query_processors=[],
                 db_query_processors=db_query_processors,
                 storage_set_key=storage.get_storage_set_key(),

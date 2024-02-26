@@ -68,3 +68,23 @@ class DatasetQueryPipelineBuilder:
             return CompositeExecutionPipeline(
                 request.query, request.query_settings, runner
             )
+
+
+class StorageQueryPipelineBuilder:
+    """
+    Produces the QueryExecutionPipeline to run the query. This is supposed
+    to handle both simple and composite queries.
+    """
+
+    def build_execution_pipeline(
+        self, request: Request, runner: QueryRunner
+    ) -> QueryExecutionPipeline:
+        if isinstance(request.query, Query):
+            entity = get_entity(request.query.get_from_clause().key)
+            return entity.get_query_pipeline_builder().build_execution_pipeline(
+                request, runner
+            )
+        else:
+            return CompositeExecutionPipeline(
+                request.query, request.query_settings, runner
+            )

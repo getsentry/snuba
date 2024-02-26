@@ -10,6 +10,7 @@ from snuba.datasets.slicing import (
     map_org_id_to_logical_partition,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 
@@ -84,7 +85,7 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         self.partition_key_column_name = partition_key_column_name
 
     def select_cluster(
-        self, query: LogicalQuery, query_settings: QuerySettings
+        self, query: AbstractQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
         """
         Selects the cluster to use for a query if the storage set is sliced.

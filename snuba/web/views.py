@@ -363,15 +363,19 @@ def storage_query(
     is_mql: bool = False,
 ):
     pass
-    """
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
 
     schema = RequestSchema.build(HTTPQuerySettings, is_mql)
     # These 3 lines are the meat of what needs to change, idk about schema
+
+    parser
+
     parse_function = (
         parse_snql_query if not is_mql else parse_mql_query
     )  # dataset, query stuff --> logical query
+
+    """parse snql and return physical query"""
     request = build_request(
         body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
     )  # query stuff, functions to use --> Request
@@ -381,7 +385,6 @@ def storage_query(
 
     payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
     return Response(dump_payload(payload), 200, {"Content-Type": "application/json"})
-    """
 
 
 @with_span()

@@ -25,12 +25,15 @@ from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
 from snuba.clickhouse.columns import Array
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.plans.translator.query import identity_translate
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -47,6 +50,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -913,6 +917,40 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         return generic_visit(node, visited_children)
 
 
+def parse_snql_for_storage(
+    body: str,
+    custom_processing: Optional[CustomProcessors] = None,
+    settings: QuerySettings | None = None,
+) -> ClickhouseQuery:
+    logical_query = parse_snql_query_initial(body)
+    if isinstance(logical_query, CompositeQuery):
+        raise ValueError(
+            "directly querying storages currently only supports non-composite queries"
+        )
+    process_logical_query(logical_query, custom_processing, settings)
+    return identity_translate(logical_query)
+
+
+def process_logical_query(
+    query: LogicalQuery,
+    custom_processing: Optional[CustomProcessors] = None,
+    settings: QuerySettings | None = None,
+):
+    _post_process(query, [_treeify_or_and_conditions], settings)
+    _post_process(
+        query,
+        POST_PROCESSORS,
+        settings,
+    )
+    # Custom processing to tweak the AST before validation, maybe
+    if custom_processing is not None:
+        _post_process(query, custom_processing, settings)
+    # Time based processing, maybe
+    _post_process(query, [_replace_time_condition], settings)
+    # validators, maybe
+    _post_process(query, VALIDATORS)
+
+
 def parse_snql_query_initial(
     body: str,
 ) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
@@ -1520,7 +1558,9 @@ def parse_snql_query(
         # before we run the anonymizer and the rest of the post processors
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
+        # necessary
 
+        # dont need
         with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
             snql_anonymized = format_snql_anonymized(query).get_sql()
 
@@ -1530,6 +1570,7 @@ def parse_snql_query(
                 POST_PROCESSORS,
                 settings,
             )
+        # necessary
 
         # Custom processing to tweak the AST before validation
         with sentry_sdk.start_span(op="processor", description="custom_processing"):
@@ -1539,14 +1580,17 @@ def parse_snql_query(
         # Time based processing
         with sentry_sdk.start_span(op="processor", description="time_based_processing"):
             _post_process(query, [_replace_time_condition], settings)
+        # maybe
 
         # XXX: Select the entity to be used for the query. This step is temporary. Eventually
         # entity selection will be moved to Sentry and specified for all SnQL queries.
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
+        # no need
 
         # Validating
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
+        # maybe
         return query, snql_anonymized
     except InvalidQueryException:
         raise
