@@ -84,12 +84,6 @@ storages:
         - mapper: ColumnToColumn
           args:
             from_table_name:
-            from_col_name: "message"
-            to_table_name:
-            to_col_name: "search_title"
-        - mapper: ColumnToColumn
-          args:
-            from_table_name:
             from_col_name: "title"
             to_table_name:
             to_col_name: "search_title"
