@@ -219,19 +219,20 @@ def query_replayer(
             )
 
         # File format is the same except for the directory
+        result_file_format = FileFormat(
+            directory=results_directory,
+            date=queries_file_format.date,
+            table=queries_file_format.table,
+            hour=queries_file_format.hour,
+        )
         file_manager.save(
-            FileFormat(
-                directory=results_directory,
-                date=queries_file_format.date,
-                table=queries_file_format.table,
-                hour=queries_file_format.hour,
-            ),
+            result_file_format,
             replay_results,
         )
 
         if notify:
             # TODO: maybe use new specific channel id
-            filename = file_manager.filename_from_blob_name(blob_name)
+            filename = file_manager.format_filename(result_file_format)
             slack_client = SlackClient(
                 channel_id=settings.SNUBA_SLACK_CHANNEL_ID,
                 token=settings.SLACK_API_TOKEN,
