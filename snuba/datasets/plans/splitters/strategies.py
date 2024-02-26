@@ -125,6 +125,9 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         assert isinstance(split_step, int)
         remaining_offset = query.get_offset()
 
+        print(
+            "TIME SPLITTING", remaining_offset, from_date_ast, to_date_ast, split_step
+        )
         overall_result: Optional[QueryResult] = None
         split_end = to_date_ast
         split_start = max(split_end - timedelta(seconds=split_step), from_date_ast)
@@ -304,6 +307,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
                 metrics.increment("column_splitter.orderby_has_a_function")
                 return None
 
+        print("SPLITTING", minimal_query)
         result = runner(minimal_query, query_settings)
         del minimal_query
 
