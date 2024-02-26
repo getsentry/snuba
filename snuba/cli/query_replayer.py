@@ -176,8 +176,6 @@ def query_replayer(
         rerun_start = datetime.utcnow()
         total, reran = rerun_queries_for_blob(blob_name)
         rerun_end = datetime.utcnow()
-        # adding buffer around querylog query
-        time.sleep(1)
 
         if total == 0:
             logger.info(f"No queries to re-run for {blob_name}")
