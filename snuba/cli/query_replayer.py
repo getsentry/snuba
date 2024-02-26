@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -139,10 +140,10 @@ def query_replayer(
 
     results_directory = f"results-{get_version()}"
     if override:
-        blobs_to_replay = blob_getter.get_all_names(prefix="queries")
+        blobs_to_replay = sorted(blob_getter.get_all_names(prefix="queries"))
     else:
-        blobs_to_replay = blob_getter.get_name_diffs(
-            ("queries/", f"{results_directory}/")
+        blobs_to_replay = sorted(
+            blob_getter.get_name_diffs(("queries/", f"{results_directory}/"))
         )
 
     def rerun_queries_for_blob(blob: str) -> Tuple[int, int]:
@@ -170,9 +171,13 @@ def query_replayer(
         return (total_queries, reran_queries)
 
     for blob_name in blobs_to_replay:
+        # adding buffer around querylog query
+        time.sleep(1)
         rerun_start = datetime.utcnow()
         total, reran = rerun_queries_for_blob(blob_name)
         rerun_end = datetime.utcnow()
+        # adding buffer around querylog query
+        time.sleep(1)
 
         if total == 0:
             logger.info(f"No queries to re-run for {blob_name}")
@@ -240,4 +245,4 @@ def query_replayer(
             )
 
     # clear out the query_log table after we re-ran queries
-    connection.execute("TRUNCATE TABLE system.query_log")
+    # connection.execute("TRUNCATE TABLE system.query_log")
