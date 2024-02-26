@@ -57,9 +57,9 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.health_info import (
-    IS_SHUTTING_DOWN,
     check_down_file_exists,
     get_health_info,
+    get_shutdown,
     metrics,
     shutdown_time,
 )
@@ -221,9 +221,9 @@ def health_envoy() -> Response:
 def health() -> Response:
 
     thorough = http_request.args.get("thorough", False)
-    health_body, health_status, health_content_type = get_health_info(thorough)
+    health_info = get_health_info(thorough)
 
-    return Response(health_body, health_status, health_content_type)
+    return Response(health_info.body, health_info.status, health_info.content_type)
 
 
 def parse_request_body(http_request: Request) -> Dict[str, Any]:
@@ -354,8 +354,8 @@ def dataset_query(
     # how long after. I don't want to do a disk check for
     # every query, so randomly sample until the shutdown file
     # is detected, and then log everything
-    if IS_SHUTTING_DOWN or random.random() < 0.05:
-        if IS_SHUTTING_DOWN or check_down_file_exists():
+    if get_shutdown() or random.random() < 0.05:
+        if get_shutdown() or check_down_file_exists():
             tags = {"dataset": get_dataset_name(dataset)}
             metrics.increment("post.shutdown.query", tags=tags)
             diff = time.time() - (shutdown_time() or 0.0)  # this should never be None

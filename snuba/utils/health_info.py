@@ -5,18 +5,8 @@ import logging
 import os
 import time
 from collections import defaultdict
-from typing import (
-    Any,
-    Dict,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-    cast,
-)
+from dataclasses import dataclass
+from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Set, Union, cast
 
 import simplejson as json
 
@@ -45,8 +35,9 @@ def shutdown_time() -> Optional[float]:
         return None
 
 
+_IS_SHUTTING_DOWN = False
+
 try:
-    IS_SHUTTING_DOWN = False
     import uwsgi
 except ImportError:
 
@@ -56,20 +47,35 @@ except ImportError:
 else:
 
     def check_down_file_exists() -> bool:
-        global IS_SHUTTING_DOWN
         try:
             m_time = shutdown_time()
             if m_time is None:
                 return False
 
             start_time: float = uwsgi.started_on
-            IS_SHUTTING_DOWN = m_time > start_time
-            return IS_SHUTTING_DOWN
+            _set_shutdown(m_time > start_time)
+            return get_shutdown()
         except OSError:
             return False
 
 
-def get_health_info(thorough: Union[bool, str]) -> Tuple[str, int, Dict[str, str]]:
+def _set_shutdown(is_shutting_down: bool) -> None:
+    global _IS_SHUTTING_DOWN
+    _IS_SHUTTING_DOWN = is_shutting_down
+
+
+def get_shutdown() -> bool:
+    return _IS_SHUTTING_DOWN
+
+
+@dataclass
+class HealthInfo:
+    body: str
+    status: int
+    content_type: Dict[str, str]
+
+
+def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
 
     start = time.time()
     down_file_exists = check_down_file_exists()
@@ -102,7 +108,11 @@ def get_health_info(thorough: Union[bool, str]) -> Tuple[str, int, Dict[str, str
     )
 
     logger.info(json.dumps(body))
-    return (json.dumps(body), status, {"Content-Type": "application/json"})
+    return HealthInfo(
+        body=json.dumps(body),
+        status=status,
+        content_type={"Content-Type": "application/json"},
+    )
 
 
 def filter_checked_storages() -> List[Storage]:
