@@ -2,28 +2,21 @@ from __future__ import annotations
 
 import atexit
 import functools
-import itertools
 import logging
-import os
 import random
 import time
-from collections import defaultdict
 from datetime import datetime
 from typing import (
     Any,
     Callable,
     Dict,
-    List,
     Mapping,
     MutableMapping,
     MutableSequence,
-    Optional,
     Sequence,
-    Set,
     Text,
     Tuple,
     Union,
-    cast,
 )
 from uuid import UUID
 
@@ -37,28 +30,19 @@ from flask import request as http_request
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
-from snuba import environment, settings, util
+from snuba import settings, util
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import JSONRowEncoder
-from snuba.clusters.cluster import (
-    ClickhouseClientSettings,
-    ConnectionId,
-    UndefinedClickhouseCluster,
-)
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.cogs.accountant import close_cogs_recorder
 from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
-from snuba.datasets.factory import (
-    InvalidDatasetError,
-    get_dataset,
-    get_dataset_name,
-    get_enabled_dataset_names,
-)
+from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import Storage, StorageNotAvailable
+from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -72,124 +56,25 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
+from snuba.utils.health_info import (
+    check_down_file_exists,
+    get_health_info,
+    get_shutdown,
+    metrics,
+    shutdown_time,
+)
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
-from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
-metrics = MetricsWrapper(environment.metrics, "api")
-
 logger = logging.getLogger("snuba.api")
 
 # Flask wants a Dict, not a Mapping
 RespTuple = Tuple[Text, int, Dict[Any, Any]]
-
-
-def shutdown_time() -> Optional[float]:
-    try:
-        return os.stat("/tmp/snuba.down").st_mtime
-    except OSError:
-        return None
-
-
-try:
-    IS_SHUTTING_DOWN = False
-    import uwsgi
-except ImportError:
-
-    def check_down_file_exists() -> bool:
-        return False
-
-else:
-
-    def check_down_file_exists() -> bool:
-        global IS_SHUTTING_DOWN
-        try:
-            m_time = shutdown_time()
-            if m_time is None:
-                return False
-
-            start_time: float = uwsgi.started_on
-            IS_SHUTTING_DOWN = m_time > start_time
-            return IS_SHUTTING_DOWN
-        except OSError:
-            return False
-
-
-def filter_checked_storages() -> List[Storage]:
-    datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-    entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
-
-    storages: List[Storage] = []
-    for entity in entities:
-        for storage in entity.get_all_storages():
-            if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
-                storages.append(storage)
-    return storages
-
-
-def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
-    """
-    Checks if all the tables in all the enabled datasets exist in ClickHouse
-    TODO: Eventually, when we fully migrate to readiness_states, we can remove DISABLED_DATASETS.
-    """
-    try:
-        storages = filter_checked_storages()
-        connection_grouped_table_names: MutableMapping[
-            ConnectionId, Set[str]
-        ] = defaultdict(set)
-        for storage in storages:
-            if isinstance(storage.get_schema(), TableSchema):
-                cluster = storage.get_cluster()
-                connection_grouped_table_names[cluster.get_connection_id()].add(
-                    cast(TableSchema, storage.get_schema()).get_table_name()
-                )
-        # De-dupe clusters by host:TCP port:HTTP port:database
-        unique_clusters = {
-            storage.get_cluster().get_connection_id(): storage.get_cluster()
-            for storage in storages
-        }
-
-        for cluster_key, cluster in unique_clusters.items():
-            clickhouse = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-            clickhouse_tables = clickhouse.execute("show tables").results
-            known_table_names = connection_grouped_table_names[cluster_key]
-            logger.debug(f"checking for {known_table_names} on {cluster_key}")
-            for table in known_table_names:
-                if (table,) not in clickhouse_tables:
-                    logger.error(f"{table} not present in cluster {cluster}")
-                    if metric_tags is not None:
-                        metric_tags["table_not_present"] = table
-                        metric_tags["cluster"] = str(cluster)
-                    return False
-
-        return True
-
-    except UndefinedClickhouseCluster as err:
-        if metric_tags is not None and isinstance(err.extra_data, dict):
-            # Be a little defensive here, since it's not always obvious this extra data
-            # is being passed to metrics, and we might want non-string values in the
-            # exception data.
-            for k, v in err.extra_data.items():
-                if isinstance(v, str):
-                    metric_tags[k] = v
-
-        logger.error(err)
-        return False
-
-    except ClickhouseError as err:
-        if metric_tags and err.__cause__:
-            metric_tags["exception"] = type(err.__cause__).__name__
-        logger.error(err)
-        return False
-
-    except Exception as err:
-        logger.error(err)
-        return False
 
 
 def truncate_dataset(dataset: Dataset) -> None:
@@ -334,37 +219,11 @@ def health_envoy() -> Response:
 
 @application.route("/health")
 def health() -> Response:
-    start = time.time()
-    down_file_exists = check_down_file_exists()
+
     thorough = http_request.args.get("thorough", False)
+    health_info = get_health_info(thorough)
 
-    metric_tags = {
-        "down_file_exists": str(down_file_exists),
-        "thorough": str(thorough),
-    }
-
-    clickhouse_health = check_clickhouse(metric_tags=metric_tags) if thorough else True
-    metric_tags["clickhouse_ok"] = str(clickhouse_health)
-
-    body: Mapping[str, Union[str, bool]]
-    if clickhouse_health:
-        body = {"status": "ok", "down_file_exists": down_file_exists}
-        status = 200
-    else:
-        body = {
-            "down_file_exists": down_file_exists,
-        }
-        if thorough:
-            body["clickhouse_ok"] = clickhouse_health
-        status = 502
-
-    if status != 200:
-        metrics.increment("healthcheck_failed", tags=metric_tags)
-        logger.error(f"Snuba health check failed! Tags: {metric_tags}")
-    metrics.timing(
-        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
-    )
-    return Response(json.dumps(body), status, {"Content-Type": "application/json"})
+    return Response(health_info.body, health_info.status, health_info.content_type)
 
 
 def parse_request_body(http_request: Request) -> Dict[str, Any]:
@@ -495,8 +354,8 @@ def dataset_query(
     # how long after. I don't want to do a disk check for
     # every query, so randomly sample until the shutdown file
     # is detected, and then log everything
-    if IS_SHUTTING_DOWN or random.random() < 0.05:
-        if IS_SHUTTING_DOWN or check_down_file_exists():
+    if get_shutdown() or random.random() < 0.05:
+        if get_shutdown() or check_down_file_exists():
             tags = {"dataset": get_dataset_name(dataset)}
             metrics.increment("post.shutdown.query", tags=tags)
             diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
