@@ -513,6 +513,7 @@ def dataset_query(
 
     try:
         result = parse_and_run_query(dataset, request, timer)
+        assert result.extra["stats"]
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
@@ -524,10 +525,14 @@ def dataset_query(
                 "type": "rate-limited",
                 "message": str(cause),
             }
-            logger.warning(
-                str(cause),
-                exc_info=True,
-            )
+            # HACK (Volo): Ideally, the `allocation_policies` key would look the same for success/non-success responses
+            # however there are implementation details of db_query that make this harder than in needs to be atm (21/02/2024)
+            # I plan to change those but in the meantime want to surface this info to the caller so this is a halfway measure
+            if isinstance(cause, AllocationPolicyViolations):
+                details["allocation_policies_violations"] = {
+                    policy_name: violation.to_dict()
+                    for policy_name, violation in cause.violations.items()
+                }
         elif isinstance(cause, ClickhouseError):
             status = get_http_status_for_clickhouse_error(cause)
             details = {
@@ -567,7 +572,11 @@ def dataset_query(
             status,
             {"Content-Type": "application/json"},
         )
-    payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
+    payload: MutableMapping[str, Any] = {
+        **result.result,
+        "timing": timer.for_json(),
+        "allocation_policies": result.allocation_policies,
+    }
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
         payload.update(result.extra)
