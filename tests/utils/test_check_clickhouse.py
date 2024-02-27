@@ -10,7 +10,12 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.utils.health_info import check_clickhouse, filter_checked_storages
+from snuba.utils.health_info import (
+    _set_shutdown,
+    check_clickhouse,
+    filter_checked_storages,
+    get_shutdown,
+)
 
 
 class BadStorage(mock.MagicMock):
@@ -149,3 +154,12 @@ def test_filter_checked_storages(
 
     # check that the storage with a non-supported readiness state is excluded in list
     assert MockStorage() not in storages
+
+
+def test_get_shutdown() -> None:
+    assert not get_shutdown()
+    _set_shutdown(True)
+    assert get_shutdown()
+
+    _set_shutdown(False)
+    assert not get_shutdown()
