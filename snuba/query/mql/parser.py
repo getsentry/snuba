@@ -1001,7 +1001,9 @@ def quantiles_to_quantile(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
     """
-    Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1)
+    Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
+    the API (so that the arrays don't need to be unwrapped) and also avoids bugs where comparing
+    arrays of values to values cause typing errors (e.g. [1] / 1).
     """
 
     def transform(exp: Expression) -> Expression:
