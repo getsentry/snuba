@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from glob import glob
-from pprint import pprint
 from typing import MutableSequence, Sequence
 
 import sentry_sdk
@@ -26,8 +25,6 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
     def __initialize(self) -> None:
         for config_file in glob(settings.STORAGE_CONFIG_FILES_GLOB, recursive=True):
             storage = build_storage_from_config(config_file)
-            if "error" in config_file:
-                pprint(vars(storage))
             StorageValidator(storage).validate()
             self._config_built_storages[storage.get_storage_key()] = storage
 
