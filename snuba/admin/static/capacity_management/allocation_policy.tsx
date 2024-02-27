@@ -8,6 +8,31 @@ import { getReadonlyRow } from "./row_data";
 import EditConfigModal from "./edit_config_modal";
 import AddConfigModal from "./add_config_modal";
 
+
+function getTableColor(configs: AllocationPolicyConfig[]): string {
+  let policyIsActive = false;
+  let policyIsEnforced = false;
+  configs.forEach(config => {
+        if (config.name == "is_active"){
+            if (parseInt(config.value) === 1) {policyIsActive = true;}
+            else {policyIsActive = false;}
+        }
+        if (config.name == "is_enforced"){
+            if (parseInt(config.value) === 1) {policyIsEnforced= true;}
+            else {policyIsEnforced= false;}
+        }
+  })
+  if (policyIsActive && policyIsEnforced) {
+    return "green"
+  }
+  else if (policyIsActive && !policyIsEnforced) {
+    return "orange"
+  }
+  else {
+    return "gray"
+  }
+}
+
 function AllocationPolicyConfigs(props: {
   api: Client;
   storage: string;
@@ -113,7 +138,7 @@ function AllocationPolicyConfigs(props: {
             getReadonlyRow(config, () => enterEditMode(config))
           )}
           columnWidths={[3, 3, 2, 5, 1, 1]}
-          customStyles={createCustomTableStyles({headerStyle: {backgroundColor: "green"}})}
+          customStyles={createCustomTableStyles({headerStyle: {backgroundColor: getTableColor(policy.configs)}})}
 
         />
         {!addingNew && policy.optional_config_definitions.length != 0 && (
