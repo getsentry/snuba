@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -95,6 +96,13 @@ def get_credentials() -> Tuple[str, str]:
     help="Name of gcs bucket to save query files to",
     required=True,
 )
+@click.option(
+    "--wait-seconds",
+    help="Number of seconds to wait between re-running queries and getting the results.",
+    type=int,
+    required=True,
+    default=30,
+)
 @click.option("--log-level", help="Logging level to use.")
 def query_replayer(
     *,
@@ -104,6 +112,7 @@ def query_replayer(
     override: bool,
     notify: bool,
     gcs_bucket: str,
+    wait_seconds: int,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -139,10 +148,10 @@ def query_replayer(
 
     results_directory = f"results-{get_version()}"
     if override:
-        blobs_to_replay = blob_getter.get_all_names(prefix="queries")
+        blobs_to_replay = sorted(blob_getter.get_all_names(prefix="queries"))
     else:
-        blobs_to_replay = blob_getter.get_name_diffs(
-            ("queries/", f"{results_directory}/")
+        blobs_to_replay = sorted(
+            blob_getter.get_name_diffs(("queries/", f"{results_directory}/"))
         )
 
     def rerun_queries_for_blob(blob: str) -> Tuple[int, int]:
@@ -170,6 +179,8 @@ def query_replayer(
         return (total_queries, reran_queries)
 
     for blob_name in blobs_to_replay:
+        # adding buffer around querylog query
+        time.sleep(1)
         rerun_start = datetime.utcnow()
         total, reran = rerun_queries_for_blob(blob_name)
         rerun_end = datetime.utcnow()
@@ -190,6 +201,9 @@ def query_replayer(
             rerun_start,
             rerun_end,
         )
+        # make sure there is enough time for the replayed queries to finish
+        # otherwise their results won't be captured
+        time.sleep(wait_seconds)
         results = connection.execute(query)
 
         replay_results = []
@@ -214,19 +228,20 @@ def query_replayer(
             )
 
         # File format is the same except for the directory
+        result_file_format = FileFormat(
+            directory=results_directory,
+            date=queries_file_format.date,
+            table=queries_file_format.table,
+            hour=queries_file_format.hour,
+        )
         file_manager.save(
-            FileFormat(
-                directory=results_directory,
-                date=queries_file_format.date,
-                table=queries_file_format.table,
-                hour=queries_file_format.hour,
-            ),
+            result_file_format,
             replay_results,
         )
 
         if notify:
             # TODO: maybe use new specific channel id
-            filename = file_manager.filename_from_blob_name(blob_name)
+            filename = file_manager.format_filename(result_file_format)
             slack_client = SlackClient(
                 channel_id=settings.SNUBA_SLACK_CHANNEL_ID,
                 token=settings.SLACK_API_TOKEN,
@@ -240,4 +255,4 @@ def query_replayer(
             )
 
     # clear out the query_log table after we re-ran queries
-    connection.execute("TRUNCATE TABLE system.query_log")
+    # connection.execute("TRUNCATE TABLE system.query_log")
