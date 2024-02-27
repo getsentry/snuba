@@ -250,6 +250,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
                 if target.parameters is not None:
                     for param in target.parameters:
+                        if not isinstance(param, InitialParseResult):
+                            continue  # Don't push down scalar values e.g. sum(mri) / 3600
                         pushdown_filter(param)
             else:
                 if target.conditions is not None:

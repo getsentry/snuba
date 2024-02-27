@@ -54,6 +54,8 @@ SHARED_MAPPING_META = {
         "65546": "transaction",
         "65536": "t1",
         "65593": "200",
+        "65594": "platform",
+        "65595": "ios",
     },
     "h": {
         "9223372036854776010": "status_code",
@@ -704,6 +706,55 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 "transaction": resolve_str("transaction"),
                 "event_type": resolve_str("event_type"),
                 "t1": resolve_str("t1"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200
+
+    def test_formula_filters_with_scalar(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                function_name="divide",
+                parameters=[
+                    Timeseries(
+                        metric=Metric(
+                            mri=DISTRIBUTIONS_MRI,
+                        ),
+                        aggregate="sum",
+                    ),
+                    3600.0,
+                ],
+                filters=[
+                    Condition(
+                        lhs=Column(name="platform"),
+                        op=Op.EQ,
+                        rhs="ios",
+                    )
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60, totals=True),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "platform": resolve_str("platform"),
+                "ios": resolve_str("ios"),
             },
         )
 
