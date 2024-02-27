@@ -57,7 +57,7 @@ class FileManager:
         directory = filename.split("_", 1)[0]
         return type_for_directory(directory)
 
-    def _format_filename(self, file_format: FileFormat) -> str:
+    def format_filename(self, file_format: FileFormat) -> str:
         # Example: {dir}_2024_01_16_errors_local_1 - first hour
         #          {dir}_2024_01_16_errors_local_2 - second hour
         directory, date, table, hour = file_format
@@ -131,7 +131,7 @@ class FileManager:
         First save the results to local csv file,
         then upload the file to gcs bucket.
         """
-        filename = self._format_filename(file_format)
+        filename = self.format_filename(file_format)
         self._save_to_csv(filename, results)
 
         blob_name = self._format_blob_name(file_format)
