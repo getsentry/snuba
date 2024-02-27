@@ -23,6 +23,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import arrayElement
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Column,
@@ -996,8 +997,32 @@ def populate_query_from_mql_context(
     return query, mql_context
 
 
+def quantiles_to_quantile(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1)
+    """
+
+    def transform(exp: Expression) -> Expression:
+        if isinstance(exp, CurriedFunctionCall):
+            if exp.internal_function.function_name in ("quantiles", "quantilesIf"):
+                if len(exp.internal_function.parameters) == 1:
+                    return arrayElement(
+                        exp.alias, replace(exp, alias=None), Literal(None, 1)
+                    )
+
+        return exp
+
+    query.transform_expressions(transform)
+
+
 CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+]
+
+MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
+    quantiles_to_quantile,
 ]
 
 
@@ -1033,7 +1058,7 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
             query,
-            POST_PROCESSORS,
+            MQL_POST_PROCESSORS,
             settings,
         )
 
