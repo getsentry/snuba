@@ -96,6 +96,13 @@ def get_credentials() -> Tuple[str, str]:
     help="Name of gcs bucket to save query files to",
     required=True,
 )
+@click.option(
+    "--wait-seconds",
+    help="Number of seconds to wait between re-running queries and getting the results.",
+    type=int,
+    required=True,
+    default=30,
+)
 @click.option("--log-level", help="Logging level to use.")
 def query_replayer(
     *,
@@ -105,6 +112,7 @@ def query_replayer(
     override: bool,
     notify: bool,
     gcs_bucket: str,
+    wait_seconds: int,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -193,6 +201,9 @@ def query_replayer(
             rerun_start,
             rerun_end,
         )
+        # make sure there is enough time for the replayed queries to finish
+        # otherwise their results won't be captured
+        time.sleep(wait_seconds)
         results = connection.execute(query)
 
         replay_results = []
