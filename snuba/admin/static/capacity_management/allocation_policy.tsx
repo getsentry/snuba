@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-import { Table } from "../table";
+import { Table, createCustomTableStyles} from "../table";
 import Client from "../api_client";
 import { AllocationPolicy, AllocationPolicyConfig } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
@@ -113,6 +113,8 @@ function AllocationPolicyConfigs(props: {
             getReadonlyRow(config, () => enterEditMode(config))
           )}
           columnWidths={[3, 3, 2, 5, 1, 1]}
+          customStyles={createCustomTableStyles({headerStyle: {backgroundColor: "green"}})}
+
         />
         {!addingNew && policy.optional_config_definitions.length != 0 && (
           <a onClick={() => setAddingNew(true)} style={linkStyle}>
