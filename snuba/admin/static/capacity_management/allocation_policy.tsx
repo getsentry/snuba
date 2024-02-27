@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 import { Table, createCustomTableStyles} from "../table";
+import { COLORS } from "../theme";
 import Client from "../api_client";
 import { AllocationPolicy, AllocationPolicyConfig } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
@@ -23,7 +24,7 @@ function getTableColor(configs: AllocationPolicyConfig[]): string {
         }
   })
   if (policyIsActive && policyIsEnforced) {
-    return "green"
+    return  COLORS.SNUBA_BLUE
   }
   else if (policyIsActive && !policyIsEnforced) {
     return "orange"
