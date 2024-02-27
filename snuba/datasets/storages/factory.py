@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from glob import glob
-from typing import MutableSequence, Sequence
-
 from pprint import pprint
+from typing import MutableSequence, Sequence
 
 import sentry_sdk
 
