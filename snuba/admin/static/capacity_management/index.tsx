@@ -3,6 +3,7 @@ import Client from "../api_client";
 import { selectStyle } from "./styles";
 import AllocationPolicyConfigs from "./allocation_policy";
 import { AllocationPolicy } from "./types";
+import AllocationPolicyDryRun from "./allocation_policy_dry_run";
 
 function CapacityManagement(props: { api: Client }) {
   const { api } = props;
@@ -67,6 +68,7 @@ function CapacityManagement(props: { api: Client }) {
       ) : (
         <p>Storage not selected.</p>
       )}
+      {selectedStorage && <AllocationPolicyDryRun />}
     </div>
   );
 }
