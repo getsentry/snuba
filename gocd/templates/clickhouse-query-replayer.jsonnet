@@ -8,6 +8,7 @@ local generate_replay_job(component) =
   {
     environment_variables: {
       // TODO - what env vars do we need ?
+      SENTRY_REGION='s4s'
       // TODO do correct interpolation
       LABEL_SELECTOR: 'service=snuba,' + 'component=' + component
     },
