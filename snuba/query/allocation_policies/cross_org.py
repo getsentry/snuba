@@ -11,7 +11,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
-    BaseConcurrentRateLimitAllocationPolicy,
+    BaseCustomerConcurrentRateLimitAllocationPolicy,
 )
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
@@ -28,7 +28,7 @@ _UNREGISTERED_REFERRER_MAX_THREADS = 1
 _UNREGISTERED_REFERRER_CONCURRENT_QUERIES = 1
 
 
-class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
+class CrossOrgQueryAllocationPolicy(BaseCustomerConcurrentRateLimitAllocationPolicy):
     """A case-by-case allocation policy for cross-org queries. All referrers affected by this policy have to be registered
     in this class's configuration through the `cross_org_referrer_limits` parameter. Example:
 

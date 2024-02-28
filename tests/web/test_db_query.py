@@ -261,7 +261,7 @@ def test_db_query_success() -> None:
             "explanation": {},
             "max_threads": 10,
         },
-        "ConcurrentRateLimitAllocationPolicy": {
+        "CustomerConcurrentRateLimitAllocationPolicy": {
             "can_run": True,
             "explanation": {"overrides": {}, "reason": "within limit"},
             "max_threads": 10,

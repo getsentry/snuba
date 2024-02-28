@@ -240,7 +240,7 @@ schema:
     - date
   not_deleted_mandatory_condition: deleted
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

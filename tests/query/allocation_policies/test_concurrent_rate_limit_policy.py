@@ -13,7 +13,7 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
-    ConcurrentRateLimitAllocationPolicy,
+    CustomerConcurrentRateLimitAllocationPolicy,
 )
 from snuba.web import QueryException, QueryResult
 
@@ -36,8 +36,8 @@ MAX_QUERIES_PER_SECOND = 10
 
 
 @pytest.fixture(scope="function")
-def policy() -> ConcurrentRateLimitAllocationPolicy:
-    policy = ConcurrentRateLimitAllocationPolicy(
+def policy() -> CustomerConcurrentRateLimitAllocationPolicy:
+    policy = CustomerConcurrentRateLimitAllocationPolicy(
         storage_key=StorageKey("test"),
         required_tenant_types=["organization_id"],
         default_config_overrides={
@@ -48,7 +48,9 @@ def policy() -> ConcurrentRateLimitAllocationPolicy:
 
 
 @pytest.mark.redis_db
-def test_rate_limit_concurrent(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+def test_rate_limit_concurrent(
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
+) -> None:
     for i in range(MAX_CONCURRENT_QUERIES):
         policy.get_quota_allowance(
             tenant_ids={"organization_id": 123}, query_id=f"abc{i}"
@@ -62,7 +64,7 @@ def test_rate_limit_concurrent(policy: ConcurrentRateLimitAllocationPolicy) -> N
 
 @pytest.mark.redis_db
 def test_rate_limit_concurrent_diff_tenants(
-    policy: ConcurrentRateLimitAllocationPolicy,
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
 ) -> None:
     RATE_LIMITED_ORG_ID = 123
     OTHER_ORG_ID = 456
@@ -84,7 +86,7 @@ def test_rate_limit_concurrent_diff_tenants(
 
 @pytest.mark.redis_db
 def test_configure_max_query_duration(
-    policy: ConcurrentRateLimitAllocationPolicy,
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
 ) -> None:
     max_query_duration_s = 1
     sleep_time = 1.01
@@ -103,7 +105,7 @@ def test_configure_max_query_duration(
 
 @pytest.mark.redis_db
 def test_rate_limit_concurrent_complete_query(
-    policy: ConcurrentRateLimitAllocationPolicy,
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
 ) -> None:
     # submit the max concurrent queries
     for i in range(MAX_CONCURRENT_QUERIES):
@@ -138,7 +140,9 @@ def test_rate_limit_concurrent_complete_query(
 
 
 @pytest.mark.redis_db
-def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+def test_update_quota_balance(
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
+) -> None:
     # test that it doesn't matter if we had an error state or a success state
     # when a query is finished (in whatever state), it is no longer counted as a concurrent query
 
@@ -160,7 +164,7 @@ def test_update_quota_balance(policy: ConcurrentRateLimitAllocationPolicy) -> No
         ).can_run
 
 
-def test_tenant_selection(policy: ConcurrentRateLimitAllocationPolicy):
+def test_tenant_selection(policy: CustomerConcurrentRateLimitAllocationPolicy):
     tenant_ids: dict[str, int | str] = {"organization_id": 123, "project_id": 456}
     assert policy._get_tenant_key_and_value(tenant_ids) == ("project_id", 456)
     assert policy._get_tenant_key_and_value({"organization_id": 123}) == (
@@ -255,7 +259,7 @@ OVERRIDE_TEST_CASES = [
     OVERRIDE_TEST_CASES,
 )
 def test_apply_overrides(
-    policy: ConcurrentRateLimitAllocationPolicy,
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
     overrides,
     tenant_ids,
     expected_overrides,
@@ -274,7 +278,7 @@ def test_apply_overrides(
 
 @pytest.mark.redis_db
 def test_override_isolation(
-    policy: ConcurrentRateLimitAllocationPolicy,
+    policy: CustomerConcurrentRateLimitAllocationPolicy,
 ) -> None:
     override_concurrent_limit = 1
     project_id = 1234
@@ -329,7 +333,7 @@ def test_override_isolation(
         )
 
 
-def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+def test_pass_through(policy: CustomerConcurrentRateLimitAllocationPolicy) -> None:
     ## should not be blocked because the subscriptions_executor referrer is not rate limited
     try:
         for i in range(MAX_CONCURRENT_QUERIES * 2):
@@ -342,7 +346,7 @@ def test_pass_through(policy: ConcurrentRateLimitAllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
+def test_cross_org(policy: CustomerConcurrentRateLimitAllocationPolicy) -> None:
     tenant_ids: dict[str, str | int] = {
         "referrer": "do_something",
         "cross_org_query": 1,
@@ -358,7 +362,7 @@ def test_cross_org(policy: ConcurrentRateLimitAllocationPolicy) -> None:
 
 
 @pytest.mark.redis_db
-def test_bad_tenants(policy: ConcurrentRateLimitAllocationPolicy):
+def test_bad_tenants(policy: CustomerConcurrentRateLimitAllocationPolicy):
     bad_tenant_ids: dict[str, str | int] = {"referrer": "abcd"}
     with mock.patch("snuba.settings.RAISE_ON_ALLOCATION_POLICY_FAILURES", False):
         with pytest.raises(AllocationPolicyViolation):

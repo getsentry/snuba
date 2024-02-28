@@ -181,7 +181,7 @@ stream_loader:
   default_topic: ingest-replay-events
   dlq_topic: snuba-dead-letter-replays
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

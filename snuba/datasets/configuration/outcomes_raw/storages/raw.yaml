@@ -25,7 +25,7 @@ schema:
   local_table_name: outcomes_raw_local
   dist_table_name: outcomes_raw_dist
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
