@@ -17,10 +17,9 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset, get_dataset_name
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Table
+from snuba.query.data_source.simple import Entity, Table
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
@@ -65,7 +64,7 @@ def parse_and_run_query(
     """
 
     entity = request.query.get_from_clause()
-    assert entity is Entity
+    assert isinstance(entity, Entity)
 
     if (
         entity.key == EntityKey("generic_metrics_distributions")
