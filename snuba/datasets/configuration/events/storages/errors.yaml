@@ -324,12 +324,9 @@ query_processors:
         - project_id
   - processor: TableRateLimit
 query_splitters:
-  - splitter: ColumnSplitQueryStrategy
+  - splitter: TimeSplitQueryStrategy
     args:
-      id_column: event_id
-      project_column: project_id
-      timestamp_column: timestamp
-
+      timestamp_col: timestamp
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 replacer_processor:
