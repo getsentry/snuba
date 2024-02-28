@@ -28,7 +28,7 @@ sentry-redis-tools==0.3.0
 sentry-relay==0.8.44
 sentry-sdk==1.40.5
 simplejson==3.17.6
-snuba-sdk==2.0.28
+snuba-sdk==2.0.29
 structlog==22.3.0
 structlog-sentry==2.0.0
 sql-metadata==2.6.0
