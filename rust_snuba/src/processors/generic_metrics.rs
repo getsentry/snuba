@@ -14,6 +14,7 @@ use crate::{
 };
 
 use super::utils::enforce_retention;
+use rust_arroyo::metric;
 
 const GRANULARITY_TEN_SECONDS: u8 = 0;
 const GRANULARITY_ONE_MINUTE: u8 = 1;
@@ -193,6 +194,9 @@ impl Parse for CountersRawRow {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        metric!(Gauge: "process_messages.messages.tags_len", tag_keys.len(), "metric_type" => "counter");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -242,6 +246,8 @@ where
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
 
+    metric!(Timer: "process_messages.messages.size", payload_bytes.len());
+
     match result {
         Ok(row) => {
             if let Some(row) = row {
@@ -289,9 +295,15 @@ impl Parse for SetsRawRow {
             MetricValue::Set(values) => values.into_vec(),
             _ => return Ok(Option::None),
         };
+
+        metric!(Timer: "process_messages.messages.sets_value_len", sets_values.len());
+
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        metric!(Gauge: "process_messages.messages.tags_len", tag_keys.len(), "metric_type" => "set");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -353,9 +365,14 @@ impl Parse for DistributionsRawRow {
             _ => return Ok(Option::None),
         };
 
+        metric!(Timer: "process_message.messages.dists_value_len", distribution_values.len());
+
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        metric!(Gauge: "process_messages.messages.tags_len", tag_keys.len(), "metric_type" => "distribution");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -449,6 +466,9 @@ impl Parse for GaugesRawRow {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        metric!(Gauge: "process_messages.messages.tags_len", tag_keys.len(), "metric_type" => "gauge");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
