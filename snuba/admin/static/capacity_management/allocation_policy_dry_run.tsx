@@ -36,9 +36,8 @@ function AllocationPolicyDryRun() {
     <>
       <h3>Allocation Policy Dry Run</h3>
       <p>
-        {" "}
         Use the dry run mode to see what allocation policies get applied and
-        what the final decision on the allocation policy would be.
+        what the final decision of all allocation policies combined would be.
       </p>
       <form onSubmit={handleSubmit}>
         <div>
