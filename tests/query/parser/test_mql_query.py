@@ -11,6 +11,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import arrayElement
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -1066,14 +1067,18 @@ mql_test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    CurriedFunctionCall(
+                    arrayElement(
                         "_snuba_aggregate_value",
-                        FunctionCall(
+                        CurriedFunctionCall(
                             None,
-                            "quantiles",
-                            (Literal(None, 0.5),),
+                            FunctionCall(
+                                None,
+                                "quantiles",
+                                (Literal(None, 0.5),),
+                            ),
+                            (Column("_snuba_value", None, "value"),),
                         ),
-                        (Column("_snuba_value", None, "value"),),
+                        Literal(None, 1),
                     ),
                 ),
                 SelectedExpression(
