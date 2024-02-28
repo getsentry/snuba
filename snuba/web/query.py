@@ -17,6 +17,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset, get_dataset_name
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -63,13 +64,14 @@ def parse_and_run_query(
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
 
-    entity_key = request.query.get_from_clause().key
+    entity = request.query.get_from_clause()
+    assert entity is Entity
 
     if (
-        (entity_key == EntityKey("generic_metrics_distributions"))
-        or entity_key == EntityKey("generic_metrics_gauges")
-        or entity_key == EntityKey("generic_metrics_counters")
-        or entity_key == EntityKey("generic_metrics_sets")
+        entity.key == EntityKey("generic_metrics_distributions")
+        or entity.key == EntityKey("generic_metrics_gauges")
+        or entity.key == EntityKey("generic_metrics_counters")
+        or entity.key == EntityKey("generic_metrics_sets")
     ):
 
         if get_dataset_name(dataset) == "metrics":
