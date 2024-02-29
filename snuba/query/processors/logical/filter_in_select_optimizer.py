@@ -1,37 +1,40 @@
 from snuba.query.conditions import binary_condition
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    Literal,
+)
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
-
-Domain = set[int] | None
+from snuba.state import get_int_config
 
 
 class FilterInSelectOptimizer(LogicalQueryProcessor):
-    """Transforms the expression avg(value) -> sum(value) / count(value)
-
-    This processor was introduced for the gauges entity which has sum and count fields
-    but not avg. This processor provides syntactic sugar for the product to be able to avg gauges.
+    """
+    This optimizer takes queries that filter by metric_id in the select clause (via conditional aggregate functions),
+    and adds the equivalent metric_id filtering to the where clause
     """
 
-    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        domain = self.get_domain_of_query(query)
-        if domain is not None:
-            domain_filter = binary_condition(
-                "in",
-                Column(None, None, "metric_id"),
-                FunctionCall(
-                    alias=None,
-                    function_name="array",
-                    parameters=tuple(map(lambda x: Literal(None, x), domain)),
-                ),
-            )
+    Domain = set[int] | None
 
-            query.add_condition_to_ast(domain_filter)
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        feat_flag = get_int_config("enable_filter_in_select_optimizer")
+        if feat_flag is not None and feat_flag == 1:
+            self.optimize(query)
+
+    def optimize(self, query: Query) -> None:
+        """Optimizes the given query by adding any metric_id filters in the select clause to the where clause"""
+        domain = self.get_domain_of_query(query)
+        filter = self.domain_to_query_filter(domain)
+        if filter is not None:
+            query.add_condition_to_ast(filter)
 
     def get_domain_of_query(self, query: Query) -> Domain:
         """
-        Returns the metric_id domain of the given query, where the metric_id domain is defined as all metric_id that are relevant to the query.
+        Returns the metric_id domain of the given query, where the metric_id domain is the set of all metric_id that are relevant to the query.
         Returns None if the metric_id domain is all metric_id.
 
         If a metric_id is not in the domain of the query it can be filtered out.
@@ -44,9 +47,28 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
                 return curr
         return None
 
+    def domain_to_query_filter(self, domain: Domain) -> Expression | None:
+        """
+        Given a metric_id domain, returns a corresponding logical filter clause.
+            ex. {1,2,3} -> in(metric_id, [1,2,3])
+        """
+        if domain is None:
+            return None
+        return binary_condition(
+            "in",
+            Column(None, None, "metric_id"),
+            FunctionCall(
+                alias=None,
+                function_name="array",
+                parameters=tuple(map(lambda x: Literal(None, x), domain)),
+            ),
+        )
+
     def _get_domain_of_exp(self, exp: Expression) -> Domain:
         if isinstance(exp, FunctionCall):
             return self._get_domain_of_function_call(exp)
+        elif isinstance(exp, CurriedFunctionCall):
+            return self._get_domain_of_curried_function_call(exp)
         elif isinstance(exp, Literal):
             return set()
         else:
@@ -61,7 +83,9 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
                 ex. sumIf1 + sumIf2 / sumIf3
         """
         if f.function_name[-2:] == "If":
-            return self._get_domain_of_cond_agg(f)
+            predicate = f.parameters[1]
+            assert isinstance(predicate, FunctionCall)
+            return self._get_domain_of_predicate(predicate)
         else:
             if len(f.parameters) == 0:
                 return None
@@ -73,9 +97,14 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
                     )
                 return domain
 
-    def _get_domain_of_cond_agg(self, e: FunctionCall) -> set[int] | None:
-        predicate = e.parameters[1]
-        assert isinstance(predicate, FunctionCall)
+    def _get_domain_of_curried_function_call(self, f: CurriedFunctionCall) -> Domain:
+        if f.internal_function.function_name[-2:] == "If":
+            assert isinstance(f.parameters[1], FunctionCall)
+            return self._get_domain_of_predicate(f.parameters[1])
+        else:
+            return None
+
+    def _get_domain_of_predicate(self, predicate: FunctionCall) -> set[int] | None:
         if predicate.function_name == "equals":
             return self._get_domain_of_equals(predicate)
         elif predicate.function_name == "in":

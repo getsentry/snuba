@@ -114,6 +114,7 @@ query_processors:
       time_group_columns:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
+  - processor: FilterInSelectOptimizer
 
 validators:
   - validator: EntityRequiredColumnValidator

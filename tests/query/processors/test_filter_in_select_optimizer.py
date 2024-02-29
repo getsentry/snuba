@@ -63,30 +63,39 @@ def test_get_domain_of_logical(logical_query: Query, expected_domain: set[int]):
 
 
 """ --- MQL TEST CASES --- """
-mql_test_cases.append(
+
+mql_queries = [
+    (
+        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
+        {123456},
+    ),
+    (
+        "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
+        {123456},
+    ),
     (
         "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
         {123456},
-    )
-)
-mql_test_cases.append(
+    ),
     (
         "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))",
         {123456},
-    )
-)
-mql_test_cases.append(
+    ),
     (
         "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}",
         {123456},
-    )
-)
-mql_test_cases.append(
+    ),
+    (
+        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction",
+        {123456},
+    ),
     (
         "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100",
         {123456},
-    )
-)
+    ),
+]
+for e in mql_queries:
+    mql_test_cases.append(e)
 
 """ --- LOGICAL TEST CASES --- """
 
