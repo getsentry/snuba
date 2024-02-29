@@ -7,7 +7,6 @@ use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
@@ -135,7 +134,7 @@ struct ErrorData {
     #[serde(default)]
     location: Option<String>,
     #[serde(default)]
-    modules: Option<HashMap<String, Option<String>>>,
+    modules: Option<BTreeMap<String, Option<String>>>,
     #[serde(default)]
     received: Option<f64>,
     #[serde(default)]
