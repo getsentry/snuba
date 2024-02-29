@@ -1,6 +1,6 @@
 import Client from "../../api_client";
 
-import AllocationPolicyConfigs from "../../capacity_management/allocation_policy";
+import {AllocationPolicyConfigs} from "../../capacity_management/allocation_policy";
 import { it, expect } from "@jest/globals";
 import { AllocationPolicy } from "../../capacity_management/types";
 import { act, fireEvent, render } from "@testing-library/react";

@@ -153,4 +153,4 @@ function AllocationPolicyConfigs(props: {
   );
 }
 
-export default AllocationPolicyConfigs;
+export {AllocationPolicyConfigs, getTableColor};
