@@ -10,7 +10,7 @@ use rust_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
 use rust_arroyo::types::Message;
-use rust_arroyo::{counter, timer};
+use rust_arroyo::{counter, gauge, timer};
 
 use crate::config::ClickhouseConfig;
 use crate::types::BytesInsertBatch;
@@ -73,6 +73,10 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for Clickhous
                 timer!("insertions.batch_write_ms", elapsed);
             }
             counter!("insertions.batch_write_msgs", insert_batch.len() as i64);
+            gauge!(
+                "insertions.batch_write_bytes",
+                insert_batch.encoded_rows().len() as i64
+            );
             insert_batch.record_message_latency();
 
             Ok(message)
