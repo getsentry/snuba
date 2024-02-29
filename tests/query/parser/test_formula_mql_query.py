@@ -11,7 +11,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl import divide, multiply, plus
+from snuba.query.dsl import arrayElement, divide, multiply, plus
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -329,37 +329,41 @@ def test_curried_aggregate() -> None:
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
-            CurriedFunctionCall(
-                alias=None,
-                internal_function=FunctionCall(
-                    None, "quantilesIf", (Literal(None, 0.5),)
-                ),
-                parameters=(
-                    Column("_snuba_value", None, "value"),
-                    FunctionCall(
-                        None,
-                        "and",
-                        (
-                            binary_condition(
-                                "equals",
-                                tag_column("status_code"),
-                                Literal(None, "200"),
-                            ),
-                            FunctionCall(
-                                None,
-                                "equals",
-                                (
-                                    Column(
-                                        "_snuba_metric_id",
-                                        None,
-                                        "metric_id",
+            arrayElement(
+                None,
+                CurriedFunctionCall(
+                    alias=None,
+                    internal_function=FunctionCall(
+                        None, "quantilesIf", (Literal(None, 0.5),)
+                    ),
+                    parameters=(
+                        Column("_snuba_value", None, "value"),
+                        FunctionCall(
+                            None,
+                            "and",
+                            (
+                                binary_condition(
+                                    "equals",
+                                    tag_column("status_code"),
+                                    Literal(None, "200"),
+                                ),
+                                FunctionCall(
+                                    None,
+                                    "equals",
+                                    (
+                                        Column(
+                                            "_snuba_metric_id",
+                                            None,
+                                            "metric_id",
+                                        ),
+                                        Literal(None, 123456),
                                     ),
-                                    Literal(None, 123456),
                                 ),
                             ),
                         ),
                     ),
                 ),
+                Literal(None, 1),
             ),
             timeseries("sumIf", 123456),
             "_snuba_aggregate_value",
