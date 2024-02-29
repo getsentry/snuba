@@ -10,7 +10,7 @@ local generate_replay_job(component) =
       SENTRY_REGION: 's4s',
       SNUBA_SERVICE_NAME: 'snuba-admin',
       GOOGLE_CLOUD_PROJECT: 'search-and-storage',
-      REPLAYER_ARGS: 'your args here (e.g --gcs-bucket abcd)'
+      REPLAYER_ARGS: 'your args here (e.g --gcs-bucket abcd)',
     },
     elastic_profile_id: pipeline_group,
     tasks: [
@@ -32,14 +32,35 @@ local pipeline = {
   },
   stages: [
     {
-      replay-queries: {
+      'replay-queries': {
         approval: {
           type: 'manual',
         },
         jobs: {
-          query-replayer: generate_replay_job('query-replayer')
+          'query-replayer': generate_replay_job('query-replayer'),
         },
       },
     },
   ],
 };
+
+// We can output two variances of these pipelines.
+if std.extVar('output-files') then
+  // 1. We output each pipeline in a seperate file, this makes debugging easier.
+  {
+    [pipeline_name + '.yaml']: {
+      format_version: 10,
+      pipelines: {
+        [pipeline_name]: pipeline,
+      },
+    },
+  }
+else
+  // 2. Output all pipelines in a single file, needed for validation or passing
+  //    pipelines directly to GoCD.
+  {
+    format_version: 10,
+    pipelines: {
+      [pipeline_name]: pipeline,
+    },
+  }
