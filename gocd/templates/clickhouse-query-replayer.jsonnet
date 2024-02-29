@@ -1,5 +1,4 @@
 local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
-local regions = getsentry.prod_regions + getsentry.test_regions;
 
 local pipeline_group = 'snuba';
 local pipeline_name = 'clickhouse-query-replayer';
