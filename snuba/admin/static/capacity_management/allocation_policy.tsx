@@ -1,12 +1,38 @@
 import React, { useEffect, useState } from "react";
 
-import { Table } from "../table";
+import { Table, createCustomTableStyles} from "../table";
+import { COLORS } from "../theme";
 import Client from "../api_client";
 import { AllocationPolicy, AllocationPolicyConfig } from "./types";
 import { containerStyle, linkStyle, paragraphStyle } from "./styles";
 import { getReadonlyRow } from "./row_data";
 import EditConfigModal from "./edit_config_modal";
 import AddConfigModal from "./add_config_modal";
+
+
+function getTableColor(configs: AllocationPolicyConfig[]): string {
+  let policyIsActive = false;
+  let policyIsEnforced = false;
+  configs.forEach(config => {
+        if (config.name == "is_active"){
+            if (parseInt(config.value) === 1) {policyIsActive = true;}
+            else {policyIsActive = false;}
+        }
+        if (config.name == "is_enforced"){
+            if (parseInt(config.value) === 1) {policyIsEnforced= true;}
+            else {policyIsEnforced= false;}
+        }
+  })
+  if (policyIsActive && policyIsEnforced) {
+    return  COLORS.SNUBA_BLUE
+  }
+  else if (policyIsActive && !policyIsEnforced) {
+    return "orange"
+  }
+  else {
+    return "gray"
+  }
+}
 
 function AllocationPolicyConfigs(props: {
   api: Client;
@@ -113,6 +139,8 @@ function AllocationPolicyConfigs(props: {
             getReadonlyRow(config, () => enterEditMode(config))
           )}
           columnWidths={[3, 3, 2, 5, 1, 1]}
+          customStyles={createCustomTableStyles({headerStyle: {backgroundColor: getTableColor(policy.configs)}})}
+
         />
         {!addingNew && policy.optional_config_definitions.length != 0 && (
           <a onClick={() => setAddingNew(true)} style={linkStyle}>
@@ -125,4 +153,4 @@ function AllocationPolicyConfigs(props: {
   );
 }
 
-export default AllocationPolicyConfigs;
+export {AllocationPolicyConfigs, getTableColor};

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Client from "../api_client";
 import { selectStyle } from "./styles";
-import AllocationPolicyConfigs from "./allocation_policy";
+import {AllocationPolicyConfigs} from "./allocation_policy";
 import { AllocationPolicy } from "./types";
 
 function CapacityManagement(props: { api: Client }) {
