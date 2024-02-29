@@ -221,7 +221,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Any,
         ],
     ) -> InitialParseResult:
-        target, _, packed_filters, _, packed_groupbys, *_ = children
+        target, filters, packed_groupbys, *_ = children
+        packed_filters = filters[0][1] if filters else []  # strip braces
         if packed_filters:
             assert isinstance(packed_filters, list)
             _, filter_expr, *_ = packed_filters[0]
@@ -565,11 +566,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         """
         Given a metric, set its children filters and groupbys, then return a Timeseries.
         """
-        target, _, packed_filters, _, packed_groupbys, *_ = children
+        target, filters, packed_groupbys, *_ = children
         target = target[0]
         assert isinstance(target, InitialParseResult)
-        if not packed_filters and not packed_groupbys:
+        if not filters and not packed_groupbys:
             return target
+        packed_filters = filters[0][1] if filters else []  # strip braces
         if packed_filters:
             _, filter_condition, *_ = packed_filters[0]
             target.conditions = [filter_condition]
