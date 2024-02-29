@@ -21,31 +21,26 @@ class MismatchedValues:
 @dataclass
 class PerfMismatchResult:
     query_id: str
-    # duration_ms
-    d_ms_1: int
-    d_ms_2: int
-    # read_rows
-    rd_r_1: int
-    rd_r_2: int
-    # read_bytes
-    rd_b_1: int
-    rd_b_2: int
-    d_ms_delta: int
-    rd_r_delta: int
-    rd_b_delta: int
+    duration_ms: int
+    duration_ms_new: int
+    read_rows: int
+    read_rows_new: int
+    read_bytes: int
+    read_bytes_new: int
+    duration_ms_delta: int
+    read_rows_delta: int
+    read_bytes_delta: int
 
 
 @dataclass
 class DataMismatchResult:
     query_id: str
-    # result_rows
-    rt_r_1: int
-    rt_r_2: int
-    # result_bytes
-    rt_b_1: int
-    rt_b_2: int
-    rt_r_delta: int
-    rt_b_delta: int
+    result_rows: int
+    result_rows_new: int
+    result_bytes: int
+    result_bytes_new: int
+    result_rows_delta: int
+    result_bytes_delta: int
 
 
 @dataclass

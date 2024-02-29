@@ -1,5 +1,6 @@
 import itertools
-from typing import Any, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, MutableMapping, Optional, Sequence, Tuple
 
 import click
 import structlog
@@ -20,6 +21,21 @@ from snuba.utils.gcs import GCSUploader
 logger = structlog.get_logger().bind(module=__name__)
 
 MismatchResultSet = Sequence[PerfMismatchResult | DataMismatchResult]
+
+
+@dataclass
+class TableTotals:
+    total_queries: int = 0
+    total_data_mismatches: int = 0
+    total_perf_mismatches: int = 0
+
+    def add(self, queries: int, data_mismatches: int, perf_mismatches: int) -> None:
+        self.total_queries += queries
+        self.total_data_mismatches += data_mismatches
+        self.total_perf_mismatches += perf_mismatches
+
+
+TOTALS_BY_TABLES: MutableMapping[str, TableTotals] = {}
 
 
 @click.command()
@@ -61,8 +77,7 @@ def query_comparer(
     result_prefixes = sorted([p for p in blob_prefixes if p.startswith("results")])
 
     if len(result_prefixes) != 2:
-        logger.info("Not enough results to compare.")
-        return
+        raise Exception("Not enough results to compare.")
 
     def get_matched_pairs() -> Sequence[Tuple[str, str]]:
         matches = []
@@ -98,7 +113,6 @@ def query_comparer(
         data_mismatches = []
         total_rows = 0
         for v1_result, v2_result in itertools.zip_longest(v1_results, v2_results):
-
             assert (
                 v1_result.query_id == v2_result.query_id
             ), f"Invalid query_ids: {v1_result.query_id} and {v2_result.query_id} must match"
@@ -124,12 +138,24 @@ def query_comparer(
                 result_file_format.hour,
             )
             file_manager.save(compared_file_format, mismatches, header_row=True)
-            # need the filename for the slack report
-            filename = file_manager.format_filename(compared_file_format)
-            _send_slack_report(
-                compare_type, total_rows, mismatches, result_file_format.table, filename
-            )
+            if mismatches:
+                # need the filename for the slack report
+                filename = file_manager.format_filename(compared_file_format)
+                message = _format_file_slack_overview(
+                    total_rows, mismatches, result_file_format.table, compare_type
+                )
+                _send_slack_report(message, filename)
 
+        totals_by_table = TOTALS_BY_TABLES.get(result_file_format.table)
+        if not totals_by_table:
+            totals_by_table = TableTotals()
+            TOTALS_BY_TABLES[result_file_format.table] = totals_by_table
+
+        totals_by_table.add(
+            queries=total_rows,
+            data_mismatches=len(data_mismatches),
+            perf_mismatches=len(perf_mismatches),
+        )
         if compare_type == "perf":
             save_comparisons(compare_type, perf_mismatches)
         elif compare_type == "data":
@@ -139,12 +165,12 @@ def query_comparer(
             save_comparisons("perf", perf_mismatches)
             save_comparisons("data", data_mismatches)
 
+    for table in TOTALS_BY_TABLES.keys():
+        message = _format_table_slack_overview(table, TOTALS_BY_TABLES[table])
+        _send_slack_report(message)
 
-PERF_THRESHOLDS = {
-    "query_duration_ms": 0,
-    "read_rows": 0,
-    "read_bytes": 0,
-}
+
+PERF_PERCENT_THRESHOLD = 10
 
 DATA_THRESHOLDS = {
     "result_rows": 0,
@@ -155,35 +181,34 @@ DATA_THRESHOLDS = {
 def create_perf_mismatch(
     v1_data: QueryMeasurementResult, v2_data: QueryMeasurementResult
 ) -> Optional[PerfMismatchResult]:
-    d_ms_1 = v1_data.query_duration_ms
-    d_ms_2 = v2_data.query_duration_ms
-    d_ms_delta = d_ms_2 - d_ms_1
+    duration_ms = v1_data.query_duration_ms
+    duration_ms_new = v2_data.query_duration_ms
+    duration_ms_delta = duration_ms_new - duration_ms
 
-    rd_r_1 = v1_data.read_rows
-    rd_r_2 = v2_data.read_rows
-    rd_r_delta = rd_r_2 - rd_r_1
+    read_rows = v1_data.read_rows
+    read_rows_new = v2_data.read_rows
+    read_rows_delta = read_rows_new - read_rows
 
-    rd_b_1 = v1_data.read_bytes
-    rd_b_2 = v2_data.read_bytes
-    rd_b_delta = rd_b_2 - rd_b_1
+    read_bytes = v1_data.read_bytes
+    read_bytes_new = v2_data.read_bytes
+    read_bytes_delta = read_bytes_new - read_bytes
 
-    if (
-        (d_ms_delta > PERF_THRESHOLDS["query_duration_ms"])
-        or rd_r_delta > PERF_THRESHOLDS["read_rows"]
-        or rd_b_delta > PERF_THRESHOLDS["read_bytes"]
-    ):
-        # mismatch!
+    duration_percent = (duration_ms_delta / duration_ms) * 100
+    # we use the delta as well as the percent threshold because for
+    # super fast queries, 10ms diff is not that big of a deal but the
+    # percentage would exceed the threshold.
+    if duration_percent > PERF_PERCENT_THRESHOLD and (duration_ms_delta > 10):
         return PerfMismatchResult(
             v1_data.query_id,
-            d_ms_1=d_ms_1,
-            d_ms_2=d_ms_2,
-            rd_r_1=rd_r_1,
-            rd_r_2=rd_r_2,
-            rd_b_1=rd_b_1,
-            rd_b_2=rd_b_2,
-            d_ms_delta=d_ms_delta,
-            rd_r_delta=rd_r_delta,
-            rd_b_delta=rd_b_delta,
+            duration_ms=duration_ms,
+            duration_ms_new=duration_ms_new,
+            read_rows=read_rows,
+            read_rows_new=read_rows_new,
+            read_bytes=read_bytes,
+            read_bytes_new=read_bytes_new,
+            duration_ms_delta=duration_ms_delta,
+            read_rows_delta=read_rows_delta,
+            read_bytes_delta=read_bytes_delta,
         )
     return None
 
@@ -191,31 +216,64 @@ def create_perf_mismatch(
 def create_data_mismatch(
     v1_data: QueryMeasurementResult, v2_data: QueryMeasurementResult
 ) -> Optional[DataMismatchResult]:
-    rt_r_1 = v1_data.result_rows
-    rt_r_2 = v2_data.result_rows
-    rt_r_delta = rt_r_2 - rt_r_1
+    result_rows = v1_data.result_rows
+    result_rows_new = v2_data.result_rows
+    result_rows_delta = result_rows_new - result_rows
 
-    rt_b_1 = v1_data.result_bytes
-    rt_b_2 = v2_data.result_bytes
-    rt_b_delta = rt_b_2 - rt_b_1
+    result_bytes = v1_data.result_bytes
+    result_bytes_new = v2_data.result_bytes
+    result_bytes_delta = result_bytes_new - result_bytes
 
-    if (rt_r_delta > DATA_THRESHOLDS["result_rows"]) or rt_b_delta > DATA_THRESHOLDS[
-        "result_bytes"
-    ]:
-        # mismatch!
+    # higher or lower amount of rows/bytes is considered a mismatch
+    if (abs(result_rows_delta) > DATA_THRESHOLDS["result_rows"]) or abs(
+        result_bytes_delta
+    ) > DATA_THRESHOLDS["result_bytes"]:
         return DataMismatchResult(
             v1_data.query_id,
-            rt_r_1=rt_r_1,
-            rt_r_2=rt_r_2,
-            rt_b_1=rt_b_1,
-            rt_b_2=rt_b_2,
-            rt_r_delta=rt_r_delta,
-            rt_b_delta=rt_b_delta,
+            result_rows=result_rows,
+            result_rows_new=result_rows_new,
+            result_bytes=result_bytes,
+            result_bytes_new=result_bytes_new,
+            result_rows_delta=result_rows_delta,
+            result_bytes_delta=result_bytes_delta,
         )
     return None
 
 
-def _format_slack_overview(
+def _format_table_slack_overview(
+    table: str,
+    totals: TableTotals,
+) -> Any:
+    print("TALBLSB", totals)
+    per_data_mismatches = (totals.total_data_mismatches / totals.total_queries) * 100
+    per_perf_mismatches = (totals.total_perf_mismatches / totals.total_queries) * 100
+    total_queries = f"Total Queries: `{totals.total_queries}`\n"
+    total_data_mismatches = f"Total Data Mismatches: `{totals.total_data_mismatches}`\n"
+    total_perf_mismatches = f"Total Perf Mismatches: `{totals.total_perf_mismatches}`\n"
+    percent_data_mismatches = f"% Data Mismatch: `{per_data_mismatches}`\n"
+    percent_perf_mismatches = f"% Perf Mismatch: `{per_perf_mismatches}`\n"
+    overview_text = f"{total_queries} {total_data_mismatches} {percent_data_mismatches} {total_perf_mismatches} {percent_perf_mismatches}"
+    return {
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Table Comparison Overview - {table}  `21.8` v `22.8`*\n",
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": overview_text,
+                },
+            },
+        ]
+    }
+
+
+def _format_file_slack_overview(
     total_rows: int,
     mismatches: MismatchResultSet,
     table: str,
@@ -247,23 +305,19 @@ def _format_slack_overview(
 
 
 def _send_slack_report(
-    compare_type: str,
-    total_rows: int,
-    mismatches: MismatchResultSet,
-    table: str,
-    filename: str,
+    message: Any,
+    filename: Optional[str] = None,
 ) -> None:
     slack_client = SlackClient(
         channel_id=settings.SNUBA_SLACK_CHANNEL_ID, token=settings.SLACK_API_TOKEN
     )
 
-    slack_client.post_message(
-        message=_format_slack_overview(total_rows, mismatches, table, compare_type)
-    )
+    slack_client.post_message(message=message)
 
-    slack_client.post_file(
-        file_name=filename,
-        file_path=f"/tmp/{filename}",
-        file_type="csv",
-        initial_comment=f"report from: {filename}",
-    )
+    if filename:
+        slack_client.post_file(
+            file_name=filename,
+            file_path=f"/tmp/{filename}",
+            file_type="csv",
+            initial_comment=f"report from: {filename}",
+        )
