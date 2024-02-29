@@ -73,6 +73,10 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for Clickhous
                 timer!("insertions.batch_write_ms", elapsed);
             }
             counter!("insertions.batch_write_msgs", insert_batch.len() as i64);
+            counter!(
+                "insertions.batch_write_bytes",
+                insert_batch.encoded_rows().len() as i64
+            );
             insert_batch.record_message_latency();
 
             Ok(message)
