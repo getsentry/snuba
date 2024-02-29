@@ -7,21 +7,20 @@ local pipeline_name = 'clickhouse-query-replayer';
 local generate_replay_job(component) =
   {
     environment_variables: {
-      // TODO - what env vars do we need ?
       SENTRY_REGION: 's4s',
-      // TODO do correct interpolation
-      LABEL_SELECTOR: 'service=snuba,' + 'component=' + component
+      SNUBA_SERVICE_NAME: 'snuba-admin',
+      GOOGLE_CLOUD_PROJECT: 'search-and-storage',
+      REPLAYER_ARGS: 'your args here (e.g --gcs-bucket abcd)'
     },
     elastic_profile_id: pipeline_group,
     tasks: [
-      gocdtasks.script(importstr './bash/replay-ch-queries.sh'),
+      gocdtasks.script(importstr './bash/s4s-replay-queries.sh'),
     ],
   };
 
 local pipeline = {
   group: pipeline_group,
   display_order: 100,  // Ensure it's last pipeline in UI
-  // TODO: for parameters, use parameters as parameters
   lock_behavior: 'unlockWhenFinished',
   materials: {
     snuba_repo: {
@@ -38,8 +37,7 @@ local pipeline = {
           type: 'manual',
         },
         jobs: {
-          ['replay-' + component]: generate_replay_job(component)
-          for component in ['query-replayer-1', 'query-replayer-2']
+          query-replayer: generate_replay_job('query-replayer)
         },
       },
     },
