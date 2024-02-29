@@ -37,7 +37,7 @@ local pipeline = {
           type: 'manual',
         },
         jobs: {
-          query-replayer: generate_replay_job('query-replayer)
+          query-replayer: generate_replay_job('query-replayer')
         },
       },
     },
