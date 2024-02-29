@@ -6,7 +6,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
 /devinfra/scripts/k8s/k8s-spawn-job.py \
   --label-selector="service=${SNUBA_SERVICE_NAME}" \
   --container-name="${SNUBA_SERVICE_NAME}" \
-  "snuba-migrate" \
+  "snuba-query-replayer" \
   "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
   -- \
   snuba query-replayer "${args[@]}"
