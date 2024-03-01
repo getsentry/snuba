@@ -66,6 +66,17 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
         (
+            "outcomes-billing-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=outcomes_raw",
+                "--consumer-group=outcomes_billing_group",
+                "--raw-events-topic=outcomes-billing",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+            ],
+        ),
+        (
             "errors-consumer",
             [
                 "snuba",
