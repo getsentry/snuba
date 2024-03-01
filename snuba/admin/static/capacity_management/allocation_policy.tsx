@@ -144,6 +144,9 @@ function AllocationPolicyConfigs(props: {
               row_data.edit,
             ])}
           columnWidths={[3, 2, 5, 1, 1]}
+          customStyles={createCustomTableStyles({
+            headerStyle: { backgroundColor: getTableColor(policy.configs) },
+          })}
         />
         <p style={paragraphStyle}>
           These are the tenant specific configurations.
