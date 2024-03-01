@@ -112,6 +112,10 @@ def _record_cogs(
         return
 
     # The dataset is usually a good proxy for app_feature
+    # However, this is not always the case. We can
+    # check the entity as well as a fallback option
+    # if the dataset is incorrect in the querylog.
+
     app_feature = query_metadata.dataset.replace("_", "")
 
     if (
