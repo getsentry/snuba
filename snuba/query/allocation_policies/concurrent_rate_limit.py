@@ -31,7 +31,7 @@ _PASS_THROUGH_REFERRERS = set(
 )
 
 
-class BaseCustomerConcurrentRateLimitAllocationPolicy(AllocationPolicy):
+class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return [
             AllocationPolicyConfig(
@@ -116,7 +116,7 @@ class BaseCustomerConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
 
 class CustomerConcurrentRateLimitAllocationPolicy(
-    BaseCustomerConcurrentRateLimitAllocationPolicy
+    BaseConcurrentRateLimitAllocationPolicy
 ):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return super()._additional_config_definitions() + [

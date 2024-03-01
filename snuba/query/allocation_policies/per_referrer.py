@@ -8,7 +8,7 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.allocation_policies.concurrent_rate_limit import (
-    BaseCustomerConcurrentRateLimitAllocationPolicy,
+    BaseConcurrentRateLimitAllocationPolicy,
 )
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
@@ -20,7 +20,7 @@ logger = logging.getLogger("snuba.query.allocation_policy_per_referrer")
 _DEFAULT_MAX_THREADS = 10
 
 
-class ReferrerGuardRailPolicy(BaseCustomerConcurrentRateLimitAllocationPolicy):
+class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
     """
     A policy to prevent runaway referrers from consuming too many queries.
 
