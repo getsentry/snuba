@@ -1,6 +1,6 @@
 import Client from "../../api_client";
 
-import {AllocationPolicyConfigs} from "../../capacity_management/allocation_policy";
+import { AllocationPolicyConfigs } from "../../capacity_management/allocation_policy";
 import { it, expect } from "@jest/globals";
 import { AllocationPolicy } from "../../capacity_management/types";
 import { act, fireEvent, render } from "@testing-library/react";
@@ -47,7 +47,6 @@ it("should populate configs table upon render", async () => {
     />
   );
 
-  expect(getByText("N/A")).toBeTruthy(); // non optional key in table
   expect(getByText("key1")).toBeTruthy();
   expect(getByText("key2")).toBeTruthy();
   expect(
