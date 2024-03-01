@@ -384,8 +384,6 @@ def dataset_query(
                 "type": "rate-limited",
                 "message": str(cause),
             }
-            if isinstance(cause, AllocationPolicyViolations):
-                details["quota_allowance"] = cause.quota_allowance
         elif isinstance(cause, ClickhouseError):
             status = get_http_status_for_clickhouse_error(cause)
             details = {
@@ -406,7 +404,12 @@ def dataset_query(
 
         return Response(
             json.dumps(
-                {"error": details, "timing": timer.for_json(), **exception.extra}
+                {
+                    "error": details,
+                    "timing": timer.for_json(),
+                    "quota_allowance": getattr(cause, "quota_allowance", {}),
+                    **exception.extra,
+                }
             ),
             status,
             {"Content-Type": "application/json"},
@@ -428,7 +431,7 @@ def dataset_query(
     payload: MutableMapping[str, Any] = {
         **result.result,
         "timing": timer.for_json(),
-        "allocation_policies": result.allocation_policies,
+        "quota_allowance": result.quota_allowance,
     }
 
     if settings.STATS_IN_RESPONSE or request.query_settings.get_debug():
