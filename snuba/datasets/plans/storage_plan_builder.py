@@ -5,7 +5,6 @@ from typing import Optional, Sequence
 import sentry_sdk
 
 from snuba import settings as snuba_settings
-from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
@@ -88,18 +87,6 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 reader=self.__cluster.get_reader(),
                 cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
             )
-
-        use_split = state.get_config("use_split", 1)
-        if use_split:
-            for splitter in self.__splitters:
-                with sentry_sdk.start_span(
-                    description=type(splitter).__name__, op="splitter"
-                ):
-                    result = splitter.execute(
-                        query, query_settings, process_and_run_query
-                    )
-                    if result is not None:
-                        return result
 
         return process_and_run_query(query, query_settings)
 
