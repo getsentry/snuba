@@ -14,7 +14,8 @@
     },
     {
       "members": [
-        "group:team-sns@sentry.io"
+        "group:team-sns@sentry.io",
+        "group:access-snuba-admin@sentry.io"
       ],
       "role": "roles/MigrationsReader"
     },

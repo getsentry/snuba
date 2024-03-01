@@ -18,7 +18,9 @@ function getReadonlyRow(
     <code style={{ wordBreak: "break-all", color: "black" }}>
       {config.value}
     </code>,
-    config.description,
+    <code style={{ wordBreak: "normal", overflowWrap: "anywhere", color: "black" }}>
+      {config.description}
+    </code>,
     config.type,
     <Button
       variant="outline-secondary"
