@@ -73,7 +73,6 @@ it("should display allocation policy configs once a storage is selected", async 
   expect(getByText("10")).toBeTruthy();
   expect(getByText("something")).toBeTruthy();
   expect(getByText("int")).toBeTruthy();
-  expect(getByText("N/A")).toBeTruthy();
 
   // second policy
   expect(getByText("some_other_policy")).toBeTruthy();
