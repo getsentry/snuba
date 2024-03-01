@@ -111,13 +111,18 @@ def _record_cogs(
     if not profile or (bytes_scanned := profile.get("progress_bytes")) is None:
         return
 
+    # The dataset is usually a good proxy for app_feature
     app_feature = query_metadata.dataset.replace("_", "")
+
     if (
-        query_metadata.dataset == "generic_metrics"
+        query_metadata.entity.startswith("generic_metrics")
         and (use_case_id := request.attribution_info.tenant_ids.get("use_case_id"))
         is not None
     ):
-        app_feature += f"_{use_case_id}"
+        app_feature = f"genericmetrics_{use_case_id}"
+
+    elif query_metadata.dataset == "events":
+        app_feature = "errors"
 
     cluster_name = query_metadata.query_list[0].stats.get("cluster_name", "")
 
