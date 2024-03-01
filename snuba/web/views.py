@@ -384,14 +384,8 @@ def dataset_query(
                 "type": "rate-limited",
                 "message": str(cause),
             }
-            # HACK (Volo): Ideally, the `allocation_policies` key would look the same for success/non-success responses
-            # however there are implementation details of db_query that make this harder than in needs to be atm (21/02/2024)
-            # I plan to change those but in the meantime want to surface this info to the caller so this is a halfway measure
             if isinstance(cause, AllocationPolicyViolations):
-                details["allocation_policies_violations"] = {
-                    policy_name: violation.to_dict()
-                    for policy_name, violation in cause.violations.items()
-                }
+                details["quota_allowance"] = cause.quota_allowance
         elif isinstance(cause, ClickhouseError):
             status = get_http_status_for_clickhouse_error(cause)
             details = {

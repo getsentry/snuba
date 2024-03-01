@@ -305,7 +305,7 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        allocation_policies = response.json["error"]["allocation_policies_violations"]
+        allocation_policies = response.json["error"]["quota_allowance"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
         assert response.status_code == 429
 
@@ -1303,7 +1303,7 @@ class TestSnQLApi(BaseApiTest):
             assert response.status_code == 429
             assert (
                 response.json["error"]["message"]
-                == "{'RejectAllocationPolicy123': \"Allocation policy violated, explanation: {'reason': 'policy rejects all queries'}\"}"
+                == "Query on could not be run due to allocation policies, details: {'RejectAllocationPolicy123': {'can_run': False, 'max_threads': 0, 'explanation': {'reason': 'policy rejects all queries'}}}"
             )
 
     def test_tags_key_column(self) -> None:
