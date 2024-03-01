@@ -95,7 +95,7 @@ class QuotaAllowance:
     # policy, this dictionary should contain some information
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
-    explanation: dict[str, Any]
+    explanation: dict[str, JsonSerializable]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -113,31 +113,6 @@ class QuotaAllowance:
             and self.max_threads == other.max_threads
             and self.explanation == other.explanation
         )
-
-
-class AllocationPolicyViolation(SerializableException):
-    @classmethod
-    def from_args(
-        cls, tenant_ids: dict[str, str | int], quota_allowance: QuotaAllowance
-    ) -> "AllocationPolicyViolation":
-        return cls(
-            "Allocation policy violated",
-            tenant_ids=tenant_ids,
-            quota_allowance=quota_allowance.to_dict(),
-        )
-
-    @property
-    def quota_allowance(self) -> dict[str, JsonSerializable]:
-        return cast(
-            "dict[str, JsonSerializable]", self.extra_data.get("quota_allowance", {})
-        )
-
-    @property
-    def explanation(self) -> dict[str, JsonSerializable]:
-        return self.extra_data.get("quota_allowance", {}).get("explanation", {})  # type: ignore
-
-    def __str__(self) -> str:
-        return f"{self.message}, explanation: {self.explanation}"
 
 
 class InvalidTenantsForAllocationPolicy(SerializableException):
@@ -177,7 +152,9 @@ class AllocationPolicyViolations(SerializableException):
         )
 
     @classmethod
-    def from_args(cls, quota_allowances: dict[str, QuotaAllowance]):
+    def from_args(
+        cls, quota_allowances: dict[str, QuotaAllowance]
+    ) -> "AllocationPolicyViolations":
         return cls(
             "Query on could not be run due to allocation policies",
             quota_allowances={
@@ -786,6 +763,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             )
         if not self.is_enforced:
             return QuotaAllowance(True, self.max_threads, {})
+        # make sure we always know which storage key we rejected a query from
+        allowance.explanation["storage_key"] = str(self._storage_key)
         return allowance
 
     @abstractmethod
