@@ -115,8 +115,10 @@ def _record_cogs(
     app_feature = query_metadata.dataset.replace("_", "")
 
     if (
-        query_metadata.entity.startswith("generic_metrics")
-        and (use_case_id := request.attribution_info.tenant_ids.get("use_case_id"))
+        query_metadata.dataset == "generic_metrics"
+        or query_metadata.entity.startswith("generic_metrics")
+    ) and (
+        use_case_id := request.attribution_info.tenant_ids.get("use_case_id")
         is not None
     ):
         app_feature = f"genericmetrics_{use_case_id}"
