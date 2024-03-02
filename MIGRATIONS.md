@@ -48,6 +48,8 @@ For each cluster, `single_node` can be set to either True or False. If False, `c
 
 For a single node cluster, do not change the default configuration.
 
+For multi node clusters (`single_node=False`), the `host` and `port` of the cluster mappings must point to a node that will have the distributed tables. Typically, this is a node that belongs to the `distributed_cluster_name` cluster in clickhouse. This node is used as the query node. In our production environment, the `host` value is a loadbalancer proxy over the nodes is the the `distributed_cluster_name`
+
 ## Running migrations
 
 The `snuba migrations` CLI tool should be used to manage migrations.
