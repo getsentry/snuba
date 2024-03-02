@@ -12,6 +12,7 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 )
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
+from snuba.utils.serializable_exception import JsonSerializable
 
 rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 
@@ -96,7 +97,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             query_id,
             RateLimitParameters(self.rate_limit_name, referrer, None, concurrent_limit),
         )
-        decision_explanation = {
+        decision_explanation: dict[str, JsonSerializable] = {
             "reason": explanation,
             "policy": self.rate_limit_name,
             "referrer": referrer,
