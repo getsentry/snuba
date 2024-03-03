@@ -64,7 +64,7 @@ schema:
   dist_table_name: search_issues_dist_v2
 
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

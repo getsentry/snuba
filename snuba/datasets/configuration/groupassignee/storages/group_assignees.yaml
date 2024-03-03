@@ -35,7 +35,7 @@ postgres_table: sentry_groupasignee
 row_processor:
   processor: GroupAssigneeRowProcessor
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

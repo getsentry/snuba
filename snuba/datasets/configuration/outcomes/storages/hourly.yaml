@@ -21,7 +21,7 @@ schema:
   local_table_name: outcomes_hourly_local
   dist_table_name: outcomes_hourly_dist
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

@@ -224,12 +224,12 @@ schema:
       {
         name: trace_sampled,
         type: UInt,
-        args: { schema_modifiers: [ nullable ], size: 8 },
+        args: { schema_modifiers: [nullable], size: 8 },
       },
       {
         name: num_processing_errors,
         type: UInt,
-        args: { schema_modifiers: [ nullable ], size: 64 },
+        args: { schema_modifiers: [nullable], size: 64 },
       },
       { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
     ]
@@ -237,7 +237,7 @@ schema:
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

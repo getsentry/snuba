@@ -86,7 +86,7 @@ schema:
   dist_table_name: generic_metric_gauges_aggregated_dist
 
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

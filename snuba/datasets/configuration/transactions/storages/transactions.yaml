@@ -163,7 +163,7 @@ schema:
   partition_format: [retention_days, date]
 
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

@@ -82,7 +82,7 @@ schema:
 query_processors:
   - processor: TableRateLimit
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id

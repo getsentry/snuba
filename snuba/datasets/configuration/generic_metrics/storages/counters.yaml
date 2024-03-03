@@ -49,18 +49,14 @@ schema:
       {
         name: value,
         type: AggregateFunction,
-        args:
-          {
-            func: sum,
-            arg_types: [{ type: Float, args: { size: 64 } }],
-          },
+        args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] },
       },
     ]
   local_table_name: generic_metric_counters_aggregated_local
   dist_table_name: generic_metric_counters_aggregated_dist
 
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
@@ -89,14 +85,14 @@ allocation_policies:
           max_threads: 4
           concurrent_limit: 10
         dynamic_sampling.counters.fetch_projects_with_count_per_transaction_volumes:
-            max_threads: 4
-            concurrent_limit: 10
+          max_threads: 4
+          concurrent_limit: 10
         dynamic_sampling.counters.fetch_projects_with_transaction_totals:
-            max_threads: 4
-            concurrent_limit: 10
+          max_threads: 4
+          concurrent_limit: 10
         dynamic_sampling.counters.get_active_orgs:
-            max_threads: 4
-            concurrent_limit: 10
+          max_threads: 4
+          concurrent_limit: 10
   - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:

@@ -268,7 +268,7 @@ class TestSnQLApi(BaseApiTest):
         concurrent_rate_limit_policies = [
             p
             for p in policies
-            if p.config_key() == "ConcurrentRateLimitAllocationPolicy"
+            if p.config_key() == "CustomerConcurrentRateLimitAllocationPolicy"
         ]
         for p in concurrent_rate_limit_policies:
             p.set_config_value("project_override", 0, {"project_id": self.project_id})
@@ -289,7 +289,9 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
         allocation_policies = response.json["allocation_policies"]
-        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
+        assert allocation_policies["CustomerConcurrentRateLimitAllocationPolicy"][
+            "can_run"
+        ]
 
         response = self.post(
             "/events/snql",
@@ -306,7 +308,7 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         allocation_policies = response.json["error"]["allocation_policies_violations"]
-        assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
+        assert allocation_policies["CustomerConcurrentRateLimitAllocationPolicy"]
         assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)

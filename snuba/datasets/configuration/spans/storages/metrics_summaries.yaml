@@ -13,7 +13,7 @@ schema:
     [
       { name: project_id, type: UInt, args: { size: 64 } },
       { name: metric_mri, type: String },
-      { name: trace_id, type: UUID},
+      { name: trace_id, type: UUID },
       { name: segment_id, type: UInt, args: { size: 64 } },
       { name: span_id, type: UInt, args: { size: 64 } },
       { name: group, type: UInt, args: { size: 64 } },
@@ -30,7 +30,7 @@ schema:
         args:
           {
             subcolumns:
-              [ { name: key, type: String }, { name: value, type: String } ],
+              [{ name: key, type: String }, { name: value, type: String }],
           },
       },
       {
@@ -39,7 +39,7 @@ schema:
         args:
           {
             inner_type: { type: UInt, args: { size: 64 } },
-            schema_modifiers: [ readonly ],
+            schema_modifiers: [readonly],
           },
       },
       { name: retention_days, type: UInt, args: { size: 16 } },
@@ -49,7 +49,7 @@ schema:
   dist_table_name: metrics_summaries_dist
   partition_format: [retention_days, date]
 allocation_policies:
-  - name: ConcurrentRateLimitAllocationPolicy
+  - name: CustomerConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
@@ -92,8 +92,7 @@ query_processors:
       column_name: tags
   - processor: PrewhereProcessor
     args:
-      prewhere_candidates:
-        [project_id, metric_mri]
+      prewhere_candidates: [project_id, metric_mri]
   - processor: TableRateLimit
   - processor: TupleUnaliaser
 
