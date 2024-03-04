@@ -15,54 +15,63 @@ from snuba.state import get_int_config
 class FilterInSelectOptimizer(LogicalQueryProcessor):
     """
     This optimizer takes queries that filter by metric_id in the select clause (via conditional aggregate functions),
-    and adds the equivalent metric_id filtering to the where clause
+    and adds the equivalent metric_id filtering to the where clause. Example:
+
+        SELECT sumIf(value, metric_id in (1,2,3,4))
+        FROM table
+
+        becomes
+
+        SELECT sumIf(value, metric_id in (1,2,3,4))
+        FROM table
+        WHERE metric_id in (1,2,3,4)
     """
 
+    """
+    Definition of 'metric_id domain': The set of all metric_id that are relevant to a query.
+        Said another way: the set of all metric_id that are being filtered.
+
+        Heres some examples:
+        * SELECT sumIf(value, metric_id in (1,2,3,4)) has a metric_id domain = {1,2,3,4}
+        * SELECT add(sumIf(value, metric_id in (1,2,3,4)), sumIf(value, metric_id in (5,6,7,8)))
+            has a metric_id domain = {1,2,3,4,5,6,7,8}
+
+        I also use this to refer to conditional filters as well, so:
+        * equals(metric_id, 8) has metric_id domain = {8}
+        * in(metric_id, [7, 11, 13]) has metric_id domain = {7, 11, 13}
+
+        Additionally, a metric_id domain of None is equivalent to the set of all metric_id.
+        * equals(status, 200) has metric_id domain = None
+            why? because this condition can hold true for any metric_id
+    """
     Domain = set[int] | None
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        feat_flag = get_int_config("enable_filter_in_select_optimizer")
-        if feat_flag is not None and feat_flag == 1:
-            self.optimize(query)
-
-    def optimize(self, query: Query) -> None:
-        """Optimizes the given query by adding any metric_id filters in the select clause to the where clause"""
-        domain = self.get_domain_of_query(query)
-        filter = self.domain_to_query_filter(domain)
-        if filter is not None:
-            query.add_condition_to_ast(filter)
+        feat_flag = get_int_config("enable_filter_in_select_optimizer", default=0)
+        if feat_flag:
+            domain = self.get_domain_of_query(query)
+            if domain is not None:
+                filter = binary_condition(
+                    "in",
+                    Column(None, None, "metric_id"),
+                    FunctionCall(
+                        alias=None,
+                        function_name="array",
+                        parameters=tuple(map(lambda x: Literal(None, x), domain)),
+                    ),
+                )
+                query.add_condition_to_ast(filter)
 
     def get_domain_of_query(self, query: Query) -> Domain:
         """
-        Returns the metric_id domain of the given query, where the metric_id domain is the set of all metric_id that are relevant to the query.
-        Returns None if the metric_id domain is all metric_id.
-
-        If a metric_id is not in the domain of the query it can be filtered out.
-        It is always acceptable to have the following clause in a query:
-            WHERE metric_id in metric_id_domain
+        This function returns the metric_id domain of the given query.
+        For a definition of metric_id domain, go to definition of the return type of this function ('Domain')
         """
         for select_exp in query.get_selected_columns():
             curr = self._get_domain_of_exp(select_exp.expression)
             if curr is not None:
                 return curr
         return None
-
-    def domain_to_query_filter(self, domain: Domain) -> Expression | None:
-        """
-        Given a metric_id domain, returns a corresponding logical filter clause.
-            ex. {1,2,3} -> in(metric_id, [1,2,3])
-        """
-        if domain is None:
-            return None
-        return binary_condition(
-            "in",
-            Column(None, None, "metric_id"),
-            FunctionCall(
-                alias=None,
-                function_name="array",
-                parameters=tuple(map(lambda x: Literal(None, x), domain)),
-            ),
-        )
 
     def _get_domain_of_exp(self, exp: Expression) -> Domain:
         if isinstance(exp, FunctionCall):
@@ -83,19 +92,29 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
                 ex. sumIf1 + sumIf2 / sumIf3
         """
         if f.function_name[-2:] == "If":
-            predicate = f.parameters[1]
-            assert isinstance(predicate, FunctionCall)
-            return self._get_domain_of_predicate(predicate)
+            if len(f.parameters) != 2 or not isinstance(f.parameters[1], FunctionCall):
+                # If the conditional function is not in the form functionIf(value, condition), I bail
+                return None
+
+            return self._get_domain_of_predicate(f.parameters[1])
         else:
+            # this section assumes that the domain of a generic function is
+            # the union of its parameters' domain.
+            # for sum(), divide(), etc this hold true but im not sure
+            # if its bad to make such a general assumption
+
+            # return the union of the domains of all parameters
             if len(f.parameters) == 0:
                 return None
-            else:
-                domain = self._get_domain_of_exp(f.parameters[0])
-                for i in range(1, len(f.parameters)):
-                    domain = self._domain_union(
-                        domain, self._get_domain_of_exp(f.parameters[i])
-                    )
-                return domain
+
+            domain = self._get_domain_of_exp(f.parameters[0])
+            for i in range(1, len(f.parameters)):
+                curr = self._get_domain_of_exp(f.parameters[i])
+                if domain is None or curr is None:
+                    return None
+                else:
+                    domain = domain.union(curr)
+            return domain
 
     def _get_domain_of_curried_function_call(self, f: CurriedFunctionCall) -> Domain:
         if f.internal_function.function_name[-2:] == "If":
@@ -105,84 +124,103 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
             return None
 
     def _get_domain_of_predicate(self, predicate: FunctionCall) -> set[int] | None:
-        if predicate.function_name == "equals":
-            return self._get_domain_of_equals(predicate)
-        elif predicate.function_name == "in":
-            return self._get_domain_of_in(predicate)
+        if self._is_metric_id_condition(predicate):
+            return self._get_domain_of_metric_id_condition(predicate)
         elif predicate.function_name == "and":
             return self._get_domain_of_and(predicate)
         else:
             return None
 
-    def _get_domain_of_equals(self, e: FunctionCall) -> set[int] | None:
-        assert e.function_name == "equals"
-        lhs = e.parameters[0]
-        if isinstance(lhs, Column) and lhs.column_name == "metric_id":
-            rhs = e.parameters[1]
-            assert isinstance(rhs, Literal)
-            assert isinstance(rhs.value, int)
-            return {rhs.value}
+    def _get_domain_of_equals(self, f: FunctionCall) -> set[int] | None:
+        if f.function_name != "equals":
+            raise ValueError("Given function must be 'equals")
+
+        if (
+            len(f.parameters) == 2
+            and isinstance(f.parameters[0], Column)
+            and f.parameters[0].column_name == "metric_id"
+            and isinstance(f.parameters[1], Literal)
+            and isinstance(f.parameters[1].value, int)
+        ):
+            return {f.parameters[1].value}
         else:
             return None
 
-    def _get_domain_of_in(self, e: FunctionCall) -> set[int] | None:
-        assert e.function_name == "in"
-        lhs = e.parameters[0]
-        rhs = e.parameters[1]
-        if isinstance(lhs, Column) and lhs.column_name == "metric_id":
-            assert isinstance(rhs, FunctionCall) and rhs.function_name == "array"
+    def _get_domain_of_in(self, f: FunctionCall) -> set[int] | None:
+        if f.function_name != "in":
+            raise ValueError("Given function must be 'in")
+
+        if (
+            len(f.parameters) == 2
+            and isinstance(f.parameters[0], Column)
+            and f.parameters[0].column_name == "metric_id"
+            and isinstance(f.parameters[1], FunctionCall)
+            and f.parameters[1].function_name == "array"
+        ):
+            rhs = f.parameters[1]
             ids = set()
             for metric_id in rhs.parameters:
-                assert isinstance(metric_id, Literal) and isinstance(
-                    metric_id.value, int
-                )
-                ids.add(metric_id.value)
+                if isinstance(metric_id, Literal) and isinstance(metric_id.value, int):
+                    ids.add(metric_id.value)
+                else:
+                    return None
             return ids
         else:
             return None
 
-    def _get_domain_of_and(self, e: FunctionCall) -> Domain:
-        assert e.function_name == "and"
-        lhs = e.parameters[0]
-        rhs = e.parameters[1]
-        assert isinstance(lhs, FunctionCall) and isinstance(rhs, FunctionCall)
-        lres = self._is_mid_cond(lhs)
-        rres = self._is_mid_cond(rhs)
-        if lres == rres:
-            # unsupported, or no filtering
-            return None
+    def _get_domain_of_and(self, f: FunctionCall) -> Domain:
+        if f.function_name != "and":
+            raise ValueError("Given function must be 'and")
 
-        # 'and' must have metric_id condition on one side, and irrelivance on the other
-        # in both of these cases the aggregate predicate is unsupported
-        if lres and self._contains_midcond(rhs):
+        if len(f.parameters) != 2:
             return None
-        elif rres and self._contains_midcond(lhs):
-            return None
-
-        condside = lhs if lres else rhs
-        if condside.function_name == "equals":
-            return self._get_domain_of_equals(condside)
+        lhs = f.parameters[0]
+        rhs = f.parameters[1]
+        if self._is_metric_id_condition(lhs) and not self._contains_metric_id_condition(
+            rhs
+        ):
+            assert isinstance(lhs, FunctionCall)
+            return self._get_domain_of_metric_id_condition(lhs)
+        elif self._is_metric_id_condition(
+            rhs
+        ) and not self._contains_metric_id_condition(lhs):
+            assert isinstance(rhs, FunctionCall)
+            return self._get_domain_of_metric_id_condition(rhs)
         else:
-            return self._get_domain_of_in(condside)
-
-    def _domain_union(self, e1: Domain, e2: Domain) -> Domain:
-        """Given 2 domains, returns the union"""
-        if e1 is None or e2 is None:
             return None
+
+    def _get_domain_of_metric_id_condition(self, f: FunctionCall) -> Domain:
+        if not self._is_metric_id_condition(f):
+            raise ValueError("Must be metric_id condition")
+
+        if f.function_name == "equals":
+            return self._get_domain_of_equals(f)
         else:
-            return e1.union(e2)
+            return self._get_domain_of_in(f)
 
-    def _is_mid_cond(self, f: FunctionCall) -> bool:
-        if f.function_name != "equals" and f.function_name != "in":
-            return False
-        if not isinstance(f.parameters[0], Column):
-            return False
-        return f.parameters[0].column_name == "metric_id"
+    def _is_metric_id_condition(self, f: Expression) -> bool:
+        """
+        A metric_id condition is either:
+          * equals(metric_id, ...)
+          * in(metric_id, ...)
+        """
+        return (
+            isinstance(f, FunctionCall)
+            and f.function_name in ("equals", "in")
+            and isinstance(f.parameters[0], Column)
+            and f.parameters[0].column_name == "metric_id"
+        )
 
-    def _contains_midcond(self, f: FunctionCall) -> bool:
-        if self._is_mid_cond(f):
+    def _contains_metric_id_condition(self, f: Expression) -> bool:
+        """
+        Returns true if the given FunctionCall contains any filtering by metric_id
+        """
+        if not isinstance(f, FunctionCall):
+            return False
+        elif self._is_metric_id_condition(f):
             return True
-        for p in f.parameters:
-            if isinstance(p, FunctionCall) and self._contains_midcond(p):
-                return True
-        return False
+        else:
+            for p in f.parameters:
+                if self._contains_metric_id_condition(p):
+                    return True
+            return False
