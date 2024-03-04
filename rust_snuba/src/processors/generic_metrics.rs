@@ -1,7 +1,6 @@
 use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
@@ -9,10 +8,12 @@ use serde::{
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
+    runtime_config::get_str_config,
     types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
 
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::timer;
 
 use super::utils::enforce_retention;
@@ -62,6 +63,11 @@ struct FromGenericMetricsMessage {
     value: MetricValue,
     retention_days: u16,
     aggregation_option: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MessageUseCase {
+    use_case_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -240,6 +246,20 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
+    let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
+    let killswitch_config = get_str_config("key");
+
+    if killswitch_config.is_ok() {
+        match killswitch_config.unwrap() {
+            Some(str) => {
+                if use_case.use_case_id == str {
+                    return Ok(InsertBatch::skip());
+                }
+            }
+            None => (),
+        }
+    }
+
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
     let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp =
