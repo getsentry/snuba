@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import functools
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
@@ -21,6 +22,14 @@ from snuba.query.conditions import (
     ConditionFunctions,
     binary_condition,
     combine_and_conditions,
+)
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinRelationship,
+    JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import arrayElement
@@ -60,10 +69,14 @@ logger = logging.getLogger("snuba.mql.parser")
 class InitialParseResult:
     expression: SelectedExpression | None = None
     formula: str | None = None
-    parameters: list[InitialParseResult] | None = None
+    parameters: list[FormulaParameter] | None = None
     groupby: list[SelectedExpression] | None = None
     conditions: list[Expression] | None = None
     mri: str | None = None
+    table_alias: str | None = None
+
+
+FormulaParameter = Union[InitialParseResult, int, float]
 
 
 ARITHMETIC_OPERATORS_MAPPING = {
@@ -78,6 +91,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     """
     Builds the arguments for a Snuba AST from the MQL Parsimonious parse tree.
     """
+
+    def __init__(self) -> None:
+        self.alias_count = {}
 
     def visit_expression(
         self,
@@ -99,94 +115,99 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
         return ARITHMETIC_OPERATORS_MAPPING[node.text]
 
-    def _build_timeseries_formula_param(
-        self, param: InitialParseResult
-    ) -> SelectedExpression:
-        """
-        Timeseries inside a formula need to have three things done to them:
-        1. Add the -If suffix to their aggregate function
-        2. Put all the filters for the timeseries inside the aggregate expression
-        3. Add a metric_id condition to the conditions in the aggregate
+    # def _build_timeseries_formula_param(
+    #     self, param: InitialParseResult
+    # ) -> SelectedExpression:
+    #     """
+    #     Timeseries inside a formula need to have three things done to them:
+    #     1. Add the -If suffix to their aggregate function
+    #     2. Put all the filters for the timeseries inside the aggregate expression
+    #     3. Add a metric_id condition to the conditions in the aggregate
 
-        Given an input parse result from `sum(mri){x:y}`, this should output
-        an expression like `sumIf(value, x = y AND metric_id = mri)`.
-        """
-        assert param.expression is not None
-        exp = param.expression.expression
-        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
+    #     Given an input parse result from `sum(mri){x:y}`, this should output
+    #     an expression like `sumIf(value, x = y AND metric_id = mri)`.
+    #     """
+    #     assert param.expression is not None
+    #     exp = param.expression.expression
+    #     assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
 
-        conditions = param.conditions or []
-        metric_id_condition = binary_condition(
-            ConditionFunctions.EQ,
-            Column(None, None, "metric_id"),
-            Literal(None, param.mri),
-        )
-        conditions.append(metric_id_condition)
-        value_column = exp.parameters[0]
-        if isinstance(exp, FunctionCall):
-            return SelectedExpression(
-                None,
-                FunctionCall(
-                    None,
-                    f"{exp.function_name}If",
-                    parameters=(
-                        value_column,
-                        combine_and_conditions(conditions),
-                    ),
-                ),
-            )
-        else:
-            return SelectedExpression(
-                None,
-                CurriedFunctionCall(
-                    None,
-                    FunctionCall(
-                        exp.internal_function.alias,
-                        f"{exp.internal_function.function_name}If",
-                        exp.internal_function.parameters,
-                    ),
-                    (
-                        value_column,
-                        combine_and_conditions(conditions),
-                    ),
-                ),
-            )
+    #     conditions = param.conditions or []
+    #     metric_id_condition = binary_condition(
+    #         ConditionFunctions.EQ,
+    #         Column(None, None, "metric_id"),
+    #         Literal(None, param.mri),
+    #     )
+    #     conditions.append(metric_id_condition)
+    #     value_column = exp.parameters[0]
+    #     if isinstance(exp, FunctionCall):
+    #         return SelectedExpression(
+    #             None,
+    #             FunctionCall(
+    #                 None,
+    #                 f"{exp.function_name}If",
+    #                 parameters=(
+    #                     value_column,
+    #                     combine_and_conditions(conditions),
+    #                 ),
+    #             ),
+    #         )
+    #     else:
+    #         return SelectedExpression(
+    #             None,
+    #             CurriedFunctionCall(
+    #                 None,
+    #                 FunctionCall(
+    #                     exp.internal_function.alias,
+    #                     f"{exp.internal_function.function_name}If",
+    #                     exp.internal_function.parameters,
+    #                 ),
+    #                 (
+    #                     value_column,
+    #                     combine_and_conditions(conditions),
+    #                 ),
+    #             ),
+    #         )
 
-    def _visit_formula(
-        self,
-        term_operator: str,
-        term: InitialParseResult,
-        coefficient: InitialParseResult,
-    ) -> InitialParseResult:
-        # TODO: If the formula has filters/group by, where do those appear?
+    # def _visit_formula(
+    #     self,
+    #     term_operator: str,
+    #     term: InitialParseResult,
+    #     coefficient: InitialParseResult,
+    # ) -> InitialParseResult:
+    #     # Assign an alias to each Timeseries parameter in the formula
+    #     if isinstance(term, InitialParseResult) and not term.formula:
+    #         alias = term.mri[0]
+    #         suffix = self.alias_count.setdefault(alias, -1) + 1
+    #         self.alias_count[alias] = suffix
+    #         term = replace(term, table_alias=f"{alias}{suffix}"))
 
-        # If the parameters of the query are timeseries, extract the expressions from the result
-        if isinstance(term, InitialParseResult) and term.expression is not None:
-            term = replace(term, expression=self._build_timeseries_formula_param(term))
-        if (
-            isinstance(coefficient, InitialParseResult)
-            and coefficient.expression is not None
-        ):
-            coefficient = replace(
-                coefficient,
-                expression=self._build_timeseries_formula_param(coefficient),
-            )
+    #     # If the parameters of the query are timeseries, extract the expressions from the result
+    #     if isinstance(term, InitialParseResult) and term.expression is not None:
+    #         term = replace(term, expression=self._build_timeseries_formula_param(term))
+    #     if (
+    #         isinstance(coefficient, InitialParseResult)
+    #         and coefficient.expression is not None
+    #     ):
+    #         coefficient = replace(
+    #             coefficient,
+    #             expression=self._build_timeseries_formula_param(coefficient),
+    #         )
 
-        if (
-            isinstance(term, InitialParseResult)
-            and isinstance(coefficient, InitialParseResult)
-            and term.groupby != coefficient.groupby
-        ):
-            raise InvalidQueryException(
-                "All terms in a formula must have the same groupby"
-            )
+    #     if (
+    #         isinstance(term, InitialParseResult)
+    #         and isinstance(coefficient, InitialParseResult)
+    #         and term.groupby != coefficient.groupby
+    #     ):
+    #         raise InvalidQueryException(
+    #             "All terms in a formula must have the same groupby"
+    #         )
 
-        return InitialParseResult(
-            expression=None,
-            formula=term_operator,
-            parameters=[term, coefficient],
-            groupby=term.groupby,
-        )
+    #     return InitialParseResult(
+    #         expression=None,
+    #         formula=term_operator,
+    #         parameters=[term, coefficient],
+    #         groupby=term.groupby,
+    #     )
 
     def visit_term(
         self,
@@ -196,7 +217,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         term, zero_or_more_others = children
         if zero_or_more_others:
             _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
-            return self._visit_formula(term_operator, term, coefficient)
+            return InitialParseResult(
+                expression=None,
+                formula=term_operator,
+                parameters=[term, coefficient],
+            )
 
         return term
 
@@ -223,53 +248,62 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         ],
     ) -> InitialParseResult:
         target, filters, packed_groupbys, *_ = children
+
+        new_condition = None
         packed_filters = filters[0][1] if filters else []  # strip braces
         if packed_filters:
             assert isinstance(packed_filters, list)
-            _, filter_expr, *_ = packed_filters[0]
-            if target.formula is not None:
+            _, new_condition, *_ = packed_filters[0]
 
-                def pushdown_filter(param: InitialParseResult) -> InitialParseResult:
+        groupby = None
+        if packed_groupbys:
+            assert isinstance(packed_groupbys, list)
+            group_by_val = packed_groupbys[0]
+            group_by = (
+                group_by_val if isinstance(group_by_val, list) else [group_by_val]
+            )
+
+        if new_condition or group_by:
+            if target.formula is not None:
+                # Push all the filters and groupbys of the formula down to all the leaf nodes
+                # so they get correctly added to their subqueries.
+                def pushdown_values(param: FormulaParameter) -> FormulaParameter:
+                    if not isinstance(param, InitialParseResult):
+                        return param
                     if param.formula is not None:
                         parameters = param.parameters or []
                         for p in parameters:
-                            pushdown_filter(p)
+                            pushdown_values(p)
                     elif param.expression is not None:
-                        exp = param.expression.expression
-                        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
-                        exp = replace(
-                            exp,
-                            parameters=(
-                                exp.parameters[0],
-                                binary_condition("and", filter_expr, exp.parameters[1]),
-                            ),
-                        )
-                        param.expression = replace(param.expression, expression=exp)
+                        if new_condition:
+                            param.conditions = (
+                                param.conditions + [new_condition]
+                                if param.conditions
+                                else [new_condition]
+                            )
+                        if group_by:
+                            param.groupby = (
+                                param.groupby + group_by if param.groupby else groupby
+                            )
                     else:
                         raise InvalidQueryException("Could not parse formula")
 
                     return param
 
-                if target.parameters is not None:
-                    for param in target.parameters:
-                        if not isinstance(param, InitialParseResult):
-                            continue  # Don't push down scalar values e.g. sum(mri) / 3600
-                        pushdown_filter(param)
-            else:
-                if target.conditions is not None:
-                    target.conditions = target.conditions + [filter_expr]
-                else:
-                    target.conditions = [filter_expr]
+                for param in target.parameters or []:
+                    pushdown_values(param)
 
-        if packed_groupbys:
-            assert isinstance(packed_groupbys, list)
-            group_by = packed_groupbys[0]
-            if not isinstance(group_by, list):
-                group_by = [group_by]
-            if target.groupby is not None:
-                target.groupby = target.groupby + group_by
             else:
-                target.groupby = group_by
+                if new_condition:
+                    target.conditions = (
+                        target.conditions + [new_condition]
+                        if target.conditions
+                        else [new_condition]
+                    )
+                if group_by:
+                    target.groupby = (
+                        target.groupby + group_by if target.groupby else groupby
+                    )
 
         return target
 
@@ -344,9 +378,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -626,17 +658,25 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         assert isinstance(node.text, str)
         return node.text
 
+    def _generate_table_alias(self, mri: str) -> str:
+        alias = mri[0]
+        suffix = self.alias_count.setdefault(alias, -1) + 1
+        self.alias_count[alias] = suffix
+        return f"{alias}{suffix}"
+
     def visit_quoted_mri(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return InitialParseResult(mri=str(node.text[1:-1]))
+        mri = str(node.text[1:-1])
+        return InitialParseResult(mri=mri, table_alias=self._generate_table_alias(mri))
 
     def visit_unquoted_mri(
         self, node: Node, children: Sequence[Any]
     ) -> InitialParseResult:
         assert isinstance(node.text, str)
-        return InitialParseResult(mri=str(node.text))
+        mri = str(node.text)
+        return InitialParseResult(mri=mri, table_alias=self._generate_table_alias(mri))
 
     def visit_quoted_public_name(
         self, node: Node, children: Sequence[Any]
@@ -657,7 +697,189 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
-def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
+def convert_formula_to_query(
+    parsed: InitialParseResult, dataset: Dataset
+) -> LogicalQuery | CompositeQuery[QueryEntity]:
+    """
+    Look up all the referenced entities, and create a JoinClause for each of the entities
+    referenced in the formula. Then map the correct table to each of the expressions in the formula.
+
+    E.g. sum(d:transactions/duration) / sum(c:transactions/duration_ms) will produce a JoinClause
+    with (d: generic_metrics_distributions) -[counters]-> (c: generic_metrics_counters)
+
+    Most formulas do not operate on multiple entities, but they get the same treatment as if they
+    did in order to keep consistency. In that case the table is joined on itself.
+
+    If a formula has only a single MRI and some scalars e.g. sum(d:transactions/duration) + 1, then
+    there's no need for a JoinClause, and this returns a simple LogicalQuery.
+    """
+
+    def find_all_leaf_nodes(tree: FormulaParameter) -> list[InitialParseResult] | None:
+        if isinstance(tree, InitialParseResult) and tree.formula is None:
+            return [tree]
+        elif isinstance(tree, InitialParseResult) and tree.formula is not None:
+            nodes = []
+            for p in tree.parameters or []:
+                found = find_all_leaf_nodes(p)
+                if found:
+                    nodes.extend(found)
+        else:
+            return None
+
+    join_nodes = find_all_leaf_nodes(parsed)
+    if len(join_nodes) == 1:
+        # This is a simple formula with only one MRI and some scalars, so we don't need to join
+        raise Exception("handle this")
+
+    entities = {}  # Used to cache query entities to avoid building multiple times
+    # We use the group by for the ON conditions, so make sure they are all the same
+    groupbys = join_nodes[0].groupby
+    if not all(node.groupby == groupbys for node in join_nodes):
+        raise InvalidQueryException("All terms in a formula must have the same groupby")
+
+    def build_node(node: InitialParseResult) -> IndividualNode:
+        entity_key = select_entity(node.mri, dataset)
+        data_source = entities.setdefault(
+            entity_key, QueryEntity(entity_key, get_entity(entity_key).get_data_model())
+        )
+        return IndividualNode(node.table_alias, data_source)
+
+    # Build join condition expressions
+    # The JoinClause needs to know what to join on. In this case, we join each query by
+    # whatever it is grouped by. We pick an arbitrary node and make that the base node
+    # that all the other nodes join too. Then we need a different alias for the base
+    # to join too. This works because all the columns to join on are the same so
+    # the only difference is the alias.
+    base_table_alias = join_nodes[0].table_alias
+    other_table_alias = join_nodes[-1].table_alias
+
+    def build_join_clause(
+        nodes: list[InitialParseResult],
+    ) -> JoinClause[QueryEntity] | IndividualNode | None:
+        if len(nodes) == 1:
+            return build_node(nodes[0])
+
+        node, *rest = nodes
+
+        conditions = []
+        left_alias = (
+            base_table_alias
+            if node.table_alias != base_table_alias
+            else other_table_alias
+        )
+        for groupby in node.groupby:
+            assert isinstance(groupby, Column)
+            conditions.append(
+                JoinCondition(
+                    left=JoinConditionExpression(left_alias, groupby.column_name),
+                    right=JoinConditionExpression(
+                        node.table_alias, groupby.column_name
+                    ),
+                )
+            )
+
+        rhs = build_node(node)
+        lhs = build_join_clause(rest)
+
+        return JoinClause(
+            left_node=lhs,
+            right_node=rhs,
+            keys=conditions,
+            join_type=JoinType.INNER,
+        )
+
+    join_clause = build_join_clause(join_nodes)
+
+    query = CompositeQuery(
+        from_clause=join_clause,
+    )
+
+    # Build SelectedExpression from root tree
+    # When going through the selected expressions, populate the table aliases
+    # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
+    # Go through all the groupbys, populate the groupbys with the table alias, add them to the query groupbys
+    # also needs the metric ID conditions added
+
+    def extract_expression(param: InitialParseResult | Any) -> Expression:
+        if not isinstance(param, InitialParseResult):
+            return Literal(None, param)
+        elif param.expression is not None:
+            return param.expression.expression
+        elif param.formula:
+            parameters = param.parameters or []
+            return FunctionCall(
+                None,
+                param.formula,
+                tuple(extract_expression(p) for p in parameters),
+            )
+        else:
+            raise InvalidQueryException("Could not parse formula")
+
+    parameters = parsed.parameters or []
+    selected_columns = [
+        SelectedExpression(
+            name=AGGREGATE_ALIAS,
+            expression=FunctionCall(
+                alias=AGGREGATE_ALIAS,
+                function_name=parsed.formula,
+                parameters=tuple(extract_expression(p) for p in parameters),
+            ),
+        )
+    ]
+    if parsed.groupby:
+        selected_columns.extend(parsed.groupby)
+    groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+    query = LogicalQuery(
+        from_clause=QueryEntity(
+            key=entity_key, schema=get_entity(entity_key).get_data_model()
+        ),
+        selected_columns=selected_columns,
+        groupby=groupby,
+    )
+    return query
+
+
+def convert_timeseries_to_query(
+    parsed: InitialParseResult, dataset: Dataset
+) -> LogicalQuery:
+    selected_columns = [parsed.expression]
+    if parsed.groupby:
+        selected_columns.extend(parsed.groupby)
+    groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+    metric_value = parsed.mri
+    if not metric_value:
+        raise ParsingException("no MRI specified in MQL query")
+
+    conditions: list[Expression] = [
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "metric_id"),
+            Literal(None, metric_value),
+        )
+    ]
+    if parsed.conditions:
+        conditions.extend(parsed.conditions)
+
+    final_conditions = combine_and_conditions(conditions) if conditions else None
+
+    entity_key = select_entity(metric_value, dataset)
+
+    query = LogicalQuery(
+        from_clause=QueryEntity(
+            key=entity_key, schema=get_entity(entity_key).get_data_model()
+        ),
+        selected_columns=selected_columns,
+        condition=final_conditions,
+        groupby=groupby,
+    )
+    return query
+
+
+def parse_mql_query_body(
+    body: str, dataset: Dataset
+) -> LogicalQuery | CompositeQuery[QueryEntity]:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
     information provided.
@@ -705,92 +927,11 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
             )
 
         if parsed.formula:
+            query = convert_formula_to_query(parsed, dataset)
 
-            def extract_expression(param: InitialParseResult | Any) -> Expression:
-                if not isinstance(param, InitialParseResult):
-                    return Literal(None, param)
-                elif param.expression is not None:
-                    return param.expression.expression
-                elif param.formula:
-                    parameters = param.parameters or []
-                    return FunctionCall(
-                        None,
-                        param.formula,
-                        tuple(extract_expression(p) for p in parameters),
-                    )
-                else:
-                    raise InvalidQueryException("Could not parse formula")
+        else:
+            query = convert_timeseries_to_query(parsed, dataset)
 
-            parameters = parsed.parameters or []
-            selected_columns = [
-                SelectedExpression(
-                    name=AGGREGATE_ALIAS,
-                    expression=FunctionCall(
-                        alias=AGGREGATE_ALIAS,
-                        function_name=parsed.formula,
-                        parameters=tuple(extract_expression(p) for p in parameters),
-                    ),
-                )
-            ]
-            if parsed.groupby:
-                selected_columns.extend(parsed.groupby)
-            groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
-
-            def extract_mri(param: InitialParseResult) -> str:
-                if param.mri:
-                    return param.mri
-                elif param.formula:
-                    for p in param.parameters or []:
-                        mri = extract_mri(p)
-                        if mri:
-                            return mri
-
-                raise ParsingException("formula does not contain any MRIs")
-
-            mri = extract_mri(parsed)  # Only works for single type formulas
-            entity_key = select_entity(mri, dataset)
-
-            query = LogicalQuery(
-                from_clause=QueryEntity(
-                    key=entity_key, schema=get_entity(entity_key).get_data_model()
-                ),
-                selected_columns=selected_columns,
-                groupby=groupby,
-            )
-        if parsed.expression:
-            selected_columns = [parsed.expression]
-            if parsed.groupby:
-                selected_columns.extend(parsed.groupby)
-            groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
-
-            metric_value = parsed.mri
-            if not metric_value:
-                raise ParsingException("no MRI specified in MQL query")
-
-            conditions: list[Expression] = [
-                binary_condition(
-                    ConditionFunctions.EQ,
-                    Column(None, None, "metric_id"),
-                    Literal(None, metric_value),
-                )
-            ]
-            if parsed.conditions:
-                conditions.extend(parsed.conditions)
-
-            final_conditions = (
-                combine_and_conditions(conditions) if conditions else None
-            )
-
-            entity_key = select_entity(metric_value, dataset)
-
-            query = LogicalQuery(
-                from_clause=QueryEntity(
-                    key=entity_key, schema=get_entity(entity_key).get_data_model()
-                ),
-                selected_columns=selected_columns,
-                condition=final_conditions,
-                groupby=groupby,
-            )
     except Exception as e:
         raise e
     return query
@@ -855,7 +996,11 @@ def populate_start_end_time(
     query.add_condition_to_ast(combine_and_conditions(filters))
 
 
-def populate_scope(query: LogicalQuery, mql_context: MQLContext) -> None:
+def populate_scope(
+    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+) -> None:
+    if isinstance(query, CompositeQuery):
+        raise Exception("need a condition for each alias in the mris")
     filters = []
     filters.append(
         binary_condition(
@@ -895,7 +1040,9 @@ def populate_scope(query: LogicalQuery, mql_context: MQLContext) -> None:
     query.add_condition_to_ast(combine_and_conditions(filters))
 
 
-def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
+def populate_rollup(
+    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+) -> None:
     rollup = mql_context.rollup
 
     # Validate/populate granularity
@@ -904,6 +1051,8 @@ def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
             f"granularity '{rollup.granularity}' is not valid, must be one of {GRANULARITIES_AVAILABLE}"
         )
 
+    if isinstance(query, CompositeQuery):
+        raise Exception("this won't work, needs one for each alias of the mris")
     query.add_condition_to_ast(
         binary_condition(
             ConditionFunctions.EQ,
@@ -929,6 +1078,8 @@ def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
 
     with_totals = rollup.with_totals == "True"
     if rollup.interval:
+        if isinstance(query, CompositeQuery):
+            raise Exception("this won't work")
         # If an interval is specified, then we need to group the time by that interval,
         # return the time in the select, and order the results by that time.
         time_expression = FunctionCall(
@@ -967,7 +1118,9 @@ def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
         query.set_ast_orderby([orderby])
 
 
-def populate_limit(query: LogicalQuery, mql_context: MQLContext) -> None:
+def populate_limit(
+    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+) -> None:
     limit = 1000
     if mql_context.limit:
         if mql_context.limit > MAX_LIMIT:
@@ -979,7 +1132,9 @@ def populate_limit(query: LogicalQuery, mql_context: MQLContext) -> None:
     query.set_limit(limit)
 
 
-def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
+def populate_offset(
+    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+) -> None:
     if mql_context.offset:
         if mql_context.offset < 0:
             raise ParsingException("offset must be greater than or equal to 0")
@@ -987,12 +1142,19 @@ def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
 
 
 def populate_query_from_mql_context(
-    query: LogicalQuery, mql_context_dict: dict[str, Any]
-) -> tuple[LogicalQuery, MQLContext]:
+    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context_dict: dict[str, Any]
+) -> tuple[LogicalQuery | CompositeQuery[QueryEntity], MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
-    entity_key = query.get_from_clause().key
 
-    populate_start_end_time(query, mql_context, entity_key)
+    if isinstance(query, LogicalQuery):
+        entity_key = query.get_from_clause().key
+        populate_start_end_time(query, mql_context, entity_key)
+    else:
+        # If we have a composite query, we need to populate the start and end time
+        # for each entity in the query.
+        for entity in query.get_from_clause():
+            populate_start_end_time(query, mql_context, entity.key)
+
     populate_scope(query, mql_context)
     populate_rollup(query, mql_context)
     populate_limit(query, mql_context)
@@ -1001,9 +1163,7 @@ def populate_query_from_mql_context(
     return query, mql_context
 
 
-def quantiles_to_quantile(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
-) -> None:
+def quantiles_to_quantile(query: CompositeQuery[QueryEntity] | LogicalQuery) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
     the API (so that the arrays don't need to be unwrapped) and also avoids bugs where comparing

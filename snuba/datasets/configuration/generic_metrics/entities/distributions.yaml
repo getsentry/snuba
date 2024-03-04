@@ -328,3 +328,33 @@ subscription_validators:
       max_allowed_aggregations: 3
       disallowed_aggregations: [having, orderby]
       required_time_column: timestamp
+
+join_relationships:
+  sets:
+    rhs_entity: generic_metrics_sets
+    join_type: inner
+    columns:
+      - [org_id, org_id]
+      - [project_id, project_id]
+      - [metric_id, metric_id]
+  gauges:
+    rhs_entity: generic_metrics_gauges
+    join_type: inner
+    columns:
+      - [org_id, org_id]
+      - [project_id, project_id]
+      - [metric_id, metric_id]
+  distributions:
+    rhs_entity: generic_metrics_distributions
+    join_type: inner
+    columns:
+      - [org_id, org_id]
+      - [project_id, project_id]
+      - [metric_id, metric_id]
+  counters:
+    rhs_entity: generic_metrics_counters
+    join_type: inner
+    columns:
+      - [org_id, org_id]
+      - [project_id, project_id]
+      - [metric_id, metric_id]
