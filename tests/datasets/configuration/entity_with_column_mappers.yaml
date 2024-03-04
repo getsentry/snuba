@@ -120,8 +120,6 @@ storage_selector:
 query_processors:
   -
     processor: TagsTypeTransformer
-  -
-    processor: ReferrerRateLimiterProcessor
 
 validators:
   -

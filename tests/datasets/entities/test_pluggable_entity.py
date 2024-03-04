@@ -24,13 +24,6 @@ from snuba.query.processors.logical.granularity_processor import (
     PERFORMANCE_GRANULARITIES,
     MappedGranularityProcessor,
 )
-from snuba.query.processors.logical.object_id_rate_limiter import (
-    OrganizationRateLimiterProcessor,
-    ProjectRateLimiterProcessor,
-    ProjectReferrerRateLimiter,
-    ReferrerRateLimiterProcessor,
-)
-from snuba.query.processors.logical.quota_processor import ResourceQuotaProcessor
 from snuba.query.processors.logical.tags_type_transformer import TagsTypeTransformer
 from snuba.query.processors.logical.timeseries_processor import TimeSeriesProcessor
 from snuba.query.query_settings import HTTPQuerySettings
@@ -91,11 +84,6 @@ def pluggable_sets_entity() -> PluggableEntity:
                 default_granularity=DEFAULT_MAPPED_GRANULARITY_ENUM,
             ),
             TimeSeriesProcessor({"bucketed_time": "timestamp"}, ("timestamp",)),
-            ReferrerRateLimiterProcessor(),
-            OrganizationRateLimiterProcessor(org_column="org_id"),
-            ProjectReferrerRateLimiter("project_id"),
-            ProjectRateLimiterProcessor(project_column="project_id"),
-            ResourceQuotaProcessor("project_id"),
         ],
         columns=[
             SchemaColumn("org_id", UInt(64)),
