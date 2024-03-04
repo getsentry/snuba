@@ -250,13 +250,10 @@ where
     let killswitch_config = get_str_config("key");
 
     if killswitch_config.is_ok() {
-        match killswitch_config.unwrap() {
-            Some(str) => {
-                if use_case.use_case_id == str {
-                    return Ok(InsertBatch::skip());
-                }
+        if let Some(str) = killswitch_config.unwrap() {
+            if use_case.use_case_id == str {
+                return Ok(InsertBatch::skip());
             }
-            None => (),
         }
     }
 
