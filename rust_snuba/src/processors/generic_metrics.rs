@@ -246,14 +246,12 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
     let killswitch_config = get_str_config("key");
 
-    if killswitch_config.is_ok() {
-        if let Some(str) = killswitch_config.unwrap() {
-            if use_case.use_case_id == str {
-                return Ok(InsertBatch::skip());
-            }
+    if let Some(killswitch) = killswitch_config.ok().flatten() {
+        let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
+        if killswitch == use_case.use_case_id {
+            return Ok(InsertBatch::skip());
         }
     }
 
