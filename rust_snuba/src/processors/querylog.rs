@@ -20,7 +20,7 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let result: Result<FromQuerylogMessage, _> = utils::from_slice(payload_bytes);
-    match result {
+    let _ = match result {
         Ok(_) => Ok(()),
         Err(err) => Err(err),
     };
