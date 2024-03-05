@@ -181,11 +181,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 "All terms in a formula must have the same groupby"
             )
 
+        groupby = term.groupby if isinstance(term, InitialParseResult) else None
         return InitialParseResult(
             expression=None,
             formula=term_operator,
             parameters=[term, coefficient],
-            groupby=term.groupby,
+            groupby=groupby,
         )
 
     def visit_term(
