@@ -41,7 +41,7 @@ TOTALS_BY_TABLES: MutableMapping[str, TableTotals] = {}
 @click.command()
 @click.option(
     "--gcs-bucket",
-    help="Name of gcs bucket to save query files to",
+    help="Name of gcs bucket to read query results from, and upload compared files to.",
     required=True,
 )
 @click.option(
@@ -80,9 +80,23 @@ def query_comparer(
         raise Exception("Not enough results to compare.")
 
     def get_matched_pairs() -> Sequence[Tuple[str, str]]:
+        """
+        In order to compare results, we need results from both
+        clickhouse versions: e.g. 21.8 & 22.8
+        This function finds the matched blob pairs of results
+        by looking at the blob names.
+
+        returns a sequence of pairs:
+        [
+            ("results-21-8/2024_02_15/meredith_test_22.csv", "results-22-8/2024_02_15/meredith_test_22.csv"),
+            ("results-21-8/2024_02_15/meredith_test_23.csv", "results-22-8/2024_02_15/meredith_test_23.csv"),
+        ]
+        """
         matches = []
         v1_prefix, v2_prefix = result_prefixes
         for v1_name in blob_getter.get_all_names(prefix=v1_prefix):
+            # the blobs are named the same except for the prefix,
+            # e.g. results-21-8/ vs results-22-8/
             v2_name = v1_name.replace(v1_prefix, v2_prefix)
             if uploader.blob_exists(v2_name):
                 matches.append((v1_name, v2_name))
