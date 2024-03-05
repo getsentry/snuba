@@ -9,6 +9,8 @@ use serde::{ser::Error, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::processors::utils;
+
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
@@ -17,6 +19,7 @@ pub fn process_message(
     _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
+    let _: FromQuerylogMessage = utils::from_slice(payload_bytes)?;
     let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
     let querylog_msg = QuerylogMessage {
