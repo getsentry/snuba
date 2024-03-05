@@ -315,6 +315,19 @@ mod tests_empty_id {
     use std::time::SystemTime;
 
     #[test]
+    fn test_querylog_simple() {
+        let data = r#"{"request": {"id": "", "body": {}, "referrer": "g"}, "dataset": "querylog", "query_list": [], "status": "success", "timing": {"timestamp": 12345, "duration_ms": 3}, "projects": [1]}"#;
+
+        let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default()).expect("EMPTY REQUEST ID");
+    }
+
+    #[test]
     fn test_querylog_empty_request_id() {
         let data = r#"{
             "request": {
