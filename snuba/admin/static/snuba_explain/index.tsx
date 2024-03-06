@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { Prism } from "@mantine/prism";
 
-import Client from "../api_client";
-import QueryEditor from "../query_editor";
-import { Collapse } from "../collapse";
-import { SnQLRequest, SnQLResult, ExplainResult, ExplainStep } from "./types";
-import { Step } from "./step_render";
+import Client from "SnubaAdmin/api_client";
+import QueryEditor from "SnubaAdmin/query_editor";
+import { Collapse } from "SnubaAdmin/collapse";
+import { SnQLRequest, SnQLResult, ExplainResult, ExplainStep } from "SnubaAdmin/snuba_explain/types";
+import { Step } from "SnubaAdmin/snuba_explain/step_render";
 
 import {
   executeActionsStyle,
   selectStyle,
   executeButtonStyle,
   collapsibleStyle,
-} from "./styles";
-import { SnubaDatasetName, SnQLQueryState } from "../snql_to_sql/types";
+} from "SnubaAdmin/snuba_explain/styles";
+import { SnubaDatasetName, SnQLQueryState } from "SnubaAdmin/snql_to_sql/types";
 
 function SnubaExplain(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
-import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "./types";
-import { executeActionsStyle } from "./styles";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
+import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "SnubaAdmin/production_queries/types";
+import { executeActionsStyle } from "SnubaAdmin/production_queries/styles";
 import {
   Accordion,
   Box,
