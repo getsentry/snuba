@@ -2061,8 +2061,8 @@ dependencies = [
 
 [[package]]
 name = "rust_arroyo"
-version = "2.16.2"
-source = "git+https://github.com/getsentry/arroyo#eb660caedd8c97f76c58ca98cb965ab5cb02e646"
+version = "2.16.4"
+source = "git+https://github.com/getsentry/arroyo#17dc8fe1af1b320ac483e0ed6110058fb92a98eb"
 dependencies = [
  "chrono",
  "coarsetime",
