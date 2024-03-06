@@ -57,7 +57,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
-    MigrationGroup.SPANS,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
 }
