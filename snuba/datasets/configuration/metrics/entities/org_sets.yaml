@@ -68,9 +68,6 @@ query_processors:
         bucketed_time: timestamp
       time_parse_columns:
         - timestamp
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
   - processor: TagsTypeTransformer
 
 validators:
