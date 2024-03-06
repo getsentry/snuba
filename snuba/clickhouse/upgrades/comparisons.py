@@ -11,6 +11,38 @@ from snuba.utils.gcs import GCSUploader
 logger = structlog.get_logger().bind(module=__name__)
 
 
+@dataclass(frozen=True)
+class MismatchedValues:
+    base_value: int
+    new_value: int
+    delta: int
+
+
+@dataclass
+class PerfMismatchResult:
+    query_id: str
+    duration_ms: int
+    duration_ms_new: int
+    read_rows: int
+    read_rows_new: int
+    read_bytes: int
+    read_bytes_new: int
+    duration_ms_delta: int
+    read_rows_delta: int
+    read_bytes_delta: int
+
+
+@dataclass
+class DataMismatchResult:
+    query_id: str
+    result_rows: int
+    result_rows_new: int
+    result_bytes: int
+    result_bytes_new: int
+    result_rows_delta: int
+    result_bytes_delta: int
+
+
 @dataclass
 class QueryInfoResult:
     query_str: str
@@ -26,12 +58,31 @@ class QueryMeasurementResult:
     read_rows: int
     read_bytes: int
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, QueryMeasurementResult):
+            return NotImplemented
+        if self.query_duration_ms != other.query_duration_ms:
+            return False
+        if self.result_rows != other.result_rows:
+            return False
+        if self.result_bytes != other.result_bytes:
+            return False
+        if self.read_rows != other.read_rows:
+            return False
+        if self.read_bytes != other.read_bytes:
+            return False
+        return True
 
-Results = Union[QueryInfoResult, QueryMeasurementResult]
+
+Results = Union[
+    QueryInfoResult, QueryMeasurementResult, DataMismatchResult, PerfMismatchResult
+]
 
 DIRECTORY_RESULT_TYPES: Dict[str, Type[Results]] = {
     "queries": QueryInfoResult,
     "results": QueryMeasurementResult,
+    "compared-data": DataMismatchResult,
+    "compared-perf": PerfMismatchResult,
 }
 
 
@@ -81,7 +132,7 @@ class FileManager:
         with open(self._full_path(filename), mode="w") as file:
             writer = csv.writer(file)
             if header_row:
-                fields = list(dataclasses.fields(result_type))  # mypy ig
+                fields = [f.name for f in dataclasses.fields(result_type)]  # mypy ig
                 writer.writerow(fields)
             for row in results:
                 writer.writerow(dataclasses.astuple(row))
@@ -126,13 +177,18 @@ class FileManager:
             directory, datetime.strptime(date, "%Y_%m_%d"), table, int(hour)
         )
 
-    def save(self, file_format: FileFormat, results: Sequence[Results]) -> None:
+    def save(
+        self,
+        file_format: FileFormat,
+        results: Sequence[Results],
+        header_row: bool = False,
+    ) -> None:
         """
         First save the results to local csv file,
         then upload the file to gcs bucket.
         """
         filename = self.format_filename(file_format)
-        self._save_to_csv(filename, results)
+        self._save_to_csv(filename, results, header_row)
 
         blob_name = self._format_blob_name(file_format)
         self._save_to_gcs(filename, blob_name)
