@@ -14,16 +14,14 @@ module.exports = (env) => ({
     },
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+		alias: {
+			Snuba: path.resolve(__dirname, 'static/'),
+		}
     },
     output: {
         filename: 'bundle.js',
         path: path.resolve(__dirname, 'dist'),
     },
-	resolve: {
-		alias: {
-			Snuba: path.resolve(__dirname, 'static/'),
-		}
-	},
     devtool: "source-map", // Source map generation must be turned on
     plugins: [
         sentryWebpackPlugin({
