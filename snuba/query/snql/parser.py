@@ -190,7 +190,7 @@ snql_grammar = Grammar(
     null_literal          = ~r"NULL"i
     subscriptable         = column_name open_square (column_name/tag_name) close_square
     column_name           = ~r"[a-zA-Z_][a-zA-Z0-9_\.:@/]*"
-    tag_column            = "tags" open_square tag_name close_square
+    tag_column            = (entity_alias dot)? "tags" open_square tag_name close_square
     tag_name              = ~r"[^\[\]]*"
     identifier            = backtick ~r"[a-zA-Z_][a-zA-Z0-9_]*" backtick
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
@@ -208,6 +208,7 @@ snql_grammar = Grammar(
     comma                 = ","
     colon                 = ":"
     backtick              = "`"
+    dot                   = "."
 
 """
 )

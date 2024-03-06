@@ -1334,6 +1334,38 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
+    def test_tags_column_in_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (events: events) -[attributes]-> (ga: group_attributes)
+                        SELECT count() AS `count`
+                        BY events.time
+                        WHERE events.timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND ifNull(events.tags[service-class], '') != 'devtest'
+                        AND events.timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND events.project_id IN array({self.project_id})
+                        AND ga.project_id IN array({self.project_id})
+                        AND ga.group_status IN array(0)
+                        AND events.type = 'error'
+                        ORDER BY events.time ASC
+                        LIMIT 10000
+                        GRANULARITY 600""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
