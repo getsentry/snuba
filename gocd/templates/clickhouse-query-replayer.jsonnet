@@ -8,8 +8,6 @@ local generate_replay_job(component) =
     environment_variables: {
       SENTRY_REGION: 's4s',
       SNUBA_SERVICE_NAME: 'query-replayer-gocd',
-      GOOGLE_CLOUD_PROJECT: 'search-and-storage',
-      REPLAYER_ARGS: 'your args here (e.g --gcs-bucket abcd)',
     },
     elastic_profile_id: pipeline_group,
     tasks: [
@@ -18,6 +16,10 @@ local generate_replay_job(component) =
   };
 
 local pipeline = {
+  environment_variables: {
+    GOOGLE_CLOUD_PROJECT: 'search-and-storage',
+    REPLAYER_ARGS: 'your args here (e.g --gcs-bucket abcd)',
+  },
   group: pipeline_group,
   display_order: 100,  // Ensure it's last pipeline in UI
   lock_behavior: 'unlockWhenFinished',
