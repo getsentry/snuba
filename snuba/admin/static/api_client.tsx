@@ -1,4 +1,4 @@
-import { AllowedTools, Settings } from "./types";
+import { AllowedTools, Settings } from "SnubaAdmin/types";
 
 import {
   Config,
@@ -7,32 +7,32 @@ import {
   ConfigChange,
   ConfigDescription,
   ConfigDescriptions,
-} from "./runtime_config/types";
+} from "SnubaAdmin/runtime_config/types";
 
 import {
   ClickhouseNodeData,
   QueryRequest,
   QueryResult,
   PredefinedQuery,
-} from "./clickhouse_queries/types";
+} from "SnubaAdmin/clickhouse_queries/types";
 import {
   MigrationGroupResult,
   RunMigrationRequest,
   RunMigrationResult,
-} from "./clickhouse_migrations/types";
-import { TracingRequest, TracingResult } from "./tracing/types";
-import { SnQLRequest, SnQLResult, SnubaDatasetName } from "./snql_to_sql/types";
+} from "SnubaAdmin/clickhouse_migrations/types";
+import { TracingRequest, TracingResult } from "SnubaAdmin/tracing/types";
+import { SnQLRequest, SnQLResult, SnubaDatasetName } from "SnubaAdmin/snql_to_sql/types";
 
-import { KafkaTopicData } from "./kafka/types";
-import { QuerylogRequest, QuerylogResult } from "./querylog/types";
+import { KafkaTopicData } from "SnubaAdmin/kafka/types";
+import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
 import {
   CardinalityQueryRequest,
   CardinalityQueryResult,
-} from "./cardinality_analyzer/types";
+} from "SnubaAdmin/cardinality_analyzer/types";
 
-import { AllocationPolicy } from "./capacity_management/types";
+import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 
-import { ReplayInstruction, Topic } from "./dead_letter_queue/types";
+import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
