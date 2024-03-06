@@ -1,6 +1,6 @@
 import React, { ReactNode, CSSProperties } from "react";
 
-import { COLORS } from "./theme";
+import { COLORS } from "theme";
 
 type CustomTableStyles = {
   tableStyle?: CSSProperties,
