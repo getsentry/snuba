@@ -12,6 +12,13 @@ from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
 from snuba.datasets.dataset import Dataset
+from snuba.query.mql.context_population import (
+    start_end_time_condition,
+    scope_conditions,
+    rollup_expressions,
+    limit_value,
+    offset_value,
+)
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -93,7 +100,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     """
 
     def __init__(self) -> None:
-        self.alias_count = {}
+        self.alias_count: dict[str, int] = {}
 
     def visit_expression(
         self,
@@ -106,7 +113,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         term, zero_or_more_others = children
         if zero_or_more_others:
             _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
-            return self._visit_formula(term_operator, term, coefficient)
+            return InitialParseResult(
+                expression=None,
+                formula=term_operator,
+                parameters=[term, coefficient],
+            )
         return term
 
     def visit_expr_op(self, node: Node, children: Sequence[Any]) -> Any:
@@ -258,12 +269,10 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         groupby = None
         if packed_groupbys:
             assert isinstance(packed_groupbys, list)
-            group_by_val = packed_groupbys[0]
-            group_by = (
-                group_by_val if isinstance(group_by_val, list) else [group_by_val]
-            )
+            groupby_val = packed_groupbys[0]
+            groupby = groupby_val if isinstance(groupby_val, list) else [groupby_val]
 
-        if new_condition or group_by:
+        if new_condition or groupby:
             if target.formula is not None:
                 # Push all the filters and groupbys of the formula down to all the leaf nodes
                 # so they get correctly added to their subqueries.
@@ -281,9 +290,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                                 if param.conditions
                                 else [new_condition]
                             )
-                        if group_by:
+                        if groupby:
                             param.groupby = (
-                                param.groupby + group_by if param.groupby else groupby
+                                param.groupby + groupby if param.groupby else groupby
                             )
                     else:
                         raise InvalidQueryException("Could not parse formula")
@@ -300,9 +309,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                         if target.conditions
                         else [new_condition]
                     )
-                if group_by:
+                if groupby:
                     target.groupby = (
-                        target.groupby + group_by if target.groupby else groupby
+                        target.groupby + groupby if target.groupby else groupby
                     )
 
         return target
@@ -697,6 +706,34 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
+METRICS_ENTITIES = {
+    "c": EntityKey.METRICS_COUNTERS,
+    "d": EntityKey.METRICS_DISTRIBUTIONS,
+    "s": EntityKey.METRICS_SETS,
+}
+
+GENERIC_ENTITIES = {
+    "c": EntityKey.GENERIC_METRICS_COUNTERS,
+    "d": EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    "s": EntityKey.GENERIC_METRICS_SETS,
+    "g": EntityKey.GENERIC_METRICS_GAUGES,
+}
+
+
+def select_entity(mri: str, dataset: Dataset) -> EntityKey:
+    """
+    Given an MRI, select the entity that it belongs to.
+    """
+    if get_dataset_name(dataset) == "metrics":
+        if entity := METRICS_ENTITIES.get(mri[0]):
+            return entity
+    elif get_dataset_name(dataset) == "generic_metrics":
+        if entity := GENERIC_ENTITIES.get(mri[0]):
+            return entity
+
+    raise ParsingException(f"invalid metric type {mri[0]}")
+
+
 def convert_formula_to_query(
     parsed: InitialParseResult, dataset: Dataset
 ) -> LogicalQuery | CompositeQuery[QueryEntity]:
@@ -713,6 +750,8 @@ def convert_formula_to_query(
     If a formula has only a single MRI and some scalars e.g. sum(d:transactions/duration) + 1, then
     there's no need for a JoinClause, and this returns a simple LogicalQuery.
     """
+    if parsed.formula is None:
+        raise InvalidQueryException("Parsed formula has no formula name specified")
 
     def find_all_leaf_nodes(tree: FormulaParameter) -> list[InitialParseResult] | None:
         if isinstance(tree, InitialParseResult) and tree.formula is None:
@@ -723,28 +762,38 @@ def convert_formula_to_query(
                 found = find_all_leaf_nodes(p)
                 if found:
                     nodes.extend(found)
+            return nodes
         else:
             return None
 
     join_nodes = find_all_leaf_nodes(parsed)
+    if join_nodes is None:
+        raise InvalidQueryException("Could not parse formula")
+
     if len(join_nodes) == 1:
         # This is a simple formula with only one MRI and some scalars, so we don't need to join
         raise Exception("handle this")
 
-    entities = {}  # Used to cache query entities to avoid building multiple times
     # We use the group by for the ON conditions, so make sure they are all the same
     groupbys = join_nodes[0].groupby
     if not all(node.groupby == groupbys for node in join_nodes):
         raise InvalidQueryException("All terms in a formula must have the same groupby")
+    print("GROUPBYS", groupbys)
+    # Used to cache query entities to avoid building multiple times
+    entities: dict[EntityKey, QueryEntity] = {}
 
-    def build_node(node: InitialParseResult) -> IndividualNode:
+    def build_node(node: InitialParseResult) -> IndividualNode[QueryEntity]:
+        if not node.mri:
+            raise InvalidQueryException("No MRI found")
+        if not node.table_alias:
+            raise InvalidQueryException(f"No table alias found for MRI {node.mri}")
+
         entity_key = select_entity(node.mri, dataset)
         data_source = entities.setdefault(
             entity_key, QueryEntity(entity_key, get_entity(entity_key).get_data_model())
         )
         return IndividualNode(node.table_alias, data_source)
 
-    # Build join condition expressions
     # The JoinClause needs to know what to join on. In this case, we join each query by
     # whatever it is grouped by. We pick an arbitrary node and make that the base node
     # that all the other nodes join too. Then we need a different alias for the base
@@ -752,34 +801,39 @@ def convert_formula_to_query(
     # the only difference is the alias.
     base_table_alias = join_nodes[0].table_alias
     other_table_alias = join_nodes[-1].table_alias
+    if base_table_alias is None or other_table_alias is None:
+        raise InvalidQueryException("Formula has invalid table aliases")
 
     def build_join_clause(
         nodes: list[InitialParseResult],
-    ) -> JoinClause[QueryEntity] | IndividualNode | None:
+    ) -> JoinClause[QueryEntity] | IndividualNode[QueryEntity] | None:
         if len(nodes) == 1:
             return build_node(nodes[0])
 
         node, *rest = nodes
+        node_alias = node.table_alias
+        if not node_alias:
+            raise InvalidQueryException("Invalid table alias in formula query")
 
         conditions = []
         left_alias = (
-            base_table_alias
-            if node.table_alias != base_table_alias
-            else other_table_alias
+            base_table_alias if node_alias != base_table_alias else other_table_alias
         )
-        for groupby in node.groupby:
-            assert isinstance(groupby, Column)
+        # TODO: This is a problem: these columns don't get resolved I don't think
+        for groupby in node.groupby or []:
+            column = groupby.expression
+            assert isinstance(column, Column)
             conditions.append(
                 JoinCondition(
-                    left=JoinConditionExpression(left_alias, groupby.column_name),
-                    right=JoinConditionExpression(
-                        node.table_alias, groupby.column_name
-                    ),
+                    left=JoinConditionExpression(left_alias, column.column_name),
+                    right=JoinConditionExpression(node_alias, column.column_name),
                 )
             )
 
         rhs = build_node(node)
         lhs = build_join_clause(rest)
+        if not lhs:
+            raise InvalidQueryException("Invalid join clause in formula query")
 
         return JoinClause(
             left_node=lhs,
@@ -789,6 +843,8 @@ def convert_formula_to_query(
         )
 
     join_clause = build_join_clause(join_nodes)
+    if not isinstance(join_clause, JoinClause):
+        raise InvalidQueryException("Invalid join clause in formula query")
 
     query = CompositeQuery(
         from_clause=join_clause,
@@ -796,15 +852,19 @@ def convert_formula_to_query(
 
     # Build SelectedExpression from root tree
     # When going through the selected expressions, populate the table aliases
-    # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
-    # Go through all the groupbys, populate the groupbys with the table alias, add them to the query groupbys
-    # also needs the metric ID conditions added
-
     def extract_expression(param: InitialParseResult | Any) -> Expression:
         if not isinstance(param, InitialParseResult):
             return Literal(None, param)
         elif param.expression is not None:
-            return param.expression.expression
+            aggregate_function = param.expression.expression
+            assert isinstance(aggregate_function, (FunctionCall, CurriedFunctionCall))
+            # Metrics aggregates operate on a column
+            column = aggregate_function.parameters[0]
+            assert isinstance(column, Column)
+            return replace(
+                aggregate_function,
+                parameters=(replace(column, table_name=param.table_alias),),
+            )
         elif param.formula:
             parameters = param.parameters or []
             return FunctionCall(
@@ -813,7 +873,9 @@ def convert_formula_to_query(
                 tuple(extract_expression(p) for p in parameters),
             )
         else:
-            raise InvalidQueryException("Could not parse formula")
+            raise InvalidQueryException(
+                "Could not build selected expression for formula"
+            )
 
     parameters = parsed.parameters or []
     selected_columns = [
@@ -826,23 +888,79 @@ def convert_formula_to_query(
             ),
         )
     ]
-    if parsed.groupby:
-        selected_columns.extend(parsed.groupby)
-    groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
 
-    query = LogicalQuery(
-        from_clause=QueryEntity(
-            key=entity_key, schema=get_entity(entity_key).get_data_model()
-        ),
-        selected_columns=selected_columns,
-        groupby=groupby,
-    )
+    # Go through all the groupbys, populate the groupbys with the table alias, add them to the query groupbys
+    groupby = None
+    if parsed.groupby:
+        groupby = []
+        for group_exp in parsed.groupby:
+            if isinstance(group_exp.expression, Column):
+                aliased_groupby = replace(
+                    group_exp,
+                    expression=replace(
+                        group_exp.expression, table_name=base_table_alias
+                    ),
+                )
+                selected_columns.append(aliased_groupby)
+                groupby.append(aliased_groupby.expression)
+        query.set_ast_groupby(groupby)
+
+    # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
+    # also needs the metric ID conditions added
+    def extract_filters(param: InitialParseResult | Any) -> list[FunctionCall]:
+        if not isinstance(param, InitialParseResult):
+            return []
+        elif param.expression is not None:
+            conditions = []
+            for c in param.conditions or []:
+                assert isinstance(c, FunctionCall)
+                lhs = c.parameters[0]
+                if isinstance(lhs, Column):
+                    conditions.append(
+                        replace(
+                            c,
+                            parameters=tuple(
+                                [
+                                    replace(lhs, table_name=param.table_alias),
+                                    *c.parameters[1:],
+                                ]
+                            ),
+                        )
+                    )
+
+            conditions.append(
+                binary_condition(
+                    "equals",
+                    Column(None, param.table_alias, "metric_id"),
+                    Literal(None, param.mri),
+                )
+            )
+            return conditions
+        elif param.formula:
+            conditions = []
+            for p in param.parameters or []:
+                conditions.extend(extract_filters(p))
+            return conditions
+        else:
+            raise InvalidQueryException("Could not extract valid filters for formula")
+
+    conditions = []
+    for p in parsed.parameters or []:
+        conditions.extend(extract_filters(p))
+
+    query.add_condition_to_ast(combine_and_conditions(conditions))
+
+    print("COMPOSITE", join_clause)
+
     return query
 
 
 def convert_timeseries_to_query(
     parsed: InitialParseResult, dataset: Dataset
 ) -> LogicalQuery:
+    if parsed.expression is None:
+        raise InvalidQueryException("Parsed expression has no expression specified")
+
     selected_columns = [parsed.expression]
     if parsed.groupby:
         selected_columns.extend(parsed.groupby)
@@ -937,208 +1055,205 @@ def parse_mql_query_body(
     return query
 
 
-METRICS_ENTITIES = {
-    "c": EntityKey.METRICS_COUNTERS,
-    "d": EntityKey.METRICS_DISTRIBUTIONS,
-    "s": EntityKey.METRICS_SETS,
-}
+# def populate_start_end_time(
+#     query: LogicalQuery, mql_context: MQLContext, entity_key: EntityKey
+# ) -> None:
+#     try:
+#         start = parse_datetime(mql_context.start)
+#         end = parse_datetime(mql_context.end)
+#     except Exception as e:
+#         raise ParsingException("Invalid start or end time") from e
 
-GENERIC_ENTITIES = {
-    "c": EntityKey.GENERIC_METRICS_COUNTERS,
-    "d": EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-    "s": EntityKey.GENERIC_METRICS_SETS,
-    "g": EntityKey.GENERIC_METRICS_GAUGES,
-}
-
-
-def select_entity(mri: str, dataset: Dataset) -> EntityKey:
-    """
-    Given an MRI, select the entity that it belongs to.
-    """
-    if get_dataset_name(dataset) == "metrics":
-        if entity := METRICS_ENTITIES.get(mri[0]):
-            return entity
-    elif get_dataset_name(dataset) == "generic_metrics":
-        if entity := GENERIC_ENTITIES.get(mri[0]):
-            return entity
-
-    raise ParsingException(f"invalid metric type {mri[0]}")
-
-
-def populate_start_end_time(
-    query: LogicalQuery, mql_context: MQLContext, entity_key: EntityKey
-) -> None:
-    try:
-        start = parse_datetime(mql_context.start)
-        end = parse_datetime(mql_context.end)
-    except Exception as e:
-        raise ParsingException("Invalid start or end time") from e
-
-    entity = get_entity(entity_key)
-    required_timestamp_column = (
-        entity.required_time_column if entity.required_time_column else "timestamp"
-    )
-    filters = []
-    filters.append(
-        binary_condition(
-            ConditionFunctions.GTE,
-            Column(None, None, column_name=required_timestamp_column),
-            Literal(None, value=start),
-        ),
-    )
-    filters.append(
-        binary_condition(
-            ConditionFunctions.LT,
-            Column(None, None, column_name=required_timestamp_column),
-            Literal(None, value=end),
-        ),
-    )
-    query.add_condition_to_ast(combine_and_conditions(filters))
+#     entity = get_entity(entity_key)
+#     required_timestamp_column = (
+#         entity.required_time_column if entity.required_time_column else "timestamp"
+#     )
+#     filters = []
+#     filters.append(
+#         binary_condition(
+#             ConditionFunctions.GTE,
+#             Column(None, None, column_name=required_timestamp_column),
+#             Literal(None, value=start),
+#         ),
+#     )
+#     filters.append(
+#         binary_condition(
+#             ConditionFunctions.LT,
+#             Column(None, None, column_name=required_timestamp_column),
+#             Literal(None, value=end),
+#         ),
+#     )
+#     query.add_condition_to_ast(combine_and_conditions(filters))
 
 
-def populate_scope(
-    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
-) -> None:
-    if isinstance(query, CompositeQuery):
-        raise Exception("need a condition for each alias in the mris")
-    filters = []
-    filters.append(
-        binary_condition(
-            ConditionFunctions.IN,
-            Column(alias=None, table_name=None, column_name="project_id"),
-            FunctionCall(
-                alias=None,
-                function_name="tuple",
-                parameters=tuple(
-                    Literal(alias=None, value=project_id)
-                    for project_id in mql_context.scope.project_ids
-                ),
-            ),
-        )
-    )
-    filters.append(
-        binary_condition(
-            ConditionFunctions.IN,
-            Column(alias=None, table_name=None, column_name="org_id"),
-            FunctionCall(
-                alias=None,
-                function_name="tuple",
-                parameters=tuple(
-                    Literal(alias=None, value=int(org_id))
-                    for org_id in mql_context.scope.org_ids
-                ),
-            ),
-        )
-    )
-    filters.append(
-        binary_condition(
-            ConditionFunctions.EQ,
-            Column(alias=None, table_name=None, column_name="use_case_id"),
-            Literal(alias=None, value=mql_context.scope.use_case_id),
-        )
-    )
-    query.add_condition_to_ast(combine_and_conditions(filters))
+# def populate_scope(
+#     query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+# ) -> None:
+#     if isinstance(query, CompositeQuery):
+#         raise Exception("need a condition for each alias in the mris")
+#     filters = []
+#     filters.append(
+#         binary_condition(
+#             ConditionFunctions.IN,
+#             Column(alias=None, table_name=None, column_name="project_id"),
+#             FunctionCall(
+#                 alias=None,
+#                 function_name="tuple",
+#                 parameters=tuple(
+#                     Literal(alias=None, value=project_id)
+#                     for project_id in mql_context.scope.project_ids
+#                 ),
+#             ),
+#         )
+#     )
+#     filters.append(
+#         binary_condition(
+#             ConditionFunctions.IN,
+#             Column(alias=None, table_name=None, column_name="org_id"),
+#             FunctionCall(
+#                 alias=None,
+#                 function_name="tuple",
+#                 parameters=tuple(
+#                     Literal(alias=None, value=int(org_id))
+#                     for org_id in mql_context.scope.org_ids
+#                 ),
+#             ),
+#         )
+#     )
+#     filters.append(
+#         binary_condition(
+#             ConditionFunctions.EQ,
+#             Column(alias=None, table_name=None, column_name="use_case_id"),
+#             Literal(alias=None, value=mql_context.scope.use_case_id),
+#         )
+#     )
+#     query.add_condition_to_ast(combine_and_conditions(filters))
 
 
-def populate_rollup(
-    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
-) -> None:
-    rollup = mql_context.rollup
+# def populate_rollup(
+#     query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+# ) -> None:
+#     rollup = mql_context.rollup
 
-    # Validate/populate granularity
-    if rollup.granularity not in GRANULARITIES_AVAILABLE:
-        raise ParsingException(
-            f"granularity '{rollup.granularity}' is not valid, must be one of {GRANULARITIES_AVAILABLE}"
-        )
+#     # Validate/populate granularity
+#     if rollup.granularity not in GRANULARITIES_AVAILABLE:
+#         raise ParsingException(
+#             f"granularity '{rollup.granularity}' is not valid, must be one of {GRANULARITIES_AVAILABLE}"
+#         )
 
-    if isinstance(query, CompositeQuery):
-        raise Exception("this won't work, needs one for each alias of the mris")
-    query.add_condition_to_ast(
-        binary_condition(
-            ConditionFunctions.EQ,
-            Column(None, None, "granularity"),
-            Literal(None, rollup.granularity),
-        )
-    )
+#     if isinstance(query, CompositeQuery):
+#         raise Exception("this won't work, needs one for each alias of the mris")
+#     query.add_condition_to_ast(
+#         binary_condition(
+#             ConditionFunctions.EQ,
+#             Column(None, None, "granularity"),
+#             Literal(None, rollup.granularity),
+#         )
+#     )
 
-    # Validate totals/orderby
-    if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
-        raise ParsingException("with_totals must be a string, either 'True' or 'False'")
-    if rollup.orderby is not None and rollup.orderby not in ("ASC", "DESC"):
-        raise ParsingException("orderby must be either 'ASC' or 'DESC'")
-    if rollup.interval is not None and rollup.orderby is not None:
-        raise ParsingException("orderby is not supported when interval is specified")
-    if rollup.interval and (
-        rollup.interval < GRANULARITIES_AVAILABLE[0]
-        or rollup.interval < rollup.granularity
-    ):
-        raise ParsingException(
-            f"interval {rollup.interval} must be greater than or equal to granularity {rollup.granularity}"
-        )
+#     # Validate totals/orderby
+#     if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
+#         raise ParsingException("with_totals must be a string, either 'True' or 'False'")
+#     if rollup.orderby is not None and rollup.orderby not in ("ASC", "DESC"):
+#         raise ParsingException("orderby must be either 'ASC' or 'DESC'")
+#     if rollup.interval is not None and rollup.orderby is not None:
+#         raise ParsingException("orderby is not supported when interval is specified")
+#     if rollup.interval and (
+#         rollup.interval < GRANULARITIES_AVAILABLE[0]
+#         or rollup.interval < rollup.granularity
+#     ):
+#         raise ParsingException(
+#             f"interval {rollup.interval} must be greater than or equal to granularity {rollup.granularity}"
+#         )
 
-    with_totals = rollup.with_totals == "True"
-    if rollup.interval:
-        if isinstance(query, CompositeQuery):
-            raise Exception("this won't work")
-        # If an interval is specified, then we need to group the time by that interval,
-        # return the time in the select, and order the results by that time.
-        time_expression = FunctionCall(
-            "time",
-            "toStartOfInterval",
-            parameters=(
-                Column(None, None, "timestamp"),
-                FunctionCall(
-                    None,
-                    "toIntervalSecond",
-                    (Literal(None, rollup.interval),),
-                ),
-                Literal(None, "Universal"),
-            ),
-        )
-        selected = list(query.get_selected_columns())
-        selected.append(SelectedExpression("time", time_expression))
-        query.set_ast_selected_columns(selected)
+#     with_totals = rollup.with_totals == "True"
+#     if rollup.interval:
+#         if isinstance(query, CompositeQuery):
+#             raise Exception("this won't work")
+#         # If an interval is specified, then we need to group the time by that interval,
+#         # return the time in the select, and order the results by that time.
+#         time_expression = FunctionCall(
+#             "time",
+#             "toStartOfInterval",
+#             parameters=(
+#                 Column(None, None, "timestamp"),
+#                 FunctionCall(
+#                     None,
+#                     "toIntervalSecond",
+#                     (Literal(None, rollup.interval),),
+#                 ),
+#                 Literal(None, "Universal"),
+#             ),
+#         )
+#         selected = list(query.get_selected_columns())
+#         selected.append(SelectedExpression("time", time_expression))
+#         query.set_ast_selected_columns(selected)
 
-        groupby = query.get_groupby()
-        if groupby:
-            query.set_ast_groupby(list(groupby) + [time_expression])
-        else:
-            query.set_ast_groupby([time_expression])
+#         groupby = query.get_groupby()
+#         if groupby:
+#             query.set_ast_groupby(list(groupby) + [time_expression])
+#         else:
+#             query.set_ast_groupby([time_expression])
 
-        orderby = OrderBy(OrderByDirection.ASC, time_expression)
-        query.set_ast_orderby([orderby])
+#         orderby = OrderBy(OrderByDirection.ASC, time_expression)
+#         query.set_ast_orderby([orderby])
 
-        if with_totals:
-            query.set_totals(True)
-    elif rollup.orderby is not None:
-        direction = (
-            OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
-        )
-        orderby = OrderBy(direction, Column(None, None, AGGREGATE_ALIAS))
-        query.set_ast_orderby([orderby])
-
-
-def populate_limit(
-    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
-) -> None:
-    limit = 1000
-    if mql_context.limit:
-        if mql_context.limit > MAX_LIMIT:
-            raise ParsingException(
-                "queries cannot have a limit higher than 10000", should_report=False
-            )
-        limit = mql_context.limit
-
-    query.set_limit(limit)
+#         if with_totals:
+#             query.set_totals(True)
+#     elif rollup.orderby is not None:
+#         direction = (
+#             OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
+#         )
+#         orderby = OrderBy(direction, Column(None, None, AGGREGATE_ALIAS))
+#         query.set_ast_orderby([orderby])
 
 
-def populate_offset(
-    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
-) -> None:
-    if mql_context.offset:
-        if mql_context.offset < 0:
-            raise ParsingException("offset must be greater than or equal to 0")
-        query.set_offset(mql_context.offset)
+# def populate_limit(
+#     query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+# ) -> None:
+#     limit = 1000
+#     if mql_context.limit:
+#         if mql_context.limit > MAX_LIMIT:
+#             raise ParsingException(
+#                 "queries cannot have a limit higher than 10000", should_report=False
+#             )
+#         limit = mql_context.limit
+
+#     query.set_limit(limit)
+
+
+# def populate_offset(
+#     query: LogicalQuery | CompositeQuery[QueryEntity], mql_context: MQLContext
+# ) -> None:
+#     if mql_context.offset:
+#         if mql_context.offset < 0:
+#             raise ParsingException("offset must be greater than or equal to 0")
+#         query.set_offset(mql_context.offset)
+
+
+# def populate_composite_query_from_mql_context(
+#     query: CompositeQuery[QueryEntity], mql_context: MQLContext
+# ) -> CompositeQuery[QueryEntity]:
+#     join_clause = query.get_from_clause()
+#     assert isinstance(join_clause, JoinClause)
+
+#     # Flatten join clause
+#     nodes = [join_clause.right_node]
+#     node = join_clause.left_node
+#     while isinstance(node, JoinClause):
+#         nodes.append(node.right_node)
+#         node = node.left_node
+
+#     assert isinstance(node, IndividualNode)
+#     nodes.append(node)
+
+#     for node in nodes:
+#         entity_key = node.data_source.key
+#         time_condition = start_end_time_condition(
+#             mql_context, entity_key, table_name=node.alias
+#         )
+
+#     return query
 
 
 def populate_query_from_mql_context(
@@ -1146,19 +1261,87 @@ def populate_query_from_mql_context(
 ) -> tuple[LogicalQuery | CompositeQuery[QueryEntity], MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
 
+    # List of entity key/alias tuples
+    entity_data: list[tuple[EntityKey, str | None]] = []
     if isinstance(query, LogicalQuery):
-        entity_key = query.get_from_clause().key
-        populate_start_end_time(query, mql_context, entity_key)
-    else:
-        # If we have a composite query, we need to populate the start and end time
-        # for each entity in the query.
-        for entity in query.get_from_clause():
-            populate_start_end_time(query, mql_context, entity.key)
+        entity_data.append((query.get_from_clause().key, None))
+    elif isinstance(query, CompositeQuery):
+        join_clause = query.get_from_clause()
+        assert isinstance(join_clause, JoinClause)
+        print("JOIN CLAUSE", join_clause)
 
-    populate_scope(query, mql_context)
-    populate_rollup(query, mql_context)
-    populate_limit(query, mql_context)
-    populate_offset(query, mql_context)
+        # Iterate the join tree to get all the entity keys and associated aliases
+        data_source = join_clause.right_node.data_source
+        assert isinstance(data_source, QueryEntity)  # mypy
+        entity_data.append((data_source.key, join_clause.right_node.alias))
+        node = join_clause.left_node
+        while isinstance(node, JoinClause):
+            data_source = join_clause.right_node.data_source
+            assert isinstance(data_source, QueryEntity)  # mypy
+            entity_data.append((data_source.key, node.right_node.alias))
+            node = node.left_node
+
+        assert isinstance(node, IndividualNode)  # mypy
+        data_source = join_clause.right_node.data_source
+        assert isinstance(data_source, QueryEntity)  # mypy
+        entity_data.append((data_source.key, node.alias))
+
+    found_selected_time = None
+    for entity_key, alias in entity_data:
+        time_condition = start_end_time_condition(mql_context, entity_key, alias)
+        scope_condition = scope_conditions(mql_context, alias)
+        granularity_condition, with_totals, orderby, selected_time = rollup_expressions(
+            mql_context, alias
+        )
+
+        context_condition = combine_and_conditions(
+            [time_condition, scope_condition, granularity_condition]
+        )
+        query.add_condition_to_ast(context_condition)
+
+        query.set_totals(with_totals)
+        # TODO: Not sure it is a good idea to have multiple orderby expressions
+        query.set_ast_orderby([orderby])
+
+        if selected_time:
+            found_selected_time = selected_time
+            query.set_ast_selected_columns(
+                list(query.get_selected_columns()) + [selected_time]
+            )
+
+            groupby = query.get_groupby()
+            if groupby:
+                query.set_ast_groupby(list(groupby) + [selected_time.expression])
+            else:
+                query.set_ast_groupby([selected_time.expression])
+
+    if isinstance(query, CompositeQuery) and found_selected_time is not None:
+        # If the query is grouping by time, that needs to be added to the JoinClause keys to
+        # ensure we correctly join the subqueries. The column names will be the same for all the
+        # subqueries, so we just need to map all the table aliases.
+        column_name = found_selected_time.expression.alias
+        join_clause = query.get_from_clause()
+        assert isinstance(join_clause, JoinClause)
+        base_node_alias = join_clause.right_node.alias
+        # Base node shouldn't map to itself
+        other_node_alias = [d[1] for d in entity_data if d[1] != base_node_alias].pop()
+        for _, alias in entity_data:
+            left_side_alias = (
+                base_node_alias if alias != base_node_alias else other_node_alias
+            )
+            right_side_alias = alias
+
+            join_clause.keys.append(
+                JoinCondition(
+                    left=JoinConditionExpression(left_side_alias, column_name),
+                    right=JoinConditionExpression(right_side_alias, column_name),
+                )
+            )
+
+    limit = limit_value(mql_context)
+    offset = offset_value(mql_context)
+    query.set_limit(limit)
+    query.set_offset(offset) if offset else None
 
     return query, mql_context
 

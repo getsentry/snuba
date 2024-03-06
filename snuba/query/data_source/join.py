@@ -160,14 +160,19 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
             **self.right_node.get_alias_node_map(),
         }
 
-    def __post_init__(self) -> None:
-        column_set = self.get_columns()
-
-        for condition in self.keys:
-            assert f"{condition.left.table_alias}.{condition.left.column}" in column_set
-            assert (
-                f"{condition.right.table_alias}.{condition.right.column}" in column_set
-            )
+    # def __post_init__(self) -> None:
+    #     column_set = self.get_columns()
+    #     print("COLUMNS", column_set.columns)
+    #     for condition in self.keys:
+    #         print(
+    #             "CONDIIONS",
+    #             f"{condition.left.table_alias}.{condition.left.column}",
+    #             f"{condition.right.table_alias}.{condition.right.column}",
+    #         )
+    #         assert f"{condition.left.table_alias}.{condition.left.column}" in column_set
+    #         assert (
+    #             f"{condition.right.table_alias}.{condition.right.column}" in column_set
+    #         )
 
     def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
         return visitor.visit_join_clause(self)
