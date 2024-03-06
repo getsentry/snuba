@@ -15,6 +15,7 @@ from snuba.query.allocation_policies.concurrent_rate_limit import (
 )
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.rate_limit import RateLimitParameters
+from snuba.utils.serializable_exception import JsonSerializable
 
 DEFAULT_CONCURRENT_QUERIES_LIMIT = 22
 DEFAULT_PER_SECOND_QUERIES_LIMIT = 50
@@ -173,7 +174,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             query_id,
             RateLimitParameters(self.rate_limit_name, referrer, None, concurrent_limit),
         )
-        decision_explanation = {"reason": explanation}
+        decision_explanation: dict[str, JsonSerializable] = {"reason": explanation}
         if not self._referrer_is_registered(referrer):
             decision_explanation[
                 "cross_org_query"

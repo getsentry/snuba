@@ -288,7 +288,7 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
-        allocation_policies = response.json["allocation_policies"]
+        allocation_policies = response.json["quota_allowance"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
@@ -305,8 +305,9 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        allocation_policies = response.json["error"]["allocation_policies_violations"]
+        allocation_policies = response.json["quota_allowance"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
+        assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
         assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)
@@ -1303,7 +1304,7 @@ class TestSnQLApi(BaseApiTest):
             assert response.status_code == 429
             assert (
                 response.json["error"]["message"]
-                == "{'RejectAllocationPolicy123': \"Allocation policy violated, explanation: {'reason': 'policy rejects all queries'}\"}"
+                == "Query on could not be run due to allocation policies, details: {'RejectAllocationPolicy123': {'can_run': False, 'max_threads': 0, 'explanation': {'reason': 'policy rejects all queries', 'storage_key': 'StorageKey.DOESNTMATTER'}}}"
             )
 
     def test_tags_key_column(self) -> None:
