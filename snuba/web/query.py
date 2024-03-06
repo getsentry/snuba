@@ -339,7 +339,7 @@ def _format_storage_query_and_run(
             stats=stats,
             query_metadata_list=query_metadata.query_list,
             query_settings={},
-            trace_id=str(uuid.uuid4()),
+            trace_id=str(uuid.UUID("00000000-0000-0000-0000-000000000000")),
             status=QueryStatus.INVALID_REQUEST,
             request_status=get_request_status(cause),
         )

@@ -504,7 +504,7 @@ def _raw_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: str = str(uuid.uuid4()),
+    trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
     """
