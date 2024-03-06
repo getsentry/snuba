@@ -15,7 +15,7 @@ module.exports = (env) => ({
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
         alias: {
-            Snuba: path.resolve(__dirname, 'static/'),
+            SnubaAdmin: path.resolve(__dirname, 'static/'),
         }
     },
     output: {

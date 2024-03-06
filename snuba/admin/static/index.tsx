@@ -2,11 +2,11 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import * as Sentry from "@sentry/react";
-import Header from "Snuba/header";
-import Nav from "Snuba/nav";
-import Body from "Snuba/body";
-import { NAV_ITEMS } from "Snuba/data";
-import Client from "Snuba/api_client";
+import Header from "SnubaAdmin/header";
+import Nav from "SnubaAdmin/nav";
+import Body from "SnubaAdmin/body";
+import { NAV_ITEMS } from "SnubaAdmin/data";
+import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
 
 const containerStyle = {
