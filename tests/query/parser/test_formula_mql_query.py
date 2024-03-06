@@ -278,6 +278,50 @@ def test_simple_formula() -> None:
     assert eq, reason
 
 
+def test_simple_formula_with_leading_literals() -> None:
+    query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            timeseries(
+                "sumIf",
+                123456,
+                binary_condition(
+                    "equals", tag_column("status_code"), Literal(None, "200")
+                ),
+            ),
+            timeseries("sumIf", 123456),
+            "_snuba_aggregate_value",
+        ),
+    )
+    expected = Query(
+        from_distributions,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression,
+            ),
+        ],
+        groupby=[time_expression],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression,
+            )
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+
+
 def test_groupby() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
     expected_selected = SelectedExpression(
