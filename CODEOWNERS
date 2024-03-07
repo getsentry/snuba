@@ -1,6 +1,43 @@
 # Use owners-snuba by default
 * @getsentry/owners-snuba
 
+# Datasets
+/snuba/datasets/configuration/discover              @getsentry/discover-n-dashboards
+/snuba/datasets/configuration/events                @getsentry/issues
+/snuba/datasets/configuration/functions
+/snuba/datasets/configuration/generic_metrics
+/snuba/datasets/configuration/group_attributes
+/snuba/datasets/configuration/groupassignee
+/snuba/datasets/configuration/groupedmessage
+/snuba/datasets/configuration/issues                @getsentry/issues
+/snuba/datasets/configuration/metrics
+/snuba/datasets/configuration/outcomes
+/snuba/datasets/configuration/outcomes_raw
+/snuba/datasets/configuration/profiles              @getsentry/profiling
+/snuba/datasets/configuration/querylog
+/snuba/datasets/configuration/replays               @getsentry/replay-backend
+/snuba/datasets/configuration/sessions              @getsentry/team-starfish @getsentry/performance
+/snuba/datasets/configuration/spans                 @getsentry/team-starfish @getsentry/performance
+/snuba/datasets/configuration/transactions          @getsentry/team-starfish @getsentry/performance
+
+"""
+@getsentry/crons
+@getsentry/hybrid-cloud
+@getsentry/alerts-notifications
+@getsentry/issues
+@getsentry/performance
+@getsentry/discover-n-dashboards
+@getsentry/team-starfish
+@getsentry/profiling
+@getsentry/replay-frontend
+@getsentry/replay-backend
+
+Integrations
+@getsentry/ecosystem
+@getsentry/product-owners-settings-integrations
+@getsentry/enterprise
+"""
+
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
 
