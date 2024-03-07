@@ -193,7 +193,7 @@ class FilterInSelectOptimizer:
             if not (
                 isinstance(lhs, (Column, SubscriptableReference))
                 and isinstance(rhs, FunctionCall)
-                and rhs.function_name == "array"
+                and rhs.function_name in ("array", "tuple")
             ):
                 raise ValueError("unexpected form of 'in' function in predicate")
             # if already there throw error, this was to protect against: and(field=1, field=2)
@@ -208,6 +208,7 @@ class FilterInSelectOptimizer:
                         "expected rhs of 'in' to only contain Literal, but that was not the case"
                     )
                 values.add(e)
+            domain[lhs] = values
         elif p.function_name == "and":
             if not (
                 len(p.parameters) == 2

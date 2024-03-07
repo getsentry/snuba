@@ -29,6 +29,7 @@ mql_context = {
     },
     "indexer_mappings": {
         "d:transactions/duration@millisecond": 123456,
+        "d:transactions/duration@second": 123457,
         "status_code": 222222,
         "transaction": 333333,
     },
@@ -49,6 +50,8 @@ def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
     logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
     assert isinstance(logical_query, Query)
     res = optimizer.get_domain_of_mql_query(logical_query)
+    if res != expected_domain:
+        raise
     assert res == expected_domain
 
 
@@ -68,6 +71,15 @@ mql_queries = [
         {
             Column("_snuba_metric_id", None, "metric_id"): {
                 Literal(None, 123456),
+            }
+        },
+    ),
+    (
+        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@second`)",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+                Literal(None, 123457),
             }
         },
     ),
@@ -103,6 +115,20 @@ mql_queries = [
             },
             subscriptable_reference("tags_raw", "222222"): {
                 Literal(None, "200"),
+            },
+        },
+    ),
+    (
+        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:[400,404,500,501]}",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            },
+            subscriptable_reference("tags_raw", "222222"): {
+                Literal(None, "400"),
+                Literal(None, "404"),
+                Literal(None, "500"),
+                Literal(None, "501"),
             },
         },
     ),
