@@ -258,18 +258,29 @@ def test_db_query_success() -> None:
     assert stats["quota_allowance"] == {
         "BytesScannedWindowAllocationPolicy": {
             "can_run": True,
-            "explanation": {},
+            "explanation": {
+                "storage_key": "StorageKey.ERRORS_RO",
+            },
             "max_threads": 10,
         },
         "ConcurrentRateLimitAllocationPolicy": {
             "can_run": True,
-            "explanation": {"overrides": {}, "reason": "within limit"},
+            "explanation": {
+                "overrides": {},
+                "reason": "within limit",
+                "storage_key": "StorageKey.ERRORS_RO",
+            },
             "max_threads": 10,
         },
         "ReferrerGuardRailPolicy": {
             "can_run": True,
-            "explanation": {},
             "max_threads": 10,
+            "explanation": {
+                "reason": "within limit",
+                "policy": "referrer_guard_rail_policy",
+                "referrer": "something",
+                "storage_key": "StorageKey.ERRORS_RO",
+            },
         },
     }
     assert len(query_metadata_list) == 1
@@ -419,7 +430,10 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         assert stats["quota_allowance"] == {
             "RejectAllocationPolicy": {
                 "can_run": False,
-                "explanation": {"reason": "policy rejects all queries"},
+                "explanation": {
+                    "reason": "policy rejects all queries",
+                    "storage_key": "StorageKey.DOESNTMATTER",
+                },
                 "max_threads": 0,
             }
         }
@@ -603,12 +617,18 @@ def test_allocation_policy_updates_quota() -> None:
         "CountQueryPolicy": {
             "can_run": False,
             "max_threads": 0,
-            "explanation": {"reason": "can only run 2 queries!"},
+            "explanation": {
+                "reason": "can only run 2 queries!",
+                "storage_key": "StorageKey.DOESNTMATTER",
+            },
         },
         "CountQueryPolicyDuplicate": {
             "can_run": False,
             "max_threads": 0,
-            "explanation": {"reason": "can only run 2 queries!"},
+            "explanation": {
+                "reason": "can only run 2 queries!",
+                "storage_key": "StorageKey.DOESNTMATTER",
+            },
         },
     }
     cause = e.value.__cause__

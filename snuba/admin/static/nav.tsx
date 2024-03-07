@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { COLORS } from "./theme";
-import { NAV_ITEMS } from "./data";
-import Client from "./api_client";
+import { COLORS } from "SnubaAdmin/theme";
+import { NAV_ITEMS } from "SnubaAdmin/data";
+import Client from "SnubaAdmin/api_client";
 
 type NavProps = {
   active: string | null;

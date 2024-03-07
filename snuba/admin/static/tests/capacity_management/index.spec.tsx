@@ -1,8 +1,8 @@
-import Client from "../../api_client";
+import Client from "SnubaAdmin/api_client";
 
-import CapacityManagement from "../../capacity_management/index";
+import CapacityManagement from "SnubaAdmin/capacity_management/index";
 import { it, expect, jest } from "@jest/globals";
-import { AllocationPolicy } from "../../capacity_management/types";
+import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 import {
   fireEvent,
   getByText,

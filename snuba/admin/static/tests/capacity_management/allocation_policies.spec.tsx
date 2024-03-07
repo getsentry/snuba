@@ -1,8 +1,8 @@
-import Client from "../../api_client";
+import Client from "SnubaAdmin/api_client";
 
-import { AllocationPolicyConfigs } from "../../capacity_management/allocation_policy";
+import { AllocationPolicyConfigs } from "SnubaAdmin/capacity_management/allocation_policy";
 import { it, expect } from "@jest/globals";
-import { AllocationPolicy } from "../../capacity_management/types";
+import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 import { act, fireEvent, render } from "@testing-library/react";
 import React from "react";
 

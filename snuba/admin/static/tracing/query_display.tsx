@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Switch } from "@mantine/core";
-import Client from "../api_client";
-import QueryEditor from "../query_editor";
-import { Table } from "../table";
+import Client from "SnubaAdmin/api_client";
+import QueryEditor from "SnubaAdmin/query_editor";
+import { Table } from "SnubaAdmin/table";
 
 import {
   LogLine,

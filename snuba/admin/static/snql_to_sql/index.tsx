@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
 
-import { executeActionsStyle, selectStyle, executeButtonStyle } from "./styles";
-import { TextArea } from "./utils";
+import { executeActionsStyle, selectStyle, executeButtonStyle } from "SnubaAdmin/snql_to_sql/styles";
+import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
 import {
   SnQLRequest,
   SnQLResult,
