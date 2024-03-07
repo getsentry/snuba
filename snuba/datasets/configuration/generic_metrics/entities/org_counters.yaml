@@ -71,7 +71,6 @@ query_processors:
       time_parse_columns:
         - timestamp
   - processor: TagsTypeTransformer
-  - processor: FilterInSelectOptimizer
 
 validators:
   - validator: GranularityValidator

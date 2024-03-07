@@ -252,7 +252,6 @@ query_processors:
         bucketed_time: timestamp
       time_parse_columns: [timestamp]
   - processor: CalculatedAverageProcessor
-  - processor: FilterInSelectOptimizer
 
 validators:
   - validator: EntityRequiredColumnValidator
