@@ -20,23 +20,23 @@
 /snuba/datasets/configuration/spans                 @getsentry/team-starfish @getsentry/performance
 /snuba/datasets/configuration/transactions          @getsentry/team-starfish @getsentry/performance
 
-"""
-@getsentry/crons
-@getsentry/hybrid-cloud
-@getsentry/alerts-notifications
-@getsentry/issues
-@getsentry/performance
-@getsentry/discover-n-dashboards
-@getsentry/team-starfish
-@getsentry/profiling
-@getsentry/replay-frontend
-@getsentry/replay-backend
 
-Integrations
-@getsentry/ecosystem
-@getsentry/product-owners-settings-integrations
-@getsentry/enterprise
-"""
+# @getsentry/crons
+# @getsentry/hybrid-cloud
+# @getsentry/alerts-notifications
+# @getsentry/issues
+# @getsentry/performance
+# @getsentry/discover-n-dashboards
+# @getsentry/team-starfish
+# @getsentry/profiling
+# @getsentry/replay-frontend
+# @getsentry/replay-backend
+
+# Integrations:
+# @getsentry/ecosystem
+# @getsentry/product-owners-settings-integrations
+# @getsentry/enterprise
+
 
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
