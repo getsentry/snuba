@@ -1365,6 +1365,7 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
+        assert False
 
 
 @pytest.mark.clickhouse_db
