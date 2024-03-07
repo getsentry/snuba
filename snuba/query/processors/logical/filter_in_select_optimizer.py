@@ -130,12 +130,12 @@ class FilterInSelectOptimizer:
             return False
 
     def _get_conditional_domains(self, exp: Expression) -> list[Domain]:
-        domains: list[dict] = []
+        domains: list[Domain] = []
         self._get_conditional_domains_helper(exp, domains)
         return domains
 
     def _get_conditional_domains_helper(
-        self, exp: Expression, domains: list[dict]
+        self, exp: Expression, domains: list[Domain]
     ) -> None:
         if isinstance(exp, FunctionCall):
             # add domain of function call
@@ -159,7 +159,7 @@ class FilterInSelectOptimizer:
                 domains.append(self._get_domain_of_predicate(exp.parameters[1]))
 
     def _get_domain_of_predicate(self, p: FunctionCall) -> Domain:
-        domain: dict = {}
+        domain: Domain = {}
         self._get_domain_of_predicate_helper(p, domain)
         return domain
 
