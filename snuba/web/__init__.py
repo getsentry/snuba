@@ -66,7 +66,7 @@ class QueryResult:
     extra: QueryExtraData
 
     @property
-    def allocation_policies(self) -> Mapping[str, Mapping[str, Any]]:
+    def quota_allowance(self) -> Mapping[str, Mapping[str, Any]]:
         return self.extra.get("stats", {}).get("quota_allowance", {})
 
 

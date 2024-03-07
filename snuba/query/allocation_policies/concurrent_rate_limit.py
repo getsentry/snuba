@@ -7,7 +7,6 @@ from snuba import state
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
-    AllocationPolicyViolation,
     AllocationPolicyViolations,
     InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
@@ -103,7 +102,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
         was_rate_limited = result_or_error.error is not None and isinstance(
             result_or_error.error.__cause__,
-            (AllocationPolicyViolation, AllocationPolicyViolations),
+            AllocationPolicyViolations,
         )
         rate_limit_finish_request(
             rate_limit_params,

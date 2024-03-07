@@ -1,24 +1,29 @@
 local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
 
 local pipeline_group = 'snuba';
-local pipeline_name = 'clickhouse-query-replayer';
+local pipeline_name = 'clickhouse-query-fetcher';
 
-local generate_replay_job(component) =
+local generate_fetch_job() =
   {
     environment_variables: {
       SENTRY_REGION: 's4s',
-      SNUBA_SERVICE_NAME: 'query-replayer-gocd',
+      SNUBA_SERVICE_NAME: 'query-fetcher-gocd',
     },
     elastic_profile_id: pipeline_group,
     tasks: [
-      gocdtasks.script(importstr './bash/s4s-replay-queries.sh'),
+      gocdtasks.script(importstr './bash/s4s-fetch-queries.sh'),
     ],
   };
 
 local pipeline = {
   environment_variables: {
-    GOOGLE_CLOUD_PROJECT: 'search-and-storage',
-    REPLAYER_ARGS: 'your args here (e.g --gcs-bucket abcd)',
+    GOOGLE_CLOUD_PROJECT: 'mattrobenolt-kube',
+    QUERYLOG_HOST: 'snuba-query-legacy-1-1.c.mattrobenolt-kube.internal',
+    QUERYLOG_PORT: '9000',
+    WINDOW_HOURS: '24',
+    TABLES: 'errors_dist,transactions_dist',
+    GCS_BUCKET: 'clickhouse-query-comparisons-s4s',
+
   },
   group: pipeline_group,
   display_order: 100,  // Ensure it's last pipeline in UI
@@ -33,12 +38,12 @@ local pipeline = {
   },
   stages: [
     {
-      'replay-queries': {
+      'fetch-queries': {
         approval: {
           type: 'manual',
         },
         jobs: {
-          'query-replayer': generate_replay_job('query-replayer'),
+          'query-fetcher': generate_fetch_job(),
         },
       },
     },

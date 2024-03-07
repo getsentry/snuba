@@ -181,11 +181,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 "All terms in a formula must have the same groupby"
             )
 
+        groupby = term.groupby if isinstance(term, InitialParseResult) else None
         return InitialParseResult(
             expression=None,
             formula=term_operator,
             parameters=[term, coefficient],
-            groupby=term.groupby,
+            groupby=groupby,
         )
 
     def visit_term(
@@ -736,14 +737,18 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
 
-            def extract_mri(param: InitialParseResult) -> str:
-                if param.mri:
-                    return param.mri
-                elif param.formula:
-                    for p in param.parameters or []:
-                        mri = extract_mri(p)
-                        if mri:
-                            return mri
+            def extract_mri(param: InitialParseResult | Any) -> str:
+                if isinstance(param, InitialParseResult):
+                    if param.mri:
+                        return param.mri
+                    elif param.formula:
+                        for p in param.parameters or []:
+                            try:
+                                mri = extract_mri(p)
+                                if mri:
+                                    return mri
+                            except ParsingException:
+                                pass
 
                 raise ParsingException("formula does not contain any MRIs")
 

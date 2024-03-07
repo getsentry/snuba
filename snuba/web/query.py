@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import textwrap
+import uuid
 from dataclasses import replace
 from functools import partial
 from math import floor
@@ -338,7 +339,7 @@ def _format_storage_query_and_run(
             stats=stats,
             query_metadata_list=query_metadata.query_list,
             query_settings={},
-            trace_id="",
+            trace_id=str(uuid.UUID(snuba_settings.DEFAULT_EMPTY_TRACE_ID)),
             status=QueryStatus.INVALID_REQUEST,
             request_status=get_request_status(cause),
         )
