@@ -32,4 +32,4 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   "snuba-query-${SNUBA_CMD_TYPE}" \
   "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
   -- \
-  snuba "query-${SNUBA_CMD_TYPE} ${ARGS}"
+  snuba "query-${SNUBA_CMD_TYPE} ${ARGS[@]}"
