@@ -14,12 +14,19 @@ module.exports = (env) => ({
     },
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+        alias: {
+            SnubaAdmin: path.resolve(__dirname, 'static/'),
+        }
     },
     output: {
         filename: 'bundle.js',
         path: path.resolve(__dirname, 'dist'),
     },
     devtool: "source-map", // Source map generation must be turned on
+    performance: {
+        maxAssetSize: 2500000,
+        maxEntrypointSize: 2500000,
+   },
     plugins: [
         sentryWebpackPlugin({
             org: process.env.SENTRY_ORGANIZATION,

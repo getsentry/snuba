@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import Client from "../api_client";
-import { Collapse } from "../collapse";
-import { CSV } from "./CSV";
-import QueryEditor from "../query_editor";
+import Client from "SnubaAdmin/api_client";
+import { Collapse } from "SnubaAdmin/collapse";
+import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
+import QueryEditor from "SnubaAdmin/query_editor";
 
 import { CardinalityQueryRequest, CardinalityQueryResult, PredefinedQuery } from "./types";
 
