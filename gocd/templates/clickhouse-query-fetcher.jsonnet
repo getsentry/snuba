@@ -11,7 +11,7 @@ local generate_fetch_job() =
     },
     elastic_profile_id: pipeline_group,
     tasks: [
-      gocdtasks.script(importstr './bash/s4s-fetch-queries.sh'),
+      gocdtasks.script(importstr './bash/s4s-clickhouse-queries.sh'),
     ],
   };
 
