@@ -66,6 +66,5 @@
   // tests is often in your way and misclicked
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": true,
-  "python.testing.pytestArgs": ["tests"],
-  "isort.args":["--profile", "black"]
+  "python.testing.pytestArgs": ["tests"]
 }
