@@ -76,26 +76,3 @@ class QueryPipelineBuilder(ABC, Generic[TPlan]):
         self, query: Query, settings: QuerySettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
         raise NotImplementedError
-
-
-class QueryPipelineBuilder(ABC, Generic[TPlan]):
-    """
-    Builds a query pipeline, which contains the directions for building
-    processing and running a single entity query or a subquery of a
-    composite query.
-    """
-
-    @abstractmethod
-    def build_execution_pipeline(
-        self, request: Request, runner: QueryRunner
-    ) -> QueryExecutionPipeline:
-        """
-        Returns a pipeline to execute a query
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def build_planner(
-        self, query: Query, settings: QuerySettings
-    ) -> QueryPlanner[ClickhouseQueryPlan]:
-        raise NotImplementedError

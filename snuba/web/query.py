@@ -18,7 +18,6 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import QueryPlanException
@@ -149,72 +148,6 @@ def _run_query_pipeline(
 
     record_missing_use_case_id(request, dataset)
     record_subscription_created_missing_tenant_ids(request)
-
-    return (
-        dataset.get_query_pipeline_builder()
-        .build_execution_pipeline(request, query_runner)
-        .execute()
-    )
-
-
-def _kyles_run_query_pipeline(
-    dataset: Dataset,
-    request: Request,
-    timer: Timer,
-    query_metadata: SnubaQueryMetadata,
-    robust: bool,
-    concurrent_queries_gauge: Optional[Gauge],
-) -> QueryResult:
-    """
-    Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
-    and a Request and returns the results of the query.
-
-    This process includes:
-    - Applying dataset query processors on the abstract Snuba query.
-    - Using the dataset provided ClickhouseQueryPlanBuilder to build a ClickhouseQueryPlan. This step
-      transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
-      From this point on none should depend on the dataset.
-    - Executing the plan specific query processors.
-    - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
-      to the QueryExecutionStrategy to actually run the DB Query.
-
-
-    ** GOTCHAS **
-
-    Something which is not immediately clear from looking at the code is that the
-    query_runner can be run multiple times during the execution of the pipeline.
-    The execution pipeline may choose to break up a query into multiple subqueries. And
-    then assemble those together into one resut
-
-    Throughout those executions, the query_metadata.query_list is appended to every time a query runs
-    within `db_query.py` with metadata about the query. That metadata then goes into the querylog.
-
-    There is the possibility that the `query_runner` is used across different threads. In that case,
-    there *may* be a race condition on the `query_list`. At time of writing (27-03-2023) this is not a concern because:
-
-      - MultipleConcurrentPipeline is not in use and therefore this does not happen in practice
-      - Even when the runner function is invoked across multiple threads, threads in python are not truly paralllel
-      - synchornizing locks for mostly theoretical analytics reasons does not seem worth it. When you are reading
-          this comment, that may no longer be true
-
-    """
-    if request.query_settings.get_dry_run():
-        query_runner = _dry_run_query_runner
-    else:
-        query_runner = partial(
-            _run_and_apply_column_names,
-            timer=timer,
-            query_metadata=query_metadata,
-            attribution_info=request.attribution_info,
-            robust=robust,
-            concurrent_queries_gauge=concurrent_queries_gauge,
-        )
-
-    record_missing_use_case_id(request, dataset)
-    record_subscription_created_missing_tenant_ids(request)
-
-    # this wont work with composite
-    SimplePipelineBuilder().build_execution_pipeline(request, runner)
 
     return (
         dataset.get_query_pipeline_builder()
@@ -380,9 +313,7 @@ def _format_storage_query_and_run(
             tags={
                 "table": table_names,
                 "referrer": attribution_info.referrer,
-                "dataset": query_metadata.dataset
-                if query_metadata is not None
-                else "cat69",
+                "dataset": query_metadata.dataset if query_metadata is not None else "",
             },
         )
 
@@ -433,7 +364,7 @@ def _format_storage_query_and_run(
                 attribution_info=attribution_info,
                 dataset_name=query_metadata.dataset
                 if query_metadata is not None
-                else "cat70",
+                else "",
                 formatted_query=formatted_query,
                 reader=reader,
                 timer=timer,

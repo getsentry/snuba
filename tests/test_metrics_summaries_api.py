@@ -100,13 +100,13 @@ class TestMetricsSummariesApi(BaseApiTest):
         writable_table_storage: WritableTableStorage,
         unique_span_ids: Sequence[str],
     ) -> None:
-        # self.generate_metrics_summaries(writable_table_storage)
+        self.generate_metrics_summaries(writable_table_storage)
         query_str = f"""MATCH (metrics_summaries)
                     SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id, metric_mri
-                    WHERE project_id = 1
-                    AND metric_mri = 'abcd'
-                    AND end_timestamp >= toDateTime('{datetime.now().isoformat()}')
-                    AND end_timestamp < toDateTime('{datetime.now().isoformat()}')
+                    WHERE project_id = {project_id}
+                    AND metric_mri = '{metric_mri}'
+                    AND end_timestamp >= toDateTime('{start_time}')
+                    AND end_timestamp < toDateTime('{end_time}')
                     GRANULARITY 60
                     """
         response = self.app.post(

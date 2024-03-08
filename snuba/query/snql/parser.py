@@ -33,7 +33,6 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.plans.translator.query import identity_translate
-from snuba.datasets.storage import ReadableTableStorage
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -50,7 +49,6 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -1556,41 +1554,42 @@ def parse_snql_query(
         # NOTE (volo): The anonymizer that runs after this function call chokes on
         # OR and AND clauses with multiple parameters so we have to treeify them
         # before we run the anonymizer and the rest of the post processors
+        # necessary
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
-        # necessary
 
         # dont need
         with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
             snql_anonymized = format_snql_anonymized(query).get_sql()
 
+        # necessary
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
                 query,
                 POST_PROCESSORS,
                 settings,
             )
-        # necessary
 
         # Custom processing to tweak the AST before validation
+        # idk
         with sentry_sdk.start_span(op="processor", description="custom_processing"):
             if custom_processing is not None:
                 _post_process(query, custom_processing, settings)
 
         # Time based processing
+        # maybe
         with sentry_sdk.start_span(op="processor", description="time_based_processing"):
             _post_process(query, [_replace_time_condition], settings)
-        # maybe
 
         # XXX: Select the entity to be used for the query. This step is temporary. Eventually
         # entity selection will be moved to Sentry and specified for all SnQL queries.
+        # dont need
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
-        # no need
 
         # Validating
+        # maybe
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
-        # maybe
         return query, snql_anonymized
     except InvalidQueryException:
         raise

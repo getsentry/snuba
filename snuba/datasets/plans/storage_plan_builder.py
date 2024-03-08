@@ -14,7 +14,6 @@ from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelecto
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
-    KylesClickhouseQueryPlanBuilder,
     QueryPlanExecutionStrategy,
     QueryRunner,
 )

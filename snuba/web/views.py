@@ -266,12 +266,8 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 @util.time_request("query")
 def snql_storage_query_view(
     *, storage: ReadableTableStorage, timer: Timer
-) -> Union[Response, str]:
-    if http_request.method == "POST":
-        body = parse_request_body(http_request)
-        return storage_query(storage, body, timer)
-    else:
-        assert False, "unexpected fallthrough"
+) -> Response | str:
+    return ""
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
@@ -353,38 +349,6 @@ def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
         logger.info(f"Received referrer: {request.attribution_info.referrer}")
         if request.attribution_info.referrer == "<unknown>":
             logger.info(f"Received unknown referrer from request: {request}, {body}")
-
-
-@with_span()
-def storage_query(
-    storage: ReadableTableStorage,
-    body: dict[str, Any],
-    timer: Timer,
-    is_mql: bool = False,
-):
-    pass
-    assert http_request.method == "POST"
-    referrer = http_request.referrer or "<unknown>"  # mypy
-
-    schema = RequestSchema.build(HTTPQuerySettings, is_mql)
-    # These 3 lines are the meat of what needs to change, idk about schema
-
-    parser
-
-    parse_function = (
-        parse_snql_query if not is_mql else parse_mql_query
-    )  # dataset, query stuff --> logical query
-
-    """parse snql and return physical query"""
-    request = build_request(
-        body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
-    )  # query stuff, functions to use --> Request
-    result = parse_and_run_query(
-        dataset, request, timer
-    )  #  Dataset, Request --> Result
-
-    payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
-    return Response(dump_payload(payload), 200, {"Content-Type": "application/json"})
 
 
 @with_span()

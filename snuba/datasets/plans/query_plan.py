@@ -6,7 +6,6 @@ from typing import Generic, Mapping, Optional, Protocol, Sequence, Tuple, TypeVa
 
 from snuba.clickhouse.query import Query
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.storage import ReadableStorage, ReadableTableStorage
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -206,32 +205,5 @@ class ClickhouseQueryPlanBuilder(ABC):
         self, query: LogicalQuery, query_settings: QuerySettings
     ) -> ClickhouseQueryPlan:
         plans = self.build_and_rank_plans(query, query_settings)
-        assert plans, "Query planner did not produce a plan"
-        return plans[0]
-
-
-class KylesClickhouseQueryPlanBuilder(ABC):
-    """
-    Embeds the dataset specific logic that selects which storage to use
-    to execute the query and produces the storage query.
-    This is provided by a dataset and, when executed, it returns a
-    sequence of valid ClickhouseQueryPlans that embeds what is needed to
-    run the storage query.
-    """
-
-    @abstractmethod
-    def build_and_rank_plans(
-        self, query: Query, storage: ReadableTableStorage, settings: QuerySettings
-    ) -> Sequence[ClickhouseQueryPlan]:
-        """
-        Returns all the valid plans for this query sorted in ranking
-        order.
-        """
-        raise NotImplementedError
-
-    def build_best_plan(
-        self, query: Query, storage: ReadableTableStorage, settings: QuerySettings
-    ) -> ClickhouseQueryPlan:
-        plans = self.build_and_rank_plans(query, storage, settings)
         assert plans, "Query planner did not produce a plan"
         return plans[0]
