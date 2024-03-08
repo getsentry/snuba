@@ -13,12 +13,12 @@ fi
 
 if [ "${SNUBA_CMD_TYPE}" == "replayer" ]
 then
-    ARGS=$COMPARER_ARGS
+    ARGS=$REPLAYER_ARGS_ARGS
 fi
 
 if [ "${SNUBA_CMD_TYPE}" == "comparer" ]
 then
-    ARGS=$REPLAYER_ARGS_ARGS
+    ARGS=$COMPARER_ARGS
 fi
 
 SNUBA_SERVICE_NAME="query-${SNUBA_CMD_TYPE}-gocd"
