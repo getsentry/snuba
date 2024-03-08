@@ -17,7 +17,7 @@ pub fn process_message(
     _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let payload_json: Value = serde_json::from_slice(&payload_bytes)?;
+    let payload_json: Value = serde_json::from_slice(payload_bytes)?;
     let from: FromQuerylogMessage = payload_json.try_into()?;
 
     let querylog_msg = QuerylogMessage {
