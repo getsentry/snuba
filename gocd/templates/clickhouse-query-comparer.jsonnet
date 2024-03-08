@@ -1,7 +1,7 @@
 local gocdtasks = import 'github.com/getsentry/gocd-jsonnet/libs/gocd-tasks.libsonnet';
 
 local pipeline_group = 'snuba';
-local pipeline_name = 'clickhouse-query-fetcher';
+local pipeline_name = 'clickhouse-query-comparer';
 
 local generate_compare_job() =
   {
