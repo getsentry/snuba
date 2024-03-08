@@ -440,11 +440,6 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
-# If an error is encountered while handling a query (for example, if the query is too long),
-# the trace_id is empty or None. This causes parsing errors downstream when a QueryException is
-# written to querylog. The current solution is to populate it with a default trace_id instead
-DEFAULT_EMPTY_TRACE_ID = "00000000-0000-0000-0000-000000000000"
-
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
