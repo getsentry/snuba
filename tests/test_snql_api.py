@@ -1366,6 +1366,34 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
+    def test_hexint_in_condition(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (spans)
+                    SELECT span_id
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND span_id IN array('844e2e5c081e6199')
+                    LIMIT 101 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
