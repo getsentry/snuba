@@ -9,6 +9,7 @@ from snuba.query.processors.logical.filter_in_select_optimizer import (
 )
 
 """ CONFIG STUFF THAT DOESNT MATTER MUCH """
+
 generic_metrics = get_dataset(
     "generic_metrics",
 )
@@ -37,26 +38,11 @@ mql_context = {
     "offset": None,
 }
 
-""" IMPORTANT STUFF """
-optimizer = FilterInSelectOptimizer()
-mql_test_cases: list[tuple[str, dict]] = []
-
-
-@pytest.mark.parametrize(
-    "mql_query, expected_domain",
-    mql_test_cases,
-)
-def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
-    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
-    assert isinstance(logical_query, Query)
-    res = optimizer.get_domain_of_mql_query(logical_query)
-    if res != expected_domain:
-        raise
-    assert res == expected_domain
+""" TEST CASES """
 
 
 def subscriptable_reference(name: str, key: str) -> SubscriptableReference:
-    """A little helper function to build a SubscriptableReference"""
+    """Helper function to build a SubscriptableReference"""
     return SubscriptableReference(
         f"_snuba_{name}[{key}]",
         Column(f"_snuba_{name}", None, name),
@@ -64,8 +50,7 @@ def subscriptable_reference(name: str, key: str) -> SubscriptableReference:
     )
 
 
-""" MQL TEST CASES """
-mql_queries = [
+mql_test_cases: list[tuple[str, dict]] = [
     (
         "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
         {
@@ -152,5 +137,20 @@ mql_queries = [
         },
     ),
 ]
-for e in mql_queries:
-    mql_test_cases.append(e)
+
+""" TESTING """
+
+optimizer = FilterInSelectOptimizer()
+
+
+@pytest.mark.parametrize(
+    "mql_query, expected_domain",
+    mql_test_cases,
+)
+def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
+    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
+    assert isinstance(logical_query, Query)
+    res = optimizer.get_domain_of_mql_query(logical_query)
+    if res != expected_domain:
+        raise
+    assert res == expected_domain
