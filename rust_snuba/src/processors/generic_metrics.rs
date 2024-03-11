@@ -120,7 +120,7 @@ where
         where
             A: serde::de::SeqAccess<'de>,
         {
-            counter!("generic_metrics.legacy_format_count");
+            counter!("generic_metrics.message_count", 1, "format" => "legacy");
             let data = Vec::<U>::deserialize(SeqAccessDeserializer::new(seq))?;
             Ok(EncodedSeries::Array { data })
         }
@@ -129,7 +129,7 @@ where
         where
             A: serde::de::MapAccess<'de>,
         {
-            counter!("generic_metrics.encoded_format_count");
+            counter!("generic_metrics.message_count", 1, "format" => "encoded");
             EncodedSeries::deserialize(MapAccessDeserializer::new(map))
         }
     }
