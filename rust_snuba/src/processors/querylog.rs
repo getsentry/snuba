@@ -17,8 +17,7 @@ pub fn process_message(
     _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let payload_json: Value = serde_json::from_slice(payload_bytes)?;
-    let from: FromQuerylogMessage = payload_json.try_into()?;
+    let from: FromQuerylogMessage = serde_json::from_slice(payload_bytes)?;
 
     let querylog_msg = QuerylogMessage {
         request: from.request,
@@ -116,7 +115,7 @@ struct WhereProfile {
 struct FromQuery {
     sql: String,
     status: String,
-    trace_id: Uuid,
+    trace_id: Option<String>,
     stats: Stats,
     profile: Profile,
     result_profile: Option<ResultProfile>,
@@ -168,49 +167,6 @@ struct QueryList {
     duration_ms: Vec<u64>,
 }
 
-impl TryFrom<Value> for FromQuerylogMessage {
-    type Error = anyhow::Error;
-    fn try_from(from: Value) -> anyhow::Result<FromQuerylogMessage> {
-        let request = serde_json::from_value(from["request"].clone())?;
-        let dataset = serde_json::from_value(from["dataset"].clone())?;
-        let projects = serde_json::from_value(from["projects"].clone())?;
-        let organization = serde_json::from_value(from["organization"].clone())?;
-        let status = serde_json::from_value(from["status"].clone())?;
-        let timing = serde_json::from_value(from["timing"].clone())?;
-        let mut query_list = vec![];
-
-        let from_query_list: Vec<Value> =
-            serde_json::from_value(from["query_list"].clone()).unwrap();
-
-        for query in from_query_list {
-            let mut query_trace_id = Uuid::nil();
-            if query["trace_id"] != "" && !query["trace_id"].is_null() {
-                query_trace_id =
-                    Uuid::parse_str(query["trace_id"].to_string().get(1..33).unwrap())?;
-            }
-
-            query_list.push(FromQuery {
-                sql: serde_json::from_value(query["sql"].clone())?,
-                status: serde_json::from_value(query["status"].clone())?,
-                trace_id: query_trace_id,
-                stats: serde_json::from_value(query["stats"].clone())?,
-                profile: serde_json::from_value(query["profile"].clone())?,
-                result_profile: serde_json::from_value(query["result_profile"].clone())?,
-            });
-        }
-
-        Ok(Self {
-            request,
-            dataset,
-            projects,
-            organization,
-            status,
-            timing,
-            query_list,
-        })
-    }
-}
-
 impl TryFrom<Vec<FromQuery>> for QueryList {
     type Error = anyhow::Error;
     fn try_from(from: Vec<FromQuery>) -> anyhow::Result<QueryList> {
@@ -239,7 +195,13 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
         for q in from {
             sql.push(q.sql);
             status.push(q.status);
-            trace_id.push(q.trace_id);
+            let mut query_trace_id = Uuid::nil();
+            if let Some(q_trace_id) = q.trace_id.as_ref() {
+                if !q_trace_id.is_empty() {
+                    query_trace_id = Uuid::parse_str(&(q.trace_id.unwrap().to_string()))?;
+                }
+            }
+            trace_id.push(query_trace_id);
             r#final.push(q.stats.r#final as u8);
             cache_hit.push(q.stats.cache_hit.unwrap_or(0));
             let sample_value = q
