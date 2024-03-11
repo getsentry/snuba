@@ -36,6 +36,9 @@ from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
+from snuba.query.processors.logical.filter_in_select_optimizer import (
+    FilterInSelectOptimizer,
+)
 from snuba.query.query_settings import QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
@@ -1028,12 +1031,19 @@ def quantiles_to_quantile(
     query.transform_expressions(transform)
 
 
+def optimize_filter_in_select(
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+) -> None:
+    FilterInSelectOptimizer().process_mql_query(query)
+
+
 CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
 ]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
     quantiles_to_quantile,
+    optimize_filter_in_select,
 ]
 
 
