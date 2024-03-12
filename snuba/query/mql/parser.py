@@ -390,9 +390,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -783,7 +781,7 @@ def convert_formula_to_query(
     groupbys = join_nodes[0].groupby
     if not all(node.groupby == groupbys for node in join_nodes):
         raise InvalidQueryException("All terms in a formula must have the same groupby")
-    print("GROUPBYS", groupbys)
+
     # Used to cache query entities to avoid building multiple times
     entities: dict[EntityKey, QueryEntity] = {}
 
@@ -869,6 +867,7 @@ def convert_formula_to_query(
             return replace(
                 aggregate_function,
                 parameters=(replace(column, table_name=param.table_alias),),
+                alias=None,
             )
         elif param.formula:
             parameters = param.parameters or []
@@ -909,6 +908,8 @@ def convert_formula_to_query(
                 selected_columns.append(aliased_groupby)
                 groupby.append(aliased_groupby.expression)
         query.set_ast_groupby(groupby)
+
+    query.set_ast_selected_columns(selected_columns)
 
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
     # also needs the metric ID conditions added
@@ -954,8 +955,6 @@ def convert_formula_to_query(
         conditions.extend(extract_filters(p))
 
     query.add_condition_to_ast(combine_and_conditions(conditions))
-
-    print("COMPOSITE", join_clause)
 
     return query
 
@@ -1267,13 +1266,12 @@ def populate_query_from_mql_context(
     mql_context = MQLContext.from_dict(mql_context_dict)
 
     # List of entity key/alias tuples
-    entity_data: list[tuple[EntityKey, str | None]] = []
+    entity_data: list[tuple[EntityKey, str]] = []
     if isinstance(query, LogicalQuery):
-        entity_data.append((query.get_from_clause().key, None))
+        entity_data.append((query.get_from_clause().key, ""))
     elif isinstance(query, CompositeQuery):
         join_clause = query.get_from_clause()
         assert isinstance(join_clause, JoinClause)
-        print("JOIN CLAUSE", join_clause)
 
         # Iterate the join tree to get all the entity keys and associated aliases
         data_source = join_clause.right_node.data_source
@@ -1309,6 +1307,7 @@ def populate_query_from_mql_context(
         query.set_ast_orderby([orderby])
 
         if selected_time:
+            print("SELECTED", query.get_selected_columns())
             found_selected_time = selected_time
             query.set_ast_selected_columns(
                 list(query.get_selected_columns()) + [selected_time]
@@ -1324,7 +1323,7 @@ def populate_query_from_mql_context(
         # If the query is grouping by time, that needs to be added to the JoinClause keys to
         # ensure we correctly join the subqueries. The column names will be the same for all the
         # subqueries, so we just need to map all the table aliases.
-        column_name = found_selected_time.expression.alias
+        column_name = str(found_selected_time.expression.alias)
         join_clause = query.get_from_clause()
         assert isinstance(join_clause, JoinClause)
         base_node_alias = join_clause.right_node.alias
@@ -1335,13 +1334,13 @@ def populate_query_from_mql_context(
                 base_node_alias if alias != base_node_alias else other_node_alias
             )
             right_side_alias = alias
-
-            join_clause.keys.append(
-                JoinCondition(
-                    left=JoinConditionExpression(left_side_alias, column_name),
-                    right=JoinConditionExpression(right_side_alias, column_name),
-                )
+            condition = JoinCondition(
+                left=JoinConditionExpression(left_side_alias, column_name),
+                right=JoinConditionExpression(right_side_alias, column_name),
             )
+            conditions = list(join_clause.keys)
+            conditions.append(condition)
+            query.set_from_clause(replace(join_clause, keys=conditions))
 
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)
@@ -1406,6 +1405,8 @@ def parse_mql_query(
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
 
+    print("EARLIER", query.get_from_clause())
+
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
     # before we run the anonymizer and the rest of the post processors
@@ -1435,5 +1436,7 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
+
+    print("FINAL", query.get_from_clause())
 
     return query, snql_anonymized

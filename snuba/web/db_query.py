@@ -207,9 +207,11 @@ def _record_rate_limit_metrics(
             value=table_rate_limit_stats.concurrent,
             tags={
                 "table": stats.get("clickhouse_table", ""),
-                "cache_partition": reader.cache_partition_id
-                if reader.cache_partition_id
-                else "default",
+                "cache_partition": (
+                    reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                ),
             },
         )
         metrics.gauge(
@@ -217,9 +219,11 @@ def _record_rate_limit_metrics(
             value=table_rate_limit_stats.rate,
             tags={
                 "table": stats.get("clickhouse_table", ""),
-                "cache_partition": reader.cache_partition_id
-                if reader.cache_partition_id
-                else "default",
+                "cache_partition": (
+                    reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                ),
             },
         )
         metrics.timing(
@@ -227,9 +231,11 @@ def _record_rate_limit_metrics(
             value=table_rate_limit_stats.concurrent,
             tags={
                 "table": stats.get("clickhouse_table", ""),
-                "cache_partition": reader.cache_partition_id
-                if reader.cache_partition_id
-                else "default",
+                "cache_partition": (
+                    reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                ),
             },
         )
 
@@ -525,7 +531,7 @@ def _raw_query(
     timer.mark("get_configs")
 
     sql = formatted_query.get_sql()
-
+    print("SQL", sql)
     # Force query to use the first shard replica, which
     # should have synchronously received any cluster writes
     # before this query is run.

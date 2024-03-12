@@ -20,7 +20,16 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
+from snuba.query.composite import CompositeQuery
 from snuba.query.mql.parser import parse_mql_query
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinRelationship,
+    JoinType,
+)
 
 # Commonly used expressions
 from_distributions = QueryEntity(
@@ -249,8 +258,27 @@ def test_simple_formula() -> None:
             "_snuba_aggregate_value",
         ),
     )
-    expected = Query(
-        from_distributions,
+    join_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d3",
+            data_source=from_distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d1",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="d3.time"),
+                right=JoinConditionExpression(table_alias="d3", column="d3.time"),
+            )
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
         selected_columns=[
             expected_selected,
             SelectedExpression(
@@ -264,16 +292,38 @@ def test_simple_formula() -> None:
             OrderBy(
                 direction=OrderByDirection.ASC,
                 expression=time_expression,
-            )
+            ),
         ],
         limit=1000,
         offset=0,
     )
 
+    # expected = Query(
+    #     from_distributions,
+    #     selected_columns=[
+    #         expected_selected,
+    #         SelectedExpression(
+    #             "time",
+    #             time_expression,
+    #         ),
+    #     ],
+    #     groupby=[time_expression],
+    #     condition=formula_condition,
+    #     order_by=[
+    #         OrderBy(
+    #             direction=OrderByDirection.ASC,
+    #             expression=time_expression,
+    #         )
+    #     ],
+    #     limit=1000,
+    #     offset=0,
+    # )
+
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    print("SELECTED", query.get_selected_columns())
     eq, reason = query.equals(expected)
     assert eq, reason
 
