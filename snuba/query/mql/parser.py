@@ -76,6 +76,10 @@ ARITHMETIC_OPERATORS_MAPPING = {
     "/": "divide",
 }
 
+UNARY_OPERATORS = {
+    "-": "negate",
+}
+
 
 class MQLVisitor(NodeVisitor):  # type: ignore
     """
@@ -101,6 +105,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
         return ARITHMETIC_OPERATORS_MAPPING[node.text]
+
+    def visit_unary_op(self, node: Node, children: Sequence[Any]) -> Any:
+        return UNARY_OPERATORS[node.text]
 
     def _build_timeseries_formula_param(
         self, param: InitialParseResult
@@ -203,6 +210,24 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             return self._visit_formula(term_operator, term, coefficient)
 
         return term
+
+    def visit_unary(self, node: Node, children: Sequence[Any]) -> Any:
+        unary_op, coefficient = children
+        if unary_op:
+            if isinstance(coefficient, float) or isinstance(coefficient, int):
+                return -coefficient
+            elif isinstance(coefficient, InitialParseResult):
+                return InitialParseResult(
+                    expression=None,
+                    formula=unary_op[0],
+                    parameters=[coefficient],
+                )
+            else:
+                raise InvalidQueryException(
+                    f"Unary expression not supported for type {type(coefficient)}"
+                )
+
+        return coefficient
 
     def visit_coefficient(
         self,
