@@ -16,7 +16,10 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
-from snuba import environment, settings, state
+from snuba import environment
+from snuba import settings
+from snuba import settings as snuba_settings
+from snuba import state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -28,7 +31,6 @@ from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
-    AllocationPolicyViolation,
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
@@ -504,7 +506,7 @@ def _raw_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
+    trace_id: str = str(uuid.UUID(snuba_settings.DEFAULT_EMPTY_TRACE_ID)),
     robust: bool = False,
 ) -> QueryResult:
     """
@@ -796,7 +798,7 @@ def _apply_allocation_policies_quota(
     quota allowances from the given allocation policies.
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
-    violations: dict[str, AllocationPolicyViolation] = {}
+    can_run = True
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -805,30 +807,22 @@ def _apply_allocation_policies_quota(
                 op="allocation_policy.get_quota_allowance",
                 description=str(allocation_policy.__class__),
             ) as span:
-                try:
-                    quota_allowances[
-                        allocation_policy.config_key()
-                    ] = allocation_policy.get_quota_allowance(
-                        attribution_info.tenant_ids, query_id
-                    )
-                    span.set_data(
-                        "quota_allowance",
-                        quota_allowances[allocation_policy.config_key()],
-                    )
-                except AllocationPolicyViolation as e:
-                    violations[allocation_policy.config_key()] = e
-        if violations:
-            span.set_data("violations", ",".join(violations.keys()))
-            stats["quota_allowance"] = {
-                k: v.quota_allowance for k, v in violations.items()
-            }
-            # HACK: This is because our SLOs are calculated weirdly
-            raise AllocationPolicyViolations(
-                "Query cannot be run due to allocation policies", violations
-            )
-
-        stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
-
+                allowance = allocation_policy.get_quota_allowance(
+                    attribution_info.tenant_ids, query_id
+                )
+                can_run &= allowance.can_run
+                quota_allowances[allocation_policy.config_key()] = allowance
+                span.set_data(
+                    "quota_allowance",
+                    quota_allowances[allocation_policy.config_key()],
+                )
+        allowance_dicts = {
+            key: quota_allowance.to_dict()
+            for key, quota_allowance in quota_allowances.items()
+        }
+        stats["quota_allowance"] = allowance_dicts
+        if not can_run:
+            raise AllocationPolicyViolations.from_args(quota_allowances)
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

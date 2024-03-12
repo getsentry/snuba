@@ -1,4 +1,4 @@
-import { LogLine } from "./types";
+import { LogLine } from "SnubaAdmin/tracing/types";
 
 const logLineMatcher =
   /\[ (?<hostname>\S+) \] \[ (?<pid>\d+) \] \{(?<local_query_id>[^}]+)\} <(?<log_level>[^>]+)> (?<component>[^:]+): (?<message>.*)/;

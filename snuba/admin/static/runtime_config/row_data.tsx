@@ -1,14 +1,14 @@
 import React, { ReactNode } from "react";
 
-import { linkStyle } from "./styles";
-import { EditableTableCell } from "../table";
+import { linkStyle } from "SnubaAdmin/runtime_config/styles";
+import { EditableTableCell } from "SnubaAdmin/table";
 import {
   ConfigKey,
   ConfigValue,
   ConfigType,
   RowData,
   ConfigDescription,
-} from "./types";
+} from "SnubaAdmin/runtime_config/types";
 
 const TYPES = ["string", "int", "float"];
 

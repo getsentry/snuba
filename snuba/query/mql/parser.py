@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 import functools
+import logging
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
@@ -12,13 +12,6 @@ from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
 from snuba.datasets.dataset import Dataset
-from snuba.query.mql.context_population import (
-    start_end_time_condition,
-    scope_conditions,
-    rollup_expressions,
-    limit_value,
-    offset_value,
-)
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -50,8 +43,18 @@ from snuba.query.expressions import (
 )
 from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.mql.context_population import (
+    limit_value,
+    offset_value,
+    rollup_expressions,
+    scope_conditions,
+    start_end_time_condition,
+)
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
+from snuba.query.processors.logical.filter_in_select_optimizer import (
+    FilterInSelectOptimizer,
+)
 from snuba.query.query_settings import QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
@@ -387,7 +390,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[InitialParseResult,],
+            Tuple[
+                InitialParseResult,
+            ],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -1366,12 +1371,19 @@ def quantiles_to_quantile(query: CompositeQuery[QueryEntity] | LogicalQuery) -> 
     query.transform_expressions(transform)
 
 
+def optimize_filter_in_select(
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+) -> None:
+    FilterInSelectOptimizer().process_mql_query(query)
+
+
 CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
 ]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
     quantiles_to_quantile,
+    optimize_filter_in_select,
 ]
 
 

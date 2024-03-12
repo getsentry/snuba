@@ -57,7 +57,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
-    MigrationGroup.SPANS,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
 }
@@ -158,7 +157,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),
         storage_sets_keys={StorageSetKey.SPANS},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
         loader=GroupAttributesLoader(),
