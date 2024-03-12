@@ -50,7 +50,7 @@ jobs:
         re="$(sed 's/[_-]/[_-]/g' <<< "$PACKAGE")"
         sed -i "s/^$re==.*/$PACKAGE==$VERSION/g" -- requirements*.txt
 
-        sed -i "s/^$re==.*/$PACKAGE\s=\s$VERSION/g" -- rust_snuba/Cargo.toml
+        sed -i "s/^$re==.*/$PACKAGE\s=\s\"$VERSION\"/g" -- rust_snuba/Cargo.toml
 
         if git diff --exit-code; then
           exit 0
