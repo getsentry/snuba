@@ -198,7 +198,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             let mut query_trace_id = Uuid::nil();
             if let Some(q_trace_id) = q.trace_id.as_ref() {
                 if !q_trace_id.is_empty() {
-                    query_trace_id = Uuid::parse_str(&q_trace_id)?;
+                    query_trace_id = Uuid::parse_str(q_trace_id)?;
                 }
             }
             trace_id.push(query_trace_id);
