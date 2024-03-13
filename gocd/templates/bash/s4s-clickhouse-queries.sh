@@ -1,7 +1,5 @@
 #!/bin/bash
 
-SNUBA_SERVICE_NAME="query-${SNUBA_CMD_TYPE}-gocd"
-
 if [ "${SNUBA_CMD_TYPE}" == "fetcher" ]
 then
     ARGS="--querylog-host ${QUERYLOG_HOST} --querylog-port ${QUERYLOG_PORT} --window-hours ${WINDOW_HOURS} --tables ${TABLES} --gcs-bucket ${GCS_BUCKET}"
@@ -18,6 +16,7 @@ then
 fi
 
 SNUBA_SERVICE_NAME="query-${SNUBA_CMD_TYPE}-gocd"
+SNUBA_CMD="query-${SNUBA_CMD_TYPE} ${ARGS[@]}"
 
 eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")
 /devinfra/scripts/k8s/k8stunnel
@@ -29,4 +28,4 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   "snuba-query-${SNUBA_CMD_TYPE}" \
   "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
   -- \
-  snuba "query-${SNUBA_CMD_TYPE} ${ARGS[@]}"
+  snuba $SNUBA_CMD
