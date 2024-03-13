@@ -123,9 +123,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         """
         assert param.expression is not None
 
-        call = param.expression.expression
-        assert isinstance(call, (FunctionCall, CurriedFunctionCall))
-
+        exp = param.expression.expression
+        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
         conditions = param.conditions or []
         metric_id_condition = binary_condition(
             ConditionFunctions.EQ,
@@ -133,14 +132,13 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Literal(None, param.mri),
         )
         conditions.append(metric_id_condition)
-        value_column = call.parameters[0]
-
-        if isinstance(call, FunctionCall):
+        value_column = exp.parameters[0]
+        if isinstance(exp, FunctionCall):
             return SelectedExpression(
                 None,
                 FunctionCall(
                     None,
-                    f"{call.function_name}If",
+                    f"{exp.function_name}If",
                     parameters=(
                         value_column,
                         combine_and_conditions(conditions),
@@ -153,9 +151,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 CurriedFunctionCall(
                     None,
                     FunctionCall(
-                        call.internal_function.alias,
-                        f"{call.internal_function.function_name}If",
-                        call.internal_function.parameters,
+                        exp.internal_function.alias,
+                        f"{exp.internal_function.function_name}If",
+                        exp.internal_function.parameters,
                     ),
                     (
                         value_column,
