@@ -33,6 +33,7 @@ mql_context = {
         "d:transactions/duration@second": 123457,
         "status_code": 222222,
         "transaction": 333333,
+        "platform": 444444,
     },
     "limit": None,
     "offset": None,
@@ -136,6 +137,17 @@ mql_test_cases: list[tuple[str, dict]] = [
             },
         },
     ),
+    (
+        '(sum(d:transactions/duration@millisecond){transaction:"/hello"} by (platform) * 1000000.0)',
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            },
+            subscriptable_reference("tags_raw", "333333"): {
+                Literal(None, "/hello"),
+            },
+        },
+    ),
 ]
 
 """ TESTING """
@@ -151,6 +163,4 @@ def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
     logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
     assert isinstance(logical_query, Query)
     res = optimizer.get_domain_of_mql_query(logical_query)
-    if res != expected_domain:
-        raise
     assert res == expected_domain
