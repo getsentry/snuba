@@ -122,8 +122,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         an expression like `sumIf(value, x = y AND metric_id = mri)`.
         """
         assert param.expression is not None
-        exp = param.expression.expression
-        assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
+
+        call = param.expression.expression
+        assert isinstance(call, (FunctionCall, CurriedFunctionCall))
 
         conditions = param.conditions or []
         metric_id_condition = binary_condition(
@@ -132,13 +133,14 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Literal(None, param.mri),
         )
         conditions.append(metric_id_condition)
-        value_column = exp.parameters[0]
-        if isinstance(exp, FunctionCall):
+        value_column = call.parameters[0]
+
+        if isinstance(call, FunctionCall):
             return SelectedExpression(
                 None,
                 FunctionCall(
                     None,
-                    f"{exp.function_name}If",
+                    f"{call.function_name}If",
                     parameters=(
                         value_column,
                         combine_and_conditions(conditions),
@@ -151,9 +153,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                 CurriedFunctionCall(
                     None,
                     FunctionCall(
-                        exp.internal_function.alias,
-                        f"{exp.internal_function.function_name}If",
-                        exp.internal_function.parameters,
+                        call.internal_function.alias,
+                        f"{call.internal_function.function_name}If",
+                        call.internal_function.parameters,
                     ),
                     (
                         value_column,
@@ -165,37 +167,49 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def _visit_formula(
         self,
         term_operator: str,
-        term: InitialParseResult,
-        coefficient: InitialParseResult,
+        operand_1: InitialParseResult,
+        operand_2: InitialParseResult | None = None,
     ) -> InitialParseResult:
         # TODO: If the formula has filters/group by, where do those appear?
 
         # If the parameters of the query are timeseries, extract the expressions from the result
-        if isinstance(term, InitialParseResult) and term.expression is not None:
-            term = replace(term, expression=self._build_timeseries_formula_param(term))
         if (
-            isinstance(coefficient, InitialParseResult)
-            and coefficient.expression is not None
+            isinstance(operand_1, InitialParseResult)
+            and operand_1.expression is not None
         ):
-            coefficient = replace(
-                coefficient,
-                expression=self._build_timeseries_formula_param(coefficient),
+            operand_1 = replace(
+                operand_1, expression=self._build_timeseries_formula_param(operand_1)
+            )
+        if (
+            operand_2 is not None
+            and isinstance(operand_2, InitialParseResult)
+            and operand_2.expression is not None
+        ):
+            operand_2 = replace(
+                operand_2,
+                expression=self._build_timeseries_formula_param(operand_2),
             )
 
         if (
-            isinstance(term, InitialParseResult)
-            and isinstance(coefficient, InitialParseResult)
-            and term.groupby != coefficient.groupby
+            operand_2 is not None
+            and isinstance(operand_1, InitialParseResult)
+            and isinstance(operand_2, InitialParseResult)
+            and operand_1.groupby != operand_2.groupby
         ):
             raise InvalidQueryException(
                 "All terms in a formula must have the same groupby"
             )
 
-        groupby = term.groupby if isinstance(term, InitialParseResult) else None
+        groupby = (
+            operand_1.groupby if isinstance(operand_1, InitialParseResult) else None
+        )
+        parameters = [operand_1]
+        if operand_2 is not None:
+            parameters.append(operand_2)
         return InitialParseResult(
             expression=None,
             formula=term_operator,
-            parameters=[term, coefficient],
+            parameters=parameters,
             groupby=groupby,
         )
 
@@ -206,8 +220,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
-            _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
-            return self._visit_formula(term_operator, term, coefficient)
+            _, term_operator, _, unary, *_ = zero_or_more_others[0]
+            return self._visit_formula(term_operator, term, unary)
 
         return term
 
@@ -217,11 +231,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             if isinstance(coefficient, float) or isinstance(coefficient, int):
                 return -coefficient
             elif isinstance(coefficient, InitialParseResult):
-                return InitialParseResult(
-                    expression=None,
-                    formula=unary_op[0],
-                    parameters=[coefficient],
-                )
+                return self._visit_formula(unary_op[0], coefficient)
             else:
                 raise InvalidQueryException(
                     f"Unary expression not supported for type {type(coefficient)}"
