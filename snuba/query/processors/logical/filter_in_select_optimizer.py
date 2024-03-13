@@ -55,27 +55,47 @@ class FilterInSelectOptimizer:
 
             if domain:
                 # add domain to where clause
-                domain_filter = None
-                for key, value in domain.items():
-                    clause = binary_condition(
-                        "in",
-                        key,
-                        FunctionCall(
-                            alias=None,
-                            function_name="array",
-                            parameters=tuple(value),
-                        ),
-                    )
-                    if not domain_filter:
-                        domain_filter = clause
-                    else:
-                        domain_filter = binary_condition(
-                            "and",
-                            domain_filter,
-                            clause,
-                        )
-                assert domain_filter is not None
-                query.add_condition_to_ast(domain_filter)
+                query.add_condition_to_ast(self._domain_to_condition(domain))
+
+    def _domain_to_condition(self, domain: Domain) -> FunctionCall:
+        """
+        Given a domain, converts to a conditional filter that can be added to a query
+        """
+        # sort domain items (for testing purposes)
+        col_items = []
+        subref_items = []
+        for e in domain.items():
+            k, v = e
+            if isinstance(k, Column):
+                col_items.append(e)
+            else:
+                subref_items.append(e)
+        col_items = sorted(col_items)
+        subref_items = sorted(subref_items)
+        items = col_items + subref_items
+
+        # create and add condition clause
+        domain_filter = None
+        for key, value in items:
+            clause = binary_condition(
+                "in",
+                key,
+                FunctionCall(
+                    alias=None,
+                    function_name="array",
+                    parameters=tuple(value),
+                ),
+            )
+            if not domain_filter:
+                domain_filter = clause
+            else:
+                domain_filter = binary_condition(
+                    "and",
+                    domain_filter,
+                    clause,
+                )
+        assert domain_filter is not None
+        return domain_filter
 
     def get_domain_of_mql_query(
         self, query: LogicalQuery | CompositeQuery[QueryEntity]
