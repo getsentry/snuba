@@ -122,9 +122,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         an expression like `sumIf(value, x = y AND metric_id = mri)`.
         """
         assert param.expression is not None
-
         exp = param.expression.expression
         assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
+
         conditions = param.conditions or []
         metric_id_condition = binary_condition(
             ConditionFunctions.EQ,
