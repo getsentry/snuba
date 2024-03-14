@@ -21,7 +21,7 @@ class AdminTools(Enum):
     CONFIGURATION = "configuration"
     SNQL_TO_SQL = "snql-to-sql"
     SYSTEM_QUERIES = "system-queries"
-    MIGRATIONS = "migrations"
+    MIGRATIONS = "clickhouse-migrations"
     QUERY_TRACING = "tracing"
     QUERYLOG = "querylog"
     AUDIT_LOG = "audit-log"

@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import QueryDisplay from "./query_display";
+import Client from "SnubaAdmin/api_client";
+import QueryDisplay from "SnubaAdmin/tracing/query_display";
 import {
   LogLine,
   TracingRequest,
   TracingResult,
   PredefinedQuery,
-} from "./types";
-import { parseLogLine } from "./util";
+} from "SnubaAdmin/tracing/types";
+import { parseLogLine } from "SnubaAdmin/tracing/util";
 
 type QueryState = Partial<TracingRequest>;
 

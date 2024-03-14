@@ -2,13 +2,18 @@ use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, vec};
+use serde::{
+    de::value::{MapAccessDeserializer, SeqAccessDeserializer},
+    Deserialize, Deserializer, Serialize,
+};
+use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
     types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
+
+use rust_arroyo::{counter, timer};
 
 use super::utils::enforce_retention;
 
@@ -64,10 +69,10 @@ struct FromGenericMetricsMessage {
 enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
-    #[serde(rename = "s")]
-    Set(Vec<u64>),
-    #[serde(rename = "d")]
-    Distribution(Vec<f64>),
+    #[serde(rename = "s", deserialize_with = "encoded_series_compat_deserializer")]
+    Set(EncodedSeries<u64>),
+    #[serde(rename = "d", deserialize_with = "encoded_series_compat_deserializer")]
+    Distribution(EncodedSeries<f64>),
     #[serde(rename = "g")]
     Gauge {
         count: u64,
@@ -76,6 +81,60 @@ enum MetricValue {
         min: f64,
         sum: f64,
     },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "format", rename_all = "lowercase")]
+enum EncodedSeries<T> {
+    Array { data: Vec<T> },
+}
+
+impl<T> EncodedSeries<T> {
+    fn into_vec(self) -> Vec<T> {
+        match self {
+            EncodedSeries::Array { data } => data,
+        }
+    }
+}
+
+fn encoded_series_compat_deserializer<'de, T, D>(
+    deserializer: D,
+) -> Result<EncodedSeries<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    struct Visitor<U>(PhantomData<U>);
+
+    impl<'de, U> serde::de::Visitor<'de> for Visitor<U>
+    where
+        U: Deserialize<'de>,
+    {
+        type Value = EncodedSeries<U>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("expected either legacy or new distribution value format")
+        }
+
+        fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            counter!("generic_metrics.message_count", 1, "format" => "legacy");
+            let data = Vec::<U>::deserialize(SeqAccessDeserializer::new(seq))?;
+            Ok(EncodedSeries::Array { data })
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            counter!("generic_metrics.message_count", 1, "format" => "encoded");
+            EncodedSeries::deserialize(MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_any(Visitor(PhantomData))
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -138,6 +197,9 @@ impl Parse for CountersRawRow {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "counter");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -187,6 +249,8 @@ where
 
     let result: Result<Option<T>, anyhow::Error> = T::parse(msg, config);
 
+    timer!("generic_metrics.messages.size", payload_bytes.len() as f64);
+
     match result {
         Ok(row) => {
             if let Some(row) = row {
@@ -231,12 +295,21 @@ impl Parse for SetsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
-            MetricValue::Set(values) => values,
+            MetricValue::Set(values) => values.into_vec(),
             _ => return Ok(Option::None),
         };
+
+        timer!(
+            "generic_metrics.messages.sets_value_len",
+            set_values.len() as u64
+        );
+
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "set");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -294,13 +367,21 @@ impl Parse for DistributionsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let distribution_values = match from.value {
-            MetricValue::Distribution(value) => value,
+            MetricValue::Distribution(value) => value.into_vec(),
             _ => return Ok(Option::None),
         };
+
+        timer!(
+            "generic_metrics.messages.dists_value_len",
+            distribution_values.len() as u64
+        );
 
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "distribution");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -394,6 +475,9 @@ impl Parse for GaugesRawRow {
         let timeseries_id =
             generate_timeseries_id(from.org_id, from.project_id, from.metric_id, &from.tags);
         let (tag_keys, tag_values): (Vec<_>, Vec<_>) = from.tags.into_iter().unzip();
+
+        timer!("generic_metrics.messages.tags_len", tag_keys.len() as u64, "metric_type" => "gauge");
+
         let mut granularities = vec![
             GRANULARITY_ONE_MINUTE,
             GRANULARITY_ONE_HOUR,
@@ -479,7 +563,22 @@ mod tests {
         "value": [0, 1, 2, 3, 4, 5]
     }"#;
 
-    const DUMMY_DISTRIBUTION_MESSAGE: &str = r#"{
+    const DUMMY_ARR_ENCODED_SET_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65562,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"errored","65690":"metric_e2e_spans_set_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65690":"metric_e2e_spans_set_k_VUW93LMS"},"d":{"65562":"s:spans/error@none"}},
+        "type": "s",
+        "value": {"format": "array", "data": [0, 1, 2, 3, 4, 5]}
+    }"#;
+
+    const DUMMY_LEGACY_DISTRIBUTION_MESSAGE: &str = r#"{
         "version": 2,
         "use_case_id": "spans",
         "org_id": 1,
@@ -492,6 +591,21 @@ mod tests {
         "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
         "type": "d",
         "value": [0, 1, 2, 3, 4, 5]
+    }"#;
+
+    const DUMMY_ARR_ENCODED_DISTRIBUTION_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": {"format": "array", "data": [0, 1, 2, 3, 4, 5]}
     }"#;
 
     const DUMMY_DISTRIBUTION_MESSAGE_WITH_HIST_AGGREGATE_OPTION: &str = r#"{
@@ -706,13 +820,13 @@ mod tests {
                     &crate::ProcessorConfig,
                 )
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
-            DUMMY_DISTRIBUTION_MESSAGE,
+            DUMMY_LEGACY_DISTRIBUTION_MESSAGE,
         );
         assert_eq!(result.unwrap(), InsertBatch::skip());
     }
 
     #[test]
-    fn test_distribution_processor_with_distribution_message() {
+    fn test_distribution_processor_with_legacy_distribution_message() {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
@@ -721,7 +835,7 @@ mod tests {
                     &crate::ProcessorConfig,
                 )
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
-            DUMMY_DISTRIBUTION_MESSAGE,
+            DUMMY_LEGACY_DISTRIBUTION_MESSAGE,
         );
         let expected_row = DistributionsRawRow {
             common_fields: CommonMetricFields {
@@ -762,6 +876,62 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 629)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_distribution_processor_with_v1_distribution_message() {
+        let result = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_ARR_ENCODED_DISTRIBUTION_MESSAGE,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
+            distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            enable_histogram: None,
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 658)])
                 })
             }
         );
@@ -970,5 +1140,60 @@ mod tests {
             DUMMY_COUNTER_MESSAGE,
         );
         assert_eq!(result.unwrap(), InsertBatch::skip());
+    }
+
+    #[test]
+    fn test_set_processor_with_v1_set_message() {
+        let result = test_processor_with_payload(
+            &(process_set_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_ARR_ENCODED_SET_MESSAGE,
+        );
+        let expected_row = SetsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65562,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_set_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "errored".to_string(),
+                ],
+                metric_type: "set".to_string(),
+                materialization_version: 2,
+                timeseries_id: 828906429,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
+            set_values: vec![0, 1, 2, 3, 4, 5],
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 651)])
+                })
+            }
+        );
     }
 }

@@ -74,6 +74,8 @@ class RequestStatus(Enum):
     NETWORK_TIMEOUT = "network-timeout"
     # Query used too much memory, MEMORY_LIMIT_EXCEEDED
     MEMORY_EXCEEDED = "memory-exceeded"
+    # Clickhouse exceeded max_concurrent_queries limit
+    CLICKHOUSE_MAX_QUERIES_EXCEEDED = "clickhouse-max-queries-exceeded"
     # Any other error
     ERROR = "error"
 
@@ -117,6 +119,7 @@ ERROR_CODE_MAPPINGS = {
     ErrorCodes.MEMORY_LIMIT_EXCEEDED: RequestStatus.MEMORY_EXCEEDED,
     ErrorCodes.CANNOT_PARSE_UUID: RequestStatus.INVALID_REQUEST,
     ErrorCodes.ILLEGAL_AGGREGATION: RequestStatus.INVALID_REQUEST,
+    ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES: RequestStatus.CLICKHOUSE_MAX_QUERIES_EXCEEDED,
 }
 
 

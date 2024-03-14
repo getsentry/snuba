@@ -10,7 +10,12 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage
-from snuba.web.views import check_clickhouse, filter_checked_storages
+from snuba.utils.health_info import (
+    _set_shutdown,
+    check_clickhouse,
+    filter_checked_storages,
+    get_shutdown,
+)
 
 
 class BadStorage(mock.MagicMock):
@@ -88,20 +93,20 @@ def temp_settings() -> Any:
 
 
 @mock.patch(
-    "snuba.web.views.get_enabled_dataset_names",
+    "snuba.utils.health_info.get_enabled_dataset_names",
     return_value=["events"],
 )
-@mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
+@mock.patch("snuba.utils.health_info.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
 def test_check_clickhouse(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
     assert check_clickhouse()
 
 
 @mock.patch(
-    "snuba.web.views.get_enabled_dataset_names",
+    "snuba.utils.health_info.get_enabled_dataset_names",
     return_value=["events", "bad"],
 )
-@mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
+@mock.patch("snuba.utils.health_info.get_dataset", side_effect=fake_get_dataset)
 def test_bad_dataset_fails_healthcheck(
     mock1: mock.MagicMock, mock2: mock.MagicMock
 ) -> None:
@@ -111,7 +116,7 @@ def test_bad_dataset_fails_healthcheck(
 
 
 @mock.patch(
-    "snuba.web.views.get_enabled_dataset_names",
+    "snuba.utils.health_info.get_enabled_dataset_names",
     return_value=["events"],
 )
 @mock.patch("snuba.clusters.cluster._get_storage_set_cluster_map", return_value={})
@@ -125,10 +130,10 @@ def test_dataset_undefined_storage_set(
 
 
 @mock.patch(
-    "snuba.web.views.get_enabled_dataset_names",
+    "snuba.utils.health_info.get_enabled_dataset_names",
     return_value=["events", "experimental", "mock"],
 )
-@mock.patch("snuba.web.views.get_dataset", side_effect=fake_get_dataset)
+@mock.patch("snuba.utils.health_info.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
 def test_filter_checked_storages(
     mock1: mock.MagicMock, mock2: mock.MagicMock, temp_settings: Any
@@ -149,3 +154,12 @@ def test_filter_checked_storages(
 
     # check that the storage with a non-supported readiness state is excluded in list
     assert MockStorage() not in storages
+
+
+def test_get_shutdown() -> None:
+    assert not get_shutdown()
+    _set_shutdown(True)
+    assert get_shutdown()
+
+    _set_shutdown(False)
+    assert not get_shutdown()

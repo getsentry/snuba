@@ -35,6 +35,17 @@ tests = [
     ),
     pytest.param(
         binary_condition(
+            ConditionFunctions.IN,
+            Column(None, None, "column1"),
+            FunctionCall(
+                None, "array", (Literal(None, "a" * 16), Literal(None, "b" * 16))
+            ),
+        ),
+        "in(column1, [12297829382473034410, 13527612320720337851])",
+        id="array_in_operator",
+    ),
+    pytest.param(
+        binary_condition(
             ConditionFunctions.EQ,
             Column(None, None, "column1"),
             FunctionCall(None, "toString", (Literal(None, "a" * 16),)),

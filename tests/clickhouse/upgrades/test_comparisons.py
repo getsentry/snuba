@@ -2,11 +2,19 @@ from datetime import datetime
 from typing import Optional
 from unittest.mock import Mock, patch
 
+import pytest
+
+from snuba.cli.query_comparer import (
+    TableTotals,
+    create_data_mismatch,
+    create_perf_mismatch,
+)
 from snuba.clickhouse.upgrades.comparisons import (
     BlobGetter,
     FileFormat,
     FileManager,
     QueryInfoResult,
+    QueryMeasurementResult,
 )
 from snuba.utils.gcs import Blobs
 
@@ -127,3 +135,153 @@ def test_blob_getter(mock_uploader: Mock) -> None:
         "queries/2024_02_16/meredith_test_1.csv",
         "queries/2024_02_16/meredith_test_2.csv",
     ]
+
+
+perf_mismatch_tests = [
+    pytest.param(
+        30,
+        45,
+        True,
+        id="Slower duration - over threshold, over 10ms delta",
+    ),
+    pytest.param(
+        30,
+        35,
+        False,
+        id="Slower duration - over threshold, under 10ms delta ",
+    ),
+    pytest.param(
+        30,
+        32,
+        False,
+        id="Slower duration - under threshold, under 10ms delta ",
+    ),
+    pytest.param(
+        30,
+        20,
+        False,
+        id="Faster duration",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "first_duration, second_duration, is_mismatch", perf_mismatch_tests
+)
+def test_perf_mismatch(
+    first_duration: int, second_duration: int, is_mismatch: bool
+) -> None:
+    first_measurement = QueryMeasurementResult(
+        query_id="xxxx-xxxx-xxxx-xxxx",
+        query_duration_ms=first_duration,
+        result_rows=0,
+        result_bytes=0,
+        read_rows=0,
+        read_bytes=0,
+    )
+    second_measurement = QueryMeasurementResult(
+        query_id="xxxx-xxxx-xxxx-xxxx",
+        query_duration_ms=second_duration,
+        result_rows=0,
+        result_bytes=0,
+        read_rows=0,
+        read_bytes=0,
+    )
+
+    mismatch = create_perf_mismatch(first_measurement, second_measurement)
+    if is_mismatch:
+        assert mismatch
+    else:
+        assert mismatch is None
+
+
+data_mismatch_tests = [
+    pytest.param(
+        0,
+        0,
+        12,
+        16,
+        True,
+        id="Higher result_bytes",
+    ),
+    pytest.param(
+        0,
+        0,
+        12,
+        10,
+        True,
+        id="Lower result_bytes",
+    ),
+    pytest.param(
+        10,
+        12,
+        0,
+        0,
+        True,
+        id="Higher result_rows",
+    ),
+    pytest.param(
+        10,
+        8,
+        0,
+        0,
+        True,
+        id="Lower results_rows",
+    ),
+    pytest.param(
+        10,
+        10,
+        12,
+        12,
+        False,
+        id="Equal result rows & bytes",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "first_result_rows, second_result_rows, first_result_bytes, second_result_bytes, is_mismatch",
+    data_mismatch_tests,
+)
+def test_data_mismatch(
+    first_result_rows: int,
+    second_result_rows: int,
+    first_result_bytes: int,
+    second_result_bytes: int,
+    is_mismatch: bool,
+) -> None:
+    first_measurement = QueryMeasurementResult(
+        query_id="xxxx-xxxx-xxxx-xxxx",
+        query_duration_ms=0,
+        result_rows=first_result_rows,
+        result_bytes=first_result_bytes,
+        read_rows=0,
+        read_bytes=0,
+    )
+    second_measurement = QueryMeasurementResult(
+        query_id="xxxx-xxxx-xxxx-xxxx",
+        query_duration_ms=0,
+        result_rows=second_result_rows,
+        result_bytes=second_result_bytes,
+        read_rows=0,
+        read_bytes=0,
+    )
+
+    mismatch = create_data_mismatch(first_measurement, second_measurement)
+    if is_mismatch:
+        assert mismatch
+    else:
+        assert mismatch is None
+
+
+def test_table_totals() -> None:
+    totals = TableTotals()
+    totals.add(10, 5, 6)
+    assert totals.total_queries == 10
+    assert totals.total_data_mismatches == 5
+    assert totals.total_perf_mismatches == 6
+
+    totals.add(10, 5, 6)
+    assert totals.total_queries == 20
+    assert totals.total_data_mismatches == 10
+    assert totals.total_perf_mismatches == 12

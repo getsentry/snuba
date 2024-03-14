@@ -39,4 +39,5 @@ def test_product_tools_role(
     assert "tracing" in data["tools"]
     assert "system-queries" in data["tools"]
     assert "production-queries" in data["tools"]
+    assert "clickhouse-migrations" in data["tools"]
     assert "all" not in data["tools"]

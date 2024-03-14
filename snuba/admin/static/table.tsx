@@ -1,11 +1,30 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, CSSProperties } from "react";
 
-import { COLORS } from "./theme";
+import { COLORS } from "SnubaAdmin/theme";
+
+type CustomTableStyles = {
+  tableStyle?: CSSProperties,
+  headerStyle?: CSSProperties,
+  thStyle?: CSSProperties,
+  tdStyle?: CSSProperties
+}
+
+const EMPTY_CUSTOM_STYLES = {
+  tableStyle: {},
+  headerStyle: {},
+  thStyle: {},
+  tdStyle: {},
+}
+
+function createCustomTableStyles(styles: Partial<CustomTableStyles> = EMPTY_CUSTOM_STYLES): CustomTableStyles {
+  return {...EMPTY_CUSTOM_STYLES, ...styles};
+}
 
 type TableProps = {
   headerData: ReactNode[];
   rowData: ReactNode[][];
   columnWidths?: number[];
+  customStyles?: CustomTableStyles;
 };
 
 function Table(props: TableProps) {
@@ -14,16 +33,34 @@ function Table(props: TableProps) {
   const autoColumnWidths = Array(headerData.length).fill(1);
   const notEmptyColumnWidths = columnWidths ?? autoColumnWidths;
   const sumColumnWidths = notEmptyColumnWidths.reduce((acc, i) => acc + i, 0);
+  const customStyles = props.customStyles ? props.customStyles : EMPTY_CUSTOM_STYLES;
+  const thisTableStyle = {
+      ...tableStyle,
+      ...customStyles.tableStyle,
+  };
+  const thisHeaderStyle = {
+    ...headerStyle,
+    ...customStyles.headerStyle,
+  };
+  const thisThStyle = {
+    ...thStyle,
+    ...customStyles.thStyle,
+  }
+  const thisTdStyle = {
+    ...tdStyle,
+    ...customStyles.tdStyle,
+  }
+
 
   return (
-    <table style={tableStyle}>
-      <thead style={headerStyle}>
+    <table style={thisTableStyle}>
+      <thead style={thisHeaderStyle}>
         <tr>
           {headerData.map((col, idx) => (
             <th
               key={idx}
               style={{
-                ...thStyle,
+                ...thisThStyle,
                 width: `${
                   (notEmptyColumnWidths[idx] * 100) / sumColumnWidths
                 }%`,
@@ -38,7 +75,7 @@ function Table(props: TableProps) {
         {rowData.map((row, rowIdx) => (
           <tr key={rowIdx}>
             {row.map((col, colIdx) => (
-              <td key={colIdx} style={tdStyle}>
+              <td key={colIdx} style={thisTdStyle}>
                 {col}
               </td>
             ))}
@@ -106,4 +143,4 @@ const textAreaStyle = {
   width: "calc(100% - 24px)",
 };
 
-export { Table, EditableTableCell };
+export { Table, EditableTableCell, createCustomTableStyles};

@@ -1,15 +1,16 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
             "name": "Pytest Current File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
-            "program": ".venv/bin/pytest -vv ${file}",
-            "console": "integratedTerminal"
+            "program": "${workspaceFolder}/.venv/bin/pytest",
+            "args": [
+                "${file}"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true  // wasn't sure if I should keep or delete
         }
     ]
 }

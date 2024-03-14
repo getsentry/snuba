@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import Client from "../api_client";
-import { Collapse } from "../collapse";
-import QueryEditor from "../query_editor";
+import Client from "SnubaAdmin/api_client";
+import { Collapse } from "SnubaAdmin/collapse";
+import QueryEditor from "SnubaAdmin/query_editor";
 
 import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
 

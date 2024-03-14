@@ -23,6 +23,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import arrayElement
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Column,
@@ -35,6 +36,9 @@ from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
+from snuba.query.processors.logical.filter_in_select_optimizer import (
+    FilterInSelectOptimizer,
+)
 from snuba.query.query_settings import QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
@@ -72,6 +76,10 @@ ARITHMETIC_OPERATORS_MAPPING = {
     "/": "divide",
 }
 
+UNARY_OPERATORS = {
+    "-": "negate",
+}
+
 
 class MQLVisitor(NodeVisitor):  # type: ignore
     """
@@ -97,6 +105,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
         return ARITHMETIC_OPERATORS_MAPPING[node.text]
+
+    def visit_unary_op(self, node: Node, children: Sequence[Any]) -> Any:
+        return UNARY_OPERATORS[node.text]
 
     def _build_timeseries_formula_param(
         self, param: InitialParseResult
@@ -154,37 +165,50 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def _visit_formula(
         self,
         term_operator: str,
-        term: InitialParseResult,
-        coefficient: InitialParseResult,
+        operand_1: InitialParseResult,
+        operand_2: InitialParseResult | None = None,
     ) -> InitialParseResult:
         # TODO: If the formula has filters/group by, where do those appear?
 
         # If the parameters of the query are timeseries, extract the expressions from the result
-        if isinstance(term, InitialParseResult) and term.expression is not None:
-            term = replace(term, expression=self._build_timeseries_formula_param(term))
         if (
-            isinstance(coefficient, InitialParseResult)
-            and coefficient.expression is not None
+            isinstance(operand_1, InitialParseResult)
+            and operand_1.expression is not None
         ):
-            coefficient = replace(
-                coefficient,
-                expression=self._build_timeseries_formula_param(coefficient),
+            operand_1 = replace(
+                operand_1, expression=self._build_timeseries_formula_param(operand_1)
+            )
+        if (
+            operand_2 is not None
+            and isinstance(operand_2, InitialParseResult)
+            and operand_2.expression is not None
+        ):
+            operand_2 = replace(
+                operand_2,
+                expression=self._build_timeseries_formula_param(operand_2),
             )
 
         if (
-            isinstance(term, InitialParseResult)
-            and isinstance(coefficient, InitialParseResult)
-            and term.groupby != coefficient.groupby
+            operand_2 is not None
+            and isinstance(operand_1, InitialParseResult)
+            and isinstance(operand_2, InitialParseResult)
+            and operand_1.groupby != operand_2.groupby
         ):
             raise InvalidQueryException(
                 "All terms in a formula must have the same groupby"
             )
 
+        groupby = (
+            operand_1.groupby if isinstance(operand_1, InitialParseResult) else None
+        )
+        parameters = [operand_1]
+        if operand_2 is not None:
+            parameters.append(operand_2)
         return InitialParseResult(
             expression=None,
             formula=term_operator,
-            parameters=[term, coefficient],
-            groupby=term.groupby,
+            parameters=parameters,
+            groupby=groupby,
         )
 
     def visit_term(
@@ -194,10 +218,24 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
-            _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
-            return self._visit_formula(term_operator, term, coefficient)
+            _, term_operator, _, unary, *_ = zero_or_more_others[0]
+            return self._visit_formula(term_operator, term, unary)
 
         return term
+
+    def visit_unary(self, node: Node, children: Sequence[Any]) -> Any:
+        unary_op, coefficient = children
+        if unary_op:
+            if isinstance(coefficient, float) or isinstance(coefficient, int):
+                return -coefficient
+            elif isinstance(coefficient, InitialParseResult):
+                return self._visit_formula(unary_op[0], coefficient)
+            else:
+                raise InvalidQueryException(
+                    f"Unary expression not supported for type {type(coefficient)}"
+                )
+
+        return coefficient
 
     def visit_coefficient(
         self,
@@ -221,7 +259,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             Any,
         ],
     ) -> InitialParseResult:
-        target, _, packed_filters, _, packed_groupbys, *_ = children
+        target, filters, packed_groupbys, *_ = children
+        packed_filters = filters[0][1] if filters else []  # strip braces
         if packed_filters:
             assert isinstance(packed_filters, list)
             _, filter_expr, *_ = packed_filters[0]
@@ -250,6 +289,8 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
                 if target.parameters is not None:
                     for param in target.parameters:
+                        if not isinstance(param, InitialParseResult):
+                            continue  # Don't push down scalar values e.g. sum(mri) / 3600
                         pushdown_filter(param)
             else:
                 if target.conditions is not None:
@@ -565,11 +606,12 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         """
         Given a metric, set its children filters and groupbys, then return a Timeseries.
         """
-        target, _, packed_filters, _, packed_groupbys, *_ = children
+        target, filters, packed_groupbys, *_ = children
         target = target[0]
         assert isinstance(target, InitialParseResult)
-        if not packed_filters and not packed_groupbys:
+        if not filters and not packed_groupbys:
             return target
+        packed_filters = filters[0][1] if filters else []  # strip braces
         if packed_filters:
             _, filter_condition, *_ = packed_filters[0]
             target.conditions = [filter_condition]
@@ -731,14 +773,18 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
 
-            def extract_mri(param: InitialParseResult) -> str:
-                if param.mri:
-                    return param.mri
-                elif param.formula:
-                    for p in param.parameters or []:
-                        mri = extract_mri(p)
-                        if mri:
-                            return mri
+            def extract_mri(param: InitialParseResult | Any) -> str:
+                if isinstance(param, InitialParseResult):
+                    if param.mri:
+                        return param.mri
+                    elif param.formula:
+                        for p in param.parameters or []:
+                            try:
+                                mri = extract_mri(p)
+                                if mri:
+                                    return mri
+                            except ParsingException:
+                                pass
 
                 raise ParsingException("formula does not contain any MRIs")
 
@@ -996,8 +1042,41 @@ def populate_query_from_mql_context(
     return query, mql_context
 
 
+def quantiles_to_quantile(
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+) -> None:
+    """
+    Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
+    the API (so that the arrays don't need to be unwrapped) and also avoids bugs where comparing
+    arrays of values to values cause typing errors (e.g. [1] / 1).
+    """
+
+    def transform(exp: Expression) -> Expression:
+        if isinstance(exp, CurriedFunctionCall):
+            if exp.internal_function.function_name in ("quantiles", "quantilesIf"):
+                if len(exp.internal_function.parameters) == 1:
+                    return arrayElement(
+                        exp.alias, replace(exp, alias=None), Literal(None, 1)
+                    )
+
+        return exp
+
+    query.transform_expressions(transform)
+
+
+def optimize_filter_in_select(
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+) -> None:
+    FilterInSelectOptimizer().process_mql_query(query)
+
+
 CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+]
+
+MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
+    quantiles_to_quantile,
+    optimize_filter_in_select,
 ]
 
 
@@ -1033,7 +1112,7 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
             query,
-            POST_PROCESSORS,
+            MQL_POST_PROCESSORS,
             settings,
         )
 
