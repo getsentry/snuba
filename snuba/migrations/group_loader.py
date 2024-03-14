@@ -317,6 +317,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0026_gauges_add_raw_tags_hash_column",
             "0027_sets_add_raw_tags_column",
             "0028_distributions_add_indexed_tags_column",
+            "0029_add_use_case_id_index",
         ]
 
 
