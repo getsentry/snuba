@@ -43,7 +43,7 @@ class FilterInSelectOptimizer:
     def process_mql_query(
         self, query: LogicalQuery | CompositeQuery[QueryEntity]
     ) -> None:
-        feat_flag = get_int_config("enable_filter_in_select_optimizer", default=0)
+        feat_flag = get_int_config("enable_filter_in_select_optimizer", default=1)
         if feat_flag:
             try:
                 domain = self.get_domain_of_mql_query(query)
