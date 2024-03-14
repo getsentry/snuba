@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Generic, Sequence, TypeVar, Union
 
 from snuba.datasets.plans.query_plan import (
@@ -12,6 +15,8 @@ from snuba.request import Request
 from snuba.web import QueryResult
 
 TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
+Tin = TypeVar("Tin")
+Tout = TypeVar("Tout")
 
 
 class QueryPlanner(ABC, Generic[TPlan]):
@@ -76,3 +81,51 @@ class QueryPipelineBuilder(ABC, Generic[TPlan]):
         self, query: Query, settings: QuerySettings
     ) -> QueryPlanner[ClickhouseQueryPlan]:
         raise NotImplementedError
+
+
+class QueryPipelineStage(Generic[Tin, Tout]):
+    """
+    This class represents a single stage in the snuba query execution pipeline.
+    The purpose of this class is to provide an organized and transparent interface to
+    execute specific processing steps on the query with clearly defined inputs and outputs.
+    These stages are designed to be composed and/or swapped among each other to form a
+    a flexible query pipeline.
+
+    Some examples of a query pipeline stage may include:
+    * Execute all entity query processors defined on the entity yaml
+    * Apply query transformation from logical representation to Clickhouse representation
+    * Execute all storage processors defined on the storage yaml
+    * Run query execution
+    * Query reporting
+
+    To create a Query Pipeline Stage, the main components to specify are:
+    an input type, an output type, and a execution function which returns the output wrapped with QueryPipelineResult.
+    ==============================================
+        >>> class MyQueryPipelineStage(QueryPipelineStage[LogicalQuery, LogicalQuery]):
+        >>>    def _execute(self, input: QueryPipelineResult[LogicalQuery]) -> QueryPipelineResult[LogicalQuery]:
+        >>>         try:
+        >>>             result = my_complex_processing_function(input.data)
+        >>>             return QueryPipelineResult(result, None)
+        >>>         except Exception as e:
+        >>>             return QueryPipelineResult(None, e)
+    """
+
+    @abstractmethod
+    def _execute(self, input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
+        raise NotImplementedError
+
+    def execute(self, input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
+        if input.error:
+            # Forward the error to next stage of pipeline
+            return QueryPipelineResult(None, input.error)
+        return self._execute(input)
+
+
+@dataclass
+class QueryPipelineResult(Generic[Tout]):
+    """
+    A container to represent the result of a query pipeline stage.
+    """
+
+    data: Tout
+    error: Exception
