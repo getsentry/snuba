@@ -15,7 +15,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_name="set_idx_use_case_id",
                 index_expression="use_case_id",
                 index_type="set(0)",
-                granularity=100,
+                granularity=1,
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.AddIndex(
@@ -24,7 +24,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_name="set_idx_use_case_id",
                 index_expression="use_case_id",
                 index_type="set(0)",
-                granularity=100,
+                granularity=1,
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.AddIndex(
@@ -33,7 +33,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_name="set_idx_use_case_id",
                 index_expression="use_case_id",
                 index_type="set(0)",
-                granularity=100,
+                granularity=1,
                 target=operations.OperationTarget.LOCAL,
             ),
             operations.AddIndex(
@@ -42,7 +42,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 index_name="set_idx_use_case_id",
                 index_expression="use_case_id",
                 index_type="set(0)",
-                granularity=100,
+                granularity=1,
                 target=operations.OperationTarget.LOCAL,
             ),
         ]
