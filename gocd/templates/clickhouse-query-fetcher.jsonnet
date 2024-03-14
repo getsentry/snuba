@@ -7,7 +7,7 @@ local generate_fetch_job() =
   {
     environment_variables: {
       SENTRY_REGION: 's4s',
-      SNUBA_SERVICE_NAME: 'query-fetcher-gocd',
+      SNUBA_CMD_TYPE: 'fetcher',
     },
     elastic_profile_id: pipeline_group,
     tasks: [
