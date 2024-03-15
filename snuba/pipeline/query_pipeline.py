@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Sequence, TypeVar, Union
+from typing import Generic, Optional, Sequence, TypeVar, Union
 
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -127,5 +127,5 @@ class QueryPipelineResult(Generic[Tout]):
     A container to represent the result of a query pipeline stage.
     """
 
-    data: Tout
-    error: Exception
+    data: Optional[Tout]
+    error: Optional[Exception]
