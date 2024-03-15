@@ -15,6 +15,7 @@ from snuba.request import Request
 from snuba.web import QueryResult
 
 TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
+T = TypeVar("T")
 Tin = TypeVar("Tin")
 Tout = TypeVar("Tout")
 
@@ -121,11 +122,21 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         return self._execute(input)
 
 
+class InvalidQueryPipelineResult(Exception):
+    pass
+
+
 @dataclass
-class QueryPipelineResult(Generic[Tout]):
+class QueryPipelineResult(ABC, Generic[T]):
     """
     A container to represent the result of a query pipeline stage.
     """
 
-    data: Optional[Tout]
+    data: Optional[T]
     error: Optional[Exception]
+
+    def __post_init__(self):
+        if self.data is None and self.error is None:
+            raise InvalidQueryPipelineResult(
+                "QueryPipelineResult must have either data or error set"
+            )

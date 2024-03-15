@@ -1,6 +1,12 @@
 from typing import Optional
 
-from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
+import pytest
+
+from snuba.pipeline.query_pipeline import (
+    InvalidQueryPipelineResult,
+    QueryPipelineResult,
+    QueryPipelineStage,
+)
 
 
 class TestQueryPipelineStage(QueryPipelineStage[int, int]):
@@ -26,3 +32,6 @@ def test_query_pipeline_stage() -> None:
     input = QueryPipelineResult(data=0, error=None)
     result = TestQueryPipelineStage().execute(input)
     assert str(result.error) == "Input cannot be zero"
+
+    with pytest.raises(InvalidQueryPipelineResult):
+        input = QueryPipelineResult(data=None, error=None)
