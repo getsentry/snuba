@@ -1,3 +1,6 @@
+import logging
+
+from snuba import environment
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -11,6 +14,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query as LogicalQuery
 from snuba.state import get_int_config
+from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
 Domain maps from a property to the specific values that are being filtered for. Ex:
@@ -23,6 +27,10 @@ Domain maps from a property to the specific values that are being filtered for. 
         }
 """
 Domain = dict[Column | SubscriptableReference, set[Literal]]
+
+metrics = MetricsWrapper(environment.metrics, "api")
+
+logger = logging.getLogger(__name__)
 
 
 class FilterInSelectOptimizer:
@@ -45,9 +53,14 @@ class FilterInSelectOptimizer:
     ) -> None:
         feat_flag = get_int_config("enable_filter_in_select_optimizer", default=1)
         if feat_flag:
+            metrics.increment("kyles_optimizer_ran")
             try:
                 domain = self.get_domain_of_mql_query(query)
             except ValueError:
+                logger.warning(
+                    "Failed getting domain",
+                    exc_info=True,
+                )
                 domain = {}
 
             if domain:
