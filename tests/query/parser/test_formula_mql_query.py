@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from datetime import datetime
 
 import pytest
@@ -233,6 +234,25 @@ def tag_column(tag: str) -> SubscriptableReference:
     )
 
 
+def in_clause(lhs: Column | SubscriptableReference, rhs: Iterable):
+    return binary_condition(
+        "in",
+        lhs,
+        FunctionCall(
+            alias=None,
+            function_name="array",
+            parameters=tuple(rhs),
+        ),
+    )
+
+
+def metric_id_in(mids: set[int]) -> FunctionCall:
+    return in_clause(
+        Column("_snuba_metric_id", None, "metric_id"),
+        map(lambda x: Literal(None, x), mids),
+    )
+
+
 def test_simple_formula() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
     expected_selected = SelectedExpression(
@@ -259,7 +279,7 @@ def test_simple_formula() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -304,7 +324,7 @@ def test_simple_formula_with_leading_literals() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -349,7 +369,7 @@ def test_groupby() -> None:
             ),
         ],
         groupby=[tag_column("transaction"), time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -424,7 +444,7 @@ def test_curried_aggregate() -> None:
             ),
         ],
         groupby=[tag_column("transaction"), time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -469,7 +489,7 @@ def test_bracketing_rules() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -523,7 +543,7 @@ def test_formula_filters() -> None:
             "_snuba_aggregate_value",
         ),
     )
-    expected = Query(
+    expected1 = Query(
         from_distributions,
         selected_columns=[
             expected_selected,
@@ -533,7 +553,15 @@ def test_formula_filters() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and",
+            metric_id_in({123456}),
+            binary_condition(
+                "and",
+                in_clause(tag_column("status_code"), [Literal(None, "200")]),
+                formula_condition,
+            ),
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -543,13 +571,31 @@ def test_formula_filters() -> None:
         limit=1000,
         offset=0,
     )
+    expected2 = Query(
+        from_clause=expected1.get_from_clause(),
+        selected_columns=expected1.get_selected_columns(),
+        groupby=expected1.get_groupby(),
+        condition=binary_condition(
+            "and",
+            in_clause(tag_column("status_code"), [Literal(None, "200")]),
+            binary_condition(
+                "and",
+                metric_id_in({123456}),
+                formula_condition,
+            ),
+        ),
+        order_by=expected1.get_orderby(),
+        limit=expected1.get_limit(),
+        offset=expected1.get_offset(),
+    )
 
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
+    eq1, reason = query.equals(expected1)
+    eq2, _ = query.equals(expected2)
+    assert eq1 or eq2, reason
 
 
 def test_formula_groupby() -> None:
@@ -574,7 +620,7 @@ def test_formula_groupby() -> None:
             "_snuba_aggregate_value",
         ),
     )
-    expected = Query(
+    expected1 = Query(
         from_distributions,
         selected_columns=[
             expected_selected,
@@ -588,7 +634,15 @@ def test_formula_groupby() -> None:
             ),
         ],
         groupby=[tag_column("transaction"), time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and",
+            metric_id_in({123456}),
+            binary_condition(
+                "and",
+                in_clause(tag_column("status_code"), [Literal(None, "200")]),
+                formula_condition,
+            ),
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -598,13 +652,31 @@ def test_formula_groupby() -> None:
         limit=1000,
         offset=0,
     )
+    expected2 = Query(
+        from_clause=expected1.get_from_clause(),
+        selected_columns=expected1.get_selected_columns(),
+        groupby=expected1.get_groupby(),
+        condition=binary_condition(
+            "and",
+            in_clause(tag_column("status_code"), [Literal(None, "200")]),
+            binary_condition(
+                "and",
+                metric_id_in({123456}),
+                formula_condition,
+            ),
+        ),
+        order_by=expected1.get_orderby(),
+        limit=expected1.get_limit(),
+        offset=expected1.get_offset(),
+    )
 
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
+    eq1, reason = query.equals(expected1)
+    eq2, _ = query.equals(expected2)
+    assert eq1 or eq2, reason
 
 
 def test_formula_scalar_value() -> None:
@@ -630,7 +702,7 @@ def test_formula_scalar_value() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -679,7 +751,7 @@ def test_arbitrary_functions() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -728,7 +800,7 @@ def test_arbitrary_functions_with_formula() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition("and", metric_id_in({123456}), formula_condition),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
