@@ -11,7 +11,6 @@ from snuba.datasets.configuration.loader import load_configuration_data
 from snuba.datasets.configuration.utils import (
     get_mandatory_condition_checkers,
     get_query_processors,
-    get_query_splitters,
     parse_columns,
 )
 from snuba.datasets.message_filters import StreamMessageFilter
@@ -43,7 +42,6 @@ SCHEMA = "schema"
 STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
-QUERY_SPLITTERS = "query_splitters"
 MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
@@ -78,9 +76,6 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         READINESS_STATE: ReadinessState(config[READINESS_STATE]),
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
-        ),
-        QUERY_SPLITTERS: get_query_splitters(
-            config[QUERY_SPLITTERS] if QUERY_SPLITTERS in config else []
         ),
         MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
             config[MANDATORY_CONDITION_CHECKERS]
