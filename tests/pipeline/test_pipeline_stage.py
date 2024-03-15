@@ -1,3 +1,5 @@
+from typing import Optional
+
 from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
 
 
@@ -10,8 +12,8 @@ class TestQueryPipelineStage(QueryPipelineStage[int, int]):
             return QueryPipelineResult(None, e)
 
 
-def check_input_and_multiply(num: int) -> int:
-    if num == 0:
+def check_input_and_multiply(num: Optional[int]) -> int:
+    if num == 0 or num is None:
         raise Exception("Input cannot be zero")
     return num * 2
 
