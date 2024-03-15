@@ -11,7 +11,6 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
@@ -80,15 +79,6 @@ class ReadableStorage(Storage):
         """
         raise NotImplementedError
 
-    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
-        """
-        If this storage supports splitting queries as optimizations, they are provided here.
-        These are optimizations, the query plan builder may decide to override the storage
-        and to skip the splitters. So correctness of the query must not depend on these
-        strategies to be applied.
-        """
-        return []
-
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         """
         Returns a list of expression patterns that need to always be
@@ -130,13 +120,11 @@ class ReadableTableStorage(ReadableStorage):
         schema: Schema,
         readiness_state: ReadinessState,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
-        self.__query_splitters = query_splitters or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
         super().__init__(storage_set_key, schema, readiness_state)
@@ -146,9 +134,6 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
-
-    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
-        return self.__query_splitters
 
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         return self.__mandatory_condition_checkers
@@ -166,7 +151,6 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         schema: Schema,
         query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
-        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
@@ -181,7 +165,6 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             schema,
             readiness_state,
             query_processors,
-            query_splitters,
             mandatory_condition_checkers,
             allocation_policies,
         )
