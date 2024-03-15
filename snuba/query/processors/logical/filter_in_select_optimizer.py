@@ -53,7 +53,6 @@ class FilterInSelectOptimizer:
     ) -> None:
         feat_flag = get_int_config("enable_filter_in_select_optimizer", default=0)
         if feat_flag:
-            metrics.increment("kyles_optimizer_ran")
             try:
                 domain = self.get_domain_of_mql_query(query)
             except ValueError:
@@ -86,6 +85,7 @@ class FilterInSelectOptimizer:
                         )
                 assert domain_filter is not None
                 query.add_condition_to_ast(domain_filter)
+                metrics.increment("kyles_optimizer_optimized")
 
     def get_domain_of_mql_query(
         self, query: LogicalQuery | CompositeQuery[QueryEntity]
