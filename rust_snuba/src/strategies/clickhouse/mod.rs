@@ -14,7 +14,7 @@ use crate::config::ClickhouseConfig;
 use crate::strategies::clickhouse::batch::BatchFactory;
 use crate::types::BytesInsertBatch;
 
-mod batch;
+pub mod batch;
 
 struct ClickhouseWriter {
     batch_factory: Arc<BatchFactory>,
