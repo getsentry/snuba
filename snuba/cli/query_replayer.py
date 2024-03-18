@@ -51,7 +51,7 @@ def format_results_query(
     """
 
 
-def get_credentials(user, password) -> Tuple[str, str]:
+def get_credentials(user: Optional[str], password: Optional[str]) -> Tuple[str, str]:
     # TOOO don't hardcode credentials, use settings
     return (user or "default", password or "")
 
