@@ -135,7 +135,7 @@ class QueryPipelineResult(ABC, Generic[T]):
     data: Optional[T]
     error: Optional[Exception]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.data is None and self.error is None:
             raise InvalidQueryPipelineResult(
                 "QueryPipelineResult must have either data or error set"
