@@ -14,9 +14,11 @@ from snuba import settings as snuba_settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
+from snuba.query.logical import Query as LogicalQuery
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import QueryPlanException
@@ -133,26 +135,73 @@ def _run_query_pipeline(
           this comment, that may no longer be true
 
     """
-    if request.query_settings.get_dry_run():
-        query_runner = _dry_run_query_runner
-    else:
-        query_runner = partial(
-            _run_and_apply_column_names,
-            timer=timer,
-            query_metadata=query_metadata,
-            attribution_info=request.attribution_info,
-            robust=robust,
-            concurrent_queries_gauge=concurrent_queries_gauge,
-        )
+
 
     record_missing_use_case_id(request, dataset)
     record_subscription_created_missing_tenant_ids(request)
 
-    return (
-        dataset.get_query_pipeline_builder()
-        .build_execution_pipeline(request, query_runner)
-        .execute()
-    )
+    from snuba.pipeline.query_pipeline import QueryPipelineStage
+    from snuba.datasets.plans.query_plan import QueryRunner
+    from snuba.pipeline.composite import CompositeExecutionPipeline
+    from snuba.datasets.entities.factory import get_entity
+
+
+    class EntityAndStoragePipelineStage(QueryPipelineStage[Request, tuple[Query, QuerySettings, Reader, str]]):
+        def _execute(self, input: QueryPipelineResult[Request]) -> QueryPipelineResult[tuple[Query, QuerySettings, Reader, str]]:
+            _clickhouse_query = None
+            _reader = None
+            _cluster_name = None
+            _query_settings = None
+            def _query_runner(
+                clickhouse_query: Union[Query, CompositeQuery[Table]],
+                query_settings: QuerySettings,
+                reader: Reader,
+                cluster_name: str,
+            ) -> QueryResult:
+                nonlocal _clickhouse_query, _reader, _cluster_name, _query_settings
+                _clickhouse_query = clickhouse_query
+                _reader = reader
+                _query_settings = query_settings
+                _cluster_name = cluster_name
+            if isinstance(input.data.query, LogicalQuery):
+                entity = get_entity(input.data.query.get_from_clause().key)
+                execution_pipeline = entity.get_query_pipeline_builder().build_execution_pipeline(
+                    request, _query_runner
+                )
+            else:
+                execution_pipeline = CompositeExecutionPipeline(
+                    input.data.query, input.data.query_settings, _query_runner
+                )
+
+            execution_pipeline.execute()
+            return QueryPipelineResult(data=(_clickhouse_query, _query_settings, _reader, _cluster_name), error=None)
+
+
+    class ExecutionStage(QueryPipelineStage[tuple[Query, QuerySettings, Reader, str], QueryResult]):
+        def _execute(self, input: QueryPipelineResult[Query]) -> QueryPipelineResult[QueryResult]:
+            # run the query processors and stuff
+            if request.query_settings.get_dry_run():
+                return _dry_run_query_runner(
+                    clickhouse_query=input.data[0],
+                    query_settings=input.data[1],
+                    reader=Reader(input.data[0].get_from_clause().key),
+                    cluster_name=input.data[0].get_from_clause().key.cluster,
+                )
+            else:
+               return _run_and_apply_column_names(
+                    timer=timer,
+                    query_metadata=query_metadata,
+                    attribution_info=request.attribution_info,
+                    robust=robust,
+                    concurrent_queries_gauge=concurrent_queries_gauge,
+                    clickhouse_query=input.data[0],
+                    query_settings=input.data[1],
+                    reader=input.data[2],
+                    cluster_name=input.data[3]
+                )
+
+    clickhouse_query = EntityAndStoragePipelineStage().execute(QueryPipelineResult(data=request, error=None))
+    return ExecutionStage().execute(clickhouse_query)
 
 
 def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
