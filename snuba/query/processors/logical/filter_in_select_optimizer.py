@@ -57,8 +57,7 @@ class FilterInSelectOptimizer:
                 domain = self.get_domain_of_mql_query(query)
             except ValueError:
                 logger.warning(
-                    "Failed getting domain",
-                    exc_info=True,
+                    "Failed getting domain", exc_info=True, extra={"query": query}
                 )
                 domain = {}
 
