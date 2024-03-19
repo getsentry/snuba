@@ -6,6 +6,7 @@ from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
+    FindConditionalAggregateFunctionsVisitor,
 )
 
 """ CONFIG STUFF THAT DOESNT MATTER MUCH """
@@ -136,6 +137,14 @@ mql_test_cases: list[tuple[str, dict]] = [
             },
         },
     ),
+    (
+        "sum(`d:transactions/duration@millisecond`) * 1000",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            }
+        },
+    ),
 ]
 
 """ TESTING """
@@ -154,3 +163,23 @@ def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
     if res != expected_domain:
         raise
     assert res == expected_domain
+
+
+@pytest.mark.parametrize(
+    "mql_query, expected_domain",
+    mql_test_cases,
+)
+def test_searcher(mql_query: str, expected_domain: set[int]) -> None:
+    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
+    assert isinstance(logical_query, Query)
+
+    opt = FilterInSelectOptimizer()
+    for selected_expression in logical_query.get_selected_columns():
+        exp = selected_expression.expression
+
+        oldres = opt._contains_conditional_aggregate(exp)
+
+        v = FindConditionalAggregateFunctionsVisitor()
+        selected_expression.expression.accept(v)
+        newres = len(v.get_matches()) > 0
+        assert newres == oldres
