@@ -96,6 +96,10 @@ ARITHMETIC_OPERATORS_MAPPING = {
     "/": "divide",
 }
 
+UNARY_OPERATORS = {
+    "-": "negate",
+}
+
 
 class MQLVisitor(NodeVisitor):  # type: ignore
     """
@@ -128,6 +132,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
         return ARITHMETIC_OPERATORS_MAPPING[node.text]
+
+    def visit_unary_op(self, node: Node, children: Sequence[Any]) -> Any:
+        return UNARY_OPERATORS[node.text]
 
     # def _build_timeseries_formula_param(
     #     self, param: InitialParseResult
@@ -185,42 +192,50 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     # def _visit_formula(
     #     self,
     #     term_operator: str,
-    #     term: InitialParseResult,
-    #     coefficient: InitialParseResult,
+    #     operand_1: InitialParseResult,
+    #     operand_2: InitialParseResult | None = None,
     # ) -> InitialParseResult:
-    #     # Assign an alias to each Timeseries parameter in the formula
-    #     if isinstance(term, InitialParseResult) and not term.formula:
-    #         alias = term.mri[0]
-    #         suffix = self.alias_count.setdefault(alias, -1) + 1
-    #         self.alias_count[alias] = suffix
-    #         term = replace(term, table_alias=f"{alias}{suffix}"))
+    #     # TODO: If the formula has filters/group by, where do those appear?
 
     #     # If the parameters of the query are timeseries, extract the expressions from the result
-    #     if isinstance(term, InitialParseResult) and term.expression is not None:
-    #         term = replace(term, expression=self._build_timeseries_formula_param(term))
     #     if (
-    #         isinstance(coefficient, InitialParseResult)
-    #         and coefficient.expression is not None
+    #         isinstance(operand_1, InitialParseResult)
+    #         and operand_1.expression is not None
     #     ):
-    #         coefficient = replace(
-    #             coefficient,
-    #             expression=self._build_timeseries_formula_param(coefficient),
+    #         operand_1 = replace(
+    #             operand_1, expression=self._build_timeseries_formula_param(operand_1)
+    #         )
+    #     if (
+    #         operand_2 is not None
+    #         and isinstance(operand_2, InitialParseResult)
+    #         and operand_2.expression is not None
+    #     ):
+    #         operand_2 = replace(
+    #             operand_2,
+    #             expression=self._build_timeseries_formula_param(operand_2),
     #         )
 
     #     if (
-    #         isinstance(term, InitialParseResult)
-    #         and isinstance(coefficient, InitialParseResult)
-    #         and term.groupby != coefficient.groupby
+    #         operand_2 is not None
+    #         and isinstance(operand_1, InitialParseResult)
+    #         and isinstance(operand_2, InitialParseResult)
+    #         and operand_1.groupby != operand_2.groupby
     #     ):
     #         raise InvalidQueryException(
     #             "All terms in a formula must have the same groupby"
     #         )
 
+    #     groupby = (
+    #         operand_1.groupby if isinstance(operand_1, InitialParseResult) else None
+    #     )
+    #     parameters = [operand_1]
+    #     if operand_2 is not None:
+    #         parameters.append(operand_2)
     #     return InitialParseResult(
     #         expression=None,
     #         formula=term_operator,
-    #         parameters=[term, coefficient],
-    #         groupby=term.groupby,
+    #         parameters=parameters,
+    #         groupby=groupby,
     #     )
 
     def visit_term(
@@ -230,14 +245,32 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
-            _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
+            _, term_operator, _, unary, *_ = zero_or_more_others[0]
+            parameters: list[FormulaParameter] = [term]
+            if unary is not None:
+                parameters.append(unary)
+
             return InitialParseResult(
                 expression=None,
                 formula=term_operator,
-                parameters=[term, coefficient],
+                parameters=parameters,
             )
 
         return term
+
+    def visit_unary(self, node: Node, children: Sequence[Any]) -> Any:
+        unary_op, coefficient = children
+        if unary_op:
+            if isinstance(coefficient, float) or isinstance(coefficient, int):
+                return -coefficient
+            elif isinstance(coefficient, InitialParseResult):
+                return self._visit_formula(unary_op[0], coefficient)
+            else:
+                raise InvalidQueryException(
+                    f"Unary expression not supported for type {type(coefficient)}"
+                )
+
+        return coefficient
 
     def visit_coefficient(
         self,
@@ -390,7 +423,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[InitialParseResult,],
+            Tuple[
+                InitialParseResult,
+            ],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:

@@ -33,8 +33,6 @@ PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == 
 RAISE_ON_ALLOCATION_POLICY_FAILURES = True
 RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES = True
 
-ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
-
 # override replacer threshold to write to redis every time a replacement message is consumed
 REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 

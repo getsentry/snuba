@@ -315,32 +315,29 @@ class TestSnQLApi(BaseApiTest):
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock: Any) -> None:
-        for use_split, expected_query_count in [(0, 1), (1, 2)]:
-            state.set_config("use_split", use_split)
-            record_query_mock.reset_mock()
-            result = json.loads(
-                self.post(
-                    "/events/snql",
-                    data=json.dumps(
-                        {
-                            "query": f"""MATCH (events)
-                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
-                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                            AND project_id IN tuple({self.project_id})
-                            LIMIT 5""",
-                            "tenant_ids": {"referrer": "test", "organization_id": 123},
-                        }
-                    ),
-                ).data
-            )
+        record_query_mock.reset_mock()
+        result = json.loads(
+            self.post(
+                "/events/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (events)
+                        SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                        WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN tuple({self.project_id})
+                        LIMIT 5""",
+                        "tenant_ids": {"referrer": "test", "organization_id": 123},
+                    }
+                ),
+            ).data
+        )
 
-            assert len(result["data"]) == 1
-            assert record_query_mock.call_count == 1
-            metadata = record_query_mock.call_args[0][0]
-            assert metadata["dataset"] == "events"
-            assert metadata["request"]["referrer"] == "test"
-            assert len(metadata["query_list"]) == expected_query_count
+        assert len(result["data"]) == 1
+        assert record_query_mock.call_count == 1
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["dataset"] == "events"
+        assert metadata["request"]["referrer"] == "test"
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")

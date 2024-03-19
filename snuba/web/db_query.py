@@ -16,10 +16,7 @@ from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
-from snuba import environment
-from snuba import settings
-from snuba import settings as snuba_settings
-from snuba import state
+from snuba import environment, settings, state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter.nodes import FormattedQuery
@@ -512,7 +509,7 @@ def _raw_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: str = str(uuid.UUID(snuba_settings.DEFAULT_EMPTY_TRACE_ID)),
+    trace_id: Optional[str] = None,
     robust: bool = False,
 ) -> QueryResult:
     """
