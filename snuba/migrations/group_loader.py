@@ -318,6 +318,8 @@ class GenericMetricsLoader(DirectoryLoader):
             "0027_sets_add_raw_tags_column",
             "0028_distributions_add_indexed_tags_column",
             "0029_add_use_case_id_index",
+            "0030_counters_meta_table",
+            "0031_counters_meta_table_mv",
         ]
 
 
