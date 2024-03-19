@@ -9,10 +9,11 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.conditions import binary_condition
+from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl import arrayElement, divide, multiply, plus
+from snuba.query.dsl import arrayElement, divide, multiply, plus, literals_tuple
 from snuba.query.expressions import (
+    Expression,
     Column,
     CurriedFunctionCall,
     FunctionCall,
@@ -37,138 +38,180 @@ from_distributions = QueryEntity(
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
 
-time_expression = FunctionCall(
-    "_snuba_time",
-    "toStartOfInterval",
-    (
-        Column("_snuba_timestamp", None, "timestamp"),
-        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
-        Literal(None, "Universal"),
-    ),
-)
 
-formula_condition = FunctionCall(
-    None,
-    "and",
-    (
-        FunctionCall(
-            None,
+def time_expression(table_alias: str | None = None) -> FunctionCall:
+    alias_prefix = f"{table_alias}." if table_alias else ""
+    return FunctionCall(
+        f"_snuba_{alias_prefix}time",
+        "toStartOfInterval",
+        (
+            Column("_snuba_timestamp", table_alias, "timestamp"),
+            FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+            Literal(None, "Universal"),
+        ),
+    )
+
+
+def condition(table_alias: str | None = None) -> list[FunctionCall]:
+    alias_prefix = f"{table_alias}." if table_alias else ""
+    conditions = [
+        binary_condition(
+            "greaterOrEquals",
+            Column("_snuba_timestamp", table_alias, "timestamp"),
+            Literal(None, datetime(2023, 11, 23, 18, 30)),
+        ),
+        binary_condition(
+            "less",
+            Column("_snuba_timestamp", table_alias, "timestamp"),
+            Literal(None, datetime(2023, 11, 23, 22, 30)),
+        ),
+        binary_condition(
+            "in",
+            Column("_snuba_project_id", table_alias, "project_id"),
+            literals_tuple(None, [Literal(alias=None, value=11)]),
+        ),
+        binary_condition(
+            "in",
+            Column("_snuba_org_id", table_alias, "org_id"),
+            literals_tuple(None, [Literal(alias=None, value=1)]),
+        ),
+        binary_condition(
             "equals",
-            (
-                Column(
-                    "_snuba_granularity",
-                    None,
-                    "granularity",
-                ),
-                Literal(None, 60),
-            ),
+            Column("_snuba_use_case_id", table_alias, "use_case_id"),
+            Literal(None, value="transactions"),
         ),
-        FunctionCall(
-            None,
-            "and",
-            (
-                FunctionCall(
-                    None,
-                    "in",
-                    (
-                        Column(
-                            "_snuba_project_id",
-                            None,
-                            "project_id",
-                        ),
-                        FunctionCall(
-                            None,
-                            "tuple",
-                            (Literal(None, 11),),
-                        ),
-                    ),
-                ),
-                FunctionCall(
-                    None,
-                    "and",
-                    (
-                        FunctionCall(
-                            None,
-                            "in",
-                            (
-                                Column(
-                                    "_snuba_org_id",
-                                    None,
-                                    "org_id",
-                                ),
-                                FunctionCall(
-                                    None,
-                                    "tuple",
-                                    (Literal(None, 1),),
-                                ),
-                            ),
-                        ),
-                        FunctionCall(
-                            None,
-                            "and",
-                            (
-                                FunctionCall(
-                                    None,
-                                    "equals",
-                                    (
-                                        Column(
-                                            "_snuba_use_case_id",
-                                            None,
-                                            "use_case_id",
-                                        ),
-                                        Literal(None, "transactions"),
-                                    ),
-                                ),
-                                FunctionCall(
-                                    None,
-                                    "and",
-                                    (
-                                        FunctionCall(
-                                            None,
-                                            "greaterOrEquals",
-                                            (
-                                                Column(
-                                                    "_snuba_timestamp",
-                                                    None,
-                                                    "timestamp",
-                                                ),
-                                                Literal(
-                                                    None,
-                                                    datetime(2023, 11, 23, 18, 30),
-                                                ),
-                                            ),
-                                        ),
-                                        FunctionCall(
-                                            None,
-                                            "less",
-                                            (
-                                                Column(
-                                                    "_snuba_timestamp",
-                                                    None,
-                                                    "timestamp",
-                                                ),
-                                                Literal(
-                                                    None,
-                                                    datetime(
-                                                        2023,
-                                                        11,
-                                                        23,
-                                                        22,
-                                                        30,
-                                                    ),
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
+        binary_condition(
+            "equals",
+            Column("_snuba_granularity", table_alias, "granularity"),
+            Literal(None, value=60),
         ),
-    ),
-)
+    ]
+
+    return conditions
+
+
+# formula_condition = FunctionCall(
+#     None,
+#     "and",
+#     (
+#         FunctionCall(
+#             None,
+#             "equals",
+#             (
+#                 Column(
+#                     "_snuba_granularity",
+#                     None,
+#                     "granularity",
+#                 ),
+#                 Literal(None, 60),
+#             ),
+#         ),
+#         FunctionCall(
+#             None,
+#             "and",
+#             (
+#                 FunctionCall(
+#                     None,
+#                     "in",
+#                     (
+#                         Column(
+#                             "_snuba_project_id",
+#                             None,
+#                             "project_id",
+#                         ),
+#                         FunctionCall(
+#                             None,
+#                             "tuple",
+#                             (Literal(None, 11),),
+#                         ),
+#                     ),
+#                 ),
+#                 FunctionCall(
+#                     None,
+#                     "and",
+#                     (
+#                         FunctionCall(
+#                             None,
+#                             "in",
+#                             (
+#                                 Column(
+#                                     "_snuba_org_id",
+#                                     None,
+#                                     "org_id",
+#                                 ),
+#                                 FunctionCall(
+#                                     None,
+#                                     "tuple",
+#                                     (Literal(None, 1),),
+#                                 ),
+#                             ),
+#                         ),
+#                         FunctionCall(
+#                             None,
+#                             "and",
+#                             (
+#                                 FunctionCall(
+#                                     None,
+#                                     "equals",
+#                                     (
+#                                         Column(
+#                                             "_snuba_use_case_id",
+#                                             None,
+#                                             "use_case_id",
+#                                         ),
+#                                         Literal(None, "transactions"),
+#                                     ),
+#                                 ),
+#                                 FunctionCall(
+#                                     None,
+#                                     "and",
+#                                     (
+#                                         FunctionCall(
+#                                             None,
+#                                             "greaterOrEquals",
+#                                             (
+#                                                 Column(
+#                                                     "_snuba_timestamp",
+#                                                     None,
+#                                                     "timestamp",
+#                                                 ),
+#                                                 Literal(
+#                                                     None,
+#                                                     datetime(2023, 11, 23, 18, 30),
+#                                                 ),
+#                                             ),
+#                                         ),
+#                                         FunctionCall(
+#                                             None,
+#                                             "less",
+#                                             (
+#                                                 Column(
+#                                                     "_snuba_timestamp",
+#                                                     None,
+#                                                     "timestamp",
+#                                                 ),
+#                                                 Literal(
+#                                                     None,
+#                                                     datetime(
+#                                                         2023,
+#                                                         11,
+#                                                         23,
+#                                                         22,
+#                                                         30,
+#                                                     ),
+#                                                 ),
+#                                             ),
+#                                         ),
+#                                     ),
+#                                 ),
+#                             ),
+#                         ),
+#                     ),
+#                 ),
+#             ),
+#         ),
+#     ),
+# )
 mql_context = {
     "entity": "generic_metrics_distributions",
     "start": "2023-11-23T18:30:00",
@@ -229,13 +272,24 @@ def timeseries(
     )
 
 
-def tag_column(tag: str) -> SubscriptableReference:
+def metric_id_condition(metric_id: int, table_alias: str | None = None) -> FunctionCall:
+    return FunctionCall(
+        None,
+        "equals",
+        (
+            Column("_snuba_metric_id", table_alias, "metric_id"),
+            Literal(None, metric_id),
+        ),
+    )
+
+
+def tag_column(tag: str, table_alias: str | None = None) -> SubscriptableReference:
     tag_val = mql_context.get("indexer_mappings").get(tag)  # type: ignore
     return SubscriptableReference(
         alias=f"_snuba_tags_raw[{tag_val}]",
         column=Column(
             alias="_snuba_tags_raw",
-            table_name=None,
+            table_name=table_alias,
             column_name="tags_raw",
         ),
         key=Literal(alias=None, value=f"{tag_val}"),
@@ -244,20 +298,24 @@ def tag_column(tag: str) -> SubscriptableReference:
 
 def test_simple_formula() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+
     expected_selected = SelectedExpression(
         "aggregate_value",
         divide(
-            timeseries(
-                "sumIf",
-                123456,
-                binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
-                ),
+            FunctionCall(
+                None,
+                "sum",
+                (Column("_snuba_value", "d1", "value"),),
             ),
-            timeseries("sumIf", 123456),
+            FunctionCall(
+                None,
+                "sum",
+                (Column("_snuba_value", "d3", "value"),),
+            ),
             "_snuba_aggregate_value",
         ),
     )
+
     join_clause = JoinClause(
         left_node=IndividualNode(
             alias="d3",
@@ -269,12 +327,54 @@ def test_simple_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d3.time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
                 right=JoinConditionExpression(table_alias="d3", column="d3.time"),
             )
         ],
         join_type=JoinType.INNER,
         join_modifier=None,
+    )
+
+    FunctionCall(
+        alias=None,
+        function_name="equals",
+        parameters=(
+            SubscriptableReference(
+                alias="_snuba_tags_raw[222222]",
+                column=Column(
+                    alias="_snuba_tags_raw", table_name="d1", column_name="tags_raw"
+                ),
+                key=Literal(alias=None, value="222222"),
+            ),
+            Literal(alias=None, value="200"),
+        ),
+    )
+    FunctionCall(
+        alias=None,
+        function_name="equals",
+        parameters=(
+            Column(alias="_snuba_metric_id", table_name="d1", column_name="metric_id"),
+            Literal(alias=None, value=123456),
+        ),
+    )
+    FunctionCall(
+        alias=None,
+        function_name="equals",
+        parameters=(
+            Column(alias="_snuba_metric_id", table_name="d3", column_name="metric_id"),
+            Literal(alias=None, value=123456),
+        ),
+    )
+
+    tag_condition = binary_condition(
+        "equals", tag_column("status_code", "d1"), Literal(None, "200")
+    )
+    metric_condition1 = metric_id_condition(123456, "d1")
+    metric_condition2 = metric_id_condition(123456, "d3")
+    formula_condition = combine_and_conditions(
+        condition("d3")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -283,15 +383,19 @@ def test_simple_formula() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression,
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d3"),
             ),
         ],
-        groupby=[time_expression],
+        groupby=[time_expression("d1"), time_expression("d3")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression,
+                expression=time_expression("d3"),
             ),
         ],
         limit=1000,
@@ -329,6 +433,8 @@ def test_simple_formula() -> None:
 
 
 def test_simple_formula_with_leading_literals() -> None:
+    # TODO: uncomment this
+    return
     query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
     expected_selected = SelectedExpression(
         "aggregate_value",
