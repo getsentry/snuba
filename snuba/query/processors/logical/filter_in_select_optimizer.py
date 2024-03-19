@@ -1,14 +1,18 @@
 import logging
+from copy import deepcopy
 
 from snuba import environment
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
+    ExpressionVisitor,
     FunctionCall,
+    Lambda,
     Literal,
     SubscriptableReference,
 )
@@ -33,19 +37,59 @@ metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger(__name__)
 
 
+class FindConditionalAggregateFunctionsVisitor(ExpressionVisitor[None]):
+    """
+    Search an expression for all conditional aggregate functions.
+
+    Might be able to use matchers.Pattern to extend this idea for general search but I was too lazy.
+    """
+
+    def __init__(self) -> None:
+        self._matches: list[FunctionCall | CurriedFunctionCall] = []
+
+    def get_matches(self) -> list[FunctionCall | CurriedFunctionCall]:
+        return deepcopy(self._matches)
+
+    def visit_literal(self, exp: Literal) -> None:
+        return
+
+    def visit_column(self, exp: Column) -> None:
+        return
+
+    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> None:
+        return
+
+    def visit_function_call(self, exp: FunctionCall) -> None:
+        if exp.function_name[-2:] == "If":
+            self._matches.append(exp)
+        else:
+            for param in exp.parameters:
+                param.accept(self)
+
+    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> None:
+        if exp.internal_function.function_name[-2:] == "If":
+            self._matches.append(exp)
+
+    def visit_argument(self, exp: Argument) -> None:
+        return
+
+    def visit_lambda(self, exp: Lambda) -> None:
+        return
+
+
 class FilterInSelectOptimizer:
     """
-    This optimizer takes queries that filter by metric_id in the select clause (via conditional aggregate functions),
-    and adds the equivalent metric_id filtering to the where clause. Example:
+    This optimizer takes queries that filter in the select clause (via conditional aggregate functions),
+    and adds the equivalent conditions to the where clause. Example:
 
-        SELECT sumIf(value, metric_id in (1,2,3,4))
+        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200)
         FROM table
 
         becomes
 
         SELECT sumIf(value, metric_id in (1,2,3,4))
         FROM table
-        WHERE metric_id in (1,2,3,4)
+        WHERE metric_id in (1,2,3,4) and status=200
     """
 
     def process_mql_query(
