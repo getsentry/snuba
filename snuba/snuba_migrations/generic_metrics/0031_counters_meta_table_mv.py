@@ -1,6 +1,13 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import AggregateFunction, Column, DateTime, String, UInt
+from snuba.clickhouse.columns import (
+    AggregateFunction,
+    Array,
+    Column,
+    DateTime,
+    String,
+    UInt,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -18,9 +25,9 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
         Column("metric_id", UInt(64)),
         Column("tag_key", String()),
-        Column("tag_value", String()),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
+        Column("tags.value", AggregateFunction("groupUniqArray", [Array(String())])),
         Column("value", AggregateFunction("sum", [Float(64)])),
     ]
     storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
@@ -40,21 +47,20 @@ class Migration(migration.ClickhouseNodeMigration):
                     use_case_id,
                     metric_id,
                     tag_key,
-                    tag_value,
                     toStartOfWeek(timestamp) as timestamp,
                     retention_days,
+                    groupUniqArrayState(tag_value) as `tags.value`,
                     sumState(count_value) as count
                 FROM generic_metric_counters_raw_local
                 ARRAY JOIN
-                    tags.key AS tag_key,
-                    tags.raw_value AS tag_value
+                    tags.key AS tag_key, tags.raw_value AS tag_value
+                WHERE use_case_id NOT IN ('escalating_issues', 'bundle_analysis', 'metric_stats')
                 GROUP BY
                     org_id,
                     project_id,
                     use_case_id,
                     metric_id,
                     tag_key,
-                    tag_value,
                     timestamp,
                     retention_days
                 """,

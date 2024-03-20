@@ -1,6 +1,13 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import AggregateFunction, Column, DateTime, String, UInt
+from snuba.clickhouse.columns import (
+    AggregateFunction,
+    Array,
+    Column,
+    DateTime,
+    String,
+    UInt,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -20,9 +27,9 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("use_case_id", String(Modifiers(low_cardinality=True))),
         Column("metric_id", UInt(64)),
         Column("tag_key", String()),
-        Column("tag_value", String()),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
+        Column("tags.value", AggregateFunction("groupUniqArray", [Array(String())])),
         Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
@@ -33,7 +40,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.local_table_name,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
-                    order_by="(org_id, project_id, use_case_id, metric_id, tag_key, timestamp, tag_value)",
+                    order_by="(org_id, project_id, use_case_id, metric_id, tag_key, timestamp)",
                     primary_key="(org_id, project_id, use_case_id, metric_id, tag_key, timestamp)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": self.granularity},
