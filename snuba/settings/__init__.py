@@ -395,6 +395,9 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
+# Max query size that can be sent to clickhouse
+MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
+
 # The slice configs below are the "SLICED" versions to the equivalent default
 # settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
 # version of "KAFKA_TOPIC_MAP". These should be filled out for any

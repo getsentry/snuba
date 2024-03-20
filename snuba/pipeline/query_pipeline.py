@@ -13,6 +13,7 @@ from snuba.datasets.plans.query_plan import (
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
+from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 
 TPlan = TypeVar("TPlan", bound=Union[ClickhouseQueryPlan, CompositeQueryPlan])
@@ -113,36 +114,49 @@ class QueryPipelineStage(Generic[Tin, Tout]):
     """
 
     def _process_error(
-        self, query_settings: QuerySettings, error: Exception
+        self, pipe_input: QueryPipelineResult[Tin]
     ) -> Union[Tout, Exception]:
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
-        logging.exception(error)
-        return error
+        logging.exception(pipe_input.error)
+        return pipe_input.error
 
     @abstractmethod
-    def _process_data(self, query_settings: QuerySettings, data: Tin) -> Tout:
+    def _process_data(self, pipe_input: QueryPipelineResult[Tin]) -> Tout:
         raise NotImplementedError
 
-    def execute(self, input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
-        if input.error:
-            # Forward the error to next stage of pipeline
-            res = self._process_error(input.query_settings, input.error)
+    def execute(
+        self, pipe_input: QueryPipelineResult[Tin]
+    ) -> QueryPipelineResult[Tout]:
+        if pipe_input.error:
+            res = self._process_error(pipe_input.query_settings, pipe_input.error)
             if isinstance(res, Exception):
                 return QueryPipelineResult(
-                    data=None, query_settings=input.query_settings, error=res
+                    data=None,
+                    query_settings=pipe_input.query_settings,
+                    error=res,
+                    timer=pipe_input.timer,
                 )
             else:
-                return QueryPipelineResult(data=res, error=None)
+                return QueryPipelineResult(
+                    data=res,
+                    query_settings=pipe_input.query_settings,
+                    error=None,
+                    timer=pipe_input.timer,
+                )
         try:
             return QueryPipelineResult(
-                data=self._process_data(input.query_settings, input.data),
-                query_settings=input.query_settings,
+                data=self._process_data(pipe_input),
+                query_settings=pipe_input.query_settings,
+                timer=pipe_input.timer,
                 error=None,
             )
         except Exception as e:
             return QueryPipelineResult(
-                data=None, query_settings=input.query_settings, error=e
+                data=None,
+                query_settings=pipe_input.query_settings,
+                timer=pipe_input.timer,
+                error=e,
             )
 
 
@@ -158,6 +172,7 @@ class QueryPipelineResult(ABC, Generic[T]):
 
     data: Optional[T]
     query_settings: QuerySettings
+    timer: Timer
     error: Optional[Exception]
 
     def __post_init__(self) -> None:

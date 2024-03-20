@@ -12,29 +12,30 @@ from snuba import environment
 from snuba import settings as snuba_settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
-from snuba.clickhouse.query import Query
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_inspector import TablesCollector
-from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset_name
-from snuba.pipeline.query_pipeline import QueryPipelineResult
-from snuba.pipeline.stages.query_execution import ExecutionStage
-from snuba.pipeline.stages.query_processing import EntityAndStoragePipelineStage
+from snuba.clusters.cluster import Cluster
+from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
+from snuba.datasets.slicing import is_storage_set_sliced
+from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
+from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
-from snuba.query.exceptions import QueryPlanException
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.query_settings import QuerySettings
-from snuba.querylog import record_query
 from snuba.querylog.query_metadata import (
     QueryStatus,
     SnubaQueryMetadata,
     get_request_status,
 )
 from snuba.reader import Reader
-from snuba.request import Request
-from snuba.subscriptions.data import SUBSCRIPTION_REFERRER
+from snuba.settings import MAX_QUERY_SIZE_BYTES
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.web import (
     QueryException,
@@ -45,137 +46,111 @@ from snuba.web import (
 )
 from snuba.web.db_query import db_query, update_query_metadata_and_stats
 
-logger = logging.getLogger("snuba.query")
-
 metrics = MetricsWrapper(environment.metrics, "api")
+logger = logging.getLogger("snuba.pipeline.stages.query_execution")
 
-MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
-
-@with_span()
-def parse_and_run_query(
-    dataset: Dataset,
-    request: Request,
-    timer: Timer,
-    robust: bool = False,
-    concurrent_queries_gauge: Optional[Gauge] = None,
-) -> QueryResult:
+class StorageKeyJoinFinder(JoinVisitor[StorageKey, Table]):
     """
-    Runs a Snuba Query, then records the metadata about each split query that was run.
-    """
-    query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
-
-    try:
-        result = _run_query_pipeline(
-            dataset=dataset,
-            request=request,
-            timer=timer,
-            query_metadata=query_metadata,
-            robust=robust,
-            concurrent_queries_gauge=concurrent_queries_gauge,
-        )
-        _set_query_final(request, result.extra)
-        if not request.query_settings.get_dry_run():
-            record_query(request, timer, query_metadata, result)
-    except QueryException as error:
-        _set_query_final(request, error.extra)
-        record_query(request, timer, query_metadata, error)
-        raise error
-    except QueryPlanException as error:
-        record_query(request, timer, query_metadata, error)
-        raise error
-
-    return result
-
-
-def _set_query_final(request: Request, extra: QueryExtraData) -> None:
-    if "final" in extra["stats"]:
-        request.query.set_final(extra["stats"]["final"])
-
-
-def _run_query_pipeline(
-    dataset: Dataset,
-    request: Request,
-    timer: Timer,
-    query_metadata: SnubaQueryMetadata,
-    robust: bool,
-    concurrent_queries_gauge: Optional[Gauge],
-) -> QueryResult:
-    """
-    Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
-    and a Request and returns the results of the query.
-
-    This process includes:
-    - Applying dataset query processors on the abstract Snuba query.
-    - Using the dataset provided ClickhouseQueryPlanBuilder to build a ClickhouseQueryPlan. This step
-      transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
-      From this point on none should depend on the dataset.
-    - Executing the plan specific query processors.
-    - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
-      to the QueryExecutionStrategy to actually run the DB Query.
+    Produces all the viable ClickhouseQueryPlans for each subquery
+    in the join.
     """
 
-    record_missing_use_case_id(request, dataset)
-    record_subscription_created_missing_tenant_ids(request)
+    def visit_individual_node(self, node: IndividualNode[Table]) -> StorageKey:
+        if isinstance(node.data_source, ProcessableQuery):
+            return node.data_source.get_from_clause().storage_key
+        else:
+            return node.data_source.storage_key
 
-    clickhouse_query = EntityAndStoragePipelineStage().execute(
-        QueryPipelineResult(
-            data=request, query_settings=request.query_settings, timer=timer, error=None
-        )
-    )
-    res = ExecutionStage(
-        attribution_info=request.attribution_info,
-        query_metadata=query_metadata,
-        robust=robust,
-    ).execute(clickhouse_query)
-    if res.error:
-        raise res.error
-    return res.data
+    def visit_join_clause(self, node: JoinClause[Table]) -> StorageKey:
+        left_storage_key = node.left_node.accept(self)
+        right_storage_key = node.right_node.accept(self)
+        if is_storage_set_sliced(get_storage(left_storage_key).get_storage_set_key()):
+            return left_storage_key
+        return right_storage_key
 
 
-def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:
+class StorageKeyFinder(DataSourceVisitor[StorageKey, Table]):
     """
-    Used to track how often the new `use_case_id` Tenant ID is not included in
-    a Generic Metrics request.
+    Given a query, finds the storage_set_key from which to get the cluster
+    In the case of a join, it will select an arbitrary storage_set_key that is in
+    the from_clause. Storages that are sliced are given higher priority
+
     """
-    if get_dataset_name(dataset) == "generic_metrics":
-        if (
-            not (tenant_ids := request.attribution_info.tenant_ids)
-            or (use_case_id := tenant_ids.get("use_case_id")) is None
-        ):
-            metrics.increment(
-                "gen_metrics_request_without_use_case_id",
-                tags={"referrer": request.referrer},
+
+    def _visit_simple_source(self, data_source: Table) -> StorageKey:
+        return data_source.storage_key
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> StorageKey:
+        return data_source.accept(StorageKeyJoinFinder())
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> StorageKey:
+        return data_source.get_from_clause().storage_key
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> StorageKey:
+        return self.visit(data_source.get_from_clause())
+
+
+class ExecutionStage(QueryPipelineStage[ClickhouseQuery, QueryResult]):
+    def __init__(
+        self,
+        attribution_info: AttributionInfo,
+        query_metadata: SnubaQueryMetadata,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ):
+        self._attribution_info = attribution_info
+        self._query_metadata = query_metadata
+        # NOTE: (Volo) this should probably be a query setting
+        self._robust = robust
+        # NOTE (Volo): this should probably exist by default or not at all
+        self._concurrent_queries_gauge = concurrent_queries_gauge
+
+    def get_cluster(self, query: ClickhouseQuery, settings: QuerySettings) -> Cluster:
+        storage_key = StorageKeyFinder().visit(query)
+        storage = get_storage(storage_key)
+        if is_storage_set_sliced(storage.get_storage_set_key()):
+            with sentry_sdk.start_span(
+                op="build_plan.sliced_storage", description="select_storage"
+            ):
+                assert (
+                    self.__partition_key_column_name is not None
+                ), "partition key column name must be defined for a sliced storage"
+                assert isinstance(storage, ReadableTableStorage)
+                return ColumnBasedStorageSliceSelector(
+                    storage=storage.get_storage_key(),
+                    storage_set=storage.get_storage_set_key(),
+                    partition_key_column_name=self.__partition_key_column_name,
+                ).select_cluster(query, settings)
+        return storage.get_cluster()
+
+    def _process_data(
+        self, pipe_input: QueryPipelineResult[ClickhouseQuery]
+    ) -> QueryResult:
+        cluster = self.get_cluster(pipe_input.data, pipe_input.query_settings)
+        if pipe_input.query_settings.get_dry_run():
+            return _dry_run_query_runner(
+                clickhouse_query=pipe_input.data,
+                query_settings=pipe_input.query_settings,
+                reader=Reader(pipe_input.data.get_from_clause().key),
+                cluster_name=pipe_input.data.get_from_clause().key.cluster,
             )
         else:
-            metrics.increment(
-                "gen_metrics_request_with_use_case_id",
-                tags={
-                    "referrer": request.referrer,
-                    "use_case_id": str(use_case_id),
-                },
-            )
-
-
-def record_subscription_created_missing_tenant_ids(request: Request) -> None:
-    """
-    Used to track how often new subscriptions are created without Tenant IDs.
-    """
-    if request.referrer == SUBSCRIPTION_REFERRER:
-        if not (tenant_ids := request.attribution_info.tenant_ids):
-            metrics.increment("subscription_created_without_tenant_ids")
-        else:
-            metrics.increment(
-                "subscription_created_with_tenant_ids",
-                tags={
-                    "use_case_id": str(tenant_ids.get("use_case_id")),
-                    "has_org_id": str(tenant_ids.get("organization_id") is not None),
-                },
+            return _run_and_apply_column_names(
+                timer=pipe_input.timer,
+                query_metadata=self._query_metadata,
+                attribution_info=self._attribution_info,
+                robust=self._robust,
+                concurrent_queries_gauge=None,
+                clickhouse_query=pipe_input.data,
+                query_settings=pipe_input.query_settings,
+                reader=cluster.get_reader(),
+                cluster_name=cluster.get_clickhouse_cluster_name() or "",
             )
 
 
 def _dry_run_query_runner(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
     cluster_name: str,
@@ -206,7 +181,7 @@ def _run_and_apply_column_names(
     attribution_info: AttributionInfo,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
     cluster_name: str,
@@ -258,7 +233,7 @@ def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     attribution_info: AttributionInfo,
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
     query_settings: QuerySettings,
     reader: Reader,
     robust: bool,
@@ -374,14 +349,14 @@ def get_query_size_group(query_size_bytes: int) -> str:
 
 
 def _apply_turbo_sampling_if_needed(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
+    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
     query_settings: QuerySettings,
 ) -> None:
     """
     TODO: Remove this method entirely and move the sampling logic
     into a query processor.
     """
-    if isinstance(clickhouse_query, Query):
+    if isinstance(clickhouse_query, ClickhouseQuery):
         if (
             query_settings.get_turbo()
             and not clickhouse_query.get_from_clause().sampling_rate
