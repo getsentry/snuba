@@ -6,6 +6,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity import Entity
 
+
 class Dataset:
     """
     A dataset represents a data model we can run a Snuba Query on.
