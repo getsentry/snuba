@@ -166,8 +166,8 @@ pub fn consumer_impl(
                 handle,
                 kafka_dlq_producer,
                 DlqLimit {
-                    max_invalid_ratio: Some(0.01),
-                    max_consecutive_count: Some(1000),
+                    max_invalid_ratio: None,
+                    max_consecutive_count: None,
                 },
                 None,
             )
