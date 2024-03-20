@@ -111,15 +111,27 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         >>>             return QueryPipelineResult(None, e)
     """
 
+    def _process_error(self, error: Exception) -> Union[Tout, Exception]:
+        """default behaviour is to just pass through to the next stage of the pipeline
+        Can be overridden to do something else"""
+        return error
+
     @abstractmethod
-    def _execute(self, input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
+    def _process_data(self, data: Tin) -> Tout:
         raise NotImplementedError
 
     def execute(self, input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
         if input.error:
             # Forward the error to next stage of pipeline
-            return QueryPipelineResult(None, input.error)
-        return self._execute(input)
+            res = self._process_error(input.error)
+            if isinstance(res, Exception):
+                return QueryPipelineResult(data=None, error=res)
+            else:
+                return QueryPipelineResult(data=res, error=None)
+        try:
+            return QueryPipelineResult(data=self._process_data(input.data), error=None)
+        except Exception as e:
+            return QueryPipelineResult(data=None, error=e)
 
 
 class InvalidQueryPipelineResult(Exception):
