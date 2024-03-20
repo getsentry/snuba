@@ -119,6 +119,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
         logging.exception(pipe_input.error)
+        assert pipe_input.error is not None
         return pipe_input.error
 
     @abstractmethod
