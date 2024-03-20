@@ -56,9 +56,9 @@ MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
 def _run_new_query_pipeline(
-    dataset: Dataset,
     request: Request,
     timer: Timer,
+    query_metadata: SnubaQueryMetadata,
     robust: bool = False,
     concurrent_queries_gauge: Optional[Gauge] = None,
 ) -> QueryResult:
@@ -67,7 +67,6 @@ def _run_new_query_pipeline(
             data=request, query_settings=request.query_settings, timer=timer, error=None
         )
     )
-    query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
     res = ExecutionStage(
         request.attribution_info,
         query_metadata=query_metadata,
@@ -98,7 +97,7 @@ def parse_and_run_query(
     try:
         if run_new_pipeline:
             _run_new_query_pipeline(
-                dataset, request, timer, robust, concurrent_queries_gauge
+                request, timer, query_metadata, robust, concurrent_queries_gauge
             )
         else:
             result = _run_query_pipeline(
