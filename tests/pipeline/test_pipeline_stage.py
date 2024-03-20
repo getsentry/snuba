@@ -12,9 +12,7 @@ from snuba.utils.metrics.timer import Timer
 
 
 class TestQueryPipelineStage(QueryPipelineStage[int, int]):
-    def _process_data(
-        self, pipe_input: QueryPipelineResult[int]
-    ) -> QueryPipelineResult[int]:
+    def _process_data(self, pipe_input: QueryPipelineResult[int]) -> int:
         return check_input_and_multiply(pipe_input.data)
 
 

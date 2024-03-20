@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Optional, Sequence, TypeVar, Union
+from typing import Generic, Optional, Sequence, TypeVar, Union, cast
 
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -114,23 +114,22 @@ class QueryPipelineStage(Generic[Tin, Tout]):
     """
 
     def _process_error(
-        self, pipe_input: QueryPipelineResult[Tin]
+        self, pipe_input: QueryPipelineError[Tin]
     ) -> Union[Tout, Exception]:
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
         logging.exception(pipe_input.error)
-        assert pipe_input.error is not None
         return pipe_input.error
 
     @abstractmethod
-    def _process_data(self, pipe_input: QueryPipelineResult[Tin]) -> Tout:
+    def _process_data(self, pipe_input: QueryPipelineData[Tin]) -> Tout:
         raise NotImplementedError
 
     def execute(
         self, pipe_input: QueryPipelineResult[Tin]
     ) -> QueryPipelineResult[Tout]:
         if pipe_input.error:
-            res = self._process_error(pipe_input)
+            res = self._process_error(pipe_input.as_error())
             if isinstance(res, Exception):
                 return QueryPipelineResult(
                     data=None,
@@ -147,7 +146,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
                 )
         try:
             return QueryPipelineResult(
-                data=self._process_data(pipe_input),
+                data=self._process_data(pipe_input.as_data()),
                 query_settings=pipe_input.query_settings,
                 timer=pipe_input.timer,
                 error=None,
@@ -172,12 +171,33 @@ class QueryPipelineResult(ABC, Generic[T]):
     """
 
     data: Optional[T]
+    error: Optional[Exception]
     query_settings: QuerySettings
     timer: Timer
-    error: Optional[Exception]
 
     def __post_init__(self) -> None:
         if self.data is None and self.error is None:
             raise InvalidQueryPipelineResult(
                 "QueryPipelineResult must have either data or error set"
             )
+
+    def as_data(self) -> QueryPipelineData[T]:
+        return cast(QueryPipelineData[T], self)
+
+    def as_error(self) -> QueryPipelineError[T]:
+        return cast(QueryPipelineError[T], self)
+
+
+# these classes are just for typing purposes. It avoids the user of a QueryPipelineStage
+# having to `assert pipe_input.data is not None` at every call, it sucks because we have to repeat
+# the class strucure a few times but I think it's a little more user friendly (Volo)
+@dataclass
+class QueryPipelineData(QueryPipelineResult[T]):
+    data: T
+    error: None
+
+
+@dataclass
+class QueryPipelineError(QueryPipelineResult[T]):
+    data: None
+    error: Exception

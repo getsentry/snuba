@@ -75,7 +75,10 @@ def _run_new_query_pipeline(
     ).execute(clickhouse_query)
     if res.error:
         raise res.error
-    return res.data
+    elif res.data:
+        return res.data
+    # we should never get here
+    raise Exception("No result or data, very bad exception")
 
 
 @with_span()
@@ -91,12 +94,17 @@ def parse_and_run_query(
     """
     # from_clause = request.query.get_from_clause()
     query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
-    run_new_pipeline = random.random() <= state.get_float_config(
+    run_new_query_pipeline_rollout = state.get_float_config(
         "run_new_query_pipeline", snuba_settings.USE_NEW_QUERY_PIPELINE_SAMPLE_RATE
+    )
+    run_new_pipeline = (
+        random.random() <= run_new_query_pipeline_rollout
+        if run_new_query_pipeline_rollout is not None
+        else False
     )
     try:
         if run_new_pipeline:
-            _run_new_query_pipeline(
+            result = _run_new_query_pipeline(
                 request, timer, query_metadata, robust, concurrent_queries_gauge
             )
         else:

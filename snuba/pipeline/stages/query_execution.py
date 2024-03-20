@@ -4,7 +4,7 @@ import logging
 import textwrap
 from dataclasses import replace
 from math import floor
-from typing import Any, MutableMapping, Optional, Union
+from typing import Any, MutableMapping, Optional
 
 import sentry_sdk
 
@@ -14,13 +14,11 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_inspector import TablesCollector
-from snuba.clusters.cluster import Cluster
-from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.slicing import is_storage_set_sliced
-from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
+from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -91,7 +89,9 @@ class StorageKeyFinder(DataSourceVisitor[StorageKey, Table]):
         return self.visit(data_source.get_from_clause())
 
 
-class ExecutionStage(QueryPipelineStage[ClickhouseQuery, QueryResult]):
+class ExecutionStage(
+    QueryPipelineStage[ClickhouseQuery | CompositeQuery[Table], QueryResult]
+):
     def __init__(
         self,
         attribution_info: AttributionInfo,
@@ -106,34 +106,25 @@ class ExecutionStage(QueryPipelineStage[ClickhouseQuery, QueryResult]):
         # NOTE (Volo): this should probably exist by default or not at all
         self._concurrent_queries_gauge = concurrent_queries_gauge
 
-    def get_cluster(self, query: ClickhouseQuery, settings: QuerySettings) -> Cluster:
+    def get_cluster(
+        self, query: ClickhouseQuery | CompositeQuery[Table], settings: QuerySettings
+    ) -> ClickhouseCluster:
         storage_key = StorageKeyFinder().visit(query)
         storage = get_storage(storage_key)
         if is_storage_set_sliced(storage.get_storage_set_key()):
-            with sentry_sdk.start_span(
-                op="build_plan.sliced_storage", description="select_storage"
-            ):
-                assert (
-                    self.__partition_key_column_name is not None
-                ), "partition key column name must be defined for a sliced storage"
-                assert isinstance(storage, ReadableTableStorage)
-                return ColumnBasedStorageSliceSelector(
-                    storage=storage.get_storage_key(),
-                    storage_set=storage.get_storage_set_key(),
-                    partition_key_column_name=self.__partition_key_column_name,
-                ).select_cluster(query, settings)
+            raise NotImplementedError("sliced storages not supported in new pipeline")
         return storage.get_cluster()
 
     def _process_data(
-        self, pipe_input: QueryPipelineResult[ClickhouseQuery]
+        self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> QueryResult:
         cluster = self.get_cluster(pipe_input.data, pipe_input.query_settings)
         if pipe_input.query_settings.get_dry_run():
             return _dry_run_query_runner(
                 clickhouse_query=pipe_input.data,
-                query_settings=pipe_input.query_settings,
-                reader=Reader(pipe_input.data.get_from_clause().key),
-                cluster_name=pipe_input.data.get_from_clause().key.cluster,
+                cluster_name=getattr(
+                    cluster, "get_clickhouse_cluster_name", lambda: "no_cluster_name"
+                )(),
             )
         else:
             return _run_and_apply_column_names(
@@ -150,9 +141,7 @@ class ExecutionStage(QueryPipelineStage[ClickhouseQuery, QueryResult]):
 
 
 def _dry_run_query_runner(
-    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
-    query_settings: QuerySettings,
-    reader: Reader,
+    clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
     # NOTE (Volo) : this is misleading behavior. If this runner is used with a split query,
@@ -181,7 +170,7 @@ def _run_and_apply_column_names(
     attribution_info: AttributionInfo,
     robust: bool,
     concurrent_queries_gauge: Optional[Gauge],
-    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
+    clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     query_settings: QuerySettings,
     reader: Reader,
     cluster_name: str,
@@ -233,7 +222,7 @@ def _format_storage_query_and_run(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     attribution_info: AttributionInfo,
-    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
+    clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     query_settings: QuerySettings,
     reader: Reader,
     robust: bool,
@@ -349,7 +338,7 @@ def get_query_size_group(query_size_bytes: int) -> str:
 
 
 def _apply_turbo_sampling_if_needed(
-    clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
+    clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     query_settings: QuerySettings,
 ) -> None:
     """
