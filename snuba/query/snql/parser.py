@@ -983,7 +983,6 @@ def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) ->
         if exp.table_name is not None:
             return exp  # Table name is already qualified
 
-        print("QUAL", exp)
         parts = exp.column_name.split(".", 1)
         if len(parts) != 2 or parts[0] not in aliases:
             raise ParsingException(
@@ -1221,7 +1220,6 @@ def _mangle_query_aliases(
 
     def mangle_aliases(exp: Expression) -> Expression:
         alias = exp.alias
-        print("ALIAS", exp)
         if alias is not None:
             return replace(exp, alias=f"{alias_prefix}{alias}")
 

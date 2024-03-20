@@ -327,8 +327,8 @@ def test_simple_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d3", column="d3.time"),
+                left=JoinConditionExpression(table_alias="d1", column="time"),
+                right=JoinConditionExpression(table_alias="d3", column="time"),
             )
         ],
         join_type=JoinType.INNER,

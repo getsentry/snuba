@@ -423,9 +423,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -772,8 +770,8 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
     raise ParsingException(f"invalid metric type {mri[0]}")
 
 
-def convert_formula_to_query(
-    parsed: InitialParseResult, dataset: Dataset
+def (
+    parsed: Inconvert_formula_to_queryitialParseResult, dataset: Dataset
 ) -> LogicalQuery | CompositeQuery[QueryEntity]:
     """
     Look up all the referenced entities, and create a JoinClause for each of the entities
@@ -832,58 +830,41 @@ def convert_formula_to_query(
         )
         return IndividualNode(node.table_alias, data_source)
 
-    # The JoinClause needs to know what to join on. In this case, we join each query by
-    # whatever it is grouped by. We pick an arbitrary node and make that the base node
-    # that all the other nodes join too. Then we need a different alias for the base
-    # to join too. This works because all the columns to join on are the same so
-    # the only difference is the alias.
-    base_table_alias = join_nodes[0].table_alias
-    other_table_alias = join_nodes[-1].table_alias
-    if base_table_alias is None or other_table_alias is None:
-        raise InvalidQueryException("Formula has invalid table aliases")
+    # Build the JoinClause recursively, joining each node to the previous node.
+    # Note one thing: this assumes that each node has the same group by, which is enforced earlier.
+    first_node = build_node(join_nodes[0])
 
     def build_join_clause(
-        nodes: list[InitialParseResult],
-    ) -> JoinClause[QueryEntity] | IndividualNode[QueryEntity] | None:
-        if len(nodes) == 1:
-            return build_node(nodes[0])
+        prev_node: IndividualNode[QueryEntity], nodes: list[InitialParseResult]
+    ) -> JoinClause[QueryEntity]:
+        if not nodes:
+            raise InvalidQueryException("Invalid join clause in formula query")
 
-        node, *rest = nodes
-        node_alias = node.table_alias
-        if not node_alias:
+        node = nodes[0]
+        if not node.table_alias:
             raise InvalidQueryException("Invalid table alias in formula query")
+        lhs = build_node(node)
 
         conditions = []
-        left_alias = (
-            base_table_alias if node_alias != base_table_alias else other_table_alias
-        )
-        # TODO: This is a problem: these columns don't get resolved I don't think
         for groupby in node.groupby or []:
             column = groupby.expression
             assert isinstance(column, Column)
             conditions.append(
                 JoinCondition(
-                    left=JoinConditionExpression(left_alias, column.column_name),
-                    right=JoinConditionExpression(node_alias, column.column_name),
+                    left=JoinConditionExpression(lhs.alias, column.column_name),
+                    right=JoinConditionExpression(prev_node.alias, column.column_name),
                 )
             )
 
-        rhs = build_node(node)
-        lhs = build_join_clause(rest)
-        if not lhs:
-            raise InvalidQueryException("Invalid join clause in formula query")
-
+        left_side = build_join_clause(lhs, nodes[1:]) if len(nodes) > 1 else lhs
         return JoinClause(
-            left_node=lhs,
-            right_node=rhs,
+            left_node=left_side,
+            right_node=prev_node,
             keys=conditions,
             join_type=JoinType.INNER,
         )
 
-    join_clause = build_join_clause(join_nodes)
-    if not isinstance(join_clause, JoinClause):
-        raise InvalidQueryException("Invalid join clause in formula query")
-
+    join_clause = build_join_clause(first_node, join_nodes)
     query = CompositeQuery(
         from_clause=join_clause,
     )
@@ -928,21 +909,25 @@ def convert_formula_to_query(
         )
     ]
 
-    # Go through all the groupbys, populate the groupbys with the table alias, add them to the query groupbys
-    groupby = None
-    if parsed.groupby:
-        groupby = []
-        for group_exp in parsed.groupby:
-            if isinstance(group_exp.expression, Column):
-                aliased_groupby = replace(
-                    group_exp,
-                    expression=replace(
-                        group_exp.expression, table_name=base_table_alias
-                    ),
-                )
-                selected_columns.append(aliased_groupby)
-                groupby.append(aliased_groupby.expression)
+    # The groupbys are pushed down to all the nodes of the query. Add them to the groupby of the query
+    groupby = []
+    for leaf_node in join_nodes:
+        if leaf_node.groupby:
+            for group_exp in leaf_node.groupby:
+                if isinstance(group_exp.expression, Column):
+                    aliased_groupby = replace(
+                        group_exp,
+                        expression=replace(
+                            group_exp.expression, table_name=leaf_node.table_alias
+                        ),
+                    )
+                    selected_columns.append(aliased_groupby)
+                    groupby.append(aliased_groupby.expression)
+
+    if groupby:
         query.set_ast_groupby(groupby)
+
+    print("SELECTED", selected_columns)
 
     query.set_ast_selected_columns(selected_columns)
 
@@ -1324,7 +1309,7 @@ def populate_query_from_mql_context(
         assert isinstance(data_source, QueryEntity)  # mypy
         entity_data.append((data_source.key, node.alias))
 
-    found_selected_time = None
+    selected_time_found = False
     for entity_key, alias in entity_data:
         time_condition = start_end_time_condition(mql_context, entity_key, alias)
         scope_condition = scope_conditions(mql_context, alias)
@@ -1342,8 +1327,7 @@ def populate_query_from_mql_context(
         query.set_ast_orderby([orderby])
 
         if selected_time:
-            print("SELECTED", query.get_selected_columns())
-            found_selected_time = selected_time
+            selected_time_found = True
             query.set_ast_selected_columns(
                 list(query.get_selected_columns()) + [selected_time]
             )
@@ -1354,28 +1338,26 @@ def populate_query_from_mql_context(
             else:
                 query.set_ast_groupby([selected_time.expression])
 
-    if isinstance(query, CompositeQuery) and found_selected_time is not None:
+    if isinstance(query, CompositeQuery) and selected_time_found:
         # If the query is grouping by time, that needs to be added to the JoinClause keys to
         # ensure we correctly join the subqueries. The column names will be the same for all the
         # subqueries, so we just need to map all the table aliases.
-        column_name = str(found_selected_time.expression.alias)
+
+        # alias -> alias.column
         join_clause = query.get_from_clause()
         assert isinstance(join_clause, JoinClause)
         base_node_alias = join_clause.right_node.alias
-        # Base node shouldn't map to itself
-        other_node_alias = [d[1] for d in entity_data if d[1] != base_node_alias].pop()
-        for _, alias in entity_data:
-            left_side_alias = (
-                base_node_alias if alias != base_node_alias else other_node_alias
-            )
-            right_side_alias = alias
+        other_aliases = [d[1] for d in entity_data if d[1] != base_node_alias]
+        new_conditions = []
+        for other in other_aliases:
             condition = JoinCondition(
-                left=JoinConditionExpression(left_side_alias, column_name),
-                right=JoinConditionExpression(right_side_alias, column_name),
+                left=JoinConditionExpression(base_node_alias, "time"),
+                right=JoinConditionExpression(other, "time"),
             )
-            conditions = list(join_clause.keys)
-            conditions.append(condition)
-            query.set_from_clause(replace(join_clause, keys=conditions))
+            new_conditions.append(condition)
+
+        conditions = list(join_clause.keys)
+        query.set_from_clause(replace(join_clause, keys=conditions + new_conditions))
 
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)
@@ -1440,8 +1422,6 @@ def parse_mql_query(
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
 
-    print("EARLIER", query.get_from_clause())
-
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
     # before we run the anonymizer and the rest of the post processors
@@ -1471,7 +1451,5 @@ def parse_mql_query(
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
-
-    print("FINAL", query.get_from_clause())
 
     return query, snql_anonymized

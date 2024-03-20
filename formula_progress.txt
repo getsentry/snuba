@@ -5,6 +5,9 @@ Trying to get aliasing working as expected: in conditions the table alias is not
 The join clause isn't right, the conditions reference the wrong columns
 JoinConditionExpression(table_alias='d1', column='d3.time')
 
+Fixed this by simplifying the recursion to skip the self reference problem entirely.
+Discovered that the groupby wasn't being properly done (need to parse all the leaf nodes)
+
 
 
 
