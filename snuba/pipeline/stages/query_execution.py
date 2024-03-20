@@ -50,8 +50,8 @@ logger = logging.getLogger("snuba.pipeline.stages.query_execution")
 
 class StorageKeyJoinFinder(JoinVisitor[StorageKey, Table]):
     """
-    Produces all the viable ClickhouseQueryPlans for each subquery
-    in the join.
+    looks through the join clause for relevant storage keys. picks an arbitrary one to execute the
+    query against, prioritizes sliced storages
     """
 
     def visit_individual_node(self, node: IndividualNode[Table]) -> StorageKey:
