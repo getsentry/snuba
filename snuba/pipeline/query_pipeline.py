@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Generic, Optional, Sequence, TypeVar, Union
@@ -111,27 +112,38 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         >>>             return QueryPipelineResult(None, e)
     """
 
-    def _process_error(self, error: Exception) -> Union[Tout, Exception]:
+    def _process_error(
+        self, query_settings: QuerySettings, error: Exception
+    ) -> Union[Tout, Exception]:
         """default behaviour is to just pass through to the next stage of the pipeline
         Can be overridden to do something else"""
+        logging.exception(error)
         return error
 
     @abstractmethod
-    def _process_data(self, data: Tin) -> Tout:
+    def _process_data(self, query_settings: QuerySettings, data: Tin) -> Tout:
         raise NotImplementedError
 
     def execute(self, input: QueryPipelineResult[Tin]) -> QueryPipelineResult[Tout]:
         if input.error:
             # Forward the error to next stage of pipeline
-            res = self._process_error(input.error)
+            res = self._process_error(input.query_settings, input.error)
             if isinstance(res, Exception):
-                return QueryPipelineResult(data=None, error=res)
+                return QueryPipelineResult(
+                    data=None, query_settings=input.query_settings, error=res
+                )
             else:
                 return QueryPipelineResult(data=res, error=None)
         try:
-            return QueryPipelineResult(data=self._process_data(input.data), error=None)
+            return QueryPipelineResult(
+                data=self._process_data(input.query_settings, input.data),
+                query_settings=input.query_settings,
+                error=None,
+            )
         except Exception as e:
-            return QueryPipelineResult(data=None, error=e)
+            return QueryPipelineResult(
+                data=None, query_settings=input.query_settings, error=e
+            )
 
 
 class InvalidQueryPipelineResult(Exception):
@@ -145,6 +157,7 @@ class QueryPipelineResult(ABC, Generic[T]):
     """
 
     data: Optional[T]
+    query_settings: QuerySettings
     error: Optional[Exception]
 
     def __post_init__(self) -> None:

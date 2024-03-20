@@ -17,10 +17,10 @@ from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.pipeline.query_pipeline import QueryPipelineResult
+from snuba.pipeline.stages.query_processing import EntityAndStoragePipelineStage
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import QueryPlanException
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import (
@@ -113,73 +113,18 @@ def _run_query_pipeline(
     - Executing the plan specific query processors.
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
-
-
-    ** GOTCHAS **
-
-    Something which is not immediately clear from looking at the code is that the
-    query_runner can be run multiple times during the execution of the pipeline.
-    The execution pipeline may choose to break up a query into multiple subqueries. And
-    then assemble those together into one resut
-
-    Throughout those executions, the query_metadata.query_list is appended to every time a query runs
-    within `db_query.py` with metadata about the query. That metadata then goes into the querylog.
-
-    There is the possibility that the `query_runner` is used across different threads. In that case,
-    there *may* be a race condition on the `query_list`. At time of writing (27-03-2023) this is not a concern because:
-
-      - MultipleConcurrentPipeline is not in use and therefore this does not happen in practice
-      - Even when the runner function is invoked across multiple threads, threads in python are not truly paralllel
-      - synchornizing locks for mostly theoretical analytics reasons does not seem worth it. When you are reading
-          this comment, that may no longer be true
-
     """
 
     record_missing_use_case_id(request, dataset)
     record_subscription_created_missing_tenant_ids(request)
 
     from snuba.clusters.cluster import Cluster
-    from snuba.datasets.entities.factory import get_entity
-    from snuba.pipeline.composite import CompositeExecutionPipeline
-    from snuba.pipeline.query_pipeline import QueryPipelineStage
-
-    class EntityAndStoragePipelineStage(
-        QueryPipelineStage[Request, tuple[Query, QuerySettings]]
-    ):
-        def _process_data(self, data: Request) -> tuple[Query, QuerySettings]:
-            _clickhouse_query = None
-            _query_settings = None
-
-            def _query_runner(
-                clickhouse_query: Union[Query, CompositeQuery[Table]],
-                query_settings: QuerySettings,
-                reader: Reader,
-                cluster_name: str,
-            ) -> QueryResult:
-                nonlocal _clickhouse_query, _query_settings
-                _clickhouse_query = clickhouse_query
-                _query_settings = query_settings
-
-            if isinstance(data.query, LogicalQuery):
-                entity = get_entity(data.query.get_from_clause().key)
-                execution_pipeline = (
-                    entity.get_query_pipeline_builder().build_execution_pipeline(
-                        request, _query_runner
-                    )
-                )
-            else:
-                execution_pipeline = CompositeExecutionPipeline(
-                    data.query, data.query_settings, _query_runner
-                )
-
-            execution_pipeline.execute()
-            return (_clickhouse_query, _query_settings)
-
     from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
     from snuba.datasets.slicing import is_storage_set_sliced
     from snuba.datasets.storage import ReadableTableStorage
     from snuba.datasets.storages.factory import get_storage
     from snuba.datasets.storages.storage_key import StorageKey
+    from snuba.pipeline.query_pipeline import QueryPipelineStage
     from snuba.query import ProcessableQuery
     from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
     from snuba.query.data_source.visitor import DataSourceVisitor
@@ -229,7 +174,10 @@ def _run_query_pipeline(
         ) -> StorageKey:
             return self.visit(data_source.get_from_clause())
 
-    class ExecutionStage(QueryPipelineStage[tuple[Query, QuerySettings], QueryResult]):
+    class ExecutionStage(QueryPipelineStage[Query, QueryResult]):
+        def __init__(self, attribution_info: AttributionInfo):
+            self._attribution_info = attribution_info
+
         def get_cluster(self, query: Query, settings: QuerySettings) -> Cluster:
             storage_key = StorageKeyFinder().visit(query)
             storage = get_storage(storage_key)
@@ -248,34 +196,38 @@ def _run_query_pipeline(
                     ).select_cluster(query, settings)
             return storage.get_cluster()
 
-        def _process_data(self, data: tuple[Query, QuerySettings]) -> QueryResult:
-            clickhouse_query = data[0]
-            query_settings = data[1]
-            cluster = self.get_cluster(clickhouse_query, query_settings)
-            if request.query_settings.get_dry_run():
+        def _process_data(
+            self, query_settings: QuerySettings, data: Query
+        ) -> QueryResult:
+            cluster = self.get_cluster(data, query_settings)
+            if query_settings.get_dry_run():
                 return _dry_run_query_runner(
-                    clickhouse_query=data[0],
-                    query_settings=data[1],
-                    reader=Reader(data[0].get_from_clause().key),
-                    cluster_name=data[0].get_from_clause().key.cluster,
+                    clickhouse_query=data,
+                    query_settings=query_settings,
+                    reader=Reader(data.get_from_clause().key),
+                    cluster_name=data.get_from_clause().key.cluster,
                 )
             else:
                 return _run_and_apply_column_names(
                     timer=timer,
                     query_metadata=query_metadata,
-                    attribution_info=request.attribution_info,
+                    attribution_info=self._attribution_info,
                     robust=robust,
                     concurrent_queries_gauge=concurrent_queries_gauge,
-                    clickhouse_query=clickhouse_query,
+                    clickhouse_query=data,
                     query_settings=query_settings,
                     reader=cluster.get_reader(),
                     cluster_name=cluster.get_clickhouse_cluster_name() or "",
                 )
 
     clickhouse_query = EntityAndStoragePipelineStage().execute(
-        QueryPipelineResult(data=request, error=None)
+        QueryPipelineResult(
+            data=request, query_settings=request.query_settings, error=None
+        )
     )
-    res = ExecutionStage().execute(clickhouse_query)
+    res = ExecutionStage(attribution_info=request.attribution_info).execute(
+        clickhouse_query
+    )
     if res.error:
         raise res.error
     return res.data
