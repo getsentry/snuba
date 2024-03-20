@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import random
 import textwrap
 from dataclasses import replace
+from functools import partial
 from math import floor
 from typing import Any, MutableMapping, Optional, Union
 
@@ -10,6 +12,7 @@ import sentry_sdk
 
 from snuba import environment
 from snuba import settings as snuba_settings
+from snuba import state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
@@ -52,6 +55,30 @@ metrics = MetricsWrapper(environment.metrics, "api")
 MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
+def _run_new_query_pipeline(
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    robust: bool = False,
+    concurrent_queries_gauge: Optional[Gauge] = None,
+) -> QueryResult:
+    clickhouse_query = EntityAndStoragePipelineStage().execute(
+        QueryPipelineResult(
+            data=request, query_settings=request.query_settings, timer=timer, error=None
+        )
+    )
+    query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
+    res = ExecutionStage(
+        request.attribution_info,
+        query_metadata=query_metadata,
+        robust=robust,
+        concurrent_queries_gauge=concurrent_queries_gauge,
+    ).execute(clickhouse_query)
+    if res.error:
+        raise res.error
+    return res.data
+
+
 @with_span()
 def parse_and_run_query(
     dataset: Dataset,
@@ -63,17 +90,25 @@ def parse_and_run_query(
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
+    # from_clause = request.query.get_from_clause()
     query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
-
+    run_new_pipeline = random.random() <= state.get_float_config(
+        "run_new_query_pipeline", snuba_settings.USE_NEW_QUERY_PIPELINE_SAMPLE_RATE
+    )
     try:
-        result = _run_query_pipeline(
-            dataset=dataset,
-            request=request,
-            timer=timer,
-            query_metadata=query_metadata,
-            robust=robust,
-            concurrent_queries_gauge=concurrent_queries_gauge,
-        )
+        if run_new_pipeline:
+            _run_new_query_pipeline(
+                dataset, request, timer, robust, concurrent_queries_gauge
+            )
+        else:
+            result = _run_query_pipeline(
+                dataset=dataset,
+                request=request,
+                timer=timer,
+                query_metadata=query_metadata,
+                robust=robust,
+                concurrent_queries_gauge=concurrent_queries_gauge,
+            )
         _set_query_final(request, result.extra)
         if not request.query_settings.get_dry_run():
             record_query(request, timer, query_metadata, result)
@@ -113,24 +148,47 @@ def _run_query_pipeline(
     - Executing the plan specific query processors.
     - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
       to the QueryExecutionStrategy to actually run the DB Query.
+
+
+    ** GOTCHAS **
+
+    Something which is not immediately clear from looking at the code is that the
+    query_runner can be run multiple times during the execution of the pipeline.
+    The execution pipeline may choose to break up a query into multiple subqueries. And
+    then assemble those together into one resut
+
+    Throughout those executions, the query_metadata.query_list is appended to every time a query runs
+    within `db_query.py` with metadata about the query. That metadata then goes into the querylog.
+
+    There is the possibility that the `query_runner` is used across different threads. In that case,
+    there *may* be a race condition on the `query_list`. At time of writing (27-03-2023) this is not a concern because:
+
+      - MultipleConcurrentPipeline is not in use and therefore this does not happen in practice
+      - Even when the runner function is invoked across multiple threads, threads in python are not truly paralllel
+      - synchornizing locks for mostly theoretical analytics reasons does not seem worth it. When you are reading
+          this comment, that may no longer be true
+
     """
+    if request.query_settings.get_dry_run():
+        query_runner = _dry_run_query_runner
+    else:
+        query_runner = partial(
+            _run_and_apply_column_names,
+            timer=timer,
+            query_metadata=query_metadata,
+            attribution_info=request.attribution_info,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
+        )
 
     record_missing_use_case_id(request, dataset)
     record_subscription_created_missing_tenant_ids(request)
 
-    clickhouse_query = EntityAndStoragePipelineStage().execute(
-        QueryPipelineResult(
-            data=request, query_settings=request.query_settings, timer=timer, error=None
-        )
+    return (
+        dataset.get_query_pipeline_builder()
+        .build_execution_pipeline(request, query_runner)
+        .execute()
     )
-    res = ExecutionStage(
-        attribution_info=request.attribution_info,
-        query_metadata=query_metadata,
-        robust=robust,
-    ).execute(clickhouse_query)
-    if res.error:
-        raise res.error
-    return res.data
 
 
 def record_missing_use_case_id(request: Request, dataset: Dataset) -> None:

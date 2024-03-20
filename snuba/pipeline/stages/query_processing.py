@@ -35,6 +35,5 @@ class EntityAndStoragePipelineStage(QueryPipelineStage[Request, ClickhouseQuery]
             execution_pipeline = CompositeExecutionPipeline(
                 pipe_input.data.query, pipe_input.query_settings, _query_runner
             )
-
         execution_pipeline.execute()
         return _clickhouse_query

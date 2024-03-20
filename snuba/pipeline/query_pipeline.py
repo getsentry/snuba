@@ -129,7 +129,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         self, pipe_input: QueryPipelineResult[Tin]
     ) -> QueryPipelineResult[Tout]:
         if pipe_input.error:
-            res = self._process_error(pipe_input.query_settings, pipe_input.error)
+            res = self._process_error(pipe_input)
             if isinstance(res, Exception):
                 return QueryPipelineResult(
                     data=None,
