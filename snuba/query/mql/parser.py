@@ -770,8 +770,8 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
     raise ParsingException(f"invalid metric type {mri[0]}")
 
 
-def (
-    parsed: Inconvert_formula_to_queryitialParseResult, dataset: Dataset
+def convert_formula_to_query(
+    parsed: InitialParseResult, dataset: Dataset
 ) -> LogicalQuery | CompositeQuery[QueryEntity]:
     """
     Look up all the referenced entities, and create a JoinClause for each of the entities
@@ -864,7 +864,7 @@ def (
             join_type=JoinType.INNER,
         )
 
-    join_clause = build_join_clause(first_node, join_nodes)
+    join_clause = build_join_clause(first_node, join_nodes[1:])
     query = CompositeQuery(
         from_clause=join_clause,
     )
@@ -1293,24 +1293,15 @@ def populate_query_from_mql_context(
         join_clause = query.get_from_clause()
         assert isinstance(join_clause, JoinClause)
 
-        # Iterate the join tree to get all the entity keys and associated aliases
-        data_source = join_clause.right_node.data_source
-        assert isinstance(data_source, QueryEntity)  # mypy
-        entity_data.append((data_source.key, join_clause.right_node.alias))
-        node = join_clause.left_node
-        while isinstance(node, JoinClause):
-            data_source = join_clause.right_node.data_source
-            assert isinstance(data_source, QueryEntity)  # mypy
-            entity_data.append((data_source.key, node.right_node.alias))
-            node = node.left_node
-
-        assert isinstance(node, IndividualNode)  # mypy
-        data_source = join_clause.right_node.data_source
-        assert isinstance(data_source, QueryEntity)  # mypy
-        entity_data.append((data_source.key, node.alias))
+        alias_node_map = join_clause.get_alias_node_map()
+        for alias, node in alias_node_map.items():
+            data_source = node.data_source
+            assert isinstance(data_source, QueryEntity)
+            entity_data.append((data_source.key, alias))
 
     selected_time_found = False
     for entity_key, alias in entity_data:
+        print("ENTITY", entity_key, alias)
         time_condition = start_end_time_condition(mql_context, entity_key, alias)
         scope_condition = scope_conditions(mql_context, alias)
         granularity_condition, with_totals, orderby, selected_time = rollup_expressions(
@@ -1338,12 +1329,14 @@ def populate_query_from_mql_context(
             else:
                 query.set_ast_groupby([selected_time.expression])
 
+    for p in query.get_selected_columns():
+        print("POST", p)
+
     if isinstance(query, CompositeQuery) and selected_time_found:
         # If the query is grouping by time, that needs to be added to the JoinClause keys to
         # ensure we correctly join the subqueries. The column names will be the same for all the
         # subqueries, so we just need to map all the table aliases.
 
-        # alias -> alias.column
         join_clause = query.get_from_clause()
         assert isinstance(join_clause, JoinClause)
         base_node_alias = join_clause.right_node.alias

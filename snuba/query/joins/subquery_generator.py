@@ -57,9 +57,9 @@ class SubqueryDraft:
                     key=lambda selected: selected.name or "",
                 )
             ),
-            condition=combine_and_conditions(self.__conditions)
-            if self.__conditions
-            else None,
+            condition=(
+                combine_and_conditions(self.__conditions) if self.__conditions else None
+            ),
             granularity=self.__granularity,
         )
 
@@ -240,6 +240,82 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     subqueries = from_clause.accept(SubqueriesInitializer())
 
     alias_generator = _alias_generator()
+    print("COMPOSITE", query.get_selected_columns())
+
+    [
+        SelectedExpression(
+            name="aggregate_value",
+            expression=FunctionCall(
+                alias="_snuba_aggregate_value",
+                function_name="plus",
+                parameters=(
+                    FunctionCall(
+                        alias=None,
+                        function_name="avg",
+                        parameters=(
+                            Column(
+                                alias="_snuba_value",
+                                table_name="d0",
+                                column_name="value",
+                            ),
+                        ),
+                    ),
+                    FunctionCall(
+                        alias=None,
+                        function_name="avg",
+                        parameters=(
+                            Column(
+                                alias="_snuba_value",
+                                table_name="d1",
+                                column_name="value",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        SelectedExpression(
+            name="time",
+            expression=FunctionCall(
+                alias="_snuba_d1.time",
+                function_name="toStartOfInterval",
+                parameters=(
+                    Column(
+                        alias="_snuba_timestamp",
+                        table_name="d1",
+                        column_name="timestamp",
+                    ),
+                    FunctionCall(
+                        alias=None,
+                        function_name="toIntervalSecond",
+                        parameters=(Literal(alias=None, value=60),),
+                    ),
+                    Literal(alias=None, value="Universal"),
+                ),
+            ),
+        ),
+        SelectedExpression(
+            name="time",
+            expression=FunctionCall(
+                alias="_snuba_d0.time",
+                function_name="toStartOfInterval",
+                parameters=(
+                    Column(
+                        alias="_snuba_timestamp",
+                        table_name="d0",
+                        column_name="timestamp",
+                    ),
+                    FunctionCall(
+                        alias=None,
+                        function_name="toIntervalSecond",
+                        parameters=(Literal(alias=None, value=60),),
+                    ),
+                    Literal(alias=None, value="Universal"),
+                ),
+            ),
+        ),
+    ]
+
     query.set_ast_selected_columns(
         [
             SelectedExpression(
@@ -249,6 +325,8 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
             for s in query.get_selected_columns()
         ]
     )
+
+    print("AFTER", query.get_selected_columns())
 
     array_join = query.get_arrayjoin()
     if array_join is not None:

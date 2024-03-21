@@ -53,7 +53,6 @@ def time_expression(table_alias: str | None = None) -> FunctionCall:
 
 
 def condition(table_alias: str | None = None) -> list[FunctionCall]:
-    alias_prefix = f"{table_alias}." if table_alias else ""
     conditions = [
         binary_condition(
             "greaterOrEquals",
@@ -335,45 +334,14 @@ def test_simple_formula() -> None:
         join_modifier=None,
     )
 
-    FunctionCall(
-        alias=None,
-        function_name="equals",
-        parameters=(
-            SubscriptableReference(
-                alias="_snuba_tags_raw[222222]",
-                column=Column(
-                    alias="_snuba_tags_raw", table_name="d1", column_name="tags_raw"
-                ),
-                key=Literal(alias=None, value="222222"),
-            ),
-            Literal(alias=None, value="200"),
-        ),
-    )
-    FunctionCall(
-        alias=None,
-        function_name="equals",
-        parameters=(
-            Column(alias="_snuba_metric_id", table_name="d1", column_name="metric_id"),
-            Literal(alias=None, value=123456),
-        ),
-    )
-    FunctionCall(
-        alias=None,
-        function_name="equals",
-        parameters=(
-            Column(alias="_snuba_metric_id", table_name="d3", column_name="metric_id"),
-            Literal(alias=None, value=123456),
-        ),
-    )
-
     tag_condition = binary_condition(
         "equals", tag_column("status_code", "d1"), Literal(None, "200")
     )
     metric_condition1 = metric_id_condition(123456, "d1")
     metric_condition2 = metric_id_condition(123456, "d3")
     formula_condition = combine_and_conditions(
-        condition("d3")
-        + condition("d1")
+        condition("d1")
+        + condition("d3")
         + [tag_condition, metric_condition1, metric_condition2]
     )
 
@@ -383,51 +351,29 @@ def test_simple_formula() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("d3"),
             ),
             SelectedExpression(
                 "time",
-                time_expression("d3"),
+                time_expression("d1"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d3")],
+        groupby=[time_expression("d3"), time_expression("d1")],
         condition=formula_condition,
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression("d3"),
+                expression=time_expression("d1"),
             ),
         ],
         limit=1000,
         offset=0,
     )
 
-    # expected = Query(
-    #     from_distributions,
-    #     selected_columns=[
-    #         expected_selected,
-    #         SelectedExpression(
-    #             "time",
-    #             time_expression,
-    #         ),
-    #     ],
-    #     groupby=[time_expression],
-    #     condition=formula_condition,
-    #     order_by=[
-    #         OrderBy(
-    #             direction=OrderByDirection.ASC,
-    #             expression=time_expression,
-    #         )
-    #     ],
-    #     limit=1000,
-    #     offset=0,
-    # )
-
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    print("SELECTED", query.get_selected_columns())
     eq, reason = query.equals(expected)
     assert eq, reason
 
