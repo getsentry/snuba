@@ -216,7 +216,6 @@ def build_entity_from_config(file_path: str) -> PluggableEntity:
         validators=_build_entity_validators(config["validators"]),
         validate_data_model=_build_validation_mode(config.get("validate_data_model")),
         join_relationships=_build_join_relationships(config),
-        partition_key_column_name=config.get("partition_key_column_name", None),
         subscription_processors=_build_subscription_processors(config),
         subscription_validators=_build_subscription_validators(config),
     )

@@ -58,9 +58,6 @@ class PluggableEntity(Entity):
     function_call_validators: Mapping[str, FunctionCallValidator] = field(
         default_factory=dict
     )
-    # partition_key_column_name is used in data slicing (the value in this storage column
-    # will be used to "choose" slices)
-    partition_key_column_name: Optional[str] = None
     subscription_processors: Optional[Sequence[EntitySubscriptionProcessor]] = None
     subscription_validators: Optional[Sequence[EntitySubscriptionValidator]] = None
 
@@ -93,7 +90,6 @@ class PluggableEntity(Entity):
         query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
             storages=self.storages,
             selector=self.storage_selector,
-            partition_key_column_name=self.partition_key_column_name,
         )
 
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)

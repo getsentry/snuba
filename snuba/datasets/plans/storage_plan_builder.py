@@ -116,7 +116,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         storages: Sequence[EntityStorageConnection],
         selector: QueryStorageSelector,
         post_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        partition_key_column_name: Optional[str] = None,
     ) -> None:
         # A list of storages and the translation mappers they are associated with.
         # This list will only contain one storage and mappers for single storage entities.
@@ -133,7 +132,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         # that would have to be executed only once (like Prewhere). That is a
         # candidate to be added here as post process.
         self.__post_processors = post_processors or []
-        self.__partition_key_column_name = partition_key_column_name
 
     def get_storage(
         self, query: LogicalQuery, settings: QuerySettings
@@ -150,14 +148,15 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             with sentry_sdk.start_span(
                 op="build_plan.sliced_storage", description="select_storage"
             ):
+                partition_key_column_name = storage.get_partition_key_column_name()
                 assert (
-                    self.__partition_key_column_name is not None
+                    partition_key_column_name is not None
                 ), "partition key column name must be defined for a sliced storage"
                 assert isinstance(storage, ReadableTableStorage)
                 return ColumnBasedStorageSliceSelector(
                     storage=storage.get_storage_key(),
                     storage_set=storage.get_storage_set_key(),
-                    partition_key_column_name=self.__partition_key_column_name,
+                    partition_key_column_name=partition_key_column_name,
                 ).select_cluster(query, settings)
         return storage.get_cluster()
 

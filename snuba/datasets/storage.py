@@ -92,6 +92,9 @@ class ReadableStorage(Storage):
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return [DEFAULT_PASSTHROUGH_POLICY]
 
+    def get_partition_key_column_name(self) -> str:
+        raise NotImplementedError()
+
 
 class WritableStorage(Storage):
     """
