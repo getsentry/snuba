@@ -262,6 +262,24 @@ expected_optimize_condition = {
         Column("_snuba_metric_id", None, "metric_id"),
         Literal(None, 123456),
     ),
+    "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)": _or(
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+        _and(
+            equals(
+                subscriptable_reference(
+                    "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
+                ),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+    ),
 }
 
 """ TESTING """

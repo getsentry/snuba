@@ -21,6 +21,9 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
+from tests.query.processors.test_filter_in_select_optimizer import (
+    expected_optimize_condition,
+)
 
 # Commonly used expressions
 from_distributions = QueryEntity(
@@ -259,7 +262,9 @@ def test_simple_formula() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -304,7 +309,9 @@ def test_simple_formula_with_leading_literals() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -349,7 +356,9 @@ def test_groupby() -> None:
             ),
         ],
         groupby=[tag_column("transaction"), time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -424,7 +433,9 @@ def test_curried_aggregate() -> None:
             ),
         ],
         groupby=[tag_column("transaction"), time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -469,7 +480,9 @@ def test_bracketing_rules() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -533,7 +546,9 @@ def test_formula_filters() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -588,7 +603,9 @@ def test_formula_groupby() -> None:
             ),
         ],
         groupby=[tag_column("transaction"), time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
@@ -630,7 +647,9 @@ def test_formula_scalar_value() -> None:
             ),
         ],
         groupby=[time_expression],
-        condition=formula_condition,
+        condition=binary_condition(
+            "and", expected_optimize_condition[query_body], formula_condition
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
