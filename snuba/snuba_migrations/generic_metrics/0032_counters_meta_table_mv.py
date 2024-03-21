@@ -1,13 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import (
-    AggregateFunction,
-    Array,
-    Column,
-    DateTime,
-    String,
-    UInt,
-)
+from snuba.clickhouse.columns import AggregateFunction, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -27,7 +20,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("tag_key", String()),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
-        Column("tag_values", AggregateFunction("groupUniqArray", [Array(String())])),
+        Column("tag_values", AggregateFunction("groupUniqArray", [String()])),
         Column("value", AggregateFunction("sum", [Float(64)])),
     ]
     storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
