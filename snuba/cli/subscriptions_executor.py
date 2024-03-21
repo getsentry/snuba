@@ -110,6 +110,7 @@ def subscriptions_executor(
 
     metrics_tags = {
         "dataset": dataset_name,
+        "entity": entity_names[0],
     }
 
     if slice_id:
