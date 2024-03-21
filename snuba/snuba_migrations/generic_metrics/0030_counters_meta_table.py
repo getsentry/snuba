@@ -29,7 +29,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("tag_key", String()),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
-        Column("tags.value", AggregateFunction("groupUniqArray", [Array(String())])),
+        Column("tag_values", AggregateFunction("groupUniqArray", [Array(String())])),
         Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
