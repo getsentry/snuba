@@ -89,8 +89,12 @@ class FilterInSelectOptimizer:
                 new_condition = self.get_select_filter(query)
                 if new_condition is not None:
                     query.add_condition_to_ast(new_condition)
-            except ValueError:
-                raise
+                    metrics.increment("kyles_optimizer_optimized")
+            except Exception:
+                logger.warning(
+                    "Failed during optimization", exc_info=True, extra={"query": query}
+                )
+                return
 
     def get_select_filter(
         self,
