@@ -13,7 +13,6 @@ from snuba.query.conditions import binary_condition, combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import arrayElement, divide, multiply, plus, literals_tuple
 from snuba.query.expressions import (
-    Expression,
     Column,
     CurriedFunctionCall,
     FunctionCall,
@@ -28,7 +27,6 @@ from snuba.query.data_source.join import (
     JoinClause,
     JoinCondition,
     JoinConditionExpression,
-    JoinRelationship,
     JoinType,
 )
 
@@ -89,128 +87,6 @@ def condition(table_alias: str | None = None) -> list[FunctionCall]:
     return conditions
 
 
-# formula_condition = FunctionCall(
-#     None,
-#     "and",
-#     (
-#         FunctionCall(
-#             None,
-#             "equals",
-#             (
-#                 Column(
-#                     "_snuba_granularity",
-#                     None,
-#                     "granularity",
-#                 ),
-#                 Literal(None, 60),
-#             ),
-#         ),
-#         FunctionCall(
-#             None,
-#             "and",
-#             (
-#                 FunctionCall(
-#                     None,
-#                     "in",
-#                     (
-#                         Column(
-#                             "_snuba_project_id",
-#                             None,
-#                             "project_id",
-#                         ),
-#                         FunctionCall(
-#                             None,
-#                             "tuple",
-#                             (Literal(None, 11),),
-#                         ),
-#                     ),
-#                 ),
-#                 FunctionCall(
-#                     None,
-#                     "and",
-#                     (
-#                         FunctionCall(
-#                             None,
-#                             "in",
-#                             (
-#                                 Column(
-#                                     "_snuba_org_id",
-#                                     None,
-#                                     "org_id",
-#                                 ),
-#                                 FunctionCall(
-#                                     None,
-#                                     "tuple",
-#                                     (Literal(None, 1),),
-#                                 ),
-#                             ),
-#                         ),
-#                         FunctionCall(
-#                             None,
-#                             "and",
-#                             (
-#                                 FunctionCall(
-#                                     None,
-#                                     "equals",
-#                                     (
-#                                         Column(
-#                                             "_snuba_use_case_id",
-#                                             None,
-#                                             "use_case_id",
-#                                         ),
-#                                         Literal(None, "transactions"),
-#                                     ),
-#                                 ),
-#                                 FunctionCall(
-#                                     None,
-#                                     "and",
-#                                     (
-#                                         FunctionCall(
-#                                             None,
-#                                             "greaterOrEquals",
-#                                             (
-#                                                 Column(
-#                                                     "_snuba_timestamp",
-#                                                     None,
-#                                                     "timestamp",
-#                                                 ),
-#                                                 Literal(
-#                                                     None,
-#                                                     datetime(2023, 11, 23, 18, 30),
-#                                                 ),
-#                                             ),
-#                                         ),
-#                                         FunctionCall(
-#                                             None,
-#                                             "less",
-#                                             (
-#                                                 Column(
-#                                                     "_snuba_timestamp",
-#                                                     None,
-#                                                     "timestamp",
-#                                                 ),
-#                                                 Literal(
-#                                                     None,
-#                                                     datetime(
-#                                                         2023,
-#                                                         11,
-#                                                         23,
-#                                                         22,
-#                                                         30,
-#                                                     ),
-#                                                 ),
-#                                             ),
-#                                         ),
-#                                     ),
-#                                 ),
-#                             ),
-#                         ),
-#                     ),
-#                 ),
-#             ),
-#         ),
-#     ),
-# )
 mql_context = {
     "entity": "generic_metrics_distributions",
     "start": "2023-11-23T18:30:00",
