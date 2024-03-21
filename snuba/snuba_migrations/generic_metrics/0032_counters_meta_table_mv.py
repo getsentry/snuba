@@ -54,7 +54,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 FROM generic_metric_counters_raw_local
                 ARRAY JOIN
                     tags.key AS tag_key, tags.raw_value AS tag_value
-                WHERE use_case_id NOT IN ('escalating_issues', 'bundle_analysis', 'metric_stats')
+                WHERE record_meta = 1
                 GROUP BY
                     org_id,
                     project_id,
