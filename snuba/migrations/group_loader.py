@@ -356,6 +356,7 @@ class SpansLoader(DirectoryLoader):
             "0009_spans_add_measure_hashmap",
             "0010_spans_add_compression",
             "0011_spans_add_index_on_trace_id",
+            "0012_spans_add_index_on_transaction_name",
         ]
 
 
