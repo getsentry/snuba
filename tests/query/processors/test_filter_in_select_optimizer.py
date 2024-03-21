@@ -13,7 +13,6 @@ from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
-    FindConditionalAggregateFunctionsVisitor,
 )
 
 """ CONFIG STUFF THAT DOESNT MATTER MUCH """
@@ -59,103 +58,6 @@ def subscriptable_reference(name: str, key: str) -> SubscriptableReference:
         Column(f"_snuba_{name}", None, name),
         Literal(None, key),
     )
-
-
-mql_test_cases: list[tuple[str, dict]] = [
-    (
-        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            }
-        },
-    ),
-    (
-        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@second`)",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-                Literal(None, 123457),
-            }
-        },
-    ),
-    (
-        "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            }
-        },
-    ),
-    (
-        "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            }
-        },
-    ),
-    (
-        "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            }
-        },
-    ),
-    (
-        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            },
-            subscriptable_reference("tags_raw", "222222"): {
-                Literal(None, "200"),
-            },
-        },
-    ),
-    (
-        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:[400,404,500,501]}",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            },
-            subscriptable_reference("tags_raw", "222222"): {
-                Literal(None, "400"),
-                Literal(None, "404"),
-                Literal(None, "500"),
-                Literal(None, "501"),
-            },
-        },
-    ),
-    (
-        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            },
-            subscriptable_reference("tags_raw", "222222"): {
-                Literal(None, "200"),
-            },
-        },
-    ),
-    (
-        "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            },
-        },
-    ),
-    (
-        "sum(`d:transactions/duration@millisecond`) * 1000",
-        {
-            Column("_snuba_metric_id", None, "metric_id"): {
-                Literal(None, 123456),
-            }
-        },
-    ),
-]
 
 
 def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
@@ -392,47 +294,12 @@ new_mql_test_cases: list[tuple[str, FunctionCall]] = [
 
 """ TESTING """
 
-optimizer = FilterInSelectOptimizer()
-
-
-@pytest.mark.parametrize(
-    "mql_query, expected_domain",
-    mql_test_cases,
-)
-def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
-    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
-    assert isinstance(logical_query, Query)
-    res = optimizer.get_domain_of_mql_query(logical_query)
-    if res != expected_domain:
-        raise
-    assert res == expected_domain
-
-
-@pytest.mark.parametrize(
-    "mql_query, expected_domain",
-    mql_test_cases,
-)
-def test_searcher(mql_query: str, expected_domain: set[int]) -> None:
-    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
-    assert isinstance(logical_query, Query)
-
-    opt = FilterInSelectOptimizer()
-    for selected_expression in logical_query.get_selected_columns():
-        exp = selected_expression.expression
-
-        oldres = opt._contains_conditional_aggregate(exp)
-
-        v = FindConditionalAggregateFunctionsVisitor()
-        selected_expression.expression.accept(v)
-        newres = len(v.get_matches()) > 0
-        assert newres == oldres
-
 
 @pytest.mark.parametrize(
     "mql_query, expected_condition",
     new_mql_test_cases,
 )
-def test_new_pipeline(mql_query: str, expected_condition: FunctionCall) -> None:
+def test_condition_generation(mql_query: str, expected_condition: FunctionCall) -> None:
     logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
     assert isinstance(logical_query, Query)
 

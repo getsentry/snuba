@@ -1067,7 +1067,7 @@ def quantiles_to_quantile(
 def optimize_filter_in_select(
     query: CompositeQuery[QueryEntity] | LogicalQuery,
 ) -> None:
-    FilterInSelectOptimizer().process_mql_query2(query)
+    FilterInSelectOptimizer().process_mql_query(query)
 
 
 CustomProcessors = Sequence[
