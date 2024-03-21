@@ -92,6 +92,64 @@ class FilterInSelectOptimizer:
         WHERE metric_id in (1,2,3,4) and status=200
     """
 
+    def process_mql_query2(
+        self, query: LogicalQuery | CompositeQuery[QueryEntity]
+    ) -> None:
+        feat_flag = get_int_config("enable_filter_in_select_optimizer", default=0)
+        if feat_flag:
+            try:
+                new_condition = self.get_select_filter(query)
+                if new_condition is not None:
+                    query.add_condition_to_ast(new_condition)
+            except ValueError:
+                raise
+
+    def get_select_filter(
+        self,
+        query: LogicalQuery | CompositeQuery[QueryEntity],
+    ) -> FunctionCall | None:
+        """
+        Given a query, grabs all the conditions from conditional aggregates and lifts into
+        one condition.
+
+        ex: SELECT sumIf(value, metric_id in (1,2,3,4) and status=200),
+                    avgIf(value, metric_id in (11,12) and status=400),
+        returns or((metric_id in (1,2,3,4) and status=200), (metric_id in (11,12) and status=400))
+        """
+        # find and grab all the conditional aggregate functions
+        cond_agg_functions: list[FunctionCall | CurriedFunctionCall] = []
+        for selected_exp in query.get_selected_columns():
+            exp = selected_exp.expression
+            finder = FindConditionalAggregateFunctionsVisitor()
+            exp.accept(finder)
+            found = finder.get_matches()
+            if len(found) > 0:
+                if len(cond_agg_functions) > 0:
+                    raise ValueError(
+                        "expected only one selected column to contain conditional aggregate functions but found multiple"
+                    )
+                else:
+                    cond_agg_functions = found
+
+        if len(cond_agg_functions) == 0:
+            return None
+
+        # validate the functions, and lift their conditions into new_condition, return it
+        new_condition = None
+        for func in cond_agg_functions:
+            if len(func.parameters) != 2 or not isinstance(
+                func.parameters[1], FunctionCall
+            ):
+                raise ValueError("unexpected form of function")
+
+            if new_condition is None:
+                new_condition = deepcopy(func.parameters[1])
+            else:
+                new_condition = binary_condition(
+                    "or", deepcopy(func.parameters[1]), new_condition
+                )
+        return new_condition
+
     def process_mql_query(
         self, query: LogicalQuery | CompositeQuery[QueryEntity]
     ) -> None:
@@ -129,6 +187,37 @@ class FilterInSelectOptimizer:
                 assert domain_filter is not None
                 query.add_condition_to_ast(domain_filter)
                 metrics.increment("kyles_optimizer_optimized")
+
+    def get_select_filter_old(
+        self,
+        query: LogicalQuery | CompositeQuery[QueryEntity],
+    ) -> FunctionCall | None:
+        domain = self.get_domain_of_mql_query(query)
+
+        if not domain:
+            return None
+
+        # make the condition
+        domain_filter = None
+        for key, value in domain.items():
+            clause = binary_condition(
+                "in",
+                key,
+                FunctionCall(
+                    alias=None,
+                    function_name="array",
+                    parameters=tuple(value),
+                ),
+            )
+            if not domain_filter:
+                domain_filter = clause
+            else:
+                domain_filter = binary_condition(
+                    "and",
+                    domain_filter,
+                    clause,
+                )
+        return domain_filter
 
     def get_domain_of_mql_query(
         self, query: LogicalQuery | CompositeQuery[QueryEntity]
