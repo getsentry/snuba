@@ -152,8 +152,8 @@ def query_fetcher(
     window_hours_ago_ts = now - timedelta(hours=window_hours)
     interval = timedelta(hours=1)
 
-    start_time = window_hours_ago_ts
     for table in table_names:
+        start_time = window_hours_ago_ts
         while start_time < now:
             end_time = start_time + interval
             logger.info(f"Fetching queries to run from {table}...")
