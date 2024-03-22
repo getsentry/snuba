@@ -144,10 +144,6 @@ def _dry_run_query_runner(
     clickhouse_query: ClickhouseQuery | CompositeQuery[Table],
     cluster_name: str,
 ) -> QueryResult:
-    # NOTE (Volo) : this is misleading behavior. If this runner is used with a split query,
-    # you will only see the sql reported that the first of the split queries ran. Since this returns
-    # no results, you won't see any others
-
     with sentry_sdk.start_span(
         description="dryrun_create_query", op="function"
     ) as span:
