@@ -1,5 +1,5 @@
 import importlib
-from typing import Any, List, Optional
+from typing import Any, List
 
 import pytest
 
@@ -71,7 +71,6 @@ TEST_CASES = [
         get_dataset("transactions"),
         get_entity(EntityKey.TRANSACTIONS).get_all_storage_connections(),
         DefaultQueryStorageSelector(),
-        None,
         StorageSetKey.TRANSACTIONS,
         id="Single storage",
     ),
@@ -87,7 +86,6 @@ TEST_CASES = [
         get_dataset("events"),
         get_entity(EntityKey.EVENTS).get_all_storage_connections(),
         ErrorsQueryStorageSelector(),
-        None,
         StorageSetKey.EVENTS,
         id="Multiple storages and selector",
     ),
@@ -97,7 +95,7 @@ TEST_CASES = [
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 @pytest.mark.parametrize(
-    "snql_query, dataset, storage_connections, selector, partition_key_column_name, expected_storage_set_key",
+    "snql_query, dataset, storage_connections, selector, expected_storage_set_key",
     TEST_CASES,
 )
 def test_storage_query_plan_builder(
@@ -105,13 +103,11 @@ def test_storage_query_plan_builder(
     dataset: Dataset,
     storage_connections: List[EntityStorageConnection],
     selector: QueryStorageSelector,
-    partition_key_column_name: Optional[str],
     expected_storage_set_key: StorageKey,
 ) -> None:
     query_plan_builder = StorageQueryPlanBuilder(
         storages=storage_connections,
         selector=selector,
-        partition_key_column_name=partition_key_column_name,
     )
     query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
@@ -160,7 +156,6 @@ def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
     query_plan_builder = StorageQueryPlanBuilder(
         storages=storage_connections,
         selector=selector,
-        partition_key_column_name=None,
     )
     query, _ = parse_snql_query(str(snql_query), dataset)
 

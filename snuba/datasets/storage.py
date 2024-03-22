@@ -125,11 +125,13 @@ class ReadableTableStorage(ReadableStorage):
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
+        partition_key_column_name: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
+        self.__partition_key_column_name = partition_key_column_name
         super().__init__(storage_set_key, schema, readiness_state)
 
     def get_storage_key(self) -> StorageKey:
@@ -143,6 +145,9 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return self.__allocation_policies or super().get_allocation_policies()
+
+    def get_partition_key_column_name(self) -> str:
+        return self.__get_partition_key_column_name()
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -160,6 +165,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
+        partition_key_column_name: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         super().__init__(
@@ -170,6 +176,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             query_processors,
             mandatory_condition_checkers,
             allocation_policies,
+            partition_key_column_name=partition_key_column_name,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(

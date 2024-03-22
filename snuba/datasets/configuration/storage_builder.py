@@ -93,6 +93,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         ]
         if ALLOCATION_POLICIES in config
         else [],
+        "partition_key_column_name": config.get("partition_key_column_name", None),
     }
 
 
