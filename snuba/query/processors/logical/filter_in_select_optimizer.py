@@ -73,6 +73,8 @@ class FindConditionalAggregateFunctionsVisitor(
     ) -> list[FunctionCall | CurriedFunctionCall]:
         if exp.internal_function.function_name[-2:] == "If":
             self._matches.append(exp)
+        for param in exp.internal_function.parameters:
+            param.accept(self)
         return self._matches
 
     def visit_argument(self, exp: Argument) -> list[FunctionCall | CurriedFunctionCall]:
@@ -85,17 +87,18 @@ class FindConditionalAggregateFunctionsVisitor(
 class FilterInSelectOptimizer:
     """
     This optimizer lifts conditions in the select clause into the where clause,
-    this is
     and adds the equivalent conditions to the where clause. Example:
 
-        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200)
+        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200),
+               avgIf(value, metric_id in (3,4,5))
         FROM table
 
         becomes
 
-        SELECT sumIf(value, metric_id in (1,2,3,4))
+        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200),
+               avgIf(value, metric_id in (3,4,5))
         FROM table
-        WHERE metric_id in (1,2,3,4) and status=200
+        WHERE (metric_id in (1,2,3,4) and status=200) or metric_id in (3,4,5)
     """
 
     def process_mql_query(
@@ -147,10 +150,14 @@ class FilterInSelectOptimizer:
         # validate the functions, and lift their conditions into new_condition, return it
         new_condition = None
         for func in cond_agg_functions:
-            if len(func.parameters) != 2 or not isinstance(
-                func.parameters[1], FunctionCall
-            ):
-                raise ValueError("unexpected form of function")
+            if len(func.parameters) != 2:
+                raise ValueError(
+                    f"expected conditional functions to be of the form funcIf(val, condition), but was given a function with {len(func.parameters)} parameters"
+                )
+            if not isinstance(func.parameters[1], FunctionCall):
+                raise ValueError(
+                    f"expected conditional functions to be of the form funcIf(val, condition), but was given a function whos condition is {type(func.parameters[1])} rather than FunctionCall"
+                )
 
             if new_condition is None:
                 new_condition = deepcopy(func.parameters[1])
