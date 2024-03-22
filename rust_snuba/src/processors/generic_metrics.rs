@@ -212,14 +212,11 @@ impl Parse for CountersRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let mut record_meta: Option<u8> = Some(1);
-        let blacklisted_use_case_ids = ["escalating_issues", "metric_stats"];
-        if blacklisted_use_case_ids
-            .iter()
-            .any(|&u| u == from.use_case_id)
-        {
-            record_meta = Some(0);
-        }
+        let record_meta = match from.use_case_id.as_str() {
+            "escalating_issues" => Some(0),
+            "metric_stats" => Some(0),
+            _ => Some(1),
+        };
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
