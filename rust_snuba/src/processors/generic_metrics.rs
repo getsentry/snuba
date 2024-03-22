@@ -213,7 +213,7 @@ impl Parse for CountersRawRow {
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
         let mut record_meta: Option<u8> = Some(1);
-        let blacklisted_use_case_ids = vec!["escalating_issues", "metric_stats"];
+        let blacklisted_use_case_ids = ["escalating_issues", "metric_stats"];
         if blacklisted_use_case_ids
             .iter()
             .any(|&u| u == from.use_case_id)
