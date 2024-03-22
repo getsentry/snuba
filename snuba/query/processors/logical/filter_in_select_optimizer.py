@@ -24,44 +24,62 @@ metrics = MetricsWrapper(environment.metrics, "api")
 logger = logging.getLogger(__name__)
 
 
-class FindConditionalAggregateFunctionsVisitor(ExpressionVisitor[None]):
+class FindConditionalAggregateFunctionsVisitor(
+    ExpressionVisitor[list[FunctionCall | CurriedFunctionCall]]
+):
     """
-    Search an expression for all conditional aggregate functions.
+    Visitor that searches an expression for all conditional aggregate functions.
+    Results are returned via get_matches function.
 
-    Might be able to use matchers.Pattern to extend this idea for general search but I was too lazy.
+    Example:
+    myexp = add(divide(sumIf(...), avgIf(...)), 100)
+    visitor = FindConditionalAggregateFunctionsVisitor()
+    myexp.accept(visitor)
+    res = visitor.get_matches()
+
+    Visitor implementation to find all conditional aggregate functions in an expression.
+    Usage:
+        >>> exp: Expression = add(divide(sumIf(...), avgIf(...)), 100)
+        >>> visitor = FindConditionalAggregateFunctionsVisitor()
+        >>> found = exp.accept(visitor)  # found = [sumIf(...), avgIf(...)]
     """
 
     def __init__(self) -> None:
         self._matches: list[FunctionCall | CurriedFunctionCall] = []
 
-    def get_matches(self) -> list[FunctionCall | CurriedFunctionCall]:
-        return deepcopy(self._matches)
+    def visit_literal(self, exp: Literal) -> list[FunctionCall | CurriedFunctionCall]:
+        return self._matches
 
-    def visit_literal(self, exp: Literal) -> None:
-        return
+    def visit_column(self, exp: Column) -> list[FunctionCall | CurriedFunctionCall]:
+        return self._matches
 
-    def visit_column(self, exp: Column) -> None:
-        return
+    def visit_subscriptable_reference(
+        self, exp: SubscriptableReference
+    ) -> list[FunctionCall | CurriedFunctionCall]:
+        return self._matches
 
-    def visit_subscriptable_reference(self, exp: SubscriptableReference) -> None:
-        return
-
-    def visit_function_call(self, exp: FunctionCall) -> None:
+    def visit_function_call(
+        self, exp: FunctionCall
+    ) -> list[FunctionCall | CurriedFunctionCall]:
         if exp.function_name[-2:] == "If":
             self._matches.append(exp)
         else:
             for param in exp.parameters:
                 param.accept(self)
+        return self._matches
 
-    def visit_curried_function_call(self, exp: CurriedFunctionCall) -> None:
+    def visit_curried_function_call(
+        self, exp: CurriedFunctionCall
+    ) -> list[FunctionCall | CurriedFunctionCall]:
         if exp.internal_function.function_name[-2:] == "If":
             self._matches.append(exp)
+        return self._matches
 
-    def visit_argument(self, exp: Argument) -> None:
-        return
+    def visit_argument(self, exp: Argument) -> list[FunctionCall | CurriedFunctionCall]:
+        return self._matches
 
-    def visit_lambda(self, exp: Lambda) -> None:
-        return
+    def visit_lambda(self, exp: Lambda) -> list[FunctionCall | CurriedFunctionCall]:
+        return self._matches
 
 
 class FilterInSelectOptimizer:
@@ -114,9 +132,7 @@ class FilterInSelectOptimizer:
         cond_agg_functions: list[FunctionCall | CurriedFunctionCall] = []
         for selected_exp in query.get_selected_columns():
             exp = selected_exp.expression
-            finder = FindConditionalAggregateFunctionsVisitor()
-            exp.accept(finder)
-            found = finder.get_matches()
+            found = exp.accept(FindConditionalAggregateFunctionsVisitor())
             if len(found) > 0:
                 if len(cond_agg_functions) > 0:
                     raise ValueError(
