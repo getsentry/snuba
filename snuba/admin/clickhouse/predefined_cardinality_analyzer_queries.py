@@ -160,3 +160,21 @@ class DatapointsByOrgProjectGauges(CardinalityQuery):
     WITH TOTALS
     ORDER BY granularity ASC
     """
+
+
+class BucketsPerOrgOverTime(CardinalityQuery):
+    """
+    Determine how many buckets an org is storing over time. Show the top 5 offenders.
+
+    This query can be tweaked by using more/less granular time function (toStartOfTenMinutes)
+    or by using project_id instead of org_id.
+    """
+
+    sql = """
+    SELECT toStartOfHour(timestamp) as time, org_id, count() as total
+    FROM generic_metric_{{metric_type}}_aggregated_dist
+    WHERE timestamp >= (now() - INTERVAL {{hour}} HOUR)
+    GROUP BY time, org_id
+    ORDER BY time ASC, total DESC
+    LIMIT 5 BY time
+    """
