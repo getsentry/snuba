@@ -102,15 +102,21 @@ class QueryPipelineStage(Generic[Tin, Tout]):
     * Query reporting
 
     To create a Query Pipeline Stage, the main components to specify are:
-    an input type, an output type, and a execution function which returns the output wrapped with QueryPipelineResult.
+    an input type, an output type, and a execution function which returns the output. The PipelineStage
+    will handle wrapping results/errors in the QueryPipelineResult type
     ==============================================
         >>> class MyQueryPipelineStage(QueryPipelineStage[LogicalQuery, LogicalQuery]):
-        >>>    def _execute(self, input: QueryPipelineResult[LogicalQuery]) -> QueryPipelineResult[LogicalQuery]:
-        >>>         try:
-        >>>             result = my_complex_processing_function(input.data)
-        >>>             return QueryPipelineResult(result, None)
-        >>>         except Exception as e:
-        >>>             return QueryPipelineResult(None, e)
+        >>>    def _process_data(self, input: QueryPipelineData[LogicalQuery]) -> QueryPipelineResult[LogicalQuery]:
+        >>>         result = my_complex_processing_function(input.data)
+
+        >>> class MyQueryPipelineStage2(QueryPipelineStage[LogicalQuery, PhysicalQuery]):
+        >>>     def _process_data(self, input: QueryPipelineResult[LogicalQuery]) -> PhysicalQuery:
+        >>>         translate_query(input)
+
+        >>> input_query = QueryPipelineResult(data=query, error=None, ...)
+        >>> transformed_query = MyQueryPipelineStage().execute(query)
+        >>> stage_2 = MyQueryPipelineStage2().execute(transformed_query)
+        >>> print("PhysicalQuery: ", stage_2.data)
     """
 
     def _process_error(
@@ -176,9 +182,9 @@ class QueryPipelineResult(ABC, Generic[T]):
     timer: Timer
 
     def __post_init__(self) -> None:
-        if self.data is None and self.error is None:
+        if not (self.data is None) ^ (self.error is None):
             raise InvalidQueryPipelineResult(
-                "QueryPipelineResult must have either data or error set"
+                f"QueryPipelineResult must have exclusively data or error set, data: {self.data}, error: {self.error}"
             )
 
     def as_data(self) -> QueryPipelineData[T]:
