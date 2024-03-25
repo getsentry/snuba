@@ -58,12 +58,11 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for Clickhous
                 tracing::debug!("performing write");
 
                 batch
-                    .write_rows(&encoded_rows)
+                    .write_rows(encoded_rows)
                     .map_err(RunTaskError::Other)?;
 
-                let response = batch.finish().await.map_err(RunTaskError::Other)?;
+                batch.finish().await.map_err(RunTaskError::Other)?;
 
-                tracing::debug!(?response);
                 tracing::info!("Inserted {} rows", insert_batch.len());
             }
 

@@ -105,14 +105,13 @@ impl Batch {
         if !self.current_chunk.is_empty() {
             // XXX: allocating small chunks of memory here and sending it across thread boundaries is
             // not very memory efficient, especially with jemalloc
-            let chunk = mem::replace(&mut self.current_chunk, Vec::new());
+            let chunk = mem::take(&mut self.current_chunk);
             self.sender.as_ref().unwrap().send(Ok(chunk))?;
         }
 
         Ok(())
     }
 
-    #[must_use]
     pub async fn finish(mut self) -> Result<(), anyhow::Error> {
         self.flush_chunk()?;
         // finish stream
