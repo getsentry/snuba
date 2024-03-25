@@ -110,7 +110,7 @@ class FilterInSelectOptimizer:
                 new_condition = self.get_select_filter(query)
                 if new_condition is not None:
                     query.add_condition_to_ast(new_condition)
-                    metrics.increment("kyles_optimizer_optimized")
+                    metrics.increment("filter_in_select_optimizer_optimized")
             except Exception:
                 logger.warning(
                     "Failed during optimization", exc_info=True, extra={"query": query}
@@ -134,16 +134,10 @@ class FilterInSelectOptimizer:
         # find and grab all the conditional aggregate functions
         cond_agg_functions: list[FunctionCall | CurriedFunctionCall] = []
         for selected_exp in query.get_selected_columns():
-            exp = selected_exp.expression
-            found = exp.accept(FindConditionalAggregateFunctionsVisitor())
-            if len(found) > 0:
-                if len(cond_agg_functions) > 0:
-                    raise ValueError(
-                        "expected only one selected column to contain conditional aggregate functions but found multiple"
-                    )
-                else:
-                    cond_agg_functions = found
-
+            found = selected_exp.expression.accept(
+                FindConditionalAggregateFunctionsVisitor()
+            )
+            cond_agg_functions += found
         if len(cond_agg_functions) == 0:
             return None
 
@@ -152,11 +146,11 @@ class FilterInSelectOptimizer:
         for func in cond_agg_functions:
             if len(func.parameters) != 2:
                 raise ValueError(
-                    f"expected conditional functions to be of the form funcIf(val, condition), but was given a function with {len(func.parameters)} parameters"
+                    f"expected conditional function to be of the form funcIf(val, condition), but was given one with {len(func.parameters)} parameters"
                 )
             if not isinstance(func.parameters[1], FunctionCall):
                 raise ValueError(
-                    f"expected conditional functions to be of the form funcIf(val, condition), but was given a function whos condition is {type(func.parameters[1])} rather than FunctionCall"
+                    f"expected conditional function to be of the form funcIf(val, condition), but the condition is type {type(func.parameters[1])} rather than FunctionCall"
                 )
 
             if new_condition is None:
