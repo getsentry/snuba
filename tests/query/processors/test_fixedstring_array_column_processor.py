@@ -3,6 +3,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -49,12 +50,12 @@ def test_uuid_array_column_processor(
     formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
-        Table("transactions", ColumnSet([])),
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
     expected_query = Query(
-        Table("transactions", ColumnSet([])),
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=expected,
     )

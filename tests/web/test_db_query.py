@@ -214,6 +214,7 @@ def _build_test_query(
                 final=False,
                 allocation_policies=allocation_policies
                 or storage.get_allocation_policies(),
+                storage_key=storage.get_storage_key(),
             ),
             selected_columns=[
                 SelectedExpression(
