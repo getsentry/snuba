@@ -7,7 +7,7 @@ local generate_replay_job(component) =
   {
     environment_variables: {
       SENTRY_REGION: 's4s',
-      SNUBA_SERVICE_NAME: 'query-replayer-gocd',
+      SNUBA_COMPONENT_NAME: 'query-replayer-gocd',
     },
     elastic_profile_id: pipeline_group,
     tasks: [
