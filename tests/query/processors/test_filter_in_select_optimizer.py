@@ -10,6 +10,7 @@ from snuba.query.logical import Query
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
 )
+from snuba.query.query_settings import HTTPQuerySettings
 
 
 def _equals(col_name: str, value: str | int) -> FunctionCall:
@@ -25,6 +26,7 @@ from_entity = Entity(
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
+settings = HTTPQuerySettings()
 
 
 def test_simple_query() -> None:
@@ -50,7 +52,7 @@ def test_simple_query() -> None:
             _equals("metric_id", 1),
         )
     )
-    optimizer.process_mql_query(input_query)
+    optimizer.process_query(input_query, settings)
     assert input_query == expected_optimized_query
 
 
@@ -85,7 +87,7 @@ def test_query_with_curried_function() -> None:
             _equals("metric_id", 1),
         )
     )
-    optimizer.process_mql_query(input_query)
+    optimizer.process_query(input_query, settings)
     assert input_query == expected_optimized_query
 
 
@@ -118,7 +120,7 @@ def test_query_with_many_nested_functions() -> None:
             _equals("metric_id", 1),
         )
     )
-    optimizer.process_mql_query(input_query)
+    optimizer.process_query(input_query, settings)
     assert input_query == expected_optimized_query
 
 
@@ -134,7 +136,7 @@ def test_query_with_literal_arithmetic_in_select() -> None:
     )
     expected_optimized_query = copy(input_query)
     expected_optimized_query.set_ast_condition(_equals("metric_id", 1))
-    optimizer.process_mql_query(input_query)
+    optimizer.process_query(input_query, settings)
     assert input_query == expected_optimized_query
 
 
@@ -162,5 +164,5 @@ def test_query_with_multiple_aggregate_columns() -> None:
             _equals("metric_id", 2),
         )
     )
-    optimizer.process_mql_query(input_query)
+    optimizer.process_query(input_query, settings)
     assert input_query == expected_optimized_query
