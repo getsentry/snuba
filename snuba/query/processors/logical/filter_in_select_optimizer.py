@@ -15,6 +15,8 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.logical import LogicalQueryProcessor
+from snuba.query.query_settings import QuerySettings
 from snuba.state import get_int_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -83,26 +85,24 @@ class FindConditionalAggregateFunctionsVisitor(
         return self._matches
 
 
-class FilterInSelectOptimizer:
+class FilterInSelectOptimizer(LogicalQueryProcessor):
     """
-    This optimizer lifts conditions in the select clause into the where clause,
-    and adds the equivalent conditions to the where clause. Example:
+    This optimizer grabs all conditions from conditional aggregate functions in the select clause
+    and adds them into the where clause. Example:
 
-        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200),
+        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200) / sumIf(value, metric_id in (1,2,3,4)),
                avgIf(value, metric_id in (3,4,5))
         FROM table
 
         becomes
 
-        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200),
+        SELECT sumIf(value, metric_id in (1,2,3,4) and status=200) / sumIf(value, metric_id in (1,2,3,4)),
                avgIf(value, metric_id in (3,4,5))
         FROM table
-        WHERE (metric_id in (1,2,3,4) and status=200) or metric_id in (3,4,5)
+        WHERE (metric_id in (1,2,3,4) and status=200) or metric_id in (1,2,3,4) or metric_id in (3,4,5)
     """
 
-    def process_mql_query(
-        self, query: LogicalQuery | CompositeQuery[QueryEntity]
-    ) -> None:
+    def process_query(self, query: LogicalQuery, query_settings: QuerySettings) -> None:
         feat_flag = get_int_config("enable_filter_in_select_optimizer", default=1)
         if feat_flag:
             try:
