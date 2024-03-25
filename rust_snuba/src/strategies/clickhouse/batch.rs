@@ -1,10 +1,11 @@
-use futures_channel::mpsc::{unbounded, UnboundedSender};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use std::mem;
 use tokio::runtime::Handle;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::task::JoinHandle;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
@@ -52,7 +53,7 @@ impl BatchFactory {
         // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
         // however to enforce any limit locally because it would mean that in the Drop impl of
         // Batch, the send may block or fail
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = unbounded_channel();
 
         let url = self.url.clone();
         let query = self.query.clone();
@@ -62,7 +63,9 @@ impl BatchFactory {
             let res = client
                 .post(&url)
                 .query(&[("query", &query)])
-                .body(reqwest::Body::wrap_stream(receiver))
+                .body(reqwest::Body::wrap_stream(UnboundedReceiverStream::new(
+                    receiver,
+                )))
                 .send()
                 .await?;
 
@@ -103,7 +106,7 @@ impl Batch {
             // XXX: allocating small chunks of memory here and sending it across thread boundaries is
             // not very memory efficient, especially with jemalloc
             let chunk = mem::replace(&mut self.current_chunk, Vec::new());
-            self.sender.as_ref().unwrap().unbounded_send(Ok(chunk))?;
+            self.sender.as_ref().unwrap().send(Ok(chunk))?;
         }
 
         Ok(())
@@ -124,7 +127,7 @@ impl Drop for Batch {
         // in case the batch was not explicitly finished, send an error into the channel to abort
         // the request
         if let Some(ref mut sender) = self.sender {
-            let _ = sender.unbounded_send(Err(anyhow::anyhow!(
+            let _ = sender.send(Err(anyhow::anyhow!(
                 "the batch got dropped without being finished explicitly"
             )));
         }
