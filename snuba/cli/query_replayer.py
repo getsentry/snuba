@@ -51,9 +51,9 @@ def format_results_query(
     """
 
 
-def get_credentials() -> Tuple[str, str]:
+def get_credentials(user: Optional[str], password: Optional[str]) -> Tuple[str, str]:
     # TOOO don't hardcode credentials, use settings
-    return ("default", "")
+    return (user or "default", password or "")
 
 
 @click.command()
@@ -69,6 +69,18 @@ def get_credentials() -> Tuple[str, str]:
     default=9000,
     help="Clickhouse native port to write to.",
     required=True,
+)
+@click.option(
+    "--clickhouse-user",
+    help="Clickhouse user to authenticate with.",
+    default=None,
+    required=False,
+)
+@click.option(
+    "--clickhouse-password",
+    help="Clickhouse password to authenticate with.",
+    default=None,
+    required=False,
 )
 @click.option(
     "--event-type",
@@ -114,6 +126,8 @@ def query_replayer(
     gcs_bucket: str,
     wait_seconds: int,
     log_level: Optional[str] = None,
+    clickhouse_user: Optional[str] = None,
+    clickhouse_password: Optional[str] = None,
 ) -> None:
     """
     We don't need the results of the query because we'll
@@ -127,7 +141,9 @@ def query_replayer(
     setup_sentry()
 
     database = "default"  # todo
-    (clickhouse_user, clickhouse_password) = get_credentials()
+    (clickhouse_user, clickhouse_password) = get_credentials(
+        clickhouse_user, clickhouse_password
+    )
     connection = ClickhousePool(
         host=clickhouse_host,
         port=clickhouse_port,

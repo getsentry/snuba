@@ -172,6 +172,8 @@ struct CountersRawRow {
     common_fields: CommonMetricFields,
     #[serde(default)]
     count_value: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_meta: Option<u8>,
 }
 
 /// Parse is the trait which should be implemented for all metric types.
@@ -210,6 +212,12 @@ impl Parse for CountersRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
+        let record_meta = match from.use_case_id.as_str() {
+            "escalating_issues" => Some(0),
+            "metric_stats" => Some(0),
+            _ => Some(1),
+        };
+
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
@@ -230,6 +238,7 @@ impl Parse for CountersRawRow {
         Ok(Some(Self {
             common_fields,
             count_value,
+            record_meta,
         }))
     }
 }
@@ -726,6 +735,7 @@ mod tests {
                 day_retention_days: None,
             },
             count_value: 1.0,
+            record_meta: Some(1),
         };
         assert_eq!(
             result.unwrap(),
