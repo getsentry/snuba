@@ -1,10 +1,9 @@
 import pytest
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.conditions import binary_condition
+from snuba.query.dsl import and_cond, equals, in_cond, or_cond
 from snuba.query.expressions import (
     Column,
-    Expression,
     FunctionCall,
     Literal,
     SubscriptableReference,
@@ -59,29 +58,13 @@ def subscriptable_reference(name: str, key: str) -> SubscriptableReference:
     )
 
 
-def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("equals", lhs, rhs)
-
-
-def _and(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("and", lhs, rhs)
-
-
-def _or(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("or", lhs, rhs)
-
-
-def _in(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("in", lhs, rhs)
-
-
 expected_optimize_condition = {
-    "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)": _or(
+    "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)": or_cond(
         equals(
             Column("_snuba_metric_id", None, "metric_id"),
             Literal(None, 123456),
         ),
-        _and(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -94,12 +77,12 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction": _or(
+    "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction": or_cond(
         equals(
             Column("_snuba_metric_id", None, "metric_id"),
             Literal(None, 123456),
         ),
-        _and(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -112,12 +95,12 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction": _or(
+    "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction": or_cond(
         equals(
             Column("_snuba_metric_id", None, "metric_id"),
             Literal(None, 123456),
         ),
-        _and(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -130,17 +113,17 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))": _or(
+    "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))": or_cond(
         equals(
             Column("_snuba_metric_id", None, "metric_id"),
             Literal(None, 123456),
         ),
-        _or(
+        or_cond(
             equals(
                 Column("_snuba_metric_id", None, "metric_id"),
                 Literal(None, 123456),
             ),
-            _or(
+            or_cond(
                 equals(
                     Column("_snuba_metric_id", None, "metric_id"),
                     Literal(None, 123456),
@@ -152,8 +135,8 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}": _or(
-        _and(
+    "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}": or_cond(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -165,7 +148,7 @@ expected_optimize_condition = {
                 Literal(None, 123456),
             ),
         ),
-        _and(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -178,9 +161,9 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:[400,404,500,501]}": _or(
-        _and(
-            _in(
+    "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:[400,404,500,501]}": or_cond(
+        and_cond(
+            in_cond(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
                 ),
@@ -200,8 +183,8 @@ expected_optimize_condition = {
                 Literal(None, 123456),
             ),
         ),
-        _and(
-            _in(
+        and_cond(
+            in_cond(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
                 ),
@@ -222,8 +205,8 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction": _or(
-        _and(
+    "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction": or_cond(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -235,7 +218,7 @@ expected_optimize_condition = {
                 Literal(None, 123456),
             ),
         ),
-        _and(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
@@ -248,7 +231,7 @@ expected_optimize_condition = {
             ),
         ),
     ),
-    "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100": _or(
+    "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100": or_cond(
         equals(
             Column("_snuba_metric_id", None, "metric_id"),
             Literal(None, 123456),
@@ -262,12 +245,12 @@ expected_optimize_condition = {
         Column("_snuba_metric_id", None, "metric_id"),
         Literal(None, 123456),
     ),
-    "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)": _or(
+    "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)": or_cond(
         equals(
             Column("_snuba_metric_id", None, "metric_id"),
             Literal(None, 123456),
         ),
-        _and(
+        and_cond(
             equals(
                 subscriptable_reference(
                     "tags_raw", str(mql_context["indexer_mappings"]["status_code"])
