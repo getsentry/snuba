@@ -49,7 +49,7 @@ from snuba.query.snql.parser import (
     _replace_time_condition,
     _treeify_or_and_conditions,
 )
-from snuba.state import explain_meta
+from snuba.state import explain_meta, get_int_config
 from snuba.util import parse_datetime
 from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
@@ -1109,11 +1109,16 @@ def parse_mql_query(
             settings,
         )
 
-    with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
-        if settings is None:
-            FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
-        else:
-            FilterInSelectOptimizer().process_query(query, settings)
+    # Filter in select optimizer
+    feat_flag = get_int_config("enable_filter_in_select_optimizer", default=1)
+    if feat_flag:
+        with sentry_sdk.start_span(
+            op="processor", description="filter_in_select_optimize"
+        ):
+            if settings is None:
+                FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
+            else:
+                FilterInSelectOptimizer().process_query(query, settings)
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):

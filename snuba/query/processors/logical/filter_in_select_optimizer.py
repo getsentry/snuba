@@ -17,7 +17,6 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
-from snuba.state import get_int_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "api")
@@ -103,18 +102,16 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
     """
 
     def process_query(self, query: LogicalQuery, query_settings: QuerySettings) -> None:
-        feat_flag = get_int_config("enable_filter_in_select_optimizer", default=1)
-        if feat_flag:
-            try:
-                new_condition = self.get_select_filter(query)
-                if new_condition is not None:
-                    query.add_condition_to_ast(new_condition)
-                    metrics.increment("filter_in_select_optimizer_optimized")
-            except Exception:
-                logger.warning(
-                    "Failed during optimization", exc_info=True, extra={"query": query}
-                )
-                return
+        try:
+            new_condition = self.get_select_filter(query)
+        except Exception:
+            logger.warning(
+                "Failed during optimization", exc_info=True, extra={"query": query}
+            )
+            return
+        if new_condition is not None:
+            query.add_condition_to_ast(new_condition)
+            metrics.increment("filter_in_select_optimizer_optimized")
 
     def get_select_filter(
         self,
