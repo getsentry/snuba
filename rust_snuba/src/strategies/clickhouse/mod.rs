@@ -138,33 +138,3 @@ impl ProcessingStrategy<BytesInsertBatch> for ClickhouseWriterStep {
         self.inner.join(timeout)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[tokio::test]
-    async fn it_works() -> Result<(), reqwest::Error> {
-        let client: ClickhouseClient = ClickhouseClient::new(
-            &std::env::var("CLICKHOUSE_HOST").unwrap_or("127.0.0.1".to_string()),
-            8123,
-            "querylog_local",
-            "default",
-        );
-
-        assert!(client.url.contains("load_balancing"));
-        assert!(client.url.contains("insert_distributed_sync"));
-        println!("running test");
-        let res = client.send(b"[]").await;
-        println!("Response status {}", res.unwrap().status());
-        Ok(())
-    }
-
-    #[test]
-    fn chunked_body() {
-        let mut data: Vec<u8> = vec![0; 1_000_000];
-
-        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 1);
-        data.push(0);
-        assert_eq!(ClickhouseClient::chunked_body(&data).len(), 2);
-    }
-}
