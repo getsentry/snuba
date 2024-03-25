@@ -2142,10 +2142,14 @@ class TestApi(SimpleAPITest):
         assert metadata["request"]["referrer"] == "test"
 
     @patch("snuba.web.query._run_query_pipeline")
-    def test_error_handler(self, pipeline_mock: MagicMock) -> None:
+    @patch("snuba.web.query._run_new_query_pipeline")
+    def test_error_handler(
+        self, pipeline_mock: MagicMock, new_pipeline_mock: MagicMock
+    ) -> None:
         from redis.exceptions import ClusterDownError
 
         pipeline_mock.side_effect = ClusterDownError("stuff")
+        new_pipeline_mock.side_effect = ClusterDownError("stuff")
         response = self.post(
             json.dumps(
                 {

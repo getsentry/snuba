@@ -1,6 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Table
@@ -13,7 +14,13 @@ def test_format_clickhouse_specific_query() -> None:
     """
 
     query = ClickhouseQuery(
-        Table("my_table", ColumnSet([]), final=True, sampling_rate=0.1),
+        Table(
+            "my_table",
+            ColumnSet([]),
+            final=True,
+            sampling_rate=0.1,
+            storage_key=StorageKey("dontmatter"),
+        ),
         selected_columns=[
             SelectedExpression("column1", Column(None, None, "column1")),
             SelectedExpression("column2", Column(None, "table1", "column2")),

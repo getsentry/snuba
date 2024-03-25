@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import logging
+import random
 import textwrap
 from dataclasses import replace
 from functools import partial
@@ -11,16 +13,20 @@ import sentry_sdk
 
 from snuba import environment
 from snuba import settings as snuba_settings
+from snuba import state
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.pipeline.query_pipeline import QueryPipelineResult
+from snuba.pipeline.stages.query_execution import ExecutionStage
+from snuba.pipeline.stages.query_processing import EntityAndStoragePipelineStage
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import QueryPlanException
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import (
     QueryStatus,
@@ -50,6 +56,44 @@ metrics = MetricsWrapper(environment.metrics, "api")
 MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 
+def _run_new_query_pipeline(
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    robust: bool = False,
+    concurrent_queries_gauge: Optional[Gauge] = None,
+    force_dry_run: bool = False,
+) -> QueryResult:
+    clickhouse_query = EntityAndStoragePipelineStage().execute(
+        QueryPipelineResult(
+            data=request, query_settings=request.query_settings, timer=timer, error=None
+        )
+    )
+    if force_dry_run:
+        clickhouse_query.query_settings = HTTPQuerySettings(
+            turbo=clickhouse_query.query_settings.get_turbo(),
+            consistent=clickhouse_query.query_settings.get_consistent(),
+            debug=clickhouse_query.query_settings.get_debug(),
+            dry_run=True,
+            legacy=clickhouse_query.query_settings.get_legacy(),
+            referrer=clickhouse_query.query_settings.referrer,
+            asynchronous=clickhouse_query.query_settings.get_asynchronous(),
+        )
+
+    res = ExecutionStage(
+        request.attribution_info,
+        query_metadata=query_metadata,
+        robust=robust,
+        concurrent_queries_gauge=concurrent_queries_gauge,
+    ).execute(clickhouse_query)
+    if res.error:
+        raise res.error
+    elif res.data:
+        return res.data
+    # we should never get here
+    raise Exception("No result or data, very bad exception")
+
+
 @with_span()
 def parse_and_run_query(
     dataset: Dataset,
@@ -63,16 +107,58 @@ def parse_and_run_query(
     """
     # from_clause = request.query.get_from_clause()
     query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
+    try_new_query_pipeline_rollout = state.get_float_config(
+        "try_new_query_pipeline", snuba_settings.TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE
+    )
+    run_new_query_pipeline_rollout = state.get_float_config(
+        "run_new_query_pipeline", snuba_settings.USE_NEW_QUERY_PIPELINE_SAMPLE_RATE
+    )
+    try_new_query_pipeline = (
+        random.random() <= try_new_query_pipeline_rollout
+        if try_new_query_pipeline_rollout is not None
+        else False
+    )
+    run_new_pipeline = (
+        random.random() <= run_new_query_pipeline_rollout
+        if run_new_query_pipeline_rollout is not None
+        else False
+    )
 
     try:
-        result = _run_query_pipeline(
-            dataset=dataset,
-            request=request,
-            timer=timer,
-            query_metadata=query_metadata,
-            robust=robust,
-            concurrent_queries_gauge=concurrent_queries_gauge,
-        )
+        if run_new_pipeline:
+            result = _run_new_query_pipeline(
+                request, timer, query_metadata, robust, concurrent_queries_gauge
+            )
+        else:
+            request_copy = copy.deepcopy(request)
+            result = _run_query_pipeline(
+                dataset=dataset,
+                request=request,
+                timer=timer,
+                query_metadata=query_metadata,
+                robust=robust,
+                concurrent_queries_gauge=concurrent_queries_gauge,
+            )
+            if try_new_query_pipeline:
+                try:
+                    dry_result = _run_new_query_pipeline(
+                        request_copy,
+                        timer,
+                        query_metadata,
+                        robust,
+                        concurrent_queries_gauge,
+                        force_dry_run=True,
+                    )
+                    new_sql = dry_result.extra["sql"]
+                    old_sql = result.extra["sql"]
+                    if new_sql != old_sql:
+                        logger.warning(
+                            "New and old query pipeline sql doesn't match: Old: %s, New: %s",
+                            old_sql,
+                            new_sql,
+                        )
+                except Exception as e:
+                    logger.exception(e)
         _set_query_final(request, result.extra)
         if not request.query_settings.get_dry_run():
             record_query(request, timer, query_metadata, result)
@@ -202,10 +288,6 @@ def _dry_run_query_runner(
     reader: Reader,
     cluster_name: str,
 ) -> QueryResult:
-    # NOTE (Volo) : this is misleading behavior. If this runner is used with a split query,
-    # you will only see the sql reported that the first of the split queries ran. Since this returns
-    # no results, you won't see any others
-
     with sentry_sdk.start_span(
         description="dryrun_create_query", op="function"
     ) as span:

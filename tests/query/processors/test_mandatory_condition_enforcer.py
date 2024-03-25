@@ -4,6 +4,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -23,10 +24,12 @@ from snuba.query.processors.physical.conditions_enforcer import (
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 
+TABLE = Table("errors", ColumnSet([]), storage_key=StorageKey("errors"))
+
 test_data = [
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
@@ -42,7 +45,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
@@ -62,7 +65,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
@@ -82,7 +85,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
@@ -100,7 +103,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.OR,
@@ -118,7 +121,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
@@ -134,7 +137,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("errors", ColumnSet([])),
+            TABLE,
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
