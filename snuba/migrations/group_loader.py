@@ -318,6 +318,9 @@ class GenericMetricsLoader(DirectoryLoader):
             "0027_sets_add_raw_tags_column",
             "0028_distributions_add_indexed_tags_column",
             "0029_add_use_case_id_index",
+            "0030_add_record_meta_column",
+            "0031_counters_meta_table",
+            "0032_counters_meta_table_mv",
         ]
 
 
@@ -356,6 +359,7 @@ class SpansLoader(DirectoryLoader):
             "0009_spans_add_measure_hashmap",
             "0010_spans_add_compression",
             "0011_spans_add_index_on_trace_id",
+            "0012_spans_add_index_on_transaction_name",
         ]
 
 
