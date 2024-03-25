@@ -61,7 +61,7 @@ def get_credentials() -> Tuple[str, str]:
     type=int,
     default=24,
     required=True,
-    help="Time window to re-run queries, in hours, max of 24",
+    help="Time window to re-run queries, in hours, max of 168 (one week)",
 )
 @click.option(
     "--tables",
@@ -114,9 +114,9 @@ def query_fetcher(
     setup_logging(log_level)
     setup_sentry()
 
-    if window_hours > 24:
-        # enforce max of 24
-        window_hours = 24
+    if window_hours > 168:
+        # enforce max of 168
+        window_hours = 168
 
     uploader = GCSUploader(gcs_bucket)
     file_saver = FileManager(uploader)
@@ -153,14 +153,24 @@ def query_fetcher(
     interval = timedelta(hours=1)
 
     for table in table_names:
+        logger.info(f"Running fetcher for {table}...")
         start_time = window_hours_ago_ts
+        files_saved = 0
         while start_time < now:
             end_time = start_time + interval
-            logger.info(f"Fetching queries to run from {table}...")
             queries = get_queries_from_querylog(table, start_time, end_time)
-            file_format = FileFormat(
-                directory="queries", date=start_time, table=table, hour=start_time.hour
-            )
-            file_saver.save(file_format, queries)
-            logger.info(f"Saved {len(queries)} queries from {table}")
+            if queries:
+                # only upload files that have queries to re-run
+                file_format = FileFormat(
+                    directory="queries",
+                    date=start_time,
+                    table=table,
+                    hour=start_time.hour,
+                )
+                file_saver.save(file_format, queries)
+                files_saved += 1
+            else:
+                logger.info(f"No queries for {table}")
             start_time = end_time
+
+        logger.info(f"{files_saved} files save for {table}")
