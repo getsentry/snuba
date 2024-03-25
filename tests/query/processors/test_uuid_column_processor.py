@@ -5,6 +5,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -240,12 +241,12 @@ def test_uuid_column_processor(
     formatted_value: str,
 ) -> None:
     unprocessed_query = Query(
-        Table("transactions", ColumnSet([])),
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )
     expected_query = Query(
-        Table("transactions", ColumnSet([])),
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=expected,
     )
@@ -302,7 +303,7 @@ tests_invalid_uuid = [
 @pytest.mark.parametrize("unprocessed", tests_invalid_uuid)
 def test_invalid_uuid(unprocessed: Expression) -> None:
     unprocessed_query = Query(
-        Table("transactions", ColumnSet([])),
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("column2", Column(None, None, "column2"))],
         condition=unprocessed,
     )

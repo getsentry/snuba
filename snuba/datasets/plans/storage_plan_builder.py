@@ -26,6 +26,7 @@ from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageNotAvailable,
 )
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
@@ -93,6 +94,7 @@ def get_query_data_source(
     allocation_policies: list[AllocationPolicy],
     final: bool,
     sampling_rate: Optional[float],
+    storage_key: StorageKey,
 ) -> Table:
     assert isinstance(relational_source, TableSource)
     return Table(
@@ -102,6 +104,7 @@ def get_query_data_source(
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
+        storage_key=storage_key,
     )
 
 
@@ -201,6 +204,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     allocation_policies=storage.get_allocation_policies(),
                     final=query.get_final(),
                     sampling_rate=query.get_sample(),
+                    storage_key=storage.get_storage_key(),
                 )
             )
 

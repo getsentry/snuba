@@ -78,7 +78,7 @@ merged_columns = ColumnSet(
 test_data = [
     pytest.param(
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -89,7 +89,7 @@ test_data = [
             ],
         ),
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -114,7 +114,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -125,7 +125,7 @@ test_data = [
             ],
         ),
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -150,7 +150,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -161,7 +161,7 @@ test_data = [
             ],
         ),
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -175,7 +175,7 @@ test_data = [
     ),
     pytest.param(
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",
@@ -188,7 +188,7 @@ test_data = [
             ],
         ),
         Query(
-            Table("discover", merged_columns),
+            Table("discover", merged_columns, storage_key=StorageKey.DISCOVER),
             selected_columns=[
                 SelectedExpression(
                     name="_snuba_count_unique_sdk_version",

@@ -44,11 +44,18 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         "generic_metric_distributions_raw_dist",
         "generic_metric_gauges_raw_dist",
     }
+    meta_tables = {
+        "generic_metric_counters_meta_aggregated_dist",
+        "generic_metric_sets_meta_aggregated_dist",
+        "generic_metric_distributions_meta_aggregated_dist",
+        "generic_metric_gauges_meta_aggregated_dist",
+    }
     validate_ro_query(
         sql_query=query,
         allowed_tables=(
             {cast(TableSchema, schema).get_table_name() for schema in schemas}
             | raw_tables
+            | meta_tables
         ),
     )
     return _stringify_result(__run_query(query))

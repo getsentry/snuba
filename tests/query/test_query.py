@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from snuba.clickhouse.columns import Any, ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Column, FunctionCall
@@ -10,7 +11,7 @@ from snuba.query.expressions import Column, FunctionCall
 
 def test_query_parameters() -> None:
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         limitby=LimitBy(
             100, [Column(alias=None, table_name="my_table", column_name="environment")]
         ),
@@ -36,7 +37,7 @@ def test_query_data_source() -> None:
     """
 
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "col1", Column(alias="col1", table_name=None, column_name="col1")
@@ -61,7 +62,7 @@ def test_query_data_source() -> None:
 
 def test_query_experiments() -> None:
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         limitby=LimitBy(
             100, [Column(alias=None, table_name="my_table", column_name="environment")]
         ),
@@ -104,7 +105,7 @@ def test_query_transformation(mock_replace: MagicMock) -> None:
     mock_order_by = [MagicMock()]
     mock_limitby = MagicMock()
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=mock_selected_columns,
         array_join=mock_array_join,
         condition=mock_condition,

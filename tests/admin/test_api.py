@@ -601,6 +601,26 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (transactions)
+    SELECT title
+    WHERE project_id IN array(1, 11276)
+    AND finish_ts >= toDateTime('2023-01-01 00:00:00')
+    AND finish_ts < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "transactions", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)

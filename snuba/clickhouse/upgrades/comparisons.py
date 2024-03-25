@@ -137,7 +137,7 @@ class FileManager:
             for row in results:
                 writer.writerow(dataclasses.astuple(row))
 
-        logger.info(f"File {self._full_path(filename)} saved")
+        logger.debug(f"File {self._full_path(filename)} saved")
 
     def _download_from_csv(self, filename: str) -> Sequence[Results]:
         result_type = self._result_type(filename)

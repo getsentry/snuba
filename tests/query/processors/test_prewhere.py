@@ -240,7 +240,11 @@ def test_prewhere(
     query = identity_translate(snql_query)
 
     all_columns = get_storage(StorageKey.ERRORS).get_schema().get_columns()
-    query.set_from_clause(Table("my_table", all_columns, final=final))
+    query.set_from_clause(
+        Table(
+            "my_table", all_columns, final=final, storage_key=StorageKey("dontmatter")
+        )
+    )
 
     query_settings = HTTPQuerySettings()
     processor = PrewhereProcessor(keys, omit_if_final=omit_if_final_keys)
