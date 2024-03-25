@@ -157,6 +157,6 @@ class FilterInSelectOptimizer:
                 new_condition = deepcopy(func.parameters[1])
             else:
                 new_condition = binary_condition(
-                    "or", deepcopy(func.parameters[1]), new_condition
+                    "or", new_condition, deepcopy(func.parameters[1])
                 )
         return new_condition
