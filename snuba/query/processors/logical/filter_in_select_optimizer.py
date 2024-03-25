@@ -1,5 +1,4 @@
 import logging
-from copy import deepcopy
 
 from snuba import environment
 from snuba.query.composite import CompositeQuery
@@ -154,9 +153,9 @@ class FilterInSelectOptimizer:
                 )
 
             if new_condition is None:
-                new_condition = deepcopy(func.parameters[1])
+                new_condition = func.parameters[1]
             else:
                 new_condition = binary_condition(
-                    "or", new_condition, deepcopy(func.parameters[1])
+                    "or", new_condition, func.parameters[1]
                 )
         return new_condition
