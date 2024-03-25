@@ -170,7 +170,7 @@ def query_fetcher(
                 file_saver.save(file_format, queries)
                 files_saved += 1
             else:
-                logger.info(f"No queries for {table}")
+                logger.info(f"No queries for {table} between {start_time} - {end_time}")
             start_time = end_time
 
         logger.info(f"{files_saved} files save for {table}")
