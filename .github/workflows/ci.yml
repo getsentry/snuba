@@ -366,6 +366,7 @@ jobs:
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
+              tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
               tests/snuba/test_snql_snuba.py \
               tests/snuba/test_metrics_layer.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
