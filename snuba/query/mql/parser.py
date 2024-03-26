@@ -1084,7 +1084,6 @@ def parse_mql_query(
     body: str,
     mql_context_dict: dict[str, Any],
     dataset: Dataset,
-    custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
@@ -1110,7 +1109,7 @@ def parse_mql_query(
         snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
-        # dont add your post processor here, add it to post_process_mql_query
+        # dont add new post processor here, add it to post_process_mql_query
         _post_process(
             query,
             POST_PROCESSORS + [quantiles_to_quantile],
@@ -1142,10 +1141,9 @@ def parse_and_post_process_mql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
-    query, snql_anonymized = parse_mql_query(
-        body, mql_context_dict, dataset, custom_processing, settings
-    )
+    query, snql_anonymized = parse_mql_query(body, mql_context_dict, dataset, settings)
     post_process_mql_query(query, custom_processing, settings)
+
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
