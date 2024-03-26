@@ -1,6 +1,6 @@
 import logging
 from enum import Enum
-from typing import Optional, Tuple, cast
+from typing import Optional, Tuple
 
 from snuba import environment
 from snuba.clickhouse.query import Query
@@ -13,7 +13,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
 )
 from snuba.query.conditions import (
     BooleanFunctions,
-    ConditionFunctions,
     combine_and_conditions,
     combine_or_conditions,
     get_first_level_and_conditions,
@@ -91,8 +90,9 @@ class MappingOptimizer(ClickhouseQueryProcessor):
         self.__killswitch = killswitch
         self.__value_subcolumn_name = value_subcolumn_name
 
-        self.__equals_condition_pattern = FunctionCall(
-            function_name=String(ConditionFunctions.EQ),
+        # TODO: Add the support for IN conditions.
+        self.__optimizable_pattern = FunctionCall(
+            function_name=String("equals"),
             parameters=(
                 Or(
                     [
@@ -104,19 +104,6 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                     ]
                 ),
                 Param("right_hand_side", Literal(Any(str))),
-            ),
-        )
-        self.__in_condition_pattern = FunctionCall(
-            function_name=String(ConditionFunctions.IN),
-            parameters=(
-                mapping_pattern,
-                Param(
-                    "right_hand_side",
-                    FunctionCall(
-                        Or([String("array"), String("tuple")]),
-                        all_parameters=Literal(),
-                    ),
-                ),
             ),
         )
         self.__tag_exists_patterns = [
@@ -168,18 +155,12 @@ class MappingOptimizer(ClickhouseQueryProcessor):
 
     def __classify_condition(self, condition: Expression) -> ConditionClass:
         # Expects this to be an individual condition
-        equals_condition_match = self.__equals_condition_pattern.match(condition)
-        in_condition_match = (
-            self.__in_condition_pattern.match(condition)
-            if equals_condition_match is None
-            else None
-        )
+        match = self.__optimizable_pattern.match(condition)
         if (
-            equals_condition_match is not None
-            and equals_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
+            match is not None
+            and match.string(KEY_COL_MAPPING_PARAM) == f"{self.__column_name}.key"
         ):
-            rhs = equals_condition_match.expression("right_hand_side")
+            rhs = match.expression("right_hand_side")
             assert isinstance(rhs, LiteralExpr)
             return (
                 ConditionClass.NOT_OPTIMIZABLE
@@ -187,20 +168,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                 if rhs.value == ""
                 else ConditionClass.OPTIMIZABLE
             )
-        if (
-            in_condition_match is not None
-            and in_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
-        ):
-            rhs = in_condition_match.expression("right_hand_side")
-            assert isinstance(rhs, FunctionExpr)
-
-            params = rhs.parameters
-            for param in params:
-                assert isinstance(param, LiteralExpr)
-
-            return ConditionClass.OPTIMIZABLE
-        elif equals_condition_match is None and in_condition_match is None:
+        elif match is None:
             # If this condition is not matching an optimizable condition,
             # check that it does not reference the optimizable column.
             # If it does, it means we should not optimize this query.
@@ -215,89 +183,35 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             return ConditionClass.IRRELEVANT
 
     def __replace_with_hash(self, condition: Expression) -> Expression:
-        equals_condition_match = self.__equals_condition_pattern.match(condition)
-        in_condition_match = (
-            self.__in_condition_pattern.match(condition)
-            if equals_condition_match is None
-            else None
-        )
+        match = self.__optimizable_pattern.match(condition)
         if (
-            equals_condition_match is not None
-            and equals_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
+            match is None
+            or match.string(KEY_COL_MAPPING_PARAM) != f"{self.__column_name}.key"
         ):
-            rhs = equals_condition_match.expression("right_hand_side")
-            assert isinstance(rhs, LiteralExpr)
-            key = equals_condition_match.scalar(KEY_MAPPING_PARAM)
-            assert isinstance(key, (str, int))
-            if isinstance(key, str):
-                key = key.translate(ESCAPE_TRANSLATION)
+            return condition
+        rhs = match.expression("right_hand_side")
+        assert isinstance(rhs, LiteralExpr)
+        key = match.scalar(KEY_MAPPING_PARAM)
+        assert isinstance(key, (str, int))
+        if isinstance(key, str):
+            key = key.translate(ESCAPE_TRANSLATION)
 
-            return FunctionExpr(
-                alias=condition.alias,
-                function_name="has",
-                parameters=(
-                    Column(
-                        alias=None,
-                        table_name=equals_condition_match.optional_string(
-                            TABLE_MAPPING_PARAM
-                        ),
-                        column_name=self.__hash_map_name,
-                    ),
-                    FunctionExpr(
-                        alias=None,
-                        function_name="cityHash64",
-                        parameters=(LiteralExpr(None, f"{key}={rhs.value}"),),
-                    ),
+        return FunctionExpr(
+            alias=condition.alias,
+            function_name="has",
+            parameters=(
+                Column(
+                    alias=None,
+                    table_name=match.optional_string(TABLE_MAPPING_PARAM),
+                    column_name=self.__hash_map_name,
                 ),
-            )
-        elif (
-            in_condition_match is not None
-            and in_condition_match.string(KEY_COL_MAPPING_PARAM)
-            == f"{self.__column_name}.key"
-        ):
-            key = in_condition_match.scalar(KEY_MAPPING_PARAM)
-            assert isinstance(key, (str, int))
-            if isinstance(key, str):
-                key = key.translate(ESCAPE_TRANSLATION)
-
-            rhs = in_condition_match.expression("right_hand_side")
-            assert isinstance(rhs, FunctionExpr)
-            for param in rhs.parameters:
-                assert isinstance(param, LiteralExpr)
-            params = cast(list[LiteralExpr], rhs.parameters)
-
-            return FunctionExpr(
-                alias=condition.alias,
-                function_name="hasAny",
-                parameters=(
-                    Column(
-                        alias=None,
-                        table_name=in_condition_match.optional_string(
-                            TABLE_MAPPING_PARAM
-                        ),
-                        column_name=self.__hash_map_name,
-                    ),
-                    FunctionExpr(
-                        alias=rhs.alias,
-                        function_name="array",
-                        parameters=tuple(
-                            [
-                                FunctionExpr(
-                                    alias=None,
-                                    function_name="cityHash64",
-                                    parameters=(
-                                        LiteralExpr(None, f"{key}={lit.value}"),
-                                    ),
-                                )
-                                for lit in params
-                            ]
-                        ),
-                    ),
+                FunctionExpr(
+                    alias=None,
+                    function_name="cityHash64",
+                    parameters=(LiteralExpr(None, f"{key}={rhs.value}"),),
                 ),
-            )
-
-        return condition
+            ),
+        )
 
     def _get_condition_without_redundant_checks(
         self, condition: Expression, query: Query
@@ -351,7 +265,7 @@ class MappingOptimizer(ClickhouseQueryProcessor):
                     if tag_exist_match:
                         matched_tag_exists_conditions[condition_id] = tag_exist_match
                 if not tag_exist_match:
-                    eq_match = self.__equals_condition_pattern.match(cond)
+                    eq_match = self.__optimizable_pattern.match(cond)
                     if eq_match:
                         tag_eq_match_keys.add(eq_match.scalar(KEY_MAPPING_PARAM))
             useful_conditions = []
