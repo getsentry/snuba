@@ -1110,21 +1110,42 @@ def parse_mql_query(
         snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
+        # dont add your post processor here, add it to post_process_mql_query
         _post_process(
             query,
-            MQL_POST_PROCESSORS,
+            POST_PROCESSORS + [quantiles_to_quantile],
             settings,
         )
-
-    # Custom processing to tweak the AST before validation
-    with sentry_sdk.start_span(op="processor", description="custom_processing"):
-        if custom_processing is not None:
-            _post_process(query, custom_processing, settings)
 
     # Time based processing
     with sentry_sdk.start_span(op="processor", description="time_based_processing"):
         _post_process(query, [_replace_time_condition], settings)
 
+    return query, snql_anonymized
+
+
+def post_process_mql_query(
+    query: CompositeQuery[QueryEntity] | LogicalQuery,
+    custom_processing: Optional[CustomProcessors] = None,
+    settings: QuerySettings | None = None,
+) -> None:
+    # Custom processing to tweak the AST before validation
+    with sentry_sdk.start_span(op="processor", description="custom_processing"):
+        if custom_processing is not None:
+            _post_process(query, custom_processing, settings)
+
+
+def parse_and_post_process_mql_query(
+    body: str,
+    mql_context_dict: dict[str, Any],
+    dataset: Dataset,
+    custom_processing: Optional[CustomProcessors] = None,
+    settings: QuerySettings | None = None,
+) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
+    query, snql_anonymized = parse_mql_query(
+        body, mql_context_dict, dataset, custom_processing, settings
+    )
+    post_process_mql_query(query, custom_processing, settings)
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)

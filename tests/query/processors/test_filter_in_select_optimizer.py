@@ -3,7 +3,7 @@ import pytest
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.logical import Query
-from snuba.query.mql.parser import parse_mql_query
+from snuba.query.mql.parser import parse_and_post_process_mql_query
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
 )
@@ -148,7 +148,9 @@ optimizer = FilterInSelectOptimizer()
     mql_test_cases,
 )
 def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
-    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
+    logical_query, _ = parse_and_post_process_mql_query(
+        str(mql_query), mql_context, generic_metrics
+    )
     assert isinstance(logical_query, Query)
     res = optimizer.get_domain_of_mql_query(logical_query)
     if res != expected_domain:

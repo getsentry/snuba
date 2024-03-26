@@ -17,7 +17,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
-from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
+from snuba.query.mql.parser import parse_and_post_process_mql_query as _parse_mql_query
 from snuba.query.parser.exceptions import PostProcessingError
 from snuba.query.query_settings import (
     HTTPQuerySettings,
