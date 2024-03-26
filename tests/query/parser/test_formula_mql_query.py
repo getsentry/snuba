@@ -11,7 +11,15 @@ from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl import arrayElement, divide, multiply, plus
+from snuba.query.dsl import (
+    and_cond,
+    arrayElement,
+    divide,
+    equals,
+    multiply,
+    or_cond,
+    plus,
+)
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -21,9 +29,6 @@ from snuba.query.expressions import (
 )
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
-from tests.query.processors.test_filter_in_select_optimizer import (
-    expected_optimize_condition,
-)
 
 # Commonly used expressions
 from_distributions = QueryEntity(
@@ -252,6 +257,22 @@ def test_simple_formula() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -263,7 +284,9 @@ def test_simple_formula() -> None:
         ],
         groupby=[time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -283,6 +306,7 @@ def test_simple_formula() -> None:
     assert eq, reason
 
 
+@pytest.mark.xfail()
 def test_simple_formula_with_leading_literals() -> None:
     query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
     expected_selected = SelectedExpression(
@@ -299,6 +323,22 @@ def test_simple_formula_with_leading_literals() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -310,7 +350,9 @@ def test_simple_formula_with_leading_literals() -> None:
         ],
         groupby=[time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -327,6 +369,7 @@ def test_simple_formula_with_leading_literals() -> None:
     )
     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
+    assert eq, reason
 
 
 def test_groupby() -> None:
@@ -345,6 +388,22 @@ def test_groupby() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -357,7 +416,9 @@ def test_groupby() -> None:
         ],
         groupby=[tag_column("transaction"), time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -422,6 +483,22 @@ def test_curried_aggregate() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -434,7 +511,9 @@ def test_curried_aggregate() -> None:
         ],
         groupby=[tag_column("transaction"), time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -470,6 +549,28 @@ def test_bracketing_rules() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        or_cond(
+            or_cond(
+                equals(
+                    Column("_snuba_metric_id", None, "metric_id"),
+                    Literal(None, 123456),
+                ),
+                equals(
+                    Column("_snuba_metric_id", None, "metric_id"),
+                    Literal(None, 123456),
+                ),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -481,7 +582,9 @@ def test_bracketing_rules() -> None:
         ],
         groupby=[time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -536,6 +639,28 @@ def test_formula_filters() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -547,7 +672,9 @@ def test_formula_filters() -> None:
         ],
         groupby=[time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -589,6 +716,28 @@ def test_formula_groupby() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+        and_cond(
+            equals(
+                tag_column("status_code"),
+                Literal(None, "200"),
+            ),
+            equals(
+                Column("_snuba_metric_id", None, "metric_id"),
+                Literal(None, 123456),
+            ),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -604,7 +753,9 @@ def test_formula_groupby() -> None:
         ],
         groupby=[tag_column("transaction"), time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
@@ -637,6 +788,16 @@ def test_formula_scalar_value() -> None:
             "_snuba_aggregate_value",
         ),
     )
+    filter_in_select_condition = or_cond(
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+        equals(
+            Column("_snuba_metric_id", None, "metric_id"),
+            Literal(None, 123456),
+        ),
+    )
     expected = Query(
         from_distributions,
         selected_columns=[
@@ -648,7 +809,9 @@ def test_formula_scalar_value() -> None:
         ],
         groupby=[time_expression],
         condition=binary_condition(
-            "and", expected_optimize_condition[query_body], formula_condition
+            "and",
+            filter_in_select_condition,
+            formula_condition,
         ),
         order_by=[
             OrderBy(
