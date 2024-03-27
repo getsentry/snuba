@@ -73,8 +73,6 @@ class FindConditionalAggregateFunctionsVisitor(
     ) -> list[FunctionCall | CurriedFunctionCall]:
         if exp.internal_function.function_name[-2:] == "If":
             self._matches.append(exp)
-        for param in exp.internal_function.parameters:
-            param.accept(self)
         return self._matches
 
     def visit_argument(self, exp: Argument) -> list[FunctionCall | CurriedFunctionCall]:
