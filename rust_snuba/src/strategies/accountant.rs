@@ -51,7 +51,7 @@ impl<N> RecordCogs<N> {
         topic_name: &str,
     ) -> Self
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
     {
         let accountant = CogsAccountant::new(broker_config, topic_name);
 
@@ -63,9 +63,9 @@ impl<N> RecordCogs<N> {
     }
 }
 
-impl<N> ProcessingStrategy<BytesInsertBatch> for RecordCogs<N>
+impl<N> ProcessingStrategy<BytesInsertBatch<()>> for RecordCogs<N>
 where
-    N: ProcessingStrategy<BytesInsertBatch> + 'static,
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.poll()
@@ -73,8 +73,8 @@ where
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+        message: Message<BytesInsertBatch<()>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<()>>> {
         for (app_feature, amount_bytes) in message.payload().cogs_data().data.iter() {
             self.accountant
                 .record_bytes(&self.resource_id, app_feature, *amount_bytes)
