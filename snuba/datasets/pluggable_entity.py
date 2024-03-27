@@ -87,15 +87,18 @@ class PluggableEntity(Entity):
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
         return self.join_relationships
 
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
-        from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
-
+    def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
         query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
             storages=self.storages,
             selector=self.storage_selector,
             partition_key_column_name=self.partition_key_column_name,
         )
+        return query_plan_builder
 
+    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
+        from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
+
+        query_plan_builder = self.get_query_plan_builder()
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages(self) -> Sequence[Storage]:

@@ -138,15 +138,19 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
         """
 
         return (
-            self.root_processors.plan_processors
-            if self.root_processors is not None
-            else [],
-            {
-                alias: subquery.plan_processors
-                for alias, subquery in self.aliased_processors.items()
-            }
-            if self.aliased_processors is not None
-            else {},
+            (
+                self.root_processors.plan_processors
+                if self.root_processors is not None
+                else []
+            ),
+            (
+                {
+                    alias: subquery.plan_processors
+                    for alias, subquery in self.aliased_processors.items()
+                }
+                if self.aliased_processors is not None
+                else {}
+            ),
         )
 
 
@@ -166,6 +170,12 @@ class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
 
     Potentially this could be agnostic to the DB.
     """
+
+    @abstractmethod
+    def apply_processors(
+        self, query: CompositeQuery[Table], query_settings: QuerySettings
+    ) -> CompositeQuery[Table]:
+        raise NotImplementedError
 
     @abstractmethod
     def execute(
