@@ -200,6 +200,28 @@ pub struct BytesInsertBatch<R = RowData> {
 }
 
 impl<R> BytesInsertBatch<R> {
+    pub fn new(
+        rows: R,
+        message_timestamp: DateTime<Utc>,
+        origin_timestamp: Option<DateTime<Utc>>,
+        sentry_received_timestamp: Option<DateTime<Utc>>,
+        commit_log_offsets: CommitLogOffsets,
+        cogs_data: CogsData,
+    ) -> Self {
+        BytesInsertBatch {
+            rows,
+            message_timestamp: message_timestamp.into(),
+            origin_timestamp: origin_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
+            sentry_received_timestamp: sentry_received_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
+            commit_log_offsets,
+            cogs_data,
+        }
+    }
+
     pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
         &self.commit_log_offsets
     }
@@ -235,28 +257,6 @@ impl<R> BytesInsertBatch<R> {
 impl BytesInsertBatch {
     pub fn encoded_rows(&self) -> &[u8] {
         &self.rows.encoded_rows
-    }
-
-    pub fn new(
-        rows: RowData,
-        message_timestamp: DateTime<Utc>,
-        origin_timestamp: Option<DateTime<Utc>>,
-        sentry_received_timestamp: Option<DateTime<Utc>>,
-        commit_log_offsets: CommitLogOffsets,
-        cogs_data: CogsData,
-    ) -> Self {
-        BytesInsertBatch {
-            rows,
-            message_timestamp: message_timestamp.into(),
-            origin_timestamp: origin_timestamp
-                .map(LatencyRecorder::from)
-                .unwrap_or_default(),
-            sentry_received_timestamp: sentry_received_timestamp
-                .map(LatencyRecorder::from)
-                .unwrap_or_default(),
-            commit_log_offsets,
-            cogs_data,
-        }
     }
 
     pub fn len(&self) -> usize {

@@ -200,7 +200,7 @@ impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets, RowData};
+    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets};
 
     use super::*;
     use crate::testutils::TestStrategy;
@@ -291,7 +291,7 @@ mod tests {
 
         let payloads = vec![
             BytesInsertBatch::new(
-                RowData::default(),
+                (),
                 Utc::now(),
                 None,
                 None,
@@ -306,7 +306,7 @@ mod tests {
                 CogsData::default(),
             ),
             BytesInsertBatch::new(
-                RowData::default(),
+                (),
                 Utc::now(),
                 None,
                 None,
