@@ -50,7 +50,7 @@ from snuba.redis import all_redis_clients
 from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_mql_query, parse_snql_query
+from snuba.request.validation import build_request, parse_request
 from snuba.state import get_float_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -364,9 +364,23 @@ def dataset_query(
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings, is_mql)
 
-    parse_function = parse_snql_query if not is_mql else parse_mql_query
+    request_parts, settings_obj, query, snql_anonymized = parse_request(
+        body,
+        HTTPQuerySettings,
+        schema,
+        dataset,
+        timer,
+        referrer,
+        is_mql,
+    )
     request = build_request(
-        body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
+        body,
+        timer,
+        referrer,
+        request_parts,
+        settings_obj,
+        query,
+        snql_anonymized,
     )
     _get_and_log_referrer(request, body)
 
