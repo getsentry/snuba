@@ -148,7 +148,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         // Write to clickhouse
         let next_step = Box::new(ClickhouseWriterStep::new(
             next_step,
-            self.skip_write,
             &self.clickhouse_concurrency,
         ));
 
@@ -159,6 +158,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.storage_config.clickhouse_table_name,
             &self.storage_config.clickhouse_cluster.database,
             &self.clickhouse_concurrency,
+            self.skip_write,
         );
 
         let accumulator = Arc::new(

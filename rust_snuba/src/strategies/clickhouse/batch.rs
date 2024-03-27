@@ -14,6 +14,7 @@ pub struct BatchFactory {
     url: String,
     query: String,
     handle: Handle,
+    skip_write: bool,
 }
 
 impl BatchFactory {
@@ -23,6 +24,7 @@ impl BatchFactory {
         table: &str,
         database: &str,
         concurrency: &ConcurrencyConfig,
+        skip_write: bool,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(3);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -46,42 +48,49 @@ impl BatchFactory {
             url,
             query,
             handle: concurrency.handle(),
+            skip_write,
         }
     }
 
     pub fn new_batch(&self) -> HttpBatch {
-        // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
-        // however to enforce any limit locally because it would mean that in the Drop impl of
-        // Batch, the send may block or fail
-        let (sender, receiver) = unbounded_channel();
+        let (sender, result_handle) = if self.skip_write {
+            (None, None)
+        } else {
+            // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
+            // however to enforce any limit locally because it would mean that in the Drop impl of
+            // Batch, the send may block or fail
+            let (sender, receiver) = unbounded_channel();
 
-        let url = self.url.clone();
-        let query = self.query.clone();
-        let client = self.client.clone();
+            let url = self.url.clone();
+            let query = self.query.clone();
+            let client = self.client.clone();
 
-        let result_handle = self.handle.spawn(async move {
-            let res = client
-                .post(&url)
-                .query(&[("query", &query)])
-                .body(reqwest::Body::wrap_stream(UnboundedReceiverStream::new(
-                    receiver,
-                )))
-                .send()
-                .await?;
+            let result_handle = self.handle.spawn(async move {
+                let res = client
+                    .post(&url)
+                    .query(&[("query", &query)])
+                    .body(reqwest::Body::wrap_stream(UnboundedReceiverStream::new(
+                        receiver,
+                    )))
+                    .send()
+                    .await?;
 
-            if res.status() != reqwest::StatusCode::OK {
-                anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
-            }
+                if res.status() != reqwest::StatusCode::OK {
+                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                }
 
-            Ok(())
-        });
+                Ok(())
+            });
+
+            (Some(sender), Some(result_handle))
+        };
 
         HttpBatch {
             current_chunk: Vec::new(),
             num_rows: 0,
             num_bytes: 0,
-            sender: Some(sender),
-            result_handle: Some(result_handle),
+            sender,
+            result_handle,
         }
     }
 }
@@ -120,18 +129,24 @@ impl HttpBatch {
             // XXX: allocating small chunks of memory here and sending it across thread boundaries is
             // not very memory efficient, especially with jemalloc
             let chunk = mem::take(&mut self.current_chunk);
-            self.sender.as_ref().unwrap().send(Ok(chunk))?;
+            if let Some(ref sender) = self.sender {
+                sender.send(Ok(chunk))?;
+            }
         }
 
         Ok(())
     }
 
-    pub async fn finish(mut self) -> Result<(), anyhow::Error> {
+    pub async fn finish(mut self) -> Result<bool, anyhow::Error> {
         self.flush_chunk()?;
         // finish stream
         drop(self.sender.take());
-        self.result_handle.take().unwrap().await??;
-        Ok(())
+        if let Some(handle) = self.result_handle.take() {
+            handle.await??;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
 

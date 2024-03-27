@@ -15,13 +15,11 @@ use crate::types::BytesInsertBatch;
 
 pub mod batch;
 
-struct ClickhouseWriter {
-    skip_write: bool,
-}
+struct ClickhouseWriter {}
 
 impl ClickhouseWriter {
-    pub fn new(skip_write: bool) -> Self {
-        ClickhouseWriter { skip_write }
+    pub fn new() -> Self {
+        ClickhouseWriter {}
     }
 }
 
@@ -32,8 +30,6 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
         &self,
         message: Message<BytesInsertBatch<HttpBatch>>,
     ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
-        let skip_write = self.skip_write;
-
         Box::pin(async move {
             // XXX: gross hack to try_map the message while retaining the old value in http_batch
             let http_batch = RefCell::new(None);
@@ -50,14 +46,12 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
 
             let write_start = SystemTime::now();
 
+            tracing::debug!("performing write");
+            let skip_write = http_batch.finish().await.map_err(RunTaskError::Other)?;
+
             if skip_write {
-                // TODO: dont open connection at all
                 tracing::info!("skipping write of {} rows", num_rows);
             } else {
-                tracing::debug!("performing write");
-
-                http_batch.finish().await.map_err(RunTaskError::Other)?;
-
                 tracing::info!("Inserted {} rows", num_rows);
             }
 
@@ -80,13 +74,13 @@ pub struct ClickhouseWriterStep {
 }
 
 impl ClickhouseWriterStep {
-    pub fn new<N>(next_step: N, skip_write: bool, concurrency: &ConcurrencyConfig) -> Self
+    pub fn new<N>(next_step: N, concurrency: &ConcurrencyConfig) -> Self
     where
         N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
     {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ClickhouseWriter::new(skip_write)),
+            Box::new(ClickhouseWriter::new()),
             concurrency,
             Some("clickhouse"),
         );
