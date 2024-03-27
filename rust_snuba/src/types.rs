@@ -259,10 +259,6 @@ impl<R> BytesInsertBatch<R> {
 }
 
 impl BytesInsertBatch {
-    pub fn encoded_rows(&self) -> &[u8] {
-        &self.rows.encoded_rows
-    }
-
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
