@@ -204,7 +204,7 @@ pub struct BytesInsertBatch<R = RowData> {
 impl<R> BytesInsertBatch<R> {
     pub fn new(
         rows: R,
-        message_timestamp: DateTime<Utc>,
+        message_timestamp: Option<DateTime<Utc>>,
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
@@ -212,7 +212,9 @@ impl<R> BytesInsertBatch<R> {
     ) -> Self {
         BytesInsertBatch {
             rows,
-            message_timestamp: message_timestamp.into(),
+            message_timestamp: message_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
             origin_timestamp: origin_timestamp
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
@@ -267,17 +269,6 @@ impl BytesInsertBatch {
 }
 
 impl BytesInsertBatch<HttpBatch> {
-    pub fn new2(rows: HttpBatch) -> Self {
-        BytesInsertBatch {
-            rows,
-            message_timestamp: Default::default(),
-            origin_timestamp: Default::default(),
-            sentry_received_timestamp: Default::default(),
-            commit_log_offsets: Default::default(),
-            cogs_data: Default::default(),
-        }
-    }
-
     pub fn merge(mut self, other: BytesInsertBatch) -> Self {
         self.rows
             .write_rows(&other.rows)

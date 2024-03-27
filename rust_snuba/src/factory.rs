@@ -32,7 +32,7 @@ use crate::strategies::processor::{
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
-use crate::types::BytesInsertBatch;
+use crate::types::{BytesInsertBatch, CogsData};
 
 pub struct ConsumerStrategyFactory {
     storage_config: config::StorageConfig,
@@ -170,7 +170,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         let next_step = Reduce::new(
             next_step,
             accumulator,
-            Arc::new(move || BytesInsertBatch::new2(batch_factory.new_batch())),
+            Arc::new(move || {
+                BytesInsertBatch::new(
+                    batch_factory.new_batch(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
+                )
+            }),
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,

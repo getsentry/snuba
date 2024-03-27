@@ -37,7 +37,7 @@ pub fn make_rust_processor(
     ) -> anyhow::Result<Message<BytesInsertBatch>> {
         let payload = BytesInsertBatch::new(
             transformed.rows,
-            timestamp,
+            Some(timestamp),
             transformed.origin_timestamp,
             transformed.sentry_received_timestamp,
             CommitLogOffsets(BTreeMap::from([(
@@ -92,7 +92,7 @@ pub fn make_rust_processor_with_replacements(
             InsertOrReplacement::Insert(transformed) => {
                 InsertOrReplacement::Insert(BytesInsertBatch::new(
                     transformed.rows,
-                    timestamp,
+                    Some(timestamp),
                     transformed.origin_timestamp,
                     transformed.sentry_received_timestamp,
                     CommitLogOffsets(BTreeMap::from([(

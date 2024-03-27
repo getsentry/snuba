@@ -86,7 +86,7 @@ impl PythonTransformStep {
 
             let payload = BytesInsertBatch::new(
                 RowData::from_encoded_rows(payload),
-                message_timestamp,
+                Some(message_timestamp),
                 origin_timestamp,
                 sentry_received_timestamp,
                 CommitLogOffsets(commit_log_offsets),
