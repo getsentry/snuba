@@ -78,6 +78,8 @@ impl BatchFactory {
 
         Batch {
             current_chunk: Vec::new(),
+            num_rows: 0,
+            num_bytes: 0,
             sender: Some(sender),
             result_handle: Some(result_handle),
         }
@@ -86,16 +88,28 @@ impl BatchFactory {
 
 pub struct Batch {
     current_chunk: Vec<u8>,
+    num_rows: usize,
+    num_bytes: usize,
     sender: Option<UnboundedSender<Result<Vec<u8>, anyhow::Error>>>,
     result_handle: Option<JoinHandle<Result<(), anyhow::Error>>>,
 }
 
 impl Batch {
+    pub fn num_rows(&self) -> usize {
+        self.num_rows
+    }
+
+    pub fn num_bytes(&self) -> usize {
+        self.num_bytes
+    }
+
     pub fn write_rows(&mut self, rows: &[u8]) -> anyhow::Result<()> {
         if self.current_chunk.len() > CLICKHOUSE_HTTP_CHUNK_SIZE {
             self.flush_chunk()?;
         }
 
+        self.num_rows += rows.iter().filter(|x| **x == b'\n').count();
+        self.num_bytes += rows.len();
         self.current_chunk.extend(rows);
         Ok(())
     }

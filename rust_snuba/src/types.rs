@@ -173,8 +173,8 @@ impl InsertBatch {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BytesInsertBatch {
-    rows: RowData,
+pub struct BytesInsertBatch<R = RowData> {
+    rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
@@ -199,7 +199,44 @@ pub struct BytesInsertBatch {
     cogs_data: CogsData,
 }
 
+impl<R> BytesInsertBatch<R> {
+    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
+        &self.commit_log_offsets
+    }
+
+    pub fn cogs_data(&self) -> &CogsData {
+        &self.cogs_data
+    }
+
+    pub fn take(self) -> (R, BytesInsertBatch<()>) {
+        let new = BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp,
+            origin_timestamp: self.origin_timestamp,
+            sentry_received_timestamp: self.sentry_received_timestamp,
+            commit_log_offsets: self.commit_log_offsets,
+            cogs_data: self.cogs_data,
+        };
+
+        (self.rows, new)
+    }
+
+    pub fn record_message_latency(&self) {
+        let write_time = Utc::now();
+
+        self.message_timestamp.send_metric(write_time, "latency");
+        self.origin_timestamp
+            .send_metric(write_time, "end_to_end_latency");
+        self.sentry_received_timestamp
+            .send_metric(write_time, "sentry_received_latency");
+    }
+}
+
 impl BytesInsertBatch {
+    pub fn encoded_rows(&self) -> &[u8] {
+        &self.rows.encoded_rows
+    }
+
     pub fn new(
         rows: RowData,
         message_timestamp: DateTime<Utc>,
@@ -222,44 +259,34 @@ impl BytesInsertBatch {
         }
     }
 
-    pub fn merge(mut self, other: Self) -> Self {
+    pub fn len(&self) -> usize {
+        self.rows.num_rows
+    }
+}
+
+impl BytesInsertBatch<crate::strategies::clickhouse::batch::Batch> {
+    pub fn new2(rows: crate::strategies::clickhouse::batch::Batch) -> Self {
+        BytesInsertBatch {
+            rows,
+            message_timestamp: Default::default(),
+            origin_timestamp: Default::default(),
+            sentry_received_timestamp: Default::default(),
+            commit_log_offsets: Default::default(),
+            cogs_data: Default::default(),
+        }
+    }
+
+    pub fn merge(mut self, other: BytesInsertBatch) -> Self {
         self.rows
-            .encoded_rows
-            .extend_from_slice(&other.rows.encoded_rows);
+            .write_rows(&other.rows.encoded_rows)
+            .expect("failed to write rows to channel");
         self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.rows.num_rows += other.rows.num_rows;
         self.message_timestamp.merge(other.message_timestamp);
         self.origin_timestamp.merge(other.origin_timestamp);
         self.sentry_received_timestamp
             .merge(other.sentry_received_timestamp);
         self.cogs_data.merge(other.cogs_data);
         self
-    }
-
-    pub fn record_message_latency(&self) {
-        let write_time = Utc::now();
-
-        self.message_timestamp.send_metric(write_time, "latency");
-        self.origin_timestamp
-            .send_metric(write_time, "end_to_end_latency");
-        self.sentry_received_timestamp
-            .send_metric(write_time, "sentry_received_latency");
-    }
-
-    pub fn len(&self) -> usize {
-        self.rows.num_rows
-    }
-
-    pub fn encoded_rows(&self) -> &[u8] {
-        &self.rows.encoded_rows
-    }
-
-    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
-        &self.commit_log_offsets
-    }
-
-    pub fn cogs_data(&self) -> &CogsData {
-        &self.cogs_data
     }
 }
 

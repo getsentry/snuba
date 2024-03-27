@@ -24,6 +24,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+use crate::strategies::clickhouse::batch::{Batch, BatchFactory};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::{
@@ -115,7 +116,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 
         // Produce commit log if there is one
-        let next_step: Box<dyn ProcessingStrategy<_>> =
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
                     next_step,
@@ -130,19 +131,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 Box::new(next_step)
             };
 
-        // Write to clickhouse
-        let next_step = Box::new(ClickhouseWriterStep::new(
-            next_step,
-            self.storage_config.clickhouse_cluster.clone(),
-            self.storage_config.clickhouse_table_name.clone(),
-            self.skip_write,
-            &self.clickhouse_concurrency,
-        ));
-
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
-        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             match (self.skip_write, self.env_config.record_cogs, cogs_label) {
                 (false, true, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
@@ -153,12 +145,32 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 _ => next_step,
             };
 
+        // Write to clickhouse
+        let next_step = Box::new(ClickhouseWriterStep::new(
+            next_step,
+            self.skip_write,
+            &self.clickhouse_concurrency,
+        ));
+
         // Batch insert rows
-        let accumulator = Arc::new(BytesInsertBatch::merge);
+        let batch_factory = BatchFactory::new(
+            &self.storage_config.clickhouse_cluster.host,
+            self.storage_config.clickhouse_cluster.http_port,
+            &self.storage_config.clickhouse_table_name,
+            &self.storage_config.clickhouse_cluster.database,
+            &self.clickhouse_concurrency,
+        );
+
+        let accumulator = Arc::new(
+            |batch: BytesInsertBatch<Batch>, small_batch: BytesInsertBatch| {
+                batch.merge(small_batch)
+            },
+        );
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
-            BytesInsertBatch::default(),
+            Arc::new(move || BytesInsertBatch::new2(batch_factory.new_batch())),
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,
