@@ -16,11 +16,11 @@ use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
-    KafkaMessageMetadata,
+    KafkaMessageMetadata, RowData,
 };
 
 pub fn make_rust_processor(
-    next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
+    next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
     func: ProcessingFunction,
     schema_name: &str,
     enforce_schema: bool,
@@ -34,7 +34,7 @@ pub fn make_rust_processor(
         partition: Partition,
         offset: u64,
         timestamp: DateTime<Utc>,
-    ) -> anyhow::Result<Message<BytesInsertBatch>> {
+    ) -> anyhow::Result<Message<BytesInsertBatch<RowData>>> {
         let payload = BytesInsertBatch::new(
             transformed.rows,
             Some(timestamp),
@@ -73,7 +73,7 @@ pub fn make_rust_processor(
 }
 
 pub fn make_rust_processor_with_replacements(
-    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
+    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> + 'static,
     func: ProcessingFunctionWithReplacements,
     schema_name: &str,
     enforce_schema: bool,
@@ -87,7 +87,7 @@ pub fn make_rust_processor_with_replacements(
         partition: Partition,
         offset: u64,
         timestamp: DateTime<Utc>,
-    ) -> anyhow::Result<Message<InsertOrReplacement<BytesInsertBatch>>> {
+    ) -> anyhow::Result<Message<InsertOrReplacement<BytesInsertBatch<RowData>>>> {
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
                 InsertOrReplacement::Insert(BytesInsertBatch::new(

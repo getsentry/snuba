@@ -175,7 +175,7 @@ impl InsertBatch {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BytesInsertBatch<R = RowData> {
+pub struct BytesInsertBatch<R> {
     rows: R,
 
     /// when the message was inserted into the snuba topic
@@ -258,14 +258,14 @@ impl<R> BytesInsertBatch<R> {
     }
 }
 
-impl BytesInsertBatch {
+impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
 }
 
 impl BytesInsertBatch<HttpBatch> {
-    pub fn merge(mut self, other: BytesInsertBatch) -> Self {
+    pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
         self.rows
             .write_rows(&other.rows)
             .expect("failed to write rows to channel");

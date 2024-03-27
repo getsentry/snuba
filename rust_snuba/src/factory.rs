@@ -32,7 +32,7 @@ use crate::strategies::processor::{
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
-use crate::types::{BytesInsertBatch, CogsData};
+use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct ConsumerStrategyFactory {
     storage_config: config::StorageConfig,
@@ -162,7 +162,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
 
         let accumulator = Arc::new(
-            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch| {
+            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch<RowData>| {
                 batch.merge(small_batch)
             },
         );
