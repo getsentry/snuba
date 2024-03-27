@@ -13,12 +13,12 @@
 /snuba/datasets/configuration/functions             @getsentry/profiling
 /snuba/datasets/configuration/profiles              @getsentry/profiling
 /snuba/datasets/configuration/replays               @getsentry/replay-backend
-/snuba/datasets/configuration/generic_metrics
+
+/snuba/datasets/configuration/generic_metrics       @getsentry/metrics @getsentry/ddm
+/snuba/datasets/configuration/metrics               @getsentry/metrics @getsentry/ddm
 /snuba/datasets/configuration/groupedmessage
-/snuba/datasets/configuration/metrics
 /snuba/datasets/configuration/outcomes
 /snuba/datasets/configuration/outcomes_raw
-/snuba/datasets/configuration/querylog
 
 # @getsentry/crons
 # @getsentry/hybrid-cloud
