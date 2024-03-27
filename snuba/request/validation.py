@@ -105,47 +105,56 @@ def update_attribution_info(
     return attribution_info
 
 
-def build_request(
+def parse_request(
     body: Dict[str, Any],
-    parser: Parser,
     settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
     schema: RequestSchema,
     dataset: Dataset,
     timer: Timer,
     referrer: str,
+    is_mql: bool,
     custom_processing: Optional[CustomProcessors] = None,
-) -> Request:
-    with sentry_sdk.start_span(description="build_request", op="validate") as span:
+) -> tuple[
+    RequestParts,
+    HTTPQuerySettings | SubscriptionQuerySettings,
+    Query | CompositeQuery[Entity],
+    str,
+]:
+    """
+    Given a snuba-api request-body (among other things), parse it into a query ast and return the ast (among other things).
+    """
+    with sentry_sdk.start_span(description="parse_request", op="validate") as span:
+        request_parts = schema.validate(body)
+        referrer = _get_referrer(request_parts, referrer)
+        settings_obj = _get_settings_object(settings_class, request_parts, referrer)
         try:
-            request_parts = schema.validate(body)
-            referrer = _get_referrer(request_parts, referrer)
-            settings_obj = _get_settings_object(settings_class, request_parts, referrer)
-            try:
-                query, snql_anonymized = parser(
+            if is_mql:
+                query, snql_anonymized = parse_mql_query(
                     request_parts, settings_obj, dataset, custom_processing
                 )
-            except PostProcessingError as exception:
-                query = exception.query
-                snql_anonymized = exception.snql_anonymized
-                request = _build_request(
-                    body, request_parts, referrer, settings_obj, query, snql_anonymized
+            else:
+                query, snql_anonymized = parse_snql_query(
+                    request_parts, settings_obj, dataset, custom_processing
                 )
-                query_metadata = SnubaQueryMetadata(
-                    request, get_dataset_name(dataset), timer
-                )
-                state.record_query(query_metadata.to_dict())
-                raise
-
-            request = _build_request(
-                body, request_parts, referrer, settings_obj, query, snql_anonymized
-            )
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
             record_invalid_request(
                 timer, request_status, referrer, str(type(exception).__name__)
             )
             raise exception
+        except PostProcessingError as exception:
+            query = exception.query
+            snql_anonymized = exception.snql_anonymized
+            request = _build_request(
+                body, request_parts, referrer, settings_obj, query, snql_anonymized
+            )
+            query_metadata = SnubaQueryMetadata(
+                request, get_dataset_name(dataset), timer
+            )
+            state.record_query(query_metadata.to_dict())
+            raise
         except Exception as exception:
+            # TODO: maybe make this log for parse error, maybe fine as is
             request_status = get_request_status(exception)
             record_error_building_request(
                 timer, request_status, referrer, str(type(exception).__name__)
@@ -158,25 +167,49 @@ def build_request(
         )
         span.set_data(
             "snuba_query_raw",
-            textwrap.wrap(repr(request.original_body), 100, break_long_words=False),
+            textwrap.wrap(repr(body), 100, break_long_words=False),
         )
         sentry_sdk.add_breadcrumb(
             category="query_info",
             level="info",
             message="snuba_query_raw",
-            data={
-                "query": textwrap.wrap(
-                    repr(request.original_body), 100, break_long_words=False
-                )
-            },
+            data={"query": textwrap.wrap(repr(body), 100, break_long_words=False)},
         )
+        return (request_parts, settings_obj, query, snql_anonymized)
+
+
+def build_request(
+    body: Dict[str, Any],
+    timer: Timer,
+    referrer: str,
+    request_parts: RequestParts,
+    settings_obj: (HTTPQuerySettings | SubscriptionQuerySettings),
+    query: Query | CompositeQuery[Entity],
+    snql_anonymized: str,
+) -> Request:
+    """
+    Given a query-ast (among other things), build and return a Request object for it
+    """
+    with sentry_sdk.start_span(description="build_request", op="validate"):
+        try:
+            request = _build_request(
+                body, request_parts, referrer, settings_obj, query, snql_anonymized
+            )
+        except (InvalidJsonRequestException, InvalidQueryException):
+            assert 1 == 0
+        except Exception as exception:
+            request_status = get_request_status(exception)
+            record_error_building_request(
+                timer, request_status, referrer, str(type(exception).__name__)
+            )
+            raise exception
+
         sentry_sdk.add_breadcrumb(
             category="query_info",
             level="info",
             message="snuba_query_raw",
             data={"request_id": request.id},
         )
-
         timer.mark("validate_schema")
         return request
 
