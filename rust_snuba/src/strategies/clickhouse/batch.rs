@@ -163,3 +163,140 @@ impl Drop for HttpBatch {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use httpmock::prelude::{MockServer, POST};
+
+    use super::*;
+
+    #[test]
+    fn test_write() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            false,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
+    }
+
+    #[test]
+    fn test_drop_batch() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).any_request();
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            false,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        // drop the batch -- it should not finish the request
+        drop(batch);
+
+        // ensure there has not been any HTTP request
+        mock.assert_hits(0);
+    }
+
+    #[test]
+    fn test_skip_write() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).any_request();
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            true,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        // finish the batch, but since we have skip_write=true, there should not be a http request
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        // ensure there has not been any HTTP request
+        mock.assert_hits(0);
+    }
+
+    #[test]
+    fn test_drop_and_skip_write() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).any_request();
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            true,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        // drop the batch -- it should not finish the request, but also we have skip_write=true
+        drop(batch);
+
+        // ensure there has not been any HTTP request
+        mock.assert_hits(0);
+    }
+}

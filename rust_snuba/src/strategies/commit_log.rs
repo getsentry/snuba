@@ -292,7 +292,7 @@ mod tests {
         let payloads = vec![
             BytesInsertBatch::new(
                 (),
-                Utc::now(),
+                Some(Utc::now()),
                 None,
                 None,
                 CommitLogOffsets(BTreeMap::from([(
@@ -307,7 +307,7 @@ mod tests {
             ),
             BytesInsertBatch::new(
                 (),
-                Utc::now(),
+                Some(Utc::now()),
                 None,
                 None,
                 CommitLogOffsets(BTreeMap::from([

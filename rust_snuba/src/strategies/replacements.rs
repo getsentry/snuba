@@ -156,7 +156,7 @@ mod tests {
             .submit(Message::new_any_message(
                 InsertOrReplacement::Insert(BytesInsertBatch::new(
                     RowData::from_rows(row_data).unwrap(),
-                    Utc::now(),
+                    Some(Utc::now()),
                     None,
                     None,
                     CommitLogOffsets::default(),
