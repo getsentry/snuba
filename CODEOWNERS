@@ -7,9 +7,9 @@
 /snuba/datasets/configuration/issues                @getsentry/issues
 /snuba/datasets/configuration/group_attributes      @getsentry/issues
 /snuba/datasets/configuration/groupassignee         @getsentry/issues
-/snuba/datasets/configuration/sessions              @getsentry/team-starfish @getsentry/performance
-/snuba/datasets/configuration/spans                 @getsentry/team-starfish @getsentry/performance
-/snuba/datasets/configuration/transactions          @getsentry/team-starfish @getsentry/performance
+/snuba/datasets/configuration/sessions              @getsentry/performance
+/snuba/datasets/configuration/spans                 @getsentry/performance
+/snuba/datasets/configuration/transactions          @getsentry/performance
 /snuba/datasets/configuration/functions             @getsentry/profiling
 /snuba/datasets/configuration/profiles              @getsentry/profiling
 /snuba/datasets/configuration/replays               @getsentry/replay-backend
@@ -26,7 +26,6 @@
 # @getsentry/issues
 # @getsentry/performance
 # @getsentry/discover-n-dashboards
-# @getsentry/team-starfish
 # @getsentry/profiling
 # @getsentry/replay-frontend
 # @getsentry/replay-backend
