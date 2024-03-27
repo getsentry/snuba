@@ -280,7 +280,7 @@ impl BytesInsertBatch<HttpBatch> {
 
     pub fn merge(mut self, other: BytesInsertBatch) -> Self {
         self.rows
-            .write_rows(&other.rows.encoded_rows)
+            .write_rows(&other.rows)
             .expect("failed to write rows to channel");
         self.commit_log_offsets.merge(other.commit_log_offsets);
         self.message_timestamp.merge(other.message_timestamp);

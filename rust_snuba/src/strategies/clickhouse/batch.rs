@@ -7,6 +7,8 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
+use crate::types::RowData;
+
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 
 pub struct BatchFactory {
@@ -112,14 +114,14 @@ impl HttpBatch {
         self.num_bytes
     }
 
-    pub fn write_rows(&mut self, rows: &[u8]) -> anyhow::Result<()> {
+    pub fn write_rows(&mut self, data: &RowData) -> anyhow::Result<()> {
         if self.current_chunk.len() > CLICKHOUSE_HTTP_CHUNK_SIZE {
             self.flush_chunk()?;
         }
 
-        self.num_rows += rows.iter().filter(|x| **x == b'\n').count();
-        self.num_bytes += rows.len();
-        self.current_chunk.extend(rows);
+        self.num_rows += data.num_rows;
+        self.num_bytes += data.encoded_rows.len();
+        self.current_chunk.extend(&data.encoded_rows);
         Ok(())
     }
 
