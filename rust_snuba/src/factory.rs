@@ -24,7 +24,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
-use crate::strategies::clickhouse::batch::{Batch, BatchFactory};
+use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::{
@@ -162,7 +162,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
 
         let accumulator = Arc::new(
-            |batch: BytesInsertBatch<Batch>, small_batch: BytesInsertBatch| {
+            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch| {
                 batch.merge(small_batch)
             },
         );

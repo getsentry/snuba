@@ -10,7 +10,7 @@ use rust_arroyo::processing::strategies::{
 use rust_arroyo::types::Message;
 use rust_arroyo::{counter, timer};
 
-use crate::strategies::clickhouse::batch::Batch;
+use crate::strategies::clickhouse::batch::HttpBatch;
 use crate::types::BytesInsertBatch;
 
 pub mod batch;
@@ -25,10 +25,12 @@ impl ClickhouseWriter {
     }
 }
 
-impl TaskRunner<BytesInsertBatch<Batch>, BytesInsertBatch<()>, anyhow::Error> for ClickhouseWriter {
+impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error>
+    for ClickhouseWriter
+{
     fn get_task(
         &self,
-        message: Message<BytesInsertBatch<Batch>>,
+        message: Message<BytesInsertBatch<HttpBatch>>,
     ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
         let skip_write = self.skip_write;
 
@@ -74,7 +76,7 @@ impl TaskRunner<BytesInsertBatch<Batch>, BytesInsertBatch<()>, anyhow::Error> fo
 }
 
 pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<BytesInsertBatch<Batch>, BytesInsertBatch<()>, anyhow::Error>,
+    inner: RunTaskInThreads<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error>,
 }
 
 impl ClickhouseWriterStep {
@@ -93,15 +95,15 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch<Batch>> for ClickhouseWriterStep {
+impl ProcessingStrategy<BytesInsertBatch<HttpBatch>> for ClickhouseWriterStep {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch<Batch>>,
-    ) -> Result<(), SubmitError<BytesInsertBatch<Batch>>> {
+        message: Message<BytesInsertBatch<HttpBatch>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<HttpBatch>>> {
         self.inner.submit(message)
     }
 

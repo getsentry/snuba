@@ -1,6 +1,8 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 
+use crate::strategies::clickhouse::batch::HttpBatch;
+
 use chrono::{DateTime, Utc};
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::timer;
@@ -264,8 +266,8 @@ impl BytesInsertBatch {
     }
 }
 
-impl BytesInsertBatch<crate::strategies::clickhouse::batch::Batch> {
-    pub fn new2(rows: crate::strategies::clickhouse::batch::Batch) -> Self {
+impl BytesInsertBatch<HttpBatch> {
+    pub fn new2(rows: HttpBatch) -> Self {
         BytesInsertBatch {
             rows,
             message_timestamp: Default::default(),

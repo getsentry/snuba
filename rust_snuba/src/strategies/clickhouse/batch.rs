@@ -49,7 +49,7 @@ impl BatchFactory {
         }
     }
 
-    pub fn new_batch(&self) -> Batch {
+    pub fn new_batch(&self) -> HttpBatch {
         // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
         // however to enforce any limit locally because it would mean that in the Drop impl of
         // Batch, the send may block or fail
@@ -76,7 +76,7 @@ impl BatchFactory {
             Ok(())
         });
 
-        Batch {
+        HttpBatch {
             current_chunk: Vec::new(),
             num_rows: 0,
             num_bytes: 0,
@@ -86,7 +86,7 @@ impl BatchFactory {
     }
 }
 
-pub struct Batch {
+pub struct HttpBatch {
     current_chunk: Vec<u8>,
     num_rows: usize,
     num_bytes: usize,
@@ -94,7 +94,7 @@ pub struct Batch {
     result_handle: Option<JoinHandle<Result<(), anyhow::Error>>>,
 }
 
-impl Batch {
+impl HttpBatch {
     pub fn num_rows(&self) -> usize {
         self.num_rows
     }
@@ -135,7 +135,7 @@ impl Batch {
     }
 }
 
-impl Drop for Batch {
+impl Drop for HttpBatch {
     fn drop(&mut self) {
         // in case the batch was not explicitly finished, send an error into the channel to abort
         // the request
