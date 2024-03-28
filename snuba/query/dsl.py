@@ -55,29 +55,6 @@ def divide(
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
-# boolean functions
-def binary_condition(
-    function_name: str, lhs: Expression, rhs: Expression
-) -> FunctionCall:
-    return FunctionCall(None, function_name, (lhs, rhs))
-
-
-def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("equals", lhs, rhs)
-
-
-def and_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("and", lhs, rhs)
-
-
-def or_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("or", lhs, rhs)
-
-
-def in_cond(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("in", lhs, rhs)
-
-
 # aggregate functions
 def count(column: Optional[Column] = None, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "count", (column,) if column else ())

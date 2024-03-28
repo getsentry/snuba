@@ -1,168 +1,156 @@
-from copy import copy
+import pytest
 
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
-from snuba.query import SelectedExpression
-from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import and_cond, divide, equals, multiply, or_cond, plus
-from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
+from snuba.datasets.factory import get_dataset
+from snuba.query.expressions import Column, Literal, SubscriptableReference
 from snuba.query.logical import Query
+from snuba.query.mql.parser import parse_mql_query
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
 )
-from snuba.query.query_settings import HTTPQuerySettings
+
+""" CONFIG STUFF THAT DOESNT MATTER MUCH """
+
+generic_metrics = get_dataset(
+    "generic_metrics",
+)
+mql_context = {
+    "entity": "generic_metrics_distributions",
+    "start": "2023-11-23T18:30:00",
+    "end": "2023-11-23T22:30:00",
+    "rollup": {
+        "granularity": 60,
+        "interval": 60,
+        "with_totals": "False",
+        "orderby": None,
+    },
+    "scope": {
+        "org_ids": [1],
+        "project_ids": [11],
+        "use_case_id": "transactions",
+    },
+    "indexer_mappings": {
+        "d:transactions/duration@millisecond": 123456,
+        "d:transactions/duration@second": 123457,
+        "status_code": 222222,
+        "transaction": 333333,
+    },
+    "limit": None,
+    "offset": None,
+}
+
+""" TEST CASES """
 
 
-def _equals(col_name: str, value: str | int) -> FunctionCall:
-    return equals(Column(None, None, col_name), Literal(None, value))
+def subscriptable_reference(name: str, key: str) -> SubscriptableReference:
+    """Helper function to build a SubscriptableReference"""
+    return SubscriptableReference(
+        f"_snuba_{name}[{key}]",
+        Column(f"_snuba_{name}", None, name),
+        Literal(None, key),
+    )
 
 
-def _cond_agg(function_name: str, condition: FunctionCall) -> FunctionCall:
-    return FunctionCall(None, function_name, (Column(None, None, "value"), condition))
+mql_test_cases: list[tuple[str, dict]] = [
+    (
+        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            }
+        },
+    ),
+    (
+        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@second`)",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+                Literal(None, 123457),
+            }
+        },
+    ),
+    (
+        "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            }
+        },
+    ),
+    (
+        "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            }
+        },
+    ),
+    (
+        "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            }
+        },
+    ),
+    (
+        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            },
+            subscriptable_reference("tags_raw", "222222"): {
+                Literal(None, "200"),
+            },
+        },
+    ),
+    (
+        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:[400,404,500,501]}",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            },
+            subscriptable_reference("tags_raw", "222222"): {
+                Literal(None, "400"),
+                Literal(None, "404"),
+                Literal(None, "500"),
+                Literal(None, "501"),
+            },
+        },
+    ),
+    (
+        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            },
+            subscriptable_reference("tags_raw", "222222"): {
+                Literal(None, "200"),
+            },
+        },
+    ),
+    (
+        "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100",
+        {
+            Column("_snuba_metric_id", None, "metric_id"): {
+                Literal(None, 123456),
+            },
+        },
+    ),
+]
 
+""" TESTING """
 
 optimizer = FilterInSelectOptimizer()
-from_entity = Entity(
-    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+
+
+@pytest.mark.parametrize(
+    "mql_query, expected_domain",
+    mql_test_cases,
 )
-settings = HTTPQuerySettings()
-
-
-def test_simple_query() -> None:
-    input_query = Query(
-        from_clause=from_entity,
-        selected_columns=[
-            SelectedExpression(
-                None,
-                divide(
-                    _cond_agg(
-                        "sumIf",
-                        and_cond(_equals("metric_id", 1), _equals("status_code", 200)),
-                    ),
-                    _cond_agg("sumIf", _equals("metric_id", 1)),
-                ),
-            )
-        ],
-    )
-    expected_optimized_query = copy(input_query)
-    expected_optimized_query.set_ast_condition(
-        or_cond(
-            and_cond(_equals("metric_id", 1), _equals("status_code", 200)),
-            _equals("metric_id", 1),
-        )
-    )
-    optimizer.process_query(input_query, settings)
-    assert input_query == expected_optimized_query
-
-
-def test_query_with_curried_function() -> None:
-    input_query = Query(
-        from_clause=from_entity,
-        selected_columns=[
-            SelectedExpression(
-                None,
-                divide(
-                    CurriedFunctionCall(
-                        alias=None,
-                        internal_function=FunctionCall(
-                            None, "quantilesIf", (Literal(None, 0.5),)
-                        ),
-                        parameters=(
-                            Column(None, None, "value"),
-                            and_cond(
-                                _equals("metric_id", 1), _equals("status_code", 200)
-                            ),
-                        ),
-                    ),
-                    _cond_agg("sumIf", _equals("metric_id", 1)),
-                ),
-            )
-        ],
-    )
-    expected_optimized_query = copy(input_query)
-    expected_optimized_query.set_ast_condition(
-        or_cond(
-            and_cond(_equals("metric_id", 1), _equals("status_code", 200)),
-            _equals("metric_id", 1),
-        )
-    )
-    optimizer.process_query(input_query, settings)
-    assert input_query == expected_optimized_query
-
-
-def test_query_with_many_nested_functions() -> None:
-    input_query = Query(
-        from_clause=from_entity,
-        selected_columns=[
-            SelectedExpression(
-                None,
-                divide(
-                    _cond_agg("sumIf", _equals("metric_id", 1)),
-                    multiply(
-                        plus(
-                            _cond_agg("maxIf", _equals("metric_id", 1)),
-                            _cond_agg("avgIf", _equals("metric_id", 1)),
-                        ),
-                        _cond_agg("minIf", _equals("metric_id", 1)),
-                    ),
-                ),
-            )
-        ],
-    )
-    expected_optimized_query = copy(input_query)
-    expected_optimized_query.set_ast_condition(
-        or_cond(
-            or_cond(
-                or_cond(_equals("metric_id", 1), _equals("metric_id", 1)),
-                _equals("metric_id", 1),
-            ),
-            _equals("metric_id", 1),
-        )
-    )
-    optimizer.process_query(input_query, settings)
-    assert input_query == expected_optimized_query
-
-
-def test_query_with_literal_arithmetic_in_select() -> None:
-    input_query = Query(
-        from_clause=from_entity,
-        selected_columns=[
-            SelectedExpression(
-                None,
-                plus(_cond_agg("sumIf", _equals("metric_id", 1)), Literal(None, 100.0)),
-            )
-        ],
-    )
-    expected_optimized_query = copy(input_query)
-    expected_optimized_query.set_ast_condition(_equals("metric_id", 1))
-    optimizer.process_query(input_query, settings)
-    assert input_query == expected_optimized_query
-
-
-def test_query_with_multiple_aggregate_columns() -> None:
-    input_query = Query(
-        from_clause=from_entity,
-        selected_columns=[
-            SelectedExpression(
-                None,
-                plus(_cond_agg("sumIf", _equals("metric_id", 1)), Literal(None, 100.0)),
-            ),
-            SelectedExpression(
-                None,
-                multiply(
-                    _cond_agg("maxIf", _equals("metric_id", 2)),
-                    _cond_agg("avgIf", _equals("metric_id", 2)),
-                ),
-            ),
-        ],
-    )
-    expected_optimized_query = copy(input_query)
-    expected_optimized_query.set_ast_condition(
-        or_cond(
-            or_cond(_equals("metric_id", 1), _equals("metric_id", 2)),
-            _equals("metric_id", 2),
-        )
-    )
-    optimizer.process_query(input_query, settings)
-    assert input_query == expected_optimized_query
+def test_get_domain_of_mql(mql_query: str, expected_domain: set[int]) -> None:
+    logical_query, _ = parse_mql_query(str(mql_query), mql_context, generic_metrics)
+    assert isinstance(logical_query, Query)
+    res = optimizer.get_domain_of_mql_query(logical_query)
+    if res != expected_domain:
+        raise
+    assert res == expected_domain
