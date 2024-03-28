@@ -13,7 +13,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal, NoopVisitor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.reader import Reader
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_snql_query
+from snuba.request.validation import build_request, parse_api_request
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 
@@ -70,19 +70,21 @@ def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
         "turbo": False,
         "consistent": False,
     }
-
     dataset = get_dataset(dataset_name)
-
     schema = RequestSchema.build(HTTPQuerySettings)
-
-    request = build_request(
+    timer = Timer(name="bloop")
+    referrer = "some_referrer"
+    request_parts, settings_obj, query, snql_anonymized = parse_api_request(
         query_body,
-        parse_snql_query,
         HTTPQuerySettings,
         schema,
         dataset,
-        Timer(name="bloop"),
-        "some_referrer",
+        timer,
+        referrer,
+        is_mql=False,
+    )
+    request = build_request(
+        query_body, timer, referrer, request_parts, settings_obj, query, snql_anonymized
     )
     # --------------------------------------------------------------------
 
