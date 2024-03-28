@@ -10,6 +10,7 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
+from snuba import settings as snuba_settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -1110,7 +1111,10 @@ def parse_mql_query(
         )
 
     # Filter in select optimizer
-    feat_flag = get_int_config("enable_filter_in_select_optimizer", default=1)
+    feat_flag = get_int_config(
+        "enable_filter_in_select_optimizer",
+        default=snuba_settings.ENABLE_FILTER_IN_SELECT_OPTIMIZER,
+    )
     if feat_flag:
         with sentry_sdk.start_span(
             op="processor", description="filter_in_select_optimize"
