@@ -134,6 +134,10 @@ def parse_and_run_query(
         if run_new_query_pipeline_rollout is not None
         else False
     )
+    if isinstance(request.query, CompositeQuery):
+        # New pipeline does not support composite queries yet.
+        try_new_query_pipeline = False
+        run_new_pipeline = False
 
     try:
         if run_new_pipeline:

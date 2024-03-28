@@ -15,6 +15,7 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder_new import StorageQueryPlanBuilderNew
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
@@ -87,8 +88,8 @@ class PluggableEntity(Entity):
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
         return self.join_relationships
 
-    def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
-        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
+    def get_new_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
+        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilderNew(
             storages=self.storages,
             selector=self.storage_selector,
             partition_key_column_name=self.partition_key_column_name,
@@ -98,7 +99,11 @@ class PluggableEntity(Entity):
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
-        query_plan_builder = self.get_query_plan_builder()
+        query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilder(
+            storages=self.storages,
+            selector=self.storage_selector,
+            partition_key_column_name=self.partition_key_column_name,
+        )
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages(self) -> Sequence[Storage]:

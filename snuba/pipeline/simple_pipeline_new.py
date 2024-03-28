@@ -1,13 +1,18 @@
 from abc import ABC, abstractmethod
 from typing import Sequence
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
     QueryPlan,
     QueryRunner,
 )
-from snuba.pipeline.processors import execute_plan_processors
+from snuba.datasets.plans.storage_plan_builder_new import (
+    ClickhouseQueryPlanBuilderNew,
+    apply_storage_processors,
+)
+from snuba.pipeline.processors import execute_entity_processors
 from snuba.pipeline.query_pipeline import QueryPipelineBuilder, QueryPlanner
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
@@ -39,7 +44,7 @@ class QueryExecutionPipelineNew(ABC):
         raise NotImplementedError
 
 
-class EntityQueryPlannerNew(QueryPlanner[ClickhouseQueryPlan]):
+class StorageQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
     """
     Executes the processing phase of a single plan query. Which means a
     query based on a single entity, that would produce a query plan based
@@ -52,7 +57,7 @@ class EntityQueryPlannerNew(QueryPlanner[ClickhouseQueryPlan]):
 
     def __init__(
         self,
-        query: LogicalQuery,
+        query: ClickhouseQuery,
         settings: QuerySettings,
         query_plan_builder: ClickhouseQueryPlanBuilder,
     ) -> None:
@@ -71,41 +76,40 @@ class EntityQueryPlannerNew(QueryPlanner[ClickhouseQueryPlan]):
 
 class SimpleExecutionPipelineNew(QueryExecutionPipelineNew):
     """
-    Executes a simple (single entity) query.
+    An execution pipeline for a simple (single entity) query.
+    This class contains methods used by a QueryPipelineStage which does
+    thins like entity processing, storage processing, and query execution
     """
 
     def __init__(
         self,
-        query: LogicalQuery,
         query_settings: QuerySettings,
     ) -> None:
-        self.__query = query
         self.__query_settings = query_settings
 
-    def create_plan(
-        self, query_plan_builder: ClickhouseQueryPlanBuilder
-    ) -> ClickhouseQueryPlan:
-        plan = EntityQueryPlannerNew(
-            self.__query,
-            self.__query_settings,
-            query_plan_builder,
+    def translate_query_and_apply_mappers(
+        self, query: LogicalQuery, query_plan_builder: ClickhouseQueryPlanBuilderNew
+    ) -> ClickhouseQuery:
+        """
+        Used by the EntityProcessingStage to apply entity processors, translate the query,
+        and apply translation mappers.
+        """
+        execute_entity_processors(query, self.__query_settings)
+        clickhouse_query = query_plan_builder.translate_query_and_apply_mappers(
+            query, self.__query_settings
         )
-        query_plan = plan.build_best_plan()
-        execute_plan_processors(query_plan, self.__query_settings)
-        return query_plan
+        return clickhouse_query
 
-    def execute(
-        self, query_plan: ClickhouseQueryPlan, runner: QueryRunner
-    ) -> QueryResult:
-        return query_plan.execution_strategy.execute(
-            query_plan.query, self.__query_settings, runner
-        )
+    def apply_storage_processors(self, query: ClickhouseQuery) -> ClickhouseQuery:
+        """
+        Used by the StorageProcessing stage to apply storage/clickhouse processors and
+        create the ClickHouseQueryPlan.
+        """
+        apply_storage_processors(query, self.__query_settings)
+        return query
 
 
 class SimplePipelineBuilderNew(QueryPipelineBuilder[ClickhouseQueryPlan]):
-    def __init__(self, query_plan_builder: ClickhouseQueryPlanBuilder) -> None:
-        self.__query_plan_builder = query_plan_builder
-
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
     ) -> QueryExecutionPipelineNew:
