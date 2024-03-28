@@ -67,14 +67,14 @@ def _run_new_query_pipeline(
     concurrent_queries_gauge: Optional[Gauge] = None,
     force_dry_run: bool = False,
 ) -> QueryResult:
-    logical_query = EntityProcessingStage().execute(
+    clickhouse_query = EntityProcessingStage().execute(
         QueryPipelineResult(
             data=request, query_settings=request.query_settings, timer=timer, error=None
         )
     )
     clickhouse_query = StorageProcessingStage().execute(
         QueryPipelineResult(
-            data=logical_query,
+            data=clickhouse_query,
             query_settings=request.query_settings,
             timer=timer,
             error=None,

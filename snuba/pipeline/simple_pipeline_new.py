@@ -1,11 +1,9 @@
-from abc import ABC, abstractmethod
 from typing import Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
-    QueryPlan,
     QueryRunner,
 )
 from snuba.datasets.plans.storage_plan_builder_new import (
@@ -13,35 +11,14 @@ from snuba.datasets.plans.storage_plan_builder_new import (
     apply_storage_processors,
 )
 from snuba.pipeline.processors import execute_entity_processors
-from snuba.pipeline.query_pipeline import QueryPipelineBuilder, QueryPlanner
+from snuba.pipeline.query_pipeline import (
+    QueryExecutionPipeline,
+    QueryPipelineBuilder,
+    QueryPlanner,
+)
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.request import Request
-from snuba.web import QueryResult
-
-
-class QueryExecutionPipelineNew(ABC):
-    """
-    Contains the instructions to execute a query.
-    The QueryExecutionPipeline performs the all query processing steps and,
-    executes the query plan and returns the result.
-
-    Most of the time, a single query plan is built by the SimplePipeline.
-    However, we can also use the MultipleConcurrentPipeline in order to build and
-    execute more than one other pipeline and compare their results, which provides
-    a way to experiment with different pipeline in production without actually using
-    their results yet.
-
-    This component is produced by the QueryPipelineBuilder.
-    """
-
-    @abstractmethod
-    def create_plan(self) -> QueryPlan:
-        raise NotImplementedError
-
-    @abstractmethod
-    def execute(self) -> QueryResult:
-        raise NotImplementedError
 
 
 class StorageQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
@@ -74,7 +51,7 @@ class StorageQueryPlanner(QueryPlanner[ClickhouseQueryPlan]):
         )
 
 
-class SimpleExecutionPipelineNew(QueryExecutionPipelineNew):
+class SimpleExecutionPipelineNew(QueryExecutionPipeline):
     """
     An execution pipeline for a simple (single entity) query.
     This class contains methods used by a QueryPipelineStage which does
@@ -112,6 +89,6 @@ class SimpleExecutionPipelineNew(QueryExecutionPipelineNew):
 class SimplePipelineBuilderNew(QueryPipelineBuilder[ClickhouseQueryPlan]):
     def build_execution_pipeline(
         self, request: Request, runner: QueryRunner
-    ) -> QueryExecutionPipelineNew:
+    ) -> QueryExecutionPipeline:
         assert isinstance(request.query, LogicalQuery)
         return SimpleExecutionPipelineNew(request, runner)

@@ -172,12 +172,6 @@ class QueryPlanExecutionStrategy(ABC, Generic[TQuery]):
     """
 
     @abstractmethod
-    def apply_processors(
-        self, query: CompositeQuery[Table], query_settings: QuerySettings
-    ) -> CompositeQuery[Table]:
-        raise NotImplementedError
-
-    @abstractmethod
     def execute(
         self,
         query: TQuery,
