@@ -105,7 +105,7 @@ def update_attribution_info(
     return attribution_info
 
 
-def parse_request(
+def parse_api_request(
     body: Dict[str, Any],
     settings_class: Union[Type[HTTPQuerySettings], Type[SubscriptionQuerySettings]],
     schema: RequestSchema,
@@ -196,7 +196,8 @@ def build_request(
                 body, request_parts, referrer, settings_obj, query, snql_anonymized
             )
         except (InvalidJsonRequestException, InvalidQueryException):
-            assert 1 == 0
+            # TODO: remove this before merge
+            assert False
         except Exception as exception:
             request_status = get_request_status(exception)
             record_error_building_request(

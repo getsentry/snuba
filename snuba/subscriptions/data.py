@@ -39,7 +39,7 @@ from snuba.query.query_settings import SubscriptionQuerySettings
 from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_snql_query
+from snuba.request.validation import build_request, parse_api_request
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -194,19 +194,30 @@ class SubscriptionData:
         if "organization_id" not in tenant_ids:
             # TODO: Subscriptions queries should have an org ID
             tenant_ids["organization_id"] = 1
-
-        request = build_request(
+        request_parts, settings_obj, query, snql_anonymized = parse_api_request(
             {
                 "query": self.query,
                 "tenant_ids": tenant_ids,
             },
-            parse_snql_query,
             SubscriptionQuerySettings,
             schema,
             dataset,
             timer,
             referrer,
-            custom_processing,
+            is_mql=False,
+            custom_processing=custom_processing,
+        )
+        request = build_request(
+            {
+                "query": self.query,
+                "tenant_ids": tenant_ids,
+            },
+            timer,
+            referrer,
+            request_parts,
+            settings_obj,
+            query,
+            snql_anonymized,
         )
         return request
 

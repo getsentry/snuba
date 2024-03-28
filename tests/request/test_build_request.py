@@ -20,7 +20,7 @@ from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_snql_query
+from snuba.request.validation import build_request, parse_api_request
 from snuba.utils.metrics.timer import Timer
 
 TESTS = [
@@ -68,15 +68,20 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
     dataset = get_dataset("events")
     entity = get_entity(EntityKey.EVENTS)
     schema = RequestSchema.build(HTTPQuerySettings)
+    timer = Timer("test")
+    referrer = "my_request"
 
-    request = build_request(
+    request_parts, settings_obj, query, snql_anonymized = parse_api_request(
         body,
-        parse_snql_query,
         HTTPQuerySettings,
         schema,
         dataset,
-        Timer("test"),
+        timer,
         "my_request",
+        is_mql=False,
+    )
+    request = build_request(
+        body, timer, referrer, request_parts, settings_obj, query, snql_anonymized
     )
 
     expected_query = Query(
@@ -172,15 +177,26 @@ def test_tenant_ids(
 ) -> None:
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
+    timer = Timer("test")
+    referrer = "my_request"
 
-    request = build_request(
+    request_parts, settings_obj, query, snql_anonymized = parse_api_request(
         request_payload,
-        parse_snql_query,
         HTTPQuerySettings,
         schema,
         dataset,
-        Timer("test"),
+        timer,
         "my_request",
+        is_mql=False,
+    )
+    request = build_request(
+        request_payload,
+        timer,
+        referrer,
+        request_parts,
+        settings_obj,
+        query,
+        snql_anonymized,
     )
     assert request.referrer == expected_referrer
     assert request.attribution_info.tenant_ids == expected_tenant_ids
