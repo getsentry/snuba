@@ -10,11 +10,7 @@ from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelectorError
-from snuba.datasets.plans.query_plan import (
-    ClickhouseQueryPlan,
-    QueryPlanExecutionStrategy,
-    QueryRunner,
-)
+from snuba.datasets.plans.query_plan import QueryPlanExecutionStrategy, QueryRunner
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -67,23 +63,6 @@ class ClickhouseQueryPlanBuilderNew(ABC):
         entity translation mappers if any.
         """
         raise NotImplementedError
-
-    @abstractmethod
-    def build_and_rank_plans(
-        self, query: Query, query_settings: QuerySettings
-    ) -> Sequence[ClickhouseQueryPlan]:
-        """
-        Returns all the valid plans for this query sorted in ranking
-        order.
-        """
-        raise NotImplementedError
-
-    def build_best_plan(
-        self, query: Query, query_settings: QuerySettings
-    ) -> ClickhouseQueryPlan:
-        plans = self.build_and_rank_plans(query, query_settings)
-        assert plans, "Query planner did not produce a plan"
-        return plans[0]
 
 
 class SimpleQueryPlanExecutionStrategyNew(QueryPlanExecutionStrategy[Query]):
@@ -222,7 +201,7 @@ def apply_storage_processors(
     clickhouse_query: Query,
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
-) -> Sequence[ClickhouseQueryPlan]:
+) -> Query:
     # storage selection should not be done through the entity anymore.
     storage_key = StorageKeyFinder().visit(clickhouse_query)
     storage = get_storage(storage_key)

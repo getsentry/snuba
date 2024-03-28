@@ -72,14 +72,7 @@ def _run_new_query_pipeline(
             data=request, query_settings=request.query_settings, timer=timer, error=None
         )
     )
-    clickhouse_query = StorageProcessingStage().execute(
-        QueryPipelineResult(
-            data=clickhouse_query,
-            query_settings=request.query_settings,
-            timer=timer,
-            error=None,
-        )
-    )
+    clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
     if force_dry_run:
         clickhouse_query.query_settings = HTTPQuerySettings(
             turbo=clickhouse_query.query_settings.get_turbo(),
