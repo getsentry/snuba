@@ -178,6 +178,7 @@ class ReplaysLoader(DirectoryLoader):
             "0015_index_frequently_accessed_columns",
             "0016_materialize_new_event_counts",
             "0017_add_component_name_column",
+            "0019_add_materialization.py",
         ]
 
 
