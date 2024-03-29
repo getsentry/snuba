@@ -155,7 +155,10 @@ def is_not_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern
 def binary_condition(
     function_name: str, lhs: Expression, rhs: Expression
 ) -> FunctionCall:
-    return FunctionCall(None, function_name, (lhs, rhs))
+    """This function is deprecated please use snuba.query.dsl.binary_condition"""
+    from snuba.query.dsl import binary_condition as dsl_binary_condition
+
+    return dsl_binary_condition(function_name, lhs, rhs)
 
 
 binary_condition_patterns = {
