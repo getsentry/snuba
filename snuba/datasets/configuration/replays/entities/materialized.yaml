@@ -27,7 +27,7 @@ schema:
       type: SimpleAggregateFunction,
       args: {
         func: sum,
-        arg_types: [{ type: UInt64, args: { schema_modifiers: [nullable], size: 64 } }]
+        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
       },
     },
     {
