@@ -23,6 +23,9 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, InsertEvent, ReplacementType
 from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+
+# from snuba.utils.metrics.timer import Timer
+# from snuba.web.views import dataset_query
 from tests.base import BaseApiTest
 from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
@@ -1439,6 +1442,13 @@ class TestApi(SimpleAPITest):
 
         assert "timing" in result
         assert "timestamp" in result["timing"]
+
+    def test_recursion_tmp(self) -> None:
+        with open("tests/tmp.json") as f:
+            data = json.load(f)
+        res = json.loads(self.post(json.dumps(data)).data)
+        print(res)
+        # dataset_query(get_dataset("events"), data, Timer("meow"))
 
     def test_doesnt_select_deletions(self) -> None:
         query = {
