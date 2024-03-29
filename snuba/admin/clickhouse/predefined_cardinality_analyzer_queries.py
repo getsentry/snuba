@@ -166,6 +166,9 @@ class BucketsPerOrgOverTime(CardinalityQuery):
     """
     Determine how many buckets an org is storing over time. Show the top 5 offenders.
 
+    By default, shows custom metrics. You can adjust the query for metric platform use cases including:
+    spans, tranactions, sessions, escalating_issues, profiles, bundle_analysis, and custom.
+
     This query can be tweaked by using more/less granular time function (toStartOfTenMinutes)
     or by using project_id instead of org_id.
     """
@@ -174,6 +177,7 @@ class BucketsPerOrgOverTime(CardinalityQuery):
     SELECT toStartOfHour(timestamp) as time, org_id, count() as total
     FROM generic_metric_{{metric_type}}_aggregated_dist
     WHERE timestamp >= (now() - INTERVAL {{hour}} HOUR)
+    AND use_case_id  = 'custom'
     GROUP BY time, org_id
     ORDER BY time ASC, total DESC
     LIMIT 5 BY time
