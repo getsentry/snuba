@@ -53,5 +53,5 @@ def backward_columns_iter() -> Iterator[operations.SqlOperation]:
 
 
 columns: List[Tuple[str, Column[Modifiers]]] = [
-    ("user_id", Column("viewed_by_id", UInt(64)))
+    ("user_email", Column("viewed_by_id", UInt(64)))
 ]
