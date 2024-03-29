@@ -1407,7 +1407,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.5",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2728,8 +2728,8 @@ dependencies = [
 
 [[package]]
 name = "rust_arroyo"
-version = "2.17.0"
-source = "git+https://github.com/getsentry/arroyo#4a2015c5702855c9484d250deccd50f50059cdd9"
+version = "2.17.1"
+source = "git+https://github.com/getsentry/arroyo#cbd9367a14f7cc047999408fefd150c633e47881"
 dependencies = [
  "chrono",
  "coarsetime",
