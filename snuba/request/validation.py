@@ -144,7 +144,6 @@ def parse_api_request(
             )
             raise exception
         except Exception as exception:
-            # TODO: maybe make this log for parse error, maybe fine as is
             request_status = get_request_status(exception)
             record_error_building_request(
                 timer, request_status, referrer, str(type(exception).__name__)
