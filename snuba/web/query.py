@@ -23,8 +23,6 @@ logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
-MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
-
 
 def _run_query_pipeline(
     request: Request,
