@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Tuple, Type, Union
 
 import sentry_sdk
 
@@ -35,17 +35,6 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "snuba.validation")
-
-
-class Parser(Protocol):
-    def __call__(
-        self,
-        request_parts: RequestParts,
-        settings: QuerySettings,
-        dataset: Dataset,
-        custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
-        ...
 
 
 def parse_snql_query(
@@ -200,9 +189,6 @@ def build_request(
                 query,
                 snql_anonymized,
             )
-        except (InvalidJsonRequestException, InvalidQueryException):
-            # TODO: remove this before merge
-            assert False
         except Exception as exception:
             request_status = get_request_status(exception)
             record_error_building_request(
