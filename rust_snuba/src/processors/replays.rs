@@ -370,7 +370,7 @@ struct ReplayEventLinkEvent {
 
 #[derive(Debug, Deserialize)]
 struct ReplayViewedEvent {
-    user_id: u64, // not the same as the column in ReplayRow. This is a Sentry user_id, belonging to the authorized user POSTing to the viewed-by endpoint
+    user_id: u64, // not the same as the column in ReplayRow. This is the id of a Sentry user in postgres, belonging to the authorized user POSTing to the viewed-by endpoint
     timestamp: f64,
 }
 
