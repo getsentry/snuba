@@ -192,7 +192,7 @@ pub fn deserialize_message(
             vec![ReplayRow {
                 replay_id: replay_message.replay_id,
                 viewed_by_id: event.user_id,
-                event_hash: Uuid::from_u64_pair(0, event.user_id),  // for dedup
+                event_hash: Uuid::from_u64_pair(0, event.user_id), // for dedup
                 timestamp: event.timestamp as u32,
                 ..Default::default()
             }]
