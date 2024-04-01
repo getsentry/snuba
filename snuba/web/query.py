@@ -62,7 +62,7 @@ def parse_and_run_query(
     concurrent_queries_gauge: Optional[Gauge] = None,
 ) -> QueryResult:
     """
-    Runs a Snuba Query, then records the metadata about each split query that was run.
+    Processes, runs a Snuba Query, then records the metadata about the query that was run.
     """
     query_metadata = SnubaQueryMetadata(request, get_dataset_name(dataset), timer)
 
@@ -72,6 +72,7 @@ def parse_and_run_query(
         )
         if not request.query_settings.get_dry_run():
             record_query(request, timer, query_metadata, result)
+        _set_query_final(request, result.extra)
     except QueryException as error:
         _set_query_final(request, error.extra)
         record_query(request, timer, query_metadata, error)
