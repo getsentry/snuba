@@ -304,6 +304,38 @@ schema:
           func: count,
           arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
         },
+      },
+      {
+        name: agg_urls,
+        type: AggregateFunction,
+        args: {
+          func: groupArrayArray,
+          arg_types: [{ type: Array, args: { inner_type: { type: String } } }]
+        },
+      },
+      {
+        name: error_ids,
+        type: AggregateFunction,
+        args: {
+          func: groupArrayArray,
+          arg_types: [{ type: Array, args: { inner_type: { type: UUID } } }]
+        },
+      },
+      {
+        name: info_ids,
+        type: AggregateFunction,
+        args: {
+          func: groupArrayArray,
+          arg_types: [{ type: Array, args: { inner_type: { type: UUID } } }]
+        },
+      },
+      {
+        name: warning_ids,
+        type: AggregateFunction,
+        args: {
+          func: groupArray,
+          arg_types: [{ type: UUID }]
+        },
       }
     ]
   local_table_name: replays_aggregated_local

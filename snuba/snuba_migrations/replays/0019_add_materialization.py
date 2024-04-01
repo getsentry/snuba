@@ -3,6 +3,7 @@ from typing import Iterator, List, Sequence
 from snuba.clickhouse.columns import (
     UUID,
     AggregateFunction,
+    Array,
     Column,
     DateTime,
     IPv4,
@@ -91,6 +92,10 @@ SELECT
     anyIfState(user_id, user_id != '') as user_id,
     anyIfState(user_name, user_name != '') as user_name,
     anyIfState(user_email, user_email != '') as user_email,
+    groupArrayArrayState(urls) as agg_urls,
+    groupArrayArrayState(arrayFilter(x -> x > 0, [error_id, fatal_id])) as error_ids,
+    groupArrayArrayState(arrayFilter(x -> x > 0, [info_id, debug_id])) as info_ids,
+    groupArrayState(warning_id) as warning_ids,
 FROM replays_local
 GROUP BY project_id, toStartOfHour(timestamp), replay_id
 """,
@@ -149,9 +154,12 @@ def CountNullable(column_name: str) -> Column:
 
 
 columns: List[Column[Modifiers]] = [
+    # Primary-key.
     Column("project_id", UInt(64)),
     Column("timestamp", DateTime()),
     Column("replay_id", UUID()),
+    # Columns ordered by column-name.
+    Column("agg_urls", AggregateFunction("groupArrayArray", [Array(String)])),
     AnyIfNullableLowCardinalityString("browser_name"),
     AnyIfNullableString("browser_version"),
     Sum("count_dead_clicks"),
@@ -168,6 +176,8 @@ columns: List[Column[Modifiers]] = [
     AnyIfNullableString("dist"),
     Column("end", AggregateFunction("max", [DateTime()])),
     AnyIfNullableLowCardinalityString("environment"),
+    Column("error_ids", AggregateFunction("groupArrayArray", [Array(UUID)])),
+    Column("info_ids", AggregateFunction("groupArrayArray", [Array(UUID)])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
     Column(
@@ -186,4 +196,5 @@ columns: List[Column[Modifiers]] = [
     AnyIfNullableString("user_id"),
     AnyIfNullableString("user_name"),
     AnyIfNullableString("user_email"),
+    Column("warning_ids", AggregateFunction("groupArray", [UUID])),
 ]
