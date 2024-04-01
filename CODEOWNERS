@@ -1,6 +1,18 @@
 # Use owners-snuba by default
 * @getsentry/owners-snuba
 
+# datasets
+/snuba/datasets/configuration/issues                @getsentry/issues
+/snuba/datasets/configuration/group_attributes      @getsentry/issues
+/snuba/datasets/configuration/groupedmessage        @getsentry/issues
+/snuba/datasets/configuration/groupassignee         @getsentry/issues
+/snuba/datasets/configuration/spans                 @getsentry/performance
+/snuba/datasets/configuration/transactions          @getsentry/performance
+/snuba/datasets/configuration/functions             @getsentry/profiling
+/snuba/datasets/configuration/profiles              @getsentry/profiling
+/snuba/datasets/configuration/replays               @getsentry/replay-backend
+/snuba/datasets/configuration/metrics               @getsentry/telemetry-experience
+
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
 

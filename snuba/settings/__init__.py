@@ -439,6 +439,8 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 USE_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
 TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
 
+ENABLE_FILTER_IN_SELECT_OPTIMIZER = 0
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
