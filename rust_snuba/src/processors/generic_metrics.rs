@@ -49,6 +49,30 @@ fn generate_timeseries_id(
     adler.checksum()
 }
 
+// MetricType should be used only with PartialMetricsMessage. Its purpose is to
+// be able to categorize the type of metric message we see without incurring the
+// full cost of deserializing the entire payload.
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+enum MetricType {
+    #[serde(rename = "c")]
+    Counter,
+    #[serde(rename = "s")]
+    Set,
+    #[serde(rename = "d")]
+    Distribution,
+    #[serde(rename = "g")]
+    Gauge,
+}
+
+// PartialMetricsMessage only contains the fields which are necessary to decide
+// whether a given processor should process the message or not. This
+#[derive(Debug, Deserialize)]
+struct PartialMetricsMessage {
+    #[serde(flatten)]
+    r#type: MetricType,
+}
+
 #[derive(Debug, Deserialize)]
 struct FromGenericMetricsMessage {
     use_case_id: String,
@@ -193,7 +217,7 @@ impl Parse for CountersRawRow {
     ) -> anyhow::Result<Option<CountersRawRow>> {
         let count_value = match from.value {
             MetricValue::Counter(value) => value,
-            _ => return Ok(Option::None),
+            _ => panic!("Shouldn't come here"),
         };
 
         let timeseries_id =
@@ -287,6 +311,13 @@ pub fn process_counter_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    if msg.r#type != MetricType::Counter {
+        println!("Skipping non counter message");
+        return Ok(InsertBatch::skip());
+    }
+
     process_message::<CountersRawRow>(payload, config)
 }
 
@@ -305,7 +336,7 @@ impl Parse for SetsRawRow {
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
             MetricValue::Set(values) => values.into_vec(),
-            _ => return Ok(Option::None),
+            _ => panic!("Should not happen"),
         };
 
         timer!(
@@ -358,6 +389,12 @@ pub fn process_set_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    if msg.r#type != MetricType::Set {
+        return Ok(InsertBatch::skip());
+    }
+
     process_message::<SetsRawRow>(payload, config)
 }
 
@@ -377,7 +414,7 @@ impl Parse for DistributionsRawRow {
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let distribution_values = match from.value {
             MetricValue::Distribution(value) => value.into_vec(),
-            _ => return Ok(Option::None),
+            _ => panic!("Should not happen"),
         };
 
         timer!(
@@ -435,6 +472,12 @@ pub fn process_distribution_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    if msg.r#type != MetricType::Distribution {
+        return Ok(InsertBatch::skip());
+    }
+
     process_message::<DistributionsRawRow>(payload, config)
 }
 
@@ -478,7 +521,7 @@ impl Parse for GaugesRawRow {
                 gauges_values_min.push(min);
                 gauges_values_sum.push(sum);
             }
-            _ => return Ok(Option::None),
+            _ => panic!("Should not happen"),
         }
 
         let timeseries_id =
@@ -531,6 +574,12 @@ pub fn process_gauge_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
+    let payload_bytes = payload.payload().context("Expected payload")?;
+    let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
+    if msg.r#type != MetricType::Gauge {
+        return Ok(InsertBatch::skip());
+    }
+
     process_message::<GaugesRawRow>(payload, config)
 }
 
