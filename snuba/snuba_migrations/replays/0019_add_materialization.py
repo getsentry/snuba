@@ -39,6 +39,7 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
             settings={"index_granularity": "8192"},
             ttl="timestamp + toIntervalDay(retention_days)",
         ),
+        target=operations.OperationTarget.LOCAL,
     )
 
     yield operations.AddIndex(
@@ -100,6 +101,7 @@ SELECT
 FROM replays_local
 GROUP BY project_id, toStartOfHour(timestamp), replay_id
 """,
+        target=operations.OperationTarget.LOCAL,
     )
 
 
@@ -114,6 +116,7 @@ def backward_iter() -> Iterator[operations.SqlOperation]:
     yield operations.DropTable(
         storage_set=StorageSetKey.REPLAYS,
         table_name="replays_aggregated_local",
+        target=operations.OperationTarget.LOCAL,
     )
 
 
