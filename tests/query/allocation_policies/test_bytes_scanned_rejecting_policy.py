@@ -64,11 +64,16 @@ def test_consume_quota(policy: BytesScannedRejectingPolicy) -> None:
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert not allowance.can_run
     assert allowance.explanation == {
-        "reason": f"organization_id 123 is over the bytes scanned limit of {ORGANIZATION_REFERRER_SCAN_LIMIT}",
+        "reason": f"organization_id 123 is over the bytes scanned limit of {ORGANIZATION_REFERRER_SCAN_LIMIT} for referrer some_referrer",
         "granted_quota": 0,
         "limit": ORGANIZATION_REFERRER_SCAN_LIMIT,
         "storage_key": "StorageKey.ERRORS",
     }
+    # a different referrer should work fine though
+    allowance = policy.get_quota_allowance(
+        {"organization_id": 123, "referrer": "different_referrer"}, QUERY_ID
+    )
+    assert allowance.can_run
 
 
 # @pytest.mark.redis_db

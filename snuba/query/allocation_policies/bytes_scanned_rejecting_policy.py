@@ -195,7 +195,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                             window_seconds=self.WINDOW_SECONDS,
                             granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                             limit=scan_limit,
-                            prefix_override=f"{self.runtime_config_prefix}-{customer_tenant_key}-{customer_tenant_value}",
+                            prefix_override=f"{self.runtime_config_prefix}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
                         )
                     ],
                 ),
@@ -206,7 +206,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         if granted_quota.granted <= 0:
             explanation[
                 "reason"
-            ] = f"{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit}"
+            ] = f"{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}"
             explanation["granted_quota"] = granted_quota.granted
             explanation["limit"] = scan_limit
             return QuotaAllowance(False, self.max_threads, explanation)
@@ -247,14 +247,13 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             return
         if bytes_scanned == 0:
             return
+        referrer = tenant_ids.get("referrer", "no_referrer")
         (
             customer_tenant_key,
             customer_tenant_value,
         ) = self._get_customer_tenant_key_and_value(tenant_ids)
         scan_limit = self.__get_scan_limit(
-            customer_tenant_key,
-            customer_tenant_value,
-            tenant_ids.get("referrer", "no_referrer"),
+            customer_tenant_key, customer_tenant_value, referrer
         )
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed
@@ -268,7 +267,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                             window_seconds=self.WINDOW_SECONDS,
                             granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
                             limit=scan_limit,
-                            prefix_override=f"{self.runtime_config_prefix}-{customer_tenant_key}-{customer_tenant_value}",
+                            prefix_override=f"{self.runtime_config_prefix}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
                         )
                     ],
                 )
