@@ -188,9 +188,13 @@ pub fn deserialize_message(
                 ..Default::default()
             }]
         }
-        ReplayPayload::ViewedEvent() => {
+        ReplayPayload::ViewedEvent(event) => {
             vec![ReplayRow {
-                //TODO:
+                replay_id: replay_message.replay_id,
+                viewed_by_id: event.user_id,
+                event_hash: Uuid::from_u64_pair(0, event.user_id),
+                timestamp: event.timestamp as u32,
+                ..Default::default()
             }]
         }
     };
@@ -216,7 +220,7 @@ enum ReplayPayload {
     Event(Box<ReplayEvent>),
     #[serde(rename = "event_link")]
     EventLinkEvent(ReplayEventLinkEvent),
-    #[serde(rename = "")] //TODO:
+    #[serde(rename = "replay_viewed")]
     ViewedEvent(ReplayViewedEvent),
 }
 
@@ -366,7 +370,8 @@ struct ReplayEventLinkEvent {
 
 #[derive(Debug, Deserialize)]
 struct ReplayViewedEvent {
-    //TODO:
+    user_id: u64, // not the same as the column in ReplayRow. This is a Sentry user_id, belonging to the authorized user POSTing to the viewed-by endpoint
+    timestamp: f64,
 }
 
 // ReplayRow is not an exact match with the schema. We're trying to remove many of the nullable
@@ -430,9 +435,10 @@ pub struct ReplayRow {
     trace_ids: Vec<Uuid>,
     urls: Vec<String>,
     user_email: String,
-    user_id: String,
+    user_id: String, // provided by customer
     user_name: String,
     user: String,
+    viewed_by_id: u64,
     warning_id: Uuid,
 }
 
