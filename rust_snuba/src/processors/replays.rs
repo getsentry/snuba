@@ -188,6 +188,11 @@ pub fn deserialize_message(
                 ..Default::default()
             }]
         }
+        ReplayPayload::ViewedEvent() => {
+            vec![ReplayRow {
+                //TODO:
+            }]
+        }
     };
 
     Ok((rows, replay_message.start_time))
@@ -211,6 +216,8 @@ enum ReplayPayload {
     Event(Box<ReplayEvent>),
     #[serde(rename = "event_link")]
     EventLinkEvent(ReplayEventLinkEvent),
+    #[serde(rename = "")] //TODO:
+    ViewedEvent(ReplayViewedEvent),
 }
 
 // Replay Click Event
@@ -355,6 +362,11 @@ struct ReplayEventLinkEvent {
     info_id: Option<Uuid>,
     #[serde(default)]
     warning_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReplayViewedEvent {
+    //TODO:
 }
 
 // ReplayRow is not an exact match with the schema. We're trying to remove many of the nullable
