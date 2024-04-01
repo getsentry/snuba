@@ -124,35 +124,36 @@ def parse_api_request(
     Given a snuba-api request-body (among other things), parse it into a query ast and return the ast (among other things).
     """
     with sentry_sdk.start_span(description="parse_request", op="validate") as span:
-        request_parts = schema.validate(body)
-        referrer = _get_referrer(request_parts, referrer)
-        settings_obj = _get_settings_object(settings_class, request_parts, referrer)
         try:
-            if is_mql:
-                query, snql_anonymized = parse_mql_query(
-                    request_parts, settings_obj, dataset, custom_processing
+            request_parts = schema.validate(body)
+            referrer = _get_referrer(request_parts, referrer)
+            settings_obj = _get_settings_object(settings_class, request_parts, referrer)
+            try:
+                if is_mql:
+                    query, snql_anonymized = parse_mql_query(
+                        request_parts, settings_obj, dataset, custom_processing
+                    )
+                else:
+                    query, snql_anonymized = parse_snql_query(
+                        request_parts, settings_obj, dataset, custom_processing
+                    )
+            except PostProcessingError as exception:
+                query = exception.query
+                snql_anonymized = exception.snql_anonymized
+                request = _build_request(
+                    body, request_parts, referrer, settings_obj, query, snql_anonymized
                 )
-            else:
-                query, snql_anonymized = parse_snql_query(
-                    request_parts, settings_obj, dataset, custom_processing
+                query_metadata = SnubaQueryMetadata(
+                    request, get_dataset_name(dataset), timer
                 )
+                state.record_query(query_metadata.to_dict())
+                raise
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
             record_invalid_request(
                 timer, request_status, referrer, str(type(exception).__name__)
             )
             raise exception
-        except PostProcessingError as exception:
-            query = exception.query
-            snql_anonymized = exception.snql_anonymized
-            request = _build_request(
-                body, request_parts, referrer, settings_obj, query, snql_anonymized
-            )
-            query_metadata = SnubaQueryMetadata(
-                request, get_dataset_name(dataset), timer
-            )
-            state.record_query(query_metadata.to_dict())
-            raise
         except Exception as exception:
             # TODO: maybe make this log for parse error, maybe fine as is
             request_status = get_request_status(exception)
@@ -181,7 +182,6 @@ def parse_api_request(
 def build_request(
     body: Dict[str, Any],
     timer: Timer,
-    referrer: str,
     request_parts: RequestParts,
     settings_obj: (HTTPQuerySettings | SubscriptionQuerySettings),
     query: Query | CompositeQuery[Entity],
@@ -193,7 +193,12 @@ def build_request(
     with sentry_sdk.start_span(description="build_request", op="validate"):
         try:
             request = _build_request(
-                body, request_parts, referrer, settings_obj, query, snql_anonymized
+                body,
+                request_parts,
+                settings_obj.referrer,
+                settings_obj,
+                query,
+                snql_anonymized,
             )
         except (InvalidJsonRequestException, InvalidQueryException):
             # TODO: remove this before merge
@@ -201,7 +206,10 @@ def build_request(
         except Exception as exception:
             request_status = get_request_status(exception)
             record_error_building_request(
-                timer, request_status, referrer, str(type(exception).__name__)
+                timer,
+                request_status,
+                settings_obj.referrer,
+                str(type(exception).__name__),
             )
             raise exception
 

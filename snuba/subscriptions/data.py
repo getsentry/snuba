@@ -213,7 +213,6 @@ class SubscriptionData:
                 "tenant_ids": tenant_ids,
             },
             timer,
-            referrer,
             request_parts,
             settings_obj,
             query,

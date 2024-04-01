@@ -69,7 +69,6 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
     entity = get_entity(EntityKey.EVENTS)
     schema = RequestSchema.build(HTTPQuerySettings)
     timer = Timer("test")
-    referrer = "my_request"
 
     request_parts, settings_obj, query, snql_anonymized = parse_api_request(
         body,
@@ -81,7 +80,7 @@ def test_build_request(body: Dict[str, Any], condition: Expression) -> None:
         is_mql=False,
     )
     request = build_request(
-        body, timer, referrer, request_parts, settings_obj, query, snql_anonymized
+        body, timer, request_parts, settings_obj, query, snql_anonymized
     )
 
     expected_query = Query(
@@ -178,7 +177,6 @@ def test_tenant_ids(
     dataset = get_dataset("events")
     schema = RequestSchema.build(HTTPQuerySettings)
     timer = Timer("test")
-    referrer = "my_request"
 
     request_parts, settings_obj, query, snql_anonymized = parse_api_request(
         request_payload,
@@ -192,7 +190,6 @@ def test_tenant_ids(
     request = build_request(
         request_payload,
         timer,
-        referrer,
         request_parts,
         settings_obj,
         query,

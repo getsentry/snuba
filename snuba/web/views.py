@@ -376,7 +376,6 @@ def dataset_query(
     request = build_request(
         body,
         timer,
-        referrer,
         request_parts,
         settings_obj,
         query,

@@ -51,7 +51,7 @@ def test_tags_hashmap_optimization() -> None:
         is_mql=False,
     )
     request = build_request(
-        query_body, timer, referrer, request_parts, settings_obj, query, snql_anonymized
+        query_body, timer, request_parts, settings_obj, query, snql_anonymized
     )
     # --------------------------------------------------------------------
 

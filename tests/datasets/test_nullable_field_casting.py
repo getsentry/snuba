@@ -65,7 +65,7 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
     )
 
     request = build_request(
-        query_body, timer, referrer, request_parts, settings_obj, query, snql_anonymized
+        query_body, timer, request_parts, settings_obj, query, snql_anonymized
     )
     # --------------------------------------------------------------------
 
