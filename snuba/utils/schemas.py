@@ -252,9 +252,9 @@ class ColumnSet(ABC):
                 self._flattened.extend(column.type.flatten(column.name))
                 flattened = column.type.flatten(column.name)
                 self._lookup[column.name] = flattened
-                self._lookup[column.escaped] = (
-                    flattened  # also store it by the escaped name
-                )
+                self._lookup[
+                    column.escaped
+                ] = flattened  # also store it by the escaped name
 
         for col in self._flattened:
             if col.flattened in self._flattened_lookup:
@@ -263,9 +263,9 @@ class ColumnSet(ABC):
                 self._nested[col.flattened] = col
 
             self._flattened_lookup[col.flattened] = col
-            self._flattened_lookup[col.escaped] = (
-                col  # also store it by the escaped name
-            )
+            self._flattened_lookup[
+                col.escaped
+            ] = col  # also store it by the escaped name
 
     def __eq__(self, other: object) -> bool:
         return (
