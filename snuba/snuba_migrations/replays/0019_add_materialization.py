@@ -163,7 +163,7 @@ columns: List[Column[Modifiers]] = [
     Column("timestamp", DateTime()),
     Column("replay_id", UUID()),
     # Columns ordered by column-name.
-    Column("agg_urls", AggregateFunction("groupArrayArray", [Array(String)])),
+    Column("agg_urls", AggregateFunction("groupArrayArray", [Array(String())])),
     any_if_nullable_low_cardinality_string("browser_name"),
     any_if_nullable_string("browser_version"),
     sum("count_dead_clicks"),
@@ -180,8 +180,8 @@ columns: List[Column[Modifiers]] = [
     any_if_nullable_string("dist"),
     Column("end", AggregateFunction("max", [DateTime()])),
     any_if_nullable_low_cardinality_string("environment"),
-    Column("error_ids", AggregateFunction("groupArrayArray", [Array(UUID)])),
-    Column("info_ids", AggregateFunction("groupArrayArray", [Array(UUID)])),
+    Column("error_ids", AggregateFunction("groupArrayArray", [Array(UUID())])),
+    Column("info_ids", AggregateFunction("groupArrayArray", [Array(UUID())])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
     Column(
@@ -200,6 +200,6 @@ columns: List[Column[Modifiers]] = [
     any_if_nullable_string("user_id"),
     any_if_nullable_string("user_name"),
     any_if_nullable_string("user_email"),
-    Column("warning_ids", AggregateFunction("groupArray", [UUID])),
-    Column("viewed_by_ids", AggregateFunction("groupArray", [UUID])),
+    Column("warning_ids", AggregateFunction("groupArray", [UUID()])),
+    Column("viewed_by_ids", AggregateFunction("groupArray", [UUID()])),
 ]
