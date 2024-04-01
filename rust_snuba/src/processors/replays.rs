@@ -190,10 +190,11 @@ pub fn deserialize_message(
         }
         ReplayPayload::ViewedEvent(event) => {
             vec![ReplayRow {
-                replay_id: replay_message.replay_id,
-                viewed_by_id: event.user_id,
-                event_hash: Uuid::from_u64_pair(0, event.user_id),
+                viewed_by_id: event.sentry_user_id,
+                event_hash: Uuid::from_u64_pair(0, event.sentry_user_id),
                 timestamp: event.timestamp as u32,
+                project_id: replay_message.project_id,
+                replay_id: replay_message.replay_id,
                 ..Default::default()
             }]
         }
@@ -370,7 +371,7 @@ struct ReplayEventLinkEvent {
 
 #[derive(Debug, Deserialize)]
 struct ReplayViewedEvent {
-    user_id: u64, // not the same as the column in ReplayRow. This is a Sentry user_id, belonging to the authorized user POSTing to the viewed-by endpoint
+    sentry_user_id: u64,
     timestamp: f64,
 }
 
@@ -435,7 +436,7 @@ pub struct ReplayRow {
     trace_ids: Vec<Uuid>,
     urls: Vec<String>,
     user_email: String,
-    user_id: String, // provided by customer
+    user_id: String,
     user_name: String,
     user: String,
     viewed_by_id: u64,
