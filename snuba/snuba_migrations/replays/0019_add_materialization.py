@@ -8,7 +8,6 @@ from snuba.clickhouse.columns import (
     DateTime,
     IPv4,
     IPv6,
-    SimpleAggregateFunction,
     String,
     UInt,
 )
@@ -80,7 +79,7 @@ SELECT
     anyIfState(environment, environment != '') as environment,
     anyState(ip_address_v4) as ip_address_v4,
     anyState(ip_address_v6) as ip_address_v6,
-    sumSimpleState(is_archived) as is_archived,
+    sumState(toUInt64(is_archived)) as is_archived,
     anyIfState(os_name, os_name != '') as os_name,
     anyIfState(os_version, os_version != '') as os_version,
     anyIfState(platform, platform != '') as platform,
@@ -185,8 +184,7 @@ columns: List[Column[Modifiers]] = [
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
     Column(
-        "is_archived",
-        SimpleAggregateFunction("sum", [UInt(64, Modifiers(nullable=True))]),
+        "is_archived", AggregateFunction("sum", [UInt(64, Modifiers(nullable=True))])
     ),
     any_if_nullable_low_cardinality_string("os_name"),
     any_if_nullable_string("os_version"),
