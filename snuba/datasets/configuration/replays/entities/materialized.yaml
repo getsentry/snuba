@@ -331,6 +331,14 @@ schema:
         func: groupArray,
         arg_types: [{ type: UUID }]
       },
+    },
+    {
+      name: viewed_by_ids,
+      type: AggregateFunction,
+      args: {
+        func: groupArray,
+        arg_types: [{ type: UUID }]
+      },
     }
   ]
 required_time_column: timestamp

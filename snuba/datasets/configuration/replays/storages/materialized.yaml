@@ -336,6 +336,14 @@ schema:
           func: groupArray,
           arg_types: [{ type: UUID }]
         },
+      },
+      {
+        name: viewed_by_ids,
+        type: AggregateFunction,
+        args: {
+          func: groupArray,
+          arg_types: [{ type: UUID }]
+        },
       }
     ]
   local_table_name: replays_aggregated_local

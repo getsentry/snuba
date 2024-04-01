@@ -96,6 +96,7 @@ SELECT
     groupArrayArrayState(arrayFilter(x -> x > 0, [error_id, fatal_id])) as error_ids,
     groupArrayArrayState(arrayFilter(x -> x > 0, [info_id, debug_id])) as info_ids,
     groupArrayState(warning_id) as warning_ids,
+    groupArrayState(viewed_by_id) as viewed_by_ids,
 FROM replays_local
 GROUP BY project_id, toStartOfHour(timestamp), replay_id
 """,
@@ -197,4 +198,5 @@ columns: List[Column[Modifiers]] = [
     AnyIfNullableString("user_name"),
     AnyIfNullableString("user_email"),
     Column("warning_ids", AggregateFunction("groupArray", [UUID])),
+    Column("viewed_by_ids", AggregateFunction("groupArray", [UUID])),
 ]
