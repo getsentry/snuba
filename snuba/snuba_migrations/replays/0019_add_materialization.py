@@ -121,7 +121,7 @@ def backward_iter() -> Iterator[operations.SqlOperation]:
 
 def any_if_string(
     column_name: str, nullable: bool = False, low_cardinality: bool = False
-) -> Column:
+) -> Column[Modifiers]:
     return Column(
         column_name,
         AggregateFunction(
@@ -134,22 +134,24 @@ def any_if_string(
     )
 
 
-def any_if_nullable_string(column_name: str, low_cardinality: bool = False) -> Column:
+def any_if_nullable_string(
+    column_name: str, low_cardinality: bool = False
+) -> Column[Modifiers]:
     """Returns an aggregate anyIf function."""
     return any_if_string(column_name, nullable=True, low_cardinality=low_cardinality)
 
 
-def any_if_nullable_low_cardinality_string(column_name: str) -> Column:
+def any_if_nullable_low_cardinality_string(column_name: str) -> Column[Modifiers]:
     """Returns a low-cardinality aggregate anyIf function."""
     return any_if_string(column_name, nullable=True, low_cardinality=True)
 
 
-def sum(column_name: str) -> Column:
+def sum(column_name: str) -> Column[Modifiers]:
     """Returns an aggregate sum function."""
     return Column(column_name, AggregateFunction("sum", [UInt(64)]))
 
 
-def count_nullable(column_name: str) -> Column:
+def count_nullable(column_name: str) -> Column[Modifiers]:
     """Returns an aggregate count function capable of accepting nullable integer values."""
     return Column(
         column_name, AggregateFunction("count", [UInt(64, Modifiers(nullable=True))])
