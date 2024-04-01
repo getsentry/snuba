@@ -156,17 +156,13 @@ def parse_api_request(
         )
         span.set_data(
             "snuba_query_raw",
-            textwrap.wrap(repr(request.original_body), 100, break_long_words=False),
+            textwrap.wrap(repr(body), 100, break_long_words=False),
         )
         sentry_sdk.add_breadcrumb(
             category="query_info",
             level="info",
             message="snuba_query_raw",
-            data={
-                "query": textwrap.wrap(
-                    repr(request.original_body), 100, break_long_words=False
-                )
-            },
+            data={"query": textwrap.wrap(repr(body), 100, break_long_words=False)},
         )
         return (request_parts, settings_obj, query, snql_anonymized)
 
