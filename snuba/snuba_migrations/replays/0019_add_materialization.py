@@ -120,7 +120,7 @@ def backward_iter() -> Iterator[operations.SqlOperation]:
     )
 
 
-def AnyIfString(
+def any_if_string(
     column_name: str, nullable: bool = False, low_cardinality: bool = False
 ) -> Column:
     return Column(
@@ -135,22 +135,22 @@ def AnyIfString(
     )
 
 
-def AnyIfNullableString(column_name: str, low_cardinality: bool = False) -> Column:
+def any_if_nullable_string(column_name: str, low_cardinality: bool = False) -> Column:
     """Returns an aggregate anyIf function."""
-    return AnyIfString(column_name, nullable=True, low_cardinality=low_cardinality)
+    return any_if_string(column_name, nullable=True, low_cardinality=low_cardinality)
 
 
-def AnyIfNullableLowCardinalityString(column_name: str) -> Column:
+def any_if_nullable_low_cardinality_string(column_name: str) -> Column:
     """Returns a low-cardinality aggregate anyIf function."""
-    return AnyIfString(column_name, nullable=True, low_cardinality=True)
+    return any_if_string(column_name, nullable=True, low_cardinality=True)
 
 
-def Sum(column_name: str) -> Column:
+def sum(column_name: str) -> Column:
     """Returns an aggregate sum function."""
     return Column(column_name, AggregateFunction("sum", [UInt(64)]))
 
 
-def CountNullable(column_name: str) -> Column:
+def count_nullable(column_name: str) -> Column:
     """Returns an aggregate count function capable of accepting nullable integer values."""
     return Column(
         column_name, AggregateFunction("count", [UInt(64, Modifiers(nullable=True))])
@@ -164,22 +164,22 @@ columns: List[Column[Modifiers]] = [
     Column("replay_id", UUID()),
     # Columns ordered by column-name.
     Column("agg_urls", AggregateFunction("groupArrayArray", [Array(String)])),
-    AnyIfNullableLowCardinalityString("browser_name"),
-    AnyIfNullableString("browser_version"),
-    Sum("count_dead_clicks"),
-    Sum("count_error_events"),
-    Sum("count_info_events"),
-    Sum("count_rage_clicks"),
-    CountNullable("count_segments"),
-    Sum("count_urls"),
-    Sum("count_warning_events"),
-    AnyIfNullableLowCardinalityString("device_brand"),
-    AnyIfNullableLowCardinalityString("device_family"),
-    AnyIfNullableLowCardinalityString("device_model"),
-    AnyIfNullableLowCardinalityString("device_name"),
-    AnyIfNullableString("dist"),
+    any_if_nullable_low_cardinality_string("browser_name"),
+    any_if_nullable_string("browser_version"),
+    sum("count_dead_clicks"),
+    sum("count_error_events"),
+    sum("count_info_events"),
+    sum("count_rage_clicks"),
+    count_nullable("count_segments"),
+    sum("count_urls"),
+    sum("count_warning_events"),
+    any_if_nullable_low_cardinality_string("device_brand"),
+    any_if_nullable_low_cardinality_string("device_family"),
+    any_if_nullable_low_cardinality_string("device_model"),
+    any_if_nullable_low_cardinality_string("device_name"),
+    any_if_nullable_string("dist"),
     Column("end", AggregateFunction("max", [DateTime()])),
-    AnyIfNullableLowCardinalityString("environment"),
+    any_if_nullable_low_cardinality_string("environment"),
     Column("error_ids", AggregateFunction("groupArrayArray", [Array(UUID)])),
     Column("info_ids", AggregateFunction("groupArrayArray", [Array(UUID)])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
@@ -188,18 +188,18 @@ columns: List[Column[Modifiers]] = [
         "is_archived",
         SimpleAggregateFunction("sum", [UInt(64, Modifiers(nullable=True))]),
     ),
-    AnyIfNullableLowCardinalityString("os_name"),
-    AnyIfNullableString("os_version"),
-    AnyIfString("platform", low_cardinality=True),
-    AnyIfNullableString("release"),
+    any_if_nullable_low_cardinality_string("os_name"),
+    any_if_nullable_string("os_version"),
+    any_if_string("platform", low_cardinality=True),
+    any_if_nullable_string("release"),
     Column("retention_days", UInt(16)),
-    AnyIfNullableLowCardinalityString("sdk_name"),
-    AnyIfNullableLowCardinalityString("sdk_version"),
+    any_if_nullable_low_cardinality_string("sdk_name"),
+    any_if_nullable_low_cardinality_string("sdk_version"),
     Column("start", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])),
-    AnyIfNullableString("user"),
-    AnyIfNullableString("user_id"),
-    AnyIfNullableString("user_name"),
-    AnyIfNullableString("user_email"),
+    any_if_nullable_string("user"),
+    any_if_nullable_string("user_id"),
+    any_if_nullable_string("user_name"),
+    any_if_nullable_string("user_email"),
     Column("warning_ids", AggregateFunction("groupArray", [UUID])),
     Column("viewed_by_ids", AggregateFunction("groupArray", [UUID])),
 ]
