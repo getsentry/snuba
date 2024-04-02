@@ -1407,7 +1407,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.5",
  "tokio",
  "tower-service",
  "tracing",
@@ -3006,9 +3006,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "0.1.60"
+version = "0.1.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95883282bfefaed402a8c89c9102f8530b94daa64f598a6ec5f8ae4ae78646ae"
+checksum = "d4121cd942bbb53f176b2f4b101a24fa6aa19c19337d5b21bfc75480440f2aee"
 dependencies = [
  "jsonschema",
  "prettyplease",
