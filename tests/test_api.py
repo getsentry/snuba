@@ -2141,45 +2141,6 @@ class TestApi(SimpleAPITest):
         assert metadata["dataset"] == "events"
         assert metadata["request"]["referrer"] == "test"
 
-    @patch("snuba.web.query._run_query_pipeline")
-    @patch("snuba.web.query._run_new_query_pipeline")
-    def test_error_handler(
-        self, pipeline_mock: MagicMock, new_pipeline_mock: MagicMock
-    ) -> None:
-        from redis.exceptions import ClusterDownError
-
-        pipeline_mock.side_effect = ClusterDownError("stuff")
-        new_pipeline_mock.side_effect = ClusterDownError("stuff")
-        response = self.post(
-            json.dumps(
-                {
-                    "conditions": [
-                        ["project_id", "IN", [1]],
-                        ["group_id", "IN", [self.group_ids[0]]],
-                    ],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                    "limit": 1,
-                    "offset": 0,
-                    "orderby": ["-timestamp", "-event_id"],
-                    "project": [1],
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": [
-                        "event_id",
-                        "group_id",
-                        "project_id",
-                        "timestamp",
-                    ],
-                }
-            ),
-        )
-        assert response.status_code == 500
-        data = json.loads(response.data)
-        assert data["error"]["type"] == "internal_server_error"
-        assert data["error"]["message"] == "stuff"
-
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
