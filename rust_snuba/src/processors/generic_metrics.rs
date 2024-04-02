@@ -246,14 +246,14 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let killswitch_config = get_str_config("key");
+    // let killswitch_config = get_str_config("key");
 
-    if let Some(killswitch) = killswitch_config.ok().flatten() {
-        let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
-        //if killswitch == use_case.use_case_id
-        if true {
-            return Ok(InsertBatch::skip());
-        }
+    // if let Some(killswitch) = killswitch_config.ok().flatten() {
+    //     let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
+    //if killswitch == use_case.use_case_id
+
+    if true {
+        return Ok(InsertBatch::skip());
     }
 
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
