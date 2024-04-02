@@ -209,8 +209,6 @@ class TestSnQLApi(BaseApiTest):
         )
         data = json.loads(response.data)
 
-        print(data["sql"])
-
         assert response.status_code == 200
         assert data["data"] == []
 

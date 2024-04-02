@@ -15,7 +15,7 @@ TVisited = TypeVar("TVisited")
 # class definition time, therefore we have to know up front whether we
 # will be using the dataclass repr or not
 # Sometimes however, we want the raw data, and this allows us to print that out
-_AUTO_REPR = True  # not settings.PRETTY_FORMAT_EXPRESSIONS
+_AUTO_REPR = not settings.PRETTY_FORMAT_EXPRESSIONS
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -74,7 +74,7 @@ class Expression(_Expression, ABC):
         Not expected to be used for anything except debugging
         (it does a lot of string copies to construct the string)
         """
-        if False:  # settings.PRETTY_FORMAT_EXPRESSIONS:
+        if settings.PRETTY_FORMAT_EXPRESSIONS:
             visitor = StringifyVisitor()
             return self.accept(visitor)
         else:
