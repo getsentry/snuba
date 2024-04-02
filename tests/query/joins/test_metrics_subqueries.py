@@ -1,18 +1,26 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from typing import cast
 
 import pytest
 
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
-from snuba.query import SelectedExpression
+from snuba.datasets.entities.factory import (
+    get_entity,
+    override_entity_map,
+    reset_entity_factory,
+)
+from snuba.datasets.factory import get_dataset
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
     binary_condition,
+    combine_and_conditions,
 )
 from snuba.query.data_source.join import (
     IndividualNode,
@@ -22,9 +30,18 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.dsl import arrayElement, divide, literals_tuple, multiply, plus
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.joins.subquery_generator import generate_subqueries
+from snuba.query.logical import Query
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.mql.parser import parse_mql_query
 from tests.query.joins.equivalence_schema import (
     EVENTS_SCHEMA,
     GROUPS_ASSIGNEE,
@@ -37,36 +54,6 @@ from tests.query.joins.join_structures import (
     events_groups_join,
     events_node,
     groups_node,
-)
-
-
-import re
-from datetime import datetime
-
-import pytest
-
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.factory import get_dataset
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.conditions import binary_condition, combine_and_conditions
-from snuba.query.dsl import arrayElement, divide, multiply, plus, literals_tuple
-from snuba.query.expressions import (
-    Column,
-    CurriedFunctionCall,
-    FunctionCall,
-    Literal,
-    SubscriptableReference,
-)
-from snuba.query.logical import Query
-from snuba.query.composite import CompositeQuery
-from snuba.query.mql.parser import parse_mql_query
-from snuba.query.data_source.join import (
-    IndividualNode,
-    JoinClause,
-    JoinCondition,
-    JoinConditionExpression,
-    JoinType,
 )
 
 BASIC_JOIN = JoinClause(
