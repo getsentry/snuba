@@ -93,8 +93,8 @@ SELECT
     anyIfState(user_name, user_name != '') as user_name,
     anyIfState(user_email, user_email != '') as user_email,
     groupArrayArrayState(urls) as agg_urls,
-    groupArrayArrayState(arrayFilter(x -> x > 0, [error_id, fatal_id])) as error_ids,
-    groupArrayArrayState(arrayFilter(x -> x > 0, [info_id, debug_id])) as info_ids,
+    groupArrayArrayState(arrayFilter(x -> x != '00000000-0000-0000-0000-000000000000', [error_id, fatal_id])) as error_ids,
+    groupArrayArrayState(arrayFilter(x -> x != '00000000-0000-0000-0000-000000000000', [info_id, debug_id])) as info_ids,
     groupArrayState(warning_id) as warning_ids,
     groupArrayState(viewed_by_id) as viewed_by_ids
 FROM replays_local
