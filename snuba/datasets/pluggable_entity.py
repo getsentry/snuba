@@ -90,8 +90,9 @@ class PluggableEntity(Entity):
 
     def get_new_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
         """
-        This method is only used by the new pipeline. It creates a StorageQueryPlanBuilderNew object
-        which contains new methods that decouple entity and storage processing.
+        Temporary: this method is used by the new pipeline. It creates a StorageQueryPlanBuilderNew object
+        which contains new methods that decouple entity and storage processing. Once the new pipeline is complete,
+        we can remove this method.
         """
         query_plan_builder: ClickhouseQueryPlanBuilder = StorageQueryPlanBuilderNew(
             storages=self.storages,
