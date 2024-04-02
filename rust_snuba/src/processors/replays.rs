@@ -195,6 +195,10 @@ pub fn deserialize_message(
                 timestamp: event.timestamp as u32,
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
+                retention_days: replay_message.retention_days,
+                error_sample_rate: -1.0,
+                session_sample_rate: -1.0,
+                platform: "javascript".to_string(),
                 ..Default::default()
             }]
         }
