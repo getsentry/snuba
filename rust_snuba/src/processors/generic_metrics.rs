@@ -250,7 +250,8 @@ where
 
     if let Some(killswitch) = killswitch_config.ok().flatten() {
         let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
-        if killswitch == use_case.use_case_id {
+        //if killswitch == use_case.use_case_id
+        if true {
             return Ok(InsertBatch::skip());
         }
     }
