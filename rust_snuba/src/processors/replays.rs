@@ -584,6 +584,7 @@ mod tests {
         assert_eq!(replay_row.error_id, Uuid::nil());
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -714,6 +715,7 @@ mod tests {
         assert_eq!(replay_row.error_id, Uuid::nil());
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -813,6 +815,7 @@ mod tests {
         assert_eq!(replay_row.title, None);
         assert_eq!(replay_row.trace_ids, vec![]);
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -907,6 +910,7 @@ mod tests {
         assert_eq!(replay_row.title, None);
         assert_eq!(replay_row.trace_ids, vec![]);
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
     }
 
     #[test]
@@ -989,6 +993,7 @@ mod tests {
         assert_eq!(replay_row.title, None);
         assert_eq!(replay_row.trace_ids, vec![]);
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -1080,7 +1085,7 @@ mod tests {
 
     #[test]
     fn test_replay_viewed_event_event_hash() {
-        test 1-to-1 mapping of user id and event hash
+        // test 1-to-1 mapping of user id and event hash
         let payload = r#"{
             "sentry_user_id": 23823623242,
             "timestamp": 1712009295,
