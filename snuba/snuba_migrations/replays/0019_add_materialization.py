@@ -52,7 +52,7 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
     )
 
     yield operations.CreateMaterializedView(
-        storage_set=StorageSetKey.METRICS,
+        storage_set=StorageSetKey.REPLAYS,
         view_name="replays_aggregation_mv",
         destination_table_name="replays_aggregated_local",
         columns=columns,
