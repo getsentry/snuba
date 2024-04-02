@@ -33,10 +33,10 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
         columns=columns,
         engine=table_engines.AggregatingMergeTree(
             storage_set=StorageSetKey.REPLAYS,
-            order_by="(project_id, toStartOfHour(timestamp), replay_id)",
-            partition_by="(retention_days, toMonday(timestamp))",
+            order_by="(project_id, toStartOfHour(ts), replay_id)",
+            partition_by="(retention_days, toMonday(ts))",
             settings={"index_granularity": "8192"},
-            ttl="timestamp + toIntervalDay(retention_days)",
+            ttl="ts + toIntervalDay(retention_days)",
         ),
         target=operations.OperationTarget.LOCAL,
     )
@@ -59,7 +59,7 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
         query="""
 SELECT
     project_id,
-    toStartOfHour(timestamp) as timestamp,
+    toStartOfHour(timestamp) as ts,
     replay_id,
     anyIfState(browser_name, browser_name != '') as browser_name,
     anyIfState(browser_version, browser_version != '') as browser_version,
@@ -128,7 +128,7 @@ def any_if_string(
             "anyIf",
             [
                 String(Modifiers(nullable=nullable, low_cardinality=low_cardinality)),
-                UInt(8),
+                UInt(8, Modifiers(nullable=nullable)),
             ],
         ),
     )
@@ -139,11 +139,6 @@ def any_if_nullable_string(
 ) -> Column[Modifiers]:
     """Returns an aggregate anyIf function."""
     return any_if_string(column_name, nullable=True, low_cardinality=low_cardinality)
-
-
-def any_if_nullable_low_cardinality_string(column_name: str) -> Column[Modifiers]:
-    """Returns a low-cardinality aggregate anyIf function."""
-    return any_if_string(column_name, nullable=True, low_cardinality=True)
 
 
 def sum(column_name: str) -> Column[Modifiers]:
@@ -161,11 +156,11 @@ def count_nullable(column_name: str) -> Column[Modifiers]:
 columns: List[Column[Modifiers]] = [
     # Primary-key.
     Column("project_id", UInt(64)),
-    Column("timestamp", DateTime()),
+    Column("ts", DateTime()),
     Column("replay_id", UUID()),
     # Columns ordered by column-name.
     Column("agg_urls", AggregateFunction("groupArrayArray", [Array(String())])),
-    any_if_nullable_low_cardinality_string("browser_name"),
+    any_if_nullable_string("browser_name"),
     any_if_nullable_string("browser_version"),
     sum("count_dead_clicks"),
     sum("count_error_events"),
@@ -174,13 +169,13 @@ columns: List[Column[Modifiers]] = [
     count_nullable("count_segments"),
     sum("count_urls"),
     sum("count_warning_events"),
-    any_if_nullable_low_cardinality_string("device_brand"),
-    any_if_nullable_low_cardinality_string("device_family"),
-    any_if_nullable_low_cardinality_string("device_model"),
-    any_if_nullable_low_cardinality_string("device_name"),
+    any_if_nullable_string("device_brand"),
+    any_if_nullable_string("device_family"),
+    any_if_nullable_string("device_model"),
+    any_if_nullable_string("device_name"),
     any_if_nullable_string("dist"),
     Column("end", AggregateFunction("max", [DateTime()])),
-    any_if_nullable_low_cardinality_string("environment"),
+    any_if_nullable_string("environment"),
     Column("error_ids", AggregateFunction("groupArrayArray", [Array(UUID())])),
     Column("info_ids", AggregateFunction("groupArrayArray", [Array(UUID())])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
@@ -188,18 +183,18 @@ columns: List[Column[Modifiers]] = [
     Column(
         "is_archived", AggregateFunction("sum", [UInt(64, Modifiers(nullable=True))])
     ),
-    any_if_nullable_low_cardinality_string("os_name"),
+    any_if_nullable_string("os_name"),
     any_if_nullable_string("os_version"),
-    any_if_string("platform", low_cardinality=True),
+    any_if_string("platform", low_cardinality=False),
     any_if_nullable_string("release"),
     Column("retention_days", UInt(16)),
-    any_if_nullable_low_cardinality_string("sdk_name"),
-    any_if_nullable_low_cardinality_string("sdk_version"),
+    any_if_nullable_string("sdk_name"),
+    any_if_nullable_string("sdk_version"),
     Column("start", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])),
     any_if_nullable_string("user"),
     any_if_nullable_string("user_id"),
     any_if_nullable_string("user_name"),
     any_if_nullable_string("user_email"),
     Column("warning_ids", AggregateFunction("groupArray", [UUID()])),
-    Column("viewed_by_ids", AggregateFunction("groupArray", [UUID()])),
+    Column("viewed_by_ids", AggregateFunction("groupArray", [UInt(64)])),
 ]
