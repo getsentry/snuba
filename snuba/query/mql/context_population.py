@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
+
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
@@ -10,12 +10,7 @@ from snuba.query.conditions import (
     binary_condition,
     combine_and_conditions,
 )
-from snuba.query.expressions import (
-    Column,
-    Expression,
-    FunctionCall,
-    Literal,
-)
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.parser import MAX_LIMIT
