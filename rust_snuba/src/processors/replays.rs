@@ -1000,8 +1000,9 @@ mod tests {
     #[test]
     fn test_parse_replay_viewed_event() {
         let payload = r#"{
+            "type": "replay_viewed",
             "viewed_by_id": 23823623242,
-            "timestamp": 1712009295,
+            "timestamp": 1712009295
         }"#;
         let payload_value = payload.as_bytes();
 
@@ -1087,8 +1088,9 @@ mod tests {
     fn test_replay_viewed_event_event_hash() {
         // test 1-to-1 mapping of user id and event hash
         let payload = r#"{
+            "type": "replay_viewed",
             "viewed_by_id": 23823623242,
-            "timestamp": 1712009295,
+            "timestamp": 1712009295
         }"#;
         let payload_value = payload.as_bytes();
         let data = format!(
@@ -1106,8 +1108,9 @@ mod tests {
         let replay_row = rows.first().unwrap();
 
         let payload_same_user = r#"{
+            "type": "replay_viewed",
             "viewed_by_id": 23823623242,
-            "timestamp": 1712009299,
+            "timestamp": 1712009299
         }"#;
         let payload_value_same_user = payload_same_user.as_bytes();
         let data_same_user = format!(
@@ -1126,8 +1129,9 @@ mod tests {
 
         // diff user but same time
         let payload_diff_user = r#"{
+            "type": "replay_viewed",
             "viewed_by_id": 1234,
-            "timestamp": 1712009295,
+            "timestamp": 1712009295
         }"#;
         let payload_value_diff_user = payload_diff_user.as_bytes();
         let data_diff_user = format!(
