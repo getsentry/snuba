@@ -5,13 +5,13 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.datasets.plans.storage_plan_builder_new import (
     StorageQueryPlanBuilderNew,
+    apply_storage_processors,
     build_best_plan,
 )
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.pipeline.processors import execute_entity_processors
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
-from snuba.pipeline.simple_pipeline_new import apply_storage_processors
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery

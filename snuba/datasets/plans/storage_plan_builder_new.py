@@ -13,11 +13,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelectorError
 from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
-from snuba.datasets.plans.query_plan import (
-    ClickhouseQueryPlan,
-    QueryPlanExecutionStrategy,
-    QueryRunner,
-)
+from snuba.datasets.plans.query_plan import QueryPlanExecutionStrategy, QueryRunner
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -276,7 +272,7 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
 
 
 def build_best_plan(
-    clickhouse_query: LogicalQuery,
+    clickhouse_query: Query,
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlanNew:
@@ -303,7 +299,7 @@ def build_best_plan(
 
 @with_span()
 def apply_storage_processors(
-    query_plan: ClickhouseQueryPlan,
+    query_plan: ClickhouseQueryPlanNew,
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> Query:
