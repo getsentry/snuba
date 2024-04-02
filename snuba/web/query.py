@@ -95,8 +95,6 @@ def _run_query_pipeline(
                 )
                 new_sql = str(compare_clickhouse_query.data)
                 old_sql = str(clickhouse_query.data)
-                print(new_sql)
-                print(old_sql)
                 if new_sql != old_sql:
                     logger.warning(
                         "New and old query pipeline sql doesn't match: Old: %s, New: %s",
