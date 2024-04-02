@@ -1,6 +1,9 @@
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.plans.storage_plan_builder_new import StorageQueryPlanBuilderNew
+from snuba.datasets.plans.storage_plan_builder_new import (
+    StorageQueryPlanBuilderNew,
+    build_best_plan,
+)
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.pipeline.processors import execute_entity_processors
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
@@ -42,7 +45,7 @@ class StorageProcessingStage(
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         # TODO: support composite queries
         assert isinstance(pipe_input.data, ClickhouseQuery)
-
-        query = apply_storage_processors(pipe_input.data, pipe_input.query_settings)
+        query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
+        query = apply_storage_processors(query_plan, pipe_input.query_settings)
 
         return query

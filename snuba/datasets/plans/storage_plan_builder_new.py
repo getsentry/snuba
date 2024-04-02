@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from dataclasses import dataclass
+from typing import Generic, Optional, Sequence, TypeVar
 
 import sentry_sdk
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelectorError
-from snuba.datasets.plans.query_plan import QueryPlanExecutionStrategy, QueryRunner
+from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
+from snuba.datasets.plans.query_plan import (
+    ClickhouseQueryPlan,
+    QueryPlanExecutionStrategy,
+    QueryRunner,
+)
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -24,6 +31,7 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
+from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
@@ -43,6 +51,60 @@ from snuba.utils.metrics.util import with_span
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
 from snuba.web import QueryResult
+
+TQuery = TypeVar("TQuery", bound=AbstractQuery)
+
+
+@dataclass(frozen=True)
+class QueryPlanNew(ABC, Generic[TQuery]):
+    """
+    Provides the directions to execute a Clickhouse Query against one
+    storage or multiple joined ones.
+
+    This is produced by a QueryPlanner class (provided either by the
+    dataset or by an entity) after the dataset query processing has
+    been performed and the storage/s has/have been selected.
+
+    It embeds the Clickhouse Query (the query to run on the storage
+    after translation). It also provides a plan execution strategy
+    that takes care of coordinating the execution of the query against
+    the database. The execution strategy can also decide to split the
+    query into multiple chunks.
+
+    When running a query we need a cluster, the cluster is picked according
+    to the storages sets containing the storages used in the query.
+    So the plan keeps track of the storage set as well.
+    There must be only one storage set per query.
+
+    TODO: Bring the methods that apply the processors in the plan itself.
+    Now that we have two Plan implementations with a different
+    structure, all code depending on this would have to be written
+    differently depending on the implementation.
+    Having the methods inside the plan would make this simpler.
+    """
+
+    query: TQuery
+    storage_set_key: StorageSetKey
+
+
+@dataclass(frozen=True)
+class ClickhouseQueryPlanNew(QueryPlanNew[Query]):
+    """
+    Query plan for a single entity, single storage query.
+
+    It provides the sequence of storage specific QueryProcessors
+    to apply to the query after the the storage has been selected.
+    These are divided in two sequences: plan processors and DB
+    processors.
+    Plan processors have to be executed only once per plan contrarily
+    to the DB Query Processors, still provided by the storage, which
+    are executed by the execution strategy at every DB Query.
+    """
+
+    # Per https://github.com/python/mypy/issues/10039, this has to be redeclared
+    # to avoid a mypy error.
+    plan_query_processors: Sequence[ClickhouseQueryProcessor]
+    db_query_processors: Sequence[ClickhouseQueryProcessor]
 
 
 class ClickhouseQueryPlanBuilderNew(ABC):
@@ -144,12 +206,29 @@ class StorageQueryPlanBuilderNew(ClickhouseQueryPlanBuilderNew):
         ):
             return self.__selector.select_storage(query, settings, self.__storages)
 
+    def get_cluster(
+        self, storage: ReadableStorage, query: LogicalQuery, settings: QuerySettings
+    ) -> ClickhouseCluster:
+        if is_storage_set_sliced(storage.get_storage_set_key()):
+            with sentry_sdk.start_span(
+                op="build_plan.sliced_storage", description="select_storage"
+            ):
+                assert (
+                    self.__partition_key_column_name is not None
+                ), "partition key column name must be defined for a sliced storage"
+                assert isinstance(storage, ReadableTableStorage)
+                return ColumnBasedStorageSliceSelector(
+                    storage=storage.get_storage_key(),
+                    storage_set=storage.get_storage_set_key(),
+                    partition_key_column_name=self.__partition_key_column_name,
+                ).select_cluster(query, settings)
+        return storage.get_cluster()
+
     def translate_query_and_apply_mappers(
         self, query: LogicalQuery, settings: QuerySettings
     ) -> Query:
         if len(self.__storages) < 1:
             raise QueryStorageSelectorError("No storages specified to select from.")
-
         storage_connection = self.get_storage(query, settings)
         storage = storage_connection.storage
         mappers = storage_connection.translation_mappers
@@ -196,14 +275,40 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
             )
 
 
+def build_best_plan(
+    clickhouse_query: LogicalQuery,
+    settings: QuerySettings,
+    post_processors: Sequence[ClickhouseQueryProcessor] = [],
+) -> ClickhouseQueryPlanNew:
+    storage_key = StorageKeyFinder().visit(clickhouse_query)
+    storage = get_storage(storage_key)
+
+    # Return failure if storage readiness state is not supported in current environment
+    check_storage_readiness(storage)
+
+    db_query_processors = [
+        *storage.get_query_processors(),
+        *post_processors,
+        MandatoryConditionApplier(),
+        MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
+    ]
+
+    return ClickhouseQueryPlanNew(
+        query=clickhouse_query,
+        plan_query_processors=[],
+        db_query_processors=db_query_processors,
+        storage_set_key=storage.get_storage_set_key(),
+    )
+
+
 @with_span()
 def apply_storage_processors(
-    clickhouse_query: Query,
+    query_plan: ClickhouseQueryPlan,
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> Query:
     # storage selection should not be done through the entity anymore.
-    storage_key = StorageKeyFinder().visit(clickhouse_query)
+    storage_key = StorageKeyFinder().visit(query_plan.query)
     storage = get_storage(storage_key)
     if is_storage_set_sliced(storage.get_storage_set_key()):
         raise NotImplementedError("sliced storages not supported in new pipeline")
@@ -213,33 +318,26 @@ def apply_storage_processors(
     with sentry_sdk.start_span(
         op="build_plan.storage_query_plan_builder", description="set_from_clause"
     ):
-        clickhouse_query.set_from_clause(
+        query_plan.query.set_from_clause(
             get_query_data_source(
                 storage.get_schema().get_data_source(),
                 allocation_policies=storage.get_allocation_policies(),
-                final=clickhouse_query.get_from_clause().final,
-                sampling_rate=clickhouse_query.get_from_clause().sampling_rate,
+                final=query_plan.query.get_from_clause().final,
+                sampling_rate=query_plan.query.get_from_clause().sampling_rate,
                 storage_key=storage.get_storage_key(),
             )
         )
 
-    db_query_processors: Sequence[ClickhouseQueryProcessor] = [
-        *storage.get_query_processors(),
-        *post_processors,
-        MandatoryConditionApplier(),
-        MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
-    ]
-
-    for processor in db_query_processors:
+    for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"
         ):
             if settings.get_dry_run():
                 with explain_meta.with_query_differ(
-                    "storage_processor", type(processor).__name__, clickhouse_query
+                    "storage_processor", type(processor).__name__, query_plan.query
                 ):
-                    processor.process_query(clickhouse_query, settings)
+                    processor.process_query(query_plan.query, settings)
             else:
-                processor.process_query(clickhouse_query, settings)
+                processor.process_query(query_plan.query, settings)
 
-    return clickhouse_query
+    return query_plan.query
