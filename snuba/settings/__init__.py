@@ -212,7 +212,6 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
 
-
 # Processor/Writer Options
 
 
@@ -269,12 +268,6 @@ TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
-
-# Capacity Management
-# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
-# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
-# available for single tenant since we can enable/disable policies at runtime there.
-ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with allocation
@@ -402,6 +395,9 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
+# Max query size that can be sent to clickhouse
+MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
+
 # The slice configs below are the "SLICED" versions to the equivalent default
 # settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
 # version of "KAFKA_TOPIC_MAP". These should be filled out for any
@@ -439,6 +435,11 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
+USE_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
+TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
+
+ENABLE_FILTER_IN_SELECT_OPTIMIZER = 0
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

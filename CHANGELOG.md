@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.3.0
+
+### Various fixes & improvements
+
+- Unrevert: feat: Remove query splitters from the API  (#5581) by @evanh
+- feat: Add use_case_id index to generic metrics (#5655) by @evanh
+- ref(ci): Remove deleted test file (#5656) by @evanh
+- fix vscode debugger (#5652) by @kylemumma
+- chore: Upgrade snuba-sdk to 2.0.31 (#5647) by @iambriccardo
+- fix(gocd): put snuba cmd into $SNUBA_CMD (#5654) by @MeredithAnya
+- enable canary health check (#5649) by @enochtangg
+- Revert "fix(CapMan): Allocation Policies causing potentially timeout errors on ST (#4403)" (703042e1) by @getsentry-bot
+- fix(gocd): add SNUBA_CMD_TYPE (#5648) by @MeredithAnya
+- Allows empty `trace_id` (#5637) by @xurui-c
+- fix: Fix bump version for rust (#5643) by @lynnagara
+- feat(generic-metrics): Add metrics around encoding format type in processor (#5627) by @ayirr7
+- feat: filter by metric_id in select logical query optimizer (#5610) by @kylemumma
+- fix(gocd): fix unbound variable (#5641) by @MeredithAnya
+- ref: bump sentry-kafka-schemas to 0.1.60 (#5642) by @getsentry-bot
+- add canary health check to gocd pipeline (#5638) by @enochtangg
+- ref(codecov) Try out the failed test feature in Codecov (#5635) by @evanh
+- feat(spans): Enable spans storage in ST and self-hosted (#5629) by @phacops
+- fix: Fix a bug in HexIntColumnProcessor that skipped array conditions (#5640) by @evanh
+- ref(gocd): use shared script query-fetcher (#5639) by @MeredithAnya
+- ref(gocd): add comparer pipeline, consolidate script? (#5636) by @MeredithAnya
+- feat(spans): Set the migration group as complete to run migrations everywhere (#5634) by @phacops
+- feat(admin): Absolute imports in snuba-admin (#5630) by @volokluev
+- the default value of trace_id will be a randomly generated uuid inste… (#5628) by @xurui-c
+
+_Plus 72 more_
+
 ## 24.2.0
 
 ### Various fixes & improvements

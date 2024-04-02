@@ -30,24 +30,24 @@ pub fn initialize_python() {
     .unwrap();
 }
 
-pub struct TestStrategy {
-    pub payloads: Vec<BytesInsertBatch>,
+pub struct TestStrategy<R> {
+    pub payloads: Vec<BytesInsertBatch<R>>,
 }
 
-impl TestStrategy {
+impl<R: Send + Sync> TestStrategy<R> {
     pub fn new() -> Self {
         Self { payloads: vec![] }
     }
 }
-impl ProcessingStrategy<BytesInsertBatch> for TestStrategy {
+impl<R: Send + Sync> ProcessingStrategy<BytesInsertBatch<R>> for TestStrategy<R> {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(None)
     }
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
-        self.payloads.push(message.payload().clone());
+        message: Message<BytesInsertBatch<R>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<R>>> {
+        self.payloads.push(message.into_payload());
         Ok(())
     }
     fn close(&mut self) {}

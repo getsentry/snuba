@@ -82,6 +82,7 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      { name: viewed_by_id, type: UInt, args: { size: 64 } },
       { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
       {
         name: os_version,

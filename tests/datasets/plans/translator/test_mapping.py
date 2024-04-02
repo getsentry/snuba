@@ -12,6 +12,7 @@ from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.plans.translator.query import QueryTranslator
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
@@ -23,6 +24,9 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as SnubaQuery
+
+TABLE = Table("mytable", ColumnSet([]), storage_key=StorageKey("mytable"))
+
 
 test_cases = [
     pytest.param(
@@ -48,7 +52,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=Table("my_table", ColumnSet([])),
+            from_clause=TABLE,
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -103,7 +107,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=Table("my_table", ColumnSet([])),
+            from_clause=TABLE,
             selected_columns=[
                 SelectedExpression("alias", Column("alias", "table", "column")),
                 SelectedExpression(
@@ -168,7 +172,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=Table("my_table", ColumnSet([])),
+            from_clause=TABLE,
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -219,7 +223,7 @@ test_cases = [
             ],
         ),
         ClickhouseQuery(
-            from_clause=Table("my_table", ColumnSet([])),
+            from_clause=TABLE,
             selected_columns=[
                 SelectedExpression(
                     "alias",
@@ -318,7 +322,7 @@ test_cases = [
             ),
         ),
         ClickhouseQuery(
-            from_clause=Table("my_table", ColumnSet([])),
+            from_clause=TABLE,
             selected_columns=[
                 SelectedExpression(
                     "platforms",
@@ -421,7 +425,7 @@ def test_translation(
 ) -> None:
     translated = QueryTranslator(mappers).translate(query)
     # basic translate doesn't do this and it's required for the equality
-    translated.set_from_clause(Table("my_table", ColumnSet([])))
+    translated.set_from_clause(TABLE)
 
     eq, reason = expected.equals(translated)
     assert eq, reason

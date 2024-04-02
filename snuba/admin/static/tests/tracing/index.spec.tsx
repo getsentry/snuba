@@ -1,6 +1,6 @@
-import TracingQueries from "../../tracing";
-import { TracingResult } from "../../tracing/types";
-import Client from "../../api_client";
+import TracingQueries from "SnubaAdmin/tracing";
+import { TracingResult } from "SnubaAdmin/tracing/types";
+import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest } from "@jest/globals";
 import {

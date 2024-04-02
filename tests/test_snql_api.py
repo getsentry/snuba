@@ -288,7 +288,7 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
-        allocation_policies = response.json["allocation_policies"]
+        allocation_policies = response.json["quota_allowance"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
@@ -305,39 +305,37 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        allocation_policies = response.json["error"]["allocation_policies_violations"]
+        allocation_policies = response.json["quota_allowance"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
+        assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
         assert response.status_code == 429
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock: Any) -> None:
-        for use_split, expected_query_count in [(0, 1), (1, 2)]:
-            state.set_config("use_split", use_split)
-            record_query_mock.reset_mock()
-            result = json.loads(
-                self.post(
-                    "/events/snql",
-                    data=json.dumps(
-                        {
-                            "query": f"""MATCH (events)
-                            SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
-                            WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
-                            AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                            AND project_id IN tuple({self.project_id})
-                            LIMIT 5""",
-                            "tenant_ids": {"referrer": "test", "organization_id": 123},
-                        }
-                    ),
-                ).data
-            )
+        record_query_mock.reset_mock()
+        result = json.loads(
+            self.post(
+                "/events/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (events)
+                        SELECT event_id, title, transaction, tags[a], tags[b], message, project_id
+                        WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN tuple({self.project_id})
+                        LIMIT 5""",
+                        "tenant_ids": {"referrer": "test", "organization_id": 123},
+                    }
+                ),
+            ).data
+        )
 
-            assert len(result["data"]) == 1
-            assert record_query_mock.call_count == 1
-            metadata = record_query_mock.call_args[0][0]
-            assert metadata["dataset"] == "events"
-            assert metadata["request"]["referrer"] == "test"
-            assert len(metadata["query_list"]) == expected_query_count
+        assert len(result["data"]) == 1
+        assert record_query_mock.call_count == 1
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["dataset"] == "events"
+        assert metadata["request"]["referrer"] == "test"
 
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
@@ -1303,7 +1301,7 @@ class TestSnQLApi(BaseApiTest):
             assert response.status_code == 429
             assert (
                 response.json["error"]["message"]
-                == "{'RejectAllocationPolicy123': \"Allocation policy violated, explanation: {'reason': 'policy rejects all queries'}\"}"
+                == "Query on could not be run due to allocation policies, details: {'RejectAllocationPolicy123': {'can_run': False, 'max_threads': 0, 'explanation': {'reason': 'policy rejects all queries', 'storage_key': 'StorageKey.DOESNTMATTER'}}}"
             )
 
     def test_tags_key_column(self) -> None:
@@ -1332,6 +1330,66 @@ class TestSnQLApi(BaseApiTest):
         )
 
         assert response.status_code == 200
+
+    def test_tags_column_in_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (events: events) -[attributes]-> (ga: group_attributes)
+                        SELECT count() AS `count`
+                        BY events.time
+                        WHERE events.timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND ifNull(events.tags[service-class], '') != 'devtest'
+                        AND events.timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND events.project_id IN array({self.project_id})
+                        AND ga.project_id IN array({self.project_id})
+                        AND ga.group_status IN array(0)
+                        AND events.type = 'error'
+                        ORDER BY events.time ASC
+                        LIMIT 10000
+                        GRANULARITY 600""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+
+    def test_hexint_in_condition(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""MATCH (spans)
+                    SELECT span_id
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND span_id IN array('844e2e5c081e6199')
+                    LIMIT 101 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
 
 
 @pytest.mark.clickhouse_db

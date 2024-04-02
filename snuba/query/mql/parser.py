@@ -10,6 +10,7 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
+from snuba import settings as snuba_settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -36,7 +37,10 @@ from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
-from snuba.query.query_settings import QuerySettings
+from snuba.query.processors.logical.filter_in_select_optimizer import (
+    FilterInSelectOptimizer,
+)
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
     MAX_LIMIT,
@@ -46,7 +50,7 @@ from snuba.query.snql.parser import (
     _replace_time_condition,
     _treeify_or_and_conditions,
 )
-from snuba.state import explain_meta
+from snuba.state import explain_meta, get_int_config
 from snuba.util import parse_datetime
 from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
@@ -71,6 +75,10 @@ ARITHMETIC_OPERATORS_MAPPING = {
     "-": "minus",
     "*": "multiply",
     "/": "divide",
+}
+
+UNARY_OPERATORS = {
+    "-": "negate",
 }
 
 
@@ -98,6 +106,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_term_op(self, node: Node, children: Sequence[Any]) -> Any:
         return ARITHMETIC_OPERATORS_MAPPING[node.text]
+
+    def visit_unary_op(self, node: Node, children: Sequence[Any]) -> Any:
+        return UNARY_OPERATORS[node.text]
 
     def _build_timeseries_formula_param(
         self, param: InitialParseResult
@@ -155,37 +166,50 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def _visit_formula(
         self,
         term_operator: str,
-        term: InitialParseResult,
-        coefficient: InitialParseResult,
+        operand_1: InitialParseResult,
+        operand_2: InitialParseResult | None = None,
     ) -> InitialParseResult:
         # TODO: If the formula has filters/group by, where do those appear?
 
         # If the parameters of the query are timeseries, extract the expressions from the result
-        if isinstance(term, InitialParseResult) and term.expression is not None:
-            term = replace(term, expression=self._build_timeseries_formula_param(term))
         if (
-            isinstance(coefficient, InitialParseResult)
-            and coefficient.expression is not None
+            isinstance(operand_1, InitialParseResult)
+            and operand_1.expression is not None
         ):
-            coefficient = replace(
-                coefficient,
-                expression=self._build_timeseries_formula_param(coefficient),
+            operand_1 = replace(
+                operand_1, expression=self._build_timeseries_formula_param(operand_1)
+            )
+        if (
+            operand_2 is not None
+            and isinstance(operand_2, InitialParseResult)
+            and operand_2.expression is not None
+        ):
+            operand_2 = replace(
+                operand_2,
+                expression=self._build_timeseries_formula_param(operand_2),
             )
 
         if (
-            isinstance(term, InitialParseResult)
-            and isinstance(coefficient, InitialParseResult)
-            and term.groupby != coefficient.groupby
+            operand_2 is not None
+            and isinstance(operand_1, InitialParseResult)
+            and isinstance(operand_2, InitialParseResult)
+            and operand_1.groupby != operand_2.groupby
         ):
             raise InvalidQueryException(
                 "All terms in a formula must have the same groupby"
             )
 
+        groupby = (
+            operand_1.groupby if isinstance(operand_1, InitialParseResult) else None
+        )
+        parameters = [operand_1]
+        if operand_2 is not None:
+            parameters.append(operand_2)
         return InitialParseResult(
             expression=None,
             formula=term_operator,
-            parameters=[term, coefficient],
-            groupby=term.groupby,
+            parameters=parameters,
+            groupby=groupby,
         )
 
     def visit_term(
@@ -195,10 +219,24 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     ) -> InitialParseResult:
         term, zero_or_more_others = children
         if zero_or_more_others:
-            _, term_operator, _, coefficient, *_ = zero_or_more_others[0]
-            return self._visit_formula(term_operator, term, coefficient)
+            _, term_operator, _, unary, *_ = zero_or_more_others[0]
+            return self._visit_formula(term_operator, term, unary)
 
         return term
+
+    def visit_unary(self, node: Node, children: Sequence[Any]) -> Any:
+        unary_op, coefficient = children
+        if unary_op:
+            if isinstance(coefficient, float) or isinstance(coefficient, int):
+                return -coefficient
+            elif isinstance(coefficient, InitialParseResult):
+                return self._visit_formula(unary_op[0], coefficient)
+            else:
+                raise InvalidQueryException(
+                    f"Unary expression not supported for type {type(coefficient)}"
+                )
+
+        return coefficient
 
     def visit_coefficient(
         self,
@@ -736,14 +774,18 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
                 selected_columns.extend(parsed.groupby)
             groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
 
-            def extract_mri(param: InitialParseResult) -> str:
-                if param.mri:
-                    return param.mri
-                elif param.formula:
-                    for p in param.parameters or []:
-                        mri = extract_mri(p)
-                        if mri:
-                            return mri
+            def extract_mri(param: InitialParseResult | Any) -> str:
+                if isinstance(param, InitialParseResult):
+                    if param.mri:
+                        return param.mri
+                    elif param.formula:
+                        for p in param.parameters or []:
+                            try:
+                                mri = extract_mri(p)
+                                if mri:
+                                    return mri
+                            except ParsingException:
+                                pass
 
                 raise ParsingException("formula does not contain any MRIs")
 
@@ -1067,6 +1109,20 @@ def parse_mql_query(
             MQL_POST_PROCESSORS,
             settings,
         )
+
+    # Filter in select optimizer
+    feat_flag = get_int_config(
+        "enable_filter_in_select_optimizer",
+        default=snuba_settings.ENABLE_FILTER_IN_SELECT_OPTIMIZER,
+    )
+    if feat_flag:
+        with sentry_sdk.start_span(
+            op="processor", description="filter_in_select_optimize"
+        ):
+            if settings is None:
+                FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
+            else:
+                FilterInSelectOptimizer().process_query(query, settings)
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):

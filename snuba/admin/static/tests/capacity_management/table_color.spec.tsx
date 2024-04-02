@@ -1,6 +1,5 @@
-import {getTableColor} from "../../capacity_management/allocation_policy";
-import { AllocationPolicy, AllocationPolicyConfig } from "../../capacity_management/types";
-import { COLORS } from "../../theme";
+import {getTableColor} from "SnubaAdmin/capacity_management/allocation_policy";
+import { COLORS } from "SnubaAdmin/theme";
 import { it, expect } from "@jest/globals";
 
 let bonus_configs = [{

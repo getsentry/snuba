@@ -95,7 +95,7 @@ class QuotaAllowance:
     # policy, this dictionary should contain some information
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
-    explanation: dict[str, Any]
+    explanation: dict[str, JsonSerializable]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -113,31 +113,6 @@ class QuotaAllowance:
             and self.max_threads == other.max_threads
             and self.explanation == other.explanation
         )
-
-
-class AllocationPolicyViolation(SerializableException):
-    @classmethod
-    def from_args(
-        cls, tenant_ids: dict[str, str | int], quota_allowance: QuotaAllowance
-    ) -> "AllocationPolicyViolation":
-        return cls(
-            "Allocation policy violated",
-            tenant_ids=tenant_ids,
-            quota_allowance=quota_allowance.to_dict(),
-        )
-
-    @property
-    def quota_allowance(self) -> dict[str, JsonSerializable]:
-        return cast(
-            "dict[str, JsonSerializable]", self.extra_data.get("quota_allowance", {})
-        )
-
-    @property
-    def explanation(self) -> dict[str, JsonSerializable]:
-        return self.extra_data.get("quota_allowance", {}).get("explanation", {})  # type: ignore
-
-    def __str__(self) -> str:
-        return f"{self.message}, explanation: {self.explanation}"
 
 
 class InvalidTenantsForAllocationPolicy(SerializableException):
@@ -159,27 +134,34 @@ class InvalidTenantsForAllocationPolicy(SerializableException):
 
 class AllocationPolicyViolations(SerializableException):
     """
-    An exception class which is used to collect multiple AllocationPolicyViolation
-    exceptions and raise them at once, useful for storages with multiple policies
-    defined on them.
-
-    Do not manually raise this exception! Use AllocationPolicyViolation instead within
-    your Allocation Policies for when a violation occurs and this exception will be
-    raised containing your raised exceptions at the end.
+    An exception class which is used to communicate that the query cannot be run because
+    at least one policy of many said no
     """
 
-    def __init__(
-        self,
-        message: str | None = None,
-        violations: dict[str, AllocationPolicyViolation] = field(default_factory=dict),
-        should_report: bool = True,
-        **extra_data: JsonSerializable,
-    ) -> None:
-        self.violations = violations
-        super().__init__(message, should_report, **extra_data)
-
     def __str__(self) -> str:
-        return str({k: str(v) for k, v in self.violations.items()})
+        return f"{self.message}, details: {self.violations}"
+
+    @property
+    def violations(self) -> dict[str, dict[str, Any]]:
+        return {k: v for k, v in self.quota_allowance.items() if v["can_run"] == False}
+
+    @property
+    def quota_allowance(self) -> dict[str, dict[str, Any]]:
+        return cast(
+            dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
+        )
+
+    @classmethod
+    def from_args(
+        cls, quota_allowances: dict[str, QuotaAllowance]
+    ) -> "AllocationPolicyViolations":
+        return cls(
+            "Query on could not be run due to allocation policies",
+            quota_allowances={
+                key: quota_allowance.to_dict()
+                for key, quota_allowance in quota_allowances.items()
+            },
+        )
 
 
 class AllocationPolicy(ABC, metaclass=RegisteredClass):
@@ -357,11 +339,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     * Because allocation policies are attached to query objects, they have to be pickleable. Don't put non-pickleable members onto the allocation policy
     * At time of writing (29-03-2023), not all allocation policy decisions are made in the allocation policy,
-        rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
+        table rate limiters are still applied in the query pipeline, those should be moved into an allocation policy as they
         are also policy decisions
-    * get_quota_allowance will throw an AllocationPolicyViolation if _get_quota_allowance().can_run is false.
-        this is to keep with the pattern in `db_query.py` which communicates error states with exceptions. There is no other
-        reason. For more information see snuba.web.db_query.db_query
     * Every allocation policy takes a `storage_key` in its init. The storage_key is like a pseudo-tenant. In different
         environments, storages may be co-located on the same cluster. To facilitate resource sharing, every allocation policy
         knows which storage_key it is serving. This is used to create unique keys for saving the config values.
@@ -438,10 +417,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_enforced(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ENFORCED))
-            and settings.ENFORCE_BYTES_SCANNED_WINDOW_POLICY
-        )
+        return bool(self.get_config_value(IS_ENFORCED))
 
     @property
     def max_threads(self) -> int:
@@ -772,8 +748,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 "db_request_rejected",
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
             )
-            if self.is_enforced:
-                raise AllocationPolicyViolation.from_args(tenant_ids, allowance)
         elif allowance.max_threads < self.max_threads:
             # NOTE: The elif is very intentional here. Don't count the throttling
             # if the request was rejected.
@@ -786,6 +760,8 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
             )
         if not self.is_enforced:
             return QuotaAllowance(True, self.max_threads, {})
+        # make sure we always know which storage key we rejected a query from
+        allowance.explanation["storage_key"] = str(self._storage_key)
         return allowance
 
     @abstractmethod

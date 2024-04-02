@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
-import { AllocationPolicyConfig } from "./types";
+import { AllocationPolicyConfig } from "SnubaAdmin/capacity_management/types";
 
 function EditConfigModal(props: {
   currentlyEditing: boolean;

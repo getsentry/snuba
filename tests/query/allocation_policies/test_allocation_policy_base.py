@@ -10,7 +10,6 @@ from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
     AllocationPolicyConfig,
-    AllocationPolicyViolation,
     InvalidPolicyConfig,
     InvalidTenantsForAllocationPolicy,
     PassthroughPolicy,
@@ -71,13 +70,6 @@ class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
         return QuotaAllowance(can_run=True, max_threads=1, explanation={})
 
 
-def test_raises_on_false_can_run() -> None:
-    with pytest.raises(AllocationPolicyViolation):
-        RejectingEverythingAllocationPolicy(
-            StorageKey("something"), [], default_config_overrides={}
-        ).get_quota_allowance({}, query_id="deadbeef")
-
-
 class BadlyWrittenAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
@@ -133,10 +125,11 @@ def test_passes_through_on_error() -> None:
             None, None, None  # type: ignore
         )
 
-        with pytest.raises(AllocationPolicyViolation):
-            InvalidTenantAllocationPolicy(
-                StorageKey("Something"), [], {}
-            ).get_quota_allowance({"some": "tenant"}, "12345")
+        assert (
+            not InvalidTenantAllocationPolicy(StorageKey("Something"), [], {})
+            .get_quota_allowance({"some": "tenant"}, "12345")
+            .can_run
+        )
 
         InvalidTenantAllocationPolicy(StorageKey("Something"), [], {}).update_quota_balance({"some": "tenant"}, "12345", None)  # type: ignore
 
@@ -487,8 +480,7 @@ def test_is_not_enforced() -> None:
         "organization_id": 123,
         "referrer": "some_referrer",
     }
-    with pytest.raises(AllocationPolicyViolation):
-        reject_policy.get_quota_allowance(tenant_ids, "deadbeef")
+    assert not reject_policy.get_quota_allowance(tenant_ids, "deadbeef").can_run
 
     reject_policy.set_config_value(config_key="is_enforced", value=0)
     # policy not enforced so we don't reject the query

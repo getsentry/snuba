@@ -32,6 +32,7 @@ events_table = Table(
     events_table_name,
     events_storage.get_schema().get_columns(),
     allocation_policies=[PassthroughPolicy(StorageKey("flimflam"), [], {})],
+    storage_key=events_storage.get_storage_key(),
     final=False,
     sampling_rate=None,
     mandatory_conditions=events_storage.get_schema()

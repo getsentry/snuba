@@ -5,7 +5,6 @@ from typing import Optional, Sequence
 import sentry_sdk
 
 from snuba import settings as snuba_settings
-from snuba import state
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
@@ -17,7 +16,6 @@ from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
 )
-from snuba.datasets.plans.splitters import QuerySplitStrategy
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -28,6 +26,7 @@ from snuba.datasets.storage import (
     ReadableTableStorage,
     StorageNotAvailable,
 )
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
@@ -54,11 +53,9 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
         self,
         cluster: ClickhouseCluster,
         db_query_processors: Sequence[ClickhouseQueryProcessor],
-        splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__cluster = cluster
         self.__query_processors = db_query_processors
-        self.__splitters = splitters or []
 
     @with_span()
     def execute(
@@ -89,18 +86,6 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy[Query]):
                 cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
             )
 
-        use_split = state.get_config("use_split", 1)
-        if use_split:
-            for splitter in self.__splitters:
-                with sentry_sdk.start_span(
-                    description=type(splitter).__name__, op="splitter"
-                ):
-                    result = splitter.execute(
-                        query, query_settings, process_and_run_query
-                    )
-                    if result is not None:
-                        return result
-
         return process_and_run_query(query, query_settings)
 
 
@@ -109,6 +94,7 @@ def get_query_data_source(
     allocation_policies: list[AllocationPolicy],
     final: bool,
     sampling_rate: Optional[float],
+    storage_key: StorageKey,
 ) -> Table:
     assert isinstance(relational_source, TableSource)
     return Table(
@@ -118,6 +104,7 @@ def get_query_data_source(
         final=final,
         sampling_rate=sampling_rate,
         mandatory_conditions=relational_source.get_mandatory_conditions(),
+        storage_key=storage_key,
     )
 
 
@@ -217,6 +204,7 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                     allocation_policies=storage.get_allocation_policies(),
                     final=query.get_final(),
                     sampling_rate=query.get_sample(),
+                    storage_key=storage.get_storage_key(),
                 )
             )
 
@@ -241,7 +229,6 @@ class StorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
                 execution_strategy=SimpleQueryPlanExecutionStrategy(
                     cluster=cluster,
                     db_query_processors=db_query_processors,
-                    splitters=storage.get_query_splitters(),
                 ),
             )
         ]

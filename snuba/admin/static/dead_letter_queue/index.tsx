@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { COLORS } from "../theme";
-import { Policy, ReplayInstruction, Topic } from "./types";
+import Client from "SnubaAdmin/api_client";
+import { COLORS } from "SnubaAdmin/theme";
+import { Policy, ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 
 function DeadLetterQueue(props: { api: Client }) {
   // Undefined means not loaded yet, null means no instruction was set
