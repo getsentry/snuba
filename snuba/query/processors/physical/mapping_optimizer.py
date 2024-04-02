@@ -199,6 +199,10 @@ class MappingOptimizer(ClickhouseQueryProcessor):
             for param in params:
                 assert isinstance(param, LiteralExpr)
 
+                # tags[foo] IN array('') is not optimizable
+                if param.value == "":
+                    return ConditionClass.NOT_OPTIMIZABLE
+
             return ConditionClass.OPTIMIZABLE
         elif equals_condition_match is None and in_condition_match is None:
             # If this condition is not matching an optimizable condition,

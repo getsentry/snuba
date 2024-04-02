@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Tuple, Union, cast
 
@@ -359,9 +358,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
 
         assert response.status_code == 200, data
         rows = data["data"]
-        assert len(rows) >= 180, rows
-
-        assert math.isnan(rows[0]["aggregate_value"])  # division by zero
+        assert len(rows) == 0
 
 
 @pytest.mark.clickhouse_db

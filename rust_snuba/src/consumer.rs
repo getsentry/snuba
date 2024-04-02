@@ -77,7 +77,7 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    tracing::info!(?consumer_config, "Starting Rust consumer");
+    tracing::info!(?consumer_config.storages, "Starting Rust consumer");
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
@@ -166,8 +166,8 @@ pub fn consumer_impl(
                 handle,
                 kafka_dlq_producer,
                 DlqLimit {
-                    max_invalid_ratio: Some(0.01),
-                    max_consecutive_count: Some(1000),
+                    max_invalid_ratio: None,
+                    max_consecutive_count: None,
                 },
                 None,
             )

@@ -348,6 +348,38 @@ TEST_CASES = [
         ),
         id="Optimizable IN condition using array",
     ),
+    pytest.param(
+        build_query(
+            selected_columns=[column("event_id")],
+            condition=binary_condition(
+                ConditionFunctions.IN,
+                nested_expression("tags", "my_tag"),
+                FunctionCall(
+                    None,
+                    "array",
+                    (
+                        Literal(None, "a"),
+                        Literal(None, "b"),
+                        Literal(None, ""),
+                    ),
+                ),
+            ),
+        ),
+        binary_condition(
+            ConditionFunctions.IN,
+            nested_expression("tags", "my_tag"),
+            FunctionCall(
+                None,
+                "array",
+                (
+                    Literal(None, "a"),
+                    Literal(None, "b"),
+                    Literal(None, ""),
+                ),
+            ),
+        ),
+        id="Non optimizable IN condition with empty value",
+    ),
 ]
 
 
