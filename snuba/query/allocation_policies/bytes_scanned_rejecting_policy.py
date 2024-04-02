@@ -52,31 +52,17 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         # If two overrides applicable available to the request, the one with a smaller value takes precedence
         return [
             AllocationPolicyConfig(
-                "project_referrer_scan_limit_override",
-                f"how many bytes can a specific project scan per referrer in the last {self.WINDOW_SECONDS/ 60} mins before queries start getting rejected",
-                int,
-                DEFAULT_BYTES_SCANNED_LIMIT,
-                param_types={"project_id": int, "referrer": str},
-            ),
-            AllocationPolicyConfig(
-                "organization_referrer_scan_limit_override",
-                f"how many bytes can a specific organization scan per referrer in the last {self.WINDOW_SECONDS/ 60} mins before queries start getting rejected",
-                int,
-                DEFAULT_BYTES_SCANNED_LIMIT * 2,
-                param_types={"organization_id": int, "referrer": str},
-            ),
-            AllocationPolicyConfig(
                 "referrer_all_projects_scan_limit_override",
                 f"Specific referrer scan limit in the last {self.WINDOW_SECONDS/ 60} mins, APPLIES TO ALL PROJECTS",
                 int,
-                DEFAULT_BYTES_SCANNED_LIMIT,
+                DEFAULT_OVERRIDE_LIMIT,
                 param_types={"referrer": str},
             ),
             AllocationPolicyConfig(
                 "referrer_all_organizations_scan_limit_override",
                 f"Specific referrer scan limit in the last {self.WINDOW_SECONDS/ 60} mins, APPLIES TO ALL ORGANIZATIONS",
                 int,
-                DEFAULT_BYTES_SCANNED_LIMIT * 2,
+                DEFAULT_OVERRIDE_LIMIT,
                 param_types={"referrer": str},
             ),
             AllocationPolicyConfig(
@@ -116,45 +102,31 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             "tenant_ids must include organization_id or project id",
         )
 
-    def _get_overrides(self, tenant_ids: dict[str, str | int]) -> dict[str, int]:
-        overrides = {}
-        available_tenant_ids = set(tenant_ids.keys())
-        # get all overrides that can be retrieved with the tenant_ids
-        # e.g. if organization_id and referrer are passed in, retrieve
-        # ('organization_override, 'referrer_organization_override')
-        for config_definition in self._additional_config_definitions():
-            if config_definition.name.endswith("_override"):
-                param_types = config_definition.param_types
-                if set(param_types.keys()).issubset(available_tenant_ids):
-                    params = {param: tenant_ids[param] for param in param_types}
-                    config_value = self.get_config_value(config_definition.name, params)
-                    if config_value != config_definition.default:
-                        key = "|".join(
-                            [
-                                f"{param}__{tenant_id}"
-                                for param, tenant_id in sorted(params.items())
-                            ]
-                        )
-
-                        overrides[key] = config_value
-        return overrides
-
     def __get_scan_limit(
         self,
         customer_tenant_key: str,
         customer_tenant_value: str | int,
         referrer: str | int,
     ) -> int:
-        overrides = self._get_overrides(
-            {customer_tenant_key: customer_tenant_value, "referrer": referrer}
-        )
-        if overrides:
-            raise NotImplementedError
         if customer_tenant_key == "project_id":
-            return self.get_config_value("project_referrer_scan_limit")
+            override = self.get_config_value(
+                "referrer_all_projects_scan_limit_override", {"referrer": referrer}
+            )
+            if override == DEFAULT_OVERRIDE_LIMIT:
+                return self.get_config_value("project_referrer_scan_limit")
+            return override
         elif customer_tenant_key == "organization_id":
-            return self.get_config_value("organization_referrer_scan_limit")
-        raise NotImplementedError
+            override = self.get_config_value(
+                "referrer_all_organizations_scan_limit_override", {"referrer": referrer}
+            )
+            if override == DEFAULT_OVERRIDE_LIMIT:
+                return self.get_config_value("organization_referrer_scan_limit")
+            return override
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            {customer_tenant_key: customer_tenant_value, "referrer": referrer},
+            self.__class__.__name__,
+            "customer tenant key is neither project_id or organization_id, this should never happen",
+        )
 
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
