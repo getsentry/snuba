@@ -190,8 +190,8 @@ pub fn deserialize_message(
         }
         ReplayPayload::ViewedEvent(event) => {
             vec![ReplayRow {
-                viewed_by_id: event.sentry_user_id,
-                event_hash: Uuid::from_u64_pair(0, event.sentry_user_id),
+                viewed_by_id: event.viewed_by_id,
+                event_hash: Uuid::from_u64_pair(0, event.viewed_by_id),
                 timestamp: event.timestamp as u32,
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
@@ -371,7 +371,7 @@ struct ReplayEventLinkEvent {
 
 #[derive(Debug, Deserialize)]
 struct ReplayViewedEvent {
-    sentry_user_id: u64,
+    viewed_by_id: u64,
     timestamp: f64,
 }
 
@@ -1000,7 +1000,7 @@ mod tests {
     #[test]
     fn test_parse_replay_viewed_event() {
         let payload = r#"{
-            "sentry_user_id": 23823623242,
+            "viewed_by_id": 23823623242,
             "timestamp": 1712009295,
         }"#;
         let payload_value = payload.as_bytes();
@@ -1087,7 +1087,7 @@ mod tests {
     fn test_replay_viewed_event_event_hash() {
         // test 1-to-1 mapping of user id and event hash
         let payload = r#"{
-            "sentry_user_id": 23823623242,
+            "viewed_by_id": 23823623242,
             "timestamp": 1712009295,
         }"#;
         let payload_value = payload.as_bytes();
@@ -1106,7 +1106,7 @@ mod tests {
         let replay_row = rows.first().unwrap();
 
         let payload_same_user = r#"{
-            "sentry_user_id": 23823623242,
+            "viewed_by_id": 23823623242,
             "timestamp": 1712009299,
         }"#;
         let payload_value_same_user = payload_same_user.as_bytes();
@@ -1126,7 +1126,7 @@ mod tests {
 
         // diff user but same time
         let payload_diff_user = r#"{
-            "sentry_user_id": 1234,
+            "viewed_by_id": 1234,
             "timestamp": 1712009295,
         }"#;
         let payload_value_diff_user = payload_diff_user.as_bytes();
