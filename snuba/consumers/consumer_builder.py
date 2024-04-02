@@ -396,8 +396,8 @@ class ConsumerBuilder:
                     Topic(self.__consumer_config.dlq_topic.physical_topic_name),
                 ),
                 DlqLimit(
-                    max_invalid_ratio=0.01,
-                    max_consecutive_count=1000,
+                    max_invalid_ratio=None,
+                    max_consecutive_count=None,
                 ),
                 None,
             )

@@ -89,6 +89,10 @@ class ReadableStorage(Storage):
         """
         return []
 
+    @abstractmethod
+    def get_storage_key(self) -> StorageKey:
+        raise NotImplementedError
+
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return [DEFAULT_PASSTHROUGH_POLICY]
 

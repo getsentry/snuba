@@ -3,6 +3,7 @@ import pytest
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.expression import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -59,7 +60,7 @@ tests = [
 @pytest.mark.parametrize("unprocessed, formatted_value", tests)
 def test_hexint_column_processor(unprocessed: Expression, formatted_value: str) -> None:
     unprocessed_query = Query(
-        Table("transactions", ColumnSet([])),
+        Table("transactions", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("column1", Column(None, None, "column1"))],
         condition=unprocessed,
     )

@@ -80,6 +80,8 @@ application = Flask(__name__, static_url_path="/static", static_folder="dist")
 runner = Runner()
 audit_log = AuditLog()
 
+ORG_ID = 1
+
 
 @application.errorhandler(UnauthorizedException)
 def handle_invalid_json(exception: UnauthorizedException) -> Response:
@@ -237,9 +239,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         if not dry_run:
             audit_log.record(
                 user or "",
-                AuditLogAction.RAN_MIGRATION_STARTED
-                if action == "run"
-                else AuditLogAction.REVERSED_MIGRATION_STARTED,
+                (
+                    AuditLogAction.RAN_MIGRATION_STARTED
+                    if action == "run"
+                    else AuditLogAction.REVERSED_MIGRATION_STARTED
+                ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
             )
             check_for_inactive_replicas(
@@ -256,9 +260,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         if not dry_run:
             audit_log.record(
                 user or "",
-                AuditLogAction.RAN_MIGRATION_COMPLETED
-                if action == "run"
-                else AuditLogAction.REVERSED_MIGRATION_COMPLETED,
+                (
+                    AuditLogAction.RAN_MIGRATION_COMPLETED
+                    if action == "run"
+                    else AuditLogAction.REVERSED_MIGRATION_COMPLETED
+                ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
                 notify=True,
             )
@@ -266,9 +272,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     def notify_error() -> None:
         audit_log.record(
             user or "",
-            AuditLogAction.RAN_MIGRATION_FAILED
-            if action == "run"
-            else AuditLogAction.REVERSED_MIGRATION_FAILED,
+            (
+                AuditLogAction.RAN_MIGRATION_FAILED
+                if action == "run"
+                else AuditLogAction.REVERSED_MIGRATION_FAILED
+            ),
             {"migration": str(migration_key), "force": force, "fake": fake},
             notify=True,
         )
@@ -667,7 +675,7 @@ def config(config_key: str) -> Response:
                 400,
                 {"Content-Type": "application/json"},
             )
-        except (state.MismatchedTypeException):
+        except state.MismatchedTypeException:
             return Response(
                 json.dumps({"error": "Mismatched type"}),
                 400,
@@ -997,7 +1005,7 @@ def dlq_replay() -> Response:
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def production_snql_query() -> Response:
     body = json.loads(request.data)
-    body["tenant_ids"] = {"referrer": request.referrer}
+    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
         ret = run_snql_query(body, g.user.email)
         return ret

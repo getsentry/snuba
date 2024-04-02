@@ -10,6 +10,7 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
+from snuba import settings as snuba_settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -53,7 +54,7 @@ from snuba.query.parser.exceptions import ParsingException
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
 )
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
     POST_PROCESSORS,
@@ -62,7 +63,7 @@ from snuba.query.snql.parser import (
     _replace_time_condition,
     _treeify_or_and_conditions,
 )
-from snuba.state import explain_meta
+from snuba.state import explain_meta, get_int_config
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
@@ -1068,19 +1069,12 @@ def quantiles_to_quantile(query: CompositeQuery[QueryEntity] | LogicalQuery) -> 
     query.transform_expressions(transform)
 
 
-def optimize_filter_in_select(
-    query: CompositeQuery[QueryEntity] | LogicalQuery,
-) -> None:
-    FilterInSelectOptimizer().process_mql_query(query)
-
-
 CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
 ]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
     quantiles_to_quantile,
-    optimize_filter_in_select,
 ]
 
 
@@ -1119,6 +1113,20 @@ def parse_mql_query(
             MQL_POST_PROCESSORS,
             settings,
         )
+
+    # Filter in select optimizer
+    feat_flag = get_int_config(
+        "enable_filter_in_select_optimizer",
+        default=snuba_settings.ENABLE_FILTER_IN_SELECT_OPTIMIZER,
+    )
+    if feat_flag:
+        with sentry_sdk.start_span(
+            op="processor", description="filter_in_select_optimize"
+        ):
+            if settings is None:
+                FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
+            else:
+                FilterInSelectOptimizer().process_query(query, settings)
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):

@@ -8,13 +8,14 @@ from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.storage_plan_builder import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.plans_selector import select_best_plans
 from snuba.query.data_source.simple import Table
 
 
 def build_plan(table_name: str, storage_set: StorageSetKey) -> ClickhouseQueryPlan:
     return ClickhouseQueryPlan(
-        Query(Table(table_name, ColumnSet([]))),
+        Query(Table(table_name, ColumnSet([]), storage_key=StorageKey("dontmatter"))),
         SimpleQueryPlanExecutionStrategy(
             get_cluster(storage_set),
             db_query_processors=[],

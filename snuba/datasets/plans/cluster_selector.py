@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from snuba import state
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -84,7 +85,7 @@ class ColumnBasedStorageSliceSelector(StorageClusterSelector):
         self.partition_key_column_name = partition_key_column_name
 
     def select_cluster(
-        self, query: LogicalQuery, query_settings: QuerySettings
+        self, query: LogicalQuery | ClickhouseQuery, query_settings: QuerySettings
     ) -> ClickhouseCluster:
         """
         Selects the cluster to use for a query if the storage set is sliced.
