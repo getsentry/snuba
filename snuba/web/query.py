@@ -91,7 +91,7 @@ def _run_query_pipeline(
                     )
                 )
                 compare_clickhouse_query = StorageProcessingStage().execute(
-                    clickhouse_query
+                    compare_clickhouse_query
                 )
                 new_sql = str(compare_clickhouse_query.data)
                 old_sql = str(clickhouse_query.data)
