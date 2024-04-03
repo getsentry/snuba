@@ -117,15 +117,15 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 "referrer_all_projects_scan_limit_override", {"referrer": referrer}
             )
             if override == DEFAULT_OVERRIDE_LIMIT:
-                return self.get_config_value("project_referrer_scan_limit")
-            return override
+                return int(self.get_config_value("project_referrer_scan_limit"))
+            return int(override)
         elif customer_tenant_key == "organization_id":
             override = self.get_config_value(
                 "referrer_all_organizations_scan_limit_override", {"referrer": referrer}
             )
             if override == DEFAULT_OVERRIDE_LIMIT:
-                return self.get_config_value("organization_referrer_scan_limit")
-            return override
+                return int(self.get_config_value("organization_referrer_scan_limit"))
+            return int(override)
         raise InvalidTenantsForAllocationPolicy.from_args(
             {customer_tenant_key: customer_tenant_value, "referrer": referrer},
             self.__class__.__name__,
