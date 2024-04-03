@@ -717,6 +717,16 @@ mod tests {
     }
 
     #[test]
+    fn test_shouldnt_killswitch_again() {
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+        let fake_config = Ok(Some("[]".to_string()));
+
+        assert_eq!(should_use_killswitch(fake_config, &use_case), false);
+    }
+
+    #[test]
     fn test_validate_timeseries_id() {
         let org_id = 1;
         let project_id = 2;
