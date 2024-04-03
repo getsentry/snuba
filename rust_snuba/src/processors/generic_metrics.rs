@@ -217,7 +217,7 @@ impl Parse for CountersRawRow {
     ) -> anyhow::Result<Option<CountersRawRow>> {
         let count_value = match from.value {
             MetricValue::Counter(value) => value,
-            _ => panic!("Shouldn't come here"),
+            _ => Ok(InsertBatch::skip()),
         };
 
         let timeseries_id =
@@ -314,11 +314,10 @@ pub fn process_counter_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
     if msg.r#type != MetricType::Counter {
-        println!("Skipping non counter message");
-        return Ok(InsertBatch::skip());
+        Ok(InsertBatch::skip())
+    } else {
+        process_message::<CountersRawRow>(payload, config)
     }
-
-    process_message::<CountersRawRow>(payload, config)
 }
 
 /// The raw row that is written to clickhouse for sets.
@@ -336,7 +335,7 @@ impl Parse for SetsRawRow {
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
             MetricValue::Set(values) => values.into_vec(),
-            _ => panic!("Should not happen"),
+            _ => Ok(InsertBatch::skip()),
         };
 
         timer!(
@@ -392,10 +391,10 @@ pub fn process_set_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
     if msg.r#type != MetricType::Set {
-        return Ok(InsertBatch::skip());
+        Ok(InsertBatch::skip())
+    } else {
+        process_message::<SetsRawRow>(payload, config)
     }
-
-    process_message::<SetsRawRow>(payload, config)
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -414,7 +413,7 @@ impl Parse for DistributionsRawRow {
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let distribution_values = match from.value {
             MetricValue::Distribution(value) => value.into_vec(),
-            _ => panic!("Should not happen"),
+            _ => Ok(InsertBatch::skip()),
         };
 
         timer!(
@@ -475,10 +474,10 @@ pub fn process_distribution_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
     if msg.r#type != MetricType::Distribution {
-        return Ok(InsertBatch::skip());
+        Ok(InsertBatch::skip());
+    } else {
+        process_message::<DistributionsRawRow>(payload, config)
     }
-
-    process_message::<DistributionsRawRow>(payload, config)
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -521,7 +520,7 @@ impl Parse for GaugesRawRow {
                 gauges_values_min.push(min);
                 gauges_values_sum.push(sum);
             }
-            _ => panic!("Should not happen"),
+            _ => Ok(InsertBatch::skip()),
         }
 
         let timeseries_id =
@@ -577,10 +576,10 @@ pub fn process_gauge_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
     if msg.r#type != MetricType::Gauge {
-        return Ok(InsertBatch::skip());
+        Ok(InsertBatch::skip())
+    } else {
+        process_message::<GaugesRawRow>(payload, config)
     }
-
-    process_message::<GaugesRawRow>(payload, config)
 }
 
 #[cfg(test)]
