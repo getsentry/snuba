@@ -265,7 +265,7 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let killswitch_config = get_str_config("key");
+    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
     let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
 
     if should_use_killswitch(killswitch_config, &use_case) {
