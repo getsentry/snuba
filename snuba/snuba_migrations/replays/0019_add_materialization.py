@@ -105,6 +105,12 @@ GROUP BY project_id, toStartOfHour(timestamp), replay_id
 
 
 def backward_iter() -> Iterator[operations.SqlOperation]:
+    yield operations.DropTable(
+        storage_set=StorageSetKey.REPLAYS,
+        table_name="replays_aggregation_mv",
+        target=operations.OperationTarget.LOCAL,
+    )
+
     yield operations.DropIndex(
         StorageSetKey.REPLAYS,
         "replays_aggregated_local",
