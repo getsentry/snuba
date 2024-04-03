@@ -111,13 +111,6 @@ def backward_iter() -> Iterator[operations.SqlOperation]:
         target=operations.OperationTarget.LOCAL,
     )
 
-    yield operations.DropIndex(
-        StorageSetKey.REPLAYS,
-        "replays_aggregated_local",
-        "bf_replay_id",
-        target=operations.OperationTarget.LOCAL,
-    )
-
     yield operations.DropTable(
         storage_set=StorageSetKey.REPLAYS,
         table_name="replays_aggregated_local",
