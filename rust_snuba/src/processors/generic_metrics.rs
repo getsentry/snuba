@@ -217,7 +217,7 @@ impl Parse for CountersRawRow {
     ) -> anyhow::Result<Option<CountersRawRow>> {
         let count_value = match from.value {
             MetricValue::Counter(value) => value,
-            _ => Ok(InsertBatch::skip()),
+            _ => return Ok(Option::None),
         };
 
         let timeseries_id =
@@ -335,7 +335,7 @@ impl Parse for SetsRawRow {
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
             MetricValue::Set(values) => values.into_vec(),
-            _ => Ok(InsertBatch::skip()),
+            _ => return Ok(Option::None),
         };
 
         timer!(
@@ -413,7 +413,7 @@ impl Parse for DistributionsRawRow {
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let distribution_values = match from.value {
             MetricValue::Distribution(value) => value.into_vec(),
-            _ => Ok(InsertBatch::skip()),
+            _ => return Ok(Option::None),
         };
 
         timer!(
@@ -474,7 +474,7 @@ pub fn process_distribution_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
     if msg.r#type != MetricType::Distribution {
-        Ok(InsertBatch::skip());
+        Ok(InsertBatch::skip())
     } else {
         process_message::<DistributionsRawRow>(payload, config)
     }
@@ -520,7 +520,7 @@ impl Parse for GaugesRawRow {
                 gauges_values_min.push(min);
                 gauges_values_sum.push(sum);
             }
-            _ => Ok(InsertBatch::skip()),
+            _ => return Ok(Option::None),
         }
 
         let timeseries_id =
