@@ -693,7 +693,7 @@ mod tests {
             use_case_id: "transactions".to_string(),
         };
 
-        assert_eq!(should_use_killswitch(fake_config, &use_case), false);
+        assert!(!should_use_killswitch(fake_config, &use_case));
     }
 
     #[test]
@@ -703,7 +703,7 @@ mod tests {
         };
         let fake_config = Ok(Some("[transactions]".to_string()));
 
-        assert_eq!(should_use_killswitch(fake_config, &use_case), true);
+        assert!(should_use_killswitch(fake_config, &use_case));
     }
 
     #[test]
@@ -713,7 +713,7 @@ mod tests {
         };
         let fake_config = Ok(Some("[transactions, custom]".to_string()));
 
-        assert_eq!(should_use_killswitch(fake_config, &use_case), true);
+        assert!(should_use_killswitch(fake_config, &use_case));
     }
 
     #[test]
@@ -723,7 +723,7 @@ mod tests {
         };
         let fake_config = Ok(Some("[]".to_string()));
 
-        assert_eq!(should_use_killswitch(fake_config, &use_case), false);
+        assert!(!should_use_killswitch(fake_config, &use_case));
     }
 
     #[test]
