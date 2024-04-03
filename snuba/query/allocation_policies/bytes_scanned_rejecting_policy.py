@@ -40,8 +40,12 @@ DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
-    """Look at the amount of bytes a customer (either a project or an organization) has scanned for a specific referrer,
-    reject queries if over the limit
+    """For every query that comes in, keep track of the amount of bytes scanned for every
+        (project_id|organization_id, referrer)
+    combination in the last 10 minutes (sliding window). If a specific combination scans too
+    many bytes, reject that query
+
+    cross-project queries use the organization_id, single project queries use the project_id
     """
 
     WINDOW_SECONDS = 10 * 60
