@@ -88,11 +88,10 @@ class PluggableEntity(Entity):
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
         return self.join_relationships
 
-    def get_new_query_plan_builder(self) -> EntityProcessingExecutor:
+    def get_processing_executor(self) -> EntityProcessingExecutor:
         """
-        Temporary: this method is used by the new pipeline. It creates a EntityProcessingExecutor object
-        which contains new methods that decouple entity and storage processing. Once the new pipeline is complete,
-        we can remove this method.
+        This method is used by the new pipeline. It creates a EntityProcessingExecutor object
+        which contains new methods that are responsible for apply everything related to entity processing.
         """
         query_plan_builder = EntityProcessingExecutor(
             storages=self.storages,

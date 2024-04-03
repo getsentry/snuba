@@ -61,7 +61,7 @@ class EntityProcessingStage(
         assert isinstance(pipe_input.data.query, LogicalQuery)
         entity = get_entity(pipe_input.data.query.get_from_clause().key)
         assert isinstance(entity, PluggableEntity)
-        entity_processing_executor = entity.get_new_query_plan_builder()
+        entity_processing_executor = entity.get_processing_executor()
         clickhouse_query = entity_processing_executor.execute(
             pipe_input.data.query, pipe_input.query_settings
         )
