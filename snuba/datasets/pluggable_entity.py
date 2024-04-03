@@ -15,10 +15,7 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.plans.storage_plan_builder_new import (
-    ClickhouseQueryPlanBuilderNew,
-    StorageQueryPlanBuilderNew,
-)
+from snuba.datasets.plans.storage_plan_builder_new import EntityProcessingExecutor
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
@@ -91,13 +88,13 @@ class PluggableEntity(Entity):
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
         return self.join_relationships
 
-    def get_new_query_plan_builder(self) -> ClickhouseQueryPlanBuilderNew:
+    def get_new_query_plan_builder(self) -> EntityProcessingExecutor:
         """
-        Temporary: this method is used by the new pipeline. It creates a StorageQueryPlanBuilderNew object
+        Temporary: this method is used by the new pipeline. It creates a EntityProcessingExecutor object
         which contains new methods that decouple entity and storage processing. Once the new pipeline is complete,
         we can remove this method.
         """
-        query_plan_builder: ClickhouseQueryPlanBuilderNew = StorageQueryPlanBuilderNew(
+        query_plan_builder = EntityProcessingExecutor(
             storages=self.storages,
             selector=self.storage_selector,
             partition_key_column_name=self.partition_key_column_name,

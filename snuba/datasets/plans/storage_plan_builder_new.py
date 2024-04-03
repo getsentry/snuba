@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from typing import Generic, Optional, Sequence, TypeVar
 
@@ -13,7 +13,6 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelectorError
 from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
-from snuba.datasets.plans.query_plan import QueryPlanExecutionStrategy, QueryRunner
 from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -42,12 +41,6 @@ from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
 from snuba.utils.metrics.util import with_span
 
-# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
-# dependency is a refactoring of the methods that return RawQueryResult to make them
-# depend on Result + some debug data structure instead. Also It requires removing
-# extra data from the result of the query.
-from snuba.web import QueryResult
-
 TQuery = TypeVar("TQuery", bound=AbstractQuery)
 
 
@@ -57,26 +50,17 @@ class QueryPlanNew(ABC, Generic[TQuery]):
     Provides the directions to execute a Clickhouse Query against one
     storage or multiple joined ones.
 
-    This is produced by a QueryPlanner class (provided either by the
-    dataset or by an entity) after the dataset query processing has
-    been performed and the storage/s has/have been selected.
+    This is produced in the storage processing stage of the query pipeline.
 
     It embeds the Clickhouse Query (the query to run on the storage
     after translation). It also provides a plan execution strategy
     that takes care of coordinating the execution of the query against
-    the database. The execution strategy can also decide to split the
-    query into multiple chunks.
+    the database.
 
     When running a query we need a cluster, the cluster is picked according
     to the storages sets containing the storages used in the query.
     So the plan keeps track of the storage set as well.
     There must be only one storage set per query.
-
-    TODO: Bring the methods that apply the processors in the plan itself.
-    Now that we have two Plan implementations with a different
-    structure, all code depending on this would have to be written
-    differently depending on the implementation.
-    Having the methods inside the plan would make this simpler.
     """
 
     query: TQuery
@@ -92,57 +76,14 @@ class ClickhouseQueryPlanNew(QueryPlanNew[Query]):
     to apply to the query after the the storage has been selected.
     These are divided in two sequences: plan processors and DB
     processors.
-    Plan processors have to be executed only once per plan contrarily
-    to the DB Query Processors, still provided by the storage, which
-    are executed by the execution strategy at every DB Query.
+    Plan processors and DB Query Processors are both executed only
+    once per plan.
     """
 
     # Per https://github.com/python/mypy/issues/10039, this has to be redeclared
     # to avoid a mypy error.
     plan_query_processors: Sequence[ClickhouseQueryProcessor]
     db_query_processors: Sequence[ClickhouseQueryProcessor]
-
-
-class ClickhouseQueryPlanBuilderNew(ABC):
-    """
-    Embeds the dataset specific logic that selects which storage to use
-    to execute the query and produces the storage query.
-    This is provided by a dataset and, when executed, it returns a
-    sequence of valid ClickhouseQueryPlans that embeds what is needed to
-    run the storage query.
-    """
-
-    @abstractmethod
-    def translate_query_and_apply_mappers(
-        self, query: LogicalQuery, query_settings: QuerySettings
-    ) -> Query:
-        """
-        Translates the LogicalQuery into a Clickhouse Query and applies
-        entity translation mappers if any.
-        """
-        raise NotImplementedError
-
-
-class SimpleQueryPlanExecutionStrategyNew(QueryPlanExecutionStrategy[Query]):
-    def __init__(
-        self,
-        cluster: ClickhouseCluster,
-    ) -> None:
-        self.__cluster = cluster
-
-    @with_span()
-    def execute(
-        self,
-        query: Query,
-        query_settings: QuerySettings,
-        runner: QueryRunner,
-    ) -> QueryResult:
-        return runner(
-            clickhouse_query=query,
-            query_settings=query_settings,
-            reader=self.__cluster.get_reader(),
-            cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
-        )
 
 
 def get_query_data_source(
@@ -164,10 +105,14 @@ def get_query_data_source(
     )
 
 
-class StorageQueryPlanBuilderNew(ClickhouseQueryPlanBuilderNew):
+class EntityProcessingExecutor:
     """
-    Builds the Clickhouse Query Execution Plan for a dataset which supports single storages,
-    multiple storages, unsliced storages, and sliced storages.
+    An executor for applying everything related to entity processing to a query.
+    This executor applies the following processing steps:
+        1. Applies entity processors defined on the entity
+        2. Selects a storage based on the storage selector
+        3. Applies translation mappers
+        4. Translates the logical query to physical query
     """
 
     def __init__(
@@ -257,6 +202,12 @@ class StorageQueryPlanBuilderNew(ClickhouseQueryPlanBuilderNew):
             )
 
         return clickhouse_query
+
+    def execute(self, query: LogicalQuery, settings: QuerySettings) -> Query:
+        from snuba.pipeline.processors import execute_entity_processors
+
+        execute_entity_processors(query, settings)
+        return self.translate_query_and_apply_mappers(query, settings)
 
 
 def check_storage_readiness(storage: ReadableStorage) -> None:

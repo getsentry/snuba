@@ -4,13 +4,11 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.datasets.plans.storage_plan_builder_new import (
-    StorageQueryPlanBuilderNew,
     apply_storage_processors,
     build_best_plan,
 )
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.pipeline.composite import CompositeExecutionPipeline
-from snuba.pipeline.processors import execute_entity_processors
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -63,10 +61,8 @@ class EntityProcessingStage(
         assert isinstance(pipe_input.data.query, LogicalQuery)
         entity = get_entity(pipe_input.data.query.get_from_clause().key)
         assert isinstance(entity, PluggableEntity)
-        execute_entity_processors(pipe_input.data.query, pipe_input.query_settings)
-        query_plan_builder = entity.get_new_query_plan_builder()
-        assert isinstance(query_plan_builder, StorageQueryPlanBuilderNew)
-        clickhouse_query = query_plan_builder.translate_query_and_apply_mappers(
+        entity_processing_executor = entity.get_new_query_plan_builder()
+        clickhouse_query = entity_processing_executor.execute(
             pipe_input.data.query, pipe_input.query_settings
         )
         return clickhouse_query
