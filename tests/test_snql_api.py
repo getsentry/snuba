@@ -395,16 +395,12 @@ class TestSnQLApi(BaseApiTest):
             assert "cluster_name" in metadata.query_list[0].stats
 
     @patch("snuba.web.query._run_query_pipeline")
-    @patch("snuba.web.query._run_new_query_pipeline")
-    def test_error_handler(
-        self, pipeline_mock: MagicMock, new_pipeline_mock: MagicMock
-    ) -> None:
+    def test_error_handler(self, pipeline_mock: MagicMock) -> None:
         from redis.exceptions import ClusterDownError
 
         hsh = "0" * 32
         group_id = int(hsh[:16], 16)
         pipeline_mock.side_effect = ClusterDownError("stuff")
-        new_pipeline_mock.side_effect = ClusterDownError("stuff")
         response = self.post(
             "/events/snql",
             data=json.dumps(
