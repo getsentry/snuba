@@ -1,3 +1,9 @@
+pytest tests/query/joins/test_metrics_subqueries.py
+
+This tests the new metrics_subquery_generator.py file. This file needs to be cleaned up to do the generation I want.
+
+------------------------
+
 pytest tests/query/parser/test_formula_mql_query.py -k "test_simple_formula"
 
 Trying to get aliasing working as expected: in conditions the table alias is not being added to the alias, so you get weird columns: Column(alias='_snuba_timestamp', table_name='d3', column_name='timestamp') - Done
