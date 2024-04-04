@@ -23,6 +23,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.equivalence_adder import add_equivalent_conditions
+from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
@@ -68,7 +69,24 @@ class CompositeQueryPlanner(QueryPlanner[CompositeQueryPlan]):
 
     def build_and_rank_plans(self) -> Sequence[CompositeQueryPlan]:
         add_equivalent_conditions(self.__query)
-        generate_subqueries(self.__query)
+
+        # Adding this hack here for now, but this could probably be handled better with the
+        # new execution pipeline stages
+        from_clause = self.__query.get_from_clause()
+        is_metrics_query = True
+        if isinstance(from_clause, JoinClause):
+            nodes = from_clause.get_alias_node_map()
+            for node in nodes.values():
+                if isinstance(node.data_source, Entity):
+                    if not node.data_source.key.value.startswith("generic_metrics"):
+                        is_metrics_query = False
+        else:
+            is_metrics_query = False
+
+        if is_metrics_query:
+            generate_metrics_subqueries(self.__query)
+        else:
+            generate_subqueries(self.__query)
         return [_plan_composite_query(self.__query, self.__settings)]
 
 
@@ -282,15 +300,19 @@ class CompositeDataSourcePlan(NamedTuple):
         Mapping[str, Sequence[ClickhouseQueryProcessor]],
     ]:
         return (
-            self.root_processors.db_processors
-            if self.root_processors is not None
-            else [],
-            {
-                alias: subquery.db_processors
-                for alias, subquery in self.aliased_processors.items()
-            }
-            if self.aliased_processors is not None
-            else {},
+            (
+                self.root_processors.db_processors
+                if self.root_processors is not None
+                else []
+            ),
+            (
+                {
+                    alias: subquery.db_processors
+                    for alias, subquery in self.aliased_processors.items()
+                }
+                if self.aliased_processors is not None
+                else {}
+            ),
         )
 
 

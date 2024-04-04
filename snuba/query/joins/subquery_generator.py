@@ -40,6 +40,7 @@ class SubqueryDraft:
         self.__granularity: int | None = None
 
     def add_select_expression(self, expression: SelectedExpression) -> None:
+        print("ADD", expression)
         self.__selected_expressions.add(expression)
 
     def add_condition(self, condition: Expression) -> None:
@@ -57,11 +58,14 @@ class SubqueryDraft:
                     key=lambda selected: selected.name or "",
                 )
             ),
-            condition=combine_and_conditions(self.__conditions)
-            if self.__conditions
-            else None,
+            condition=(
+                combine_and_conditions(self.__conditions) if self.__conditions else None
+            ),
             granularity=self.__granularity,
         )
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
 
 
 def aliasify_column(col_name: str) -> str:
@@ -166,7 +170,10 @@ def _process_root(
     Takes a root expression in the main query, runs the branch cutter
     and pushes down the subexpressions.
     """
+    print("EXP", expression)
     subexpressions = expression.accept(BranchCutter(alias_generator))
+    print("SUB", subexpressions)
+    breakpoint()
     return _push_down_branches(subexpressions, subqueries, alias_generator)
 
 
@@ -181,6 +188,7 @@ def _push_down_branches(
     """
     cut_subexpression = subexpressions.cut_branch(alias_generator)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
+        print("BRANCH", entity_alias, branches)
         for branch in branches:
             subqueries[entity_alias].add_select_expression(
                 SelectedExpression(name=branch.alias, expression=branch)
@@ -238,7 +246,8 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
 
     # Now this has to be a join, so we can work with it.
     subqueries = from_clause.accept(SubqueriesInitializer())
-
+    print("SUBQUERIES", subqueries)
+    print("PRE", query.get_selected_columns())
     alias_generator = _alias_generator()
     query.set_ast_selected_columns(
         [
@@ -249,6 +258,10 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
             for s in query.get_selected_columns()
         ]
     )
+    # This is working correctly for everything except the aggregate value function
+    print("PROCESSED", query.get_selected_columns())
+
+    print("TIME?", subqueries["d0"].build_query().get_selected_columns())
 
     array_join = query.get_arrayjoin()
     if array_join is not None:
