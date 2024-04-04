@@ -21,7 +21,7 @@ local pipedream_config = {
   },
 
   // Set to true to auto-deploy changes (defaults to true)
-  auto_deploy: false,
+  auto_deploy: true,
 };
 
 pipedream.render(pipedream_config, snuba)
