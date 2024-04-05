@@ -75,6 +75,7 @@ def _run_query_pipeline(
     else:
         if try_new_query_pipeline:
             request_copy = copy.deepcopy(request)
+            compare_clickhouse_query = None
             try:
                 compare_clickhouse_query = EntityProcessingStage().execute(
                     QueryPipelineResult(
@@ -98,7 +99,10 @@ def _run_query_pipeline(
             )
         )
         if try_new_query_pipeline:
-            new_sql = str(compare_clickhouse_query.data)
+            if compare_clickhouse_query:
+                new_sql = str(compare_clickhouse_query.data)
+            else:
+                new_sql = ""
             old_sql = str(clickhouse_query.data)
             if new_sql != old_sql:
                 logger.warning(
