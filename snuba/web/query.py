@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import random
 from typing import Optional
@@ -72,6 +73,7 @@ def _run_query_pipeline(
         )
         clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
     else:
+        request_copy = copy.deepcopy(request)
         clickhouse_query = EntityAndStoragePipelineStage().execute(
             QueryPipelineResult(
                 data=request,
@@ -84,7 +86,7 @@ def _run_query_pipeline(
             try:
                 compare_clickhouse_query = EntityProcessingStage().execute(
                     QueryPipelineResult(
-                        data=request,
+                        data=request_copy,
                         query_settings=request.query_settings,
                         timer=timer,
                         error=None,
