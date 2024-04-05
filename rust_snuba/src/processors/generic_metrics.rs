@@ -471,13 +471,12 @@ pub fn process_distribution_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: PartialMetricsMessage = serde_json::from_slice(payload_bytes)?;
-    if msg.r#type != MetricType::Distribution {
-        Ok(InsertBatch::skip())
-    } else {
-        process_message::<DistributionsRawRow>(payload, config)
-    }
+    // We do not perform the optimization of parital deserialization for distribution
+    // type messages because these messages are the highest in terms of volume and the
+    // penalty of double deserialization is worse than deserializing all the messages.
+    // This makes sense because most of the other message types are typically much smaller
+    // in size compared to distribution message.
+    process_message::<DistributionsRawRow>(payload, config)
 }
 
 #[derive(Debug, Serialize, Default)]
