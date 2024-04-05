@@ -44,12 +44,11 @@ def run_metrics_query(query: str, user: str) -> ClickhouseResult:
         "generic_metric_distributions_raw_dist",
         "generic_metric_gauges_raw_dist",
     }
-    meta_tables = {
-        "generic_metric_counters_meta_aggregated_dist",
-        "generic_metric_sets_meta_aggregated_dist",
-        "generic_metric_distributions_meta_aggregated_dist",
-        "generic_metric_gauges_meta_aggregated_dist",
-    }
+    meta_tables = set()
+    for mtype in ["counters", "sets", "distributions", "gauges"]:
+        meta_tables.add(f"generic_metric_{mtype}_meta_aggregated_dist")
+        meta_tables.add(f"generic_metric_{mtype}_meta_tag_value_aggregated_dist")
+
     validate_ro_query(
         sql_query=query,
         allowed_tables=(
