@@ -73,16 +73,8 @@ def _run_query_pipeline(
         )
         clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
     else:
-        request_copy = copy.deepcopy(request)
-        clickhouse_query = EntityAndStoragePipelineStage().execute(
-            QueryPipelineResult(
-                data=request,
-                query_settings=request.query_settings,
-                timer=timer,
-                error=None,
-            )
-        )
         if try_new_query_pipeline:
+            request_copy = copy.deepcopy(request)
             try:
                 compare_clickhouse_query = EntityProcessingStage().execute(
                     QueryPipelineResult(
@@ -95,16 +87,25 @@ def _run_query_pipeline(
                 compare_clickhouse_query = StorageProcessingStage().execute(
                     compare_clickhouse_query
                 )
-                new_sql = str(compare_clickhouse_query.data)
-                old_sql = str(clickhouse_query.data)
-                if new_sql != old_sql:
-                    logger.warning(
-                        "New and old query pipeline sql doesn't match: Old: %s, New: %s",
-                        old_sql,
-                        new_sql,
-                    )
             except Exception as e:
                 logger.exception(e)
+        clickhouse_query = EntityAndStoragePipelineStage().execute(
+            QueryPipelineResult(
+                data=request,
+                query_settings=request.query_settings,
+                timer=timer,
+                error=None,
+            )
+        )
+        if try_new_query_pipeline:
+            new_sql = str(compare_clickhouse_query.data)
+            old_sql = str(clickhouse_query.data)
+            if new_sql != old_sql:
+                logger.warning(
+                    "New and old query pipeline sql doesn't match: Old: %s, New: %s",
+                    old_sql,
+                    new_sql,
+                )
     res = ExecutionStage(
         request.attribution_info,
         query_metadata=query_metadata,
