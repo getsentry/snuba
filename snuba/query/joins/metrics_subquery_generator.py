@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Generator, Mapping
+from typing import Generator, Mapping, Optional, Sequence
 
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -18,12 +18,13 @@ from snuba.query.data_source.join import (
     JoinVisitor,
 )
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column, Expression
+from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.joins.classifier import (
     AliasGenerator,
     BranchCutter,
     SubExpression,
     SubqueryExpression,
+    AggregateBranchCutter,
 )
 from snuba.query.joins.subquery_generator import (
     SubqueriesInitializer,
@@ -33,7 +34,13 @@ from snuba.query.joins.subquery_generator import (
 )
 from snuba.query.logical import Query as LogicalQuery
 
-# class AggregateBranchCutter(BranchCutter[Expression]):
+
+class MetricsSubqueriesInitializer(SubqueriesInitializer):
+    def visit_join_clause(
+        self, node: JoinClause[Entity]
+    ) -> Mapping[str, SubqueryDraft]:
+        combined = {**node.left_node.accept(self), **node.right_node.accept(self)}
+        return combined
 
 
 def _process_aggregate_value(
@@ -45,7 +52,7 @@ def _process_aggregate_value(
     Takes an aggregate value function and pushes down the inner aggregate functions
     to the subqueries.
     """
-    subexpressions = expression.accept(BranchCutter(alias_generator))
+    subexpressions = expression.accept(AggregateBranchCutter(alias_generator))
     return _push_down_branches(subexpressions, subqueries, alias_generator)
 
 
@@ -59,6 +66,7 @@ def _process_root(
     and pushes down the subexpressions.
     """
     subexpressions = expression.accept(BranchCutter(alias_generator))
+    print("ROOT", subexpressions)
     return _push_down_branches(subexpressions, subqueries, alias_generator)
 
 
@@ -72,11 +80,46 @@ def _push_down_branches(
     returns the main expression for the main query.
     """
     cut_subexpression = subexpressions.cut_branch(alias_generator)
+    print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
+            # print("ADDING", entity_alias, branch)
             subqueries[entity_alias].add_select_expression(
                 SelectedExpression(name=branch.alias, expression=branch)
             )
+
+    return cut_subexpression.main_expression
+
+
+def _process_root_groupby(
+    expression: Expression,
+    subqueries: Mapping[str, SubqueryDraft],
+    alias_generator: AliasGenerator,
+) -> Expression:
+    """
+    Takes a root expression in the main query, runs the branch cutter
+    and pushes down the subexpressions.
+    """
+    subexpressions = expression.accept(BranchCutter(alias_generator))
+    print("ROOT", subexpressions)
+    return _push_down_groupby_branches(subexpressions, subqueries, alias_generator)
+
+
+def _push_down_groupby_branches(
+    subexpressions: SubExpression,
+    subqueries: Mapping[str, SubqueryDraft],
+    alias_generator: AliasGenerator,
+) -> Expression:
+    """
+    Pushes the branches of a SubExpression into subqueries and
+    returns the main expression for the main query.
+    """
+    cut_subexpression = subexpressions.cut_branch(alias_generator)
+    print("CUT", cut_subexpression)
+    for entity_alias, branches in cut_subexpression.cut_branches.items():
+        for branch in branches:
+            # print("ADDING", entity_alias, branch)
+            subqueries[entity_alias].add_groupby_expression(branch)
 
     return cut_subexpression.main_expression
 
@@ -165,7 +208,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
         return
 
     # Now this has to be a join, so we can work with it.
-    subqueries = from_clause.accept(SubqueriesInitializer())
+    subqueries = from_clause.accept(MetricsSubqueriesInitializer())
     alias_generator = _alias_generator()
 
     selected_columns = []
@@ -188,6 +231,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             )
 
     query.set_ast_selected_columns(selected_columns)
+
     # query.set_ast_selected_columns(
     #     [
     #         SelectedExpression(
@@ -238,7 +282,10 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
 
     # TODO: push down the group by when it is the same as the join key.
     query.set_ast_groupby(
-        [_process_root(e, subqueries, alias_generator) for e in query.get_groupby()]
+        [
+            _process_root_groupby(e, subqueries, alias_generator)
+            for e in query.get_groupby()
+        ]
     )
 
     # having = query.get_having()
@@ -263,6 +310,9 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             for orderby in query.get_orderby()
         ]
     )
+
+    # print("SUBS", subqueries["d0"])
+    # print("SUB", subqueries["d0"])
 
     # limitby = query.get_limitby()
     # if limitby is not None:

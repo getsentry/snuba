@@ -1,5 +1,13 @@
 pytest tests/query/joins/test_metrics_subqueries.py
 
+More progress, groupby is not working. Need to add groupby to SubqueryDraft, and eventually figure out how to get that working
+Thought: Do I need groupby in the top level query? I don't think I actually do.
+
+------------
+
+
+pytest tests/query/joins/test_metrics_subqueries.py
+
 This tests the new metrics_subquery_generator.py file. This file needs to be cleaned up to do the generation I want.
 
 ------------------------

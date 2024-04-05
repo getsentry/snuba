@@ -37,14 +37,22 @@ class SubqueryDraft:
         self.__data_source = data_source
         self.__selected_expressions: set[SelectedExpression] = set()
         self.__conditions: list[Expression] = []
+        self.__groupby: list[Expression] = []
         self.__granularity: int | None = None
 
     def add_select_expression(self, expression: SelectedExpression) -> None:
-        print("ADD", expression)
+        print("ADDING", expression)
         self.__selected_expressions.add(expression)
+
+    # temp
+    def get_selected_expressions(self) -> set[SelectedExpression]:
+        return self.__selected_expressions
 
     def add_condition(self, condition: Expression) -> None:
         self.__conditions.append(condition)
+
+    def add_groupby_expression(self, expression: Expression) -> None:
+        self.__groupby.append(expression)
 
     def set_granularity(self, granularity: int | None) -> None:
         self.__granularity = granularity
