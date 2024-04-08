@@ -5,6 +5,7 @@ import pytest
 from snuba.clickhouse.columns import UUID, ColumnSet, String, UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_inspector import TablesCollector
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -36,7 +37,13 @@ GROUPS_SCHEMA = ColumnSet(
 )
 
 SIMPLE_QUERY = ClickhouseQuery(
-    Table("errors_local", ERRORS_SCHEMA, final=True, sampling_rate=0.1),
+    Table(
+        "errors_local",
+        ERRORS_SCHEMA,
+        final=True,
+        sampling_rate=0.1,
+        storage_key=StorageKey("events"),
+    ),
     selected_columns=[
         SelectedExpression(
             "alias",
@@ -90,7 +97,10 @@ TEST_CASES = [
             from_clause=JoinClause(
                 left_node=IndividualNode(alias="err", data_source=SIMPLE_QUERY),
                 right_node=IndividualNode(
-                    alias="groups", data_source=Table("groups_local", GROUPS_SCHEMA)
+                    alias="groups",
+                    data_source=Table(
+                        "groups_local", GROUPS_SCHEMA, storage_key=StorageKey("groups")
+                    ),
                 ),
                 keys=[
                     JoinCondition(

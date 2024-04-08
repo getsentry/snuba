@@ -62,11 +62,11 @@ from snuba.datasets.factory import (
     get_dataset,
     get_enabled_dataset_names,
 )
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
@@ -79,6 +79,8 @@ application = Flask(__name__, static_url_path="/static", static_folder="dist")
 
 runner = Runner()
 audit_log = AuditLog()
+
+ORG_ID = 1
 
 
 @application.errorhandler(UnauthorizedException)
@@ -221,7 +223,7 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     except ValueError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
-
+    readiness_state = get_group_readiness_state(migration_group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
@@ -237,12 +239,16 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         if not dry_run:
             audit_log.record(
                 user or "",
-                AuditLogAction.RAN_MIGRATION_STARTED
-                if action == "run"
-                else AuditLogAction.REVERSED_MIGRATION_STARTED,
+                (
+                    AuditLogAction.RAN_MIGRATION_STARTED
+                    if action == "run"
+                    else AuditLogAction.REVERSED_MIGRATION_STARTED
+                ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
             )
-            check_for_inactive_replicas()
+            check_for_inactive_replicas(
+                get_all_storage_keys(readiness_states=[readiness_state])
+            )
 
         if action == "run":
             runner.run_migration(migration_key, force=force, fake=fake, dry_run=dry_run)
@@ -254,9 +260,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
         if not dry_run:
             audit_log.record(
                 user or "",
-                AuditLogAction.RAN_MIGRATION_COMPLETED
-                if action == "run"
-                else AuditLogAction.REVERSED_MIGRATION_COMPLETED,
+                (
+                    AuditLogAction.RAN_MIGRATION_COMPLETED
+                    if action == "run"
+                    else AuditLogAction.REVERSED_MIGRATION_COMPLETED
+                ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
                 notify=True,
             )
@@ -264,9 +272,11 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     def notify_error() -> None:
         audit_log.record(
             user or "",
-            AuditLogAction.RAN_MIGRATION_FAILED
-            if action == "run"
-            else AuditLogAction.REVERSED_MIGRATION_FAILED,
+            (
+                AuditLogAction.RAN_MIGRATION_FAILED
+                if action == "run"
+                else AuditLogAction.REVERSED_MIGRATION_FAILED
+            ),
             {"migration": str(migration_key), "force": force, "fake": fake},
             notify=True,
         )
@@ -665,7 +675,7 @@ def config(config_key: str) -> Response:
                 400,
                 {"Content-Type": "application/json"},
             )
-        except (state.MismatchedTypeException):
+        except state.MismatchedTypeException:
             return Response(
                 json.dumps({"error": "Mismatched type"}),
                 400,
@@ -995,7 +1005,7 @@ def dlq_replay() -> Response:
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def production_snql_query() -> Response:
     body = json.loads(request.data)
-    body["tenant_ids"] = {"referrer": request.referrer}
+    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
         ret = run_snql_query(body, g.user.email)
         return ret

@@ -501,8 +501,8 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
 
-        # two policies
-        assert response.json is not None and len(response.json) == 2
+        # three policies
+        assert response.json is not None and len(response.json) == 3
         policy_configs = response.json
         bytes_scanned_policy = [
             policy
@@ -542,7 +542,7 @@ def test_set_allocation_policy_config(admin_api: FlaskClient) -> None:
 
         response = admin_api.get("/allocation_policy_configs/errors")
         assert response.status_code == 200
-        assert response.json is not None and len(response.json) == 2
+        assert response.json is not None and len(response.json) == 3
         assert {
             "default": -1,
             "description": "Number of bytes a specific org can scan in a 10 minute "
@@ -592,6 +592,26 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query",
         data=json.dumps({"dataset": "events", "query": snql_query}),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
+    snql_query = """
+    MATCH (transactions)
+    SELECT title
+    WHERE project_id IN array(1, 11276)
+    AND finish_ts >= toDateTime('2023-01-01 00:00:00')
+    AND finish_ts < toDateTime('2023-02-01 00:00:00')
+    """
+    response = admin_api.post(
+        "/production_snql_query",
+        data=json.dumps({"dataset": "transactions", "query": snql_query}),
         headers={"Referer": "https://snuba-admin.getsentry.net/"},
     )
     assert response.status_code == 200

@@ -101,7 +101,6 @@ test_cases: Sequence[Tuple[Mapping[str, Any], Optional[Set[int]]]] = [
                 ["event_id", "=", "something"],
                 [["ifNull", ["partition", 0]], "=", 1],
                 ["project_id", "IN", [100, 200, 300]],
-                [["count", ["offset"]], "=", 10],
                 ["project_id", "=", 100],
             ],
         },
@@ -128,7 +127,6 @@ test_cases: Sequence[Tuple[Mapping[str, Any], Optional[Set[int]]]] = [
                 ["project_id", "IN", [100, 200, 300]],
                 [
                     [["ifNull", ["project_id", 1000]], "=", 100],
-                    [["count", ["offset"]], "=", 10],
                     [["ifNull", ["project_id", 1000]], "=", 200],
                 ],
             ],

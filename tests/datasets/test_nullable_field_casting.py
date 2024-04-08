@@ -69,6 +69,7 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
         clickhouse_query: Union[Query, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         # The only reason this extends StringifyVisitor is because it has all the other
         # visit methods implemented.

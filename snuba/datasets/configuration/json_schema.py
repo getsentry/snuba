@@ -6,6 +6,8 @@ from typing import Any
 import fastjsonschema
 import sentry_sdk
 
+from snuba import settings
+
 # Snubadocs are automatically generated from this file. When adding new schemas or individual keys,
 # please ensure you add a description key in the same level and succinctly describe the property.
 
@@ -84,6 +86,7 @@ STREAM_LOADER_SCHEMA = {
     "additionalProperties": False,
     "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
 }
+
 
 ######
 # Column specific json schemas
@@ -330,11 +333,6 @@ STORAGE_QUERY_PROCESSORS_SCHEMA = registered_class_array_schema(
     "QueryProcessor",
     "Name of ClickhouseQueryProcessor class config key. Responsible for the transformation applied to a query.",
 )
-STORAGE_QUERY_SPLITTERS_SCHEMA = registered_class_array_schema(
-    "splitter",
-    "QuerySplitStrategy",
-    "Name of QuerySplitStrategy class config key. Responsible for splitting a query into two at runtime and combining the results.",
-)
 STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA = registered_class_array_schema(
     "condition",
     "ConditionChecker",
@@ -540,7 +538,6 @@ V1_READABLE_STORAGE_SCHEMA = {
         "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
     },
@@ -567,7 +564,6 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
@@ -605,7 +601,6 @@ V1_CDC_STORAGE_SCHEMA = {
         "postgres_table": TYPE_STRING,
         "row_processor": CDC_STORAGE_ROW_PROCESSOR_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
-        "query_splitters": STORAGE_QUERY_SPLITTERS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
@@ -742,19 +737,23 @@ V1_MIGRATION_GROUP_SCHEMA = {
     "additionalProperties": False,
 }
 
-with sentry_sdk.start_span(op="compile", description="Storage Validators"):
-    STORAGE_VALIDATORS = {
-        "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
-        "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
-        "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
-    }
+if settings.VALIDATE_DATASET_YAMLS_ON_STARTUP:
+    with sentry_sdk.start_span(op="compile", description="Storage Validators"):
+        STORAGE_VALIDATORS = {
+            "readable_storage": fastjsonschema.compile(V1_READABLE_STORAGE_SCHEMA),
+            "writable_storage": fastjsonschema.compile(V1_WRITABLE_STORAGE_SCHEMA),
+            "cdc_storage": fastjsonschema.compile(V1_CDC_STORAGE_SCHEMA),
+        }
 
-with sentry_sdk.start_span(op="compile", description="Entity Validators"):
-    ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
+    with sentry_sdk.start_span(op="compile", description="Entity Validators"):
+        ENTITY_VALIDATORS = {"entity": fastjsonschema.compile(V1_ENTITY_SCHEMA)}
 
-
-with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
-    DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+    with sentry_sdk.start_span(op="compile", description="Dataset Validators"):
+        DATASET_VALIDATORS = {"dataset": fastjsonschema.compile(V1_DATASET_SCHEMA)}
+else:
+    STORAGE_VALIDATORS = {}
+    ENTITY_VALIDATORS = {}
+    DATASET_VALIDATORS = {}
 
 
 ALL_VALIDATORS = {

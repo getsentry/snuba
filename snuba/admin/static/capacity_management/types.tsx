@@ -27,14 +27,14 @@ type AllocationPolicyOptionalConfigDefinition = {
   params: AllocationPolicyConfigParams[];
 };
 
-type RowData = [
-  ReactNode,
-  ReactNode,
-  ReactNode,
-  ReactNode,
-  ReactNode,
-  ReactNode
-];
+type RowData = {
+  name: ReactNode;
+  params: ReactNode;
+  value: ReactNode;
+  description: ReactNode;
+  type: ReactNode;
+  edit: ReactNode;
+};
 
 export {
   AllocationPolicy,

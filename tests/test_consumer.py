@@ -4,7 +4,7 @@ import json
 import pickle
 from datetime import datetime
 from pickle import PickleBuffer
-from typing import MutableSequence, Optional
+from typing import MutableSequence
 from unittest.mock import Mock, call
 
 import pytest
@@ -17,15 +17,15 @@ from snuba.consumers.consumer import (
     BytesInsertBatch,
     InsertBatchWriter,
     LatencyRecorder,
-    MultistorageConsumerProcessingStrategyFactory,
     ProcessedMessageBatchWriter,
     ReplacementBatchWriter,
+    build_batch_writer,
     process_message,
 )
 from snuba.consumers.strategy_factory import KafkaConsumerStrategyFactory
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
-from snuba.datasets.storages.factory import get_cdc_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertBatch, ReplacementBatch
 from snuba.utils.metrics.wrapper import MetricsWrapper
@@ -156,101 +156,54 @@ def get_row_count(storage: Storage) -> int:
 
 
 @pytest.mark.clickhouse_db
-@pytest.mark.parametrize(
-    "processes, input_block_size, output_block_size",
-    [
-        pytest.param(1, int(32 * 1e6), int(64 * 1e6), id="multiprocessing"),
-        pytest.param(None, None, None, id="no multiprocessing"),
-    ],
-)
-def test_multistorage_strategy(
-    processes: Optional[int],
-    input_block_size: Optional[int],
-    output_block_size: Optional[int],
-) -> None:
-    from tests.datasets.cdc.test_groupassignee import TestGroupassignee
-    from tests.datasets.cdc.test_groupedmessage import TestGroupedMessage
-
-    groupassignees_storage = get_cdc_storage(StorageKey.GROUPASSIGNEES)
-    groupedmessages_storage = get_cdc_storage(StorageKey.GROUPEDMESSAGES)
-
-    commit = Mock()
-    partitions = Mock()
-
-    storages = [groupassignees_storage, groupedmessages_storage]
-
-    strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages,
-        10,
-        10,
-        processes,
-        input_block_size,
-        output_block_size,
-        TestingMetricsBackend(),
-        None,
-        None,
-    ).create_with_partitions(commit, partitions)
-
-    payloads = [
-        KafkaPayload(None, b"{}", [("table", b"ignored")]),
-        KafkaPayload(
-            None,
-            json.dumps(TestGroupassignee.INSERT_MSG).encode("utf8"),
-            [("table", groupassignees_storage.get_postgres_table().encode("utf8"))],
-        ),
-        KafkaPayload(
-            None,
-            json.dumps(TestGroupedMessage.INSERT_MSG).encode("utf8"),
-            [("table", groupedmessages_storage.get_postgres_table().encode("utf8"))],
-        ),
-    ]
-
-    now = datetime.now()
-
-    messages = [
-        Message(BrokerValue(payload, Partition(Topic("topic"), 0), offset, now))
-        for offset, payload in enumerate(payloads)
-    ]
-
-    with assert_changes(
-        lambda: get_row_count(groupedmessages_storage), 0, 1
-    ), assert_changes(lambda: get_row_count(groupedmessages_storage), 0, 1):
-
-        for message in messages:
-            strategy.submit(message)
-
-        strategy.close()
-        strategy.join()
-
-
-@pytest.mark.clickhouse_db
 def test_metrics_writing_e2e() -> None:
-    distributions_storage = get_writable_storage(StorageKey.METRICS_DISTRIBUTIONS)
+    distributions_storage = get_storage(StorageKey.METRICS_DISTRIBUTIONS)
     polymorphic_bucket = get_writable_storage(StorageKey.METRICS_RAW)
     dist_message = json.dumps(
         {
             "org_id": 1,
             "project_id": 2,
+            "use_case_id": "sessions",
             "name": "sentry.transactions.transaction.duration",
             "unit": "ms",
             "type": "d",
             "value": [24.0, 80.0, 119.0, 146.0, 182.0],
-            "timestamp": datetime.now().timestamp(),
+            "timestamp": int(datetime.now().timestamp()),
             "tags": {"6": 91, "9": 134, "4": 117, "5": 7},
             "metric_id": 8,
             "retention_days": 90,
             "sentry_received_timestamp": datetime.now().timestamp(),
+            "mapping_meta": {},
         }
     )
 
     commit = Mock()
-    partitions = Mock()
 
-    storages = [polymorphic_bucket]
+    table_writer = polymorphic_bucket.get_table_writer()
+    stream_loader = table_writer.get_stream_loader()
 
-    strategy = MultistorageConsumerProcessingStrategyFactory(
-        storages, 10, 10, None, None, None, TestingMetricsBackend(), None, None
-    ).create_with_partitions(commit, partitions)
+    metrics = TestingMetricsBackend()
+
+    strategy = KafkaConsumerStrategyFactory(
+        None,
+        functools.partial(
+            process_message,
+            stream_loader.get_processor(),
+            "consumer_group",
+            SnubaTopic.METRICS,
+            True,
+        ),
+        build_batch_writer(table_writer, metrics=metrics),
+        max_batch_size=10,
+        max_batch_time=60,
+        max_insert_batch_size=None,
+        max_insert_batch_time=None,
+        processes=None,
+        input_block_size=None,
+        output_block_size=None,
+        health_check_file=None,
+        metrics_tags={},
+    ).create_with_partitions(commit, {})
 
     payloads = [KafkaPayload(None, dist_message.encode("utf-8"), [])]
     now = datetime.now()

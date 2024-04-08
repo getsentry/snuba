@@ -5,6 +5,8 @@ from typing import Optional, Sequence
 import click
 from confluent_kafka import KafkaException
 
+from snuba.clusters.cluster import CLUSTERS
+from snuba.datasets.storages.factory import get_all_storage_keys
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
     check_clickhouse_connections,
@@ -87,6 +89,6 @@ def bootstrap(
         create_topics(client, [t for t in Topic])
 
     if migrate:
-        check_clickhouse_connections()
-        check_for_inactive_replicas()
+        check_clickhouse_connections(CLUSTERS)
+        check_for_inactive_replicas(get_all_storage_keys())
         Runner().run_all(force=True)

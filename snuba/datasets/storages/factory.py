@@ -8,6 +8,7 @@ import sentry_sdk
 from snuba import settings
 from snuba.datasets.cdc.cdcstorage import CdcStorage
 from snuba.datasets.configuration.storage_builder import build_storage_from_config
+from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.storage import ReadableTableStorage, Storage, WritableTableStorage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.storages.validator import StorageValidator
@@ -109,8 +110,17 @@ def get_cdc_storage_keys() -> list[StorageKey]:
     return _storage_factory().get_cdc_storage_keys()
 
 
-def get_all_storage_keys() -> list[StorageKey]:
-    return _storage_factory().get_all_storage_keys()
+def get_all_storage_keys(
+    readiness_states: list[ReadinessState] | None = None,
+) -> list[StorageKey]:
+    all_storage_keys = _storage_factory().get_all_storage_keys()
+    if readiness_states is None:
+        return all_storage_keys
+    return [
+        s
+        for s in all_storage_keys
+        if get_storage(s).get_readiness_state() in readiness_states
+    ]
 
 
 def get_config_built_storages() -> dict[StorageKey, Storage]:

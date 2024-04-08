@@ -1,11 +1,53 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 
+use crate::strategies::clickhouse::batch::HttpBatch;
+
 use chrono::{DateTime, Utc};
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
-pub type CommitLogOffsets = BTreeMap<u16, (u64, DateTime<Utc>)>;
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommitLogEntry {
+    pub offset: u64,
+    pub orig_message_ts: DateTime<Utc>,
+    pub received_p99: Vec<DateTime<Utc>>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct CommitLogOffsets(pub BTreeMap<u16, CommitLogEntry>);
+
+impl CommitLogOffsets {
+    fn merge(&mut self, other: CommitLogOffsets) {
+        for (partition, other_entry) in other.0 {
+            self.0
+                .entry(partition)
+                .and_modify(|entry| {
+                    entry.offset = other_entry.offset;
+                    entry.orig_message_ts = other_entry.orig_message_ts;
+                    entry.received_p99.extend(&other_entry.received_p99);
+                })
+                .or_insert(other_entry);
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct CogsData {
+    pub data: BTreeMap<String, u64>, // app_feature: bytes_len
+}
+
+impl CogsData {
+    fn merge(&mut self, other: CogsData) {
+        for (k, v) in other.data {
+            self.data
+                .entry(k)
+                .and_modify(|curr| *curr += v)
+                .or_insert(v);
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct LatencyRecorder {
@@ -69,36 +111,72 @@ impl LatencyRecorder {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReplacementData {
+    pub key: Vec<u8>, // Project id
+    // Replacement message bytes. Newline-delimited series of json payloads
+    pub value: Vec<u8>,
+}
+
+impl From<ReplacementData> for KafkaPayload {
+    fn from(value: ReplacementData) -> KafkaPayload {
+        KafkaPayload::new(Some(value.key), None, Some(value.value))
+    }
+}
+
+impl From<KafkaPayload> for ReplacementData {
+    fn from(value: KafkaPayload) -> ReplacementData {
+        ReplacementData {
+            key: value.key().unwrap().clone(),
+            value: value.payload().unwrap().clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum InsertOrReplacement<T> {
+    Insert(T),
+    Replacement(ReplacementData),
+}
+
 /// The return value of message processors.
-///
-/// NOTE: In Python, this struct crosses a serialization boundary, and so this struct is somewhat
-/// sensitive to serialization speed. If there are additional things that should be returned from
-/// the Rust message processor that are not necessary in Python, it's probably best to duplicate
-/// this struct for Python as there it can be an internal type.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct InsertBatch {
     pub rows: RowData,
     pub origin_timestamp: Option<DateTime<Utc>>,
     pub sentry_received_timestamp: Option<DateTime<Utc>>,
+    pub cogs_data: Option<CogsData>,
 }
 
 impl InsertBatch {
-    pub fn from_rows<T>(rows: impl IntoIterator<Item = T>) -> anyhow::Result<Self>
+    pub fn from_rows<T>(
+        rows: impl IntoIterator<Item = T>,
+        origin_timestamp: Option<DateTime<Utc>>,
+    ) -> anyhow::Result<Self>
     where
         T: Serialize,
     {
         let rows = RowData::from_rows(rows)?;
         Ok(Self {
             rows,
-            origin_timestamp: None,
+            origin_timestamp,
             sentry_received_timestamp: None,
+            cogs_data: None,
         })
+    }
+
+    /// In case the processing function wants to skip the message, we return an empty batch.
+    /// But instead of having the caller send an empty batch, lets make an explicit api for
+    /// skipping. This way we can change the implementation later if we want to. Skipping ensures
+    /// that the message is committed but not processed.
+    pub fn skip() -> Self {
+        Self::default()
     }
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BytesInsertBatch {
-    rows: RowData,
+pub struct BytesInsertBatch<R> {
+    rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
@@ -119,19 +197,24 @@ pub struct BytesInsertBatch {
 
     // For each partition we store the offset and timestamp to be produced to the commit log
     commit_log_offsets: CommitLogOffsets,
+
+    cogs_data: CogsData,
 }
 
-impl BytesInsertBatch {
+impl<R> BytesInsertBatch<R> {
     pub fn new(
-        rows: RowData,
-        message_timestamp: DateTime<Utc>,
+        rows: R,
+        message_timestamp: Option<DateTime<Utc>>,
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
+        cogs_data: CogsData,
     ) -> Self {
         BytesInsertBatch {
             rows,
-            message_timestamp: message_timestamp.into(),
+            message_timestamp: message_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
             origin_timestamp: origin_timestamp
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
@@ -139,20 +222,29 @@ impl BytesInsertBatch {
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
             commit_log_offsets,
+            cogs_data,
         }
     }
 
-    pub fn merge(mut self, other: Self) -> Self {
-        self.rows
-            .encoded_rows
-            .extend_from_slice(&other.rows.encoded_rows);
-        self.commit_log_offsets.extend(other.commit_log_offsets);
-        self.rows.num_rows += other.rows.num_rows;
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self
+    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
+        &self.commit_log_offsets
+    }
+
+    pub fn cogs_data(&self) -> &CogsData {
+        &self.cogs_data
+    }
+
+    pub fn take(self) -> (R, BytesInsertBatch<()>) {
+        let new = BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp,
+            origin_timestamp: self.origin_timestamp,
+            sentry_received_timestamp: self.sentry_received_timestamp,
+            commit_log_offsets: self.commit_log_offsets,
+            cogs_data: self.cogs_data,
+        };
+
+        (self.rows, new)
     }
 
     pub fn record_message_latency(&self) {
@@ -164,24 +256,33 @@ impl BytesInsertBatch {
         self.sentry_received_timestamp
             .send_metric(write_time, "sentry_received_latency");
     }
+}
 
+impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
+}
 
-    pub fn encoded_rows(&self) -> &[u8] {
-        &self.rows.encoded_rows
-    }
-
-    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
-        &self.commit_log_offsets
+impl BytesInsertBatch<HttpBatch> {
+    pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
+        self.rows
+            .write_rows(&other.rows)
+            .expect("failed to write rows to channel");
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct RowData {
-    encoded_rows: Vec<u8>,
-    num_rows: usize,
+    pub encoded_rows: Vec<u8>,
+    pub num_rows: usize,
 }
 
 impl RowData {
@@ -193,6 +294,7 @@ impl RowData {
         let mut num_rows = 0;
         for row in rows {
             serde_json::to_writer(&mut encoded_rows, &row)?;
+            debug_assert!(encoded_rows.ends_with(b"}"));
             encoded_rows.push(b'\n');
             num_rows += 1;
         }

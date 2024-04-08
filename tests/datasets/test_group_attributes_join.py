@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Mapping
+from typing import Any, Mapping, Union
 
 import pytest
 import simplejson as json
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -14,8 +15,9 @@ from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Table
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import parse_snql_query
+from snuba.reader import Reader
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.web import QueryResult
 from tests.base import BaseApiTest
@@ -111,6 +113,7 @@ class TestEventsGroupAttributes(BaseApiTest):
             clickhouse_query,
             query_settings,
             reader,
+            cluster_name,
         ) -> QueryResult:
             assert isinstance(clickhouse_query, CompositeQuery)
             assert isinstance(clickhouse_query.get_from_clause(), JoinClause)
@@ -299,9 +302,10 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         }
 
         def assert_joined_final(
-            clickhouse_query,
-            query_settings,
-            reader,
+            clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
+            query_settings: QuerySettings,
+            reader: Reader,
+            cluster_name: str,
         ) -> QueryResult:
             assert isinstance(clickhouse_query, CompositeQuery)
             assert isinstance(clickhouse_query.get_from_clause(), JoinClause)

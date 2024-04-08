@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.10.13
+ARG PYTHON_VERSION=3.11.6
 
 FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
 WORKDIR /usr/src/snuba
@@ -13,7 +13,6 @@ COPY requirements-build.txt ./
 RUN set -ex; \
     \
     buildDeps=' \
-        curl \
         git \
         gcc \
         libc6-dev \
@@ -29,6 +28,7 @@ RUN set -ex; \
         gnupg \
     '; \
     runtimeDeps=' \
+        curl \
         libjemalloc2 \
     '; \
     apt-get update; \
@@ -66,10 +66,10 @@ RUN set -ex; \
 # dependencies from building the Rust source code, see Relay Dockerfile.
 
 FROM build_base AS build_rust_snuba_base
-ARG RUST_TOOLCHAIN=1.74.1
 
 RUN set -ex; \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain $RUST_TOOLCHAIN  --profile minimal -y; \
+    # do not install any toolchain, as rust_snuba/rust-toolchain.toml defines that for us
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none -y; \
     # use git CLI to avoid OOM on ARM64
     echo '[net]' > ~/.cargo/config; \
     echo 'git-fetch-with-cli = true' >> ~/.cargo/config; \
@@ -80,8 +80,8 @@ ENV PATH="/root/.cargo/bin/:${PATH}"
 
 FROM build_rust_snuba_base AS build_rust_snuba_deps
 
-COPY ./rust_snuba/rust_arroyo/Cargo.toml ./rust_snuba/rust_arroyo/Cargo.toml
 COPY ./rust_snuba/Cargo.toml ./rust_snuba/Cargo.toml
+COPY ./rust_snuba/rust-toolchain.toml ./rust_snuba/rust-toolchain.toml
 COPY ./rust_snuba/Cargo.lock ./rust_snuba/Cargo.lock
 COPY ./scripts/rust-dummy-build.sh ./scripts/rust-dummy-build.sh
 
@@ -96,7 +96,6 @@ COPY --from=build_rust_snuba_deps /usr/src/snuba/rust_snuba/target/ ./rust_snuba
 COPY --from=build_rust_snuba_deps /root/.cargo/ /root/.cargo/
 RUN set -ex; \
     cd ./rust_snuba/; \
-    touch ./rust_arroyo/src/lib.rs; \
     maturin build --release --compatibility linux --locked
 
 # Install nodejs and yarn and build the admin UI

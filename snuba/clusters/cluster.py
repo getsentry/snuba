@@ -88,6 +88,8 @@ class ClickhouseClientSettings(Enum):
             "max_threads": 10,
             # Don't use up production cache for cardinality analyzer queries.
             "use_uncompressed_cache": 0,
+            # Allow longer running queries.
+            "max_execution_time": 60,
         },
         None,
     )
@@ -229,10 +231,14 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         distributed_cluster_name: Optional[str] = None,
         cache_partition_id: Optional[str] = None,
         query_settings_prefix: Optional[str] = None,
+        max_connections: int = 1,
+        block_connections: bool = False,
     ):
         super().__init__(storage_sets)
         self.__host = host
         self.__port = port
+        self.__max_connections = max_connections
+        self.__block_connections = block_connections
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
         self.__password = password
@@ -304,6 +310,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         return HTTPBatchWriter(
             host=self.__query_node.host_name,
             port=self.__http_port,
+            max_connections=self.__max_connections,
+            block_connections=self.__block_connections,
             user=self.__user,
             password=self.__password,
             metrics=metrics,

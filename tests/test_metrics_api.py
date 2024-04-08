@@ -10,7 +10,6 @@ from snuba.consumers.types import KafkaMessageMetadata
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.metrics_messages import InputType
-from snuba.datasets.processors.metrics_aggregate_processor import timestamp_to_bucket
 from snuba.datasets.storage import WritableTableStorage
 from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
@@ -28,6 +27,31 @@ TAG_4_VALUE_1 = 34
 RETENTION_DAYS = 90
 
 
+def timestamp_to_bucket(timestamp: datetime, interval_seconds: int) -> datetime:
+    time_seconds = timestamp.timestamp()
+    out_seconds = interval_seconds * (time_seconds // interval_seconds)
+    return datetime.fromtimestamp(out_seconds, timestamp.tzinfo)
+
+
+def test_time_bucketing() -> None:
+    # Verified these output timestamps as rounding down properly
+    # from today's date at time of writing
+    base_timestamp = 1644349789
+    base_datetime = datetime.fromtimestamp(base_timestamp)
+
+    ten_s_bucket = timestamp_to_bucket(base_datetime, 10)
+    assert ten_s_bucket.timestamp() == 1644349780
+
+    one_min_bucket = timestamp_to_bucket(base_datetime, 60)
+    assert one_min_bucket.timestamp() == 1644349740
+
+    one_hour_bucket = timestamp_to_bucket(base_datetime, 3600)
+    assert one_hour_bucket.timestamp() == 1644346800
+
+    one_day_bucket = timestamp_to_bucket(base_datetime, 86400)
+    assert one_day_bucket.timestamp() == 1644278400
+
+
 def teardown_common() -> None:
     # Reset rate limits
     state.delete_config("global_concurrent_limit")
@@ -42,6 +66,10 @@ def utc_yesterday_12_15() -> datetime:
     return (datetime.utcnow() - timedelta(days=1)).replace(
         hour=12, minute=15, second=0, microsecond=0, tzinfo=timezone.utc
     )
+
+
+have_generated_counters = False
+have_generated_dists = False
 
 
 @pytest.mark.clickhouse_db
@@ -88,6 +116,10 @@ class TestMetricsApiCounters(BaseApiTest):
         teardown_common()
 
     def generate_counters(self) -> None:
+        global have_generated_counters
+        if have_generated_counters:
+            return
+
         events = []
         for n in range(self.seconds):
             for p in self.project_ids:
@@ -117,6 +149,7 @@ class TestMetricsApiCounters(BaseApiTest):
                 if processed:
                     events.append(processed)
         write_processed_messages(self.storage, events)
+        have_generated_counters = True
 
     def build_simple_query(
         self,
@@ -492,6 +525,10 @@ class TestMetricsApiDistributions(BaseApiTest):
         teardown_common()
 
     def generate_uniform_distributions(self) -> None:
+        global have_generated_dists
+        if have_generated_dists:
+            return
+
         events = []
         processor = self.storage.get_table_writer().get_stream_loader().get_processor()
         value_array = list(range(self.d_range_min, self.d_range_max))
@@ -518,6 +555,7 @@ class TestMetricsApiDistributions(BaseApiTest):
                 if processed:
                     events.append(processed)
         write_processed_messages(self.storage, events)
+        have_generated_dists = True
 
     def test_dists_percentiles(self) -> None:
         query_str = """MATCH (metrics_distributions)

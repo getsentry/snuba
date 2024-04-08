@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Sequence
 
 import pytest
-from freezegun import freeze_time
+import time_machine
 
 from snuba import settings
 from snuba.clickhouse.optimize.optimize_scheduler import (
@@ -250,16 +250,17 @@ def test_get_next_schedule(
 ) -> None:
     optimize_scheduler = OptimizeScheduler(parallel=parallel)
 
-    with freeze_time(current_time):
+    with time_machine.travel(current_time, tick=False):
         assert optimize_scheduler.get_next_schedule(partitions) == expected
 
 
 def test_get_next_schedule_raises_exception() -> None:
     optimize_scheduler = OptimizeScheduler(parallel=1)
-    with freeze_time(
+    with time_machine.travel(
         last_midnight
         + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
-        + timedelta(minutes=20)
+        + timedelta(minutes=20),
+        tick=False,
     ):
         with pytest.raises(OptimizedSchedulerTimeout):
             optimize_scheduler.get_next_schedule(

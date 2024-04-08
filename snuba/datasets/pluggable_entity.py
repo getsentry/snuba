@@ -15,6 +15,7 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
+from snuba.datasets.plans.storage_plan_builder_new import EntityProcessingExecutor
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
@@ -27,6 +28,7 @@ from snuba.query.validation import FunctionCallValidator
 from snuba.query.validation.validators import (
     ColumnValidationMode,
     EntityContainsColumnsValidator,
+    IllegalAggregateInConditionValidator,
     QueryValidator,
 )
 from snuba.utils.schemas import SchemaModifiers
@@ -69,8 +71,9 @@ class PluggableEntity(Entity):
             EntityContainsColumnsValidator(
                 EntityColumnSet(self.columns),
                 mappers,
-                self.validate_data_model or ColumnValidationMode.WARN,
-            )
+                self.validate_data_model or ColumnValidationMode.ERROR,
+            ),
+            IllegalAggregateInConditionValidator(),
         ]
 
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
@@ -85,6 +88,18 @@ class PluggableEntity(Entity):
     def get_all_join_relationships(self) -> Mapping[str, JoinRelationship]:
         return self.join_relationships
 
+    def get_processing_executor(self) -> EntityProcessingExecutor:
+        """
+        This method is used by the new pipeline. It creates a EntityProcessingExecutor object
+        which contains new methods that are responsible for apply everything related to entity processing.
+        """
+        query_plan_builder = EntityProcessingExecutor(
+            storages=self.storages,
+            selector=self.storage_selector,
+            partition_key_column_name=self.partition_key_column_name,
+        )
+        return query_plan_builder
+
     def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
         from snuba.pipeline.simple_pipeline import SimplePipelineBuilder
 
@@ -93,7 +108,6 @@ class PluggableEntity(Entity):
             selector=self.storage_selector,
             partition_key_column_name=self.partition_key_column_name,
         )
-
         return SimplePipelineBuilder(query_plan_builder=query_plan_builder)
 
     def get_all_storages(self) -> Sequence[Storage]:

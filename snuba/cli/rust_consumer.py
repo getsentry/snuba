@@ -1,10 +1,11 @@
 import json
+import sys
 from dataclasses import asdict
 from typing import Optional, Sequence
 
 import click
 
-from snuba import settings, state
+from snuba import settings
 from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage_keys
 
@@ -202,22 +203,18 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
-    # XXX: Temporary way to quickly test different values for concurrency
-    # Should be removed before this is put into  prod
-    concurrency_override = state.get_int_config(
-        f"rust_consumer.{storage_names[0]}.concurrency"
-    )
-
-    rust_snuba.consumer(  # type: ignore
+    exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
         consumer_config_raw,
         skip_write,
-        concurrency_override or concurrency or 1,
+        concurrency or 1,
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
         python_max_queue_depth,
         health_check_file,
     )
+
+    sys.exit(exitcode)

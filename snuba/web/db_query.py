@@ -7,20 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from threading import Lock
-from typing import (
-    Any,
-    Dict,
-    Mapping,
-    MutableMapping,
-    MutableSequence,
-    Optional,
-    Union,
-    cast,
-)
+from typing import Any, Mapping, MutableMapping, MutableSequence, Optional, Union, cast
 
 import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
@@ -36,7 +28,6 @@ from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
-    AllocationPolicyViolation,
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
@@ -124,10 +115,10 @@ def update_query_metadata_and_stats(
     stats: MutableMapping[str, Any],
     query_metadata_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
-    trace_id: Optional[str],
+    trace_id: str,
     status: QueryStatus,
     request_status: Status,
-    profile_data: Optional[Dict[str, Any]] = None,
+    profile_data: Optional[snuba_queries_v1._QueryMetadataResultProfileObject] = None,
     error_code: Optional[int] = None,
     triggered_rate_limiter: Optional[str] = None,
 ) -> MutableMapping[str, Any]:
@@ -313,7 +304,6 @@ def execute_query_with_query_id(
     robust: bool,
     referrer: str,
 ) -> Result:
-
     if state.get_config("randomize_query_id", False):
         query_id = uuid.uuid4().hex
     else:
@@ -373,7 +363,6 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-
     span = Hub.current.scope.span
 
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
@@ -681,7 +670,7 @@ def db_query(
     timer: Timer,
     # NOTE: This variable is a piece of state which is updated and used outside this function
     stats: MutableMapping[str, Any],
-    trace_id: Optional[str] = None,
+    trace_id: str,
     robust: bool = False,
 ) -> QueryResult:
     """This function is responsible for:
@@ -806,35 +795,38 @@ def _apply_allocation_policies_quota(
     quota allowances from the given allocation policies.
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
-    violations: dict[str, AllocationPolicyViolation] = {}
-    for allocation_policy in allocation_policies:
-        try:
-            quota_allowances[
-                allocation_policy.config_key()
-            ] = allocation_policy.get_quota_allowance(
-                attribution_info.tenant_ids, query_id
-            )
-
-        except AllocationPolicyViolation as e:
-            violations[allocation_policy.config_key()] = e
-    if violations:
-        stats["quota_allowance"] = {k: v.quota_allowance for k, v in violations.items()}
-        # HACK: This is because our SLOs are calculated weirdly
-        raise AllocationPolicyViolations(
-            "Query cannot be run due to allocation policies", violations
+    can_run = True
+    with sentry_sdk.start_span(
+        op="allocation_policy", description="_apply_allocation_policies_quota"
+    ) as span:
+        for allocation_policy in allocation_policies:
+            with sentry_sdk.start_span(
+                op="allocation_policy.get_quota_allowance",
+                description=str(allocation_policy.__class__),
+            ) as span:
+                allowance = allocation_policy.get_quota_allowance(
+                    attribution_info.tenant_ids, query_id
+                )
+                can_run &= allowance.can_run
+                quota_allowances[allocation_policy.config_key()] = allowance
+                span.set_data(
+                    "quota_allowance",
+                    quota_allowances[allocation_policy.config_key()],
+                )
+        allowance_dicts = {
+            key: quota_allowance.to_dict()
+            for key, quota_allowance in quota_allowances.items()
+        }
+        stats["quota_allowance"] = allowance_dicts
+        if not can_run:
+            raise AllocationPolicyViolations.from_args(quota_allowances)
+        # Before allocation policies were a thing, the query pipeline would apply
+        # thread limits in a query processor. That is not necessary if there
+        # is an allocation_policy in place but nobody has removed that code yet.
+        # Therefore, the least permissive thread limit is taken
+        max_threads = min(
+            min(quota_allowances.values()).max_threads,
+            getattr(query_settings.get_resource_quota(), "max_threads", 10),
         )
-
-    stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
-
-    # Before allocation policies were a thing, the query pipeline would apply
-    # thread limits in a query processor. That is not necessary if there
-    # is an allocation_policy in place but nobody has removed that code yet.
-    # Therefore, the least permissive thread limit is taken
-    query_settings.set_resource_quota(
-        ResourceQuota(
-            max_threads=min(
-                min(quota_allowances.values()).max_threads,
-                getattr(query_settings.get_resource_quota(), "max_threads", 10),
-            )
-        )
-    )
+        span.set_data("max_threads", max_threads)
+        query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

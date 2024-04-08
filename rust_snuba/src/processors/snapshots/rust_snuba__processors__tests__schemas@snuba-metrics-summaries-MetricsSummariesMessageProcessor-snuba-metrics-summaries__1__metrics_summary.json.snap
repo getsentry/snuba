@@ -1,0 +1,42 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"duration_ms\": 1000,\n  \"end_timestamp\": 1691105878.72,\n  \"group\": \"deadbeefdeadbeef\",\n  \"is_segment\": false,\n  \"mri\": \"c:sentry.events.outcomes@none\",\n  \"project_id\": 1,\n  \"received\": 169110587919.123,\n  \"retention_days\": 90,\n  \"segment_id\": \"deadbeefdeadbeef\",\n  \"span_id\": \"deadbeefdeadbeef\",\n  \"trace_id\": \"deadbeefdeadbeefdeadbeefdeadbeef\",\n  \"count\": 1,\n  \"max\": 1.0,\n  \"min\": 1.0,\n  \"sum\": 1.0,\n  \"tags\": {\n    \"category\": \"error\",\n    \"environment\": \"unknown\",\n    \"event_type\": \"error\",\n    \"outcome\": \"accepted\",\n    \"release\": \"backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8\",\n    \"topic\": \"outcomes-billing\",\n    \"transaction\": \"sentry.tasks.store.save_event\"\n  }\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "count": 1,
+    "deleted": 0,
+    "duration_ms": 1000,
+    "end_timestamp": 1691105878,
+    "group": 16045690984833335023,
+    "is_segment": 0,
+    "max": 1.0,
+    "metric_mri": "c:sentry.events.outcomes@none",
+    "min": 1.0,
+    "project_id": 1,
+    "retention_days": 90,
+    "segment_id": 16045690984833335023,
+    "span_id": 16045690984833335023,
+    "sum": 1.0,
+    "tags.key": [
+      "category",
+      "environment",
+      "event_type",
+      "outcome",
+      "release",
+      "topic",
+      "transaction"
+    ],
+    "tags.value": [
+      "error",
+      "unknown",
+      "error",
+      "accepted",
+      "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+      "outcomes-billing",
+      "sentry.tasks.store.save_event"
+    ],
+    "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef"
+  }
+]

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
 import {
   MigrationData,
   MigrationGroupResult,
@@ -8,7 +8,7 @@ import {
   RunMigrationRequest,
   RunMigrationResult,
   Action,
-} from "./types";
+} from "SnubaAdmin/clickhouse_migrations/types";
 
 function ClickhouseMigrations(props: { api: Client }) {
   const [allGroups, setAllGroups] = useState<GroupOptions>({});

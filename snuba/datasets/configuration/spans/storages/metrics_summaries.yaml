@@ -13,8 +13,12 @@ schema:
     [
       { name: project_id, type: UInt, args: { size: 64 } },
       { name: metric_mri, type: String },
-      { name: span_id, type: UInt, args: { size: 64 } },
       { name: trace_id, type: UUID},
+      { name: segment_id, type: UInt, args: { size: 64 } },
+      { name: span_id, type: UInt, args: { size: 64 } },
+      { name: group, type: UInt, args: { size: 64 } },
+      { name: duration_ms, type: UInt, args: { size: 32 } },
+      { name: is_segment, type: UInt, args: { size: 8 } },
       { name: min, type: Float, args: { size: 64 } },
       { name: max, type: Float, args: { size: 64 } },
       { name: sum, type: Float, args: { size: 64 } },
@@ -62,6 +66,13 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
@@ -69,7 +80,7 @@ query_processors:
       columns: [trace_id]
   - processor: HexIntColumnProcessor
     args:
-      columns: [span_id]
+      columns: [span_id, segment_id, group]
   - processor: MappingOptimizer
     args:
       column_name: tags
@@ -86,14 +97,9 @@ query_processors:
   - processor: TableRateLimit
   - processor: TupleUnaliaser
 
-query_splitters:
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: start_timestamp
-
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
   processor: MetricsSummariesMessageProcessor
-  default_topic: snuba-spans
+  default_topic: snuba-metrics-summaries

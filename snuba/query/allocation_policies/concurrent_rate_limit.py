@@ -7,8 +7,8 @@ from snuba import state
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
-    AllocationPolicyViolation,
     AllocationPolicyViolations,
+    InvalidTenantsForAllocationPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -102,7 +102,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
         was_rate_limited = result_or_error.error is not None and isinstance(
             result_or_error.error.__cause__,
-            (AllocationPolicyViolation, AllocationPolicyViolations),
+            AllocationPolicyViolations,
         )
         rate_limit_finish_request(
             rate_limit_params,
@@ -183,8 +183,10 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             return "project_id", tenant_ids["project_id"]
         if "organization_id" in tenant_ids:
             return "organization_id", tenant_ids["organization_id"]
-        raise AllocationPolicyViolation(
-            "Queries must have a project id or organization id"
+        raise InvalidTenantsForAllocationPolicy.from_args(
+            tenant_ids,
+            self.__class__.__name__,
+            "tenant_ids must include organization_id or project id",
         )
 
     @property

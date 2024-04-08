@@ -1,10 +1,8 @@
-# For local development, override PYTHONPATH explicitly so that `cargo test`
-# works for the Rust consumer. This _probably_ does not cause problems elsewhere.
-#
 # Related thread: https://github.com/PyO3/pyo3/issues/1741
 
-export PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
-export PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
+# This is required for the tests in python.rs
+export SNUBA_TEST_PYTHONPATH="$(python -c 'import sys; print(":".join(sys.path))')"
+export SNUBA_TEST_PYTHONEXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
 
 # load cargo envvars explicitly in case user forgot
 . "$HOME/.cargo/env"

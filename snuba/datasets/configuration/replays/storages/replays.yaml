@@ -82,6 +82,7 @@ schema:
         type: String,
         args: { schema_modifiers: [nullable] },
       },
+      { name: viewed_by_id, type: UInt, args: { size: 64 } },
       { name: os_name, type: String, args: { schema_modifiers: [nullable] } },
       {
         name: os_version,
@@ -198,3 +199,10 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0

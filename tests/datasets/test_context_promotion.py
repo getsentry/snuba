@@ -90,6 +90,7 @@ def test_span_id_promotion(entity_key: str, expected_table_name: str) -> None:
         clickhouse_query: Union[Query, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         assert isinstance(clickhouse_query, Query)
         # in local and CI there's a table name difference

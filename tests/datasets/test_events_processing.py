@@ -44,7 +44,10 @@ def test_events_processing() -> None:
     )
 
     def query_runner(
-        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
+        clickhouse_query: Query,
+        query_settings: QuerySettings,
+        reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         assert clickhouse_query.get_selected_columns() == [
             SelectedExpression(

@@ -1,6 +1,6 @@
 use crate::config::MessageProcessorConfig;
 
-use crate::types::{BytesInsertBatch, RowData};
+use crate::types::{BytesInsertBatch, CogsData, CommitLogEntry, CommitLogOffsets, RowData};
 use anyhow::Error;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::{
     merge_commit_request, CommitRequest, InvalidMessage, MessageRejected, ProcessingStrategy,
-    SubmitError,
+    StrategyError, SubmitError,
 };
 use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition, Topic};
 use rust_arroyo::utils::timing::Deadline;
@@ -23,9 +23,9 @@ type Committable = BTreeMap<(String, u16), u64>;
 type PyReturnValue = (ReturnValue, MessageTimestamp, Committable);
 
 pub struct PythonTransformStep {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>>,
     python_strategy: Arc<Mutex<Py<PyAny>>>,
-    transformed_messages: VecDeque<Message<BytesInsertBatch>>,
+    transformed_messages: VecDeque<Message<BytesInsertBatch<RowData>>>,
     commit_request_carried_over: Option<CommitRequest>,
 }
 
@@ -37,7 +37,7 @@ impl PythonTransformStep {
         max_queue_depth: Option<usize>,
     ) -> Result<Self, Error>
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
     {
         env::set_var(
             "RUST_SNUBA_PROCESSOR_MODULE",
@@ -72,15 +72,25 @@ impl PythonTransformStep {
 
             let commit_log_offsets = offsets
                 .iter()
-                .map(|((_t, p), o)| (*p, (*o, message_timestamp)))
+                .map(|((_t, p), o)| {
+                    (
+                        *p,
+                        CommitLogEntry {
+                            offset: *o,
+                            orig_message_ts: message_timestamp,
+                            received_p99: Vec::new(),
+                        },
+                    )
+                })
                 .collect();
 
             let payload = BytesInsertBatch::new(
                 RowData::from_encoded_rows(payload),
-                message_timestamp,
+                Some(message_timestamp),
                 origin_timestamp,
                 sentry_received_timestamp,
-                commit_log_offsets,
+                CommitLogOffsets(commit_log_offsets),
+                CogsData::default(),
             );
 
             let mut committable: BTreeMap<Partition, u64> = BTreeMap::new();
@@ -95,7 +105,7 @@ impl PythonTransformStep {
 }
 
 impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
-    fn poll(&mut self) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let messages = Python::with_gil(|py| -> PyResult<Vec<PyReturnValue>> {
             let python_strategy = self.python_strategy.lock();
             let result = python_strategy.call_method0(py, "poll")?;
@@ -119,7 +129,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     break;
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -211,7 +221,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, InvalidMessage> {
+    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         let deadline = timeout.map(Deadline::new);
         let timeout_secs = timeout.map(|d| d.as_secs());
 
@@ -244,7 +254,7 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
                     }
                 }
                 Err(SubmitError::InvalidMessage(invalid_message)) => {
-                    return Err(invalid_message);
+                    return Err(invalid_message.into());
                 }
                 Ok(_) => {}
             }
@@ -281,21 +291,9 @@ mod tests {
     use super::*;
     use rust_arroyo::testutils::TestStrategy;
 
-    fn set_sys_executable() {
-        let python_executable = std::env::var("PYTHONEXECUTABLE").unwrap();
-        Python::with_gil(|py| -> PyResult<()> {
-            PyModule::import(py, "sys")?.setattr("executable", python_executable)?;
-            Ok(())
-        })
-        .unwrap();
-    }
-
     #[test]
-    // test is flaky in CI and fails 100% of the time locally with " signal only works in main
-    // thread of the main interpreter"
-    #[ignore]
     fn test_python() {
-        set_sys_executable();
+        crate::testutils::initialize_python();
 
         let sink = TestStrategy::new();
 

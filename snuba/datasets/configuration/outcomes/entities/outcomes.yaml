@@ -33,10 +33,6 @@ query_processors:
         time: timestamp
       time_parse_columns:
         - timestamp
-  - processor: ReferrerRateLimiterProcessor
-  - processor: OrganizationRateLimiterProcessor
-    args:
-      org_column: org_id
 validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator

@@ -51,7 +51,7 @@ services:
       - "--junit-xml"
       - "/.artifacts/${TEST_LOCATION:-tests}/${SNUBA_SETTINGS}/pytest.junit.xml"
   zookeeper:
-    image: "confluentinc/cp-zookeeper:5.1.2"
+    image: "ghcr.io/getsentry/image-mirror-confluentinc-cp-zookeeper:6.2.0"
     environment:
       ZOOKEEPER_CLIENT_PORT: "2181"
       CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
@@ -60,7 +60,7 @@ services:
   kafka:
     depends_on:
       - zookeeper
-    image: "confluentinc/cp-kafka:5.1.2"
+    image: "ghcr.io/getsentry/image-mirror-confluentinc-cp-kafka:6.2.0"
     environment:
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
@@ -70,7 +70,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
       KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:
-    image: "${CLICKHOUSE_IMAGE:-altinity/clickhouse-server:21.8.13.1.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:21.8.13.1.altinitystable}"
     volumes:
       - ./config/clickhouse/macros.xml:/etc/clickhouse-server/config.d/macros.xml
       - ./config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
@@ -84,7 +84,7 @@ services:
   clickhouse-query:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-altinity/clickhouse-server:21.8.13.1.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:21.8.13.1.altinitystable}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/zookeeper.xml:/etc/clickhouse-server/config.d/zookeeper.xml
@@ -135,7 +135,7 @@ services:
   clickhouse-04:
     depends_on:
       - zookeeper
-    image: "${CLICKHOUSE_IMAGE:-altinity/clickhouse-server:21.8.13.1.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:21.8.13.1.altinitystable}"
     profiles: ["multi_node"]
     volumes:
       - ./test_distributed_migrations/config/clickhouse/macros-04.xml:/etc/clickhouse-server/config.d/macros.xml

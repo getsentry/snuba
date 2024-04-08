@@ -38,6 +38,14 @@ schema:
     ]
   local_table_name: functions_raw_local
   dist_table_name: functions_raw_dist
+allocation_policies:
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
 stream_loader:
   processor: FunctionsMessageProcessor
   default_topic: profiles-call-tree

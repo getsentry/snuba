@@ -8,6 +8,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.processors import execute_all_clickhouse_processors
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
@@ -39,7 +40,7 @@ def test_iterate_over_query() -> None:
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
@@ -91,7 +92,7 @@ def test_replace_expression() -> None:
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
     query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[SelectedExpression("alias", function_1)],
         array_join=None,
         condition=condition,
@@ -109,7 +110,7 @@ def test_replace_expression() -> None:
     query.transform_expressions(replace)
 
     expected_query = Query(
-        Table("my_table", ColumnSet([])),
+        Table("my_table", ColumnSet([]), storage_key=StorageKey("dontmatter")),
         selected_columns=[
             SelectedExpression(
                 "alias", FunctionCall("alias", "tag", (Literal(None, "f1"),))

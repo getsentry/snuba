@@ -15,6 +15,7 @@ Contents:
    configuration/overview
    query/overview
    language/snql
+   language/mql
    migrations/modes
    contributing/environment
    clickhouse/death_queries

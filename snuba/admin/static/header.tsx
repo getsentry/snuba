@@ -1,5 +1,5 @@
 import React from "react";
-import { COLORS } from "./theme";
+import { COLORS } from "SnubaAdmin/theme";
 
 function Header() {
   const PROD_URL_START = "https://snuba-admin";

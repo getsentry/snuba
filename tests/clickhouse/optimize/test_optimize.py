@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Mapping
 
 import pytest
-from freezegun import freeze_time
+import time_machine
 
 from snuba import settings
 from snuba.clickhouse.optimize import optimize
@@ -107,7 +107,7 @@ test_data = [
 
 
 @pytest.mark.xfail(
-    reason="At certain times of day, this test is completely busted and completely blocks CI / deployment"
+    reason="This test still is flaky sometimes and then completely blocks CI / deployment"
 )
 class TestOptimize:
     @pytest.mark.clickhouse_db
@@ -201,7 +201,7 @@ class TestOptimize:
         )
 
         tracker.update_all_partitions([part.name for part in partitions])
-        with freeze_time(current_time):
+        with time_machine.travel(current_time, tick=False):
             optimize.optimize_partition_runner(
                 clickhouse=clickhouse,
                 database=database,
@@ -219,6 +219,9 @@ class TestOptimize:
         assert partitions == []
 
         tracker.delete_all_states()
+        # For ClickHouse 23.3 and 23.8 parts from previous test runs
+        # interfere with following tests, so best to drop the tables
+        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
 
     @pytest.mark.parametrize(
         "table,host,expected",
@@ -266,10 +269,11 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     dummy_partition = "(90,'2022-03-28')"
     tracker.update_all_partitions([dummy_partition])
 
-    with freeze_time(
+    with time_machine.travel(
         last_midnight
         + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)
-        + timedelta(minutes=15)
+        + timedelta(minutes=15),
+        tick=False,
     ):
         scheduler = OptimizeScheduler(2)
         with pytest.raises(OptimizedSchedulerTimeout):

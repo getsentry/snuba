@@ -156,12 +156,10 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 100000
-query_splitters:
-  - splitter: ColumnSplitQueryStrategy
+  - name: ReferrerGuardRailPolicy
     args:
-      id_column: event_id
-      project_column: project_id
-      timestamp_column: timestamp
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: timestamp
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0

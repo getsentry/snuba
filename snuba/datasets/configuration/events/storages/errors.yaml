@@ -246,17 +246,20 @@ allocation_policies:
         - organization_id
         - referrer
         - project_id
-      default_config_overrides:
-        is_enforced: 0
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
         - referrer
       default_config_overrides:
-        is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 10000000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
@@ -320,15 +323,6 @@ query_processors:
         - environment
         - project_id
   - processor: TableRateLimit
-query_splitters:
-  - splitter: ColumnSplitQueryStrategy
-    args:
-      id_column: event_id
-      project_column: project_id
-      timestamp_column: timestamp
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: timestamp
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 replacer_processor:

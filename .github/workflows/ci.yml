@@ -39,7 +39,7 @@ jobs:
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11'
       - uses: actions/cache@v3
         with:
           path: ~/.cache/pre-commit
@@ -100,7 +100,7 @@ jobs:
         name: Checkout code
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -118,7 +118,7 @@ jobs:
         name: Checkout code
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -168,10 +168,7 @@ jobs:
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
-          cache-to: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }},mode=max
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest,mode=max
+          # cache-to is re-implemented using the next step, to run conditionally for contributors
 
       - name: Publish images for cache
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
@@ -227,24 +224,30 @@ jobs:
 
       - name: Docker Snuba Rust tests
         run: |
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
         if: ${{ matrix.snuba_settings == 'test_rust' }}
 
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
-          SNUBA_SETTINGS=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml up -d
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker-compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
       - name: Docker Snuba Init Tests
         run: |
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload to codecov
         run: |
@@ -359,10 +362,14 @@ jobs:
               tests/sentry/eventstream/kafka \
               tests/sentry/post_process_forwarder \
               tests/sentry/snuba \
+              tests/sentry/eventstore/snuba \
               tests/sentry/search/events \
               tests/sentry/event_manager \
-              tests/sentry/api/endpoints/test_organization_ddm_meta.py \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
+              tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
+              tests/sentry/sentry_metrics/querying \
+              tests/snuba/test_snql_snuba.py \
+              tests/snuba/test_metrics_layer.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests
@@ -378,7 +385,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["22.3.15.34.altinitystable", "22.8.15.25.altinitystable"]
+        version:
+          [
+            "21.8.13.1.altinitystable",
+            "22.8.15.25.altinitystable",
+            "23.3.13.7.altinitystable",
+            "23.8.8.21.altinitystable",
+          ]
 
     steps:
       - uses: actions/checkout@v2
@@ -406,8 +419,8 @@ jobs:
 
       - name: Docker Snuba Test other ClickHouse versions
         run: |
-          export CLICKHOUSE_IMAGE=altinity/clickhouse-server:${{matrix.version}}
-          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker-compose -f docker-compose.gcb.yml run --rm snuba-test
+          export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
+          SNUBA_IMAGE=snuba-test SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
         run: |

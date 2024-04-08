@@ -2,6 +2,7 @@ from typing import Sequence
 
 from snuba.clickhouse.columns import Array, Column, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.storages.tags_hash_map import SENTRY_TAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
@@ -9,16 +10,6 @@ from snuba.migrations.operations import OperationTarget, SqlOperation
 storage_set_name = StorageSetKey.SPANS
 local_table_name = "spans_local"
 dist_table_name = "spans_dist"
-
-# There an issue in Clickhouse where the arrayMap function passes
-# in Nothing type values for empty arrays. This causes the regex function to fail
-# without the toString function, unless a merge for the part is completed.
-# This is fixed in Clickhouse 22.
-SENTRY_TAGS_HASH_MAP_COLUMN = (
-    "arrayMap((k, v) -> cityHash64(concat("
-    "replaceRegexpAll(toString(k), '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', toString(v))), "
-    "sentry_tags.key, sentry_tags.value)"
-)
 
 
 class Migration(migration.ClickhouseNodeMigration):

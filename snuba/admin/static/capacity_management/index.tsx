@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { selectStyle } from "./styles";
-import AllocationPolicyConfigs from "./allocation_policy";
-import { AllocationPolicy } from "./types";
+import Client from "SnubaAdmin/api_client";
+import { selectStyle } from "SnubaAdmin/capacity_management/styles";
+import {AllocationPolicyConfigs} from "SnubaAdmin/capacity_management/allocation_policy";
+import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 
 function CapacityManagement(props: { api: Client }) {
   const { api } = props;

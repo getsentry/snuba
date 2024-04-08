@@ -1,17 +1,17 @@
-import RuntimeConfig from "./runtime_config";
-import AuditLog from "./runtime_config/auditlog";
-import ClickhouseMigrations from "./clickhouse_migrations";
-import ClickhouseQueries from "./clickhouse_queries";
-import TracingQueries from "./tracing";
-import SnQLToSQL from "./snql_to_sql";
-import Kafka from "./kafka";
-import QuerylogQueries from "./querylog";
-import CapacityManagement from "./capacity_management";
-import DeadLetterQueue from "./dead_letter_queue";
-import CardinalityAnalyzer from "./cardinality_analyzer";
-import ProductionQueries from "./production_queries";
-import SnubaExplain from "./snuba_explain";
-import Welcome from "./welcome";
+import RuntimeConfig from "SnubaAdmin/runtime_config";
+import AuditLog from "SnubaAdmin/runtime_config/auditlog";
+import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
+import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
+import TracingQueries from "SnubaAdmin/tracing";
+import SnQLToSQL from "SnubaAdmin/snql_to_sql";
+import Kafka from "SnubaAdmin/kafka";
+import QuerylogQueries from "SnubaAdmin/querylog";
+import CapacityManagement from "SnubaAdmin/capacity_management";
+import DeadLetterQueue from "SnubaAdmin/dead_letter_queue";
+import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
+import ProductionQueries from "SnubaAdmin/production_queries";
+import SnubaExplain from "SnubaAdmin/snuba_explain";
+import Welcome from "SnubaAdmin/welcome";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -32,7 +32,7 @@ const NAV_ITEMS = [
     component: SnubaExplain,
   },
   {
-    id: "clickhouse",
+    id: "system-queries",
     display: "🏚️ System Queries",
     component: ClickhouseQueries,
   },

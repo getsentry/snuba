@@ -108,3 +108,27 @@ class InactiveReplicas(SystemQuery):
         active_replicas < total_replicas
         OR total_replicas < 2
     """
+
+
+class ColumnSizeOnDisk(SystemQuery):
+    """
+    Shows the size of each column on disk in the selected table. Can be used to compare
+    the actual size on disk (compressed) compared to the actual size of the data (uncompressed)
+    """
+
+    sql = """
+    SELECT
+        table,
+        column,
+        formatReadableSize(sum(column_data_compressed_bytes) AS size) AS compressed,
+        formatReadableSize(sum(column_data_uncompressed_bytes) AS usize) AS uncompressed,
+        round(usize / size, 2) AS compr_ratio,
+        sum(rows) rows_cnt,
+        round(usize / rows_cnt, 2) avg_row_size
+    FROM system.parts_columns
+    WHERE (active = 1) AND (table = {{table}})
+    GROUP BY
+        table,
+        column
+    ORDER BY size DESC;
+    """

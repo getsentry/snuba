@@ -3,7 +3,7 @@ import { it, expect, describe, jest, afterEach } from "@jest/globals";
 import { act, cleanup, render } from "@testing-library/react";
 import { generateQuery, mergeQueryParamValues } from "../query_editor";
 import userEvent from "@testing-library/user-event";
-import QueryEditor from "../query_editor";
+import QueryEditor from "SnubaAdmin/query_editor";
 
 describe("Query editor", () => {
   global.ResizeObserver = require("resize-observer-polyfill");

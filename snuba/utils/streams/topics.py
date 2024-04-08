@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Mapping
 
+from sentry_kafka_schemas import SchemaNotFound, get_topic
+
 
 # These are the default topic names, they can be changed via settings
 class Topic(Enum):
@@ -12,6 +14,7 @@ class Topic(Enum):
     TRANSACTIONS_COMMIT_LOG = "snuba-transactions-commit-log"
     METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
+    OUTCOMES_BILLING = "outcomes-billing"
     SESSIONS = "ingest-sessions"
     SESSIONS_COMMIT_LOG = "snuba-sessions-commit-log"
     METRICS_COMMIT_LOG = "snuba-metrics-commit-log"
@@ -52,66 +55,22 @@ class Topic(Enum):
 
     ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
-    DEAD_LETTER_METRICS_SETS = "snuba-dead-letter-metrics-sets"
-    DEAD_LETTER_METRICS_COUNTERS = "snuba-dead-letter-metrics-counters"
-    DEAD_LETTER_METRICS_DISTRIBUTIONS = "snuba-dead-letter-metrics-distributions"
     DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
+
     SPANS = "snuba-spans"
+    METRICS_SUMMARIES = "snuba-metrics-summaries"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
-    config = {
-        Topic.EVENTS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.TRANSACTIONS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.METRICS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.PROFILES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.REPLAYEVENTS: {
-            "message.timestamp.type": "LogAppendTime",
-            "max.message.bytes": "15000000",
-        },
-        Topic.GENERIC_METRICS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.GENERIC_EVENTS: {"message.timestamp.type": "LogAppendTime"},
-        Topic.QUERYLOG: {"max.message.bytes": "2000000"},
-        Topic.GROUP_ATTRIBUTES: {"message.timestamp.type": "LogAppendTime"},
-        Topic.COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.TRANSACTIONS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.SESSIONS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.METRICS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_METRICS_SETS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_METRICS_DISTRIBUTIONS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_METRICS_COUNTERS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-        Topic.GENERIC_EVENTS_COMMIT_LOG: {
-            "cleanup.policy": "compact,delete",
-            "min.compaction.lag.ms": "3600000",
-        },
-    }
-
-    return config.get(topic, {})
+    try:
+        return get_topic(topic.value)["topic_creation_config"]
+    # TODO: Remove this once all topics needed by snuba are registered in sentry-kafka-schemas
+    except SchemaNotFound:
+        return {}

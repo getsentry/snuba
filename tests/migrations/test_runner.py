@@ -499,7 +499,7 @@ def test_check_inactive_replica() -> None:
             mock_conn.execute.return_value = inactive_replica_query_result
 
             with pytest.raises(InactiveClickhouseReplica) as exc:
-                check_for_inactive_replicas()
+                check_for_inactive_replicas([storage_key])
 
             assert exc.value.args[0] == (
                 f"Storage {storage_key.value} has inactive replicas for table bad_table_1 "

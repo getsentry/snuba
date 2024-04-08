@@ -57,7 +57,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GENERIC_METRICS,
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
-    MigrationGroup.SPANS,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
 }
@@ -158,12 +157,12 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.SPANS: _MigrationGroup(
         loader=SpansLoader(),
         storage_sets_keys={StorageSetKey.SPANS},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
         loader=GroupAttributesLoader(),
         storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
-        readiness_state=ReadinessState.PARTIAL,
+        readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.METRICS_SUMMARIES: _MigrationGroup(
         loader=MetricsSummariesLoader(),
@@ -196,6 +195,10 @@ _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING: Dict[
 
 def get_group_loader(group: MigrationGroup) -> GroupLoader:
     return _REGISTERED_MIGRATION_GROUPS[group].loader
+
+
+def get_storage_set_keys(group: MigrationGroup) -> Set[StorageSetKey]:
+    return _REGISTERED_MIGRATION_GROUPS[group].storage_set_keys
 
 
 def get_group_readiness_state_from_storage_set(

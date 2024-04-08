@@ -28,7 +28,9 @@ pub fn setup_sentry(sentry_dsn: &str) -> ClientInitGuard {
     sentry::init((
         sentry_dsn,
         sentry::ClientOptions {
-            release: sentry::release_name!(),
+            // the value for release is also computed in python snuba, please keep the
+            // logic in sync
+            release: std::env::var("SNUBA_RELEASE").ok().map(From::from),
             ..Default::default()
         },
     ))

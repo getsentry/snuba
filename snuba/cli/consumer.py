@@ -225,6 +225,9 @@ def consumer(
     if slice_id:
         metrics_tags["slice_id"] = str(slice_id)
 
+    for key, value in metrics_tags.items():
+        sentry_sdk.set_tag(key, value)
+
     metrics = MetricsWrapper(environment.metrics, "consumer", tags=metrics_tags)
     configure_metrics(StreamMetricsAdapter(metrics))
 

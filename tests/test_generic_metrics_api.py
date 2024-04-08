@@ -39,15 +39,15 @@ def gen_string() -> str:
     return "placeholder{:04d}".format(placeholder_counter)
 
 
-SHARED_TAGS: Mapping[str, int] = {
-    "65546": 65536,
-    "9223372036854776010": 65593,
-    "9223372036854776016": 109333,
-    "9223372036854776020": 65616,
-    "9223372036854776021": 9223372036854776027,
-    "9223372036854776022": 65539,
-    "9223372036854776023": 65555,
-    "9223372036854776026": 9223372036854776031,
+SHARED_TAGS: Mapping[str, str] = {
+    "65546": gen_string(),
+    "9223372036854776010": gen_string(),
+    "9223372036854776016": gen_string(),
+    "9223372036854776020": gen_string(),
+    "9223372036854776021": gen_string(),
+    "9223372036854776022": gen_string(),
+    "9223372036854776023": gen_string(),
+    "9223372036854776026": gen_string(),
 }
 
 SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
@@ -113,7 +113,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
     def generate_sets(
         self,
-        tags: Mapping[str, int],
+        tags: Mapping[str, str],
         mapping_meta: Mapping[str, Mapping[str, str]],
         int_source: Iterable[int],
     ) -> None:
@@ -172,13 +172,10 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
     def test_raw_tags(self) -> None:
         tag_key = 1337
-        tag_idx_value = 123456
-        new_set_unique_count = 10
-        new_tag_values = {str(tag_key): tag_idx_value}
         value_as_string = gen_string()
-        new_mapping_meta = {
-            "d": {str(tag_key): gen_string(), str(tag_idx_value): value_as_string}
-        }
+        new_set_unique_count = 10
+        new_tag_values = {str(tag_key): value_as_string}
+        new_mapping_meta = {"d": {str(tag_key): gen_string()}}
         new_set_values = itertools.cycle(range(0, new_set_unique_count))
 
         self.generate_sets(
@@ -193,49 +190,6 @@ class TestGenericMetricsApiSets(BaseApiTest):
                     AND project_id = {self.project_id}
                     AND metric_id = {self.metric_id}
                     AND tags_raw[{tag_key}] = '{value_as_string}'
-                    AND timestamp >= toDateTime('{self.start_time}')
-                    AND timestamp < toDateTime('{self.end_time}')
-                    GRANULARITY 60
-                    """
-        response = self.app.post(
-            SNQL_ROUTE,
-            data=json.dumps(
-                {
-                    "query": query_str,
-                    "dataset": "generic_metrics",
-                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
-                }
-            ),
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert len(data["data"]) == 1, data
-        assert data["data"][0]["unique_values"] == new_set_unique_count
-
-    def test_indexed_tags(self) -> None:
-        tag_key = 1337
-        tag_idx_value = 123456
-        new_set_unique_count = 12
-        new_tag_values = {str(tag_key): tag_idx_value}
-        value_as_string = gen_string()
-        new_mapping_meta = {
-            "d": {str(tag_key): gen_string(), str(tag_idx_value): value_as_string}
-        }
-        new_set_values = itertools.cycle(range(0, new_set_unique_count))
-
-        self.generate_sets(
-            tags=new_tag_values,
-            mapping_meta=new_mapping_meta,
-            int_source=new_set_values,
-        )
-
-        query_str = f"""MATCH (generic_metrics_sets)
-                    SELECT uniq(value) AS unique_values BY project_id, org_id
-                    WHERE org_id = {self.org_id}
-                    AND project_id = {self.project_id}
-                    AND metric_id = {self.metric_id}
-                    AND tags[{tag_key}] = {tag_idx_value}
                     AND timestamp >= toDateTime('{self.start_time}')
                     AND timestamp < toDateTime('{self.end_time}')
                     GRANULARITY 60
@@ -432,8 +386,8 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
 
     def test_tags_hash_map(self) -> None:
         shared_key = 65546  # pick a key from shared_values
-        value_index = SHARED_TAGS[str(shared_key)]
-        expected_value = SHARED_MAPPING_META["c"][str(value_index)]
+        value = "65536"
+        expected_value = SHARED_MAPPING_META["c"][value]
         query_str = f"""MATCH (generic_metrics_distributions)
                         SELECT count() AS thecount
                         WHERE tags_raw[{shared_key}] = '{expected_value}'
@@ -687,8 +641,6 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         Tests that we can query raw tags
         """
         shared_key = 65546  # pick a key from shared_values
-        value_index = SHARED_TAGS[str(shared_key)]
-        expected_value = SHARED_MAPPING_META["c"][str(value_index)]
         tag_column_name = f"tags_raw[{shared_key}]"
         query = Query(
             match=Entity("generic_org_metrics_counters"),
@@ -717,7 +669,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         )
         data = json.loads(response.data)
         first_row = data["data"][0]
-        assert first_row["tag_string"] == expected_value
+        assert first_row["tag_string"] == "placeholder0001"
 
 
 @pytest.mark.clickhouse_db

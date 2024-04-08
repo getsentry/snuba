@@ -53,7 +53,10 @@ def test_tags_hashmap_optimization() -> None:
     # --------------------------------------------------------------------
 
     def query_verifier(
-        clickhouse_query: Query, query_settings: QuerySettings, reader: Reader
+        clickhouse_query: Query,
+        query_settings: QuerySettings,
+        reader: Reader,
+        cluster_name: str,
     ) -> None:
         class ConditionVisitor(NoopVisitor):
             def __init__(self) -> None:

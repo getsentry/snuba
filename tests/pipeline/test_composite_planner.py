@@ -60,6 +60,7 @@ events_table_name = events_storage.get_table_writer().get_schema().get_table_nam
 events_table = Table(
     events_table_name,
     events_storage.get_schema().get_columns(),
+    storage_key=events_storage.get_storage_key(),
     allocation_policies=events_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
@@ -78,6 +79,7 @@ assert isinstance(groups_schema, TableSchema)
 groups_table = Table(
     groups_schema.get_table_name(),
     groups_schema.get_columns(),
+    storage_key=groups_storage.get_storage_key(),
     allocation_policies=groups_storage.get_allocation_policies(),
     final=False,
     sampling_rate=None,
@@ -548,6 +550,7 @@ def test_composite_planner(
         clickhouse_query: Union[ClickhouseQuery, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         report = clickhouse_query.equals(processed_query)
         assert report[0], f"Mismatch: {report[1]}"

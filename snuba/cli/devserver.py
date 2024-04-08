@@ -2,16 +2,13 @@ import click
 
 from snuba import settings
 
-COMMON_CONSUMER_DEV_OPTIONS = [
+COMMON_RUST_CONSUMER_DEV_OPTIONS = [
+    "--use-rust-processor",
+    "--no-skip-write",
     "--auto-offset-reset=latest",
     "--no-strict-offset-reset",
     "--log-level=debug",
     "--enforce-schema",
-]
-
-COMMON_RUST_CONSUMER_DEV_OPTIONS = COMMON_CONSUMER_DEV_OPTIONS + [
-    "--use-rust-processor",
-    "--no-skip-write",
 ]
 
 
@@ -69,13 +66,24 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
         (
+            "outcomes-billing-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=outcomes_raw",
+                "--consumer-group=outcomes_billing_group",
+                "--raw-events-topic=outcomes-billing",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+            ],
+        ),
+        (
             "errors-consumer",
             [
                 "snuba",
-                "consumer",
+                "rust-consumer",
                 "--storage=errors",
                 "--consumer-group=errors_group",
-                *COMMON_CONSUMER_DEV_OPTIONS,
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
         (
@@ -362,6 +370,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "snuba",
                     "rust-consumer",
                     "--storage=functions_raw",
+                    "--consumer-group=functions_group",
                     *COMMON_RUST_CONSUMER_DEV_OPTIONS,
                 ],
             ),

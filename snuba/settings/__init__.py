@@ -84,6 +84,10 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": os.environ.get("CLICKHOUSE_HOST", "127.0.0.1"),
         "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "max_connections": int(os.environ.get("CLICKHOUSE_MAX_CONNECTIONS", 1)),
+        "block_connections": bool(
+            os.environ.get("CLICKHOUSE_BLOCK_CONNECTIONS", False)
+        ),
         "user": os.environ.get("CLICKHOUSE_USER", "default"),
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
@@ -122,6 +126,7 @@ DOGSTATSD_SAMPLING_RATES = {
     "metrics.processor.set.size": 0.1,
     "metrics.processor.distribution.size": 0.1,
 }
+DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
 CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
@@ -184,6 +189,9 @@ REDIS_CLUSTERS: RedisClusters = {
 # Query Recording Options
 RECORD_QUERIES = False
 
+# Record COGS
+RECORD_COGS = False
+
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
 CONFIG_STATE: Mapping[str, Optional[Any]] = {}
@@ -203,7 +211,6 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
-
 
 # Processor/Writer Options
 
@@ -260,13 +267,7 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD_KEY_TTL = 60 * 60  # 1 hour in seconds
 TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
-PRETTY_FORMAT_EXPRESSIONS = True
-
-# Capacity Management
-# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
-# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
-# available for single tenant since we can enable/disable policies at runtime there.
-ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
+PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with allocation
@@ -331,11 +332,6 @@ SUBSCRIPTIONS_DEFAULT_BUFFER_SIZE = 10000
 # (entity name, buffer size)
 SUBSCRIPTIONS_ENTITY_BUFFER_SIZE: Mapping[str, int] = {}
 
-# Used for migrating to/from writing metrics directly to aggregate tables
-# rather than using materialized views
-WRITE_METRICS_AGG_DIRECTLY = False
-ENABLED_MATERIALIZATION_VERSION = 4
-
 # Enable profiles ingestion
 ENABLE_PROFILES_CONSUMER = os.environ.get("ENABLE_PROFILES_CONSUMER", False)
 
@@ -364,7 +360,7 @@ OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
 # Maximum jitter to add to the scheduling of threads of an optimize job
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 30
+OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
@@ -372,7 +368,8 @@ PARALLEL_OPTIMIZE_JOB_START_TIME = 0
 
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs in
 # parallel to avoid running in parallel when peak traffic starts.
-PARALLEL_OPTIMIZE_JOB_END_TIME = OPTIMIZE_JOB_CUTOFF_TIME
+# Cutoff time in PST would be 6am of the next day.
+PARALLEL_OPTIMIZE_JOB_END_TIME = 14
 
 # Configuration directory settings
 CONFIG_FILES_PATH = f"{Path(__file__).parent.parent.as_posix()}/datasets/configuration"
@@ -397,6 +394,9 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 # Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
+
+# Max query size that can be sent to clickhouse
+MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
 
 # The slice configs below are the "SLICED" versions to the equivalent default
 # settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
@@ -429,6 +429,16 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 # This is only for sliced Kafka topics
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 
+# When dataset yamls (i.e. dataset, storages, entities) are loaded into memory, should we validate
+# the jsonschema or not? In production we shouldn't need to do it, in CI we should. This is for performance
+# reasons. The json schemas take around a second to compile and they add time to the load of every
+# yaml file as well because we validate them. By skipping these steps in production environments
+# we save ~2s on startup time
+VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
+USE_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
+TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
@@ -437,6 +447,7 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     provide a full absolute path such as `/foo/bar/my_settings.py`."""
 
     import importlib
+    import importlib.abc
     import importlib.util
     import os
 

@@ -445,16 +445,6 @@ query_processors:
   - processor: HandledFunctionsProcessor
     args:
       column: exception_stacks.mechanism_handled
-  - processor: ReferrerRateLimiterProcessor
-  - processor: ProjectReferrerRateLimiter
-    args:
-      project_column: project_id
-  - processor: ProjectRateLimiterProcessor
-    args:
-      project_column: project_id
-  - processor: ResourceQuotaProcessor
-    args:
-      project_field: project_id
 
 validate_data_model: error
 validators:

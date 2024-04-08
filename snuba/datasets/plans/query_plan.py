@@ -22,6 +22,7 @@ class QueryRunner(Protocol):
         clickhouse_query: Union[Query, CompositeQuery[Table]],
         query_settings: QuerySettings,
         reader: Reader,
+        cluster_name: str,
     ) -> QueryResult:
         ...
 
@@ -137,15 +138,19 @@ class CompositeQueryPlan(QueryPlan[CompositeQuery[Table]]):
         """
 
         return (
-            self.root_processors.plan_processors
-            if self.root_processors is not None
-            else [],
-            {
-                alias: subquery.plan_processors
-                for alias, subquery in self.aliased_processors.items()
-            }
-            if self.aliased_processors is not None
-            else {},
+            (
+                self.root_processors.plan_processors
+                if self.root_processors is not None
+                else []
+            ),
+            (
+                {
+                    alias: subquery.plan_processors
+                    for alias, subquery in self.aliased_processors.items()
+                }
+                if self.aliased_processors is not None
+                else {}
+            ),
         )
 
 

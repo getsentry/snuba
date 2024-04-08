@@ -299,8 +299,12 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         options: Optional[Mapping[str, Any]] = None,
         chunk_size: Optional[int] = None,
         buffer_size: int = 0,
+        max_connections: int = 1,
+        block_connections: bool = False,
     ):
-        self.__pool = HTTPConnectionPool(host, port)
+        self.__pool = HTTPConnectionPool(
+            host, port, maxsize=max_connections, block=block_connections
+        )
         self.__executor = ThreadPoolExecutor()
         self.__metrics = metrics
 
