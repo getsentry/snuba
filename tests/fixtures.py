@@ -313,10 +313,10 @@ def get_replay_event(replay_id: str | None = None) -> Mapping[str, Any]:
                         "type": "replay_event",
                         "replay_id": replay_id,
                         "segment_id": 0,
-                        "tags": {
-                            "customtag": "is_set",
-                            "transaction": "/organizations/:orgId/issues/",
-                        },
+                        "tags": [
+                            ["customtag", "is_set"],
+                            ["transaction", "/organizations/:orgId/issues/"],
+                        ],
                         "trace_ids": [
                             "36e980a9-c602-4cde-9f5d-089f15b83b5f",
                             "8bea4461-d8b9-44f3-93c1-5a3cb1c4169a",
