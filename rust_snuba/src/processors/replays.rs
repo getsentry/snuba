@@ -192,6 +192,8 @@ pub fn deserialize_message(
             vec![ReplayRow {
                 error_sample_rate: -1.0,
                 event_hash: Uuid::from_u64_pair(0, event.viewed_by_id),
+                offset,
+                partition,
                 platform: "javascript".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
