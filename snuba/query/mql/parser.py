@@ -266,13 +266,16 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             _, filter_expr, *_ = packed_filters[0]
             if target.formula is not None:
 
-                def pushdown_filter(param: InitialParseResult) -> InitialParseResult:
-                    if param.formula is not None:
-                        parameters = param.parameters or []
-                        for p in parameters:
-                            pushdown_filter(p)
-                    elif param.expression is not None:
-                        exp = param.expression.expression
+                def pushdown_filter(n: InitialParseResult) -> None:
+                    assert isinstance(n, InitialParseResult)
+                    if n.formula is not None:
+                        for param in n.parameters or []:
+                            if isinstance(param, InitialParseResult):
+                                # Only push down non-scalar values e.g. sum(mri) / 3600, 3600 will not be pushed down
+                                # TODO: the type definition of InitialParseResult.parameters is inaccurate
+                                pushdown_filter(param)
+                    elif n.expression is not None:
+                        exp = n.expression.expression
                         assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
                         exp = replace(
                             exp,
@@ -281,17 +284,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                                 binary_condition("and", filter_expr, exp.parameters[1]),
                             ),
                         )
-                        param.expression = replace(param.expression, expression=exp)
+                        n.expression = replace(n.expression, expression=exp)
                     else:
                         raise InvalidQueryException("Could not parse formula")
 
-                    return param
-
-                if target.parameters is not None:
-                    for param in target.parameters:
-                        if not isinstance(param, InitialParseResult):
-                            continue  # Don't push down scalar values e.g. sum(mri) / 3600
-                        pushdown_filter(param)
+                pushdown_filter(target)
             else:
                 if target.conditions is not None:
                     target.conditions = target.conditions + [filter_expr]
