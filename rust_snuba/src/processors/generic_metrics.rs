@@ -1,7 +1,6 @@
 use adler::Adler32;
-use anyhow::Context;
+use anyhow::{Context, Error};
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
     Deserialize, Deserializer, Serialize,
@@ -9,10 +8,12 @@ use serde::{
 use std::{collections::BTreeMap, marker::PhantomData, vec};
 
 use crate::{
+    runtime_config::get_str_config,
     types::{CogsData, InsertBatch, RowData},
     KafkaMessageMetadata, ProcessorConfig,
 };
 
+use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::{counter, timer};
 
 use super::utils::enforce_retention;
@@ -62,6 +63,11 @@ struct FromGenericMetricsMessage {
     value: MetricValue,
     retention_days: u16,
     aggregation_option: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MessageUseCase {
+    use_case_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -243,6 +249,14 @@ impl Parse for CountersRawRow {
     }
 }
 
+fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &MessageUseCase) -> bool {
+    if let Some(killswitch) = config.ok().flatten() {
+        return killswitch.contains(use_case.use_case_id.as_str());
+    }
+
+    false
+}
+
 fn process_message<T>(
     payload: KafkaPayload,
     config: &ProcessorConfig,
@@ -251,6 +265,14 @@ where
     T: Parse + Serialize,
 {
     let payload_bytes = payload.payload().context("Expected payload")?;
+    let killswitch_config = get_str_config("generic_metrics_use_case_killswitch");
+    let use_case: MessageUseCase = serde_json::from_slice(payload_bytes)?;
+
+    if should_use_killswitch(killswitch_config, &use_case) {
+        counter!("generic_metrics.messages.killswitched_use_case", 1, "use_case_id" => use_case.use_case_id.as_str());
+        return Ok(InsertBatch::skip());
+    }
+
     let msg: FromGenericMetricsMessage = serde_json::from_slice(payload_bytes)?;
     let use_case_id = msg.use_case_id.clone();
     let sentry_received_timestamp =
@@ -663,6 +685,66 @@ mod tests {
         "value": {"count": 10, "last": 10.0, "max": 10.0, "min": 1.0, "sum": 20.0},
         "aggregation_option": "ten_second"
     }"#;
+
+    #[test]
+    fn test_shouldnt_killswitch() {
+        let fake_config = Ok(Some("[custom]".to_string()));
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+
+        assert!(!should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_should_killswitch() {
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+        let fake_config = Ok(Some("[transactions]".to_string()));
+
+        assert!(should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_should_killswitch_again() {
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+        let fake_config = Ok(Some("[transactions, custom]".to_string()));
+
+        assert!(should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_shouldnt_killswitch_again() {
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+        let fake_config = Ok(Some("[]".to_string()));
+
+        assert!(!should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_shouldnt_killswitch_empty() {
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+        let fake_config = Ok(Some("".to_string()));
+
+        assert!(!should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_shouldnt_killswitch_no_config() {
+        let use_case = MessageUseCase {
+            use_case_id: "transactions".to_string(),
+        };
+        let fake_config = Ok(None);
+
+        assert!(!should_use_killswitch(fake_config, &use_case));
+    }
 
     #[test]
     fn test_validate_timeseries_id() {
