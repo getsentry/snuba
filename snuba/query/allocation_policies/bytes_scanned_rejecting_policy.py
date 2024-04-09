@@ -185,6 +185,14 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             ] = f"{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}"
             explanation["granted_quota"] = granted_quota.granted
             explanation["limit"] = scan_limit
+            # This is technically a high cardinality tag value however these rejections
+            # should not happen often therefore it should be safe to output these rejections as metris
+            self.metrics.increment(
+                "bytes_scanned_rejection",
+                tags={
+                    "tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"
+                },
+            )
             return QuotaAllowance(False, self.max_threads, explanation)
         return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"})
 
