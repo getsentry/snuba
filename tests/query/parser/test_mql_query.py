@@ -2749,3 +2749,29 @@ def test_invalid_format_expressions_from_mql(
     generic_metrics = get_dataset("generic_metrics")
     with pytest.raises(type(error), match=re.escape(str(error))):
         query, _ = parse_mql_query(query_body, mql_context, generic_metrics)
+
+
+def test_pushdown_error_query():
+    mql = '((avg(d:transactions/duration@millisecond) * 100.0) * 100.0){transaction:"getsentry.tasks.calculate_spike_projections"}'
+    context = {
+        "end": "2024-04-08T06:49:00+00:00",
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 9223372036854775909,
+            "transaction": 9223372036854776020,
+        },
+        "limit": 10000,
+        "offset": None,
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "orderby": None,
+            "with_totals": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1],
+            "use_case_id": "'transactions'",
+        },
+        "start": "2024-04-08T05:48:00+00:00",
+    }
+    parse_mql_query(mql, context, get_dataset("generic_metrics"))
