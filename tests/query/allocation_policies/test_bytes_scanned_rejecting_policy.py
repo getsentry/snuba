@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import pytest
+from clickhouse_driver import errors
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import AllocationPolicy, QueryResultOrError
 from snuba.query.allocation_policies.bytes_scanned_rejecting_policy import (
     BytesScannedRejectingPolicy,
 )
-from snuba.web import QueryResult
+from snuba.web import QueryException, QueryResult
 
 PROJECT_REFERRER_SCAN_LIMIT = 1000
 ORGANIZATION_REFERRER_SCAN_LIMIT = PROJECT_REFERRER_SCAN_LIMIT * 2
@@ -207,4 +209,37 @@ def test_overrides(
     assert allowance.explanation["limit"] == limit
 
 
-# test overrides
+@pytest.mark.redis_db
+def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
+    _configure_policy(policy)
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "project_id": 12345,
+        "referrer": "some_referrer",
+    }
+    policy.set_config_value(
+        "clickhouse_timeout_bytes_scanned_penalization",
+        ORGANIZATION_REFERRER_SCAN_LIMIT * 2,
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+
+    assert allowance.can_run
+    # regular query exception is thrown, should not affect quota
+    policy.update_quota_balance(
+        tenant_ids, QUERY_ID, QueryResultOrError(None, QueryException())
+    )
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.can_run
+
+    # timneout exception is thrown, the penalization is greater than the quota, therefore
+    # next query should be rejected
+    timeout_exception = QueryException()
+    timeout_exception.__cause__ = ClickhouseError(
+        code=errors.ErrorCodes.TIMEOUT_EXCEEDED
+    )
+    policy.update_quota_balance(
+        tenant_ids, QUERY_ID, QueryResultOrError(None, timeout_exception)
+    )
+
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert not allowance.can_run

@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Any, cast
 
+from clickhouse_driver import errors
 from sentry_redis_tools.sliding_windows_rate_limiter import (
     GrantedQuota,
     Quota,
@@ -11,6 +12,7 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
     RequestedQuota,
 )
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
@@ -37,6 +39,7 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(
 )
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
+DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 20
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
@@ -80,6 +83,12 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 f"DEFAULT: how many bytes can an organization scan per referrer in the last {self.WINDOW_SECONDS/ 60} mins before queries start getting rejected. Cross-project queries are limited by organization_id",
                 int,
                 DEFAULT_BYTES_SCANNED_LIMIT * 2,
+            ),
+            AllocationPolicyConfig(
+                "clickhouse_timeout_bytes_scanned_penalization",
+                "If a clickhouse query times out, how many bytes does the policy assume the query scanned? Increasing the number increases the penalty for queries that time out",
+                int,
+                DEFAULT_TIMEOUT_PENALIZATION,
             ),
         ]
 
@@ -199,6 +208,17 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
     ) -> int:
+        if result_or_error.error:
+            if (
+                isinstance(result_or_error.error.__cause__, ClickhouseError)
+                and result_or_error.error.__cause__.code
+                == errors.ErrorCodes.TIMEOUT_EXCEEDED
+            ):
+                return self.get_config_value(
+                    "clickhouse_timeout_bytes_scanned_penalization"
+                )
+            else:
+                return 0
         progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
         if isinstance(progress_bytes_scanned, (int, float)):
             self.metrics.increment(
@@ -206,7 +226,6 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 progress_bytes_scanned,
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
             )
-
         return progress_bytes_scanned
 
     def _update_quota_balance(
@@ -221,14 +240,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             return
         if self.is_cross_org_query(tenant_ids):
             return
-        if result_or_error.error:
-            return
         bytes_scanned = self._get_bytes_scanned_in_query(tenant_ids, result_or_error)
-        query_result = result_or_error.query_result
-        assert query_result is not None
-        if bytes_scanned is None:
-            logging.error("No bytes scanned in query_result %s", query_result)
-            return
         if bytes_scanned == 0:
             return
         referrer = tenant_ids.get("referrer", "no_referrer")
