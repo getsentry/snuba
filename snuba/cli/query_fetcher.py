@@ -66,7 +66,6 @@ def get_credentials() -> Tuple[str, str]:
 @click.option(
     "--tables",
     type=str,
-    required=True,
     help="table names separated with ,",
 )
 @click.option(
@@ -142,7 +141,19 @@ def query_fetcher(
             queries.append(QueryInfoResult(query_id=query_id, query_str=query))
         return queries
 
-    table_names = [t for t in tables.split(",")]
+    def get_table_names() -> Sequence[str]:
+        name_results = connection.execute("SHOW TABLES").results
+        if not name_results:
+            raise Exception("No tables names found")
+        return [n[0] for n in name_results]
+
+    if not tables:
+        # fetches all the table names from the node
+        # we are getting the querylog queries from
+        table_names = get_table_names()
+    else:
+        table_names = [t for t in tables.split(",")]
+
     # rounded to the hour
     now = datetime.utcnow().replace(
         microsecond=0,
