@@ -214,8 +214,10 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 and result_or_error.error.__cause__.code
                 == errors.ErrorCodes.TIMEOUT_EXCEEDED
             ):
-                return self.get_config_value(
-                    "clickhouse_timeout_bytes_scanned_penalization"
+                return int(
+                    self.get_config_value(
+                        "clickhouse_timeout_bytes_scanned_penalization"
+                    )
                 )
             else:
                 return 0
