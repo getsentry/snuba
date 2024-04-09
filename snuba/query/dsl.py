@@ -1,9 +1,27 @@
 from typing import Optional, Sequence
 
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
+
+
+def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
+    return SubscriptableReference(
+        f"_snuba_tags_raw[{indexer_mapping}]",
+        Column(
+            "_snuba_tags_raw",
+            None,
+            "tags_raw",
+        ),
+        Literal(None, str(indexer_mapping)),
+    )
 
 
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:

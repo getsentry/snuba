@@ -1234,9 +1234,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.22"
+version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d6250322ef6e60f93f9a2162799302cd6f68f79f6e5d85c8c16f14d1d958178"
+checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
 dependencies = [
  "bytes",
  "fnv",
@@ -3006,9 +3006,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "0.1.60"
+version = "0.1.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95883282bfefaed402a8c89c9102f8530b94daa64f598a6ec5f8ae4ae78646ae"
+checksum = "d4121cd942bbb53f176b2f4b101a24fa6aa19c19337d5b21bfc75480440f2aee"
 dependencies = [
  "jsonschema",
  "prettyplease",
