@@ -309,7 +309,20 @@ pub fn process_counter_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<CountersRawRow>(payload, config)
+    if let Some(headers) = payload.headers() {
+        if let Some(header_value) = headers.get("metric_type") {
+            match header_value {
+                b"g" => process_message::<CountersRawRow>(payload, config),
+                _ => Ok(InsertBatch::skip()),
+            }
+        } else {
+            // In case of specific header not found, process the message normally
+            process_message::<CountersRawRow>(payload, config)
+        }
+    } else {
+        // In case of no headers, process the message normally
+        process_message::<CountersRawRow>(payload, config)
+    }
 }
 
 /// The raw row that is written to clickhouse for sets.
@@ -380,7 +393,20 @@ pub fn process_set_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<SetsRawRow>(payload, config)
+    if let Some(headers) = payload.headers() {
+        if let Some(header_value) = headers.get("metric_type") {
+            match header_value {
+                b"s" => process_message::<SetsRawRow>(payload, config),
+                _ => Ok(InsertBatch::skip()),
+            }
+        } else {
+            // In case of specific header not found, process the message normally
+            process_message::<SetsRawRow>(payload, config)
+        }
+    } else {
+        // In case of no headers, process the message normally
+        process_message::<SetsRawRow>(payload, config)
+    }
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -457,7 +483,20 @@ pub fn process_distribution_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<DistributionsRawRow>(payload, config)
+    if let Some(headers) = payload.headers() {
+        if let Some(header_value) = headers.get("metric_type") {
+            match header_value {
+                b"d" => process_message::<DistributionsRawRow>(payload, config),
+                _ => Ok(InsertBatch::skip()),
+            }
+        } else {
+            // In case no header key found, process message normally
+            process_message::<DistributionsRawRow>(payload, config)
+        }
+    } else {
+        // In case of no headers, process the message normally
+        process_message::<DistributionsRawRow>(payload, config)
+    }
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -553,7 +592,20 @@ pub fn process_gauge_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    process_message::<GaugesRawRow>(payload, config)
+    if let Some(headers) = payload.headers() {
+        if let Some(header_value) = headers.get("metric_type") {
+            match header_value {
+                b"g" => process_message::<GaugesRawRow>(payload, config),
+                _ => Ok(InsertBatch::skip()),
+            }
+        } else {
+            // In case of specific header not found, process the message normally
+            process_message::<GaugesRawRow>(payload, config)
+        }
+    } else {
+        // In case of no headers, process the message normally
+        process_message::<GaugesRawRow>(payload, config)
+    }
 }
 
 #[cfg(test)]
