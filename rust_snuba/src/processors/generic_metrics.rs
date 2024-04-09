@@ -50,19 +50,19 @@ fn generate_timeseries_id(
     adler.checksum()
 }
 
-#[derive(Debug, Deserialize)]
-struct FromGenericMetricsMessage {
-    use_case_id: String,
-    org_id: u64,
-    project_id: u64,
-    metric_id: u64,
-    timestamp: f64,
-    sentry_received_timestamp: f64,
-    tags: BTreeMap<String, String>,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FromGenericMetricsMessage {
+    pub use_case_id: String,
+    pub org_id: u64,
+    pub project_id: u64,
+    pub metric_id: u64,
+    pub timestamp: f64,
+    pub sentry_received_timestamp: f64,
+    pub tags: BTreeMap<String, String>,
     #[serde(flatten)]
-    value: MetricValue,
-    retention_days: u16,
-    aggregation_option: Option<String>,
+    pub value: MetricValue,
+    pub retention_days: u16,
+    pub aggregation_option: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,9 +70,9 @@ struct MessageUseCase {
     use_case_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
-enum MetricValue {
+pub enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
     #[serde(rename = "s", deserialize_with = "encoded_series_compat_deserializer")]
@@ -89,9 +89,9 @@ enum MetricValue {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "format", rename_all = "lowercase")]
-enum EncodedSeries<T> {
+pub enum EncodedSeries<T> {
     Array { data: Vec<T> },
 }
 
@@ -312,11 +312,11 @@ pub fn process_counter_message(
     if let Some(headers) = payload.headers() {
         if let Some(header_value) = headers.get("metric_type") {
             match header_value {
-                b"g" => process_message::<CountersRawRow>(payload, config),
+                b"c" => process_message::<CountersRawRow>(payload, config),
                 _ => Ok(InsertBatch::skip()),
             }
         } else {
-            // In case of specific header not found, process the message normally
+            // In case the specified header key not found, process message normally
             process_message::<CountersRawRow>(payload, config)
         }
     } else {
@@ -400,7 +400,7 @@ pub fn process_set_message(
                 _ => Ok(InsertBatch::skip()),
             }
         } else {
-            // In case of specific header not found, process the message normally
+            // In case the specified header key not found, process message normally
             process_message::<SetsRawRow>(payload, config)
         }
     } else {
@@ -490,7 +490,7 @@ pub fn process_distribution_message(
                 _ => Ok(InsertBatch::skip()),
             }
         } else {
-            // In case no header key found, process message normally
+            // In case the specified header key not found, process message normally
             process_message::<DistributionsRawRow>(payload, config)
         }
     } else {
@@ -599,7 +599,7 @@ pub fn process_gauge_message(
                 _ => Ok(InsertBatch::skip()),
             }
         } else {
-            // In case of specific header not found, process the message normally
+            // In case the specified header key not found, process message normally
             process_message::<GaugesRawRow>(payload, config)
         }
     } else {
