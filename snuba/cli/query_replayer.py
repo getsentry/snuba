@@ -61,6 +61,15 @@ def get_credentials(user: Optional[str], password: Optional[str]) -> Tuple[str, 
     return (user or "default", password or "")
 
 
+def parse_table_name(err: ClickhouseError) -> str:
+    match = re.search(r"Table\s+(\S+)\s+doesn\'t", err.message)
+    if not match:
+        raise Exception("Couldn't parse table name.")
+    # err message will have full database.table but we just want table
+    _, table = match.group(1).strip().split(".")
+    return table
+
+
 # Kind of hacky but the saved schemas will have one
 # of these clusters defined
 CLUSTERS = {
@@ -191,20 +200,15 @@ def query_replayer(
             blob_getter.get_name_diffs(("queries/", f"{results_directory}/"))
         )
 
-    def create_table_from_err(err: ClickhouseError) -> None:
+    def create_table(table: str) -> None:
         """
         If we try to replay queries for tables that haven't
-        been created yet, we do that here. We parse the table
-        name from the error message, download the schema from
-        our gcs bucket, replace the cluster name in the schema
-        with the one passed in the cli command (--cluster-name)
-        and then finally execute the CREATE TABLE query
+        been created yet and fail, then we attempt to create
+        the table now. We download the schema from our gcs
+        bucket, replace the cluster name in the schema with
+        the one passed in the cli command (--cluster-name)
+        and execute the CREATE TABLE query.
         """
-        match = re.search(r"Table\s+(\S+)\s+doesn\'t", err.message)
-        if not match:
-            return
-        # err message will have full database.table but we just want table
-        _, table = match.group(1).strip().split(".")
         filename = f"{table}.sql"
         filepath = full_path(filename)
         logger.info(f"Downloading schema for {table}...")
@@ -244,7 +248,8 @@ def query_replayer(
             assert isinstance(q, QueryInfoResult)
             err = _run_query(q)
             if err and err.code == ErrorCodes.UNKNOWN_TABLE:
-                create_table_from_err(err)
+                table = parse_table_name(err)
+                create_table(table)
                 # give it a second to create the table
                 time.sleep(1)
                 err = _run_query(q)
