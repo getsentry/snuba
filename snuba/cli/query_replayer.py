@@ -192,7 +192,7 @@ def query_replayer(
             blob_getter.get_name_diffs(("queries/", f"{results_directory}/"))
         )
 
-    def create_table_from_err(err) -> None:
+    def create_table_from_err(err: ClickhouseError) -> None:
         """
         If we try to replay queries for tables that haven't
         been created yet, we do that here. We parse the table
@@ -202,6 +202,8 @@ def query_replayer(
         and then finally execute the CREATE TABLE query
         """
         match = re.search(r"Table\s+(\S+)\s+doesn\'t", err.message)
+        if not match:
+            return
         # err message will have full database.table but we just want table
         _, table = match.group(1).strip().split(".")
         filename = f"{table}.sql"
@@ -234,7 +236,9 @@ def query_replayer(
                 sentry_sdk.capture_exception(err)
                 if isinstance(err, ClickhouseError):
                     return err
-            return
+                else:
+                    return None
+            return None
 
         logger.info(f"Re-running queries for {blob}")
         for q in queries:

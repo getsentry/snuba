@@ -156,7 +156,7 @@ def query_fetcher(
     else:
         table_names = [t for t in tables.split(",")]
 
-    def save_table_schema(table) -> None:
+    def save_table_schema(table: str) -> None:
         """
         Fetches the table schema from the same node we are
         fetching the queries from. The schemas may be needed
