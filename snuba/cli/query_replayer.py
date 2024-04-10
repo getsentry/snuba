@@ -1,3 +1,4 @@
+import re
 import time
 from datetime import datetime
 from typing import Optional, Tuple
@@ -8,6 +9,7 @@ import structlog
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.upgrades.comparisons import (
     BlobGetter,
@@ -15,12 +17,16 @@ from snuba.clickhouse.upgrades.comparisons import (
     FileManager,
     QueryInfoResult,
     QueryMeasurementResult,
+    delete_local_file,
+    full_path,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.gcs import GCSUploader
 
 logger = structlog.get_logger().bind(module=__name__)
+
+TABLE_DOESNT_EXIST = 60
 
 
 def format_results_query(
@@ -54,6 +60,15 @@ def format_results_query(
 def get_credentials(user: Optional[str], password: Optional[str]) -> Tuple[str, str]:
     # TOOO don't hardcode credentials, use settings
     return (user or "default", password or "")
+
+
+# Kind of hacky but the saved schemas will have one
+# of these clusters defined
+CLUSTERS = {
+    "snuba-st",
+    "snuba-generic-metrics",
+    "snuba-shared",
+}
 
 
 @click.command()
@@ -115,6 +130,12 @@ def get_credentials(user: Optional[str], password: Optional[str]) -> Tuple[str, 
     required=True,
     default=30,
 )
+@click.option(
+    "--cluster-name",
+    help="Option to send saved csv file to slack",
+    required=True,
+    default="snuba-test",
+)
 @click.option("--log-level", help="Logging level to use.")
 def query_replayer(
     *,
@@ -125,6 +146,7 @@ def query_replayer(
     notify: bool,
     gcs_bucket: str,
     wait_seconds: int,
+    cluster_name: str,
     log_level: Optional[str] = None,
     clickhouse_user: Optional[str] = None,
     clickhouse_password: Optional[str] = None,
@@ -170,27 +192,62 @@ def query_replayer(
             blob_getter.get_name_diffs(("queries/", f"{results_directory}/"))
         )
 
+    def create_table_from_err(err) -> None:
+        """
+        If we try to replay queries for tables that haven't
+        been created yet, we do that here. We parse the table
+        name from the error message, download the schema from
+        our gcs bucket, replace the cluster name in the schema
+        with the one passed in the cli command (--cluster-name)
+        and then finally execute the CREATE TABLE query
+        """
+        match = re.search(r"Table\s+(\S+)\s+doesn\'t", err.message)
+        # err message will have full database.table but we just want table
+        _, table = match.group(1).strip().split(".")
+        filename = f"{table}.sql"
+        filepath = full_path(filename)
+        logger.info(f"Downloading schema for {table}...")
+        uploader.download_file(f"schemas/{filename}", filepath)
+        with open(filename, encoding="utf-8") as f:
+            schema = f.read()
+            for orig_cluster in CLUSTERS:
+                schema = schema.replace(orig_cluster, cluster_name)
+            logger.info(f"Creating table {table}...")
+            connection.execute(schema)
+        delete_local_file(filepath)
+
     def rerun_queries_for_blob(blob: str) -> Tuple[int, int]:
         queries = file_manager.download(blob)
         reran_queries = 0
         total_queries = len(queries)
-        logger.info(f"Re-running queries for {blob}")
-        for q in queries:
-            assert isinstance(q, QueryInfoResult)
+
+        def _run_query(q: QueryInfoResult) -> Optional[ClickhouseError]:
             try:
                 connection.execute(
                     q.query_str,
                     query_id=q.query_id,
                 )
-                reran_queries += 1
             except Exception as e:
-                logger.info(
-                    f"Re-ran {reran_queries}/{total_queries} queries before failing on {q.query_id}"
-                )
+                if isinstance(e, ClickhouseError):
+                    return e
                 # capturing the execption so that we can debug,
                 # but not re-raising because we don't want one
                 # blob to prevent others from being processed
                 sentry_sdk.capture_exception(e)
+            return
+
+        logger.info(f"Re-running queries for {blob}")
+        for q in queries:
+            assert isinstance(q, QueryInfoResult)
+            err = _run_query(q)
+            if err.code == TABLE_DOESNT_EXIST:
+                create_table_from_err(err)
+                # give it a second to create the table
+                time.sleep(1)
+                err = _run_query(q)
+            if not err:
+                reran_queries += 1
+
         logger.info(f"Re-ran {reran_queries}/{total_queries} queries")
         return (total_queries, reran_queries)
 
