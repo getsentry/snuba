@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 import click
 import sentry_sdk
 import structlog
+from clickhouse_driver.errors import ErrorCodes
 
 from snuba import settings
 from snuba.admin.notifications.slack.client import SlackClient
@@ -25,8 +26,6 @@ from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.gcs import GCSUploader
 
 logger = structlog.get_logger().bind(module=__name__)
-
-TABLE_DOESNT_EXIST = 60
 
 
 def format_results_query(
@@ -108,19 +107,19 @@ CLUSTERS = {
 )
 @click.option(
     "--override",
-    help="Option to override any previously re-run results",
+    help="Option to override any previously re-run results.",
     is_flag=True,
     default=False,
 )
 @click.option(
     "--notify",
-    help="Option to send saved csv file to slack",
+    help="Option to send saved csv file to slack.",
     is_flag=True,
     default=False,
 )
 @click.option(
     "--gcs-bucket",
-    help="Name of gcs bucket to save query files to",
+    help="Name of gcs bucket to save query files to.",
     required=True,
 )
 @click.option(
@@ -132,7 +131,7 @@ CLUSTERS = {
 )
 @click.option(
     "--cluster-name",
-    help="Option to send saved csv file to slack",
+    help="Cluster name for the nodes you're re-running queries on.",
     required=True,
     default="snuba-test",
 )
@@ -244,7 +243,7 @@ def query_replayer(
         for q in queries:
             assert isinstance(q, QueryInfoResult)
             err = _run_query(q)
-            if err and err.code == TABLE_DOESNT_EXIST:
+            if err and err.code == ErrorCodes.UNKNOWN_TABLE:
                 create_table_from_err(err)
                 # give it a second to create the table
                 time.sleep(1)
