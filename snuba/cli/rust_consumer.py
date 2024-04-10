@@ -28,7 +28,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
