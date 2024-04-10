@@ -227,20 +227,20 @@ def query_replayer(
                     q.query_str,
                     query_id=q.query_id,
                 )
-            except Exception as e:
-                if isinstance(e, ClickhouseError):
-                    return e
+            except Exception as err:
                 # capturing the execption so that we can debug,
                 # but not re-raising because we don't want one
                 # blob to prevent others from being processed
-                sentry_sdk.capture_exception(e)
+                sentry_sdk.capture_exception(err)
+                if isinstance(err, ClickhouseError):
+                    return err
             return
 
         logger.info(f"Re-running queries for {blob}")
         for q in queries:
             assert isinstance(q, QueryInfoResult)
             err = _run_query(q)
-            if err.code == TABLE_DOESNT_EXIST:
+            if err and err.code == TABLE_DOESNT_EXIST:
                 create_table_from_err(err)
                 # give it a second to create the table
                 time.sleep(1)
