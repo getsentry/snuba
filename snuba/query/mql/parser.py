@@ -10,7 +10,6 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
-from snuba import settings as snuba_settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -50,7 +49,7 @@ from snuba.query.snql.parser import (
     _replace_time_condition,
     _treeify_or_and_conditions,
 )
-from snuba.state import explain_meta, get_int_config
+from snuba.state import explain_meta
 from snuba.util import parse_datetime
 from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
@@ -267,13 +266,16 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             _, filter_expr, *_ = packed_filters[0]
             if target.formula is not None:
 
-                def pushdown_filter(param: InitialParseResult) -> InitialParseResult:
-                    if param.formula is not None:
-                        parameters = param.parameters or []
-                        for p in parameters:
-                            pushdown_filter(p)
-                    elif param.expression is not None:
-                        exp = param.expression.expression
+                def pushdown_filter(n: InitialParseResult) -> None:
+                    assert isinstance(n, InitialParseResult)
+                    if n.formula is not None:
+                        for param in n.parameters or []:
+                            if isinstance(param, InitialParseResult):
+                                # Only push down non-scalar values e.g. sum(mri) / 3600, 3600 will not be pushed down
+                                # TODO: the type definition of InitialParseResult.parameters is inaccurate
+                                pushdown_filter(param)
+                    elif n.expression is not None:
+                        exp = n.expression.expression
                         assert isinstance(exp, (FunctionCall, CurriedFunctionCall))
                         exp = replace(
                             exp,
@@ -282,17 +284,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                                 binary_condition("and", filter_expr, exp.parameters[1]),
                             ),
                         )
-                        param.expression = replace(param.expression, expression=exp)
+                        n.expression = replace(n.expression, expression=exp)
                     else:
                         raise InvalidQueryException("Could not parse formula")
 
-                    return param
-
-                if target.parameters is not None:
-                    for param in target.parameters:
-                        if not isinstance(param, InitialParseResult):
-                            continue  # Don't push down scalar values e.g. sum(mri) / 3600
-                        pushdown_filter(param)
+                pushdown_filter(target)
             else:
                 if target.conditions is not None:
                     target.conditions = target.conditions + [filter_expr]
@@ -1111,18 +1107,11 @@ def parse_mql_query(
         )
 
     # Filter in select optimizer
-    feat_flag = get_int_config(
-        "enable_filter_in_select_optimizer",
-        default=snuba_settings.ENABLE_FILTER_IN_SELECT_OPTIMIZER,
-    )
-    if feat_flag:
-        with sentry_sdk.start_span(
-            op="processor", description="filter_in_select_optimize"
-        ):
-            if settings is None:
-                FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
-            else:
-                FilterInSelectOptimizer().process_query(query, settings)
+    with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
+        if settings is None:
+            FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
+        else:
+            FilterInSelectOptimizer().process_query(query, settings)
 
     # Custom processing to tweak the AST before validation
     with sentry_sdk.start_span(op="processor", description="custom_processing"):
