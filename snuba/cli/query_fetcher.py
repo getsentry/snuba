@@ -44,19 +44,6 @@ def get_credentials() -> Tuple[str, str]:
     return ("default", "")
 
 
-def get_table_names(connection: ClickhousePool) -> Sequence[str]:
-    name_results = connection.execute("SHOW TABLES").results
-    if not name_results:
-        raise Exception("No tables names found")
-    return [n[0] for n in name_results]
-
-
-def get_table_schema(connection: ClickhousePool, table: str) -> str:
-    return connection.execute(
-        f"SELECT create_table_query FROM system.tables WHERE name = '{table}'"
-    ).results
-
-
 @click.command()
 @click.option(
     "--querylog-host",
