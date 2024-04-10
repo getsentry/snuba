@@ -395,8 +395,8 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
-# Max query size that can be sent to clickhouse
-MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
+# From testing, the max query size that can be sent to clickhouse is 131535 bytes (~128.452 KiB)
+MAX_QUERY_SIZE_BYTES = 128 * 1024  # 128 KiB
 
 # The slice configs below are the "SLICED" versions to the equivalent default
 # settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
