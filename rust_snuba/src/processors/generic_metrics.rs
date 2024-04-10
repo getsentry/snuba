@@ -89,7 +89,7 @@ enum MetricValue {
     },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "format", rename_all = "lowercase")]
 enum EncodedSeries<T> {
     Array { data: Vec<T> },
@@ -304,24 +304,51 @@ where
     }
 }
 
+// MetricTypeHeader specifies what type of metric was sent on the message
+// as per the kafka headers. It is possible to get data with heades missing
+// altogether or the specific header key with which to determine the metric
+// type to be missing. Hence there is an Unknown variant
+enum MetricTypeHeader {
+    Unknown,
+    Counter,
+    Set,
+    Distribution,
+    Gauge,
+}
+
+impl MetricTypeHeader {
+    fn from_kafka_header(header: Option<&Headers>) -> Self {
+        if let Some(headers) = header {
+            if let Some(header_value) = headers.get("metric_type") {
+                match header_value {
+                    b"c" => MetricTypeHeader::Counter,
+                    b"s" => MetricTypeHeader::Set,
+                    b"d" => MetricTypeHeader::Distribution,
+                    b"g" => MetricTypeHeader::Gauge,
+                    _ => MetricTypeHeader::Unknown,
+                }
+            } else {
+                // metric_type header not found
+                MetricTypeHeader::Unknown
+            }
+        } else {
+            // No headers on message
+            MetricTypeHeader::Unknown
+        }
+    }
+}
+
 pub fn process_counter_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    if let Some(headers) = payload.headers() {
-        if let Some(header_value) = headers.get("metric_type") {
-            match header_value {
-                b"c" => process_message::<CountersRawRow>(payload, config),
-                _ => Ok(InsertBatch::skip()),
-            }
-        } else {
-            // In case the specified header key not found, process message normally
+    let metric_type_header = MetricTypeHeader::from_kafka_header(payload.headers());
+    match metric_type_header {
+        MetricTypeHeader::Counter | MetricTypeHeader::Unknown => {
             process_message::<CountersRawRow>(payload, config)
         }
-    } else {
-        // In case of no headers, process the message normally
-        process_message::<CountersRawRow>(payload, config)
+        _ => Ok(InsertBatch::skip()),
     }
 }
 
@@ -393,19 +420,12 @@ pub fn process_set_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    if let Some(headers) = payload.headers() {
-        if let Some(header_value) = headers.get("metric_type") {
-            match header_value {
-                b"s" => process_message::<SetsRawRow>(payload, config),
-                _ => Ok(InsertBatch::skip()),
-            }
-        } else {
-            // In case the specified header key not found, process message normally
+    let metric_type_header = MetricTypeHeader::from_kafka_header(payload.headers());
+    match metric_type_header {
+        MetricTypeHeader::Set | MetricTypeHeader::Unknown => {
             process_message::<SetsRawRow>(payload, config)
         }
-    } else {
-        // In case of no headers, process the message normally
-        process_message::<SetsRawRow>(payload, config)
+        _ => Ok(InsertBatch::skip()),
     }
 }
 
@@ -483,19 +503,12 @@ pub fn process_distribution_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    if let Some(headers) = payload.headers() {
-        if let Some(header_value) = headers.get("metric_type") {
-            match header_value {
-                b"d" => process_message::<DistributionsRawRow>(payload, config),
-                _ => Ok(InsertBatch::skip()),
-            }
-        } else {
-            // In case the specified header key not found, process message normally
+    let metric_type_header = MetricTypeHeader::from_kafka_header(payload.headers());
+    match metric_type_header {
+        MetricTypeHeader::Distribution | MetricTypeHeader::Unknown => {
             process_message::<DistributionsRawRow>(payload, config)
         }
-    } else {
-        // In case of no headers, process the message normally
-        process_message::<DistributionsRawRow>(payload, config)
+        _ => Ok(InsertBatch::skip()),
     }
 }
 
@@ -592,19 +605,12 @@ pub fn process_gauge_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
-    if let Some(headers) = payload.headers() {
-        if let Some(header_value) = headers.get("metric_type") {
-            match header_value {
-                b"g" => process_message::<GaugesRawRow>(payload, config),
-                _ => Ok(InsertBatch::skip()),
-            }
-        } else {
-            // In case the specified header key not found, process message normally
+    let metric_type_header = MetricTypeHeader::from_kafka_header(payload.headers());
+    match metric_type_header {
+        MetricTypeHeader::Gauge | MetricTypeHeader::Unknown => {
             process_message::<GaugesRawRow>(payload, config)
         }
-    } else {
-        // In case of no headers, process the message normally
-        process_message::<GaugesRawRow>(payload, config)
+        _ => Ok(InsertBatch::skip()),
     }
 }
 
@@ -896,7 +902,7 @@ mod tests {
                     -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
             DUMMY_SET_MESSAGE,
         );
-        assert_eq!(result.unwrap(), InsertBatch::default());
+        assert_eq!(result.unwrap(), InsertBatch::skip());
     }
 
     #[test]
