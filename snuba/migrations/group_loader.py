@@ -223,7 +223,6 @@ class MetricsLoader(DirectoryLoader):
             "0033_metrics_cleanup_old_views",
             "0034_metrics_cleanup_old_tables",
             "0035_metrics_raw_timeseries_id",
-            "0036_gauges_meta_tables",
         ]
 
 
@@ -326,6 +325,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0033_counters_meta_tag_values_table",
             "0034_counters_meta_tag_values_table_mv",
             "0035_recreate_counters_meta_tag_value_table_mv",
+            "0036_gauges_meta_tables",
         ]
 
 
