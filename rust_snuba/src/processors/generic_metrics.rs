@@ -239,7 +239,7 @@ impl Parse for CountersRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
-            record_meta: record_meta,
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -372,7 +372,7 @@ impl Parse for SetsRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
-            record_meta: record_meta,
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -454,7 +454,7 @@ impl Parse for DistributionsRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
-            record_meta: record_meta,
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -553,7 +553,7 @@ impl Parse for GaugesRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
-            record_meta: record_meta,
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
