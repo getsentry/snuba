@@ -64,7 +64,7 @@ SELECT
     anyIfState(device_model, device_model != '') as device_model,
     anyIfState(device_name, device_name != '') as device_name,
     anyIfState(dist, dist != '') as dist,
-    maxState(timestamp) as end,
+    maxState(timestamp) as finished_at,
     anyIfState(environment, environment != '') as environment,
     anyState(ip_address_v4) as ip_address_v4,
     anyState(ip_address_v6) as ip_address_v6,
@@ -76,11 +76,12 @@ SELECT
     any(retention_days),
     anyIfState(sdk_name, sdk_name != '') as sdk_name,
     anyIfState(sdk_version, sdk_version != '') as sdk_version,
-    minState(replay_start_timestamp) as start,
+    minState(replay_start_timestamp) as started_at,
     anyIfState(user, user != '') as user,
     anyIfState(user_id, user_id != '') as user_id,
     anyIfState(user_name, user_name != '') as user_name,
-    anyIfState(user_email, user_email != '') as user_email
+    anyIfState(user_email, user_email != '') as user_email,
+    minState(segment_id) as min_segment_id
 FROM replays_local
 GROUP BY project_id, toStartOfHour(timestamp), replay_id
 """,
@@ -156,7 +157,7 @@ columns: List[Column[Modifiers]] = [
     any_if_nullable_string("device_model"),
     any_if_nullable_string("device_name"),
     any_if_nullable_string("dist"),
-    Column("end", AggregateFunction("max", [DateTime()])),
+    Column("finished_at", AggregateFunction("max", [DateTime()])),
     any_if_nullable_string("environment"),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
@@ -170,7 +171,10 @@ columns: List[Column[Modifiers]] = [
     Column("retention_days", UInt(16)),
     any_if_nullable_string("sdk_name"),
     any_if_nullable_string("sdk_version"),
-    Column("start", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])),
+    Column("min_segment_id", AggregateFunction("min", [UInt(16)])),
+    Column(
+        "started_at", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])
+    ),
     any_if_nullable_string("user"),
     any_if_nullable_string("user_id"),
     any_if_nullable_string("user_name"),
