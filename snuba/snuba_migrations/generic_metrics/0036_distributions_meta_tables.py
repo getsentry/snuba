@@ -38,7 +38,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
-    storage_set_key = StorageSetKey.GENERIC_METRICS_SETS
+    storage_set_key = StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
