@@ -50,19 +50,19 @@ fn generate_timeseries_id(
     adler.checksum()
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct FromGenericMetricsMessage {
-    pub use_case_id: String,
-    pub org_id: u64,
-    pub project_id: u64,
-    pub metric_id: u64,
-    pub timestamp: f64,
-    pub sentry_received_timestamp: f64,
-    pub tags: BTreeMap<String, String>,
+#[derive(Debug, Deserialize)]
+struct FromGenericMetricsMessage {
+    use_case_id: String,
+    org_id: u64,
+    project_id: u64,
+    metric_id: u64,
+    timestamp: f64,
+    sentry_received_timestamp: f64,
+    tags: BTreeMap<String, String>,
     #[serde(flatten)]
-    pub value: MetricValue,
-    pub retention_days: u16,
-    pub aggregation_option: Option<String>,
+    value: MetricValue,
+    retention_days: u16,
+    aggregation_option: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,9 +70,9 @@ struct MessageUseCase {
     use_case_id: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", content = "value")]
-pub enum MetricValue {
+enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
     #[serde(rename = "s", deserialize_with = "encoded_series_compat_deserializer")]
@@ -91,7 +91,7 @@ pub enum MetricValue {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "format", rename_all = "lowercase")]
-pub enum EncodedSeries<T> {
+enum EncodedSeries<T> {
     Array { data: Vec<T> },
 }
 
