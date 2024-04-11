@@ -168,8 +168,6 @@ def query_fetcher(
         schemas/table_name.sql
         """
         filename = f"{table}.sql"
-        if uploader.blob_exists(f"schemas/{filename}"):
-            return
         ((schema,),) = connection.execute(
             f"SELECT create_table_query FROM system.tables WHERE name = '{table}'"
         ).results
