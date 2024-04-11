@@ -139,10 +139,13 @@ CLUSTERS = {
     default=30,
 )
 @click.option(
-    "--cluster-name",
-    help="Cluster name for the nodes you're re-running queries on.",
-    required=True,
+    "--old-cluster",
+    help="Cluster name you copied the schemas from, will be replaced by --new-cluster.",
     default="snuba-test",
+)
+@click.option(
+    "--new-cluster",
+    help="Cluster name for the nodes you're re-running queries on, replaces --old-cluster.",
 )
 @click.option("--log-level", help="Logging level to use.")
 def query_replayer(
@@ -154,7 +157,8 @@ def query_replayer(
     notify: bool,
     gcs_bucket: str,
     wait_seconds: int,
-    cluster_name: str,
+    old_cluster: Optional[str],
+    new_cluster: Optional[str],
     log_level: Optional[str] = None,
     clickhouse_user: Optional[str] = None,
     clickhouse_password: Optional[str] = None,
@@ -209,14 +213,17 @@ def query_replayer(
         the one passed in the cli command (--cluster-name)
         and execute the CREATE TABLE query.
         """
+        if not (old_cluster and new_cluster):
+            raise Exception(
+                "Must have --old-cluster and --new-cluster if creating tables!"
+            )
         filename = f"{table}.sql"
         filepath = full_path(filename)
         logger.info(f"Downloading schema for {table}...")
         uploader.download_file(f"schemas/{filename}", filepath)
         with open(filename, encoding="utf-8") as f:
             schema = f.read()
-            for orig_cluster in CLUSTERS:
-                schema = schema.replace(orig_cluster, cluster_name)
+            schema = schema.replace(old_cluster, new_cluster)
             logger.info(f"Creating table {table}...")
             connection.execute(schema)
         delete_local_file(filepath)
