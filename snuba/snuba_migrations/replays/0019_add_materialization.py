@@ -60,6 +60,7 @@ SELECT
     project_id,
     toStartOfHour(timestamp) as to_hour_timestamp,
     replay_id,
+    retention_days,
     anyIfState(browser_name, browser_name != '') as browser_name,
     anyIfState(browser_version, browser_version != '') as browser_version,
     sumState(toUInt64(click_is_dead)) as count_dead_clicks,
@@ -82,7 +83,6 @@ SELECT
     anyIfState(os_name, os_name != '') as os_name,
     anyIfState(os_version, os_version != '') as os_version,
     anyIfState(platform, platform != '') as platform,
-    any(retention_days),
     anyIfState(sdk_name, sdk_name != '') as sdk_name,
     anyIfState(sdk_version, sdk_version != '') as sdk_version,
     minState(replay_start_timestamp) as started_at,
@@ -92,7 +92,7 @@ SELECT
     anyIfState(user_email, user_email != '') as user_email,
     minState(segment_id) as min_segment_id
 FROM replays_local
-GROUP BY project_id, toStartOfHour(timestamp), replay_id
+GROUP BY project_id, toStartOfHour(timestamp), replay_id, retention_days
 """,
         target=operations.OperationTarget.LOCAL,
     )
@@ -151,6 +151,7 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("to_hour_timestamp", DateTime()),
     Column("replay_id", UUID()),
+    Column("retention_days", UInt(16)),
     # Columns ordered by column-name.
     any_if_nullable_string("browser_name"),
     any_if_nullable_string("browser_version"),
@@ -179,7 +180,6 @@ columns: List[Column[Modifiers]] = [
     any_if_nullable_string("os_name"),
     any_if_nullable_string("os_version"),
     any_if_string("platform", low_cardinality=False),
-    Column("retention_days", UInt(16)),
     any_if_nullable_string("sdk_name"),
     any_if_nullable_string("sdk_version"),
     Column(
