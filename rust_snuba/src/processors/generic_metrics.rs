@@ -92,17 +92,40 @@ enum MetricValue {
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "format", rename_all = "lowercase")]
-enum EncodedSeries<T> {
+enum EncodedSeries<T: Decodable> {
     Array { data: Vec<T> },
     Base64 { data: String },
 }
 
-impl<T> EncodedSeries<T> {
+impl<T: Decodable> EncodedSeries<T> {
     fn into_vec(self) -> Vec<T> {
         match self {
             EncodedSeries::Array { data } => data,
-            EncodedSeries::Base64 { data } => BASE64.decode(data.as_bytes()).ok().unwrap(),
+            EncodedSeries::Base64 { data } => {
+                let v = BASE64.decode(data.as_bytes()).ok().unwrap();
+                v.chunks_exact(4)
+                    .map(TryInto::try_into)
+                    .map(Result::unwrap)
+                    .map(T::decode_bytes)
+                    .collect()
+            }
         }
+    }
+}
+
+trait Decodable {
+    fn decode_bytes(bytes: [u8; 8]) -> Self;
+}
+
+impl Decodable for u64 {
+    fn decode_bytes(bytes: [u8; 8]) -> Self {
+        u64::from_le_bytes(bytes)
+    }
+}
+
+impl Decodable for f64 {
+    fn decode_bytes(bytes: [u8; 8]) -> Self {
+        f64::from_le_bytes(bytes)
     }
 }
 
@@ -110,14 +133,14 @@ fn encoded_series_compat_deserializer<'de, T, D>(
     deserializer: D,
 ) -> Result<EncodedSeries<T>, D::Error>
 where
-    T: Deserialize<'de>,
+    T: Decodable + Deserialize<'de>,
     D: Deserializer<'de>,
 {
     struct Visitor<U>(PhantomData<U>);
 
     impl<'de, U> serde::de::Visitor<'de> for Visitor<U>
     where
-        U: Deserialize<'de>,
+        U: Decodable + Deserialize<'de>,
     {
         type Value = EncodedSeries<U>;
 
