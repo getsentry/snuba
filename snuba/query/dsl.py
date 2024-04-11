@@ -5,11 +5,22 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
+    OptionalScalarType,
     SubscriptableReference,
 )
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
+
+
+def column(
+    column_name, table_name: str | None = None, alias: str | None = None
+) -> Column:
+    return Column(alias, table_name, column_name)
+
+
+def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
+    return Literal(alias, value)
 
 
 def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
