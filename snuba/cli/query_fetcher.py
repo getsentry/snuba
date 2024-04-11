@@ -189,7 +189,7 @@ def query_fetcher(
 
     for table in table_names:
         # we'll use the table schema in the replayer, so
-        # save the create_table_query if not already saved
+        # save the create_table_query
         save_table_schema(table)
         logger.info(f"Running fetcher for {table}...")
         start_time = window_hours_ago_ts
