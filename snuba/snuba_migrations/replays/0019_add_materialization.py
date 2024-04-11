@@ -173,7 +173,9 @@ columns: List[Column[Modifiers]] = [
     Column(
         "is_archived", AggregateFunction("sum", [UInt(64, Modifiers(nullable=True))])
     ),
-    Column("min_segment_id", AggregateFunction("min", [UInt(16, nullable=True)])),
+    Column(
+        "min_segment_id", AggregateFunction("min", [UInt(16, Modifiers(nullable=True))])
+    ),
     any_if_nullable_string("os_name"),
     any_if_nullable_string("os_version"),
     any_if_string("platform", low_cardinality=False),
