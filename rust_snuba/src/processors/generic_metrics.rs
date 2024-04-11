@@ -15,6 +15,7 @@ use crate::{
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::{counter, timer};
+static BASE64: data_encoding::Encoding = data_encoding::BASE64;
 
 use super::utils::enforce_retention;
 
@@ -93,12 +94,14 @@ enum MetricValue {
 #[serde(tag = "format", rename_all = "lowercase")]
 enum EncodedSeries<T> {
     Array { data: Vec<T> },
+    Base64 { data: String },
 }
 
 impl<T> EncodedSeries<T> {
-    fn into_vec(self) -> Vec<T> {
+    fn into_vec(self) -> Vec<T, U> {
         match self {
             EncodedSeries::Array { data } => data,
+            EncodedSeries::Base64 { data } => BASE64.decode(data.as_bytes()).ok().unwrap(),
         }
     }
 }
