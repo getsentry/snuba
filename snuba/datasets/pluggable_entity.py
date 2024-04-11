@@ -10,12 +10,12 @@ from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
+from snuba.datasets.plans.entity_processing import EntityProcessingExecutor
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.storage_plan_builder import StorageQueryPlanBuilder
-from snuba.datasets.plans.storage_plan_builder_new import EntityProcessingExecutor
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
