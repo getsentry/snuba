@@ -70,15 +70,6 @@ def parse_table_name(err: ClickhouseError) -> str:
     return table
 
 
-# Kind of hacky but the saved schemas will have one
-# of these clusters defined
-CLUSTERS = {
-    "snuba-st",
-    "snuba-generic-metrics",
-    "snuba-shared",
-}
-
-
 @click.command()
 @click.option(
     "--clickhouse-host",
