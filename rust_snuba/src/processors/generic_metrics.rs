@@ -13,7 +13,7 @@ use crate::{
     KafkaMessageMetadata, ProcessorConfig,
 };
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::backends::kafka::types::{Headers, KafkaPayload};
 use rust_arroyo::{counter, timer};
 
 use super::utils::enforce_retention;
@@ -308,7 +308,9 @@ where
 // as per the kafka headers. It is possible to get data with heades missing
 // altogether or the specific header key with which to determine the metric
 // type to be missing. Hence there is an Unknown variant
+#[derive(Debug, Default, PartialEq, Clone)]
 enum MetricTypeHeader {
+    #[default]
     Unknown,
     Counter,
     Set,
@@ -1344,6 +1346,49 @@ mod tests {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 651)])
                 })
             }
+        );
+    }
+
+    #[test]
+    fn test_metric_type_header() {
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(None),
+            MetricTypeHeader::Unknown
+        );
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(Some(&Headers::new())),
+            MetricTypeHeader::Unknown
+        );
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(Some(
+                &Headers::new().insert("key", Some(b"value".to_vec()))
+            )),
+            MetricTypeHeader::Unknown
+        );
+
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(Some(
+                &Headers::new().insert("metric_type", Some(b"c".to_vec()))
+            )),
+            MetricTypeHeader::Counter
+        );
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(Some(
+                &Headers::new().insert("metric_type", Some(b"s".to_vec()))
+            )),
+            MetricTypeHeader::Set
+        );
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(Some(
+                &Headers::new().insert("metric_type", Some(b"d".to_vec()))
+            )),
+            MetricTypeHeader::Distribution
+        );
+        assert_eq!(
+            MetricTypeHeader::from_kafka_header(Some(
+                &Headers::new().insert("metric_type", Some(b"g".to_vec()))
+            )),
+            MetricTypeHeader::Gauge
         );
     }
 }
