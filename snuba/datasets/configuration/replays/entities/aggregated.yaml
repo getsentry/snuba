@@ -4,32 +4,8 @@ name: replays_aggregated
 schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
-    { name: timestamp, type: DateTime },
+    { name: to_hour_timestamp, type: DateTime },
     { name: replay_id, type: UUID },
-    {
-      name: start,
-      type: AggregateFunction,
-      args: {
-        func: min,
-        arg_types: [{ type: DateTime, args: { schema_modifiers: [nullable] } }]
-      },
-    },
-    {
-      name: end,
-      type: AggregateFunction,
-      args: {
-        func: max,
-        arg_types: [{ type: DateTime }]
-      },
-    },
-    {
-      name: is_archived,
-      type: SimpleAggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
-      },
-    },
     {
       name: browser_name,
       type: AggregateFunction,
@@ -50,6 +26,62 @@ schema:
           { type: String, args: { schema_modifiers: [nullable] } },
           { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
         ]
+      },
+    },
+    {
+      name: count_dead_clicks,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { size: 64 } }]
+      },
+    },
+    {
+      name: count_errors,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { size: 64 } }]
+      },
+    },
+    {
+      name: count_infos,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { size: 64 } }]
+      },
+    },
+    {
+      name: count_rage_clicks,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { size: 64 } }]
+      },
+    },
+    {
+      name: count_segments,
+      type: AggregateFunction,
+      args: {
+        func: count,
+        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
+      },
+    },
+    {
+      name: count_urls,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { size: 64 } }]
+      },
+    },
+    {
+      name: count_warnings,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { size: 64 } }]
       },
     },
     {
@@ -119,6 +151,46 @@ schema:
       },
     },
     {
+      name: finished_at,
+      type: AggregateFunction,
+      args: {
+        func: max,
+        arg_types: [{ type: DateTime }]
+      },
+    },
+    {
+      name: ip_address_v4,
+      type: AggregateFunction,
+      args: {
+        func: any,
+        arg_types: [{ type: IPv4, args: { schema_modifiers: [nullable] } }]
+      },
+    },
+    {
+      name: ip_address_v6,
+      type: AggregateFunction,
+      args: {
+        func: any,
+        arg_types: [{ type: IPv6, args: { schema_modifiers: [nullable] } }]
+      },
+    },
+    {
+      name: is_archived,
+      type: AggregateFunction,
+      args: {
+        func: sum,
+        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
+      },
+    },
+    {
+      name: min_segment_id,
+      type: AggregateFunction,
+      args: {
+        func: min,
+        arg_types: [{ type: UInt, args: { size: 16, schema_modifiers: [nullable] } }]
+      },
+    },
+    {
       name: os_name,
       type: AggregateFunction,
       args: {
@@ -151,17 +223,7 @@ schema:
         ]
       },
     },
-    {
-      name: release,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
-      },
-    },
+    { name: retention_days, type: UInt, args: { size: 16 } },
     {
       name: sdk_name,
       type: AggregateFunction,
@@ -185,19 +247,11 @@ schema:
       },
     },
     {
-      name: ip_address_v4,
+      name: started_at,
       type: AggregateFunction,
       args: {
-        func: any,
-        arg_types: [{ type: IPv4, args: { schema_modifiers: [nullable] } }]
-      },
-    },
-    {
-      name: ip_address_v6,
-      type: AggregateFunction,
-      args: {
-        func: any,
-        arg_types: [{ type: IPv6, args: { schema_modifiers: [nullable] } }]
+        func: min,
+        arg_types: [{ type: DateTime, args: { schema_modifiers: [nullable] } }]
       },
     },
     {
@@ -243,105 +297,9 @@ schema:
           { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
         ]
       },
-    },
-    {
-      name: count_dead_clicks,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
-      },
-    },
-    {
-      name: count_error_events,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
-      },
-    },
-    {
-      name: count_info_events,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
-      },
-    },
-    {
-      name: count_rage_clicks,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
-      },
-    },
-    {
-      name: count_urls,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
-      },
-    },
-    {
-      name: count_warning_events,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
-      },
-    },
-    {
-      name: count_segments,
-      type: AggregateFunction,
-      args: {
-        func: count,
-        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
-      },
-    },
-    {
-      name: agg_urls,
-      type: AggregateFunction,
-      args: {
-        func: groupArrayArray,
-        arg_types: [{ type: Array, args: { inner_type: { type: String } } }]
-      },
-    },
-    {
-      name: error_ids,
-      type: AggregateFunction,
-      args: {
-        func: groupArrayArray,
-        arg_types: [{ type: Array, args: { inner_type: { type: UUID } } }]
-      },
-    },
-    {
-      name: info_ids,
-      type: AggregateFunction,
-      args: {
-        func: groupArrayArray,
-        arg_types: [{ type: Array, args: { inner_type: { type: UUID } } }]
-      },
-    },
-    {
-      name: warning_ids,
-      type: AggregateFunction,
-      args: {
-        func: groupArray,
-        arg_types: [{ type: UUID }]
-      },
-    },
-    {
-      name: viewed_by_ids,
-      type: AggregateFunction,
-      args: {
-        func: groupArray,
-        arg_types: [{ type: UUID }]
-      },
     }
   ]
-required_time_column: timestamp
+required_time_column: to_hour_timestamp
 storages:
   - storage: replays_aggregated
     is_writable: true
@@ -352,9 +310,9 @@ query_processors:
   - processor: TimeSeriesProcessor
     args:
       time_group_columns:
-        time: timestamp
+        time: to_hour_timestamp
       time_parse_columns:
-        - timestamp
+        - to_hour_timestamp
 validators:
   - validator: EntityRequiredColumnValidator
     args:
