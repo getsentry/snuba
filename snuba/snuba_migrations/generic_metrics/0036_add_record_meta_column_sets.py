@@ -13,7 +13,7 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.GENERIC_METRICS_SETS
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops = [
+        return [
             operations.AddColumn(
                 storage_set=self.storage_set_key,
                 table_name=self.local_table_name,
@@ -30,26 +30,18 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ]
 
-        return ops
-
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops = []
-        for table in ["sets", "distributions", "gauges"]:
-            ops.append(
-                operations.DropColumn(
-                    column_name="record_meta",
-                    storage_set=self.storage_set_key,
-                    table_name=self.dist_table_name.format(table=table),
-                    target=operations.OperationTarget.DISTRIBUTED,
-                )
-            )
-            ops.append(
-                operations.DropColumn(
-                    column_name="record_meta",
-                    storage_set=self.storage_set_key,
-                    table_name=self.local_table_name.format(table=table),
-                    target=operations.OperationTarget.LOCAL,
-                )
-            )
-
-        return ops
+        return [
+            operations.DropColumn(
+                column_name="record_meta",
+                storage_set=self.storage_set_key,
+                table_name=self.dist_table_name,
+                target=operations.OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropColumn(
+                column_name="record_meta",
+                storage_set=self.storage_set_key,
+                table_name=self.local_table_name,
+                target=operations.OperationTarget.LOCAL,
+            ),
+        ]
