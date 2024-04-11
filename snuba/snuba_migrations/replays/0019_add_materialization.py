@@ -166,20 +166,20 @@ columns: List[Column[Modifiers]] = [
     any_if_nullable_string("device_model"),
     any_if_nullable_string("device_name"),
     any_if_nullable_string("dist"),
-    Column("finished_at", AggregateFunction("max", [DateTime()])),
     any_if_nullable_string("environment"),
+    Column("finished_at", AggregateFunction("max", [DateTime()])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
     Column(
         "is_archived", AggregateFunction("sum", [UInt(64, Modifiers(nullable=True))])
     ),
+    Column("min_segment_id", AggregateFunction("min", [UInt(16, nullable=True)])),
     any_if_nullable_string("os_name"),
     any_if_nullable_string("os_version"),
     any_if_string("platform", low_cardinality=False),
     Column("retention_days", UInt(16)),
     any_if_nullable_string("sdk_name"),
     any_if_nullable_string("sdk_version"),
-    Column("min_segment_id", AggregateFunction("min", [UInt(16, nullable=True)])),
     Column(
         "started_at", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])
     ),
