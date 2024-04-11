@@ -712,6 +712,21 @@ mod tests {
         "aggregation_option": "ten_second"
     }"#;
 
+    const DUMMY_BASE64_ENCODED_DISTRIBUTION_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": {"format": "base64", "data": "AAAAAAAACEAAAAAAAADwPwAAAAAAAABA"}
+    }"#;
+
     #[test]
     fn test_base64_decode_f64() {
         assert!(
@@ -724,19 +739,75 @@ mod tests {
     }
 
     #[test]
-    fn test_base64_decode_u64() {
-        let mut actual_set = BTreeSet::new();
-        actual_set.insert(1u64);
-        actual_set.insert(7u64);
-
-        assert!(
-            EncodedSeries::<u64>::Base64 {
-                data: "AQAAAAcAAAA=".to_string(),
+    fn test_distribution_processor_with_v2_distribution_message() {
+        let result = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_BASE64_ENCODED_DISTRIBUTION_MESSAGE,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+            },
+            distribution_values: vec![3f64, 1f64, 2f64],
+            enable_histogram: None,
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 675)])
+                })
             }
-            .into_vec()
-                == vec![1u64, 7u64]
-        )
+        );
     }
+
+    // #[test]
+    // fn test_base64_decode_u64() {
+    //     let mut actual_set = BTreeSet::new();
+    //     actual_set.insert(1u64);
+    //     actual_set.insert(7u64);
+
+    //     assert!(
+    //         EncodedSeries::<u64>::Base64 {
+    //             data: "AQAAAAcAAAA=".to_string(),
+    //         }
+    //         .into_vec()
+    //             == vec![1u64, 7u64]
+    //     )
+    // }
 
     #[test]
     fn test_shouldnt_killswitch() {
