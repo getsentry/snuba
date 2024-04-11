@@ -103,7 +103,7 @@ impl<T: Decodable> EncodedSeries<T> {
             EncodedSeries::Array { data } => data,
             EncodedSeries::Base64 { data } => {
                 let v = BASE64.decode(data.as_bytes()).ok().unwrap();
-                v.chunks_exact(4)
+                v.chunks_exact(8)
                     .map(TryInto::try_into)
                     .map(Result::unwrap)
                     .map(T::decode_bytes)
@@ -588,7 +588,7 @@ mod tests {
 
     use super::*;
     use chrono::DateTime;
-    use std::time::SystemTime;
+    use std::{collections::BTreeSet, time::SystemTime};
 
     const DUMMY_COUNTER_MESSAGE: &str = r#"{
         "version": 2,
@@ -711,6 +711,32 @@ mod tests {
         "value": {"count": 10, "last": 10.0, "max": 10.0, "min": 1.0, "sum": 20.0},
         "aggregation_option": "ten_second"
     }"#;
+
+    #[test]
+    fn test_base64_decode_f64() {
+        assert!(
+            EncodedSeries::<f64>::Base64 {
+                data: "AAAAAAAACEAAAAAAAADwPwAAAAAAAABA".to_string(),
+            }
+            .into_vec()
+                == vec![3f64, 1f64, 2f64]
+        )
+    }
+
+    #[test]
+    fn test_base64_decode_u64() {
+        let mut actual_set = BTreeSet::new();
+        actual_set.insert(1u64);
+        actual_set.insert(7u64);
+
+        assert!(
+            EncodedSeries::<u64>::Base64 {
+                data: "AQAAAAcAAAA=".to_string(),
+            }
+            .into_vec()
+                == vec![1u64, 7u64]
+        )
+    }
 
     #[test]
     fn test_shouldnt_killswitch() {
