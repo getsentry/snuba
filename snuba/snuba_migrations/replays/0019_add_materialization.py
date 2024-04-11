@@ -179,7 +179,7 @@ columns: List[Column[Modifiers]] = [
     Column("retention_days", UInt(16)),
     any_if_nullable_string("sdk_name"),
     any_if_nullable_string("sdk_version"),
-    Column("min_segment_id", AggregateFunction("min", [UInt(16)])),
+    Column("min_segment_id", AggregateFunction("min", [UInt(16, nullable=True)])),
     Column(
         "started_at", AggregateFunction("min", [DateTime(Modifiers(nullable=True))])
     ),
