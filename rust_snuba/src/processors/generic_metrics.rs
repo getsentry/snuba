@@ -98,7 +98,7 @@ enum EncodedSeries<T> {
 }
 
 impl<T> EncodedSeries<T> {
-    fn into_vec(self) -> Vec<T, U> {
+    fn into_vec(self) -> Vec<T> {
         match self {
             EncodedSeries::Array { data } => data,
             EncodedSeries::Base64 { data } => BASE64.decode(data.as_bytes()).ok().unwrap(),
