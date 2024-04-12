@@ -1,88 +1,84 @@
-from copy import deepcopy
-from datetime import datetime
+from unittest.mock import MagicMock
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.clusters.cluster import _STORAGE_SET_CLUSTER_MAP, CLUSTERS
+from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.readiness_state import ReadinessState
+from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_processing import StorageProcessingStage
-from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
-from snuba.query.dsl import and_cond, binary_condition, column, equals, literal
-from snuba.query.expressions import Column, FunctionCall
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.processors.physical import ClickhouseQueryProcessor
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.utils.metrics.timer import Timer
 
 
+class MockQueryProcessor(ClickhouseQueryProcessor):
+    def process_query(self, query: Query, query_settings: QuerySettings) -> None:
+        return
+
+
+# Create a fake storage and add it to global storages and clusters
+mock_processors = [
+    MockQueryProcessor(),
+    MockQueryProcessor(),
+    MockQueryProcessor(),
+]
+mock_storage = ReadableTableStorage(
+    storage_key=StorageKey("mockstorage"),
+    storage_set_key=StorageSetKey("mockstorageset"),
+    schema=TableSchema(
+        columns=ColumnSet([]),
+        local_table_name="mockstoragelocal",
+        dist_table_name="mockstoragedist",
+        storage_set_key=StorageSetKey("mockstorageset"),
+    ),
+    readiness_state=ReadinessState.COMPLETE,
+    query_processors=mock_processors,
+    mandatory_condition_checkers=[],
+    allocation_policies=[],
+)
+get_config_built_storages()[mock_storage.get_storage_key()] = mock_storage
+_STORAGE_SET_CLUSTER_MAP[mock_storage.get_storage_set_key()] = CLUSTERS[0]
+
+
 def test_basic():
+    for f in mock_processors:
+        f.process_query = MagicMock()
+
     ch_query = Query(
         from_clause=Table(
-            "metrics_distributions_v2_local",
+            "dontmatter",
             ColumnSet([]),
-            storage_key=StorageKey.METRICS_DISTRIBUTIONS,
+            storage_key=mock_storage.get_storage_key(),
         ),
-        selected_columns=[
-            SelectedExpression(
-                "avg(granularity)",
-                FunctionCall(
-                    "_snuba_avg(granularity)",
-                    "avg",
-                    (Column("_snuba_granularity", None, "granularity"),),
-                ),
-            )
-        ],
-        condition=and_cond(
-            equals(column("granularity"), literal(60)),
-            and_cond(
-                binary_condition(
-                    "greaterOrEquals",
-                    column("timestamp", alias="_snuba_timestamp"),
-                    literal(datetime(2021, 5, 17, 19, 42, 1)),
-                ),
-                and_cond(
-                    binary_condition(
-                        "less",
-                        column("timestamp", alias="_snuba_timestamp"),
-                        literal(datetime(2021, 5, 17, 23, 42, 1)),
-                    ),
-                    and_cond(
-                        equals(column("org_id", alias="_snuba_org_id"), literal(1)),
-                        equals(
-                            column("project_id", alias="_snuba_project_id"), literal(1)
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        limit=1000,
+        selected_columns=[],
+        condition=None,
     )
     timer = Timer("test")
     settings = HTTPQuerySettings()
-
     res = StorageProcessingStage().execute(
         QueryPipelineResult(
-            data=deepcopy(ch_query),
+            data=ch_query,
             query_settings=settings,
             timer=timer,
             error=None,
         )
     )
-    assert res.data == Query(
-        from_clause=res.data.get_from_clause(),
-        selected_columns=ch_query.get_selected_columns(),
-        array_join=ch_query.get_arrayjoin(),
-        condition=ch_query.get_condition(),
-        prewhere=ch_query.get_prewhere_ast(),
-        groupby=ch_query.get_groupby(),
-        having=ch_query.get_having(),
-        order_by=ch_query.get_orderby(),
-        limitby=ch_query.get_limitby(),
-        limit=ch_query.get_limit(),
-        offset=ch_query.get_offset(),
-        totals=ch_query.has_totals(),
-        granularity=ch_query.get_granularity(),
+
+    assert res.data
+    fc = ch_query.get_from_clause()
+    assert (
+        fc
+        and fc.table_name == mock_storage.get_schema().get_table_name()
+        and fc.schema == mock_storage.get_schema().get_columns()
+        and fc.storage_key == mock_storage.get_storage_key()
+        and fc.allocation_policies == mock_storage.get_allocation_policies()
+        and fc.mandatory_conditions == mock_storage.get_mandatory_condition_checkers()
     )
-    assert res.data.get_from_clause() != ch_query.get_from_clause()
-    assert res.data.get_from_clause().table_name == "metrics_distributions_v2_local"
-    assert res.data.get_from_clause().storage_key == StorageKey.METRICS_DISTRIBUTIONS
-    assert len(res.data.get_from_clause().schema.columns) > 0
+    for f in mock_processors:
+        f.process_query.assert_called_with(ch_query, settings)
