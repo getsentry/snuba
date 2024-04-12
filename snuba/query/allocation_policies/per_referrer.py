@@ -93,10 +93,23 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
         concurrent_limit = self._get_concurrent_limit(referrer)
-        can_run, explanation = self._is_within_rate_limit(
-            query_id,
-            RateLimitParameters(self.rate_limit_name, referrer, None, concurrent_limit),
+        rate_limit_params = RateLimitParameters(
+            self.rate_limit_name, referrer, None, concurrent_limit
         )
+        rate_limit_stats = self._get_rate_limit_stats(
+            query_id,
+            rate_limit_params,
+        )
+        can_run, explanation = self._is_within_rate_limit(
+            rate_limit_stats,
+            rate_limit_params,
+        )
+        if not can_run:
+            self.metrics.increment(
+                "concurrent_query_exceeded_limit",
+                rate_limit_stats.concurrent,
+                tags={"referrer": referrer},
+            )
         decision_explanation: dict[str, JsonSerializable] = {
             "reason": explanation,
             "policy": self.rate_limit_name,
