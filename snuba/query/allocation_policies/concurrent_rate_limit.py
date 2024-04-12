@@ -56,9 +56,9 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     def rate_limit_name(self) -> str:
         raise NotImplementedError
 
-    def _get_rate_limit_stats(
+    def _is_within_rate_limit(
         self, query_id: str, rate_limit_params: RateLimitParameters
-    ) -> RateLimitStats:
+    ) -> tuple[RateLimitStats, bool, str]:
         rate_limit_prefix = f"{self.runtime_config_prefix}.rate_limit"
         # HACK: this is a harcoded value because this rate_history_s is not a useful
         # configuration parameter. It's used for the per-second caclulation but that calculation
@@ -81,22 +81,14 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             rate_limit_prefix,
             self.get_config_value("max_query_duration_s"),
         )
-        return rate_limit_stats
-
-    def _is_within_rate_limit(
-        self, rate_limit_stats: RateLimitStats, rate_limit_params: RateLimitParameters
-    ) -> tuple[bool, str]:
         if rate_limit_stats.concurrent == -1:
             return True, "rate limiter errored, failing open"
-        if (
-            rate_limit_params.concurrent_limit
-            and rate_limit_stats.concurrent > rate_limit_params.concurrent_limit
-        ):
+        if rate_limit_stats.concurrent > rate_limit_params.concurrent_limit:
             return (
                 False,
                 f"concurrent policy {rate_limit_stats.concurrent} exceeds limit of {rate_limit_params.concurrent_limit}",
             )
-        return True, "within limit"
+        return rate_limit_stats, True, "within limit"
 
     def _end_query(
         self,
@@ -239,9 +231,8 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             )
 
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
-        rate_limit_stats = self._get_rate_limit_stats(query_id, rate_limit_params)
-        within_rate_limit, why = self._is_within_rate_limit(
-            rate_limit_stats,
+        _, within_rate_limit, why = self._is_within_rate_limit(
+            query_id,
             rate_limit_params,
         )
         return QuotaAllowance(

@@ -173,13 +173,8 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
         rate_limit_params = RateLimitParameters(
             self.rate_limit_name, referrer, None, concurrent_limit
         )
-        rate_limit_stats = self._get_rate_limit_stats(
+        _, can_run, explanation = self._is_within_rate_limit(
             query_id,
-            rate_limit_params,
-        )
-
-        can_run, explanation = self._is_within_rate_limit(
-            rate_limit_stats,
             rate_limit_params,
         )
         decision_explanation: dict[str, JsonSerializable] = {"reason": explanation}
