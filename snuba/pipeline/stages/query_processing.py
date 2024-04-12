@@ -3,7 +3,7 @@ from typing import Any, cast
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.plans.query_plan import QueryRunner
-from snuba.datasets.plans.storage_plan_builder_new import (
+from snuba.datasets.plans.storage_processing import (
     apply_storage_processors,
     build_best_plan,
 )
