@@ -328,6 +328,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0036_counters_meta_tables_final",
             "0037_add_record_meta_column_sets",
             "0038_add_record_meta_column_distributions",
+            "0039_add_record_meta_column_gauges",
         ]
 
 
