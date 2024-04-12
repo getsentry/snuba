@@ -648,7 +648,7 @@ mod tests {
 
     use super::*;
     use chrono::DateTime;
-    use std::{collections::BTreeSet, time::SystemTime};
+    use std::time::SystemTime;
 
     const DUMMY_COUNTER_MESSAGE: &str = r#"{
         "version": 2,
