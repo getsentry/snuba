@@ -3,7 +3,6 @@ from typing import Sequence
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 
-
 table_name_prefix = "transactions"
 column_name = "trace_id"
 
