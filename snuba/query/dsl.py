@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from snuba.query.expressions import (
     Column,
@@ -10,6 +10,21 @@ from snuba.query.expressions import (
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
+
+
+class NestedColumn:
+    def __init__(self, column_name) -> None:
+        self.column_name = column_name
+
+    def __getitem__(self, key: str) -> SubscriptableReference:
+        return SubscriptableReference(
+            f"_snuba_{self.column_name}[{key}]",
+            Column(f"_snuba_{self.column_name}", None, self.column_name),
+            Literal(None, key),
+        )
+
+    def __setitem__(self, key: str, value: Any):
+        raise NotImplementedError()
 
 
 def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
