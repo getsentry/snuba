@@ -115,6 +115,7 @@ class TransactionsLoader(DirectoryLoader):
             "0019_transactions_add_indexes_and_context_hash",
             "0020_transactions_add_codecs",
             "0021_transactions_add_replay_id",
+            "0022_transactions_add_index_on_trace_id",
         ]
 
 
@@ -325,6 +326,10 @@ class GenericMetricsLoader(DirectoryLoader):
             "0033_counters_meta_tag_values_table",
             "0034_counters_meta_tag_values_table_mv",
             "0035_recreate_counters_meta_tag_value_table_mv",
+            "0036_counters_meta_tables_final",
+            "0037_add_record_meta_column_sets",
+            "0038_add_record_meta_column_distributions",
+            "0039_add_record_meta_column_gauges",
         ]
 
 
