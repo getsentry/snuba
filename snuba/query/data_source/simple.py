@@ -52,6 +52,23 @@ class Entity(SimpleDataSource):
 
 
 @dataclass(frozen=True)
+class Storage(SimpleDataSource):
+    """An datasource that is just a pointer to a storage. Acts as an adapter class to be
+    able to query storages directly from SnQL"""
+
+    # it's because the sample is an optional float
+    storage_key: StorageKey
+    sample: Optional[float] = None
+
+    @property
+    def human_readable_id(self) -> str:
+        return f"Storage({self.storage_key.value})"
+
+    def get_columns(self) -> PhysicalColumnSet:
+        return PhysicalColumnSet([])
+
+
+@dataclass(frozen=True)
 class Table(SimpleDataSource):
     """
     Represents a table or a view in the physical query.

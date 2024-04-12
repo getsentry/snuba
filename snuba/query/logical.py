@@ -5,11 +5,11 @@ from typing import Callable, Iterable, Optional, Sequence
 from snuba.query import LimitBy, OrderBy
 from snuba.query import ProcessableQuery as AbstractQuery
 from snuba.query import SelectedExpression
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, Storage
 from snuba.query.expressions import Expression, ExpressionVisitor
 
 
-class Query(AbstractQuery[Entity]):
+class Query(AbstractQuery[Entity | Storage]):
     """
     Represents the logical query during query processing.
     This means the query class used between parsing and query translation.
@@ -20,7 +20,7 @@ class Query(AbstractQuery[Entity]):
 
     def __init__(
         self,
-        from_clause: Optional[Entity],
+        from_clause: Optional[Entity | Storage],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Sequence[Expression]] = None,
