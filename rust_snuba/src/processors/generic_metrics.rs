@@ -90,20 +90,44 @@ enum MetricValue {
     },
 }
 
+trait Decodable<const COUNT: usize>: Copy {
+    const COUNT: usize = COUNT;
+
+    fn decode_bytes(bytes: [u8; COUNT]) -> Self;
+}
+
+impl Decodable<4> for u32 {
+    fn decode_bytes(bytes: [u8; Self::COUNT]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+}
+
+impl Decodable<8> for u64 {
+    fn decode_bytes(bytes: [u8; Self::COUNT]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+}
+
+impl Decodable<8> for f64 {
+    fn decode_bytes(bytes: [u8; Self::COUNT]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "format", rename_all = "lowercase")]
-enum EncodedSeries<T: Decodable> {
+enum EncodedSeries<T> {
     Array { data: Vec<T> },
     Base64 { data: String },
 }
 
-impl<T: Decodable> EncodedSeries<T> {
+impl<const COUNT: usize, T: Decodable<COUNT>> EncodedSeries<T> {
     fn into_vec(self) -> Vec<T> {
         match self {
             EncodedSeries::Array { data } => data,
             EncodedSeries::Base64 { data } => {
                 let v = BASE64.decode(data.as_bytes()).ok().unwrap();
-                v.chunks_exact(8)
+                v.chunks_exact(std::mem::size_of::<T>())
                     .map(TryInto::try_into)
                     .map(Result::unwrap)
                     .map(T::decode_bytes)
@@ -113,34 +137,18 @@ impl<T: Decodable> EncodedSeries<T> {
     }
 }
 
-trait Decodable {
-    fn decode_bytes(bytes: [u8; 8]) -> Self;
-}
-
-impl Decodable for u64 {
-    fn decode_bytes(bytes: [u8; 8]) -> Self {
-        u64::from_le_bytes(bytes)
-    }
-}
-
-impl Decodable for f64 {
-    fn decode_bytes(bytes: [u8; 8]) -> Self {
-        f64::from_le_bytes(bytes)
-    }
-}
-
 fn encoded_series_compat_deserializer<'de, T, D>(
     deserializer: D,
 ) -> Result<EncodedSeries<T>, D::Error>
 where
-    T: Decodable + Deserialize<'de>,
+    T: Deserialize<'de>,
     D: Deserializer<'de>,
 {
     struct Visitor<U>(PhantomData<U>);
 
     impl<'de, U> serde::de::Visitor<'de> for Visitor<U>
     where
-        U: Decodable + Deserialize<'de>,
+        U: Deserialize<'de>,
     {
         type Value = EncodedSeries<U>;
 
@@ -854,20 +862,16 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test_base64_decode_u64() {
-    //     let mut actual_set = BTreeSet::new();
-    //     actual_set.insert(1u64);
-    //     actual_set.insert(7u64);
-
-    //     assert!(
-    //         EncodedSeries::<u64>::Base64 {
-    //             data: "AQAAAAcAAAA=".to_string(),
-    //         }
-    //         .into_vec()
-    //             == vec![1u64, 7u64]
-    //     )
-    // }
+    #[test]
+    fn test_base64_decode_324() {
+        assert!(
+            EncodedSeries::<u32>::Base64 {
+                data: "AQAAAAcAAAA=".to_string(),
+            }
+            .into_vec()
+                == vec![1u32, 7u32]
+        )
+    }
 
     #[test]
     fn test_shouldnt_killswitch() {
