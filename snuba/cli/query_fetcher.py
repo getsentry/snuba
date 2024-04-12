@@ -9,6 +9,8 @@ from snuba.clickhouse.upgrades.comparisons import (
     FileFormat,
     FileManager,
     QueryInfoResult,
+    delete_local_file,
+    full_path,
 )
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.environment import setup_logging, setup_sentry
@@ -154,6 +156,28 @@ def query_fetcher(
     else:
         table_names = [t for t in tables.split(",")]
 
+    def save_table_schema(table: str) -> None:
+        """
+        Fetches the table schema from the same node we are
+        fetching the queries from. The schemas may be needed
+        when running the replayer for the first time.
+
+        Only upload missing schemas, puts them in same bucket
+        under the following convention:
+
+        schemas/table_name.sql
+        """
+        filename = f"{table}.sql"
+        ((schema,),) = connection.execute(
+            f"SELECT create_table_query FROM system.tables WHERE name = '{table}'"
+        ).results
+        filepath = full_path(filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(schema)
+        logger.info(f"Uploading schema for {table}...")
+        uploader.upload_file(filepath, f"schemas/{filename}")
+        delete_local_file(filepath)
+
     # rounded to the hour
     now = datetime.utcnow().replace(
         microsecond=0,
@@ -164,6 +188,9 @@ def query_fetcher(
     interval = timedelta(hours=1)
 
     for table in table_names:
+        # we'll use the table schema in the replayer, so
+        # save the create_table_query
+        save_table_schema(table)
         logger.info(f"Running fetcher for {table}...")
         start_time = window_hours_ago_ts
         files_saved = 0

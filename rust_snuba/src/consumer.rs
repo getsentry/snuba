@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
@@ -261,12 +261,7 @@ pub fn process_message(
         .ok_or(SnubaRustError::new_err("processor not found"))?;
 
     let payload = KafkaPayload::new(None, None, Some(value));
-
-    let timestamp = DateTime::from_naive_utc_and_offset(
-        NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
-        Utc,
-    );
-
+    let timestamp = DateTime::<Utc>::from_timestamp_millis(millis_since_epoch).unwrap_or_default();
     let meta = KafkaMessageMetadata {
         partition,
         offset,

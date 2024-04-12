@@ -17,6 +17,7 @@ def test_valid_topics() -> None:
                 Topic.SESSIONS,
                 Topic.SESSIONS_COMMIT_LOG,
                 Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
+                Topic.SUBSCRIPTION_RESULTS_SESSIONS,
                 Topic.DEAD_LETTER_SESSIONS,
             )
 
