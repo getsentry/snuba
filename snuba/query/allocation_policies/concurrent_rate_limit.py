@@ -82,9 +82,10 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             self.get_config_value("max_query_duration_s"),
         )
         if rate_limit_stats.concurrent == -1:
-            return True, "rate limiter errored, failing open"
+            return rate_limit_stats, True, "rate limiter errored, failing open"
         if rate_limit_stats.concurrent > rate_limit_params.concurrent_limit:
             return (
+                rate_limit_stats,
                 False,
                 f"concurrent policy {rate_limit_stats.concurrent} exceeds limit of {rate_limit_params.concurrent_limit}",
             )
