@@ -16,6 +16,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import sentry_sdk
@@ -31,6 +32,7 @@ from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -47,6 +49,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -111,7 +114,7 @@ snql_grammar = Grammar(
     r"""
     query_exp             = match_clause select_clause group_by_clause? arrayjoin_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
-    match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
+    match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single / storage_single)
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
     arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
@@ -125,6 +128,7 @@ snql_grammar = Grammar(
     totals_clause         = space+ "TOTALS" space+ boolean_literal
 
     entity_single         = open_paren space* entity_name sample_clause? space* close_paren
+    storage_single        = "STORAGE" space* open_paren space* storage_name sample_clause? space* close_paren
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? space* close_paren
     relationship_link     = ~r"-\[" relationship_name ~r"\]->"
     relationship_match    = space* entity_match space* relationship_link space* entity_match
@@ -196,6 +200,7 @@ snql_grammar = Grammar(
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
+    storage_name          = ~r"[a-zA-Z_]+"
     relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     arrow                 = "->"
     open_brace            = "{"
@@ -298,16 +303,17 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             Any,
             Union[
                 QueryEntity,
-                CompositeQuery[QueryEntity],
+                CompositeQuery[QueryEntity | QueryStorage],
                 LogicalQuery,
                 RelationshipTuple,
                 Sequence[RelationshipTuple],
             ],
         ],
     ) -> Union[
-        CompositeQuery[QueryEntity],
+        CompositeQuery[QueryEntity | QueryStorage],
         LogicalQuery,
         QueryEntity,
+        # joins not availble for storage queries as of 2024-04-12
         JoinClause[QueryEntity],
     ]:
         _, _, _, match = visited_children
@@ -322,7 +328,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             join_clause = build_join_clause(match)
             return join_clause
 
-        assert isinstance(match, QueryEntity)  # mypy
+        assert isinstance(match, (QueryEntity, QueryStorage))  # mypy
         return match
 
     def visit_entity_single(
@@ -337,6 +343,19 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             sample = None
 
         return QueryEntity(name, get_entity(name).get_data_model(), sample)
+
+    def visit_storage_single(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any, Any, Any, Any, StorageKey, Union[Optional[float], Node], Any, Any
+        ],
+    ) -> QueryStorage:
+        _, _, _, _, storage_key, sample, _, _ = visited_children
+        if isinstance(sample, Node):
+            sample = None
+
+        return QueryStorage(storage_key=storage_key, sample=sample)
 
     def visit_entity_match(
         self,
@@ -361,6 +380,14 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             return EntityKey(node.text)
         except Exception:
             raise ParsingException(f"{node.text} is not a valid entity name")
+
+    def visit_storage_name(
+        self, node: Node, visited_children: Tuple[Any]
+    ) -> StorageKey:
+        try:
+            return StorageKey(node.text)
+        except Exception:
+            raise ParsingException(f"{node.text} is not a valid Storage name")
 
     def visit_relationships(
         self,
@@ -1304,12 +1331,17 @@ def _replace_time_condition(
 
 
 def _align_max_days_date_align(
-    key: EntityKey,
+    key: EntityKey | StorageKey,
     old_top_level: Sequence[Expression],
     max_days: Optional[int],
     date_align: int,
     alias: Optional[str] = None,
 ) -> Sequence[Expression]:
+    if isinstance(key, StorageKey):
+        # TODO: Make this work for storage queries as well
+        # required_time_column should be a field on the storage if
+        # we support this
+        return old_top_level
     entity = get_entity(key)
     if not entity.required_time_column:
         return old_top_level
@@ -1375,7 +1407,13 @@ def validate_entities_with_query(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
     if isinstance(query, LogicalQuery):
-        entity = get_entity(query.get_from_clause().key)
+        if isinstance(query.get_from_clause(), QueryStorage):
+            return
+        elif isinstance(query.get_from_clause(), QueryEntity):
+            entity = get_entity(cast(EntityKey, query.get_from_clause().key))
+        else:
+            entity = None
+        assert isinstance(entity, QueryEntity)
         try:
             for v in entity.get_validators():
                 v.validate(query)
@@ -1540,8 +1578,6 @@ def parse_snql_query(
         with sentry_sdk.start_span(op="processor", description="time_based_processing"):
             _post_process(query, [_replace_time_condition], settings)
 
-        # XXX: Select the entity to be used for the query. This step is temporary. Eventually
-        # entity selection will be moved to Sentry and specified for all SnQL queries.
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
 
         # Validating

@@ -6,7 +6,6 @@ import pytest
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition, unary_condition
@@ -19,7 +18,6 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -63,28 +61,6 @@ required_condition = binary_condition(
 
 
 test_cases = [
-    pytest.param(
-        f"MATCH STORAGE(metric_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
-        LogicalQuery(
-            QueryStorage(storage_key=StorageKey("metric_summaries")),
-            selected_columns=[
-                SelectedExpression(
-                    "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
-                    ),
-                ),
-                SelectedExpression(
-                    "event_id", Column("_snuba_event_id", None, "event_id")
-                ),
-            ],
-            granularity=60,
-            condition=required_condition,
-            limit=1000,
-            offset=0,
-        ),
-        id="basic_storage_query",
-    ),
     pytest.param(
         f"MATCH (events) SELECT 4-5, event_id WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(

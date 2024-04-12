@@ -67,6 +67,11 @@ class Storage(SimpleDataSource):
     def get_columns(self) -> PhysicalColumnSet:
         return PhysicalColumnSet([])
 
+    # FIXME: remove this
+    @property
+    def key(self) -> StorageKey:
+        return self.storage_key
+
 
 @dataclass(frozen=True)
 class Table(SimpleDataSource):
