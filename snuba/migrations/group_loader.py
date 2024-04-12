@@ -327,6 +327,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0035_recreate_counters_meta_tag_value_table_mv",
             "0036_counters_meta_tables_final",
             "0037_add_record_meta_column_sets",
+            "0038_add_record_meta_column_distributions",
         ]
 
 
