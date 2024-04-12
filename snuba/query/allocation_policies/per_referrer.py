@@ -104,12 +104,11 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             rate_limit_stats,
             rate_limit_params,
         )
-        if not can_run:
-            self.metrics.increment(
-                "concurrent_query_exceeded_limit",
-                rate_limit_stats.concurrent,
-                tags={"referrer": referrer},
-            )
+        self.metrics.timing(
+            "concurrent_queries_referrer",
+            rate_limit_stats.concurrent,
+            tags={"referrer": referrer},
+        )
         decision_explanation: dict[str, JsonSerializable] = {
             "reason": explanation,
             "policy": self.rate_limit_name,
