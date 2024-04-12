@@ -2,31 +2,12 @@ import datetime
 
 import pytest
 
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import binary_condition, unary_condition
-from snuba.query.data_source.join import (
-    IndividualNode,
-    JoinClause,
-    JoinCondition,
-    JoinConditionExpression,
-    JoinRelationship,
-    JoinType,
-)
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query import SelectedExpression
+from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Storage as QueryStorage
-from snuba.query.expressions import (
-    Argument,
-    Column,
-    FunctionCall,
-    Lambda,
-    Literal,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
 
