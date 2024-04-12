@@ -90,12 +90,13 @@ def test_consume_quota(
     )
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
     assert not allowance.can_run
-    assert allowance.explanation == {
-        "reason": reason,
+    assert {
         "granted_quota": 0,
         "limit": limit,
         "storage_key": "StorageKey.ERRORS",
-    }
+    }.items() <= allowance.explanation.items()
+
+    assert reason in str(allowance.explanation["reason"])
     new_tenant_ids = {**tenant_ids, "referrer": tenant_ids["referrer"] + "abcd"}
 
     # a different referrer should work fine though

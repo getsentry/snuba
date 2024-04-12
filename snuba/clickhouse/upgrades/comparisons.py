@@ -1,5 +1,6 @@
 import csv
 import dataclasses
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, NamedTuple, Sequence, Tuple, Type, Union
@@ -100,6 +101,15 @@ def type_for_directory(directory: str) -> Type[Results]:
     return DIRECTORY_RESULT_TYPES[directory]
 
 
+def full_path(filename: str) -> str:
+    return f"/tmp/{filename}"
+
+
+def delete_local_file(full_path: str) -> None:
+    if os.path.isfile(full_path):
+        os.remove(full_path)
+
+
 class FileManager:
     def __init__(self, uploader: GCSUploader) -> None:
         self.uploader = uploader
@@ -122,14 +132,11 @@ class FileManager:
         day = datetime.strftime(date, "%Y_%m_%d")
         return f"{directory}/{day}/{table}_{hour}.csv"
 
-    def _full_path(self, filename: str) -> str:
-        return f"/tmp/{filename}"
-
     def _save_to_csv(
         self, filename: str, results: Sequence[Results], header_row: bool = False
     ) -> None:
         result_type = self._result_type(filename)
-        with open(self._full_path(filename), mode="w") as file:
+        with open(full_path(filename), mode="w") as file:
             writer = csv.writer(file)
             if header_row:
                 fields = [f.name for f in dataclasses.fields(result_type)]  # mypy ig
@@ -137,12 +144,10 @@ class FileManager:
             for row in results:
                 writer.writerow(dataclasses.astuple(row))
 
-        logger.debug(f"File {self._full_path(filename)} saved")
-
     def _download_from_csv(self, filename: str) -> Sequence[Results]:
         result_type = self._result_type(filename)
         results: List[Results] = []
-        with open(self._full_path(filename), mode="r") as csvfile:
+        with open(full_path(filename), mode="r") as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
                 result: Results
@@ -161,10 +166,10 @@ class FileManager:
         return results
 
     def _save_to_gcs(self, filename: str, blob_name: str) -> None:
-        self.uploader.upload_file(self._full_path(filename), blob_name)
+        self.uploader.upload_file(full_path(filename), blob_name)
 
     def _download_from_gcs(self, blob_name: str, filename: str) -> None:
-        self.uploader.download_file(blob_name, self._full_path(filename))
+        self.uploader.download_file(blob_name, full_path(filename))
 
     def filename_from_blob_name(self, blob_name: str) -> str:
         return blob_name.replace("/", "_")
