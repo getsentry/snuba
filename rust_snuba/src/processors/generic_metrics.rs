@@ -173,8 +173,8 @@ struct CommonMetricFields {
     record_meta: Option<u8>,
 }
 
-fn should_record_meta(use_case_id: String) -> Option<u8> {
-    match use_case_id.as_str() {
+fn should_record_meta(use_case_id: &str) -> Option<u8> {
+    match use_case_id {
         "escalating_issues" => Some(0),
         "metric_stats" => Some(0),
         _ => Some(1),
@@ -226,7 +226,7 @@ impl Parse for CountersRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let record_meta = should_record_meta(from.use_case_id.clone());
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -397,7 +397,7 @@ impl Parse for SetsRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let record_meta = should_record_meta(from.use_case_id.clone());
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -481,7 +481,7 @@ impl Parse for DistributionsRawRow {
             enable_histogram = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-        let record_meta = should_record_meta(from.use_case_id.clone());
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -582,7 +582,7 @@ impl Parse for GaugesRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
-        let record_meta = should_record_meta(from.use_case_id.clone());
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -815,6 +815,15 @@ mod tests {
         let fake_config = Ok(None);
 
         assert!(!should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_should_record_meta_yes() {
+        let use_case_invalid = "escalating_issues";
+        assert_eq!(should_record_meta(use_case_invalid), Some(0));
+
+        let use_case_valid = "spans";
+        assert_eq!(should_record_meta(use_case_valid), Some(1));
     }
 
     #[test]
