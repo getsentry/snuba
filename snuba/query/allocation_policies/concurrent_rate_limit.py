@@ -88,7 +88,10 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
     ) -> tuple[bool, str]:
         if rate_limit_stats.concurrent == -1:
             return True, "rate limiter errored, failing open"
-        if rate_limit_stats.concurrent > rate_limit_params.concurrent_limit:
+        if (
+            rate_limit_params.concurrent_limit
+            and rate_limit_stats.concurrent > rate_limit_params.concurrent_limit
+        ):
             return (
                 False,
                 f"concurrent policy {rate_limit_stats.concurrent} exceeds limit of {rate_limit_params.concurrent_limit}",
