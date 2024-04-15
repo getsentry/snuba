@@ -56,7 +56,6 @@ class Storage(SimpleDataSource):
     """An datasource that is just a pointer to a storage. Acts as an adapter class to be
     able to query storages directly from SnQL"""
 
-    # it's because the sample is an optional float
     key: StorageKey
     sample: Optional[float] = None
 
