@@ -355,7 +355,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(sample, Node):
             sample = None
 
-        return QueryStorage(storage_key=storage_key, sample=sample)
+        return QueryStorage(key=storage_key, sample=sample)
 
     def visit_entity_match(
         self,

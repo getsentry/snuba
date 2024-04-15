@@ -57,20 +57,15 @@ class Storage(SimpleDataSource):
     able to query storages directly from SnQL"""
 
     # it's because the sample is an optional float
-    storage_key: StorageKey
+    key: StorageKey
     sample: Optional[float] = None
 
     @property
     def human_readable_id(self) -> str:
-        return f"Storage({self.storage_key.value})"
+        return f"Storage({self.key.value})"
 
     def get_columns(self) -> PhysicalColumnSet:
         return PhysicalColumnSet([])
-
-    # FIXME: remove this
-    @property
-    def key(self) -> StorageKey:
-        return self.storage_key
 
 
 @dataclass(frozen=True)

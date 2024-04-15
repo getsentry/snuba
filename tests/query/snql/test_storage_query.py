@@ -47,7 +47,7 @@ test_cases = [
     pytest.param(
         f"MATCH STORAGE(metric_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
         LogicalQuery(
-            QueryStorage(storage_key=StorageKey("metric_summaries")),
+            QueryStorage(key=StorageKey("metric_summaries")),
             selected_columns=[
                 SelectedExpression(
                     "4-5",
@@ -69,7 +69,7 @@ test_cases = [
     pytest.param(
         f"MATCH STORAGE(metrics_summaries) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
         LogicalQuery(
-            QueryStorage(storage_key=StorageKey("metrics_summaries")),
+            QueryStorage(key=StorageKey("metrics_summaries")),
             selected_columns=[
                 SelectedExpression(
                     "trace_id", Column("_snuba_trace_id", None, "trace_id")
@@ -88,7 +88,7 @@ test_cases = [
     pytest.param(
         f"MATCH STORAGE(metrics_summaries SAMPLE 0.1) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
         LogicalQuery(
-            QueryStorage(storage_key=StorageKey("metrics_summaries"), sample=0.1),
+            QueryStorage(key=StorageKey("metrics_summaries"), sample=0.1),
             selected_columns=[
                 SelectedExpression(
                     "trace_id", Column("_snuba_trace_id", None, "trace_id")
