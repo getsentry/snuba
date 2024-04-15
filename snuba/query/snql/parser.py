@@ -1413,7 +1413,7 @@ def validate_entities_with_query(
             entity = get_entity(cast(EntityKey, query.get_from_clause().key))
         else:
             entity = None
-        assert isinstance(entity, QueryEntity)
+        assert entity is not None
         try:
             for v in entity.get_validators():
                 v.validate(query)
