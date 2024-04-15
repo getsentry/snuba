@@ -40,16 +40,6 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
         target=operations.OperationTarget.LOCAL,
     )
 
-    yield operations.AddIndex(
-        storage_set=StorageSetKey.REPLAYS,
-        table_name="replays_aggregated_local",
-        index_name="bf_replay_id",
-        index_expression="replay_id",
-        index_type="bloom_filter()",
-        granularity=1,
-        target=operations.OperationTarget.LOCAL,
-    )
-
     yield operations.CreateMaterializedView(
         storage_set=StorageSetKey.REPLAYS,
         view_name="replays_aggregation_mv",
