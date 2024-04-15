@@ -259,7 +259,16 @@ allocation_policies:
       required_tenant_types:
         - referrer
       default_config_overrides:
+        is_enforced: 1
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
         is_enforced: 0
+
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
