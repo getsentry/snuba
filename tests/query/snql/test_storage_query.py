@@ -151,8 +151,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events = get_dataset("events")
     query, _ = parse_snql_query(query_body, events)
     eq, reason = query.equals(expected_query)
-    print(query)
-    print("------")
-    print(expected_query)
+    # this is an easier diff to parse as a human
     assert repr(query) == repr(expected_query)
+    # get a structural diff too
     assert eq, reason
