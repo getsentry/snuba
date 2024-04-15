@@ -90,26 +90,26 @@ enum MetricValue {
     },
 }
 
-trait Decodable<const COUNT: usize>: Copy {
-    const COUNT: usize = COUNT;
+trait Decodable<const SIZE: usize>: Copy {
+    const SIZE: usize = SIZE;
 
-    fn decode_bytes(bytes: [u8; COUNT]) -> Self;
+    fn decode_bytes(bytes: [u8; SIZE]) -> Self;
 }
 
 impl Decodable<4> for u32 {
-    fn decode_bytes(bytes: [u8; Self::COUNT]) -> Self {
+    fn decode_bytes(bytes: [u8; Self::SIZE]) -> Self {
         Self::from_le_bytes(bytes)
     }
 }
 
 impl Decodable<8> for u64 {
-    fn decode_bytes(bytes: [u8; Self::COUNT]) -> Self {
+    fn decode_bytes(bytes: [u8; Self::SIZE]) -> Self {
         Self::from_le_bytes(bytes)
     }
 }
 
 impl Decodable<8> for f64 {
-    fn decode_bytes(bytes: [u8; Self::COUNT]) -> Self {
+    fn decode_bytes(bytes: [u8; Self::SIZE]) -> Self {
         Self::from_le_bytes(bytes)
     }
 }
@@ -121,8 +121,11 @@ enum EncodedSeries<T> {
     Base64 { data: String },
 }
 
-impl<const COUNT: usize, T: Decodable<COUNT>> EncodedSeries<T> {
-    fn into_vec(self) -> Vec<T> {
+impl<T> EncodedSeries<T> {
+    fn into_vec<const SIZE: usize>(self) -> Vec<T>
+    where
+        T: Decodable<SIZE>,
+    {
         match self {
             EncodedSeries::Array { data } => data,
             EncodedSeries::Base64 { data } => {
@@ -136,6 +139,21 @@ impl<const COUNT: usize, T: Decodable<COUNT>> EncodedSeries<T> {
         }
     }
 }
+// impl<const COUNT: usize, T: Decodable<COUNT>> EncodedSeries<T> {
+//     fn into_vec(self) -> Vec<T> {
+//         match self {
+//             EncodedSeries::Array { data } => data,
+//             EncodedSeries::Base64 { data } => {
+//                 let v = BASE64.decode(data.as_bytes()).ok().unwrap();
+//                 v.chunks_exact(std::mem::size_of::<T>())
+//                     .map(TryInto::try_into)
+//                     .map(Result::unwrap)
+//                     .map(T::decode_bytes)
+//                     .collect()
+//             }
+//         }
+//     }
+// }
 
 fn encoded_series_compat_deserializer<'de, T, D>(
     deserializer: D,
@@ -863,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    fn test_base64_decode_324() {
+    fn test_base64_decode_32() {
         assert!(
             EncodedSeries::<u32>::Base64 {
                 data: "AQAAAAcAAAA=".to_string(),
