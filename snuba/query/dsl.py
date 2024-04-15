@@ -7,14 +7,12 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
+    OptionalScalarType,
     SubscriptableReference,
 )
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
-
-
-LiteralScalar = int | str | float
 
 
 class NestedColumn:
@@ -99,7 +97,7 @@ def binary_condition(
 
 
 def equals(
-    lhs: Expression | LiteralScalar, rhs: Expression | LiteralScalar
+    lhs: Expression | OptionalScalarType, rhs: Expression | OptionalScalarType
 ) -> FunctionCall:
     left = lhs if isinstance(lhs, Expression) else Literal(None, lhs)
     right = rhs if isinstance(rhs, Expression) else Literal(None, rhs)
