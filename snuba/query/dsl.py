@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Optional, Sequence
 
 from snuba.query.expressions import (
@@ -12,7 +14,20 @@ from snuba.query.expressions import (
 # verbose to build.
 
 
+LiteralScalar = int | str | float
+
+
 class NestedColumn:
+    """Usage:
+
+    tags = NestedColumn("tags")
+    assert tags["some_key"] == SubscriptableReference(
+        "_snuba_tags[some_key]",
+        Column("_snuba_tags"), None, "tags"),
+        Literal(None, "some_key")
+    )
+    """
+
     def __init__(self, column_name) -> None:
         self.column_name = column_name
 
@@ -25,18 +40,6 @@ class NestedColumn:
 
     def __setitem__(self, key: str, value: Any):
         raise NotImplementedError()
-
-
-def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
-    return SubscriptableReference(
-        f"_snuba_tags_raw[{indexer_mapping}]",
-        Column(
-            "_snuba_tags_raw",
-            None,
-            "tags_raw",
-        ),
-        Literal(None, str(indexer_mapping)),
-    )
 
 
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
@@ -95,8 +98,12 @@ def binary_condition(
     return FunctionCall(None, function_name, (lhs, rhs))
 
 
-def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("equals", lhs, rhs)
+def equals(
+    lhs: Expression | LiteralScalar, rhs: Expression | LiteralScalar
+) -> FunctionCall:
+    left = lhs if isinstance(lhs, Expression) else Literal(None, lhs)
+    right = rhs if isinstance(rhs, Expression) else Literal(None, rhs)
+    return binary_condition("equals", left, right)
 
 
 def and_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
