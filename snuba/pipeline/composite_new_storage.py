@@ -5,34 +5,21 @@ from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 import sentry_sdk
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clusters.cluster import ClickhouseCluster
 from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
-from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.plans.query_plan import (
-    ClickhouseQueryPlan,
-    QueryPlanExecutionStrategy,
-    QueryRunner,
-    SubqueryProcessors,
-)
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, SubqueryProcessors
 from snuba.datasets.plans.storage_processing import (
     ClickhouseQueryPlanNew,
     build_best_plan,
 )
-from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
-from snuba.query.logical import Query as LogicalQuery
-from snuba.query.processors.physical import (
-    ClickhouseQueryProcessor,
-    CompositeQueryProcessor,
-)
+from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
-from snuba.web import QueryResult
 
 
 class JoinDataSourcePlan(NamedTuple):
@@ -183,8 +170,7 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Tabl
     visiting each node as the data source can be composite itself.
 
     At each step an intermediate data structure containing the
-    translated query and the query processors to run in the execution
-    strategy is produced.
+    translated query and the query processors to be executed produced.
     These intermediate structures are merged together and produce the
     CompositeQueryPlan.
     """
@@ -252,10 +238,10 @@ class JoinPlansBuilder(
         self, node: IndividualNode[Table]
     ) -> Mapping[str, ClickhouseQueryPlanNew]:
         assert isinstance(
-            node.data_source, LogicalQuery
+            node.data_source, ClickhouseQuery
         ), "Invalid composite query. All nodes must be subqueries."
 
-        plan = build_best_plan(node, self.__settings)
+        plan = build_best_plan(node.data_source, self.__settings)
 
         return {node.alias: plan}
 
@@ -266,79 +252,6 @@ class JoinPlansBuilder(
             **node.left_node.accept(self),
             **node.right_node.accept(self),
         }
-
-
-class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
-    """
-    A visitor class responsible for helping traverse a join query and builds
-    an alias to physical query mapping.
-    """
-
-    def __init__(self, settings: QuerySettings) -> None:
-        self.__settings = settings
-
-    def visit_individual_node(
-        self, node: IndividualNode[Entity]
-    ) -> Mapping[str, ClickhouseQuery]:
-        assert isinstance(
-            node.data_source, LogicalQuery
-        ), "Invalid composite query. All nodes must be subqueries."
-
-        entity = get_entity(node.data_source.get_from_clause().key)
-        assert isinstance(entity, PluggableEntity)
-        entity_processing_executor = entity.get_processing_executor()
-        query = entity_processing_executor.execute(node.data_source, self.__settings)
-
-        return {node.alias: query}
-
-    def visit_join_clause(
-        self, node: JoinClause[Entity]
-    ) -> Mapping[str, ClickhouseQuery]:
-        return {
-            **node.left_node.accept(self),
-            **node.right_node.accept(self),
-        }
-
-
-class JoinDataSourceTransformer(
-    JoinVisitor[Union[JoinClause[Table], IndividualNode[Table]], Entity]
-):
-    """
-    A visitor class responsible for producing a join data source.
-    """
-
-    def __init__(
-        self,
-        settings: QuerySettings,
-        alias_to_query_mappings: Mapping[str, ClickhouseQuery],
-    ) -> None:
-        self.__settings = settings
-        self.alias_to_query_mappings = alias_to_query_mappings
-
-    def visit_individual_node(
-        self, node: IndividualNode[Entity]
-    ) -> Union[JoinClause[Table], IndividualNode[Table]]:
-        assert isinstance(
-            node.data_source, ProcessableQuery
-        ), "Invalid composite query. All nodes must be subqueries."
-
-        query = self.alias_to_query_mappings[node.alias]
-        return IndividualNode(alias=node.alias, data_source=query)
-
-    def visit_join_clause(
-        self, node: JoinClause[Entity]
-    ) -> Union[JoinClause[Table], IndividualNode[Table]]:
-        left_node = node.left_node.accept(self)
-        right_node = self.visit_individual_node(node.right_node)
-
-        assert isinstance(right_node, IndividualNode)
-        return JoinClause(
-            left_node=left_node,
-            right_node=right_node,
-            keys=node.keys,
-            join_type=node.join_type,
-            join_modifier=node.join_modifier,
-        )
 
 
 class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Table]):
@@ -451,82 +364,3 @@ class ProcessorsExecutor(DataSourceVisitor[None, Table], JoinVisitor[None, Table
     def visit_join_clause(self, node: JoinClause[Table]) -> None:
         node.left_node.accept(self)
         node.right_node.accept(self)
-
-
-class CompositeExecutionStrategy(QueryPlanExecutionStrategy[CompositeQuery[Table]]):
-    """
-    Executes a composite query after applying the db query processors
-    to each subquery.
-    """
-
-    def __init__(
-        self,
-        cluster: ClickhouseCluster,
-        root_processors: Sequence[ClickhouseQueryProcessor],
-        aliased_processors: Mapping[str, Sequence[ClickhouseQueryProcessor]],
-        composite_processors: Sequence[CompositeQueryProcessor],
-    ) -> None:
-        self.__cluster = cluster
-        self.__root_processors = root_processors
-        self.__aliased_processors = aliased_processors
-        # Processors that are applied to the entire composite query
-        # by the execution strategy before running the query on the DB
-        # and after all subquery processors have been executed
-        self.__composite_processors = composite_processors
-
-    def execute(
-        self,
-        query: CompositeQuery[Table],
-        query_settings: QuerySettings,
-        runner: QueryRunner,
-    ) -> QueryResult:
-        ProcessorsExecutor(
-            self.__root_processors, self.__aliased_processors, query_settings
-        ).visit(query)
-
-        for p in self.__composite_processors:
-            if query_settings.get_dry_run():
-                with explain_meta.with_query_differ(
-                    "composite_storage_processor", type(p).__name__, query
-                ):
-                    p.process_query(query, query_settings)
-            else:
-                p.process_query(query, query_settings)
-
-        return runner(
-            clickhouse_query=query,
-            query_settings=query_settings,
-            reader=self.__cluster.get_reader(),
-            cluster_name=self.__cluster.get_clickhouse_cluster_name() or "",
-        )
-
-
-# class CompositeExecutionPipeline(QueryExecutionPipeline):
-#     """
-#     Executes a logical composite query by generating a plan,
-#     applying the plan query processors to all subqueries and
-#     handing the result to the execution strategy.
-#     """
-
-#     def __init__(
-#         self,
-#         query: CompositeQuery[Entity],
-#         query_settings: QuerySettings,
-#         runner: QueryRunner,
-#     ):
-#         self.__query = query
-#         self.__settings = query_settings
-#         self.__runner = runner
-
-#     def execute(self) -> QueryResult:
-#         plan = CompositeQueryPlanner(self.__query, self.__settings).build_best_plan()
-#         root_processors, aliased_processors = plan.get_plan_processors()
-#         ProcessorsExecutor(
-#             root_processors,
-#             aliased_processors,
-#             self.__settings,
-#         ).visit(plan.query)
-
-#         return plan.execution_strategy.execute(
-#             plan.query, self.__settings, self.__runner
-#         )

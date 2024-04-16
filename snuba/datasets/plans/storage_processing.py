@@ -20,8 +20,10 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
+from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
@@ -110,15 +112,8 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
             )
 
 
-from snuba.query import ProcessableQuery
-from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import IndividualNode, JoinClause
-
-
 def build_best_plan(
-    physical_query: Union[
-        Query, ProcessableQuery, CompositeQuery, JoinClause, IndividualNode
-    ],
+    physical_query: Union[Query, ProcessableQuery, CompositeQuery],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlanNew:
