@@ -22,6 +22,7 @@ class GroupAttributesMessageProcessor(DatasetMessageProcessor):
             [
                 {
                     "project_id": message["project_id"],
+                    "priority": message.get("priority", None),
                     "group_id": message["group_id"],
                     "group_status": message["status"],
                     "group_substatus": message["substatus"],
