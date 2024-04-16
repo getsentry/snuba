@@ -122,23 +122,24 @@ enum EncodedSeries<T> {
 }
 
 impl<T> EncodedSeries<T> {
-    fn into_vec<const SIZE: usize>(self) -> Vec<T>
+    fn into_vec<const SIZE: usize>(self) -> Result<Vec<T>, anyhow::Error>
     where
         T: Decodable<SIZE>,
     {
-        match self {
+        let res = match self {
             EncodedSeries::Array { data } => data,
-            EncodedSeries::Base64 { data } => {
-                let v = BASE64.decode(data.as_bytes()).ok().unwrap();
-                v.chunks_exact(std::mem::size_of::<T>())
-                    .map(TryInto::try_into)
-                    .map(Result::unwrap)
-                    .map(T::decode_bytes)
-                    .collect()
-            }
-        }
+            EncodedSeries::Base64 { data, .. } => BASE64
+                .decode(data.as_bytes())?
+                .chunks_exact(T::SIZE)
+                .map(TryInto::try_into)
+                .map(Result::unwrap)
+                .map(T::decode_bytes)
+                .collect(),
+        };
+        Ok(res)
     }
 }
+
 // impl<const COUNT: usize, T: Decodable<COUNT>> EncodedSeries<T> {
 //     fn into_vec(self) -> Vec<T> {
 //         match self {
@@ -419,10 +420,12 @@ impl Parse for SetsRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
-        let set_values = match from.value {
+        let maybe_set = match from.value {
             MetricValue::Set(values) => values.into_vec(),
             _ => return Ok(Option::None),
         };
+
+        let set_values = maybe_set?;
 
         timer!(
             "generic_metrics.messages.sets_value_len",
@@ -497,10 +500,12 @@ impl Parse for DistributionsRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
-        let distribution_values = match from.value {
+        let maybe_dist = match from.value {
             MetricValue::Distribution(value) => value.into_vec(),
             _ => return Ok(Option::None),
         };
+
+        let distribution_values = maybe_dist?;
 
         timer!(
             "generic_metrics.messages.dists_value_len",
@@ -820,6 +825,8 @@ mod tests {
                 data: "AAAAAAAACEAAAAAAAADwPwAAAAAAAABA".to_string(),
             }
             .into_vec()
+            .ok()
+            .unwrap()
                 == vec![3f64, 1f64, 2f64]
         )
     }
@@ -887,6 +894,8 @@ mod tests {
                 data: "AQAAAAcAAAA=".to_string(),
             }
             .into_vec()
+            .ok()
+            .unwrap()
                 == vec![1u32, 7u32]
         )
     }
