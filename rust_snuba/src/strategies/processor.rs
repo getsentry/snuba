@@ -184,6 +184,7 @@ struct MessageProcessor<TResult: Clone, TNext: Clone> {
         fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<TResult>,
     // Function that return Message<TNext> to be passed to the next strategy. Gets passed TResult,
     // as well as the message's partition, offset and timestamp.
+    #[allow(clippy::type_complexity)]
     result_to_next_msg:
         fn(TResult, Partition, u64, DateTime<Utc>, Option<i64>) -> anyhow::Result<Message<TNext>>,
     processor_config: ProcessorConfig,
