@@ -96,3 +96,9 @@ def test_basic():
         and len(res.data.result["data"]) == 1
         and "avg(granularity)" in res.data.result["data"][0]
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_dry_run():
+    pass
