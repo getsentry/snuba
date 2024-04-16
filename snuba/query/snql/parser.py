@@ -16,6 +16,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import sentry_sdk
@@ -60,6 +61,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import StorageQuery
 from snuba.query.matchers import Any as AnyMatch
 from snuba.query.matchers import AnyExpression, AnyOptionalString
 from snuba.query.matchers import Column as ColumnMatch
@@ -251,7 +253,12 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
+    ) -> Union[
+        LogicalQuery,
+        CompositeQuery[QueryEntity],
+        StorageQuery,
+        CompositeQuery[QueryStorage],
+    ]:
         args: MutableMapping[str, Any] = {}
         (
             data_source,
@@ -284,14 +291,19 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
         if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
             args["from_clause"] = data_source
-            return CompositeQuery(**args)
+            return cast(
+                CompositeQuery[QueryEntity] | CompositeQuery[QueryStorage],
+                CompositeQuery(**args),
+            )
 
         args.update({"prewhere": None, "from_clause": data_source})
         if isinstance(data_source, QueryEntity):
             # TODO: How sample rate gets stored needs to be addressed in a future PR
             args["sample"] = data_source.sample
 
-        return LogicalQuery(**args)
+        if isinstance(data_source, QueryEntity):
+            return LogicalQuery(**args)
+        return StorageQuery(**args)
 
     def visit_match_clause(
         self,
@@ -972,7 +984,7 @@ def parse_snql_query_initial(
             message, _ = message.split("\n", 1)
         raise ParsingException(message)
 
-    assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
+    assert isinstance(parsed, (CompositeQuery, LogicalQuery, StorageQuery))  # mypy
 
     # Add these defaults here to avoid them getting applied to subqueries
     limit = parsed.get_limit()
@@ -1543,7 +1555,15 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
+) -> Tuple[
+    Union[
+        CompositeQuery[QueryEntity],
+        LogicalQuery,
+        CompositeQuery[QueryStorage],
+        StorageQuery,
+    ],
+    str,
+]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
     snql_anonymized = ""

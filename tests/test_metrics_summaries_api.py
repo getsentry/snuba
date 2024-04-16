@@ -101,7 +101,7 @@ class TestMetricsSummariesApi(BaseApiTest):
         unique_span_ids: Sequence[str],
     ) -> None:
         self.generate_metrics_summaries(writable_table_storage)
-        query_str = f"""MATCH (metrics_summaries)
+        query_str = f"""MATCH STORAGE(metrics_summaries)
                     SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id, metric_mri
                     WHERE project_id = {project_id}
                     AND metric_mri = '{metric_mri}'
@@ -138,6 +138,43 @@ class TestMetricsSummariesApi(BaseApiTest):
     ) -> None:
         self.generate_metrics_summaries(writable_table_storage)
         query_str = f"""MATCH (metrics_summaries)
+                    SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id, metric_mri
+                    WHERE project_id = {project_id}
+                    AND metric_mri = '{metric_mri}'
+                    AND tags[{tag_key}] = '{tag_value}'
+                    AND end_timestamp >= toDateTime('{start_time}')
+                    AND end_timestamp < toDateTime('{end_time}')
+                    GRANULARITY 60
+                    """
+        response = self.app.post(
+            SNQL_ROUTE,
+            data=json.dumps(
+                {
+                    "query": query_str,
+                    "dataset": "spans",
+                    "tenant_ids": {"referrer": "tests", "organization_id": 1},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert len(data["data"]) == 1, data
+        assert data["data"][0]["unique_span_ids"] == unique_span_ids
+
+    def test_storage_query_tags(
+        self,
+        writable_table_storage: WritableTableStorage,
+        project_id: int,
+        metric_mri: str,
+        start_time: datetime,
+        end_time: datetime,
+        unique_span_ids: Sequence[str],
+        tag_key: str,
+        tag_value: str,
+    ) -> None:
+        self.generate_metrics_summaries(writable_table_storage)
+        query_str = f"""MATCH STORAGE(metrics_summaries)
                     SELECT groupUniqArray(span_id) AS unique_span_ids BY project_id, metric_mri
                     WHERE project_id = {project_id}
                     AND metric_mri = '{metric_mri}'

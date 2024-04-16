@@ -70,4 +70,4 @@ def test_count_columns(
     expected_proj: Set[int],
 ) -> None:
     project_finder = ProjectsFinder()
-    assert project_finder.visit(query) == expected_proj
+    assert project_finder.visit(query) == expected_proj  # type: ignore

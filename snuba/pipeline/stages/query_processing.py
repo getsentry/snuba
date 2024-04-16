@@ -6,13 +6,17 @@ from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.datasets.plans.storage_processing import (
     apply_storage_processors,
     build_best_plan,
+    get_query_data_source,
 )
+from snuba.datasets.plans.translator.query import identity_translate
 from snuba.datasets.pluggable_entity import PluggableEntity
+from snuba.datasets.storages.factory import get_storage
 from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import StorageQuery
 from snuba.request import Request
 
 
@@ -41,7 +45,9 @@ class EntityAndStoragePipelineStage(
             )
         else:
             execution_pipeline = CompositeExecutionPipeline(
-                pipe_input.data.query,
+                # Note: this whole class should dissappear by 05-01-24
+                # that's why we an assume that what is being passed in is an entity
+                pipe_input.data.query,  # type: ignore
                 pipe_input.query_settings,
                 cast(QueryRunner, _query_runner),
             )
@@ -58,14 +64,29 @@ class EntityProcessingStage(
     ) -> ClickhouseQuery | CompositeQuery[Table]:
 
         # TODO: support composite queries
-        assert isinstance(pipe_input.data.query, LogicalQuery)
-        entity = get_entity(pipe_input.data.query.get_from_clause().key)
-        assert isinstance(entity, PluggableEntity)
-        entity_processing_executor = entity.get_processing_executor()
-        clickhouse_query = entity_processing_executor.execute(
-            pipe_input.data.query, pipe_input.query_settings
-        )
-        return clickhouse_query
+        if isinstance(pipe_input.data.query, StorageQuery):
+            res = identity_translate(pipe_input.data.query)
+            storage = get_storage(pipe_input.data.query.get_from_clause().key)
+            res.set_from_clause(
+                get_query_data_source(
+                    storage.get_schema().get_data_source(),
+                    allocation_policies=storage.get_allocation_policies(),
+                    final=pipe_input.data.query.get_final(),
+                    sampling_rate=pipe_input.data.query.get_sample(),
+                    storage_key=storage.get_storage_key(),
+                )
+            )
+            return res
+
+        else:
+            assert isinstance(pipe_input.data.query, LogicalQuery)
+            entity = get_entity(pipe_input.data.query.get_from_clause().key)
+            assert isinstance(entity, PluggableEntity)
+            entity_processing_executor = entity.get_processing_executor()
+            clickhouse_query = entity_processing_executor.execute(
+                pipe_input.data.query, pipe_input.query_settings
+            )
+            return clickhouse_query
 
 
 class StorageProcessingStage(

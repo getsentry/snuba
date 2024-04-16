@@ -9,7 +9,7 @@ from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.dsl import NestedColumn, and_cond, equals
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import StorageQuery
 from snuba.query.snql.parser import parse_snql_query
 
 tags = NestedColumn("tags")
@@ -46,7 +46,7 @@ required_condition = and_cond(
 test_cases = [
     pytest.param(
         f"MATCH STORAGE(metric_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
-        LogicalQuery(
+        StorageQuery(
             QueryStorage(key=StorageKey("metric_summaries")),
             selected_columns=[
                 SelectedExpression(
@@ -68,7 +68,7 @@ test_cases = [
     ),
     pytest.param(
         f"MATCH STORAGE(metrics_summaries) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
-        LogicalQuery(
+        StorageQuery(
             QueryStorage(key=StorageKey("metrics_summaries")),
             selected_columns=[
                 SelectedExpression(
@@ -87,7 +87,7 @@ test_cases = [
     ),
     pytest.param(
         f"MATCH STORAGE(metrics_summaries SAMPLE 0.1) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
-        LogicalQuery(
+        StorageQuery(
             QueryStorage(key=StorageKey("metrics_summaries"), sample=0.1),
             selected_columns=[
                 SelectedExpression(
@@ -112,7 +112,7 @@ test_cases = [
     #     } SELECT max(duration_ms) AS max_duration"""
     #     % added_condition,
     #     CompositeQuery(
-    #         from_clause=LogicalQuery(
+    #         from_clause=StorageQuery(
     #             QueryStorage(storage_key=StorageKey("metrics_summaries"), sample=0.1),
     #             selected_columns=[
     #                 SelectedExpression(
@@ -146,7 +146,7 @@ test_cases = [
 
 
 @pytest.mark.parametrize("query_body, expected_query", test_cases)
-def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> None:
+def test_format_expressions(query_body: str, expected_query: StorageQuery) -> None:
     # dataset does not matter :D
     events = get_dataset("events")
     query, _ = parse_snql_query(query_body, events)

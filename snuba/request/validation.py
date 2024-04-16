@@ -14,9 +14,9 @@ from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, Storage
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.logical import Query
+from snuba.query.logical import Query, StorageQuery
 from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
 from snuba.query.parser.exceptions import PostProcessingError
 from snuba.query.query_settings import (
@@ -44,7 +44,9 @@ class Parser(Protocol):
         settings: QuerySettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+    ) -> Tuple[
+        Union[Query, CompositeQuery[Entity], StorageQuery, CompositeQuery[Storage]], str
+    ]:
         ...
 
 
@@ -53,7 +55,9 @@ def parse_snql_query(
     settings: QuerySettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
-) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+) -> Tuple[
+    Union[Query, CompositeQuery[Entity], StorageQuery, CompositeQuery[Storage]], str
+]:
     return _parse_snql_query(
         request_parts.query["query"], dataset, custom_processing, settings
     )
@@ -218,7 +222,9 @@ def _get_settings_object(
     return None  # type: ignore
 
 
-def _get_project_id(query: Query | CompositeQuery[Entity]) -> int | None:
+def _get_project_id(
+    query: Query | CompositeQuery[Entity] | StorageQuery | CompositeQuery[Storage],
+) -> int | None:
     project_ids = get_object_ids_in_query_ast(query, "project_id")
     if project_ids is not None and len(project_ids) == 1:
         return project_ids.pop()
@@ -238,7 +244,7 @@ def _build_request(
     request_parts: RequestParts,
     referrer: str,
     settings: QuerySettings,
-    query: Query | CompositeQuery[Entity],
+    query: Query | CompositeQuery[Entity] | StorageQuery | CompositeQuery[Storage],
     snql_anonymized: str,
 ) -> Request:
     org_ids = get_object_ids_in_query_ast(query, "org_id")
