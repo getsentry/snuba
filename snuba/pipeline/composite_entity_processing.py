@@ -188,9 +188,13 @@ class JoinDataSourceTransformer(
         )
 
 
-def composite_query_entity_processing_and_translation(
+def translate_composite_query(
     query: CompositeQuery[Entity], query_settings: QuerySettings
 ) -> CompositeQuery:
+    """
+    A function that traverses a logical composite query, applies all entitiy processors,
+    and translates the result into a physical composite query.
+    """
     add_equivalent_conditions(query)
     generate_subqueries(query)
     physical_query = translate_logical_composite_query(query, query_settings)

@@ -9,6 +9,11 @@ from snuba.datasets.plans.storage_processing import (
 )
 from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.pipeline.composite import CompositeExecutionPipeline
+from snuba.pipeline.composite_entity_processing import translate_composite_query
+from snuba.pipeline.composite_storage_processing import (
+    apply_composite_storage_processors,
+    build_best_plan_for_composite_query,
+)
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -64,11 +69,7 @@ class EntityProcessingStage(
                 pipe_input.data.query, pipe_input.query_settings
             )
         else:
-            from snuba.pipeline.composite_new_entity import (
-                composite_query_entity_processing_and_translation,
-            )
-
-            physical_query = composite_query_entity_processing_and_translation(
+            physical_query = translate_composite_query(
                 pipe_input.data.query, pipe_input.query_settings
             )
         return physical_query
@@ -87,11 +88,6 @@ class StorageProcessingStage(
             query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
             query = apply_storage_processors(query_plan, pipe_input.query_settings)
         else:
-            from snuba.pipeline.composite_new_storage import (
-                apply_composite_storage_processors,
-                build_best_plan_for_composite_query,
-            )
-
             composite_query_plan = build_best_plan_for_composite_query(
                 pipe_input.data, pipe_input.query_settings, []
             )

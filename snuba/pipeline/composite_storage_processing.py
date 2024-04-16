@@ -22,26 +22,13 @@ from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
 
 
-class JoinDataSourcePlan(NamedTuple):
-    """
-    Intermediate data structure maintained when visiting and
-    transforming a join in the composite query data source.
-
-    We cannot use a Composite plan itself as an intermediate
-    structure thus the need of this class.
-    This is because the data source type is a bit less
-    restrictive in this class and we would have to instantiate
-    an execution strategy that is not used.
-    """
-
-    translated_source: Union[JoinClause[Table], IndividualNode[Table]]
-    processors: Mapping[str, SubqueryProcessors]
-    storage_set_key: StorageSetKey
-
-
 def apply_composite_storage_processors(
     query_plan: CompositeDataSourcePlan, settings: QuerySettings
 ) -> CompositeQuery:
+    """
+    Given a single composite query plan, this function applies all the
+    db_processors and plan_processors to the physical query.
+    """
     plan_root_processors, plan_aliased_processors = query_plan.get_plan_processors()
     ProcessorsExecutor(
         plan_root_processors,
@@ -72,9 +59,12 @@ def build_best_plan_for_composite_query(
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> CompositeDataSourcePlan:
-
+    """
+    A function that traverses each subquery node in a composite query,
+    build a plan for each subquery, and returns a single plan containing
+    all the necessary storage processors that need to be applied.
+    """
     plan = CompositeDataSourcePlanner(settings).visit(physical_query.get_from_clause())
-
     return CompositeDataSourcePlan(
         translated_source=physical_query,
         storage_set_key=plan.storage_set_key,
@@ -252,6 +242,23 @@ class JoinPlansBuilder(
             **node.left_node.accept(self),
             **node.right_node.accept(self),
         }
+
+
+class JoinDataSourcePlan(NamedTuple):
+    """
+    Intermediate data structure maintained when visiting and
+    transforming a join in the composite query data source.
+
+    We cannot use a Composite plan itself as an intermediate
+    structure thus the need of this class.
+    This is because the data source type is a bit less
+    restrictive in this class and we would have to instantiate
+    an execution strategy that is not used.
+    """
+
+    translated_source: Union[JoinClause[Table], IndividualNode[Table]]
+    processors: Mapping[str, SubqueryProcessors]
+    storage_set_key: StorageSetKey
 
 
 class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Table]):
