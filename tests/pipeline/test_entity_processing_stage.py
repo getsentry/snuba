@@ -20,6 +20,7 @@ from snuba.pipeline.stages.query_processing import EntityProcessingStage
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, column, equals, literal
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query_initial
 from snuba.request import Request
@@ -64,7 +65,7 @@ entity = PluggableEntity(
 override_entity_map(entkey, entity)
 
 
-def test_basic():
+def test_basic() -> None:
     query_body = {
         "query": (
             f"MATCH ({entkey.value}) "
@@ -75,6 +76,7 @@ def test_basic():
         ),
     }
     logical_query = parse_snql_query_initial(query_body["query"])
+    assert isinstance(logical_query, LogicalQuery)
     query_settings = HTTPQuerySettings()
     timer = Timer("test")
     request = Request(
@@ -98,7 +100,9 @@ def test_basic():
                 allocation_policies=storage.get_allocation_policies(),
                 final=logical_query.get_final(),
                 sampling_rate=logical_query.get_sample(),
-                mandatory_conditions=storage.get_mandatory_condition_checkers(),
+                mandatory_conditions=storage.get_schema()
+                .get_data_source()
+                .get_mandatory_conditions(),
             ),
             selected_columns=[SelectedExpression("timestamp", column("timestamp"))],
             condition=and_cond(

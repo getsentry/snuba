@@ -14,7 +14,7 @@ from snuba.query.expressions import (
 
 
 def column(
-    column_name, table_name: str | None = None, alias: str | None = None
+    column_name: str, table_name: str | None = None, alias: str | None = None
 ) -> Column:
     return Column(alias, table_name, column_name)
 

@@ -6,6 +6,8 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
@@ -16,9 +18,10 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
-from snuba.query.data_source.simple import Table
+from snuba.query.data_source.simple import Entity, Table
 from snuba.query.dsl import and_cond, binary_condition, column, equals, literal
 from snuba.query.expressions import Column, FunctionCall
+from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
@@ -52,10 +55,29 @@ policy = MockAllocationPolicy(
     default_config_overrides={},
 )
 
+mockmetadata = SnubaQueryMetadata(
+    Request(
+        "",
+        {},
+        LogicalQuery(
+            from_clause=Entity(
+                key=EntityKey.METRICS_DISTRIBUTIONS, schema=EntityColumnSet([])
+            )
+        ),
+        HTTPQuerySettings(),
+        AttributionInfo(
+            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
+        ),
+        "",
+    ),
+    "blah",
+    Timer("woof"),
+)
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_basic():
+def test_basic() -> None:
     attinfo = AttributionInfo(
         get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
     )
@@ -115,14 +137,7 @@ def test_basic():
         ),
         limit=1000,
     )
-    res = ExecutionStage(
-        attinfo,
-        query_metadata=SnubaQueryMetadata(
-            Request("", {}, ch_query, settings, attinfo, ""),
-            "blah",
-            timer,
-        ),
-    ).execute(
+    res = ExecutionStage(attinfo, query_metadata=mockmetadata).execute(
         QueryPipelineResult(
             data=ch_query,
             query_settings=settings,
@@ -136,12 +151,13 @@ def test_basic():
         and "avg(granularity)" in res.data.result["data"][0]
     )
     assert policy.did_update
-    assert settings.get_resource_quota().max_threads == 1
+    q = settings.get_resource_quota()
+    assert q and q.max_threads == 1
 
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_dry_run():
+def test_dry_run() -> None:
     attinfo = AttributionInfo(
         get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
     )
@@ -196,14 +212,7 @@ def test_dry_run():
         ),
         limit=1000,
     )
-    res = ExecutionStage(
-        attinfo,
-        query_metadata=SnubaQueryMetadata(
-            Request("", {}, ch_query, settings, attinfo, ""),
-            "blah",
-            timer,
-        ),
-    ).execute(
+    res = ExecutionStage(attinfo, query_metadata=mockmetadata).execute(
         QueryPipelineResult(
             data=ch_query,
             query_settings=settings,
@@ -212,7 +221,8 @@ def test_dry_run():
         )
     )
     assert (
-        res.data.result["data"] == []
+        res.data
+        and res.data.result["data"] == []
         and res.data.result["meta"] == []
         and "cluster_name" in res.data.extra["stats"]
         and res.data.extra["sql"]
