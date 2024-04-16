@@ -206,7 +206,7 @@ class SubscriptionData:
             dataset,
             timer,
             referrer,
-            custom_processing,
+            custom_processing,  # type: ignore
         )
         return request
 

@@ -34,6 +34,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.indexer.resolver import resolve_mappings
 from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import StorageQuery
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.processors.logical.filter_in_select_optimizer import (
@@ -1040,7 +1041,7 @@ def populate_query_from_mql_context(
 
 
 def quantiles_to_quantile(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
 ) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
@@ -1062,7 +1063,7 @@ def quantiles_to_quantile(
 
 
 CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]], None]
 ]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
