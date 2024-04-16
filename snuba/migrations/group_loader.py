@@ -371,6 +371,7 @@ class SpansLoader(DirectoryLoader):
             "0010_spans_add_compression",
             "0011_spans_add_index_on_trace_id",
             "0012_spans_add_index_on_transaction_name",
+            "0013_spans_remove_module_column",
         ]
 
 

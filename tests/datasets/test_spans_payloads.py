@@ -55,7 +55,6 @@ expected_for_required_fields = {
     "is_segment": 1,
     "measurements.key": [],
     "measurements.value": [],
-    "module": "",
     "offset": 1,
     "op": "",
     "parent_span_id": 0,

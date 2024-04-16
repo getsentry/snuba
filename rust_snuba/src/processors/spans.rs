@@ -73,8 +73,6 @@ struct Span {
     #[serde(default)]
     group_raw: u64,
     is_segment: u8,
-    #[serde(default)]
-    module: String,
     #[serde(rename(serialize = "measurements.key"))]
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
@@ -153,7 +151,6 @@ impl TryFrom<FromSpanMessage> for Span {
             is_segment: if from.is_segment { 1 } else { 0 },
             measurement_keys,
             measurement_values,
-            module: sentry_tags.get("module").cloned().unwrap_or_default(),
             op: sentry_tags.get("op").cloned().unwrap_or_default(),
             parent_span_id: from.parent_span_id.map_or(0, |parent_span_id| {
                 u64::from_str_radix(&parent_span_id, 16).unwrap_or_default()
@@ -312,7 +309,6 @@ mod tests {
         group: Option<String>,
         #[serde(rename = "http.method")]
         http_method: Option<String>,
-        module: Option<String>,
         op: Option<String>,
         status: Option<String>,
         status_code: Option<String>,
@@ -362,7 +358,6 @@ mod tests {
                 domain: Some("targetdomain.tld:targetport".into()),
                 group: Some("deadbeefdeadbeef".into()),
                 http_method: Some("GET".into()),
-                module: Some("http".into()),
                 op: Some("http.client".into()),
                 status: Some("ok".into()),
                 status_code: Some("200".into()),
