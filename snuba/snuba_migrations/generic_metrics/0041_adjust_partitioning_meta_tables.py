@@ -11,9 +11,12 @@ from snuba.utils.schemas import Float
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     granularity = "8192"
-    meta_view_name = "generic_metric_counters_meta_mv"
-    meta_local_table_name = "generic_metric_counters_meta_local"
-    meta_dist_table_name = "generic_metric_counters_meta_dist"
+    old_meta_view_name = "generic_metric_counters_meta_mv"
+    old_meta_local_table_name = "generic_metric_counters_meta_local"
+    old_meta_dist_table_name = "generic_metric_counters_meta_dist"
+    meta_view_name = "generic_metric_counters_meta_v2_mv"
+    meta_local_table_name = "generic_metric_counters_meta_v2_local"
+    meta_dist_table_name = "generic_metric_counters_meta_v2_dist"
     meta_table_columns: Sequence[Column[Modifiers]] = [
         Column("org_id", UInt(64)),
         Column("project_id", UInt(64)),
@@ -25,9 +28,12 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
-    tag_value_view_name = "generic_metric_counters_meta_tag_values_mv"
-    tag_value_local_table_name = "generic_metric_counters_meta_tag_values_local"
-    tag_value_dist_table_name = "generic_metric_counters_meta_tag_values_dist"
+    old_tag_value_view_name = "generic_metric_counters_meta_tag_values_mv"
+    old_tag_value_local_table_name = "generic_metric_counters_meta_tag_values_local"
+    old_tag_value_dist_table_name = "generic_metric_counters_meta_tag_values_dist"
+    tag_value_view_name = "generic_metric_counters_meta_tag_values_v2_mv"
+    tag_value_local_table_name = "generic_metric_counters_meta_tag_values_v2_local"
+    tag_value_dist_table_name = "generic_metric_counters_meta_tag_values_v2_dist"
     tag_value_table_columns: Sequence[Column[Modifiers]] = [
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
@@ -45,32 +51,32 @@ class Migration(migration.ClickhouseNodeMigration):
         ops: list[SqlOperation] = [
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.tag_value_view_name,
+                table_name=self.old_tag_value_view_name,
                 target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.tag_value_dist_table_name,
+                table_name=self.old_tag_value_dist_table_name,
                 target=OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.tag_value_local_table_name,
+                table_name=self.old_tag_value_local_table_name,
                 target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.meta_view_name,
+                table_name=self.old_meta_view_name,
                 target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.meta_dist_table_name,
+                table_name=self.old_meta_dist_table_name,
                 target=OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.meta_local_table_name,
+                table_name=self.old_meta_local_table_name,
                 target=OperationTarget.LOCAL,
             ),
         ]
@@ -228,7 +234,7 @@ class Migration(migration.ClickhouseNodeMigration):
             # Recreate old tables
             operations.CreateTable(
                 storage_set=self.storage_set_key,
-                table_name=self.meta_local_table_name,
+                table_name=self.old_meta_local_table_name,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     order_by="(org_id, project_id, use_case_id, metric_id, tag_key, timestamp)",
@@ -242,7 +248,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
-                table_name=self.meta_dist_table_name,
+                table_name=self.old_meta_dist_table_name,
                 engine=table_engines.Distributed(
                     local_table_name=self.meta_local_table_name, sharding_key=None
                 ),
@@ -251,7 +257,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set_key,
-                view_name=self.meta_view_name,
+                view_name=self.old_meta_view_name,
                 columns=self.meta_table_columns,
                 destination_table_name=self.meta_local_table_name,
                 target=OperationTarget.LOCAL,
@@ -280,7 +286,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
-                table_name=self.tag_value_local_table_name,
+                table_name=self.old_tag_value_local_table_name,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     order_by="(project_id, metric_id, tag_key, tag_value, timestamp)",
@@ -294,7 +300,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
-                table_name=self.tag_value_dist_table_name,
+                table_name=self.old_tag_value_dist_table_name,
                 engine=table_engines.Distributed(
                     local_table_name=self.tag_value_local_table_name, sharding_key=None
                 ),
@@ -303,7 +309,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set_key,
-                view_name=self.tag_value_view_name,
+                view_name=self.old_tag_value_view_name,
                 columns=self.tag_value_table_columns,
                 destination_table_name=self.tag_value_local_table_name,
                 target=OperationTarget.LOCAL,
