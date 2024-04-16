@@ -56,16 +56,22 @@ class EntityProcessingStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
+        if isinstance(pipe_input.data.query, LogicalQuery):
+            entity = get_entity(pipe_input.data.query.get_from_clause().key)
+            assert isinstance(entity, PluggableEntity)
+            entity_processing_executor = entity.get_processing_executor()
+            physical_query = entity_processing_executor.execute(
+                pipe_input.data.query, pipe_input.query_settings
+            )
+        else:
+            from snuba.pipeline.composite_new_entity import (
+                composite_query_entity_processing_and_translation,
+            )
 
-        # TODO: support composite queries
-        assert isinstance(pipe_input.data.query, LogicalQuery)
-        entity = get_entity(pipe_input.data.query.get_from_clause().key)
-        assert isinstance(entity, PluggableEntity)
-        entity_processing_executor = entity.get_processing_executor()
-        clickhouse_query = entity_processing_executor.execute(
-            pipe_input.data.query, pipe_input.query_settings
-        )
-        return clickhouse_query
+            physical_query = composite_query_entity_processing_and_translation(
+                pipe_input.data.query, pipe_input.query_settings
+            )
+        return physical_query
 
 
 class StorageProcessingStage(
@@ -77,9 +83,20 @@ class StorageProcessingStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
-        # TODO: support composite queries
-        assert isinstance(pipe_input.data, ClickhouseQuery)
-        query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
-        query = apply_storage_processors(query_plan, pipe_input.query_settings)
+        if isinstance(pipe_input.data, ClickhouseQuery):
+            query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
+            query = apply_storage_processors(query_plan, pipe_input.query_settings)
+        else:
+            from snuba.pipeline.composite_new_storage import (
+                apply_composite_storage_processors,
+                build_best_plan_for_composite_query,
+            )
+
+            composite_query_plan = build_best_plan_for_composite_query(
+                pipe_input.data, pipe_input.query_settings, []
+            )
+            query = apply_composite_storage_processors(
+                composite_query_plan, pipe_input.query_settings
+            )
 
         return query
