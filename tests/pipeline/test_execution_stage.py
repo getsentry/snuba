@@ -10,6 +10,12 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
 from snuba.query import SelectedExpression
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    AllocationPolicyConfig,
+    QueryResultOrError,
+    QuotaAllowance,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import and_cond, binary_condition, column, equals, literal
 from snuba.query.expressions import Column, FunctionCall
@@ -20,6 +26,33 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.schemas import DateTime, UInt
 
 
+class MockAllocationPolicy(AllocationPolicy):
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        # Define policy specific config definitions, these will be used along
+        # with the default definitions of the base class. (is_enforced, is_active)
+        return []
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        self.did_update = True
+
+
+policy = MockAllocationPolicy(
+    StorageKey("mystorage"),
+    required_tenant_types=["organization_id", "referrer"],
+    default_config_overrides={},
+)
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_basic():
@@ -28,6 +61,11 @@ def test_basic():
     )
     settings = HTTPQuerySettings()
     timer = Timer("test")
+    policy = MockAllocationPolicy(
+        StorageKey.METRICS_DISTRIBUTIONS,
+        required_tenant_types=["organization_id", "referrer"],
+        default_config_overrides={},
+    )
     ch_query = Query(
         from_clause=Table(
             "metrics_distributions_v2_local",
@@ -40,6 +78,7 @@ def test_basic():
                 ]
             ),
             storage_key=StorageKey.METRICS_DISTRIBUTIONS,
+            allocation_policies=[policy],
         ),
         selected_columns=[
             SelectedExpression(
@@ -96,6 +135,8 @@ def test_basic():
         and len(res.data.result["data"]) == 1
         and "avg(granularity)" in res.data.result["data"][0]
     )
+    assert policy.did_update
+    assert settings.get_resource_quota().max_threads == 1
 
 
 @pytest.mark.clickhouse_db
