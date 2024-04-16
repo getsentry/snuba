@@ -37,11 +37,8 @@ def translate_logical_composite_query(
     query: CompositeQuery[Entity], settings: QuerySettings
 ) -> CompositeQuery:
     """
-    Produces a composite query plan out of a composite query.
-
-    This is the bulk of the logic of The Composite Planner. It is kept
-    in its own function because it needs to be used by the data source
-    visitor when planning subqueries (which can be composite as well).
+    Given a logical composite query, this function traverses each subquery node,
+    executes entity processing, and builds a single physical composite query.
     """
 
     translated_source = CompositeDataSourceTransformer(settings).visit(
@@ -69,14 +66,13 @@ def check_sub_query_storage_sets(
 ) -> None:
     """
     Receives a mapping with all the valid query for each subquery
-    in a join, and checks that queries are in the same storage set.
+    in a join, and checks that queries are grouped in JOINABLE_STORAGE_SETS.
     """
     from snuba.datasets.storages.factory import get_storage
     from snuba.pipeline.utils.storage_finder import StorageKeyFinder
 
     all_storage_sets = []
-    for alias, query in alias_to_query_mappings.items():
-        # get storage set key from each subquery
+    for _, query in alias_to_query_mappings.items():
         storage_key = StorageKeyFinder().visit(query)
         storage = get_storage(storage_key)
         all_storage_sets.append(storage.get_storage_set_key())
@@ -93,14 +89,9 @@ class CompositeDataSourceTransformer(
     ]
 ):
     """
-    Plans the DataSource (the from clause) of a Composite query by
-    visiting each node as the data source can be composite itself.
-
-    At each step an intermediate data structure containing the
-    translated query and the query processors to run in the execution
-    strategy is produced.
-    These intermediate structures are merged together and produce the
-    CompositeQueryPlan.
+    A visitor class responsible for producing a data source whether it be a ClickhouseQuery,
+    CompositeQuery, JoinClause[Table], or IndividualNode[Table]. This visitor traverses through
+    each node, applies the entity processing, and builds up a single data source.
     """
 
     def __init__(self, query_settings: QuerySettings) -> None:
@@ -142,7 +133,8 @@ class CompositeDataSourceTransformer(
 
 class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
     """
-    Produces all ClickhouseQuerys for each subquery in the join.
+    A visitor class responsible for helping traverse a join query and builds
+    an alias to physical query mapping.
     """
 
     def __init__(self, settings: QuerySettings) -> None:
@@ -175,7 +167,7 @@ class JoinDataSourceTransformer(
     JoinVisitor[Union[JoinClause[Table], IndividualNode[Table]], Entity]
 ):
     """
-    TODO
+    A visitor class responsible for producing a join data source.
     """
 
     def __init__(
