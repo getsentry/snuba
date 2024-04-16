@@ -101,4 +101,79 @@ def test_basic():
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_dry_run():
-    pass
+    attinfo = AttributionInfo(
+        get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
+    )
+    # set dry run
+    settings = HTTPQuerySettings(dry_run=True)
+    timer = Timer("test")
+    ch_query = Query(
+        from_clause=Table(
+            "metrics_distributions_v2_local",
+            ColumnSet(
+                [
+                    ("org_id", UInt(64)),
+                    ("project_id", UInt(64)),
+                    ("timestamp", DateTime()),
+                    ("granularity", UInt(32)),
+                ]
+            ),
+            storage_key=StorageKey.METRICS_DISTRIBUTIONS,
+        ),
+        selected_columns=[
+            SelectedExpression(
+                "avg(granularity)",
+                FunctionCall(
+                    "_snuba_avg(granularity)",
+                    "avg",
+                    (Column("_snuba_granularity", None, "granularity"),),
+                ),
+            )
+        ],
+        condition=and_cond(
+            equals(column("granularity"), literal(60)),
+            and_cond(
+                binary_condition(
+                    "greaterOrEquals",
+                    column("timestamp", alias="_snuba_timestamp"),
+                    literal(datetime(2021, 5, 17, 19, 42, 1)),
+                ),
+                and_cond(
+                    binary_condition(
+                        "less",
+                        column("timestamp", alias="_snuba_timestamp"),
+                        literal(datetime(2021, 5, 17, 23, 42, 1)),
+                    ),
+                    and_cond(
+                        equals(column("org_id", alias="_snuba_org_id"), literal(1)),
+                        equals(
+                            column("project_id", alias="_snuba_project_id"), literal(1)
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        limit=1000,
+    )
+    res = ExecutionStage(
+        attinfo,
+        query_metadata=SnubaQueryMetadata(
+            Request("", {}, ch_query, settings, attinfo, ""),
+            "blah",
+            timer,
+        ),
+    ).execute(
+        QueryPipelineResult(
+            data=ch_query,
+            query_settings=settings,
+            timer=timer,
+            error=None,
+        )
+    )
+    assert (
+        res.data.result["data"] == []
+        and res.data.result["meta"] == []
+        and "cluster_name" in res.data.extra["stats"]
+        and res.data.extra["sql"]
+        and "experiments" in res.data.extra
+    )
