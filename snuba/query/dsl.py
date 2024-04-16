@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Optional, Sequence
 
 from snuba.query.expressions import (
     Column,
@@ -26,7 +26,7 @@ class NestedColumn:
     )
     """
 
-    def __init__(self, column_name) -> None:
+    def __init__(self, column_name: str) -> None:
         self.column_name = column_name
 
     def __getitem__(self, key: str) -> SubscriptableReference:
@@ -35,9 +35,6 @@ class NestedColumn:
             Column(f"_snuba_{self.column_name}", None, self.column_name),
             Literal(None, key),
         )
-
-    def __setitem__(self, key: str, value: Any):
-        raise NotImplementedError()
 
 
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:

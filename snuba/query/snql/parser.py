@@ -16,7 +16,6 @@ from typing import (
     Set,
     Tuple,
     Union,
-    cast,
 )
 
 import sentry_sdk
@@ -1410,7 +1409,7 @@ def validate_entities_with_query(
         if isinstance(query.get_from_clause(), QueryStorage):
             return
         elif isinstance(query.get_from_clause(), QueryEntity):
-            entity = get_entity(cast(EntityKey, query.get_from_clause().key))
+            entity = get_entity(query.get_from_clause().key)
         else:
             entity = None
         assert entity is not None
