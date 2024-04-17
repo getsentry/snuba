@@ -56,13 +56,12 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.CreateTable(
                 storage_set=StorageSetKey.DISCOVER,
-                table_name=self.dist_table_name,
+                table_name=self.local_table_name,
                 columns=columns,
-                engine=table_engines.Distributed(
-                    local_table_name=self.local_table_name,
-                    sharding_key=None,
+                engine=table_engines.Merge(
+                    table_name_regex="^errors_local$|^transactions_local$"
                 ),
-                target=OperationTarget.DISTRIBUTED,
+                target=OperationTarget.LOCAL,
             ),
         ]
 
