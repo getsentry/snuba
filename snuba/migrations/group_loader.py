@@ -332,6 +332,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0038_add_record_meta_column_distributions",
             "0039_add_record_meta_column_gauges",
             "0040_remove_counters_meta_tables",
+            "0041_adjust_partitioning_meta_tables",
         ]
 
 
