@@ -16,9 +16,9 @@ from typing import (
 )
 
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.query import ProcessableQuery, TSimpleDataSource
+from snuba.query import ProcessableQuery
 from snuba.query.data_source import DataSource
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, SimpleDataSource
 from snuba.utils.schemas import Column, ColumnSet, SchemaModifiers, WildcardColumn
 
 
@@ -52,7 +52,7 @@ class JoinRelationship(NamedTuple):
     equivalences: Sequence[ColumnEquivalence]
 
 
-class JoinNode(ABC, Generic[TSimpleDataSource]):
+class JoinNode(ABC):
     """
     Represent a Node in the join tree data structure.
     Join nodes can be simple data sources, join expressions and queries.
@@ -63,11 +63,11 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
         raise NotImplementedError
 
     @abstractmethod
-    def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
+    def accept(self, visitor: JoinVisitor[TReturn]) -> TReturn:
         raise NotImplementedError
 
     @abstractmethod
-    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode]:
         raise NotImplementedError
 
 
@@ -83,7 +83,7 @@ class IndividualNode(JoinNode):
     """
 
     alias: str
-    data_source: Union[TSimpleDataSource, ProcessableQuery]
+    data_source: Union[SimpleDataSource, ProcessableQuery]
 
     def get_alias_node_map(self) -> Mapping[str, IndividualNode]:
         return {self.alias: self}

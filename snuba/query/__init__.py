@@ -485,6 +485,9 @@ class Query(DataSource, ABC):
         return eq
 
 
+TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
+
+
 class ProcessableQuery(Query, ABC):
     """
     A Query class that can be used by query processors and translators.

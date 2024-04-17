@@ -1,14 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar, Union
 
-from snuba.query import ProcessableQuery, TSimpleDataSource
+from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.simple import SimpleDataSource
 
 TReturn = TypeVar("TReturn")
 
 
-class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
+class DataSourceVisitor(ABC, Generic[TReturn]):
     """
     Visitor like system to process a tree of data sources.
 
@@ -22,10 +23,10 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
     def visit(
         self,
         data_source: Union[
-            TSimpleDataSource,
-            JoinClause[TSimpleDataSource],
-            ProcessableQuery[TSimpleDataSource],
-            CompositeQuery[TSimpleDataSource],
+            SimpleDataSource,
+            JoinClause,
+            ProcessableQuery,
+            CompositeQuery,
         ],
     ) -> TReturn:
         if isinstance(data_source, JoinClause):
@@ -41,21 +42,17 @@ class DataSourceVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
             return self._visit_simple_source(data_source)
 
     @abstractmethod
-    def _visit_simple_source(self, data_source: TSimpleDataSource) -> TReturn:
+    def _visit_simple_source(self, data_source: SimpleDataSource) -> TReturn:
         raise NotImplementedError
 
     @abstractmethod
-    def _visit_join(self, data_source: JoinClause[TSimpleDataSource]) -> TReturn:
+    def _visit_join(self, data_source: JoinClause) -> TReturn:
         raise NotImplementedError
 
     @abstractmethod
-    def _visit_simple_query(
-        self, data_source: ProcessableQuery[TSimpleDataSource]
-    ) -> TReturn:
+    def _visit_simple_query(self, data_source: ProcessableQuery) -> TReturn:
         raise NotImplementedError
 
     @abstractmethod
-    def _visit_composite_query(
-        self, data_source: CompositeQuery[TSimpleDataSource]
-    ) -> TReturn:
+    def _visit_composite_query(self, data_source: CompositeQuery) -> TReturn:
         raise NotImplementedError
