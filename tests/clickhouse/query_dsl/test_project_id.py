@@ -179,13 +179,13 @@ def test_find_projects(
         with pytest.raises(ParsingException):
             request = json_to_snql(query_body, "events")
             request.validate()
-            query, _ = parse_snql_query(str(request.query), events)
+            query = parse_snql_query(str(request.query), events)
             assert isinstance(query, Query)
             identity_translate(query)
     else:
         request = json_to_snql(query_body, "events")
         request.validate()
-        query, _ = parse_snql_query(str(request.query), events)
+        query = parse_snql_query(str(request.query), events)
         assert isinstance(query, Query)
         translated_query = identity_translate(query)
         project_ids_ast = get_object_ids_in_query_ast(translated_query, "project_id")
