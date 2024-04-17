@@ -237,13 +237,12 @@ def test_metrics_processing(
     }
 
     metrics_dataset = get_dataset("metrics")
-    query, snql_anonymized = parse_snql_query(query_body["query"], metrics_dataset)
+    query = parse_snql_query(query_body["query"], metrics_dataset)
 
     request = Request(
         id="",
         original_body=query_body,
         query=query,
-        snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer=""),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None

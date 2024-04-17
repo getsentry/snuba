@@ -31,12 +31,11 @@ def test_events_processing() -> None:
     events_dataset = get_dataset("events")
     events_entity = get_entity(EntityKey.EVENTS)
 
-    query, snql_anonymized = parse_snql_query(query_body["query"], events_dataset)
+    query = parse_snql_query(query_body["query"], events_dataset)
     request = Request(
         id="",
         original_body=query_body,
         query=query,
-        snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer=""),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
