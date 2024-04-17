@@ -136,7 +136,8 @@ class DiscoverLoader(DirectoryLoader):
             "0005_discover_fix_transaction_name",
             "0006_discover_add_trace_id",
             "0007_discover_add_span_id",
-            "0008_discover_add_replay_id",
+            "0008_discover_fix_add_local_table",
+            "0009_discover_add_replay_id",
         ]
 
 
