@@ -7,7 +7,6 @@ from itertools import chain
 from typing import Any as AnyType
 from typing import (
     Callable,
-    Generic,
     Iterable,
     MutableMapping,
     Optional,
@@ -16,7 +15,6 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
-    cast,
 )
 
 from snuba.clickhouse.columns import Any, ColumnSet
@@ -487,10 +485,7 @@ class Query(DataSource, ABC):
         return eq
 
 
-TSimpleDataSource = TypeVar("TSimpleDataSource", bound=SimpleDataSource)
-
-
-class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
+class ProcessableQuery(Query, ABC):
     """
     A Query class that can be used by query processors and translators.
     Specifically its data source can only be a SimpleDataSource.
@@ -498,7 +493,7 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
 
     def __init__(
         self,
-        from_clause: Optional[TSimpleDataSource],
+        from_clause: Optional[SimpleDataSource],
         # TODO: Consider if to remove the defaults and make some of
         # these fields mandatory. This impacts a lot of code so it
         # would be done on its own.
@@ -529,12 +524,12 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         )
         self.__from_clause = from_clause
 
-    def get_from_clause(self) -> TSimpleDataSource:
+    def get_from_clause(self) -> SimpleDataSource:
         if self.__from_clause is None:
             raise FromClauseNotSet("Data source has not been provided yet.")
         return self.__from_clause
 
-    def set_from_clause(self, from_clause: TSimpleDataSource) -> None:
+    def set_from_clause(self, from_clause: SimpleDataSource) -> None:
         self.__from_clause = from_clause
 
     def _eq_functions(self) -> Sequence[str]:
@@ -543,21 +538,4 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
     def __repr__(self) -> str:
         from snuba.query.formatters.tracing import format_query
 
-        # NOTE (Vlad): Why the type is cast:
-        # If you remove the ignore type comment you will get the following error:
-        #
-        #   Argument 1 to "format_query" has incompatible type
-        #   "ProcessableQuery[TSimpleDataSource]"; expected
-        #   "Union[ProcessableQuery[SimpleDataSource], CompositeQuery[SimpleDataSource]]"
-        #
-        # This happens because self in this case is a generic type
-        # CompositeQuery[TSimpleDataSource] while the function format_query takes a
-        # SimpleDataSource (a concrete type). It is known by us (and mypy) that
-        # TSimpleDataSource is bound to SimpleDataSource, which means that all types
-        # parametrizing this class must be subtypes of SimpleDataSource, mypy is not smart
-        # enough to know that though and so in order to have a generic repr function
-        # I cast type check in this case.
-        # Making TSimpleDataSource covariant would almost work except that covariant types
-        # canot be used as parameters: https://github.com/python/mypy/issues/7049
-
-        return "\n".join(format_query(cast(ProcessableQuery[SimpleDataSource], self)))
+        return "\n".join(format_query(self))

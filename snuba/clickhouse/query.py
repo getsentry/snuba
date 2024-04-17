@@ -1,8 +1,6 @@
-from typing import Callable, Iterable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence, cast
 
-from snuba.query import LimitBy, OrderBy
-from snuba.query import ProcessableQuery as AbstractQuery
-from snuba.query import SelectedExpression
+from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import ExpressionVisitor
@@ -12,7 +10,7 @@ from snuba.query.expressions import ExpressionVisitor
 Expression = SnubaExpression
 
 
-class Query(AbstractQuery[Table]):
+class Query(ProcessableQuery):
     def __init__(
         self,
         from_clause: Optional[Table],
@@ -46,6 +44,12 @@ class Query(AbstractQuery[Table]):
             totals=totals,
             granularity=granularity,
         )
+
+    def get_from_clause(self) -> Table:
+        return cast(Table, super().get_from_clause())
+
+    def set_from_clause(self, from_clause: Table) -> None:  # type: ignore
+        return super().set_from_clause(from_clause)
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
         return self.__prewhere or []

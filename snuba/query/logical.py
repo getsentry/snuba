@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence, cast
 
-from snuba.query import LimitBy, OrderBy
-from snuba.query import ProcessableQuery as AbstractQuery
-from snuba.query import SelectedExpression
+from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Expression, ExpressionVisitor
 
 
-class Query(AbstractQuery[Entity]):
+class Query(ProcessableQuery):
     """
     Represents the logical query during query processing.
     This means the query class used between parsing and query translation.
@@ -58,6 +56,12 @@ class Query(AbstractQuery[Entity]):
             totals=totals,
             granularity=granularity,
         )
+
+    def get_from_clause(self) -> Entity:
+        return cast(Entity, super().get_from_clause())
+
+    def set_from_clause(self, from_clause: Entity) -> None:  # type: ignore
+        return super().set_from_clause(from_clause)
 
     def get_final(self) -> bool:
         return self.__final
