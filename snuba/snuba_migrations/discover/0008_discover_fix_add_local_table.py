@@ -51,19 +51,9 @@ columns: List[Column[Modifiers]] = [
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     local_table_name = "discover_local"
-    dist_table_name = "discover_dist_new"
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
-            operations.CreateTable(
-                storage_set=StorageSetKey.DISCOVER,
-                table_name=self.local_table_name,
-                columns=columns,
-                engine=table_engines.Merge(
-                    table_name_regex="^errors_local$|^transactions_local$"
-                ),
-                target=OperationTarget.LOCAL,
-            ),
             operations.CreateTable(
                 storage_set=StorageSetKey.DISCOVER,
                 table_name=self.dist_table_name,
@@ -78,10 +68,4 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         # we do not drop the local table because it is created in previous migrations
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.DISCOVER,
-                table_name=self.dist_table_name,
-                target=OperationTarget.DISTRIBUTED,
-            )
-        ]
+        return []
