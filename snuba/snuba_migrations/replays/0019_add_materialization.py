@@ -65,7 +65,7 @@ SELECT
     anyIfState(device_model, device_model != '') as device_model,
     anyIfState(device_name, device_name != '') as device_name,
     anyIfState(dist, dist != '') as dist,
-    maxState(timestamp) as finished_at,
+    maxIfState(timestamp, segment_id IS NOT NULL) as finished_at,
     anyIfState(environment, environment != '') as environment,
     anyState(ip_address_v4) as ip_address_v4,
     anyState(ip_address_v6) as ip_address_v6,
@@ -158,7 +158,7 @@ columns: List[Column[Modifiers]] = [
     any_if_nullable_string("device_name"),
     any_if_nullable_string("dist"),
     any_if_nullable_string("environment"),
-    Column("finished_at", AggregateFunction("max", [DateTime()])),
+    Column("finished_at", AggregateFunction("maxIf", [DateTime(), UInt(8)])),
     Column("ip_address_v4", AggregateFunction("any", [IPv4(Modifiers(nullable=True))])),
     Column("ip_address_v6", AggregateFunction("any", [IPv6(Modifiers(nullable=True))])),
     Column(
