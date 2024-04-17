@@ -266,17 +266,6 @@ allocation_policies:
         - referrer
       default_config_overrides:
         is_enforced: 0
-  - name: CrossOrgQueryAllocationPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
-        is_active: 0
-      cross_org_referrer_limits:
-        getsentry.tasks.backfill_grouping_records:
-          max_threads: 2
-          concurrent_limit: 4
 
 
 query_processors:
@@ -302,10 +291,7 @@ query_processors:
   - processor: UserColumnProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: !!set
-        primary_hash: null
-        event_id: null
-        trace_id: null
+      columns: [event_id, primary_hash, trace_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
