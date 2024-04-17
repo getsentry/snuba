@@ -137,6 +137,7 @@ class DiscoverLoader(DirectoryLoader):
             "0006_discover_add_trace_id",
             "0007_discover_add_span_id",
             "0008_discover_fix_new_dist_table",
+            "0009_discover_fix_rename_dist_table",
         ]
 
 
