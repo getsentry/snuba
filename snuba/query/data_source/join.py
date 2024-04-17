@@ -72,7 +72,7 @@ class JoinNode(ABC, Generic[TSimpleDataSource]):
 
 
 @dataclass(frozen=True)
-class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
+class IndividualNode(JoinNode):
     """
     Join node that represent an individual data source: an entity/table
     or a subquery.
@@ -83,9 +83,9 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
     """
 
     alias: str
-    data_source: Union[TSimpleDataSource, ProcessableQuery[TSimpleDataSource]]
+    data_source: Union[TSimpleDataSource, ProcessableQuery]
 
-    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode]:
         return {self.alias: self}
 
     def get_column_sets(self) -> Mapping[str, ColumnSet]:
@@ -95,11 +95,11 @@ class IndividualNode(JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
             else {}
         )
 
-    def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
+    def accept(self, visitor: JoinVisitor[TReturn]) -> TReturn:
         return visitor.visit_individual_node(self)
 
 
-def entity_from_node(node: IndividualNode[Entity]) -> EntityKey:
+def entity_from_node(node: IndividualNode) -> EntityKey:
     assert isinstance(node.data_source, Entity)
     return node.data_source.key
 
@@ -124,7 +124,7 @@ class JoinCondition(NamedTuple):
 
 
 @dataclass(frozen=True)
-class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSource]):
+class JoinClause(DataSource, JoinNode):
     """
     Joins two JoinNodes.
 
@@ -139,8 +139,8 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
     still needs to be an IndividualNode.
     """
 
-    left_node: JoinNode[TSimpleDataSource]
-    right_node: IndividualNode[TSimpleDataSource]
+    left_node: JoinNode
+    right_node: IndividualNode
     keys: Sequence[JoinCondition]
     join_type: JoinType
     join_modifier: Optional[JoinModifier] = None
@@ -154,7 +154,7 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
     def get_columns(self) -> ColumnSet:
         return QualifiedColumnSet(self.get_column_sets())
 
-    def get_alias_node_map(self) -> Mapping[str, IndividualNode[TSimpleDataSource]]:
+    def get_alias_node_map(self) -> Mapping[str, IndividualNode]:
         return {
             **self.left_node.get_alias_node_map(),
             **self.right_node.get_alias_node_map(),
@@ -169,20 +169,20 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
                 f"{condition.right.table_alias}.{condition.right.column}" in column_set
             )
 
-    def accept(self, visitor: JoinVisitor[TReturn, TSimpleDataSource]) -> TReturn:
+    def accept(self, visitor: JoinVisitor[TReturn]) -> TReturn:
         return visitor.visit_join_clause(self)
 
 
 TReturn = TypeVar("TReturn", covariant=True)
 
 
-class JoinVisitor(ABC, Generic[TReturn, TSimpleDataSource]):
+class JoinVisitor(ABC, Generic[TReturn]):
     @abstractmethod
-    def visit_individual_node(self, node: IndividualNode[TSimpleDataSource]) -> TReturn:
+    def visit_individual_node(self, node: IndividualNode) -> TReturn:
         raise NotImplementedError
 
     @abstractmethod
-    def visit_join_clause(self, node: JoinClause[TSimpleDataSource]) -> TReturn:
+    def visit_join_clause(self, node: JoinClause) -> TReturn:
         raise NotImplementedError
 
 
