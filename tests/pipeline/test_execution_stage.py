@@ -1,7 +1,8 @@
-from datetime import datetime
+from dataclasses import replace
 
 import pytest
 
+from snuba import settings as snubasettings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
@@ -19,14 +20,14 @@ from snuba.query.allocation_policies import (
     QuotaAllowance,
 )
 from snuba.query.data_source.simple import Entity, Table
-from snuba.query.dsl import and_cond, binary_condition, column, equals, literal
+from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import SnubaQueryMetadata
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.schemas import DateTime, UInt
+from snuba.utils.schemas import UUID, String, UInt
 
 
 class MockAllocationPolicy(AllocationPolicy):
@@ -60,9 +61,7 @@ mockmetadata = SnubaQueryMetadata(
         "",
         {},
         LogicalQuery(
-            from_clause=Entity(
-                key=EntityKey.METRICS_DISTRIBUTIONS, schema=EntityColumnSet([])
-            )
+            from_clause=Entity(key=EntityKey.TRANSACTIONS, schema=EntityColumnSet([]))
         ),
         HTTPQuerySettings(),
         AttributionInfo(
@@ -74,6 +73,37 @@ mockmetadata = SnubaQueryMetadata(
     Timer("woof"),
 )
 
+ch_query = Query(
+    from_clause=Table(
+        "transactions_local",
+        ColumnSet(
+            [
+                ("event_id", UUID()),
+                ("project_id", UInt(64)),
+                ("transaction_name", String()),
+                ("duration", UInt(32)),
+            ]
+        ),
+        storage_key=StorageKey.TRANSACTIONS,
+        allocation_policies=[policy],
+    ),
+    selected_columns=[
+        SelectedExpression(
+            "avg(duration)",
+            FunctionCall(
+                "_snuba_avg(duration)",
+                "avg",
+                (Column("_snuba_duration", None, "duration"),),
+            ),
+        )
+    ],
+    condition=and_cond(
+        equals(column("transaction_name"), literal("dog")),
+        equals(column("project_id"), literal(1)),
+    ),
+    limit=1000,
+)
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
@@ -83,60 +113,6 @@ def test_basic() -> None:
     )
     settings = HTTPQuerySettings()
     timer = Timer("test")
-    policy = MockAllocationPolicy(
-        StorageKey.METRICS_DISTRIBUTIONS,
-        required_tenant_types=["organization_id", "referrer"],
-        default_config_overrides={},
-    )
-    ch_query = Query(
-        from_clause=Table(
-            "metrics_distributions_v2_local",
-            ColumnSet(
-                [
-                    ("org_id", UInt(64)),
-                    ("project_id", UInt(64)),
-                    ("timestamp", DateTime()),
-                    ("granularity", UInt(32)),
-                ]
-            ),
-            storage_key=StorageKey.METRICS_DISTRIBUTIONS,
-            allocation_policies=[policy],
-        ),
-        selected_columns=[
-            SelectedExpression(
-                "avg(granularity)",
-                FunctionCall(
-                    "_snuba_avg(granularity)",
-                    "avg",
-                    (Column("_snuba_granularity", None, "granularity"),),
-                ),
-            )
-        ],
-        condition=and_cond(
-            equals(column("granularity"), literal(60)),
-            and_cond(
-                binary_condition(
-                    "greaterOrEquals",
-                    column("timestamp", alias="_snuba_timestamp"),
-                    literal(datetime(2021, 5, 17, 19, 42, 1)),
-                ),
-                and_cond(
-                    binary_condition(
-                        "less",
-                        column("timestamp", alias="_snuba_timestamp"),
-                        literal(datetime(2021, 5, 17, 23, 42, 1)),
-                    ),
-                    and_cond(
-                        equals(column("org_id", alias="_snuba_org_id"), literal(1)),
-                        equals(
-                            column("project_id", alias="_snuba_project_id"), literal(1)
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        limit=1000,
-    )
     res = ExecutionStage(attinfo, query_metadata=mockmetadata).execute(
         QueryPipelineResult(
             data=ch_query,
@@ -148,7 +124,7 @@ def test_basic() -> None:
     assert (
         res.data
         and len(res.data.result["data"]) == 1
-        and "avg(granularity)" in res.data.result["data"][0]
+        and "avg(duration)" in res.data.result["data"][0]
     )
     assert policy.did_update
     q = settings.get_resource_quota()
@@ -164,54 +140,6 @@ def test_dry_run() -> None:
     # set dry run
     settings = HTTPQuerySettings(dry_run=True)
     timer = Timer("test")
-    ch_query = Query(
-        from_clause=Table(
-            "metrics_distributions_v2_local",
-            ColumnSet(
-                [
-                    ("org_id", UInt(64)),
-                    ("project_id", UInt(64)),
-                    ("timestamp", DateTime()),
-                    ("granularity", UInt(32)),
-                ]
-            ),
-            storage_key=StorageKey.METRICS_DISTRIBUTIONS,
-        ),
-        selected_columns=[
-            SelectedExpression(
-                "avg(granularity)",
-                FunctionCall(
-                    "_snuba_avg(granularity)",
-                    "avg",
-                    (Column("_snuba_granularity", None, "granularity"),),
-                ),
-            )
-        ],
-        condition=and_cond(
-            equals(column("granularity"), literal(60)),
-            and_cond(
-                binary_condition(
-                    "greaterOrEquals",
-                    column("timestamp", alias="_snuba_timestamp"),
-                    literal(datetime(2021, 5, 17, 19, 42, 1)),
-                ),
-                and_cond(
-                    binary_condition(
-                        "less",
-                        column("timestamp", alias="_snuba_timestamp"),
-                        literal(datetime(2021, 5, 17, 23, 42, 1)),
-                    ),
-                    and_cond(
-                        equals(column("org_id", alias="_snuba_org_id"), literal(1)),
-                        equals(
-                            column("project_id", alias="_snuba_project_id"), literal(1)
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        limit=1000,
-    )
     res = ExecutionStage(attinfo, query_metadata=mockmetadata).execute(
         QueryPipelineResult(
             data=ch_query,
@@ -228,3 +156,35 @@ def test_dry_run() -> None:
         and res.data.extra["sql"]
         and "experiments" in res.data.extra
     )
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_turbo() -> None:
+    ch_query.set_from_clause(
+        replace(
+            ch_query.get_from_clause(),
+            table_name="transactions_local",
+            storage_key=StorageKey.TRANSACTIONS,
+        )
+    )
+    attinfo = AttributionInfo(
+        get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
+    )
+    settings = HTTPQuerySettings(turbo=True)
+    timer = Timer("test")
+    res = ExecutionStage(attinfo, query_metadata=mockmetadata).execute(
+        QueryPipelineResult(
+            data=ch_query,
+            query_settings=settings,
+            timer=timer,
+            error=None,
+        )
+    )
+    assert res.data
+    assert (
+        res.data
+        and len(res.data.result["data"]) == 1
+        and "avg(duration)" in res.data.result["data"][0]
+    )
+    assert ch_query.get_from_clause().sampling_rate == snubasettings.TURBO_SAMPLE_RATE
