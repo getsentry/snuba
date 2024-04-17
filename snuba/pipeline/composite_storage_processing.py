@@ -24,7 +24,7 @@ from snuba.state import explain_meta
 
 def apply_composite_storage_processors(
     query_plan: CompositeDataSourcePlan, settings: QuerySettings
-) -> Union[ClickhouseQuery, CompositeQuery[Table], JoinClause[Table]]:
+) -> CompositeQuery[Table]:
     """
     Given a single composite query plan, this function applies all the
     db_processors and plan_processors to the physical query.

@@ -19,7 +19,7 @@ from snuba.query.query_settings import QuerySettings
 
 def translate_logical_composite_query(
     query: CompositeQuery[Entity], settings: QuerySettings
-) -> CompositeQuery[Entity]:
+) -> CompositeQuery[Table]:
     """
     Given a logical composite query, this function traverses each subquery node,
     executes entity processing, and builds a single physical composite query.
@@ -67,7 +67,9 @@ def check_sub_query_storage_sets(
 class CompositeDataSourceTransformer(
     DataSourceVisitor[
         Union[
-            ClickhouseQuery, CompositeQuery, JoinClause[Table], IndividualNode[Table]
+            ProcessableQuery[Table],
+            CompositeQuery[Table],
+            JoinClause[Table],
         ],
         Entity,
     ]
@@ -87,7 +89,7 @@ class CompositeDataSourceTransformer(
 
     def _visit_join(
         self, data_source: JoinClause[Entity]
-    ) -> Union[JoinClause[Table], IndividualNode[Table]]:
+    ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
         alias_to_query_mappings = data_source.accept(JoinQueryVisitor(self.__settings))
         check_sub_query_storage_sets(alias_to_query_mappings)
 
@@ -111,7 +113,7 @@ class CompositeDataSourceTransformer(
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Entity]
-    ) -> CompositeQuery:
+    ) -> CompositeQuery[Table]:
         return translate_logical_composite_query(data_source, self.__settings)
 
 
@@ -190,7 +192,7 @@ class JoinDataSourceTransformer(
 
 def translate_composite_query(
     query: CompositeQuery[Entity], query_settings: QuerySettings
-) -> CompositeQuery[Entity]:
+) -> CompositeQuery[Table]:
     """
     A function that traverses a logical composite query, applies all entitiy processors,
     and translates the result into a physical composite query.

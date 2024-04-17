@@ -65,14 +65,13 @@ class EntityProcessingStage(
             entity = get_entity(pipe_input.data.query.get_from_clause().key)
             assert isinstance(entity, PluggableEntity)
             entity_processing_executor = entity.get_processing_executor()
-            physical_query = entity_processing_executor.execute(
+            return entity_processing_executor.execute(
                 pipe_input.data.query, pipe_input.query_settings
             )
         else:
-            physical_query = translate_composite_query(
+            return translate_composite_query(
                 pipe_input.data.query, pipe_input.query_settings
             )
-        return physical_query
 
 
 class StorageProcessingStage(
@@ -86,13 +85,11 @@ class StorageProcessingStage(
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         if isinstance(pipe_input.data, ClickhouseQuery):
             query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])
-            query = apply_storage_processors(query_plan, pipe_input.query_settings)
+            return apply_storage_processors(query_plan, pipe_input.query_settings)
         else:
             composite_query_plan = build_best_plan_for_composite_query(
                 pipe_input.data, pipe_input.query_settings, []
             )
-            query = apply_composite_storage_processors(
+            return apply_composite_storage_processors(
                 composite_query_plan, pipe_input.query_settings
             )
-
-        return query
