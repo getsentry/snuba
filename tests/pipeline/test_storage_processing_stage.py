@@ -1,3 +1,7 @@
+from collections.abc import Generator
+
+import pytest
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import _STORAGE_SET_CLUSTER_MAP, CLUSTERS
@@ -16,31 +20,36 @@ from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.utils.metrics.timer import Timer
 
 
-class MockQueryProcessor(ClickhouseQueryProcessor):
+class NoopCHQueryProcessor(ClickhouseQueryProcessor):
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         query.add_condition_to_ast(equals(literal(1), literal(1)))
 
 
-# Create a fake storage and add it to global storages and clusters
-mock_storage = ReadableTableStorage(
-    storage_key=StorageKey("mockstorage"),
-    storage_set_key=StorageSetKey("mockstorageset"),
-    schema=TableSchema(
-        columns=ColumnSet([]),
-        local_table_name="mockstoragelocal",
-        dist_table_name="mockstoragedist",
+@pytest.fixture(scope="module")
+def mock_storage() -> Generator[ReadableTableStorage, None, None]:
+    # Create a fake storage and add it to global storages and clusters
+    mock_storage = ReadableTableStorage(
+        storage_key=StorageKey("mockstorage"),
         storage_set_key=StorageSetKey("mockstorageset"),
-    ),
-    readiness_state=ReadinessState.COMPLETE,
-    query_processors=[MockQueryProcessor()],
-    mandatory_condition_checkers=[],
-    allocation_policies=[],
-)
-get_config_built_storages()[mock_storage.get_storage_key()] = mock_storage
-_STORAGE_SET_CLUSTER_MAP[mock_storage.get_storage_set_key()] = CLUSTERS[0]
+        schema=TableSchema(
+            columns=ColumnSet([]),
+            local_table_name="mockstoragelocal",
+            dist_table_name="mockstoragedist",
+            storage_set_key=StorageSetKey("mockstorageset"),
+        ),
+        readiness_state=ReadinessState.COMPLETE,
+        query_processors=[NoopCHQueryProcessor()],
+        mandatory_condition_checkers=[],
+        allocation_policies=[],
+    )
+    get_config_built_storages()[mock_storage.get_storage_key()] = mock_storage
+    _STORAGE_SET_CLUSTER_MAP[mock_storage.get_storage_set_key()] = CLUSTERS[0]
+    yield mock_storage
+    del _STORAGE_SET_CLUSTER_MAP[mock_storage.get_storage_set_key()]
+    del get_config_built_storages()[mock_storage.get_storage_key()]
 
 
-def test_basic() -> None:
+def test_basic(mock_storage: ReadableTableStorage) -> None:
     query = Query(
         from_clause=Table(
             "dontmatter",
