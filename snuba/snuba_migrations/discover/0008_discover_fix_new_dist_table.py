@@ -77,15 +77,11 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
+        # we do not drop the local table because it is created in previous migrations
         return [
             operations.DropTable(
                 storage_set=StorageSetKey.DISCOVER,
                 table_name=self.dist_table_name,
                 target=OperationTarget.DISTRIBUTED,
-            ),
-            operations.DropTable(
-                storage_set=StorageSetKey.DISCOVER,
-                table_name=self.local_table_name,
-                target=OperationTarget.LOCAL,
-            ),
+            )
         ]
