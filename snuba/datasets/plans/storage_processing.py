@@ -23,7 +23,6 @@ from snuba.pipeline.utils.storage_finder import StorageKeyFinder
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
-from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
@@ -63,7 +62,7 @@ class QueryPlanNew(ABC, Generic[TQuery]):
 
 
 @dataclass(frozen=True)
-class ClickhouseQueryPlanNew(QueryPlanNew[Query]):
+class ClickhouseQueryPlanNew(QueryPlanNew[Union[Query, ProcessableQuery[Table]]]):
     """
     Query plan for a single entity, single storage query.
 
@@ -113,7 +112,7 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
 
 
 def build_best_plan(
-    physical_query: Union[Query, ProcessableQuery, CompositeQuery],
+    physical_query: Union[Query, ProcessableQuery[Table]],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlanNew:
@@ -164,7 +163,7 @@ def apply_storage_processors(
                 storage_key=storage.get_storage_key(),
             )
         )
-
+    assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"

@@ -6,7 +6,7 @@ import sentry_sdk
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan, SubqueryProcessors
+from snuba.datasets.plans.query_plan import SubqueryProcessors
 from snuba.datasets.plans.storage_processing import (
     ClickhouseQueryPlanNew,
     build_best_plan,
@@ -14,7 +14,7 @@ from snuba.datasets.plans.storage_processing import (
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
-from snuba.query.data_source.simple import Entity, Table
+from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.semi_joins import SemiJoinOptimizer
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -24,11 +24,12 @@ from snuba.state import explain_meta
 
 def apply_composite_storage_processors(
     query_plan: CompositeDataSourcePlan, settings: QuerySettings
-) -> CompositeQuery:
+) -> Union[ClickhouseQuery, CompositeQuery[Table], JoinClause[Table]]:
     """
     Given a single composite query plan, this function applies all the
     db_processors and plan_processors to the physical query.
     """
+    assert isinstance(query_plan.translated_source, CompositeQuery)
     plan_root_processors, plan_aliased_processors = query_plan.get_plan_processors()
     ProcessorsExecutor(
         plan_root_processors,
@@ -55,7 +56,7 @@ def apply_composite_storage_processors(
 
 
 def build_best_plan_for_composite_query(
-    physical_query: CompositeQuery,
+    physical_query: CompositeQuery[Table],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> CompositeDataSourcePlan:
@@ -65,6 +66,7 @@ def build_best_plan_for_composite_query(
     all the necessary storage processors that need to be applied.
     """
     plan = CompositeDataSourcePlanner(settings).visit(physical_query.get_from_clause())
+    physical_query.set_from_clause(plan.translated_source)
     return CompositeDataSourcePlan(
         translated_source=physical_query,
         storage_set_key=plan.storage_set_key,
@@ -104,7 +106,12 @@ class CompositeDataSourcePlan(NamedTuple):
     an execution strategy that is not used.
     """
 
-    translated_source: Union[ClickhouseQuery, CompositeQuery[Table], JoinClause[Table]]
+    translated_source: Union[
+        ClickhouseQuery,
+        ProcessableQuery[Table],
+        CompositeQuery[Table],
+        JoinClause[Table],
+    ]
     storage_set_key: StorageSetKey
     root_processors: Optional[SubqueryProcessors] = None
     aliased_processors: Optional[Mapping[str, SubqueryProcessors]] = None
@@ -213,9 +220,7 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Tabl
         )
 
 
-class JoinPlansBuilder(
-    JoinVisitor[Mapping[str, Sequence[ClickhouseQueryPlan]], Entity]
-):
+class JoinPlansBuilder(JoinVisitor[Mapping[str, ClickhouseQueryPlanNew], Table]):
     """
     Produces all the viable ClickhouseQueryPlans for each subquery
     in the join.
@@ -237,7 +242,7 @@ class JoinPlansBuilder(
 
     def visit_join_clause(
         self, node: JoinClause[Table]
-    ) -> Mapping[str, Sequence[ClickhouseQueryPlan]]:
+    ) -> Mapping[str, ClickhouseQueryPlanNew]:
         return {
             **node.left_node.accept(self),
             **node.right_node.accept(self),

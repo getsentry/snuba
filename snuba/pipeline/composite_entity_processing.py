@@ -19,7 +19,7 @@ from snuba.query.query_settings import QuerySettings
 
 def translate_logical_composite_query(
     query: CompositeQuery[Entity], settings: QuerySettings
-) -> CompositeQuery:
+) -> CompositeQuery[Entity]:
     """
     Given a logical composite query, this function traverses each subquery node,
     executes entity processing, and builds a single physical composite query.
@@ -190,7 +190,7 @@ class JoinDataSourceTransformer(
 
 def translate_composite_query(
     query: CompositeQuery[Entity], query_settings: QuerySettings
-) -> CompositeQuery:
+) -> CompositeQuery[Entity]:
     """
     A function that traverses a logical composite query, applies all entitiy processors,
     and translates the result into a physical composite query.
