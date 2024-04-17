@@ -97,11 +97,12 @@ class CompositeDataSourceTransformer(
             self.__settings, alias_to_query_mappings
         )
         join_query = data_source.accept(join_visitor)
+        assert isinstance(join_query, JoinClause)
         return join_query
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Entity]
-    ) -> ClickhouseQuery:
+    ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
         assert isinstance(
             data_source, LogicalQuery
         ), f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
@@ -113,7 +114,7 @@ class CompositeDataSourceTransformer(
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Entity]
-    ) -> CompositeQuery[Table]:
+    ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
         return translate_logical_composite_query(data_source, self.__settings)
 
 
