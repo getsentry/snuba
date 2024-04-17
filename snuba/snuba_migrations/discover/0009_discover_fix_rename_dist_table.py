@@ -19,13 +19,13 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.RenameTable(
                 storage_set=StorageSetKey.DISCOVER,
-                table_name=self.old_table_name,
+                old_table_name=self.old_table_name,
                 new_table_name=self.tmp_table_name,
                 target=OperationTarget.DISTRIBUTED,
             ),
             operations.RenameTable(
                 storage_set=StorageSetKey.DISCOVER,
-                table_name=self.new_table_name,
+                old_table_name=self.new_table_name,
                 new_table_name=self.old_table_name,
                 target=OperationTarget.DISTRIBUTED,
             ),
