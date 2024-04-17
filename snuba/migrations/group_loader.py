@@ -136,6 +136,7 @@ class DiscoverLoader(DirectoryLoader):
             "0005_discover_fix_transaction_name",
             "0006_discover_add_trace_id",
             "0007_discover_add_span_id",
+            "0008_discover_add_replay_id",
         ]
 
 
@@ -330,8 +331,6 @@ class GenericMetricsLoader(DirectoryLoader):
             "0037_add_record_meta_column_sets",
             "0038_add_record_meta_column_distributions",
             "0039_add_record_meta_column_gauges",
-            "0040_remove_counters_meta_tables",
-            "0041_adjust_partitioning_meta_tables",
         ]
 
 
