@@ -88,7 +88,6 @@ schema:
         args: { schema_modifiers: [nullable], size: 64 },
       },
       { name: deleted, type: UInt, args: { size: 8 } },
-      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } }
     ]
   local_table_name: discover_local
   dist_table_name: discover_dist
@@ -116,7 +115,9 @@ query_processors:
       column_name: tags
   - processor: UUIDColumnProcessor
     args:
-      columns: [event_id, trace_id, replay_id]
+      columns: !!set
+        trace_id: null
+        event_id: null
   - processor: HexIntColumnProcessor
     args:
       columns: !!set

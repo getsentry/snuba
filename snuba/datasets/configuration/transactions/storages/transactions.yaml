@@ -157,7 +157,6 @@ schema:
       },
       { name: app_start_type, type: String },
       { name: profile_id, type: UUID, args: { schema_modifiers: [nullable] } },
-      { name: replay_id, type: UUID, args: { schema_modifiers: [nullable] } },
     ]
   local_table_name: transactions_local
   dist_table_name: transactions_dist
@@ -203,7 +202,7 @@ query_processors:
           trace.span_id: span_id
   - processor: UUIDColumnProcessor
     args:
-      columns: [event_id, trace_id, profile_id, replay_id]
+      columns: [event_id, trace_id, profile_id]
   - processor: HexIntColumnProcessor
     args:
       columns: [span_id]
