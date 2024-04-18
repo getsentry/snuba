@@ -115,6 +115,7 @@ class TransactionsLoader(DirectoryLoader):
             "0019_transactions_add_indexes_and_context_hash",
             "0020_transactions_add_codecs",
             "0021_transactions_add_replay_id",
+            "0022_transactions_add_index_on_trace_id",
         ]
 
 
@@ -135,6 +136,8 @@ class DiscoverLoader(DirectoryLoader):
             "0005_discover_fix_transaction_name",
             "0006_discover_add_trace_id",
             "0007_discover_add_span_id",
+            "0008_discover_fix_add_local_table",
+            "0009_discover_add_replay_id",
         ]
 
 
@@ -179,6 +182,7 @@ class ReplaysLoader(DirectoryLoader):
             "0016_materialize_new_event_counts",
             "0017_add_component_name_column",
             "0018_add_viewed_by_id_column",
+            "0019_add_materialization",
         ]
 
 
@@ -325,7 +329,13 @@ class GenericMetricsLoader(DirectoryLoader):
             "0033_counters_meta_tag_values_table",
             "0034_counters_meta_tag_values_table_mv",
             "0035_recreate_counters_meta_tag_value_table_mv",
-            "0036_distributions_meta_tables",
+            "0036_counters_meta_tables_final",
+            "0037_add_record_meta_column_sets",
+            "0038_add_record_meta_column_distributions",
+            "0039_add_record_meta_column_gauges",
+            "0040_remove_counters_meta_tables",
+            "0041_adjust_partitioning_meta_tables",
+            "0042_distributions_meta_tables",
         ]
 
 
