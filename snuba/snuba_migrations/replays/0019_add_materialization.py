@@ -32,7 +32,7 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
         columns=columns,
         engine=table_engines.AggregatingMergeTree(
             storage_set=StorageSetKey.REPLAYS,
-            order_by="(project_id, toStartOfHour(to_hour_timestamp), replay_id, retention_days)",
+            order_by="(project_id, to_hour_timestamp, replay_id, retention_days)",
             partition_by="(retention_days, toMonday(to_hour_timestamp))",
             settings={"index_granularity": "8192"},
             ttl="to_hour_timestamp + toIntervalDay(retention_days)",
