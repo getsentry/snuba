@@ -22,7 +22,12 @@ from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import HTTPQuerySettings
-from snuba.querylog.query_metadata import SnubaQueryMetadata
+from snuba.querylog.query_metadata import (
+    SLO,
+    QueryStatus,
+    RequestStatus,
+    SnubaQueryMetadata,
+)
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.schemas import UUID, String, UInt
@@ -143,6 +148,13 @@ def test_basic(ch_query: Query) -> None:
     assert isinstance(policy, MockAllocationPolicy) and policy.did_update
     q = settings.get_resource_quota()
     assert q and q.max_threads == 1
+    # metadata
+    assert (
+        metadata.request_status == RequestStatus.SUCCESS
+        and metadata.status == QueryStatus.SUCCESS
+        and metadata.slo == SLO.FOR
+        and len(metadata.query_list) == 1
+    )
 
 
 @pytest.mark.clickhouse_db
