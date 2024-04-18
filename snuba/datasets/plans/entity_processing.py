@@ -6,6 +6,7 @@ import sentry_sdk
 
 from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
+from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entities.storage_selectors.selector import QueryStorageSelectorError
 from snuba.datasets.plans.cluster_selector import ColumnBasedStorageSliceSelector
@@ -14,6 +15,7 @@ from snuba.datasets.plans.storage_processing import (
     get_query_data_source,
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
+from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import (
     EntityStorageConnection,
@@ -123,3 +125,11 @@ class EntityProcessingExecutor:
 
         execute_entity_processors(query, settings)
         return self.translate_query_and_apply_mappers(query, settings)
+
+
+def run_entity_processing_executor(query: LogicalQuery, query_settings: QuerySettings):
+    entity = get_entity(query.get_from_clause().key)
+    assert isinstance(entity, PluggableEntity)
+    entity_processing_executor = entity.get_processing_executor()
+    query = entity_processing_executor.execute(query, query_settings)
+    return query

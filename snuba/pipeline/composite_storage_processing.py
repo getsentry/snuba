@@ -26,8 +26,9 @@ def apply_composite_storage_processors(
     query_plan: CompositeDataSourcePlan, settings: QuerySettings
 ) -> CompositeQuery[Table]:
     """
-    Given a single composite query plan, this function applies all the
-    db_processors and plan_processors to the physical query.
+    Given a composite query plan, this function applies all the
+    db_processors and plan_processors defined on the plan to the
+    physical query.
     """
     assert isinstance(query_plan.translated_source, CompositeQuery)
     plan_root_processors, plan_aliased_processors = query_plan.get_plan_processors()
@@ -61,9 +62,9 @@ def build_best_plan_for_composite_query(
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> CompositeDataSourcePlan:
     """
-    A function that traverses each subquery node in a composite query,
-    build a plan for each subquery, and returns a single plan containing
-    all the necessary storage processors that need to be applied.
+    A function that traverses each sub-query node in a physical composite query,
+    builds a plan for each sub-query, combines them into a single composite plan, and
+    returns all the necessary storage processors that need to be applied.
     """
     plan = CompositeDataSourcePlanner(settings).visit(physical_query.get_from_clause())
     physical_query.set_from_clause(plan.translated_source)

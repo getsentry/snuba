@@ -2,12 +2,12 @@ from typing import Any, cast
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.plans.entity_processing import run_entity_processing_executor
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.datasets.plans.storage_processing import (
     apply_storage_processors,
     build_best_plan,
 )
-from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.pipeline.composite import CompositeExecutionPipeline
 from snuba.pipeline.composite_entity_processing import translate_composite_query
 from snuba.pipeline.composite_storage_processing import (
@@ -62,11 +62,8 @@ class EntityProcessingStage(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         if isinstance(pipe_input.data.query, LogicalQuery):
-            entity = get_entity(pipe_input.data.query.get_from_clause().key)
-            assert isinstance(entity, PluggableEntity)
-            entity_processing_executor = entity.get_processing_executor()
-            return entity_processing_executor.execute(
-                pipe_input.data.query, pipe_input.query_settings
+            return run_entity_processing_executor(
+                pipe_input.data.query, self.__settings
             )
         else:
             return translate_composite_query(

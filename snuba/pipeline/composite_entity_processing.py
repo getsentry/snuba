@@ -3,9 +3,8 @@ from __future__ import annotations
 from typing import Mapping, Union
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.clusters.storage_sets import is_valid_storage_set_combination
-from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.pluggable_entity import PluggableEntity
+from snuba.datasets.plans.entity_processing import run_entity_processing_executor
+from snuba.pipeline.composite_storage_processing import check_sub_query_storage_sets
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -17,12 +16,26 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 
 
+def translate_composite_query(
+    query: CompositeQuery[Entity], query_settings: QuerySettings
+) -> CompositeQuery[Table]:
+    """
+    A function that traverses a logical composite query, applies all entity processors,
+    and translates the result into a physical composite query.
+    """
+    add_equivalent_conditions(query)
+    generate_subqueries(query)
+    physical_query = translate_logical_composite_query(query, query_settings)
+    return physical_query
+
+
 def translate_logical_composite_query(
     query: CompositeQuery[Entity], settings: QuerySettings
 ) -> CompositeQuery[Table]:
     """
-    Given a logical composite query, this function traverses each subquery node,
-    executes entity processing, and builds a single physical composite query.
+    Given a logical composite query, this function traverses each sub-query node,
+    executes all entity processors associated with each sub-query node,
+    and builds a physical composite query.
     """
 
     translated_source = CompositeDataSourceTransformer(settings).visit(
@@ -43,25 +56,6 @@ def translate_logical_composite_query(
         totals=query.has_totals(),
         granularity=query.get_granularity(),
     )
-
-
-def check_sub_query_storage_sets(
-    alias_to_query_mappings: Mapping[str, ClickhouseQuery]
-) -> None:
-    """
-    Receives a mapping with all the valid query for each subquery
-    in a join, and checks that queries are grouped in JOINABLE_STORAGE_SETS.
-    """
-    from snuba.datasets.storages.factory import get_storage
-    from snuba.pipeline.utils.storage_finder import StorageKeyFinder
-
-    all_storage_sets = []
-    for _, query in alias_to_query_mappings.items():
-        storage_key = StorageKeyFinder().visit(query)
-        storage = get_storage(storage_key)
-        all_storage_sets.append(storage.get_storage_set_key())
-
-    is_valid_storage_set_combination(*all_storage_sets)
 
 
 class CompositeDataSourceTransformer(
@@ -106,11 +100,8 @@ class CompositeDataSourceTransformer(
         assert isinstance(
             data_source, LogicalQuery
         ), f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
-        entity = get_entity(data_source.get_from_clause().key)
-        assert isinstance(entity, PluggableEntity)
-        entity_processing_executor = entity.get_processing_executor()
-        query = entity_processing_executor.execute(data_source, self.__settings)
-        return query
+        physical_query = run_entity_processing_executor(data_source, self.__settings)
+        return physical_query
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Entity]
@@ -133,13 +124,10 @@ class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
         assert isinstance(
             node.data_source, LogicalQuery
         ), "Invalid composite query. All nodes must be subqueries."
-
-        entity = get_entity(node.data_source.get_from_clause().key)
-        assert isinstance(entity, PluggableEntity)
-        entity_processing_executor = entity.get_processing_executor()
-        query = entity_processing_executor.execute(node.data_source, self.__settings)
-
-        return {node.alias: query}
+        physical_query = run_entity_processing_executor(
+            node.data_source, self.__settings
+        )
+        return {node.alias: physical_query}
 
     def visit_join_clause(
         self, node: JoinClause[Entity]
@@ -189,16 +177,3 @@ class JoinDataSourceTransformer(
             join_type=node.join_type,
             join_modifier=node.join_modifier,
         )
-
-
-def translate_composite_query(
-    query: CompositeQuery[Entity], query_settings: QuerySettings
-) -> CompositeQuery[Table]:
-    """
-    A function that traverses a logical composite query, applies all entitiy processors,
-    and translates the result into a physical composite query.
-    """
-    add_equivalent_conditions(query)
-    generate_subqueries(query)
-    physical_query = translate_logical_composite_query(query, query_settings)
-    return physical_query
