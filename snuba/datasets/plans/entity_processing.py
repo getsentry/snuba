@@ -14,7 +14,6 @@ from snuba.datasets.plans.storage_processing import (
     get_query_data_source,
 )
 from snuba.datasets.plans.translator.query import QueryTranslator
-from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storage import (
     EntityStorageConnection,
@@ -130,6 +129,7 @@ def run_entity_processing_executor(
     query: LogicalQuery, query_settings: QuerySettings
 ) -> Query:
     from snuba.datasets.entities.factory import get_entity
+    from snuba.datasets.pluggable_entity import PluggableEntity
 
     entity = get_entity(query.get_from_clause().key)
     assert isinstance(entity, PluggableEntity)
