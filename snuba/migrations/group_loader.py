@@ -137,6 +137,7 @@ class DiscoverLoader(DirectoryLoader):
             "0006_discover_add_trace_id",
             "0007_discover_add_span_id",
             "0008_discover_fix_add_local_table",
+            "0009_discover_add_replay_id",
         ]
 
 
@@ -181,6 +182,7 @@ class ReplaysLoader(DirectoryLoader):
             "0016_materialize_new_event_counts",
             "0017_add_component_name_column",
             "0018_add_viewed_by_id_column",
+            "0019_add_materialization",
         ]
 
 
