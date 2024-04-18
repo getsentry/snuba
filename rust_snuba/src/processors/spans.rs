@@ -77,6 +77,8 @@ struct Span {
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
+    #[serde(default)]
+    module: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
