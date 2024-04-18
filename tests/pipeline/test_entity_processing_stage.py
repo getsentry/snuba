@@ -43,7 +43,7 @@ class NoopQueryProcessor(LogicalQueryProcessor):
         query.add_condition_to_ast(equals(literal(1), literal(1)))
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()  # (scope="module")
 def mock_storage() -> Generator[ReadableTableStorage, None, None]:
     # setup
     storkey = StorageKey("mockstorage")
@@ -71,7 +71,7 @@ def mock_storage() -> Generator[ReadableTableStorage, None, None]:
     del _STORAGE_SET_CLUSTER_MAP[storage.get_storage_set_key()]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()  # (scope="module")
 def mock_entity(
     mock_storage: ReadableTableStorage,
 ) -> Generator[PluggableEntity, None, None]:
