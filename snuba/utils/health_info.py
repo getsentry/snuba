@@ -107,7 +107,6 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
         "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
     )
 
-    logger.info(json.dumps(body))
     return HealthInfo(
         body=json.dumps(body),
         status=status,
