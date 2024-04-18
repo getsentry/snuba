@@ -22,6 +22,7 @@ expression: snapshot_payload
     "measurements.value": [
       100.0
     ],
+    "module": "",
     "offset": 1,
     "op": "http.client",
     "parent_span_id": 16045690984833335023,
