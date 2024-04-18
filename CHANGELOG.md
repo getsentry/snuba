@@ -1,5 +1,24 @@
 # Changelog
 
+## 24.4.1
+
+### Various fixes & improvements
+
+- feat(replays): add migration for replay_id in discover (#5790) by @JoshFerge
+- feat: replacer defaults to auto.offset.reset=earliest (#5772) by @lynnagara
+- feat(migrations): add discover local (#5788) by @dbanda
+- fix(spans): Let null domain be null (#5780) by @phacops
+- feat(meta): Adjust partitioning/settings of counters meta tables (#5784) by @evanh
+- Revert "feat(replays): add replay_id column to merged discover table (#5777)" (2f1509fc) by @getsentry-bot
+- fix: fix mypy --strict vscode (#5781) by @kylemumma
+- feat(replays): add replay_id column to merged discover table (#5777) by @JoshFerge
+- ref: Rust consumer should not skip writes by default (#5778) by @lynnagara
+- chore(on-call): Add CrossOrgQueryAllocationPolicy to errors (#5774) by @enochtangg
+- inc-715: rust consumer can stop processing messages at specific timestamp (#5779) by @lynnagara
+- meta: Bump new development version (2248bb55)
+- fix(meta): Remove experimental meta tables (#5733) by @evanh
+- ref(card-an): Allow the new meta tables in the cardinality analyzer (#5769) by @evanh
+
 ## 24.4.0
 
 ### Various fixes & improvements

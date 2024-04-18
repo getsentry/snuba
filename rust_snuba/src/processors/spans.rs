@@ -63,8 +63,7 @@ struct Span {
     action: String,
     deleted: u8,
     description: String,
-    #[serde(default)]
-    domain: String,
+    domain: Option<String>,
     duration: u32,
     end_ms: u16,
     end_timestamp: u64,
@@ -73,12 +72,12 @@ struct Span {
     #[serde(default)]
     group_raw: u64,
     is_segment: u8,
-    #[serde(default)]
-    module: String,
     #[serde(rename(serialize = "measurements.key"))]
     measurement_keys: Vec<String>,
     #[serde(rename(serialize = "measurements.value"))]
     measurement_values: Vec<f64>,
+    #[serde(default)]
+    module: String,
     offset: u64,
     op: String,
     parent_span_id: u64,
@@ -144,7 +143,7 @@ impl TryFrom<FromSpanMessage> for Span {
         Ok(Self {
             action: sentry_tags.get("action").cloned().unwrap_or_default(),
             description: from.description.unwrap_or_default(),
-            domain: sentry_tags.get("domain").cloned().unwrap_or_default(),
+            domain: sentry_tags.get("domain").cloned(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
@@ -153,7 +152,6 @@ impl TryFrom<FromSpanMessage> for Span {
             is_segment: if from.is_segment { 1 } else { 0 },
             measurement_keys,
             measurement_values,
-            module: sentry_tags.get("module").cloned().unwrap_or_default(),
             op: sentry_tags.get("op").cloned().unwrap_or_default(),
             parent_span_id: from.parent_span_id.map_or(0, |parent_span_id| {
                 u64::from_str_radix(&parent_span_id, 16).unwrap_or_default()
@@ -308,11 +306,11 @@ mod tests {
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
         action: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         domain: Option<String>,
         group: Option<String>,
         #[serde(rename = "http.method")]
         http_method: Option<String>,
-        module: Option<String>,
         op: Option<String>,
         status: Option<String>,
         status_code: Option<String>,
@@ -362,7 +360,6 @@ mod tests {
                 domain: Some("targetdomain.tld:targetport".into()),
                 group: Some("deadbeefdeadbeef".into()),
                 http_method: Some("GET".into()),
-                module: Some("http".into()),
                 op: Some("http.client".into()),
                 status: Some("ok".into()),
                 status_code: Some("200".into()),
@@ -446,5 +443,20 @@ mod tests {
     #[test]
     fn schema() {
         run_schema_type_test::<FromSpanMessage>("snuba-spans", None);
+    }
+
+    #[test]
+    fn test_null_domain() {
+        let mut span = valid_span();
+        span.sentry_tags.domain = Option::None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

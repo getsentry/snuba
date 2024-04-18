@@ -41,7 +41,7 @@ expected_for_required_fields = {
     "action": "",
     "deleted": 0,
     "description": "",
-    "domain": "",
+    "domain": None,
     "duration": 1234560123,
     "end_ms": 234,
     "end_timestamp": int(
@@ -55,7 +55,6 @@ expected_for_required_fields = {
     "is_segment": 1,
     "measurements.key": [],
     "measurements.value": [],
-    "module": "",
     "offset": 1,
     "op": "",
     "parent_span_id": 0,

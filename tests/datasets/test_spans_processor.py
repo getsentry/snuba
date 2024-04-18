@@ -24,7 +24,6 @@ class SpanEventExample:
     group: str
     http_method: Optional[str]
     measurements: Dict[str, _MeasurementValue]
-    module: str
     op: str
     organization_id: int
     parent_span_id: str
@@ -57,7 +56,6 @@ class SpanEventExample:
                     "http.method": "GET",
                     "action": "SELECT",
                     "domain": "targetdomain.tld:targetport",
-                    "module": self.module,
                     "group": self.group,
                     "status": "ok",
                     "system": "python",
@@ -118,7 +116,7 @@ class SpanEventExample:
                 "span_kind": "",
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
                 "status": SPAN_STATUS_NAME_TO_CODE.get("ok"),
-                "module": self.module,
+                "module": "",
                 "domain": "targetdomain.tld:targetport",
                 "platform": self.platform,
                 "action": "SELECT",
@@ -139,7 +137,6 @@ class SpanEventExample:
                     "domain",
                     "group",
                     "http.method",
-                    "module",
                     "op",
                     "status",
                     "status_code",
@@ -153,7 +150,6 @@ class SpanEventExample:
                     "targetdomain.tld:targetport",
                     self.group,
                     "GET",
-                    self.module,
                     "http.client",
                     "ok",
                     "200",
@@ -208,7 +204,6 @@ def get_span_event() -> SpanEventExample:
         group="deadbeefdeadbeef",
         http_method="POST",
         measurements={"memory": {"value": 1000.0}},
-        module="http",
         op="navigation",
         organization_id=69,
         parent_span_id="deadbeefdeadbeef",

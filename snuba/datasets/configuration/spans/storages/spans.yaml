@@ -34,7 +34,6 @@ schema:
       { name: span_kind, type: String },
       { name: description, type: String },
       { name: status, type: UInt, args: { size: 32, schema_modifiers: [nullable] } },
-      { name: module, type: String },
       { name: action, type: String, args: { schema_modifiers: [nullable] } },
       { name: domain, type: String, args: { schema_modifiers: [nullable] } },
       { name: platform, type: String, args: { schema_modifiers: [nullable] } },
