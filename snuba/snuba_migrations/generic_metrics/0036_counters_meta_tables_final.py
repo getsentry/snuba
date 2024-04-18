@@ -11,9 +11,9 @@ from snuba.utils.schemas import Float
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     granularity = "8192"
-    meta_view_name = "generic_metric_gauges_meta_mv"
-    meta_local_table_name = "generic_metric_gauges_meta_local"
-    meta_dist_table_name = "generic_metric_gauges_meta_dist"
+    meta_view_name = "generic_metric_counters_meta_mv"
+    meta_local_table_name = "generic_metric_counters_meta_local"
+    meta_dist_table_name = "generic_metric_counters_meta_dist"
     meta_table_columns: Sequence[Column[Modifiers]] = [
         Column("org_id", UInt(64)),
         Column("project_id", UInt(64)),
@@ -25,9 +25,9 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
-    tag_value_view_name = "generic_metric_gauges_meta_tag_values_mv"
-    tag_value_local_table_name = "generic_metric_gauges_meta_tag_values_local"
-    tag_value_dist_table_name = "generic_metric_gauges_meta_tag_values_dist"
+    tag_value_view_name = "generic_metric_counters_meta_tag_values_mv"
+    tag_value_local_table_name = "generic_metric_counters_meta_tag_values_local"
+    tag_value_dist_table_name = "generic_metric_counters_meta_tag_values_dist"
     tag_value_table_columns: Sequence[Column[Modifiers]] = [
         Column("project_id", UInt(64)),
         Column("metric_id", UInt(64)),
@@ -38,7 +38,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("count", AggregateFunction("sum", [Float(64)])),
     ]
 
-    storage_set_key = StorageSetKey.GENERIC_METRICS_GAUGES
+    storage_set_key = StorageSetKey.GENERIC_METRICS_COUNTERS
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -81,7 +81,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     toStartOfWeek(timestamp) as timestamp,
                     retention_days,
                     sumState(count_value) as count
-                FROM generic_metric_gauges_raw_local
+                FROM generic_metric_counters_raw_local
                 ARRAY JOIN tags.key AS tag_key
                 WHERE record_meta = 1
                 GROUP BY
@@ -132,7 +132,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     toStartOfWeek(timestamp) as timestamp,
                     retention_days,
                     sumState(count_value) as count
-                FROM generic_metric_gauges_raw_local
+                FROM generic_metric_counters_raw_local
                 ARRAY JOIN
                     tags.key AS tag_key, tags.raw_value AS tag_value
                 WHERE record_meta = 1

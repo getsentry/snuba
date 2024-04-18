@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 
 use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
@@ -39,6 +39,7 @@ pub fn consumer(
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
+    stop_at_timestamp: Option<i64>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -53,6 +54,7 @@ pub fn consumer(
             max_poll_interval_ms,
             python_max_queue_depth,
             health_check_file,
+            stop_at_timestamp,
         )
     });
 }
@@ -70,6 +72,7 @@ pub fn consumer_impl(
     max_poll_interval_ms: usize,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
+    stop_at_timestamp: Option<i64>,
 ) -> usize {
     setup_logging();
 
@@ -217,6 +220,7 @@ pub fn consumer_impl(
         consumer_group.to_owned(),
         Topic::new(&consumer_config.raw_topic.physical_topic_name),
         consumer_config.accountant_topic,
+        stop_at_timestamp,
     );
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
@@ -261,12 +265,7 @@ pub fn process_message(
         .ok_or(SnubaRustError::new_err("processor not found"))?;
 
     let payload = KafkaPayload::new(None, None, Some(value));
-
-    let timestamp = DateTime::from_naive_utc_and_offset(
-        NaiveDateTime::from_timestamp_millis(millis_since_epoch).unwrap_or(NaiveDateTime::MIN),
-        Utc,
-    );
-
+    let timestamp = DateTime::<Utc>::from_timestamp_millis(millis_since_epoch).unwrap_or_default();
     let meta = KafkaMessageMetadata {
         partition,
         offset,

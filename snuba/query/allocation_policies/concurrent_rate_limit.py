@@ -14,6 +14,7 @@ from snuba.query.allocation_policies import (
 )
 from snuba.state.rate_limit import (
     RateLimitParameters,
+    RateLimitStats,
     rate_limit_finish_request,
     rate_limit_start_request,
 )
@@ -57,7 +58,7 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
 
     def _is_within_rate_limit(
         self, query_id: str, rate_limit_params: RateLimitParameters
-    ) -> tuple[bool, str]:
+    ) -> tuple[RateLimitStats, bool, str]:
         rate_limit_prefix = f"{self.runtime_config_prefix}.rate_limit"
         # HACK: this is a harcoded value because this rate_history_s is not a useful
         # configuration parameter. It's used for the per-second caclulation but that calculation
@@ -81,13 +82,14 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
             self.get_config_value("max_query_duration_s"),
         )
         if rate_limit_stats.concurrent == -1:
-            return True, "rate limiter errored, failing open"
+            return rate_limit_stats, True, "rate limiter errored, failing open"
         if rate_limit_stats.concurrent > rate_limit_params.concurrent_limit:
             return (
+                rate_limit_stats,
                 False,
                 f"concurrent policy {rate_limit_stats.concurrent} exceeds limit of {rate_limit_params.concurrent_limit}",
             )
-        return True, "within limit"
+        return rate_limit_stats, True, "within limit"
 
     def _end_query(
         self,
@@ -230,7 +232,10 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             )
 
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
-        within_rate_limit, why = self._is_within_rate_limit(query_id, rate_limit_params)
+        _, within_rate_limit, why = self._is_within_rate_limit(
+            query_id,
+            rate_limit_params,
+        )
         return QuotaAllowance(
             within_rate_limit, self.max_threads, {"reason": why, "overrides": overrides}
         )
