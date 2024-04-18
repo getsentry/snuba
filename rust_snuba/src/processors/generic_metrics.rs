@@ -169,6 +169,16 @@ struct CommonMetricFields {
     hr_retention_days: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     day_retention_days: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_meta: Option<u8>,
+}
+
+fn should_record_meta(use_case_id: &str) -> Option<u8> {
+    match use_case_id {
+        "escalating_issues" => Some(0),
+        "metric_stats" => Some(0),
+        _ => Some(1),
+    }
 }
 
 /// The raw row that is written to clickhouse for counters.
@@ -178,8 +188,6 @@ struct CountersRawRow {
     common_fields: CommonMetricFields,
     #[serde(default)]
     count_value: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    record_meta: Option<u8>,
 }
 
 /// Parse is the trait which should be implemented for all metric types.
@@ -218,11 +226,7 @@ impl Parse for CountersRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let record_meta = match from.use_case_id.as_str() {
-            "escalating_issues" => Some(0),
-            "metric_stats" => Some(0),
-            _ => Some(1),
-        };
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -239,12 +243,12 @@ impl Parse for CountersRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
             common_fields,
             count_value,
-            record_meta,
         }))
     }
 }
@@ -393,6 +397,8 @@ impl Parse for SetsRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
+        let record_meta = should_record_meta(from.use_case_id.as_str());
+
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
@@ -408,6 +414,7 @@ impl Parse for SetsRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -474,6 +481,7 @@ impl Parse for DistributionsRawRow {
             enable_histogram = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -490,6 +498,7 @@ impl Parse for DistributionsRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -573,6 +582,7 @@ impl Parse for GaugesRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -589,6 +599,7 @@ impl Parse for GaugesRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -807,6 +818,15 @@ mod tests {
     }
 
     #[test]
+    fn test_should_record_meta_yes() {
+        let use_case_invalid = "escalating_issues";
+        assert_eq!(should_record_meta(use_case_invalid), Some(0));
+
+        let use_case_valid = "spans";
+        assert_eq!(should_record_meta(use_case_valid), Some(1));
+    }
+
+    #[test]
     fn test_validate_timeseries_id() {
         let org_id = 1;
         let project_id = 2;
@@ -875,9 +895,9 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             count_value: 1.0,
-            record_meta: Some(1),
         };
         assert_eq!(
             result.unwrap(),
@@ -946,6 +966,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
         };
@@ -1016,6 +1037,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1072,6 +1094,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1128,6 +1151,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
@@ -1199,6 +1223,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
@@ -1259,6 +1284,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
@@ -1333,6 +1359,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
         };

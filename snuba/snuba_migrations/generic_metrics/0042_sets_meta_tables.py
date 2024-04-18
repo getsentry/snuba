@@ -49,8 +49,13 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=self.storage_set_key,
                     order_by="(org_id, project_id, use_case_id, metric_id, tag_key, timestamp)",
                     primary_key="(org_id, project_id, use_case_id, metric_id, tag_key, timestamp)",
-                    partition_by="(retention_days, toMonday(timestamp))",
-                    settings={"index_granularity": self.granularity},
+                    partition_by="toMonday(timestamp)",
+                    settings={
+                        "index_granularity": self.granularity,
+                        # Since the partitions contain multiple retention periods, need to ensure
+                        # that rows within partitions are dropped
+                        "ttl_only_drop_parts": 0,
+                    },
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
                 columns=self.meta_table_columns,
@@ -78,7 +83,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     use_case_id,
                     metric_id,
                     tag_key,
-                    toStartOfWeek(timestamp) as timestamp,
+                    toMonday(timestamp) as timestamp,
                     retention_days,
                     sumState(count_value) as count
                 FROM generic_metric_sets_raw_local
@@ -101,8 +106,13 @@ class Migration(migration.ClickhouseNodeMigration):
                     storage_set=self.storage_set_key,
                     order_by="(project_id, metric_id, tag_key, tag_value, timestamp)",
                     primary_key="(project_id, metric_id, tag_key, tag_value, timestamp)",
-                    partition_by="(retention_days, toMonday(timestamp))",
-                    settings={"index_granularity": self.granularity},
+                    partition_by="toMonday(timestamp)",
+                    settings={
+                        "index_granularity": self.granularity,
+                        # Since the partitions contain multiple retention periods, need to ensure
+                        # that rows within partitions are dropped
+                        "ttl_only_drop_parts": 0,
+                    },
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
                 columns=self.tag_value_table_columns,
@@ -129,7 +139,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     metric_id,
                     tag_key,
                     tag_value,
-                    toStartOfWeek(timestamp) as timestamp,
+                    toMonday(timestamp) as timestamp,
                     retention_days,
                     sumState(count_value) as count
                 FROM generic_metric_sets_raw_local

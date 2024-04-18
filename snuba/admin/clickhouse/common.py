@@ -151,7 +151,26 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     if parsed.query_type != QueryType.SELECT:
         raise InvalidCustomQuery("Only SELECT queries are allowed")
 
-    if allowed_tables and not set(parsed.tables).issubset(allowed_tables):
+    # This parser doesn't handle ARRAY JOIN clauses correctly, so do some
+    # massaging to get around that. What ends up happening is that the columns
+    # in the ARRAY JOIN are treated as table aliases, so end up in this dictionary
+    # as well as in the tables list. E.g. FROM x ARRAY JOIN y AS z becomes
+    # tables_aliases = {'ARRAY': x, 'z': y} and tables = ['x', 'y'].
+    # Confusingly it will also sometimes lower case ARRAY, so check for both.
+    tables_set = set(parsed.tables)
+    array_join = None
+    if "ARRAY" in parsed.tables_aliases:
+        array_join = "ARRAY"
+    elif "array" in parsed.tables_aliases:
+        array_join = "array"
+
+    if array_join:
+        for v in parsed.tables_aliases.values():
+            tables_set.discard(v)  # Remove the columns
+
+        tables_set.add(parsed.tables_aliases[array_join])  # Add the table back
+
+    if allowed_tables and not tables_set.issubset(allowed_tables):
         raise InvalidCustomQuery(
             f"Invalid FROM clause, only the following tables are allowed: {allowed_tables}"
         )
