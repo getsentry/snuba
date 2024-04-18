@@ -288,6 +288,11 @@ def test_db_query_success() -> None:
             "explanation": {},
             "max_threads": 10,
         },
+        "CrossOrgQueryAllocationPolicy": {
+            "can_run": True,
+            "explanation": {},
+            "max_threads": 10,
+        },
     }
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats

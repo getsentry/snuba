@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.4.0
+
+### Various fixes & improvements
+
+- chore(on-call): Add metric for concurrent queries by referrer that violate policy (#5767) by @enochtangg
+- ref: make auto.offset.reset=earliest everywhere (#5765) by @lynnagara
+- feat(trace): Add trace id to transactions (#5768) by @wmak
+- fix(spans): Move span id above trace id in the prewhere (#5766) by @wmak
+- feat(meta): Add record meta column to gauges (#5760) by @evanh
+- feat(meta): Add record meta column to distributions (#5759) by @evanh
+- feat(meta): Add record_meta column to sets (#5735) by @evanh
+- ref: bump sentry-kafka-schemas to 0.1.68 (#5764) by @getsentry-bot
+- chore(capman): set default bytes scanned limit for rejecting policy (#5755) by @volokluev
+- ref(ch-upgrades): create dist tables functionality (#5737) by @MeredithAnya
+- perf(metrics): Use kafka header optimization (#5756) by @nikhars
+- feat(meta): Add updated versions of meta tables for counters (#5734) by @evanh
+- chore(rust): Update dependencies (#5751) by @nikhars
+- chore: update sdk version (#5754) by @kylemumma
+- fix: Fix default auto-offset-reset value (#5753) by @lynnagara
+- lower max query size to 128KiB (#5750) by @enochtangg
+- clean up old simple pipeline (#5732) by @enochtangg
+- feat(capman): Long term rejection allocation policy (#5718) by @volokluev
+- ref(fetcher): --tables optional now (#5730) by @MeredithAnya
+- fix: parser, bug in pushdown filter (#5731) by @kylemumma
+- feat(generic-metrics): Add a killswitch to processor (#5617) by @ayirr7
+- feat(replays): Replace python processor with a rust-based processor (#5380) by @cmanallen
+- feat(replay): add ReplayViewedEvent to replay processor (#5712) by @aliu3ntry
+- chore(deps): bump h2 from 0.3.22 to 0.3.26 in /rust_snuba (#5727) by @dependabot
+
+_Plus 52 more_
+
 ## 24.3.0
 
 ### Various fixes & improvements

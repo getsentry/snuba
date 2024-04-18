@@ -54,6 +54,7 @@ pub struct ConsumerStrategyFactory {
     physical_consumer_group: String,
     physical_topic_name: Topic,
     accountant_topic_config: config::TopicConfig,
+    stop_at_timestamp: Option<i64>,
 }
 
 impl ConsumerStrategyFactory {
@@ -78,6 +79,7 @@ impl ConsumerStrategyFactory {
         physical_consumer_group: String,
         physical_topic_name: Topic,
         accountant_topic_config: config::TopicConfig,
+        stop_at_timestamp: Option<i64>,
     ) -> Self {
         Self {
             storage_config,
@@ -99,6 +101,7 @@ impl ConsumerStrategyFactory {
             physical_consumer_group,
             physical_topic_name,
             accountant_topic_config,
+            stop_at_timestamp,
         }
     }
 }
@@ -220,6 +223,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                     },
+                    self.stop_at_timestamp,
                 );
             }
             (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
@@ -232,6 +236,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                     },
+                    self.stop_at_timestamp,
                 )
             }
             (
