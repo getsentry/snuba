@@ -127,9 +127,11 @@ class EntityProcessingExecutor:
         return self.translate_query_and_apply_mappers(query, settings)
 
 
-def run_entity_processing_executor(query: LogicalQuery, query_settings: QuerySettings):
+def run_entity_processing_executor(
+    query: LogicalQuery, query_settings: QuerySettings
+) -> Query:
     entity = get_entity(query.get_from_clause().key)
     assert isinstance(entity, PluggableEntity)
     entity_processing_executor = entity.get_processing_executor()
-    query = entity_processing_executor.execute(query, query_settings)
-    return query
+    physical_query = entity_processing_executor.execute(query, query_settings)
+    return physical_query

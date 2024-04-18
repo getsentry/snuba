@@ -63,7 +63,7 @@ class EntityProcessingStage(
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         if isinstance(pipe_input.data.query, LogicalQuery):
             return run_entity_processing_executor(
-                pipe_input.data.query, self.__settings
+                pipe_input.data.query, pipe_input.query_settings
             )
         else:
             return translate_composite_query(
