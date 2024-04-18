@@ -399,6 +399,7 @@ CLUSTERS = [
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+        max_connections=cluster["max_connections"] if "max_connections" in cluster else None,
         distributed_cluster_name=cluster["distributed_cluster_name"]
         if "distributed_cluster_name" in cluster
         else None,
