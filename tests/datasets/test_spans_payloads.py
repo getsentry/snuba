@@ -41,7 +41,7 @@ expected_for_required_fields = {
     "action": "",
     "deleted": 0,
     "description": "",
-    "domain": "",
+    "domain": None,
     "duration": 1234560123,
     "end_ms": 234,
     "end_timestamp": int(

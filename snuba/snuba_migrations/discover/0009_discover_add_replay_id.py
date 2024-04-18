@@ -42,15 +42,3 @@ class Migration(migration.ClickhouseNodeMigration):
                 ("discover_local", OperationTarget.LOCAL),
             ]
         ]
-
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return self.forwards_ops()
-
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return self.backwards_ops()
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return self.forwards_ops()
-
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return self.backwards_ops()

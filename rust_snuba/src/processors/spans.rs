@@ -63,8 +63,7 @@ struct Span {
     action: String,
     deleted: u8,
     description: String,
-    #[serde(default)]
-    domain: String,
+    domain: Option<String>,
     duration: u32,
     end_ms: u16,
     end_timestamp: u64,
@@ -144,7 +143,7 @@ impl TryFrom<FromSpanMessage> for Span {
         Ok(Self {
             action: sentry_tags.get("action").cloned().unwrap_or_default(),
             description: from.description.unwrap_or_default(),
-            domain: sentry_tags.get("domain").cloned().unwrap_or_default(),
+            domain: sentry_tags.get("domain").cloned(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
@@ -307,6 +306,7 @@ mod tests {
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
         action: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         domain: Option<String>,
         group: Option<String>,
         #[serde(rename = "http.method")]
@@ -443,5 +443,20 @@ mod tests {
     #[test]
     fn schema() {
         run_schema_type_test::<FromSpanMessage>("snuba-spans", None);
+    }
+
+    #[test]
+    fn test_null_domain() {
+        let mut span = valid_span();
+        span.sentry_tags.domain = Option::None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }
