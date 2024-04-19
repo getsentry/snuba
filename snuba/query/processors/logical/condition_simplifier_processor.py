@@ -42,7 +42,12 @@ class ConditionSimplifierProcessor(LogicalQueryProcessor):
                     exp.alias, "equals", (exp.parameters[0], rhs.parameters[0])
                 )
 
-            return FunctionCall(exp.alias, "has", (rhs, exp.parameters[0]))
+            # `has` requires an array, so convert everything to an array
+            return FunctionCall(
+                exp.alias,
+                "has",
+                (FunctionCall(None, "array", rhs.parameters), exp.parameters[0]),
+            )
 
         if state.get_int_config("use.condition.simplifier.processor", 1) == 0:
             return
