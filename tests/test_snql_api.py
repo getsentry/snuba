@@ -1455,7 +1455,7 @@ class TestSnQLApi(BaseApiTest):
                     "dataset": "discover",
                     "app_id": "default",
                     "tenant_ids": {
-                        "organization_id": 1,
+                        "organization_id": self.org_id,
                         "referrer": "discover",
                     },
                     "parent_api": "<missing>",
@@ -1464,9 +1464,10 @@ class TestSnQLApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert (
-            "has(['test@1.2.3+123', 'test2@1.2.4+124'], (release AS _snuba_release))"
+            "has(array('test@1.2.3+123', 'test2@1.2.4+124'), (release AS _snuba_release))"
             in data["sql"]
         )
+        print(data["sql"])
 
 
 @pytest.mark.clickhouse_db
