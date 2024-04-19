@@ -22,7 +22,6 @@ class ConditionSimplifierProcessor(LogicalQueryProcessor):
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_cond(exp: Expression) -> Expression:
-            print("CHECKING", exp)
             if not is_condition(exp):
                 return exp
 
