@@ -448,6 +448,7 @@ query_processors:
       time_parse_columns:
         - timestamp
   - processor: BasicFunctionsProcessor
+  - processor: ConditionSimplifierProcessor
 
 validate_data_model: error
 validators:
