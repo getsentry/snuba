@@ -1,14 +1,17 @@
+import importlib
 from collections.abc import Generator
 
 import pytest
 
+from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.clusters.cluster import _STORAGE_SET_CLUSTER_MAP, CLUSTERS
+from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
@@ -25,9 +28,9 @@ class NoopCHQueryProcessor(ClickhouseQueryProcessor):
         query.add_condition_to_ast(equals(literal(1), literal(1)))
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def mock_storage() -> Generator[ReadableTableStorage, None, None]:
-    # Create a fake storage and add it to global storages and clusters
+    # Create a fake storage
     mock_storage = ReadableTableStorage(
         storage_key=StorageKey("mockstorage"),
         storage_set_key=StorageSetKey("mockstorageset"),
@@ -42,11 +45,16 @@ def mock_storage() -> Generator[ReadableTableStorage, None, None]:
         mandatory_condition_checkers=[],
         allocation_policies=[],
     )
+    # add it to the global storages and cluster
     get_config_built_storages()[mock_storage.get_storage_key()] = mock_storage
-    _STORAGE_SET_CLUSTER_MAP[mock_storage.get_storage_set_key()] = CLUSTERS[0]
+    assert len(settings.CLUSTERS) == 1
+    settings.CLUSTERS[0]["storage_sets"].add("mockstorageset")
+    importlib.reload(cluster)
     yield mock_storage
-    del _STORAGE_SET_CLUSTER_MAP[mock_storage.get_storage_set_key()]
-    del get_config_built_storages()[mock_storage.get_storage_key()]
+    # teardown
+    importlib.reload(settings)
+    importlib.reload(cluster)
+    importlib.reload(factory)
 
 
 def test_basic(mock_storage: ReadableTableStorage) -> None:

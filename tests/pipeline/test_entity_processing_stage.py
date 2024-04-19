@@ -1,13 +1,15 @@
+import importlib
 from collections.abc import Generator
 
 import pytest
 
+from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.clusters.cluster import _STORAGE_SET_CLUSTER_MAP, CLUSTERS
+from snuba.clusters import cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import override_entity_map, reset_entity_factory
@@ -18,6 +20,8 @@ from snuba.datasets.pluggable_entity import PluggableEntity
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import EntityStorageConnection, ReadableTableStorage
+from snuba.datasets.storages import factory
+from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_processing import EntityProcessingStage
@@ -43,9 +47,9 @@ class NoopQueryProcessor(LogicalQueryProcessor):
         query.add_condition_to_ast(equals(literal(1), literal(1)))
 
 
-@pytest.fixture()  # (scope="module")
+@pytest.fixture
 def mock_storage() -> Generator[ReadableTableStorage, None, None]:
-    # setup
+    # create a storage
     storkey = StorageKey("mockstorage")
     storsetkey = StorageSetKey("mockstorageset")
     storage = ReadableTableStorage(
@@ -65,13 +69,19 @@ def mock_storage() -> Generator[ReadableTableStorage, None, None]:
         ),
         readiness_state=ReadinessState.COMPLETE,
     )
-    _STORAGE_SET_CLUSTER_MAP[storage.get_storage_set_key()] = CLUSTERS[0]
+    # add it to the global storages and clusters
+    get_config_built_storages()[storage.get_storage_key()] = storage
+    assert len(settings.CLUSTERS) == 1
+    settings.CLUSTERS[0]["storage_sets"].add("mockstorageset")
+    importlib.reload(cluster)
     yield storage
     # teardown
-    del _STORAGE_SET_CLUSTER_MAP[storage.get_storage_set_key()]
+    importlib.reload(settings)
+    importlib.reload(cluster)
+    importlib.reload(factory)
 
 
-@pytest.fixture()  # (scope="module")
+@pytest.fixture
 def mock_entity(
     mock_storage: ReadableTableStorage,
 ) -> Generator[PluggableEntity, None, None]:
