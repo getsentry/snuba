@@ -4,10 +4,27 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_condition,
 )
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
+
+_LOW_CARDINALITY_COLUMNS = set(
+    [
+        "transaction_name",
+        "transaction_op",
+        "platform",
+        "environment",
+        "release",
+        "dist",
+        "sdk_name",
+        "sdk_version",
+        "http_method",
+        "type",
+        "app_start_type",
+        "transaction_source",
+    ]
+)
 
 
 class ConditionSimplifierProcessor(LogicalQueryProcessor):
@@ -37,6 +54,13 @@ class ConditionSimplifierProcessor(LogicalQueryProcessor):
             ):
                 return exp
 
+            lhs = exp.parameters[0]
+            if (
+                not isinstance(lhs, Column)
+                or lhs.column_name not in _LOW_CARDINALITY_COLUMNS
+            ):
+                return exp
+
             if len(rhs.parameters) == 1:
                 return FunctionCall(
                     exp.alias, "equals", (exp.parameters[0], rhs.parameters[0])
@@ -51,7 +75,6 @@ class ConditionSimplifierProcessor(LogicalQueryProcessor):
 
         if state.get_int_config("use.condition.simplifier.processor", 1) == 0:
             return
-
         condition = query.get_condition()
         if condition:
             conditions = get_first_level_and_conditions(condition)
