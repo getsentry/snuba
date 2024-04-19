@@ -295,9 +295,16 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
     if len(conditions) == 1:
         return conditions[0]
 
-    return binary_condition(
-        function, conditions[0], _combine_conditions(conditions[1:], function)
-    )
+    new_conds: list[Expression] = []
+    if len(conditions) % 2 == 0:
+        start = 0
+    else:
+        new_conds.append(conditions[0])
+        start = 1
+    for i in range(start, len(conditions) - 1, 2):
+        new_conds.append(binary_condition(function, conditions[i], conditions[i + 1]))
+
+    return _combine_conditions(new_conds, function)
 
 
 CONDITION_MATCH = Or(
