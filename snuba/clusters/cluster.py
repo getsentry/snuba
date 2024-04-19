@@ -240,8 +240,8 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__max_connections = max_connections
         self.__block_connections = block_connections
         self.__query_node = ClickhouseNode(host, port)
-        self.__user = "rachel"
-        self.__password = "123"
+        self.__user = "x"
+        self.__password = "y"
         self.__database = database
         self.__http_port = http_port
         self.__single_node = single_node
