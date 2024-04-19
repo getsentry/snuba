@@ -1,3 +1,4 @@
+from snuba import state
 from snuba.query.conditions import (
     combine_and_conditions,
     get_first_level_and_conditions,
@@ -30,7 +31,6 @@ class ConditionSimplifierProcessor(LogicalQueryProcessor):
                 return exp
 
             rhs = exp.parameters[1]
-            print(rhs)
             if not isinstance(rhs, FunctionCall) or rhs.function_name not in (
                 "tuple",
                 "array",
@@ -43,6 +43,9 @@ class ConditionSimplifierProcessor(LogicalQueryProcessor):
                 )
 
             return FunctionCall(exp.alias, "has", (rhs, exp.parameters[0]))
+
+        if state.get_int_config("use.condition.simplifier.processor", 1) == 0:
+            return
 
         condition = query.get_condition()
         if condition:
