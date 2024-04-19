@@ -23,6 +23,7 @@ _LOW_CARDINALITY_COLUMNS = set(
         "type",
         "app_start_type",
         "transaction_source",
+        "version",
     ]
 )
 
