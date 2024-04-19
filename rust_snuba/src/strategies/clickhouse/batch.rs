@@ -28,13 +28,22 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         skip_write: bool,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(3);
+        let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
+        headers.insert(
+            "X-Clickhouse-User",
+            HeaderValue::from_str("rachel").unwrap(),
+        );
+        headers.insert("X-ClickHouse-Key", HeaderValue::from_str("123").unwrap());
         headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
+
+        for (name, value) in headers.iter() {
+            println!("{}: {}", name.as_str(), value.to_str().unwrap());
+        }
 
         let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
         let url = format!("http://{hostname}:{http_port}?{query_params}");

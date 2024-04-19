@@ -99,6 +99,8 @@ def check_clickhouse_connections(
                     attempts,
                     exc_info=e,
                 )
+                logger.error("clickhouse_username %s", clickhouse.user)
+                logger.error(clickhouse.password)
                 attempts += 1
                 if attempts == 60:
                     raise
