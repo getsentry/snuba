@@ -1442,11 +1442,11 @@ class TestSnQLApi(BaseApiTest):
                 {
                     "consistent": False,
                     "turbo": False,
-                    "query": "MATCH (discover) SELECT event_id AS `id` WHERE release IN array('test@1.2.3+123', 'test2@1.2.4+124') AND timestamp >= toDateTime('2024-04-18T22:28:40.928000') AND timestamp < toDateTime('2024-04-19T22:28:40.306000') AND project_id IN array(4553863597588481) LIMIT 50",
+                    "query": f"MATCH (discover) SELECT event_id AS `id` WHERE release IN array('test@1.2.3+123', 'test2@1.2.4+124') AND timestamp >= toDateTime('{self.base_time.isoformat()}') AND timestamp < toDateTime('{self.base_time.isoformat()}') AND project_id IN array({self.project_id}) LIMIT 50",
                     "dataset": "discover",
                     "app_id": "default",
                     "tenant_ids": {
-                        "organization_id": 4553863597391872,
+                        "organization_id": self.org_id,
                         "referrer": "discover",
                     },
                     "parent_api": "<missing>",
@@ -1454,11 +1454,12 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         assert (
-            "has(['test@1.2.3+123', 'test2@1.2.4+124'], (release AS _snuba_release))"
+            "has(array('test@1.2.3+123', 'test2@1.2.4+124'), (release AS _snuba_release))"
             in data["sql"]
         )
+        print(data["sql"])
 
 
 @pytest.mark.clickhouse_db
