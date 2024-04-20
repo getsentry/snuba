@@ -359,6 +359,7 @@ query_processors:
     { processor: BasicFunctionsProcessor },
     { processor: ApdexProcessor },
     { processor: FailureRateProcessor },
+    { processor: ConditionSimplifierProcessor },
   ]
 validate_data_model: error
 validators:
