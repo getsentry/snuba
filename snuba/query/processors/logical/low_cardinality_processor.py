@@ -36,12 +36,8 @@ class LowCardinalityProcessor(LogicalQueryProcessor):
                 exp.alias,
                 "cast",
                 (
-                    FunctionCall(
-                        None,
-                        "ifNull",
-                        (replace(exp, alias=None), Literal(None, "")),
-                    ),
-                    Literal(None, "String"),
+                    replace(exp, alias=None),
+                    Literal(None, "Nullable(String)"),
                 ),
             )
 
