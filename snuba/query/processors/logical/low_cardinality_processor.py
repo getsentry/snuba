@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from snuba import state
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -31,13 +33,13 @@ class LowCardinalityProcessor(LogicalQueryProcessor):
                 return exp
 
             return FunctionCall(
-                None,
+                exp.alias,
                 "cast",
                 (
                     FunctionCall(
                         None,
                         "ifNull",
-                        (exp, Literal(None, "")),
+                        (replace(exp, alias=None), Literal(None, "")),
                     ),
                     Literal(None, "String"),
                 ),

@@ -1431,11 +1431,11 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert (
-            "equals(cast(ifNull((release AS _snuba_release), ''), 'String'), '1123581321345589')"
+            "equals((cast(ifNull(release, ''), 'String') AS _snuba_release), '1123581321345589')"
             in data["sql"]
         )
         assert (
-            "has(['prod', 'dev'], cast(ifNull((environment AS _snuba_environment), ''), 'String'))"
+            "has(['prod', 'dev'], (cast(ifNull(environment, ''), 'String') AS _snuba_environment))"
             in data["sql"]
         )
 
@@ -1475,7 +1475,7 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert (
-            "cast(ifNull((environment AS _snuba_environment), ''), 'String')"
+            "cast(ifNull(environment, ''), 'String') AS _snuba_environment"
             in data["sql"]
         )
 
