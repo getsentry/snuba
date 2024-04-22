@@ -79,7 +79,6 @@ def test_nullable_field_casting(entity: Entity, expected_table_name: str) -> Non
                 super().__init__()
 
             def visit_function_call(self, exp: FunctionCall) -> str:
-                print(exp)
                 if (
                     exp.function_name == "cast"
                     and exp.alias == "_snuba_sdk_version"
