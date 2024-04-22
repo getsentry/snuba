@@ -458,7 +458,6 @@ query_processors:
         - release
         - dist
         - sdk_name
-        - sdk_version
         - http_method
         - type
         - app_start_type

@@ -364,7 +364,7 @@ query_processors:
       processor: LowCardinalityProcessor,
       args:
         {
-          columns: [transaction_name, transaction_op, platform, environment, release, dist, sdk_name, sdk_version, http_method, type, app_start_type, transaction_source],
+          columns: [transaction_name, transaction_op, platform, environment, release, dist, sdk_name, http_method, type, app_start_type, transaction_source],
         },
     },
   ]
