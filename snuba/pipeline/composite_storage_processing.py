@@ -97,14 +97,13 @@ def check_sub_query_storage_sets(
 
 class CompositeDataSourcePlan(NamedTuple):
     """
-    Intermediate data structure maintained when visiting and
-    transforming the query data source.
+    Intermediate query plan data structure maintained when visiting
+    each node of a composite query. This structure responsible for keeping track
+    of a query and the relavent processors that need to be executed on the query.
 
-    We cannot use a Composite plan itself as an intermediate
-    structure thus the need of this class.
-    This is because the data source type is a bit less
-    restrictive in this class and we would have to instantiate
-    an execution strategy that is not used.
+    We cannot use a Composite plan itself because the data source type is too
+    restrictive and processors are structured differently for composite queries
+    (e.g. aliased processors).
     """
 
     translated_source: Union[

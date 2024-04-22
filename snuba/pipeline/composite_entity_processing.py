@@ -25,11 +25,11 @@ def translate_composite_query(
     """
     add_equivalent_conditions(query)
     generate_subqueries(query)
-    physical_query = translate_logical_composite_query(query, query_settings)
+    physical_query = _translate_logical_composite_query(query, query_settings)
     return physical_query
 
 
-def translate_logical_composite_query(
+def _translate_logical_composite_query(
     query: CompositeQuery[Entity], settings: QuerySettings
 ) -> CompositeQuery[Table]:
     """
@@ -69,9 +69,8 @@ class CompositeDataSourceTransformer(
     ]
 ):
     """
-    A visitor class responsible for producing a data source whether it be a ClickhouseQuery,
-    CompositeQuery, JoinClause[Table], or IndividualNode[Table]. This visitor traverses through
-    each node, applies the entity processing, and builds up a single data source.
+    A visitor class responsible for traversing through each sub-query node, applies
+    entity processors to each node, and returning physical query.
     """
 
     def __init__(self, query_settings: QuerySettings) -> None:
@@ -106,13 +105,13 @@ class CompositeDataSourceTransformer(
     def _visit_composite_query(
         self, data_source: CompositeQuery[Entity]
     ) -> Union[ProcessableQuery[Table], CompositeQuery[Table], JoinClause[Table]]:
-        return translate_logical_composite_query(data_source, self.__settings)
+        return _translate_logical_composite_query(data_source, self.__settings)
 
 
 class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
     """
-    A visitor class responsible for helping traverse a join query and builds
-    an alias to physical query mapping.
+    A visitor class responsible for helping traverse a join query, runs entity processors,
+    and builds n alias to physical query mapping.
     """
 
     def __init__(self, settings: QuerySettings) -> None:
