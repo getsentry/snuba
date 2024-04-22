@@ -264,7 +264,7 @@ test_data = [
         """
         MATCH (transactions)
         SELECT tags_key, tags_value
-        WHERE release IN tuple('t1', 't2')
+        WHERE title IN tuple('t1', 't2')
             AND finish_ts >= toDateTime('2021-01-01T00:00:00')
             AND finish_ts < toDateTime('2021-01-02T00:00:00')
             AND project_id = 1
@@ -303,7 +303,7 @@ test_data = [
             ],
             condition=with_required(
                 in_condition(
-                    Column("_snuba_release", None, "release"),
+                    Column("_snuba_title", None, "transaction_name"),
                     [Literal(None, "t1"), Literal(None, "t2")],
                 )
             ),
@@ -453,6 +453,7 @@ def parse_and_process(snql_query: str) -> ClickhouseQuery:
     return query_plan.query
 
 
+@pytest.mark.redis_db
 @pytest.mark.parametrize("query_body, expected_query", test_data)
 def test_tags_processor(query_body: str, expected_query: ClickhouseQuery) -> None:
     """
@@ -503,6 +504,7 @@ def test_formatting() -> None:
     )
 
 
+@pytest.mark.redis_db
 def test_aliasing() -> None:
     """
     Validates aliasing works properly when the query contains both tags_key
