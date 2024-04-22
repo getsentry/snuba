@@ -45,7 +45,7 @@ class LowCardinalityProcessor(LogicalQueryProcessor):
                 ),
             )
 
-        if state.get_int_config("use.low.cardinality.processor", 1) == 0:
+        if state.get_int_config("use.low.cardinality.processor", 0) == 0:
             return
 
         query.transform_expressions(transform_expressions)
