@@ -167,7 +167,7 @@ def test_get_all_columns_legacy() -> None:
     events = get_dataset("events")
     request = json_to_snql(query_body, "events")
     request.validate()
-    query = parse_snql_query(str(request.query), events)
+    query, _ = parse_snql_query(str(request.query), events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_title", None, "title"),
@@ -207,7 +207,7 @@ def test_get_all_columns() -> None:
         HAVING trace_sampled > 1
         """
     events = get_dataset("events")
-    query = parse_snql_query(query_body, events)
+    query, _ = parse_snql_query(query_body, events)
 
     assert query.get_all_ast_referenced_columns() == {
         Column("_snuba_partition", None, "partition"),
@@ -336,7 +336,7 @@ def test_alias_validation(
     events_entity = get_entity(EntityKey.EVENTS)
     request = json_to_snql(query_body, "events")
     request.validate()
-    query = parse_snql_query(str(request.query), events)
+    query, _ = parse_snql_query(str(request.query), events)
     settings = HTTPQuerySettings()
     query_plan = (
         events_entity.get_query_pipeline_builder().build_planner(query, settings)

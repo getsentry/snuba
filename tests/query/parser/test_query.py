@@ -1185,7 +1185,7 @@ snql_test_cases = [
 @pytest.mark.parametrize("query_body, expected_query", snql_test_cases)
 def test_format_expressions_from_snql(query_body: str, expected_query: Query) -> None:
     events = get_dataset("events")
-    query = parse_snql_query(str(query_body), events)
+    query, _ = parse_snql_query(str(query_body), events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason
@@ -1237,7 +1237,7 @@ def test_treeify() -> None:
     WHERE project_id IN array(4552673527463954) AND timestamp < toDateTime('2023-09-22T18:18:10.891157') AND timestamp >= toDateTime('2023-06-24T18:18:10.891157')
     HAVING or(1, 1, 1, 1) != 0 LIMIT 10
     """
-    query_ast = parse_snql_query(query, get_dataset("replays"))
+    query_ast, _ = parse_snql_query(query, get_dataset("replays"))
     having = query_ast.get_having()
     expected = binary_condition(
         ConditionFunctions.NEQ,

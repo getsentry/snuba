@@ -301,7 +301,7 @@ def test_simple_formula() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -367,7 +367,7 @@ def test_simple_formula_with_leading_literals() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -433,7 +433,7 @@ def test_groupby() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -528,7 +528,7 @@ def test_curried_aggregate() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -599,7 +599,7 @@ def test_bracketing_rules() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -689,7 +689,7 @@ def test_formula_filters() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -770,7 +770,7 @@ def test_formula_groupby() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -826,7 +826,7 @@ def test_formula_scalar_value() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -875,7 +875,7 @@ def test_arbitrary_functions() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -924,7 +924,7 @@ def test_arbitrary_functions_with_formula() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -982,6 +982,6 @@ def test_arbitrary_functions_with_formula_and_filters() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason

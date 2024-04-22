@@ -235,7 +235,7 @@ def test_prewhere(
     ]
     request = json_to_snql(query_body, "events")
     request.validate()
-    snql_query = parse_snql_query(str(request.query), events)
+    snql_query, _ = parse_snql_query(str(request.query), events)
     assert isinstance(snql_query, Query)
     query = identity_translate(snql_query)
 

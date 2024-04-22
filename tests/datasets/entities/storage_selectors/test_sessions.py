@@ -70,7 +70,7 @@ def test_query_storage_selector(
     selector: QueryStorageSelector,
     expected_storage: Storage,
 ) -> None:
-    query = parse_snql_query(str(snql_query), dataset)
+    query, _ = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
     selected_storage = selector.select_storage(
         query, SubscriptionQuerySettings(), storage_connections
@@ -79,7 +79,7 @@ def test_query_storage_selector(
 
 
 def test_assert_raises() -> None:
-    query = parse_snql_query(
+    query, _ = parse_snql_query(
         """
         MATCH (events)
         SELECT event_id

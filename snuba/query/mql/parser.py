@@ -40,6 +40,7 @@ from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
 )
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.parser import (
     MAX_LIMIT,
     POST_PROCESSORS,
@@ -1075,7 +1076,7 @@ def parse_mql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
         query = parse_mql_query_body(body, dataset)
     with sentry_sdk.start_span(
@@ -1093,6 +1094,10 @@ def parse_mql_query(
     # before we run the anonymizer and the rest of the post processors
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
+
+    # TODO: Figure out what to put for the anonymized string
+    with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+        snql_anonymized = format_snql_anonymized(query).get_sql()
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
@@ -1121,4 +1126,4 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
 
-    return query
+    return query, snql_anonymized

@@ -75,6 +75,7 @@ from snuba.query.parser.exceptions import ParsingException, PostProcessingError
 from snuba.query.parser.validation import validate_query
 from snuba.query.query_settings import QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
+from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.discover_entity_selection import select_discover_entity
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
@@ -1505,9 +1506,10 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
+    snql_anonymized = ""
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
@@ -1518,6 +1520,9 @@ def parse_snql_query(
         # before we run the anonymizer and the rest of the post processors
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
+
+        with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
+            snql_anonymized = format_snql_anonymized(query).get_sql()
 
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
@@ -1542,8 +1547,8 @@ def parse_snql_query(
         # Validating
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
-        return query
+        return query, snql_anonymized
     except InvalidQueryException:
         raise
     except Exception:
-        raise PostProcessingError(query)
+        raise PostProcessingError(query, snql_anonymized)

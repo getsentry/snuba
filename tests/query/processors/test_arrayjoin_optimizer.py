@@ -421,11 +421,12 @@ test_data = [
 
 def parse_and_process(snql_query: str) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
-    query = parse_snql_query(str(snql_query), dataset)
+    query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     request = Request(
         id="a",
         original_body={"query": snql_query, "dataset": "transactions"},
         query=query,
+        snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer="r"),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None

@@ -113,7 +113,7 @@ def test_storage_query_plan_builder(
         selector=selector,
         partition_key_column_name=partition_key_column_name,
     )
-    query = parse_snql_query(str(snql_query), dataset)
+    query, snql_anonymized = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
     plan: ClickhouseQueryPlan = query_plan_builder.build_and_rank_plans(
         query=query, settings=HTTPQuerySettings(referrer="r")
@@ -162,7 +162,7 @@ def test_storage_unavailable_error_in_plan_builder(temp_settings: Any) -> None:
         selector=selector,
         partition_key_column_name=None,
     )
-    query = parse_snql_query(str(snql_query), dataset)
+    query, _ = parse_snql_query(str(snql_query), dataset)
 
     temp_settings.SUPPORTED_STATES = {}  # remove all supported states
     temp_settings.READINESS_STATE_FAIL_QUERIES = True

@@ -44,7 +44,7 @@ def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
         return
 
     request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
-    query = parse_snql_query(request_parts.query["query"], dataset)
+    query = parse_snql_query(request_parts.query["query"], dataset)[0]
     project_ids = get_object_ids_in_query_ast(query, "project_id")
     if project_ids == set():
         raise InvalidQueryException("Missing project ID")

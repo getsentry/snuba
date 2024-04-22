@@ -18,6 +18,9 @@ class Request:
     query_settings: QuerySettings
     attribution_info: AttributionInfo
 
+    # TODO: This should maybe not live on the request
+    snql_anonymized: str
+
     @property
     def referrer(self) -> str:
         return self.attribution_info.referrer

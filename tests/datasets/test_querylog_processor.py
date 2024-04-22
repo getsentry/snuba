@@ -44,6 +44,7 @@ def test_simple() -> None:
         id=uuid.UUID("a" * 32).hex,
         original_body=request_body,
         query=query,
+        snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer="search"),
         attribution_info=AttributionInfo(
             get_app_id("default"),
@@ -96,7 +97,7 @@ def test_simple() -> None:
             )
         ],
         projects={2},
-        snql_anonymized="",
+        snql_anonymized=request.snql_anonymized,
         entity=EntityKey.EVENTS.value,
     ).to_dict()
 

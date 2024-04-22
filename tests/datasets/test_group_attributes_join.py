@@ -131,7 +131,7 @@ class TestEventsGroupAttributes(BaseApiTest):
                 {"stats": {}, "sql": "", "experiments": {}},
             )
 
-        query = parse_snql_query(str(query_body), get_dataset("events"))
+        query, _ = parse_snql_query(str(query_body), get_dataset("events"))
         CompositeExecutionPipeline(
             query, HTTPQuerySettings(), assert_joined_final
         ).execute()
@@ -330,7 +330,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
                 {"stats": {}, "sql": "", "experiments": {}},
             )
 
-        query = parse_snql_query(str(query_body), get_dataset("search_issues"))
+        query, _ = parse_snql_query(str(query_body), get_dataset("search_issues"))
         CompositeExecutionPipeline(
             query, HTTPQuerySettings(), assert_joined_final
         ).execute()
