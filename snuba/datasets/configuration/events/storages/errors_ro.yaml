@@ -277,8 +277,6 @@ allocation_policies:
         getsentry.tasks.backfill_grouping_records:
           max_threads: 2
           concurrent_limit: 4
-
-
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
@@ -302,10 +300,7 @@ query_processors:
   - processor: UserColumnProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: !!set
-        primary_hash: null
-        event_id: null
-        trace_id: null
+      columns: [event_id, primary_hash, trace_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
