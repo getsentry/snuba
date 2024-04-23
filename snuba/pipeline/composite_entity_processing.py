@@ -110,7 +110,7 @@ class CompositeDataSourceTransformer(
 class JoinQueryVisitor(JoinVisitor[Mapping[str, ClickhouseQuery], Entity]):
     """
     A visitor class responsible for helping traverse a join query, runs entity processors,
-    and builds n alias to physical query mapping.
+    and builds an alias to physical query mapping.
     """
 
     def __init__(self, settings: QuerySettings) -> None:
