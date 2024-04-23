@@ -140,22 +140,6 @@ impl<T> EncodedSeries<T> {
     }
 }
 
-// impl<const COUNT: usize, T: Decodable<COUNT>> EncodedSeries<T> {
-//     fn into_vec(self) -> Vec<T> {
-//         match self {
-//             EncodedSeries::Array { data } => data,
-//             EncodedSeries::Base64 { data } => {
-//                 let v = BASE64.decode(data.as_bytes()).ok().unwrap();
-//                 v.chunks_exact(std::mem::size_of::<T>())
-//                     .map(TryInto::try_into)
-//                     .map(Result::unwrap)
-//                     .map(T::decode_bytes)
-//                     .collect()
-//             }
-//         }
-//     }
-// }
-
 fn encoded_series_compat_deserializer<'de, T, D>(
     deserializer: D,
 ) -> Result<EncodedSeries<T>, D::Error>
