@@ -31,14 +31,14 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
-                table_name="group_attributes_local",
-                column_name="group_priority",
-                target=OperationTarget.LOCAL,
-            ),
-            operations.DropColumn(
-                storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_dist",
                 column_name="group_priority",
                 target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropColumn(
+                storage_set=StorageSetKey.GROUP_ATTRIBUTES,
+                table_name="group_attributes_local",
+                column_name="group_priority",
+                target=OperationTarget.LOCAL,
             ),
         ]
