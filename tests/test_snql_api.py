@@ -1455,11 +1455,13 @@ class TestSnQLApi(BaseApiTest):
                         project_id AS `project`,
                         title,
                         event_id AS `id`,
-                        project_id AS `project.name`
+                        project_id AS `project.name`,
+                        platform AS `platform`
                     WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
                     AND timestamp < toDateTime('{self.next_time.isoformat()}')
                     AND project_id IN array({self.project_id})
                     AND environment IN array('dev', 'prod', 'staging')
+                    AND platform IN tuple('snuba', 'sentry')
                     ORDER BY timestamp DESC LIMIT 51 OFFSET 0""",
                     "legacy": True,
                     "app_id": "legacy",
@@ -1477,6 +1479,8 @@ class TestSnQLApi(BaseApiTest):
         assert (
             "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
         )
+        # platform is not nullable but can be cast to nullable
+        assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
 
 
 @pytest.mark.clickhouse_db
