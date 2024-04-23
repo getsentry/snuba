@@ -176,6 +176,130 @@ TEST_CASES = [
     ),
     pytest.param(
         CompositeQuery(
+            from_clause=CompositeQuery(
+                from_clause=LogicalQuery(
+                    from_clause=events_ent,
+                    selected_columns=[
+                        SelectedExpression(
+                            "project_id", Column(None, None, "project_id")
+                        ),
+                        SelectedExpression(
+                            "count_environment",
+                            FunctionCall(
+                                "count_environment",
+                                "uniq",
+                                (
+                                    SubscriptableReference(
+                                        None,
+                                        Column(None, None, "tags"),
+                                        Literal(None, "environment"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                    groupby=[Column(None, None, "project_id")],
+                    condition=binary_condition(
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            ConditionFunctions.EQ,
+                            Column(None, None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 1, 1, 12, 0)),
+                        ),
+                    ),
+                ),
+                selected_columns=[
+                    SelectedExpression(
+                        "max",
+                        FunctionCall(
+                            "max", "max", (Column(None, None, "count_environment"),)
+                        ),
+                    ),
+                ],
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "average",
+                    FunctionCall(
+                        "average", "avg", (Column(None, None, "count_environment"),)
+                    ),
+                ),
+            ],
+        ),
+        CompositeQuery(
+            from_clause=CompositeQuery(
+                from_clause=ClickhouseQuery(
+                    from_clause=events_table,
+                    selected_columns=[
+                        SelectedExpression(
+                            "project_id", Column(None, None, "project_id")
+                        ),
+                        SelectedExpression(
+                            "count_environment",
+                            FunctionCall(
+                                "count_environment",
+                                function_name="ifNull",
+                                parameters=(
+                                    FunctionCall(
+                                        None,
+                                        "uniq",
+                                        (
+                                            build_mapping_expr(
+                                                None,
+                                                None,
+                                                "tags",
+                                                Literal(None, "environment"),
+                                                "value",
+                                            ),
+                                        ),
+                                    ),
+                                    Literal(alias=None, value=0),
+                                ),
+                            ),
+                        ),
+                    ],
+                    groupby=[Column(None, None, "project_id")],
+                    condition=binary_condition(
+                        BooleanFunctions.AND,
+                        binary_condition(
+                            ConditionFunctions.EQ,
+                            Column(None, None, "project_id"),
+                            Literal(None, 1),
+                        ),
+                        binary_condition(
+                            ConditionFunctions.GTE,
+                            Column(None, None, "timestamp"),
+                            Literal(None, datetime(2020, 1, 1, 12, 0)),
+                        ),
+                    ),
+                ),
+                selected_columns=[
+                    SelectedExpression(
+                        "max",
+                        FunctionCall(
+                            "max", "max", (Column(None, None, "count_environment"),)
+                        ),
+                    ),
+                ],
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "average",
+                    FunctionCall(
+                        "average", "avg", (Column(None, None, "count_environment"),)
+                    ),
+                ),
+            ],
+        ),
+        id="Query with a nested subquery",
+    ),
+    pytest.param(
+        CompositeQuery(
             from_clause=JoinClause(
                 left_node=IndividualNode(
                     alias="err",
