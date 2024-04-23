@@ -216,7 +216,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     extra={"project_id": processed.get_project_id(), "data": message},
                 )
                 metrics.increment(
-                    "bypass_projects",
+                    "replacement_message_skipped",
                     1,
                     tags={
                         "type": type_,
