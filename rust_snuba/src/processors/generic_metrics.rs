@@ -122,7 +122,7 @@ enum EncodedSeries<T> {
 }
 
 impl<T> EncodedSeries<T> {
-    fn into_vec<const SIZE: usize>(self) -> Result<Vec<T>, anyhow::Error>
+    fn try_into_vec<const SIZE: usize>(self) -> Result<Vec<T>, anyhow::Error>
     where
         T: Decodable<SIZE>,
     {
@@ -409,7 +409,7 @@ impl Parse for SetsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let maybe_set = match from.value {
-            MetricValue::Set(values) => values.into_vec(),
+            MetricValue::Set(values) => values.try_into_vec(),
             _ => return Ok(Option::None),
         };
 
@@ -492,7 +492,7 @@ impl Parse for DistributionsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
         let maybe_dist = match from.value {
-            MetricValue::Distribution(value) => value.into_vec(),
+            MetricValue::Distribution(value) => value.try_into_vec(),
             _ => return Ok(Option::None),
         };
 
@@ -834,7 +834,7 @@ mod tests {
             EncodedSeries::<f64>::Base64 {
                 data: "AAAAAAAACEAAAAAAAADwPwAAAAAAAABA".to_string(),
             }
-            .into_vec()
+            .try_into_vec()
             .ok()
             .unwrap()
                 == vec![3f64, 1f64, 2f64]
@@ -904,7 +904,7 @@ mod tests {
             EncodedSeries::<u32>::Base64 {
                 data: "AQAAAAcAAAA=".to_string(),
             }
-            .into_vec()
+            .try_into_vec()
             .ok()
             .unwrap()
                 == vec![1u32, 7u32]
