@@ -195,6 +195,7 @@ class ConnectionCache:
 
 
 connection_cache = ConnectionCache()
+_DEFAULT_MAX_CONNECTIONS = 1
 
 
 class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
@@ -231,13 +232,13 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         distributed_cluster_name: Optional[str] = None,
         cache_partition_id: Optional[str] = None,
         query_settings_prefix: Optional[str] = None,
-        max_connections: int = 1,
+        max_connections: Optional[int] = None,
         block_connections: bool = False,
     ):
         super().__init__(storage_sets)
         self.__host = host
         self.__port = port
-        self.__max_connections = max_connections
+        self.__max_connections = max_connections or _DEFAULT_MAX_CONNECTIONS
         self.__block_connections = block_connections
         self.__query_node = ClickhouseNode(host, port)
         self.__user = user
@@ -405,6 +406,7 @@ CLUSTERS = [
         else None,
         cache_partition_id=cluster.get("cache_partition_id"),
         query_settings_prefix=cluster.get("query_settings_prefix"),
+        max_connections=cluster.get("max_connections", _DEFAULT_MAX_CONNECTIONS),
     )
     for cluster in settings.CLUSTERS
 ]
