@@ -196,10 +196,9 @@ def test_metrics_polymorphic_processor(
     settings.DISABLED_DATASETS = set()
 
     meta = KafkaMessageMetadata(offset=100, partition=1, timestamp=datetime(1970, 1, 1))
-    assert (
-        PolymorphicMetricsProcessor().process_message(message, meta).rows
-        == expected_output
-    )
+    output = PolymorphicMetricsProcessor().process_message(message, meta)
+    assert isinstance(output, InsertBatch)
+    assert output.rows == expected_output
 
 
 @pytest.mark.parametrize(
@@ -224,6 +223,7 @@ def test_metrics_polymorphic_processor(
                     "retention_days": 30,
                     "granularities": [1, 2, 3],
                     "min_retention_days": 30,
+                    "record_meta": 1,
                 }
             ],
             id="all tag values strings",

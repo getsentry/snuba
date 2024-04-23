@@ -449,6 +449,7 @@ query_processors:
         - timestamp
   - processor: BasicFunctionsProcessor
 
+
 validate_data_model: error
 validators:
   - validator: EntityRequiredColumnValidator

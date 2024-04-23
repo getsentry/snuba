@@ -5,11 +5,22 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
+    OptionalScalarType,
     SubscriptableReference,
 )
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
+
+
+def column(
+    column_name: str, table_name: str | None = None, alias: str | None = None
+) -> Column:
+    return Column(alias, table_name, column_name)
+
+
+def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
+    return Literal(alias, value)
 
 
 def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
@@ -84,8 +95,20 @@ def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
     return binary_condition("equals", lhs, rhs)
 
 
-def and_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("and", lhs, rhs)
+def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:
+    """
+    if only lhs and rhs are given, return and(lhs, rhs)
+    otherwise (more than 2 conditions are given), returns and(lhs, and(rhs, and(...)))
+    """
+    if len(args) == 0:
+        return binary_condition("and", lhs, rhs)
+
+    sofar = args[len(args) - 1]
+    for i in range(len(args) - 2, -1, -1):
+        sofar = binary_condition("and", args[i], sofar)
+    sofar = binary_condition("and", rhs, sofar)
+    sofar = binary_condition("and", lhs, sofar)
+    return sofar
 
 
 def or_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:

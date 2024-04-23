@@ -1391,6 +1391,50 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
 
+    def test_allocator_clickhouse_bug(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": f"""
+                    MATCH (discover)
+                    SELECT
+                        divide(count(), divide(320519.0, 60)) AS `epm`,
+                        quantile(0.5)(duration) AS `p50`,
+                        countIf(notIn(transaction_status, tuple(2, 0, 1))) AS `failure_count`,
+                        transaction BY transaction
+                    WHERE
+                        type = 'transaction'
+                        AND release IN tuple('1123581321345589')
+                        AND environment IN array('prod', 'dev')
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN tuple({self.project_id})
+                    HAVING
+                        countIf(notIn(transaction_status, tuple(2, 0, 1))) AS `failure_count` > 0.0
+                    ORDER BY
+                        countIf(notIn(transaction_status, tuple(2, 0, 1))) AS `failure_count` DESC
+                    LIMIT
+                        6 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "equals((release AS _snuba_release), '1123581321345589')" in data["sql"]
+        assert (
+            "has(['prod', 'dev'], (environment AS _snuba_environment))" in data["sql"]
+        )
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
