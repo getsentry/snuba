@@ -880,7 +880,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
-                record_meta: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![3f64, 1f64, 2f64],
             enable_histogram: None,
@@ -950,7 +950,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
-                record_meta: None,
+                record_meta: Some(1),
             },
             set_values: vec![1u32, 7u32],
         };
