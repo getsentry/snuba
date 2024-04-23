@@ -67,7 +67,6 @@ def build_best_plan_for_composite_query(
     returns all the necessary storage processors that need to be applied.
     """
     plan = CompositeDataSourcePlanner(settings).visit(physical_query.get_from_clause())
-    physical_query.set_from_clause(plan.translated_source)
     return CompositeDataSourcePlan(
         translated_source=physical_query,
         storage_set_key=plan.storage_set_key,

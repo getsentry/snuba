@@ -319,7 +319,6 @@ def test_composite(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
         ),
     )
-
     actual = (
         EntityProcessingStage()
         .execute(

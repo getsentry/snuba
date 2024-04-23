@@ -20,8 +20,7 @@ def translate_composite_query(
     query: CompositeQuery[Entity], query_settings: QuerySettings
 ) -> CompositeQuery[Table]:
     """
-    A function that traverses a logical composite query, applies all entity processors,
-    and translates the result into a physical composite query.
+    Converts a logical composite query to a physical composite query.
     """
     add_equivalent_conditions(query)
     generate_subqueries(query)
