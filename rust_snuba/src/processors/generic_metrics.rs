@@ -1,5 +1,5 @@
 use adler::Adler32;
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use chrono::DateTime;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
@@ -126,17 +126,26 @@ impl<T> EncodedSeries<T> {
     where
         T: Decodable<SIZE>,
     {
-        let res = match self {
-            EncodedSeries::Array { data } => data,
-            EncodedSeries::Base64 { data, .. } => BASE64
-                .decode(data.as_bytes())?
-                .chunks_exact(T::SIZE)
-                .map(TryInto::try_into)
-                .map(Result::unwrap)
-                .map(T::decode_bytes)
-                .collect(),
-        };
-        Ok(res)
+        match self {
+            EncodedSeries::Array { data } => Ok(data),
+            EncodedSeries::Base64 { data, .. } => {
+                let decoded_bytes = BASE64.decode(data.as_bytes())?;
+                if decoded_bytes.len() % T::SIZE == 0 {
+                    Ok(decoded_bytes
+                        .chunks_exact(T::SIZE)
+                        .map(TryInto::try_into)
+                        .map(Result::unwrap) // OK to unwrap, `chunks_exact` always yields slices of the right length
+                        .map(T::decode_bytes)
+                        .collect())
+                } else {
+                    Err(anyhow!(format!(
+                        "Decoded Base64 cannot be chunked into {}, but got {}",
+                        T::SIZE,
+                        decoded_bytes.len()
+                    )))
+                }
+            }
+        }
     }
 }
 
@@ -909,6 +918,15 @@ mod tests {
             .unwrap()
                 == vec![1u32, 7u32]
         )
+    }
+
+    #[test]
+    fn test_base64_decode_32_invalid() {
+        assert!(EncodedSeries::<u32>::Base64 {
+            data: "AQAAAAcAAA=".to_string(),
+        }
+        .try_into_vec()
+        .is_err())
     }
 
     #[test]
