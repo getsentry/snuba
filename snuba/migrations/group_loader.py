@@ -336,6 +336,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0040_remove_counters_meta_tables",
             "0041_adjust_partitioning_meta_tables",
             "0042_rename_counters_meta_tables",
+            "0043_sets_meta_tables",
         ]
 
 
