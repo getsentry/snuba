@@ -237,7 +237,7 @@ test_data = [
     pytest.param(
         """
         MATCH (transactions)
-        SELECT platform
+        SELECT sdk_version
         WHERE tags_key IN tuple('t1', 't2')
             AND finish_ts >= toDateTime('2021-01-01T00:00:00')
             AND finish_ts < toDateTime('2021-01-02T00:00:00')
@@ -247,8 +247,8 @@ test_data = [
             None,
             selected_columns=[
                 SelectedExpression(
-                    name="platform",
-                    expression=Column("_snuba_platform", None, "platform"),
+                    name="sdk_version",
+                    expression=Column("_snuba_sdk_version", None, "sdk_version"),
                 )
             ],
             condition=with_required(
