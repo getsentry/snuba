@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Generic, Optional, Sequence, TypeVar
+from typing import Generic, Optional, Sequence, TypeVar, Union
 
 import sentry_sdk
 
@@ -20,6 +20,7 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
+from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
@@ -61,7 +62,7 @@ class QueryPlanNew(ABC, Generic[TQuery]):
 
 
 @dataclass(frozen=True)
-class ClickhouseQueryPlanNew(QueryPlanNew[Query]):
+class ClickhouseQueryPlanNew(QueryPlanNew[Union[Query, ProcessableQuery[Table]]]):
     """
     Query plan for a single entity, single storage query.
 
@@ -111,11 +112,11 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
 
 
 def build_best_plan(
-    clickhouse_query: Query,
+    physical_query: Union[Query, ProcessableQuery[Table]],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> ClickhouseQueryPlanNew:
-    storage_key = StorageKeyFinder().visit(clickhouse_query)
+    storage_key = StorageKeyFinder().visit(physical_query)
     storage = get_storage(storage_key)
 
     # Return failure if storage readiness state is not supported in current environment
@@ -129,7 +130,7 @@ def build_best_plan(
     ]
 
     return ClickhouseQueryPlanNew(
-        query=clickhouse_query,
+        query=physical_query,
         plan_query_processors=[],
         db_query_processors=db_query_processors,
         storage_set_key=storage.get_storage_set_key(),
@@ -162,7 +163,7 @@ def apply_storage_processors(
                 storage_key=storage.get_storage_key(),
             )
         )
-
+    assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"
