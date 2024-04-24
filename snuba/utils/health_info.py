@@ -101,10 +101,12 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
         status = 502
 
     payload = json.dumps(body)
-    if status != 200 or down_file_exists:
+    if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
-        logger.info(payload)
         logger.error(f"Snuba health check failed! Tags: {metric_tags}")
+
+    if status != 200 or down_file_exists:
+        logger.info(payload)
 
     metrics.timing(
         "healthcheck.latency",
