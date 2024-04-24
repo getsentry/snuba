@@ -176,7 +176,7 @@ TEST_CASES = [
                 ),
             ],
         ),
-        id="Query with a subquery",
+        id="Subquery",
     ),
     pytest.param(
         CompositeQuery(
@@ -312,7 +312,7 @@ TEST_CASES = [
                 ),
             ],
         ),
-        id="Query with a nested subquery",
+        id="Nested subquery",
     ),
     pytest.param(
         CompositeQuery(
@@ -477,7 +477,7 @@ TEST_CASES = [
                 ),
             ],
         ),
-        id="Simple join turned into a join of subqueries",
+        id="Join query",
     ),
 ]
 

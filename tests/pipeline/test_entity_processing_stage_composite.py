@@ -172,7 +172,7 @@ TEST_CASES = [
                 ),
             ],
         ),
-        id="Query with a subquery",
+        id="Subquery",
     ),
     pytest.param(
         CompositeQuery(
@@ -296,7 +296,7 @@ TEST_CASES = [
                 ),
             ],
         ),
-        id="Query with a nested subquery",
+        id="Nested subquery",
     ),
     pytest.param(
         CompositeQuery(
@@ -422,16 +422,16 @@ TEST_CASES = [
                 ),
             ],
         ),
-        id="Simple join turned into a join of subqueries",
+        id="Join query",
     ),
 ]
 
 
-@pytest.mark.parametrize("logical_query, processed_query", TEST_CASES)
+@pytest.mark.parametrize("logical_query, expected", TEST_CASES)
 @pytest.mark.clickhouse_db
 def test_composite(
     logical_query: CompositeQuery[Entity],
-    processed_query: CompositeQuery[Table],
+    expected: CompositeQuery[Table],
 ) -> None:
     request = Request(
         id="",
@@ -455,4 +455,4 @@ def test_composite(
         )
         .data
     )
-    assert actual == processed_query
+    assert actual == expected
