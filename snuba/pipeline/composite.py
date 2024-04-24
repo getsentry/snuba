@@ -282,15 +282,19 @@ class CompositeDataSourcePlan(NamedTuple):
         Mapping[str, Sequence[ClickhouseQueryProcessor]],
     ]:
         return (
-            self.root_processors.db_processors
-            if self.root_processors is not None
-            else [],
-            {
-                alias: subquery.db_processors
-                for alias, subquery in self.aliased_processors.items()
-            }
-            if self.aliased_processors is not None
-            else {},
+            (
+                self.root_processors.db_processors
+                if self.root_processors is not None
+                else []
+            ),
+            (
+                {
+                    alias: subquery.db_processors
+                    for alias, subquery in self.aliased_processors.items()
+                }
+                if self.aliased_processors is not None
+                else {}
+            ),
         )
 
 
@@ -474,13 +478,13 @@ class CompositeExecutionPipeline(QueryExecutionPipeline):
 
     def execute(self) -> QueryResult:
         plan = CompositeQueryPlanner(self.__query, self.__settings).build_best_plan()
+        print(plan)
         root_processors, aliased_processors = plan.get_plan_processors()
         ProcessorsExecutor(
             root_processors,
             aliased_processors,
             self.__settings,
         ).visit(plan.query)
-
         return plan.execution_strategy.execute(
             plan.query, self.__settings, self.__runner
         )
