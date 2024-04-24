@@ -108,6 +108,8 @@ pub struct EnvConfig {
     pub record_cogs: bool,
     pub ddm_metrics_sample_rate: f64,
     pub project_stacktrace_blacklist: Vec<u64>,
+    pub clickhouse_user: String,
+    pub clickhouse_password: String,
 }
 
 impl Default for EnvConfig {
@@ -122,6 +124,8 @@ impl Default for EnvConfig {
             record_cogs: false,
             ddm_metrics_sample_rate: 0.0,
             project_stacktrace_blacklist: Vec::new(),
+            clickhouse_user: "default".to_string(),
+            clickhouse_password: "".to_string(),
         }
     }
 }
