@@ -57,39 +57,9 @@ def _run_query_pipeline(
         if run_new_query_pipeline_rollout is not None
         else False
     )
-    if isinstance(request.query, CompositeQuery):
-        # New pipeline does not support composite queries yet.
-        try_new_query_pipeline = False
-        run_new_query_pipeline = False
-
-    if run_new_query_pipeline:
-        clickhouse_query = EntityProcessingStage().execute(
-            QueryPipelineResult(
-                data=request,
-                query_settings=request.query_settings,
-                timer=timer,
-                error=None,
-            )
-        )
-        clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
-    else:
+    if not run_new_query_pipeline and isinstance(request.query, CompositeQuery):
         if try_new_query_pipeline:
             request_copy = copy.deepcopy(request)
-            compare_clickhouse_query = None
-            try:
-                compare_clickhouse_query = EntityProcessingStage().execute(
-                    QueryPipelineResult(
-                        data=request_copy,
-                        query_settings=request.query_settings,
-                        timer=timer,
-                        error=None,
-                    )
-                )
-                compare_clickhouse_query = StorageProcessingStage().execute(
-                    compare_clickhouse_query
-                )
-            except Exception as e:
-                logger.exception(e)
         clickhouse_query = EntityAndStoragePipelineStage().execute(
             QueryPipelineResult(
                 data=request,
@@ -99,17 +69,39 @@ def _run_query_pipeline(
             )
         )
         if try_new_query_pipeline:
-            if compare_clickhouse_query:
-                new_sql = str(compare_clickhouse_query.data)
-            else:
-                new_sql = ""
-            old_sql = str(clickhouse_query.data)
-            if new_sql != old_sql:
-                logger.warning(
-                    "New and old query pipeline sql doesn't match: Old: %s, New: %s",
-                    old_sql,
-                    new_sql,
+            try:
+                compare_clickhouse_query = EntityProcessingStage().execute(
+                    QueryPipelineResult(
+                        data=request_copy,
+                        query_settings=request_copy.query_settings,
+                        timer=timer,
+                        error=None,
+                    )
                 )
+                compare_clickhouse_query = StorageProcessingStage().execute(
+                    compare_clickhouse_query
+                )
+                new_sql = str(compare_clickhouse_query.data)
+                old_sql = str(clickhouse_query.data)
+                if new_sql != old_sql:
+                    logger.warning(
+                        "New and old query pipeline sql doesn't match: Old: %s, New: %s",
+                        old_sql,
+                        new_sql,
+                    )
+            except Exception as e:
+                logger.exception(e)
+    else:
+        clickhouse_query = EntityProcessingStage().execute(
+            QueryPipelineResult(
+                data=request,
+                query_settings=request.query_settings,
+                timer=timer,
+                error=None,
+            )
+        )
+        clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
+
     res = ExecutionStage(
         request.attribution_info,
         query_metadata=query_metadata,

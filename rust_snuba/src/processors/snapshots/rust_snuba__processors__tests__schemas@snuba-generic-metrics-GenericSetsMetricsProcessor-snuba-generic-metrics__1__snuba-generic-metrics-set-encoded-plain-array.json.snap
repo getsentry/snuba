@@ -16,6 +16,7 @@ expression: snapshot_payload
     "min_retention_days": 90,
     "org_id": 1,
     "project_id": 3,
+    "record_meta": 1,
     "retention_days": 90,
     "set_values": [
       0,

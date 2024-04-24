@@ -395,8 +395,8 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
 
-# Max query size that can be sent to clickhouse
-MAX_QUERY_SIZE_BYTES = 256 * 1024  # 256 KiB by default
+# From testing, the max query size that can be sent to clickhouse is 131535 bytes (~128.452 KiB)
+MAX_QUERY_SIZE_BYTES = 128 * 1024  # 128 KiB
 
 # The slice configs below are the "SLICED" versions to the equivalent default
 # settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
@@ -435,6 +435,7 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+USE_CARDINALITY_CASTER = 0
 
 USE_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
 TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
