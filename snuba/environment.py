@@ -76,7 +76,7 @@ def setup_logging(level: Optional[str] = None) -> None:
 
 def setup_sentry() -> None:
     sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
+        dsn="https://23b85496de9ec74d4cb6a1fbf4099bab@o1.ingest.us.sentry.io/4507143880245248",
         integrations=[
             FlaskIntegration(),
             GnuBacktraceIntegration(),

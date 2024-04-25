@@ -131,8 +131,8 @@ def _resolve_env_config() -> EnvConfig:
     lower_retention_days = settings.LOWER_RETENTION_DAYS
     valid_retention_days = list(settings.VALID_RETENTION_DAYS)
     record_cogs = settings.RECORD_COGS
-    clickhouse_user = settings.CLUSTERS[0].get("user")
-    clickhouse_password = settings.CLUSTERS[0].get("password")
+    clickhouse_user = str(settings.CLUSTERS[0].get("user"))
+    clickhouse_password = str(settings.CLUSTERS[0].get("password"))
     return EnvConfig(
         sentry_dsn=sentry_dsn,
         dogstatsd_host=dogstatsd_host,
