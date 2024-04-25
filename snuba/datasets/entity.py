@@ -94,12 +94,6 @@ class Entity(Describable, ABC):
         """
         return self.__join_relationships
 
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
-        """
-        Returns the component that orchestrates building and running query plans.
-        """
-        return self.__query_pipeline_builder
-
     def get_all_storages(self) -> Sequence[Storage]:
         """
         Returns all storage and mappers for this entity.
