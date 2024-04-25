@@ -3,6 +3,8 @@ from typing import Any, MutableMapping
 import pytest
 from snuba_sdk.legacy import json_to_snql
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
 from snuba.datasets.factory import get_dataset
@@ -24,6 +26,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
+from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 
 
@@ -335,10 +338,6 @@ VALIDATION_TESTS = [
 def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
-    from snuba.attribution.appid import AppID
-    from snuba.attribution.attribution_info import AttributionInfo
-    from snuba.request import Request
-
     events = get_dataset("events")
     request = json_to_snql(query_body, "events")
     request.validate()
