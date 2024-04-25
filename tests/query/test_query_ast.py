@@ -5,11 +5,13 @@ from snuba_sdk.legacy import json_to_snql
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.pipeline.processors import execute_all_clickhouse_processors
+from snuba.pipeline.query_pipeline import QueryPipelineResult
+from snuba.pipeline.stages.query_processing import (
+    EntityProcessingStage,
+    StorageProcessingStage,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
@@ -22,6 +24,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query, parse_snql_query_initial
+from snuba.utils.metrics.timer import Timer
 
 
 def test_iterate_over_query() -> None:
@@ -332,15 +335,40 @@ VALIDATION_TESTS = [
 def test_alias_validation(
     query_body: MutableMapping[str, Any], expected_result: bool
 ) -> None:
+    from snuba.attribution.appid import AppID
+    from snuba.attribution.attribution_info import AttributionInfo
+    from snuba.request import Request
+
     events = get_dataset("events")
-    events_entity = get_entity(EntityKey.EVENTS)
     request = json_to_snql(query_body, "events")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), events)
     settings = HTTPQuerySettings()
-    query_plan = (
-        events_entity.get_query_pipeline_builder().build_planner(query, settings)
-    ).build_best_plan()
-    execute_all_clickhouse_processors(query_plan, settings)
+    query, _ = parse_snql_query(str(request.query), events)
+    attribution_info = AttributionInfo(
+        app_id=AppID(key=""),
+        tenant_ids={},
+        referrer="",
+        team=None,
+        feature=None,
+        parent_api=None,
+    )
+    request = Request(
+        id="123",
+        original_body=query_body,
+        query=query,
+        query_settings=settings,
+        attribution_info=attribution_info,
+        snql_anonymized="",
+    )
 
-    assert query_plan.query.validate_aliases() == expected_result
+    pipeline_result = EntityProcessingStage().execute(
+        QueryPipelineResult(
+            data=request,
+            query_settings=settings,
+            timer=Timer(name="bloop"),
+            error=None,
+        )
+    )
+    clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+
+    assert clickhouse_query.validate_aliases() == expected_result
