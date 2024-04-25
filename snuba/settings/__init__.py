@@ -435,7 +435,6 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
-USE_CARDINALITY_CASTER = 0
 
 USE_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
 TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
