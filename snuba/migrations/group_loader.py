@@ -338,6 +338,7 @@ class GenericMetricsLoader(DirectoryLoader):
             "0042_rename_counters_meta_tables",
             "0043_sets_meta_tables",
             "0044_gauges_meta_tables",
+            "0045_distributions_meta_tables",
         ]
 
 
