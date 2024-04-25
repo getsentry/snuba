@@ -139,7 +139,7 @@ impl<T> EncodedSeries<T> {
                         .collect())
                 } else {
                     Err(anyhow!(
-                        "Decoded Base64 cannot be chunked into {}, but got {}",
+                        "Decoded Base64 cannot be chunked into {}, got {}",
                         T::SIZE,
                         decoded_bytes.len()
                     ))
