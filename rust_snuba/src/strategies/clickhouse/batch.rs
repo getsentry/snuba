@@ -19,6 +19,7 @@ pub struct BatchFactory {
     skip_write: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl BatchFactory {
     pub fn new(
         hostname: &str,
