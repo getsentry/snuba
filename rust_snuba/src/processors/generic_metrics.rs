@@ -417,12 +417,10 @@ impl Parse for SetsRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
-        let maybe_set = match from.value {
-            MetricValue::Set(values) => values.try_into_vec(),
+        let set_values = match from.value {
+            MetricValue::Set(values) => values.try_into_vec()?,
             _ => return Ok(Option::None),
         };
-
-        let set_values = maybe_set?;
 
         timer!(
             "generic_metrics.messages.sets_value_len",
