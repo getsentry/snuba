@@ -27,12 +27,20 @@ impl BatchFactory {
         database: &str,
         concurrency: &ConcurrencyConfig,
         skip_write: bool,
+        clickhouse_user: &str,
+        clickhouse_password: &str,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
-        headers.insert("X-Clickhouse-User", HeaderValue::from_static("x"));
-        headers.insert("X-ClickHouse-Key", HeaderValue::from_static("y"));
+        headers.insert(
+            "X-Clickhouse-User",
+            HeaderValue::from_str(clickhouse_user).unwrap(),
+        );
+        headers.insert(
+            "X-ClickHouse-Key",
+            HeaderValue::from_str(clickhouse_password).unwrap(),
+        );
         headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
