@@ -100,16 +100,22 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
             body["clickhouse_ok"] = clickhouse_health
         status = 502
 
+    payload = json.dumps(body)
     if status != 200:
         metrics.increment("healthcheck_failed", tags=metric_tags)
         logger.error(f"Snuba health check failed! Tags: {metric_tags}")
+
+    if status != 200 or down_file_exists:
+        logger.info(payload)
+
     metrics.timing(
-        "healthcheck.latency", time.time() - start, tags={"thorough": str(thorough)}
+        "healthcheck.latency",
+        time.time() - start,
+        tags={"thorough": str(thorough), "down_file_exists": str(down_file_exists)},
     )
 
-    logger.info(json.dumps(body))
     return HealthInfo(
-        body=json.dumps(body),
+        body=payload,
         status=status,
         content_type={"Content-Type": "application/json"},
     )
