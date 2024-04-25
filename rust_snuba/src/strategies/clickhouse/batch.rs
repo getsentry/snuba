@@ -38,10 +38,6 @@ impl BatchFactory {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        for (name, value) in headers.iter() {
-            println!("{}: {}", name.as_str(), value.to_str().unwrap());
-        }
-
         let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");

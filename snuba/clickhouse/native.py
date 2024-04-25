@@ -88,8 +88,8 @@ class ClickhousePool(object):
     ) -> None:
         self.host = host
         self.port = port
-        self.user = "x"
-        self.password = "y"
+        self.user = user
+        self.password = password
         self.database = database
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout

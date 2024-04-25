@@ -82,7 +82,6 @@ class SpanEventExample:
             span["event_id"] = self.event_id
         if self.profile_id:
             span["profile_id"] = self.profile_id
-        print(span)
         return span
 
     def build_result(self, meta: KafkaMessageMetadata) -> Sequence[Mapping[str, Any]]:

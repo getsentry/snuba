@@ -208,7 +208,6 @@ class TestSpansPayloads:
         meta = KafkaMessageMetadata(
             offset=1, partition=2, timestamp=datetime.datetime(1970, 1, 1)
         )
-        print(payload)
         assert payload
         processed_rows = SpansMessageProcessor().process_message(payload, meta)
 
