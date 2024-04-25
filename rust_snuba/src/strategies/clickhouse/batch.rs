@@ -197,6 +197,8 @@ mod tests {
             "testdb",
             &concurrency,
             false,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -228,6 +230,8 @@ mod tests {
             "testdb",
             &concurrency,
             false,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -261,6 +265,8 @@ mod tests {
             "testdb",
             &concurrency,
             true,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -294,6 +300,8 @@ mod tests {
             "testdb",
             &concurrency,
             true,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
