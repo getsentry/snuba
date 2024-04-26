@@ -28,7 +28,6 @@ from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     DEFAULT_PASSTHROUGH_POLICY,
     AllocationPolicy,
-    AllocationPolicyViolation,
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
@@ -796,7 +795,7 @@ def _apply_allocation_policies_quota(
     quota allowances from the given allocation policies.
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
-    violations: dict[str, AllocationPolicyViolation] = {}
+    can_run = True
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -805,30 +804,22 @@ def _apply_allocation_policies_quota(
                 op="allocation_policy.get_quota_allowance",
                 description=str(allocation_policy.__class__),
             ) as span:
-                try:
-                    quota_allowances[
-                        allocation_policy.config_key()
-                    ] = allocation_policy.get_quota_allowance(
-                        attribution_info.tenant_ids, query_id
-                    )
-                    span.set_data(
-                        "quota_allowance",
-                        quota_allowances[allocation_policy.config_key()],
-                    )
-                except AllocationPolicyViolation as e:
-                    violations[allocation_policy.config_key()] = e
-        if violations:
-            span.set_data("violations", ",".join(violations.keys()))
-            stats["quota_allowance"] = {
-                k: v.quota_allowance for k, v in violations.items()
-            }
-            # HACK: This is because our SLOs are calculated weirdly
-            raise AllocationPolicyViolations(
-                "Query cannot be run due to allocation policies", violations
-            )
-
-        stats["quota_allowance"] = {k: v.to_dict() for k, v in quota_allowances.items()}
-
+                allowance = allocation_policy.get_quota_allowance(
+                    attribution_info.tenant_ids, query_id
+                )
+                can_run &= allowance.can_run
+                quota_allowances[allocation_policy.config_key()] = allowance
+                span.set_data(
+                    "quota_allowance",
+                    quota_allowances[allocation_policy.config_key()],
+                )
+        allowance_dicts = {
+            key: quota_allowance.to_dict()
+            for key, quota_allowance in quota_allowances.items()
+        }
+        stats["quota_allowance"] = allowance_dicts
+        if not can_run:
+            raise AllocationPolicyViolations.from_args(quota_allowances)
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

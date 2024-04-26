@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { Collapse } from "../collapse";
-import QueryEditor from "../query_editor";
+import Client from "SnubaAdmin/api_client";
+import { Collapse } from "SnubaAdmin/collapse";
+import QueryEditor from "SnubaAdmin/query_editor";
 
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
@@ -15,7 +15,7 @@ import {
   QueryRequest,
   QueryResult,
   PredefinedQuery,
-} from "./types";
+} from "SnubaAdmin/clickhouse_queries/types";
 
 type QueryState = Partial<QueryRequest>;
 

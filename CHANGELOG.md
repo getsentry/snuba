@@ -1,5 +1,86 @@
 # Changelog
 
+## 24.4.1
+
+### Various fixes & improvements
+
+- feat(replays): add migration for replay_id in discover (#5790) by @JoshFerge
+- feat: replacer defaults to auto.offset.reset=earliest (#5772) by @lynnagara
+- feat(migrations): add discover local (#5788) by @dbanda
+- fix(spans): Let null domain be null (#5780) by @phacops
+- feat(meta): Adjust partitioning/settings of counters meta tables (#5784) by @evanh
+- Revert "feat(replays): add replay_id column to merged discover table (#5777)" (2f1509fc) by @getsentry-bot
+- fix: fix mypy --strict vscode (#5781) by @kylemumma
+- feat(replays): add replay_id column to merged discover table (#5777) by @JoshFerge
+- ref: Rust consumer should not skip writes by default (#5778) by @lynnagara
+- chore(on-call): Add CrossOrgQueryAllocationPolicy to errors (#5774) by @enochtangg
+- inc-715: rust consumer can stop processing messages at specific timestamp (#5779) by @lynnagara
+- meta: Bump new development version (2248bb55)
+- fix(meta): Remove experimental meta tables (#5733) by @evanh
+- ref(card-an): Allow the new meta tables in the cardinality analyzer (#5769) by @evanh
+
+## 24.4.0
+
+### Various fixes & improvements
+
+- chore(on-call): Add metric for concurrent queries by referrer that violate policy (#5767) by @enochtangg
+- ref: make auto.offset.reset=earliest everywhere (#5765) by @lynnagara
+- feat(trace): Add trace id to transactions (#5768) by @wmak
+- fix(spans): Move span id above trace id in the prewhere (#5766) by @wmak
+- feat(meta): Add record meta column to gauges (#5760) by @evanh
+- feat(meta): Add record meta column to distributions (#5759) by @evanh
+- feat(meta): Add record_meta column to sets (#5735) by @evanh
+- ref: bump sentry-kafka-schemas to 0.1.68 (#5764) by @getsentry-bot
+- chore(capman): set default bytes scanned limit for rejecting policy (#5755) by @volokluev
+- ref(ch-upgrades): create dist tables functionality (#5737) by @MeredithAnya
+- perf(metrics): Use kafka header optimization (#5756) by @nikhars
+- feat(meta): Add updated versions of meta tables for counters (#5734) by @evanh
+- chore(rust): Update dependencies (#5751) by @nikhars
+- chore: update sdk version (#5754) by @kylemumma
+- fix: Fix default auto-offset-reset value (#5753) by @lynnagara
+- lower max query size to 128KiB (#5750) by @enochtangg
+- clean up old simple pipeline (#5732) by @enochtangg
+- feat(capman): Long term rejection allocation policy (#5718) by @volokluev
+- ref(fetcher): --tables optional now (#5730) by @MeredithAnya
+- fix: parser, bug in pushdown filter (#5731) by @kylemumma
+- feat(generic-metrics): Add a killswitch to processor (#5617) by @ayirr7
+- feat(replays): Replace python processor with a rust-based processor (#5380) by @cmanallen
+- feat(replay): add ReplayViewedEvent to replay processor (#5712) by @aliu3ntry
+- chore(deps): bump h2 from 0.3.22 to 0.3.26 in /rust_snuba (#5727) by @dependabot
+
+_Plus 52 more_
+
+## 24.3.0
+
+### Various fixes & improvements
+
+- Unrevert: feat: Remove query splitters from the API  (#5581) by @evanh
+- feat: Add use_case_id index to generic metrics (#5655) by @evanh
+- ref(ci): Remove deleted test file (#5656) by @evanh
+- fix vscode debugger (#5652) by @kylemumma
+- chore: Upgrade snuba-sdk to 2.0.31 (#5647) by @iambriccardo
+- fix(gocd): put snuba cmd into $SNUBA_CMD (#5654) by @MeredithAnya
+- enable canary health check (#5649) by @enochtangg
+- Revert "fix(CapMan): Allocation Policies causing potentially timeout errors on ST (#4403)" (703042e1) by @getsentry-bot
+- fix(gocd): add SNUBA_CMD_TYPE (#5648) by @MeredithAnya
+- Allows empty `trace_id` (#5637) by @xurui-c
+- fix: Fix bump version for rust (#5643) by @lynnagara
+- feat(generic-metrics): Add metrics around encoding format type in processor (#5627) by @ayirr7
+- feat: filter by metric_id in select logical query optimizer (#5610) by @kylemumma
+- fix(gocd): fix unbound variable (#5641) by @MeredithAnya
+- ref: bump sentry-kafka-schemas to 0.1.60 (#5642) by @getsentry-bot
+- add canary health check to gocd pipeline (#5638) by @enochtangg
+- ref(codecov) Try out the failed test feature in Codecov (#5635) by @evanh
+- feat(spans): Enable spans storage in ST and self-hosted (#5629) by @phacops
+- fix: Fix a bug in HexIntColumnProcessor that skipped array conditions (#5640) by @evanh
+- ref(gocd): use shared script query-fetcher (#5639) by @MeredithAnya
+- ref(gocd): add comparer pipeline, consolidate script? (#5636) by @MeredithAnya
+- feat(spans): Set the migration group as complete to run migrations everywhere (#5634) by @phacops
+- feat(admin): Absolute imports in snuba-admin (#5630) by @volokluev
+- the default value of trace_id will be a randomly generated uuid inste… (#5628) by @xurui-c
+
+_Plus 72 more_
+
 ## 24.2.0
 
 ### Various fixes & improvements

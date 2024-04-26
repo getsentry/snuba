@@ -57,7 +57,6 @@
   },
 
   "python.linting.mypyEnabled": true,
-  "python.linting.mypyArgs": ["--strict"],
   "python.linting.flake8Enabled": true,
   "python.formatting.provider": "black",
   // https://github.com/DonJayamanne/pythonVSCode/issues/992
@@ -65,6 +64,6 @@
   // test discovery is sluggish and the UI around running
   // tests is often in your way and misclicked
   "python.testing.pytestEnabled": true,
-  "python.testing.unittestEnabled": true,
-  "python.testing.pytestArgs": ["tests"]
+  "python.testing.pytestArgs": ["tests"],
+  "mypy-type-checker.args": ["--strict"]
 }

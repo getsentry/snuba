@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
-import QueryDisplay from "./query_display";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
+import QueryDisplay from "SnubaAdmin/querylog/query_display";
 import { QuerylogResult, PredefinedQuery } from "./types";
 
 function QuerylogQueries(props: { api: Client }) {

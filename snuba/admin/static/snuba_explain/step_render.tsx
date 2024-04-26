@@ -1,8 +1,8 @@
 import React, { ReactNode } from "react";
 
 import { Prism } from "@mantine/prism";
-import { ExplainStep, QueryTransformData } from "./types";
-import { nonCollapsibleStyle } from "./styles";
+import { ExplainStep, QueryTransformData } from "SnubaAdmin/snuba_explain/types";
+import { nonCollapsibleStyle } from "SnubaAdmin/snuba_explain/styles";
 
 import { Collapse } from "../collapse";
 

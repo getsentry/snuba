@@ -5,6 +5,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
@@ -60,6 +61,7 @@ def test_mand_conditions(table: str, mand_conditions: List[FunctionCall]) -> Non
             final=False,
             sampling_rate=None,
             mandatory_conditions=mand_conditions,
+            storage_key=StorageKey("dontmatter"),
         ),
         None,
         None,

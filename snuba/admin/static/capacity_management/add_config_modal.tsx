@@ -5,7 +5,7 @@ import Modal from "react-bootstrap/Modal";
 import {
   AllocationPolicyConfig,
   AllocationPolicyOptionalConfigDefinition,
-} from "./types";
+} from "SnubaAdmin/capacity_management/types";
 import FormGroup from "react-bootstrap/FormGroup";
 
 function AddConfigModal(props: {

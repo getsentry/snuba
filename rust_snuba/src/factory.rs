@@ -24,6 +24,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::processors::{self, get_cogs_label};
 use crate::strategies::accountant::RecordCogs;
+use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::processor::{
@@ -31,7 +32,7 @@ use crate::strategies::processor::{
 };
 use crate::strategies::python::PythonTransformStep;
 use crate::strategies::replacements::ProduceReplacements;
-use crate::types::BytesInsertBatch;
+use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct ConsumerStrategyFactory {
     storage_config: config::StorageConfig,
@@ -53,6 +54,7 @@ pub struct ConsumerStrategyFactory {
     physical_consumer_group: String,
     physical_topic_name: Topic,
     accountant_topic_config: config::TopicConfig,
+    stop_at_timestamp: Option<i64>,
 }
 
 impl ConsumerStrategyFactory {
@@ -77,6 +79,7 @@ impl ConsumerStrategyFactory {
         physical_consumer_group: String,
         physical_topic_name: Topic,
         accountant_topic_config: config::TopicConfig,
+        stop_at_timestamp: Option<i64>,
     ) -> Self {
         Self {
             storage_config,
@@ -98,6 +101,7 @@ impl ConsumerStrategyFactory {
             physical_consumer_group,
             physical_topic_name,
             accountant_topic_config,
+            stop_at_timestamp,
         }
     }
 }
@@ -115,7 +119,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
 
         // Produce commit log if there is one
-        let next_step: Box<dyn ProcessingStrategy<_>> =
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             if let Some((ref producer, destination)) = self.commit_log_producer {
                 Box::new(ProduceCommitLog::new(
                     next_step,
@@ -130,19 +134,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 Box::new(next_step)
             };
 
-        // Write to clickhouse
-        let next_step = Box::new(ClickhouseWriterStep::new(
-            next_step,
-            self.storage_config.clickhouse_cluster.clone(),
-            self.storage_config.clickhouse_table_name.clone(),
-            self.skip_write,
-            &self.clickhouse_concurrency,
-        ));
-
         let cogs_label = get_cogs_label(&self.storage_config.message_processor.python_class_name);
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
-        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>> =
+        let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
             match (self.skip_write, self.env_config.record_cogs, cogs_label) {
                 (false, true, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
@@ -153,12 +148,43 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 _ => next_step,
             };
 
+        // Write to clickhouse
+        let next_step = Box::new(ClickhouseWriterStep::new(
+            next_step,
+            &self.clickhouse_concurrency,
+        ));
+
         // Batch insert rows
-        let accumulator = Arc::new(BytesInsertBatch::merge);
+        let batch_factory = BatchFactory::new(
+            &self.storage_config.clickhouse_cluster.host,
+            self.storage_config.clickhouse_cluster.http_port,
+            &self.storage_config.clickhouse_table_name,
+            &self.storage_config.clickhouse_cluster.database,
+            &self.clickhouse_concurrency,
+            self.skip_write,
+            &self.storage_config.clickhouse_cluster.user,
+            &self.storage_config.clickhouse_cluster.password,
+        );
+
+        let accumulator = Arc::new(
+            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch<RowData>| {
+                batch.merge(small_batch)
+            },
+        );
+
         let next_step = Reduce::new(
             next_step,
             accumulator,
-            BytesInsertBatch::default(),
+            Arc::new(move || {
+                BytesInsertBatch::new(
+                    batch_factory.new_batch(),
+                    None,
+                    None,
+                    None,
+                    Default::default(),
+                    CogsData::default(),
+                )
+            }),
             self.max_batch_size,
             self.max_batch_time,
             BytesInsertBatch::len,
@@ -199,6 +225,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                     },
+                    self.stop_at_timestamp,
                 );
             }
             (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
@@ -211,6 +238,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                     },
+                    self.stop_at_timestamp,
                 )
             }
             (

@@ -11,6 +11,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import arrayElement
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -1066,14 +1067,18 @@ mql_test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    CurriedFunctionCall(
+                    arrayElement(
                         "_snuba_aggregate_value",
-                        FunctionCall(
+                        CurriedFunctionCall(
                             None,
-                            "quantiles",
-                            (Literal(None, 0.5),),
+                            FunctionCall(
+                                None,
+                                "quantiles",
+                                (Literal(None, 0.5),),
+                            ),
+                            (Column("_snuba_value", None, "value"),),
                         ),
-                        (Column("_snuba_value", None, "value"),),
+                        Literal(None, 1),
                     ),
                 ),
                 SelectedExpression(
@@ -2744,3 +2749,29 @@ def test_invalid_format_expressions_from_mql(
     generic_metrics = get_dataset("generic_metrics")
     with pytest.raises(type(error), match=re.escape(str(error))):
         query, _ = parse_mql_query(query_body, mql_context, generic_metrics)
+
+
+def test_pushdown_error_query():
+    mql = '((avg(d:transactions/duration@millisecond) * 100.0) * 100.0){transaction:"getsentry.tasks.calculate_spike_projections"}'
+    context = {
+        "end": "2024-04-08T06:49:00+00:00",
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 9223372036854775909,
+            "transaction": 9223372036854776020,
+        },
+        "limit": 10000,
+        "offset": None,
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "orderby": None,
+            "with_totals": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1],
+            "use_case_id": "'transactions'",
+        },
+        "start": "2024-04-08T05:48:00+00:00",
+    }
+    parse_mql_query(mql, context, get_dataset("generic_metrics"))

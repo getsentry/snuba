@@ -2,6 +2,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.table_rate_limit import TableRateLimit
@@ -9,12 +10,12 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import set_config
 from snuba.state.rate_limit import TABLE_RATE_LIMIT_NAME, RateLimitParameters
 
+TABLE = Table("errors_local", ColumnSet([]), storage_key=StorageKey("errors"))
+
 test_data = [
     pytest.param(
         TableRateLimit(),
-        Query(
-            Table("errors_local", ColumnSet([])), selected_columns=[], condition=None
-        ),
+        Query(TABLE, selected_columns=[], condition=None),
         "table_concurrent_limit_transactions_local",
         RateLimitParameters(
             rate_limit_name=TABLE_RATE_LIMIT_NAME,
@@ -26,9 +27,7 @@ test_data = [
     ),
     pytest.param(
         TableRateLimit(),
-        Query(
-            Table("errors_local", ColumnSet([])), selected_columns=[], condition=None
-        ),
+        Query(TABLE, selected_columns=[], condition=None),
         "table_concurrent_limit_errors_local",
         RateLimitParameters(
             rate_limit_name=TABLE_RATE_LIMIT_NAME,
@@ -40,9 +39,7 @@ test_data = [
     ),
     pytest.param(
         TableRateLimit(suffix="errors_tiger"),
-        Query(
-            Table("errors_local", ColumnSet([])), selected_columns=[], condition=None
-        ),
+        Query(TABLE, selected_columns=[], condition=None),
         "table_concurrent_limit_errors_local_errors_tiger",
         RateLimitParameters(
             rate_limit_name=TABLE_RATE_LIMIT_NAME,

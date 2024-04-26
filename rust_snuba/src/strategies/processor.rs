@@ -16,16 +16,17 @@ use crate::config::ProcessorConfig;
 use crate::processors::{ProcessingFunction, ProcessingFunctionWithReplacements};
 use crate::types::{
     BytesInsertBatch, CommitLogEntry, CommitLogOffsets, InsertBatch, InsertOrReplacement,
-    KafkaMessageMetadata,
+    KafkaMessageMetadata, RowData,
 };
 
 pub fn make_rust_processor(
-    next_step: impl ProcessingStrategy<BytesInsertBatch> + 'static,
+    next_step: impl ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
     func: ProcessingFunction,
     schema_name: &str,
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
@@ -34,10 +35,21 @@ pub fn make_rust_processor(
         partition: Partition,
         offset: u64,
         timestamp: DateTime<Utc>,
-    ) -> anyhow::Result<Message<BytesInsertBatch>> {
+        stop_at_timestamp: Option<i64>,
+    ) -> anyhow::Result<Message<BytesInsertBatch<RowData>>> {
+        // Don't process any more messages
+        if let Some(stop) = stop_at_timestamp {
+            if stop < timestamp.timestamp() {
+                let payload = BytesInsertBatch::default();
+                return Ok(Message::new_broker_message(
+                    payload, partition, offset, timestamp,
+                ));
+            }
+        }
+
         let payload = BytesInsertBatch::new(
             transformed.rows,
-            timestamp,
+            Some(timestamp),
             transformed.origin_timestamp,
             transformed.sentry_received_timestamp,
             CommitLogOffsets(BTreeMap::from([(
@@ -62,6 +74,7 @@ pub fn make_rust_processor(
         func,
         result_to_next_msg,
         processor_config,
+        stop_at_timestamp,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -73,12 +86,13 @@ pub fn make_rust_processor(
 }
 
 pub fn make_rust_processor_with_replacements(
-    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> + 'static,
+    next_step: impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> + 'static,
     func: ProcessingFunctionWithReplacements,
     schema_name: &str,
     enforce_schema: bool,
     concurrency: &ConcurrencyConfig,
     processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
 ) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
     let schema = get_schema(schema_name, enforce_schema);
 
@@ -87,12 +101,26 @@ pub fn make_rust_processor_with_replacements(
         partition: Partition,
         offset: u64,
         timestamp: DateTime<Utc>,
-    ) -> anyhow::Result<Message<InsertOrReplacement<BytesInsertBatch>>> {
+        stop_at_timestamp: Option<i64>,
+    ) -> anyhow::Result<Message<InsertOrReplacement<BytesInsertBatch<RowData>>>> {
+        // Don't process any more messages
+        if let Some(stop) = stop_at_timestamp {
+            if stop < timestamp.timestamp() {
+                let payload = BytesInsertBatch::default();
+                return Ok(Message::new_broker_message(
+                    InsertOrReplacement::Insert(payload),
+                    partition,
+                    offset,
+                    timestamp,
+                ));
+            }
+        }
+
         let payload = match transformed {
             InsertOrReplacement::Insert(transformed) => {
                 InsertOrReplacement::Insert(BytesInsertBatch::new(
                     transformed.rows,
-                    timestamp,
+                    Some(timestamp),
                     transformed.origin_timestamp,
                     transformed.sentry_received_timestamp,
                     CommitLogOffsets(BTreeMap::from([(
@@ -120,6 +148,7 @@ pub fn make_rust_processor_with_replacements(
         func,
         result_to_next_msg,
         processor_config,
+        stop_at_timestamp,
     };
 
     Box::new(RunTaskInThreads::new(
@@ -155,9 +184,11 @@ struct MessageProcessor<TResult: Clone, TNext: Clone> {
         fn(KafkaPayload, KafkaMessageMetadata, config: &ProcessorConfig) -> anyhow::Result<TResult>,
     // Function that return Message<TNext> to be passed to the next strategy. Gets passed TResult,
     // as well as the message's partition, offset and timestamp.
+    #[allow(clippy::type_complexity)]
     result_to_next_msg:
-        fn(TResult, Partition, u64, DateTime<Utc>) -> anyhow::Result<Message<TNext>>,
+        fn(TResult, Partition, u64, DateTime<Utc>, Option<i64>) -> anyhow::Result<Message<TNext>>,
     processor_config: ProcessorConfig,
+    stop_at_timestamp: Option<i64>,
 }
 
 impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
@@ -216,7 +247,13 @@ impl<TResult: Clone, TNext: Clone> MessageProcessor<TResult, TNext> {
 
         let transformed = (self.func)(msg.payload, metadata, &self.processor_config)?;
 
-        (self.result_to_next_msg)(transformed, msg.partition, msg.offset, msg.timestamp)
+        (self.result_to_next_msg)(
+            transformed,
+            msg.partition,
+            msg.offset,
+            msg.timestamp,
+            self.stop_at_timestamp,
+        )
     }
 }
 
@@ -329,6 +366,7 @@ mod tests {
             true,
             &concurrency,
             ProcessorConfig::default(),
+            None,
         );
 
         let example = "{
