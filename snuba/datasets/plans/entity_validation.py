@@ -9,12 +9,13 @@ from snuba.query import Query
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.exceptions import InvalidQueryException
+from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.parser.exceptions import ParsingException
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
+
+EXPRESSION_VALIDATORS = [FunctionCallsValidator()]
 
 
 def _validate_query(query: Query) -> None:
@@ -30,13 +31,16 @@ def _validate_query(query: Query) -> None:
 def _validate_entities_with_query(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery]
 ) -> None:
+    """
+    Applies all validator defined on the entities in the query
+    """
     if isinstance(query, LogicalQuery):
         entity = get_entity(query.get_from_clause().key)
         try:
             for v in entity.get_validators():
                 v.validate(query)
         except InvalidQueryException as e:
-            raise ParsingException(
+            raise ValidationException(
                 f"validation failed for entity {query.get_from_clause().key.value}: {e}",
                 should_report=e.should_report,
             )
@@ -51,13 +55,12 @@ def _validate_entities_with_query(
                     for v in entity.get_validators():
                         v.validate(query, alias)
                 except InvalidQueryException as e:
-                    raise ParsingException(
+                    raise ValidationException(
                         f"validation failed for entity {node.data_source.key.value}: {e}",
                         should_report=e.should_report,
                     )
 
 
-EXPRESSION_VALIDATORS = [FunctionCallsValidator()]
 VALIDATORS = [_validate_query, _validate_entities_with_query]
 
 
@@ -65,13 +68,16 @@ def run_entity_validators(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
     settings: QuerySettings | None = None,
 ) -> None:
+    """
+    Main function for applying all validators associated with an entity
+    """
     for validator_func in VALIDATORS:
-        # custom processors can be partials instead of functions but partials don't
-        # have the __name__ attribute set automatically (and we don't set it manually)
         description = getattr(validator_func, "__name__", "custom")
-        with sentry_sdk.start_span(op="processor", description=description):
+        with sentry_sdk.start_span(op="validator", description=description):
             if settings and settings.get_dry_run():
-                with explain_meta.with_query_differ("snql_parsing", description, query):
+                with explain_meta.with_query_differ(
+                    "entity_validator", description, query
+                ):
                     validator_func(query)
             else:
                 validator_func(query)
@@ -79,4 +85,4 @@ def run_entity_validators(
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
         if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
-            run_entity_validators(from_clause, VALIDATORS, settings)
+            run_entity_validators(from_clause, settings)

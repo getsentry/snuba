@@ -328,7 +328,7 @@ TEST_CASES = [
                 ),
                 SelectedExpression(
                     "_snuba_right",
-                    Column("_snuba_right", "groups", "right_col"),
+                    Column("_snuba_right", "groups", "status"),
                 ),
             ],
             condition=binary_condition(
@@ -398,7 +398,7 @@ TEST_CASES = [
                             ),
                             SelectedExpression(
                                 "_snuba_right",
-                                Column("_snuba_right", None, "right_col"),
+                                Column("_snuba_right", None, "status"),
                             ),
                         ],
                     ),
