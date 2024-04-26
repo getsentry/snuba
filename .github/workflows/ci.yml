@@ -428,6 +428,7 @@ jobs:
   self-hosted-end-to-end:
     needs: [snuba-image]
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout Snuba
