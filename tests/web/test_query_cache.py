@@ -18,7 +18,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query as _run_query
 
 
 def run_query() -> None:
@@ -38,7 +38,7 @@ def run_query() -> None:
     dataset = get_dataset("events")
     timer = Timer("test")
 
-    result = parse_and_run_query(
+    result = _run_query(
         dataset,
         Request(
             id="asd",

@@ -13,7 +13,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
@@ -52,7 +52,7 @@ class SubscriptionCreator:
 
     def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
         request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
-        parse_and_run_query(self.dataset, request, timer)
+        run_query(self.dataset, request, timer)
 
 
 class SubscriptionDeleter:

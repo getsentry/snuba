@@ -20,7 +20,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Column as MetaColumn
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 from tests.helpers import write_unprocessed_events
 
 
@@ -83,7 +83,7 @@ def test_transform_column_names() -> None:
     dataset = get_dataset("events")
     timer = Timer("test")
 
-    result = parse_and_run_query(
+    result = run_query(
         dataset,
         Request(
             id="asd",

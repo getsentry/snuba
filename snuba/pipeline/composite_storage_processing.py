@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from typing import Mapping, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Mapping, NamedTuple, Sequence, Union
 
 import sentry_sdk
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clusters.storage_sets import StorageSetKey, is_valid_storage_set_combination
-from snuba.datasets.plans.query_plan import SubqueryProcessors
-from snuba.datasets.plans.storage_processing import (
-    ClickhouseQueryPlanNew,
-    build_best_plan,
+from snuba.datasets.plans.query_plan import (
+    ClickhouseQueryPlan,
+    CompositeQueryPlan,
+    SubqueryProcessors,
 )
+from snuba.datasets.plans.storage_processing import build_best_plan
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -23,7 +24,7 @@ from snuba.state import explain_meta
 
 
 def apply_composite_storage_processors(
-    query_plan: CompositeDataSourcePlan, settings: QuerySettings
+    query_plan: CompositeQueryPlan, settings: QuerySettings
 ) -> CompositeQuery[Table]:
     """
     Given a composite query plan, this function applies all the
@@ -60,14 +61,14 @@ def build_best_plan_for_composite_query(
     physical_query: CompositeQuery[Table],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
-) -> CompositeDataSourcePlan:
+) -> CompositeQueryPlan:
     """
     A function that traverses each sub-query node in a physical composite query,
     builds a plan for each sub-query, combines them into a single composite plan, and
     returns all the necessary storage processors that need to be applied.
     """
     plan = CompositeDataSourcePlanner(settings).visit(physical_query.get_from_clause())
-    return CompositeDataSourcePlan(
+    return CompositeQueryPlan(
         translated_source=physical_query,
         storage_set_key=plan.storage_set_key,
         root_processors=plan.root_processors,
@@ -94,73 +95,7 @@ def check_sub_query_storage_sets(
     is_valid_storage_set_combination(*all_storage_sets)
 
 
-class CompositeDataSourcePlan(NamedTuple):
-    """
-    Intermediate query plan data structure maintained when visiting
-    each node of a composite query. This structure responsible for keeping track
-    of a query and the relavent processors that need to be executed on the query.
-
-    We cannot use a Composite plan itself because the data source type is too
-    restrictive and processors are structured differently for composite queries
-    (e.g. aliased processors).
-    """
-
-    translated_source: Union[
-        ClickhouseQuery,
-        ProcessableQuery[Table],
-        CompositeQuery[Table],
-        JoinClause[Table],
-    ]
-    storage_set_key: StorageSetKey
-    root_processors: Optional[SubqueryProcessors] = None
-    aliased_processors: Optional[Mapping[str, SubqueryProcessors]] = None
-
-    def get_db_processors(
-        self,
-    ) -> Tuple[
-        Sequence[ClickhouseQueryProcessor],
-        Mapping[str, Sequence[ClickhouseQueryProcessor]],
-    ]:
-        return (
-            (
-                self.root_processors.db_processors
-                if self.root_processors is not None
-                else []
-            ),
-            (
-                {
-                    alias: subquery.db_processors
-                    for alias, subquery in self.aliased_processors.items()
-                }
-                if self.aliased_processors is not None
-                else {}
-            ),
-        )
-
-    def get_plan_processors(
-        self,
-    ) -> Tuple[
-        Sequence[ClickhouseQueryProcessor],
-        Mapping[str, Sequence[ClickhouseQueryProcessor]],
-    ]:
-        return (
-            (
-                self.root_processors.plan_processors
-                if self.root_processors is not None
-                else []
-            ),
-            (
-                {
-                    alias: subquery.plan_processors
-                    for alias, subquery in self.aliased_processors.items()
-                }
-                if self.aliased_processors is not None
-                else {}
-            ),
-        )
-
-
-class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Table]):
+class CompositeDataSourcePlanner(DataSourceVisitor[CompositeQueryPlan, Table]):
     """
     Plans the DataSource (the from clause) of a Composite query by
     visiting each node as the data source can be composite itself.
@@ -174,17 +109,17 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Tabl
     def __init__(self, query_settings: QuerySettings) -> None:
         self.__settings = query_settings
 
-    def _visit_simple_source(self, data_source: Table) -> CompositeDataSourcePlan:
+    def _visit_simple_source(self, data_source: Table) -> CompositeQueryPlan:
         # We are never supposed to get here.
         raise ValueError("Cannot translate a simple Entity")
 
-    def _visit_join(self, data_source: JoinClause[Table]) -> CompositeDataSourcePlan:
+    def _visit_join(self, data_source: JoinClause[Table]) -> CompositeQueryPlan:
         best_plans = data_source.accept(JoinPlansBuilder(self.__settings))
         join_visitor = JoinDataSourcePlanner(self.__settings, best_plans)
         plan = data_source.accept(join_visitor)
 
         assert isinstance(plan.translated_source, JoinClause)
-        return CompositeDataSourcePlan(
+        return CompositeQueryPlan(
             translated_source=plan.translated_source,
             aliased_processors=plan.processors,
             storage_set_key=plan.storage_set_key,
@@ -192,12 +127,12 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Tabl
 
     def _visit_simple_query(
         self, data_source: ProcessableQuery[Table]
-    ) -> CompositeDataSourcePlan:
+    ) -> CompositeQueryPlan:
         assert isinstance(
             data_source, ProcessableQuery
         ), f"Only subqueries are allowed at query planning stage. {type(data_source)} found."
         query_plan = build_best_plan(data_source, self.__settings)
-        return CompositeDataSourcePlan(
+        return CompositeQueryPlan(
             translated_source=query_plan.query,
             root_processors=SubqueryProcessors(
                 plan_processors=query_plan.plan_query_processors,
@@ -208,10 +143,10 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Tabl
 
     def _visit_composite_query(
         self, data_source: CompositeQuery[Table]
-    ) -> CompositeDataSourcePlan:
+    ) -> CompositeQueryPlan:
         query_plan = build_best_plan_for_composite_query(data_source, self.__settings)
 
-        return CompositeDataSourcePlan(
+        return CompositeQueryPlan(
             translated_source=query_plan.translated_source,
             root_processors=query_plan.root_processors,
             aliased_processors=query_plan.aliased_processors,
@@ -219,7 +154,7 @@ class CompositeDataSourcePlanner(DataSourceVisitor[CompositeDataSourcePlan, Tabl
         )
 
 
-class JoinPlansBuilder(JoinVisitor[Mapping[str, ClickhouseQueryPlanNew], Table]):
+class JoinPlansBuilder(JoinVisitor[Mapping[str, ClickhouseQueryPlan], Table]):
     """
     Produces all the viable ClickhouseQueryPlans for each subquery
     in the join.
@@ -230,7 +165,7 @@ class JoinPlansBuilder(JoinVisitor[Mapping[str, ClickhouseQueryPlanNew], Table])
 
     def visit_individual_node(
         self, node: IndividualNode[Table]
-    ) -> Mapping[str, ClickhouseQueryPlanNew]:
+    ) -> Mapping[str, ClickhouseQueryPlan]:
         assert isinstance(
             node.data_source, ClickhouseQuery
         ), "Invalid composite query. All nodes must be subqueries."
@@ -241,7 +176,7 @@ class JoinPlansBuilder(JoinVisitor[Mapping[str, ClickhouseQueryPlanNew], Table])
 
     def visit_join_clause(
         self, node: JoinClause[Table]
-    ) -> Mapping[str, ClickhouseQueryPlanNew]:
+    ) -> Mapping[str, ClickhouseQueryPlan]:
         return {
             **node.left_node.accept(self),
             **node.right_node.accept(self),
@@ -277,7 +212,7 @@ class JoinDataSourcePlanner(JoinVisitor[JoinDataSourcePlan, Table]):
     """
 
     def __init__(
-        self, settings: QuerySettings, plans: Mapping[str, ClickhouseQueryPlanNew]
+        self, settings: QuerySettings, plans: Mapping[str, ClickhouseQueryPlan]
     ) -> None:
         self.__settings = settings
         self.__plans = plans
