@@ -63,7 +63,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
 
         self.write_storage = get_storage(test_storage_set)
         self.count = 10
-        self.org_id, self.project_id = 1, 2
+        self.org_id, self.project_id = 10, 20
         self.metric_ids = [4, 9, 16]
         self.sentry_received_timestamp = datetime.now(UTC) - timedelta(minutes=2)
         self.tag_generator = get_tags()
