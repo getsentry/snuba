@@ -1,4 +1,6 @@
 version: v1
+# This entity stores meta data about metrics, specifically the unique tag values for a given metric and tag key.
+
 kind: entity
 name: generic_metrics_sets_meta_tag_values
 

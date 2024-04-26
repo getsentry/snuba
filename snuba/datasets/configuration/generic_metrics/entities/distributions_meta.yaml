@@ -1,4 +1,6 @@
 version: v1
+# This entity stores meta data about metrics, specifically the unique metric IDs and tag key IDs.
+
 kind: entity
 name: generic_metrics_distributions_meta
 

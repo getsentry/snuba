@@ -118,7 +118,6 @@ class EntityRequiredColumnValidator(QueryValidator):
                 if not found:
                     missing.add(col)
 
-        missing = set()
         if self.required_str_columns:
             for col in self.required_str_columns:
                 match = build_match(
