@@ -162,8 +162,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.storage_config.clickhouse_cluster.database,
             &self.clickhouse_concurrency,
             self.skip_write,
-            &self.storage_config.clickhouse_cluster.user,
-            &self.storage_config.clickhouse_cluster.password,
         );
 
         let accumulator = Arc::new(
