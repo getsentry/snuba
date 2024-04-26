@@ -320,19 +320,6 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                         ],
                     ),
                     (
-                        "subscriptions-scheduler-generic-metrics-gauges",
-                        [
-                            "snuba",
-                            "subscriptions-scheduler",
-                            "--entity=generic_metrics_gauges",
-                            "--consumer-group=snuba-generic-metrics-gauges-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-generic-metrics-gauges-consumers",
-                            "--auto-offset-reset=latest",
-                            "--log-level=debug",
-                            "--schedule-ttl=10",
-                        ],
-                    ),
-                    (
                         "subscriptions-executor-metrics",
                         [
                             "snuba",

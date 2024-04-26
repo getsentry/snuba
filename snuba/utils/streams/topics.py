@@ -31,9 +31,6 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS = (
         "scheduled-subscriptions-generic-metrics-counters"
     )
-    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_GAUGES = (
-        "scheduled-subscriptions-generic-metrics-gauges"
-    )
 
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
@@ -52,7 +49,6 @@ class Topic(Enum):
         "snuba-generic-metrics-distributions-commit-log"
     )
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
-    GENERIC_METRICS_GAUGES_COMMIT_LOG = "snuba-generic-metrics-gauges-commit-log"
     GENERIC_EVENTS = "generic-events"
     GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
     GROUP_ATTRIBUTES = "group-attributes"
