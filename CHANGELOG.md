@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.4.2
+
+### Various fixes & improvements
+
+- feat(generic-metrics): Add success metric around Base64 message processing (#5830) by @ayirr7
+- chore(deps): bump python and node (#5829) by @mdtro
+- ref: remove pushing to legacy gcr (#5819) by @asottile-sentry
+- Enables Clickhouse Authorization (#5818) by @xurui-c
+- remove ConditionSimplifierProcessor (#5820) by @volokluev
+- chore(dev-exp): Remove old pipeline code (#5821) by @enochtangg
+- Revert "feat(generic-metrics): Add support for subscriptions to gauges (#5736)" (d0c50931) by @getsentry-bot
+- feat(generic-metrics): Add Base64 decoding to Snuba processors (#5761) by @ayirr7
+- feat(generic-metrics): Add support for subscriptions to gauges (#5736) by @ayirr7
+- add a metric for how many queries are waiting for readthrough cache (#5817) by @volokluev
+- ref: use artifact registry (#5816) by @asottile-sentry
+- feat(meta): Create distributions meta tables (#5748) by @evanh
+- chore: Bump Kafka schema version to 0.1.71 (#5814) by @ayirr7
+- Remove unnecessary test (#5812) by @ayirr7
+- feat(meta): Create gauges meta tables (#5749) by @evanh
+- Revert "Revert "ref: dual-write docker image to artifact registry (#5798)"" (#5813) by @volokluev
+- fix: Don't log this every time, it clogs the logs up (#5799) by @evanh
+- feat(devexp): Split entity and storage processing for composite queries (#5785) by @enochtangg
+- feat(meta) Create sets meta tables (#5747) by @evanh
+- Emit a metric when replacements are skipped (#5809) by @xurui-c
+- Revert "ref: dual-write docker image to artifact registry (#5798)" (b69f85f5) by @getsentry-bot
+- ref: dual-write docker image to artifact registry (#5798) by @asottile-sentry
+- fix(meta) Rename counter tables for consistency (#5797) by @evanh
+- fix(22.8) don't use ifnull for cardinality casting (#5807) by @volokluev
+
+_Plus 14 more_
+
 ## 24.4.1
 
 ### Various fixes & improvements
