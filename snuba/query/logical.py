@@ -93,7 +93,6 @@ class StorageQuery(ProcessableQuery[Storage]):
     def __init__(
         self,
         from_clause: Optional[Storage],
-        # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[SelectedExpression]] = None,
         array_join: Optional[Sequence[Expression]] = None,
         condition: Optional[Expression] = None,
@@ -111,11 +110,8 @@ class StorageQuery(ProcessableQuery[Storage]):
         """
         Expects an already parsed query body.
         """
-        # TODO: make the parser produce this data structure directly
-        # in order not to expose the internal representation.
         self.__final = False
         self.__sample = sample
-
         super().__init__(
             from_clause=from_clause,
             selected_columns=selected_columns,

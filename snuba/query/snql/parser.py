@@ -288,7 +288,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
             args["groupby"] = [gb.expression for gb in args["groupby"]]
 
-        if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
+        if isinstance(
+            data_source, (CompositeQuery, LogicalQuery, JoinClause, StorageQuery)
+        ):
             args["from_clause"] = data_source
             return cast(
                 CompositeQuery[QueryEntity] | CompositeQuery[QueryStorage],
@@ -327,7 +329,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         JoinClause[QueryEntity],
     ]:
         _, _, _, match = visited_children
-        if isinstance(match, (CompositeQuery, LogicalQuery)):
+        if isinstance(match, (CompositeQuery, LogicalQuery, StorageQuery)):
             return match
         elif isinstance(match, RelationshipTuple):
             join_clause = build_join_clause([match])
@@ -337,6 +339,11 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         ):
             join_clause = build_join_clause(match)
             return join_clause
+        if not isinstance(match, (QueryEntity, QueryStorage)):
+            import pdb
+
+            pdb.set_trace()
+            print(match)
 
         assert isinstance(match, (QueryEntity, QueryStorage))  # mypy
         return match
@@ -452,9 +459,14 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_subquery(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
+    ) -> Union[
+        LogicalQuery,
+        StorageQuery,
+        CompositeQuery[QueryEntity],
+        CompositeQuery[QueryStorage],
+    ]:
         _, query, _ = visited_children
-        assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
+        assert isinstance(query, (CompositeQuery, LogicalQuery, StorageQuery))  # mypy
         return query
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
@@ -1311,7 +1323,12 @@ def validate_identifiers_in_lambda(
 
 
 def _replace_time_condition(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[
+        CompositeQuery[QueryEntity],
+        CompositeQuery[QueryStorage],
+        LogicalQuery,
+        StorageQuery,
+    ]
 ) -> None:
     condition = query.get_condition()
     top_level = (
@@ -1324,6 +1341,9 @@ def _replace_time_condition(
     if max_days is not None:
         max_days = int(max_days)
 
+    import pdb
+
+    pdb.set_trace()
     if isinstance(query, (LogicalQuery, StorageQuery)):
         new_top_level = _align_max_days_date_align(
             query.get_from_clause().key, top_level, max_days, date_align
