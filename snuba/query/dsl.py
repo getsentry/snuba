@@ -13,6 +13,12 @@ from snuba.query.expressions import (
 # verbose to build.
 
 
+def function_call(
+    name: str, *params: Expression, alias: str | None = None
+) -> FunctionCall:
+    return FunctionCall(function_name=name, parameters=params, alias=alias)
+
+
 def column(
     column_name: str, table_name: str | None = None, alias: str | None = None
 ) -> Column:

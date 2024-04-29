@@ -14,8 +14,11 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import (
     and_cond,
     arrayElement,
+    column,
     divide,
     equals,
+    function_call,
+    literal,
     multiply,
     or_cond,
     plus,
@@ -28,7 +31,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
-from snuba.query.mql.parser import parse_mql_query
+from snuba.query.mql.parser import parse_mql_query, parse_mql_query_body
 
 # Commonly used expressions
 from_distributions = QueryEntity(
@@ -241,68 +244,51 @@ def tag_column(tag: str) -> SubscriptableReference:
     )
 
 
+"""
+Most of the existing E2E tests will now be unit tests of the first stage of parsing,
+parse_mql_query_body which is the transformation from MQL to AST
+"""
+
+
 def test_simple_formula() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
-    expected_selected = SelectedExpression(
-        "aggregate_value",
-        divide(
-            timeseries(
-                "sumIf",
-                123456,
-                binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
-                ),
-            ),
-            timeseries("sumIf", 123456),
-            "_snuba_aggregate_value",
-        ),
-    )
-    filter_in_select_condition = or_cond(
-        and_cond(
-            equals(
-                tag_column("status_code"),
-                Literal(None, "200"),
-            ),
-            equals(
-                Column("_snuba_metric_id", None, "metric_id"),
-                Literal(None, 123456),
-            ),
-        ),
-        equals(
-            Column("_snuba_metric_id", None, "metric_id"),
-            Literal(None, 123456),
-        ),
-    )
     expected = Query(
         from_distributions,
         selected_columns=[
-            expected_selected,
             SelectedExpression(
-                "time",
-                time_expression,
-            ),
-        ],
-        groupby=[time_expression],
-        condition=binary_condition(
-            "and",
-            filter_in_select_condition,
-            formula_condition,
-        ),
-        order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=time_expression,
+                "aggregate_value",
+                divide(
+                    function_call(
+                        "sumIf",
+                        column("value"),
+                        and_cond(
+                            equals(column("status_code"), literal("200")),
+                            equals(
+                                column("metric_id"),
+                                literal("d:transactions/duration@millisecond"),
+                            ),
+                        ),
+                    ),
+                    function_call(
+                        "sumIf",
+                        column("value"),
+                        equals(
+                            column("metric_id"),
+                            literal("d:transactions/duration@millisecond"),
+                        ),
+                    ),
+                    alias="aggregate_value",
+                ),
             )
         ],
-        limit=1000,
-        offset=0,
     )
-
-    generic_metrics = get_dataset(
-        "generic_metrics",
+    actual = parse_mql_query_body(
+        query_body,
+        get_dataset(
+            "generic_metrics",
+        ),
     )
-    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
+    eq, reason = actual.equals(expected)
     assert eq, reason
 
 
@@ -374,67 +360,47 @@ def test_simple_formula_with_leading_literals() -> None:
 
 def test_groupby() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
-    expected_selected = SelectedExpression(
-        "aggregate_value",
-        divide(
-            timeseries(
-                "sumIf",
-                123456,
-                binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
+    expected_selected = [
+        SelectedExpression(
+            "aggregate_value",
+            divide(
+                function_call(
+                    "sumIf",
+                    column("value"),
+                    and_cond(
+                        equals(column("status_code"), literal("200")),
+                        equals(
+                            column("metric_id"),
+                            literal("d:transactions/duration@millisecond"),
+                        ),
+                    ),
                 ),
-            ),
-            timeseries("sumIf", 123456),
-            "_snuba_aggregate_value",
-        ),
-    )
-    filter_in_select_condition = or_cond(
-        and_cond(
-            equals(
-                tag_column("status_code"),
-                Literal(None, "200"),
-            ),
-            equals(
-                Column("_snuba_metric_id", None, "metric_id"),
-                Literal(None, 123456),
+                function_call(
+                    "sumIf",
+                    column("value"),
+                    equals(
+                        column("metric_id"),
+                        literal("d:transactions/duration@millisecond"),
+                    ),
+                ),
+                alias="aggregate_value",
             ),
         ),
-        equals(
-            Column("_snuba_metric_id", None, "metric_id"),
-            Literal(None, 123456),
-        ),
-    )
+        SelectedExpression("transaction", column("transaction", alias="transaction")),
+    ]
+
     expected = Query(
         from_distributions,
-        selected_columns=[
-            expected_selected,
-            SelectedExpression("transaction", tag_column("transaction")),
-            SelectedExpression(
-                "time",
-                time_expression,
-            ),
-        ],
-        groupby=[tag_column("transaction"), time_expression],
-        condition=binary_condition(
-            "and",
-            filter_in_select_condition,
-            formula_condition,
+        selected_columns=expected_selected,
+        groupby=[column("transaction", alias="transaction")],
+    )
+    actual = parse_mql_query_body(
+        query_body,
+        get_dataset(
+            "generic_metrics",
         ),
-        order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=time_expression,
-            )
-        ],
-        limit=1000,
-        offset=0,
     )
-
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
+    eq, reason = actual.equals(expected)
     assert eq, reason
 
 

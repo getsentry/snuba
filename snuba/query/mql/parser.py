@@ -1027,6 +1027,9 @@ def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
 def populate_query_from_mql_context(
     query: LogicalQuery, mql_context_dict: dict[str, Any]
 ) -> tuple[LogicalQuery, MQLContext]:
+    """
+    Populates the given logical query with the given mql-context-dict, in-place.
+    """
     mql_context = MQLContext.from_dict(mql_context_dict)
     entity_key = query.get_from_clause().key
 
