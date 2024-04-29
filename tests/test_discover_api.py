@@ -747,7 +747,6 @@ class TestDiscoverApi(BaseApiTest):
                 entity="discover_transactions",
             ).data
         )
-
         assert result["data"] == []
 
     def test_contexts(self) -> None:

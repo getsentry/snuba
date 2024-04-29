@@ -226,6 +226,7 @@ class RedisCache(Cache[TValue]):
             task_ident = result[1].decode("utf-8")
             task_timeout_remaining = int(result[2])
             effective_timeout = min(task_timeout_remaining, timeout)
+            metrics.increment("task_waiting", tags=metric_tags)
             logger.debug(
                 "Waiting for task result (%r) for up to %s seconds...",
                 task_ident,

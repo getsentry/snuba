@@ -10,7 +10,6 @@ from parsimonious.nodes import Node, NodeVisitor
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
-from snuba import settings as snuba_settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -64,6 +63,8 @@ from snuba.query.snql.parser import (
     _treeify_or_and_conditions,
 )
 from snuba.state import explain_meta, get_int_config
+from snuba.util import parse_datetime
+from snuba.utils.constants import GRANULARITIES_AVAILABLE
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
@@ -317,7 +318,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[InitialParseResult,],
+            Tuple[
+                InitialParseResult,
+            ],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -664,25 +667,49 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
     raise ParsingException(f"invalid metric type {mri[0]}")
 
 
-def convert_formula_to_query(
+# def convert_simple_formula_to_query(
+#     parsed: InitialParseResult, dataset: Dataset
+# ) -> LogicalQuery:
+#     if parsed.expression is None:
+#         raise InvalidQueryException("Parsed expression has no expression specified")
+
+#     selected_columns = [parsed.expression]
+#     if parsed.groupby:
+#         selected_columns.extend(parsed.groupby)
+#     groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
+
+#     metric_value = parsed.mri
+#     if not metric_value:
+#         raise ParsingException("no MRI specified in MQL query")
+
+#     conditions: list[Expression] = [
+#         binary_condition(
+#             ConditionFunctions.EQ,
+#             Column(None, None, "metric_id"),
+#             Literal(None, metric_value),
+#         )
+#     ]
+#     if parsed.conditions:
+#         conditions.extend(parsed.conditions)
+
+#     final_conditions = combine_and_conditions(conditions) if conditions else None
+
+#     entity_key = select_entity(metric_value, dataset)
+
+#     query = LogicalQuery(
+#         from_clause=QueryEntity(
+#             key=entity_key, schema=get_entity(entity_key).get_data_model()
+#         ),
+#         selected_columns=selected_columns,
+#         condition=final_conditions,
+#         groupby=groupby,
+#     )
+#     return query
+
+
+def build_formula_query_from_clause(
     parsed: InitialParseResult, dataset: Dataset
-) -> LogicalQuery | CompositeQuery[QueryEntity]:
-    """
-    Look up all the referenced entities, and create a JoinClause for each of the entities
-    referenced in the formula. Then map the correct table to each of the expressions in the formula.
-
-    E.g. sum(d:transactions/duration) / sum(c:transactions/duration_ms) will produce a JoinClause
-    with (d: generic_metrics_distributions) -[counters]-> (c: generic_metrics_counters)
-
-    Most formulas do not operate on multiple entities, but they get the same treatment as if they
-    did in order to keep consistency. In that case the table is joined on itself.
-
-    If a formula has only a single MRI and some scalars e.g. sum(d:transactions/duration) + 1, then
-    there's no need for a JoinClause, and this returns a simple LogicalQuery.
-    """
-    if parsed.formula is None:
-        raise InvalidQueryException("Parsed formula has no formula name specified")
-
+) -> tuple[LogicalQuery | CompositeQuery[QueryEntity], list[InitialParseResult]]:
     def find_all_leaf_nodes(tree: FormulaParameter) -> list[InitialParseResult] | None:
         if isinstance(tree, InitialParseResult) and tree.formula is None:
             return [tree]
@@ -700,9 +727,18 @@ def convert_formula_to_query(
     if join_nodes is None:
         raise InvalidQueryException("Could not parse formula")
 
-    if len(join_nodes) == 1:
-        # This is a simple formula with only one MRI and some scalars, so we don't need to join
-        raise Exception("handle this")
+    entity_keys = set([select_entity(node.mri or "", dataset) for node in join_nodes])
+    if len(entity_keys) == 1:
+        # The query only references a single entity, so it's not necessary to build a join clause
+        # across entities.
+        return (
+            LogicalQuery(
+                from_clause=QueryEntity(
+                    entity_keys.pop(), get_entity(entity_keys.pop()).get_data_model()
+                )
+            ),
+            join_nodes,
+        )
 
     # We use the group by for the ON conditions, so make sure they are all the same
     groupbys = join_nodes[0].groupby
@@ -759,9 +795,34 @@ def convert_formula_to_query(
         )
 
     join_clause = build_join_clause(first_node, join_nodes[1:])
-    query = CompositeQuery(
-        from_clause=join_clause,
+    return (
+        CompositeQuery(
+            from_clause=join_clause,
+        ),
+        join_nodes,
     )
+
+
+def convert_formula_to_query(
+    parsed: InitialParseResult, dataset: Dataset
+) -> LogicalQuery | CompositeQuery[QueryEntity]:
+    """
+    Look up all the referenced entities, and create a JoinClause for each of the entities
+    referenced in the formula. Then map the correct table to each of the expressions in the formula.
+
+    E.g. sum(d:transactions/duration) / sum(c:transactions/duration_ms) will produce a JoinClause
+    with (d: generic_metrics_distributions) -[counters]-> (c: generic_metrics_counters)
+
+    Most formulas do not operate on multiple entities, but they get the same treatment as if they
+    did in order to keep consistency. In that case the table is joined on itself.
+
+    If a formula has only a single MRI and some scalars e.g. sum(d:transactions/duration) + 1, then
+    there's no need for a JoinClause, and this returns a simple LogicalQuery.
+    """
+    if parsed.formula is None:
+        raise InvalidQueryException("Parsed formula has no formula name specified")
+
+    query, nodes = build_formula_query_from_clause(parsed, dataset)
 
     # Build SelectedExpression from root tree
     # When going through the selected expressions, populate the table aliases
@@ -805,7 +866,7 @@ def convert_formula_to_query(
 
     # The groupbys are pushed down to all the nodes of the query. Add them to the groupby of the query
     groupby = []
-    for leaf_node in join_nodes:
+    for leaf_node in nodes:
         if leaf_node.groupby:
             for group_exp in leaf_node.groupby:
                 if isinstance(group_exp.expression, Column):
@@ -1113,14 +1174,8 @@ def parse_mql_query(
         )
 
     # Filter in select optimizer
-    feat_flag = get_int_config(
-        "enable_filter_in_select_optimizer",
-        default=snuba_settings.ENABLE_FILTER_IN_SELECT_OPTIMIZER,
-    )
-    if feat_flag:
-        with sentry_sdk.start_span(
-            op="processor", description="filter_in_select_optimize"
-        ):
+    with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
+        if isinstance(query, LogicalQuery):
             if settings is None:
                 FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
             else:

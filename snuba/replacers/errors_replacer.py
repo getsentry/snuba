@@ -215,6 +215,14 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                     "Skipping replacement for project",
                     extra={"project_id": processed.get_project_id(), "data": message},
                 )
+                metrics.increment(
+                    "replacement_message_skipped",
+                    1,
+                    tags={
+                        "type": type_,
+                        "consumer_group": message.metadata.consumer_group,
+                    },
+                )
                 return None
 
         return processed

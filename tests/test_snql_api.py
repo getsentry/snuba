@@ -1391,6 +1391,49 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
 
+    def test_low_cardinality_processor(self) -> None:
+        response = self.post(
+            "/discover/snql",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "query": f"""
+                    MATCH (discover)
+                    SELECT
+                        type AS `event.type`,
+                        contexts[trace.trace_id] AS `trace`,
+                        coalesce(email, username, user_id, ip_address) AS `user.display`,
+                        timestamp,
+                        project_id AS `project`,
+                        title,
+                        event_id AS `id`,
+                        project_id AS `project.name`,
+                        platform AS `platform`
+                    WHERE timestamp >= toDateTime('{self.base_time.isoformat()}')
+                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                    AND project_id IN array({self.project_id})
+                    AND environment IN array('dev', 'prod', 'staging')
+                    AND platform IN tuple('snuba', 'sentry')
+                    ORDER BY timestamp DESC LIMIT 51 OFFSET 0""",
+                    "legacy": True,
+                    "app_id": "legacy",
+                    "tenant_ids": {
+                        "organization_id": self.org_id,
+                        "referrer": "join.tag.test",
+                    },
+                    "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert (
+            "cast(environment, 'Nullable(String)') AS _snuba_environment" in data["sql"]
+        )
+        # platform is not nullable but can be cast to nullable
+        assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
