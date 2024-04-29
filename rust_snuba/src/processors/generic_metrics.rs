@@ -1,5 +1,5 @@
 use adler::Adler32;
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use chrono::DateTime;
 use serde::{
     de::value::{MapAccessDeserializer, SeqAccessDeserializer},
@@ -15,6 +15,7 @@ use crate::{
 
 use rust_arroyo::backends::kafka::types::{Headers, KafkaPayload};
 use rust_arroyo::{counter, timer};
+static BASE64: data_encoding::Encoding = data_encoding::BASE64;
 
 use super::utils::enforce_retention;
 
@@ -76,7 +77,7 @@ enum MetricValue {
     #[serde(rename = "c")]
     Counter(f64),
     #[serde(rename = "s", deserialize_with = "encoded_series_compat_deserializer")]
-    Set(EncodedSeries<u64>),
+    Set(EncodedSeries<u32>),
     #[serde(rename = "d", deserialize_with = "encoded_series_compat_deserializer")]
     Distribution(EncodedSeries<f64>),
     #[serde(rename = "g")]
@@ -89,16 +90,67 @@ enum MetricValue {
     },
 }
 
+trait Decodable<const SIZE: usize>: Copy {
+    const SIZE: usize = SIZE;
+
+    fn decode_bytes(bytes: [u8; SIZE]) -> Self;
+}
+
+impl Decodable<4> for u32 {
+    fn decode_bytes(bytes: [u8; Self::SIZE]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+}
+
+impl Decodable<8> for u64 {
+    fn decode_bytes(bytes: [u8; Self::SIZE]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+}
+
+impl Decodable<8> for f64 {
+    fn decode_bytes(bytes: [u8; Self::SIZE]) -> Self {
+        Self::from_le_bytes(bytes)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "format", rename_all = "lowercase")]
 enum EncodedSeries<T> {
     Array { data: Vec<T> },
+    Base64 { data: String },
 }
 
 impl<T> EncodedSeries<T> {
-    fn into_vec(self) -> Vec<T> {
+    fn try_into_vec<const SIZE: usize>(self) -> Result<Vec<T>, anyhow::Error>
+    where
+        T: Decodable<SIZE>,
+    {
         match self {
-            EncodedSeries::Array { data } => data,
+            EncodedSeries::Array { data } => Ok(data),
+            EncodedSeries::Base64 { data, .. } => {
+                counter!("generic_metrics.encoded_receive_count", 1, "format" => "base64");
+
+                let decoded_bytes = BASE64.decode(data.as_bytes())?;
+                if decoded_bytes.len() % T::SIZE == 0 {
+                    let res = Ok(decoded_bytes
+                        .chunks_exact(T::SIZE)
+                        .map(TryInto::try_into)
+                        .map(Result::unwrap) // OK to unwrap, `chunks_exact` always yields slices of the right length
+                        .map(T::decode_bytes)
+                        .collect());
+
+                    counter!("generic_metrics.encoded_success_count", 1, "format" => "base64");
+
+                    res
+                } else {
+                    Err(anyhow!(
+                        "Decoded Base64 cannot be chunked into {}, got {}",
+                        T::SIZE,
+                        decoded_bytes.len()
+                    ))
+                }
+            }
         }
     }
 }
@@ -169,6 +221,16 @@ struct CommonMetricFields {
     hr_retention_days: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     day_retention_days: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record_meta: Option<u8>,
+}
+
+fn should_record_meta(use_case_id: &str) -> Option<u8> {
+    match use_case_id {
+        "escalating_issues" => Some(0),
+        "metric_stats" => Some(0),
+        _ => Some(1),
+    }
 }
 
 /// The raw row that is written to clickhouse for counters.
@@ -178,8 +240,6 @@ struct CountersRawRow {
     common_fields: CommonMetricFields,
     #[serde(default)]
     count_value: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    record_meta: Option<u8>,
 }
 
 /// Parse is the trait which should be implemented for all metric types.
@@ -218,11 +278,7 @@ impl Parse for CountersRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
-        let record_meta = match from.use_case_id.as_str() {
-            "escalating_issues" => Some(0),
-            "metric_stats" => Some(0),
-            _ => Some(1),
-        };
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -239,12 +295,12 @@ impl Parse for CountersRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
             common_fields,
             count_value,
-            record_meta,
         }))
     }
 }
@@ -359,7 +415,7 @@ pub fn process_counter_message(
 struct SetsRawRow {
     #[serde(flatten)]
     common_fields: CommonMetricFields,
-    set_values: Vec<u64>,
+    set_values: Vec<u32>,
 }
 
 impl Parse for SetsRawRow {
@@ -368,7 +424,7 @@ impl Parse for SetsRawRow {
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<SetsRawRow>> {
         let set_values = match from.value {
-            MetricValue::Set(values) => values.into_vec(),
+            MetricValue::Set(values) => values.try_into_vec()?,
             _ => return Ok(Option::None),
         };
 
@@ -393,6 +449,8 @@ impl Parse for SetsRawRow {
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
 
+        let record_meta = should_record_meta(from.use_case_id.as_str());
+
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
             org_id: from.org_id,
@@ -408,6 +466,7 @@ impl Parse for SetsRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -445,10 +504,12 @@ impl Parse for DistributionsRawRow {
         from: FromGenericMetricsMessage,
         config: &ProcessorConfig,
     ) -> anyhow::Result<Option<DistributionsRawRow>> {
-        let distribution_values = match from.value {
-            MetricValue::Distribution(value) => value.into_vec(),
+        let maybe_dist = match from.value {
+            MetricValue::Distribution(value) => value.try_into_vec(),
             _ => return Ok(Option::None),
         };
+
+        let distribution_values = maybe_dist?;
 
         timer!(
             "generic_metrics.messages.dists_value_len",
@@ -474,6 +535,7 @@ impl Parse for DistributionsRawRow {
             enable_histogram = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -490,6 +552,7 @@ impl Parse for DistributionsRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -573,6 +636,7 @@ impl Parse for GaugesRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
+        let record_meta = should_record_meta(from.use_case_id.as_str());
 
         let common_fields = CommonMetricFields {
             use_case_id: from.use_case_id,
@@ -589,6 +653,7 @@ impl Parse for GaugesRawRow {
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
+            record_meta,
             ..Default::default()
         };
         Ok(Some(Self {
@@ -746,6 +811,184 @@ mod tests {
         "aggregation_option": "ten_second"
     }"#;
 
+    const DUMMY_BASE64_ENCODED_DISTRIBUTION_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": {"format": "base64", "data": "AAAAAAAACEAAAAAAAADwPwAAAAAAAABA"}
+    }"#;
+
+    const DUMMY_BASE64_ENCODED_SET_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"s:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_set_k_VUW93LMS"}},
+        "type": "s",
+        "value": {"format": "base64", "data": "AQAAAAcAAAA="}
+    }"#;
+
+    #[test]
+    fn test_base64_decode_f64() {
+        assert!(
+            EncodedSeries::<f64>::Base64 {
+                data: "AAAAAAAACEAAAAAAAADwPwAAAAAAAABA".to_string(),
+            }
+            .try_into_vec()
+            .ok()
+            .unwrap()
+                == vec![3f64, 1f64, 2f64]
+        )
+    }
+
+    #[test]
+    fn test_distribution_processor_with_v2_distribution_message() {
+        let result: Result<InsertBatch, Error> = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_BASE64_ENCODED_DISTRIBUTION_MESSAGE,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+            },
+            distribution_values: vec![3f64, 1f64, 2f64],
+            enable_histogram: None,
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 675)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_base64_decode_32() {
+        assert!(
+            EncodedSeries::<u32>::Base64 {
+                data: "AQAAAAcAAAA=".to_string(),
+            }
+            .try_into_vec()
+            .ok()
+            .unwrap()
+                == vec![1u32, 7u32]
+        )
+    }
+
+    #[test]
+    fn test_base64_decode_32_invalid() {
+        assert!(EncodedSeries::<u32>::Base64 {
+            data: "AQAAAAcAAA=".to_string(),
+        }
+        .try_into_vec()
+        .is_err())
+    }
+
+    #[test]
+    fn test_set_processor_with_v2_set_message() {
+        let result = test_processor_with_payload(
+            &(process_set_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_BASE64_ENCODED_SET_MESSAGE,
+        );
+        let expected_row = SetsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "set".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+            },
+            set_values: vec![1u32, 7u32],
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 654)])
+                })
+            }
+        );
+    }
+
     #[test]
     fn test_shouldnt_killswitch() {
         let fake_config = Ok(Some("[custom]".to_string()));
@@ -804,6 +1047,15 @@ mod tests {
         let fake_config = Ok(None);
 
         assert!(!should_use_killswitch(fake_config, &use_case));
+    }
+
+    #[test]
+    fn test_should_record_meta_yes() {
+        let use_case_invalid = "escalating_issues";
+        assert_eq!(should_record_meta(use_case_invalid), Some(0));
+
+        let use_case_valid = "spans";
+        assert_eq!(should_record_meta(use_case_valid), Some(1));
     }
 
     #[test]
@@ -875,9 +1127,9 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             count_value: 1.0,
-            record_meta: Some(1),
         };
         assert_eq!(
             result.unwrap(),
@@ -946,6 +1198,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
         };
@@ -1016,6 +1269,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1072,6 +1326,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1128,6 +1383,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
@@ -1199,6 +1455,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
@@ -1259,6 +1516,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
@@ -1333,6 +1591,7 @@ mod tests {
                 min_retention_days: Some(90),
                 hr_retention_days: None,
                 day_retention_days: None,
+                record_meta: Some(1),
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
         };

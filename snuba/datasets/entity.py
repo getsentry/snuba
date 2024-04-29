@@ -4,13 +4,11 @@ from typing import Mapping, Optional, Sequence
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storage import (
     EntityStorageConnection,
     Storage,
     WritableTableStorage,
 )
-from snuba.pipeline.query_pipeline import QueryPipelineBuilder
 from snuba.query.data_source.join import JoinRelationship
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.validation import FunctionCallValidator
@@ -33,7 +31,6 @@ class Entity(Describable, ABC):
         self,
         *,
         storages: Sequence[EntityStorageConnection],
-        query_pipeline_builder: QueryPipelineBuilder[ClickhouseQueryPlan],
         abstract_column_set: ColumnSet,
         join_relationships: Mapping[str, JoinRelationship],
         validators: Optional[Sequence[QueryValidator]],
@@ -43,7 +40,6 @@ class Entity(Describable, ABC):
         subscription_validators: Optional[Sequence[EntitySubscriptionValidator]],
     ) -> None:
         self.__storages = storages
-        self.__query_pipeline_builder = query_pipeline_builder
 
         # Eventually, the EntityColumnSet should be passed in
         # For now, just convert it so we have the right
@@ -93,12 +89,6 @@ class Entity(Describable, ABC):
         Returns all the join relationships
         """
         return self.__join_relationships
-
-    def get_query_pipeline_builder(self) -> QueryPipelineBuilder[ClickhouseQueryPlan]:
-        """
-        Returns the component that orchestrates building and running query plans.
-        """
-        return self.__query_pipeline_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         """

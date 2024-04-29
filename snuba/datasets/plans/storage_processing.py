@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from abc import ABC
-from dataclasses import dataclass
-from typing import Generic, Optional, Sequence, TypeVar
+from typing import Optional, Sequence, TypeVar, Union
 
 import sentry_sdk
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.query import Query
-from snuba.clusters.storage_sets import StorageSetKey
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.slicing import is_storage_set_sliced
@@ -20,6 +18,7 @@ from snuba.datasets.storage import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
+from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
@@ -35,48 +34,6 @@ from snuba.state import explain_meta
 from snuba.utils.metrics.util import with_span
 
 TQuery = TypeVar("TQuery", bound=AbstractQuery)
-
-
-@dataclass(frozen=True)
-class QueryPlanNew(ABC, Generic[TQuery]):
-    """
-    Provides the directions to execute a Clickhouse Query against one
-    storage or multiple joined ones.
-
-    This is produced in the storage processing stage of the query pipeline.
-
-    It embeds the Clickhouse Query (the query to run on the storage
-    after translation). It also provides a plan execution strategy
-    that takes care of coordinating the execution of the query against
-    the database.
-
-    When running a query we need a cluster, the cluster is picked according
-    to the storages sets containing the storages used in the query.
-    So the plan keeps track of the storage set as well.
-    There must be only one storage set per query.
-    """
-
-    query: TQuery
-    storage_set_key: StorageSetKey
-
-
-@dataclass(frozen=True)
-class ClickhouseQueryPlanNew(QueryPlanNew[Query]):
-    """
-    Query plan for a single entity, single storage query.
-
-    It provides the sequence of storage specific QueryProcessors
-    to apply to the query after the the storage has been selected.
-    These are divided in two sequences: plan processors and DB
-    processors.
-    Plan processors and DB Query Processors are both executed only
-    once per plan.
-    """
-
-    # Per https://github.com/python/mypy/issues/10039, this has to be redeclared
-    # to avoid a mypy error.
-    plan_query_processors: Sequence[ClickhouseQueryProcessor]
-    db_query_processors: Sequence[ClickhouseQueryProcessor]
 
 
 def get_query_data_source(
@@ -111,11 +68,11 @@ def check_storage_readiness(storage: ReadableStorage) -> None:
 
 
 def build_best_plan(
-    clickhouse_query: Query,
+    physical_query: Union[Query, ProcessableQuery[Table]],
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
-) -> ClickhouseQueryPlanNew:
-    storage_key = StorageKeyFinder().visit(clickhouse_query)
+) -> ClickhouseQueryPlan:
+    storage_key = StorageKeyFinder().visit(physical_query)
     storage = get_storage(storage_key)
 
     # Return failure if storage readiness state is not supported in current environment
@@ -128,8 +85,8 @@ def build_best_plan(
         MandatoryConditionEnforcer(storage.get_mandatory_condition_checkers()),
     ]
 
-    return ClickhouseQueryPlanNew(
-        query=clickhouse_query,
+    return ClickhouseQueryPlan(
+        query=physical_query,
         plan_query_processors=[],
         db_query_processors=db_query_processors,
         storage_set_key=storage.get_storage_set_key(),
@@ -138,7 +95,7 @@ def build_best_plan(
 
 @with_span()
 def apply_storage_processors(
-    query_plan: ClickhouseQueryPlanNew,
+    query_plan: ClickhouseQueryPlan,
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
 ) -> Query:
@@ -162,7 +119,7 @@ def apply_storage_processors(
                 storage_key=storage.get_storage_key(),
             )
         )
-
+    assert isinstance(query_plan.query, Query)
     for processor in query_plan.db_query_processors:
         with sentry_sdk.start_span(
             description=type(processor).__name__, op="processor"

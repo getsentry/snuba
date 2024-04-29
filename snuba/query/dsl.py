@@ -37,6 +37,16 @@ class NestedColumn:
         )
 
 
+def column(
+    column_name: str, table_name: str | None = None, alias: str | None = None
+) -> Column:
+    return Column(alias, table_name, column_name)
+
+
+def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
+    return Literal(alias, value)
+
+
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
     return FunctionCall(alias, "tuple", tuple(literals))
 
@@ -101,8 +111,20 @@ def equals(
     return binary_condition("equals", left, right)
 
 
-def and_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("and", lhs, rhs)
+def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:
+    """
+    if only lhs and rhs are given, return and(lhs, rhs)
+    otherwise (more than 2 conditions are given), returns and(lhs, and(rhs, and(...)))
+    """
+    if len(args) == 0:
+        return binary_condition("and", lhs, rhs)
+
+    sofar = args[len(args) - 1]
+    for i in range(len(args) - 2, -1, -1):
+        sofar = binary_condition("and", args[i], sofar)
+    sofar = binary_condition("and", rhs, sofar)
+    sofar = binary_condition("and", lhs, sofar)
+    return sofar
 
 
 def or_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:

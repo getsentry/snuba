@@ -9,11 +9,9 @@ from snuba.datasets.factory import get_dataset_name
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
 from snuba.pipeline.stages.query_processing import (
-    EntityAndStoragePipelineStage,
     EntityProcessingStage,
     StorageProcessingStage,
 )
-from snuba.query.composite import CompositeQuery
 from snuba.query.exceptions import QueryPlanException
 from snuba.querylog import record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata
@@ -37,26 +35,15 @@ def _run_query_pipeline(
     concurrent_queries_gauge: Optional[Gauge] = None,
     force_dry_run: bool = False,
 ) -> QueryResult:
-    if isinstance(request.query, CompositeQuery):
-        # New pipeline does not support composite queries yet.
-        clickhouse_query = EntityAndStoragePipelineStage().execute(
-            QueryPipelineResult(
-                data=request,
-                query_settings=request.query_settings,
-                timer=timer,
-                error=None,
-            )
+    clickhouse_query = EntityProcessingStage().execute(
+        QueryPipelineResult(
+            data=request,
+            query_settings=request.query_settings,
+            timer=timer,
+            error=None,
         )
-    else:
-        clickhouse_query = EntityProcessingStage().execute(
-            QueryPipelineResult(
-                data=request,
-                query_settings=request.query_settings,
-                timer=timer,
-                error=None,
-            )
-        )
-        clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
+    )
+    clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
 
     res = ExecutionStage(
         request.attribution_info,
@@ -73,7 +60,7 @@ def _run_query_pipeline(
 
 
 @with_span()
-def parse_and_run_query(
+def run_query(
     dataset: Dataset,
     request: Request,
     timer: Timer,
