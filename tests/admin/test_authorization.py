@@ -34,7 +34,6 @@ def test_product_tools_role(
     response = admin_api.get("/tools")
     assert response.status_code == 200
     data = json.loads(response.data)
-    print(data)
     assert len(data["tools"]) > 0
     assert "snql-to-sql" in data["tools"]
     assert "tracing" in data["tools"]
