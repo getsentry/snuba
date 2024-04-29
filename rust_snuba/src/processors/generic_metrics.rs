@@ -142,7 +142,7 @@ impl<T> EncodedSeries<T> {
 
                     counter!("generic_metrics.encoded_success_count", 1, "format" => "base64");
 
-                    return res;
+                    res
                 } else {
                     Err(anyhow!(
                         "Decoded Base64 cannot be chunked into {}, got {}",
