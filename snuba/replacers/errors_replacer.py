@@ -53,7 +53,7 @@ from snuba.replacers.replacer_processor import (
     ReplacerProcessor,
     ReplacerState,
 )
-from snuba.state import get_config
+from snuba.state import config_replacements_bypass_projects_hash, get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
@@ -107,7 +107,11 @@ class Replacement(ReplacementBase):
         raise NotImplementedError()
 
     def should_write_every_node(self) -> bool:
-        project_rollout_setting = get_config("write_node_replacements_projects", "")
+        project_rollout_setting = get_config(
+            "write_node_replacements_projects",
+            "",
+            config_key=config_replacements_bypass_projects_hash,
+        )
         if project_rollout_setting:
             # The expected for mat is [project,project,...]
             project_rollout_setting = project_rollout_setting[1:-1]

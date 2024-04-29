@@ -37,6 +37,7 @@ rds = get_redis_client(RedisClientKey.CONFIG)
 
 ratelimit_prefix = "snuba-ratelimit:"
 config_hash = "snuba-config"
+config_replacements_bypass_projects_hash = "snuba-config-replacements-bypass-projects"
 config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
@@ -121,6 +122,7 @@ def set_config(
     user: Optional[str] = None,
     force: bool = False,
     config_key: str = config_hash,
+    expire_in_seconds: Optional[int] = None,
 ) -> None:
     value = get_typed_value(value)
     enc_value = "{}".format(value).encode("utf-8") if value is not None else None
@@ -142,6 +144,8 @@ def set_config(
         else:
             p.hset(config_key, key, enc_value)
             p.hset(config_history_hash, key, json.dumps(change_record))
+            if expire_in_seconds is not None:
+                p.expire(config_key, 3600)
         p.lpush(config_changes_list, json.dumps((key, change_record)))
         p.ltrim(config_changes_list, 0, config_changes_list_limit)
         p.execute()
@@ -219,6 +223,7 @@ def get_raw_configs(config_key: str = config_hash) -> Mapping[str, Optional[Any]
             for k, v in all_configs.items()
             if v is not None
         }
+        configs = configs | rds.hgetall(config_replacements_bypass_projects_hash)
         if os.environ.get("SENTRY_SINGLE_TENANT"):
             # Single Tenant has this overriding CONFIG_STATE.
             for k, v in settings.CONFIG_STATE.items():
