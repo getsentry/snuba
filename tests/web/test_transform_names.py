@@ -76,7 +76,7 @@ def test_transform_column_names() -> None:
                 ),
             ),
         ],
-        condition=in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
+        condition=in_condition(Column(None, None, "project_id"), [Literal(None, 1)]),
     )
     query_settings = HTTPQuerySettings(referrer="asd")
 
