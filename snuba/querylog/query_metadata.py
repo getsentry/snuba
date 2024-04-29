@@ -128,6 +128,7 @@ def get_request_status(cause: Exception | None = None) -> Status:
     if cause is None:
         slo_status = RequestStatus.SUCCESS
     elif isinstance(cause, RateLimitExceeded):
+        print(cause)
         trigger_rate_limiter = cause.extra_data.get("scope", "")
         if trigger_rate_limiter == TABLE_RATE_LIMIT_NAME:
             slo_status = RequestStatus.TABLE_RATE_LIMITED

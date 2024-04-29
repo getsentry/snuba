@@ -63,8 +63,8 @@ class SqlOperation(ABC):
     def execute(self) -> None:
         nodes = self.get_nodes()
         cluster = get_cluster(self._storage_set)
-        if nodes:
-            logger.info(f"Executing op: {self.format_sql()[:32]}...")
+        # if nodes:
+        # logger.info(f"Executing op: {self.format_sql()[:32]}...")
         for node in nodes:
             connection = cluster.get_node_connection(
                 ClickhouseClientSettings.MIGRATE, node

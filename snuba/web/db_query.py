@@ -562,7 +562,6 @@ def _raw_query(
     )
 
     try:
-        raise RateLimitExceeded("test", "test")
         result = execute_query_with_query_id(
             clickhouse_query,
             query_settings,

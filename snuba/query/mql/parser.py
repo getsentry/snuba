@@ -159,7 +159,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
             if isinstance(coefficient, float) or isinstance(coefficient, int):
                 return -coefficient
             elif isinstance(coefficient, InitialParseResult):
-                return self._visit_formula(unary_op[0], coefficient)
+                return InitialParseResult(
+                    expression=None,
+                    formula=unary_op[0],
+                    parameters=[coefficient],
+                )
             else:
                 raise InvalidQueryException(
                     f"Unary expression not supported for type {type(coefficient)}"
@@ -318,9 +322,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -667,46 +669,6 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
     raise ParsingException(f"invalid metric type {mri[0]}")
 
 
-# def convert_simple_formula_to_query(
-#     parsed: InitialParseResult, dataset: Dataset
-# ) -> LogicalQuery:
-#     if parsed.expression is None:
-#         raise InvalidQueryException("Parsed expression has no expression specified")
-
-#     selected_columns = [parsed.expression]
-#     if parsed.groupby:
-#         selected_columns.extend(parsed.groupby)
-#     groupby = [g.expression for g in parsed.groupby] if parsed.groupby else None
-
-#     metric_value = parsed.mri
-#     if not metric_value:
-#         raise ParsingException("no MRI specified in MQL query")
-
-#     conditions: list[Expression] = [
-#         binary_condition(
-#             ConditionFunctions.EQ,
-#             Column(None, None, "metric_id"),
-#             Literal(None, metric_value),
-#         )
-#     ]
-#     if parsed.conditions:
-#         conditions.extend(parsed.conditions)
-
-#     final_conditions = combine_and_conditions(conditions) if conditions else None
-
-#     entity_key = select_entity(metric_value, dataset)
-
-#     query = LogicalQuery(
-#         from_clause=QueryEntity(
-#             key=entity_key, schema=get_entity(entity_key).get_data_model()
-#         ),
-#         selected_columns=selected_columns,
-#         condition=final_conditions,
-#         groupby=groupby,
-#     )
-#     return query
-
-
 def build_formula_query_from_clause(
     parsed: InitialParseResult, dataset: Dataset
 ) -> tuple[LogicalQuery | CompositeQuery[QueryEntity], list[InitialParseResult]]:
@@ -731,10 +693,11 @@ def build_formula_query_from_clause(
     if len(entity_keys) == 1:
         # The query only references a single entity, so it's not necessary to build a join clause
         # across entities.
+        entity_key = entity_keys.pop()
         return (
             LogicalQuery(
                 from_clause=QueryEntity(
-                    entity_keys.pop(), get_entity(entity_keys.pop()).get_data_model()
+                    entity_key, get_entity(entity_key).get_data_model()
                 )
             ),
             join_nodes,
@@ -824,6 +787,10 @@ def convert_formula_to_query(
 
     query, nodes = build_formula_query_from_clause(parsed, dataset)
 
+    def alias_wrap(alias: str | None) -> str | None:
+        print("ALIAS", f"'''{alias}'''")
+        return None if isinstance(query, LogicalQuery) else alias
+
     # Build SelectedExpression from root tree
     # When going through the selected expressions, populate the table aliases
     def extract_expression(param: InitialParseResult | Any) -> Expression:
@@ -837,7 +804,7 @@ def convert_formula_to_query(
             assert isinstance(column, Column)
             return replace(
                 aggregate_function,
-                parameters=(replace(column, table_name=param.table_alias),),
+                parameters=(replace(column, table_name=alias_wrap(param.table_alias)),),
                 alias=None,
             )
         elif param.formula:
@@ -873,7 +840,8 @@ def convert_formula_to_query(
                     aliased_groupby = replace(
                         group_exp,
                         expression=replace(
-                            group_exp.expression, table_name=leaf_node.table_alias
+                            group_exp.expression,
+                            table_name=alias_wrap(leaf_node.table_alias),
                         ),
                     )
                     selected_columns.append(aliased_groupby)
@@ -900,7 +868,9 @@ def convert_formula_to_query(
                             c,
                             parameters=tuple(
                                 [
-                                    replace(lhs, table_name=param.table_alias),
+                                    replace(
+                                        lhs, table_name=alias_wrap(param.table_alias)
+                                    ),
                                     *c.parameters[1:],
                                 ]
                             ),
@@ -910,7 +880,7 @@ def convert_formula_to_query(
             conditions.append(
                 binary_condition(
                     "equals",
-                    Column(None, param.table_alias, "metric_id"),
+                    Column(None, alias_wrap(param.table_alias), "metric_id"),
                     Literal(None, param.mri),
                 )
             )
