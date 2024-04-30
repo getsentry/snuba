@@ -1,3 +1,5 @@
+from typing import cast
+
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
 from snuba.datasets.plans.entity_validation import run_entity_validators
@@ -15,7 +17,7 @@ from snuba.pipeline.composite_storage_processing import (
 )
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Table
+from snuba.query.data_source.simple import Entity, Table
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.logical import StorageQuery
 from snuba.request import Request
@@ -48,7 +50,8 @@ class EntityProcessingStage(
             )
         else:
             return translate_composite_query(
-                pipe_input.data.query, pipe_input.query_settings
+                cast(CompositeQuery[Entity], pipe_input.data.query),
+                pipe_input.query_settings,
             )
 
 

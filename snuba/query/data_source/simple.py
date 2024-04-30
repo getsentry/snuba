@@ -61,10 +61,7 @@ class Storage(SimpleDataSource):
 
     @property
     def human_readable_id(self) -> str:
-        return f"Storage({self.key.value})"
-
-    def get_columns(self) -> PhysicalColumnSet:
-        return PhysicalColumnSet([])
+        return f"STORAGE({self.key.value})"
 
 
 @dataclass(frozen=True)
