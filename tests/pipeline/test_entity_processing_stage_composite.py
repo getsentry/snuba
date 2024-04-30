@@ -437,7 +437,6 @@ def test_composite(
         id="",
         original_body={"query": "placeholder"},
         query=logical_query,
-        snql_anonymized="",
         query_settings=HTTPQuerySettings(),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None

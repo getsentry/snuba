@@ -89,7 +89,6 @@ def test_transform_column_names() -> None:
             id="asd",
             original_body={},
             query=query,
-            snql_anonymized="",
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),
