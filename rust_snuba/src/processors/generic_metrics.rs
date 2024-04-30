@@ -129,14 +129,20 @@ impl<T> EncodedSeries<T> {
         match self {
             EncodedSeries::Array { data } => Ok(data),
             EncodedSeries::Base64 { data, .. } => {
+                counter!("generic_metrics.encoded_receive_count", 1, "format" => "base64");
+
                 let decoded_bytes = BASE64.decode(data.as_bytes())?;
                 if decoded_bytes.len() % T::SIZE == 0 {
-                    Ok(decoded_bytes
+                    let res = Ok(decoded_bytes
                         .chunks_exact(T::SIZE)
                         .map(TryInto::try_into)
                         .map(Result::unwrap) // OK to unwrap, `chunks_exact` always yields slices of the right length
                         .map(T::decode_bytes)
-                        .collect())
+                        .collect());
+
+                    counter!("generic_metrics.encoded_success_count", 1, "format" => "base64");
+
+                    res
                 } else {
                     Err(anyhow!(
                         "Decoded Base64 cannot be chunked into {}, got {}",
