@@ -72,7 +72,6 @@ from snuba.query.parser import (
     validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException, PostProcessingError
-from snuba.query.parser.validation import validate_query
 from snuba.query.query_settings import QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.anonymize import format_snql_anonymized
@@ -1491,8 +1490,6 @@ POST_PROCESSORS = [
 
 VALIDATORS = [
     validate_identifiers_in_lambda,
-    validate_query,
-    validate_entities_with_query,
 ]
 
 
