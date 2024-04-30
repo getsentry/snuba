@@ -440,7 +440,7 @@ jobs:
         with:
           project_name: snuba
           docker_repo: getsentry/snuba
-          image_url: us.gcr.io/sentryio/snuba:${{ github.event.pull_request.head.sha || github.sha }}
+          image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
           docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
 
   publish-to-dockerhub:
