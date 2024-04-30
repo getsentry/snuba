@@ -181,14 +181,14 @@ def test_find_projects(
         with pytest.raises(ValidationException):
             request = json_to_snql(query_body, "events")
             request.validate()
-            query, _ = parse_snql_query(str(request.query), events)
+            query = parse_snql_query(str(request.query), events)
             assert isinstance(query, Query)
             run_entity_validators(query, HTTPQuerySettings())
             identity_translate(query)
     else:
         request = json_to_snql(query_body, "events")
         request.validate()
-        query, _ = parse_snql_query(str(request.query), events)
+        query = parse_snql_query(str(request.query), events)
         assert isinstance(query, Query)
         run_entity_validators(query, HTTPQuerySettings())
         translated_query = identity_translate(query)

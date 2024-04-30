@@ -122,7 +122,6 @@ def test_basic(
         id="",
         original_body=query_body,
         query=logical_query,
-        snql_anonymized="",
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None

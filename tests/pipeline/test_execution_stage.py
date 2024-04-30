@@ -72,7 +72,6 @@ def get_fake_metadata() -> SnubaQueryMetadata:
                 None,
                 None,
             ),
-            "",
         ),
         "blah",
         Timer("woof"),
