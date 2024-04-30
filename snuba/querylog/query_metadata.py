@@ -277,8 +277,8 @@ class SnubaQueryMetadata:
             self.end_timestamp = end
             self.entity = entity_name
             self.query_list: MutableSequence[ClickhouseQueryMetadata] = []
-            self.projects = ProjectsFinder().visit(request.query)  # type: ignore
-            self.snql_anonymized = request.snql_anonymized
+            self.projects = ProjectsFinder().visit(request.query)
+            self.snql_anonymized = ""
         else:
             self.start_timestamp = start_timestamp
             self.end_timestamp = end_timestamp

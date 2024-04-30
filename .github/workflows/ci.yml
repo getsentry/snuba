@@ -424,6 +424,25 @@ jobs:
       - name: Upload to codecov
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
+
+  self-hosted-end-to-end:
+    needs: [snuba-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # temporary, remove once we are confident the action is working
+    continue-on-error: true
+
+    steps:
+      - name: Checkout Snuba
+        uses: actions/checkout@v3
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/action-self-hosted-e2e-tests@267fab2add9e173029c1e09ecfd82e04688d7c44
+        with:
+          project_name: snuba
+          docker_repo: getsentry/snuba
+          image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
+          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
+
   publish-to-dockerhub:
     name: Publish Snuba to DockerHub
     runs-on: ubuntu-20.04

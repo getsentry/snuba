@@ -1,0 +1,51 @@
+version: v1
+# This entity stores meta data about metrics, specifically the unique tag values for a given metric and tag key.
+
+kind: entity
+name: generic_metrics_sets_meta_tag_values
+
+schema:
+  [
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: metric_id, type: UInt, args: { size: 64 } },
+    { name: tag_key, type: UInt, args: { size: 64 } },
+    { name: tag_value, type: String},
+    { name: timestamp, type: DateTime },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    {
+      name: count,
+      type: AggregateFunction,
+      args:
+        {
+          func: sum,
+          arg_types: [{ type: Float, args: { size: 64 } }],
+        },
+    },
+  ]
+
+storages:
+  - storage: generic_metrics_sets_meta_tag_values
+    translation_mappers:
+      functions:
+        - mapper: FunctionNameMapper
+          args:
+            from_name: sum
+            to_name: sumMerge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: sumIf
+            to_name: sumMergeIf
+
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: generic_metrics_sets_meta_tag_values
+
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: ["project_id", "metric_id", "tag_key"]
+required_time_column: timestamp
+partition_key_column_name: project_id
+
+query_processors: []

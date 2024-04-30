@@ -1,5 +1,6 @@
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
+from snuba.datasets.plans.entity_validation import run_entity_validators
 from snuba.datasets.plans.storage_processing import (
     apply_storage_processors,
     build_best_plan,
@@ -41,6 +42,7 @@ class EntityProcessingStage(
             )
             return res
         elif isinstance(pipe_input.data.query, LogicalQuery):
+            run_entity_validators(pipe_input.data.query, pipe_input.query_settings)
             return run_entity_processing_executor(
                 pipe_input.data.query, pipe_input.query_settings
             )
