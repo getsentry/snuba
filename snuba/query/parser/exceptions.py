@@ -25,9 +25,7 @@ class PostProcessingError(Exception):
     def __init__(
         self,
         query: Query | CompositeQuery[Entity],
-        snql_anonymized: str,
         message: str | None = None,
     ):
         super().__init__(message)
         self.query = query
-        self.snql_anonymized = snql_anonymized

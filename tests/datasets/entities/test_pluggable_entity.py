@@ -102,14 +102,11 @@ def pluggable_sets_entity() -> PluggableEntity:
 
 def build_request(query_body: Mapping[str, str]) -> Request:
     generic_metrics_dataset = get_dataset("generic_metrics")
-    query, snql_anonymized = parse_snql_query(
-        query_body["query"], generic_metrics_dataset
-    )
+    query = parse_snql_query(query_body["query"], generic_metrics_dataset)
     request = Request(
         id="",
         original_body=query_body,
         query=query,
-        snql_anonymized=snql_anonymized,
         query_settings=HTTPQuerySettings(referrer=""),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
