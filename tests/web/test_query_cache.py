@@ -10,8 +10,9 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
+from snuba.query.conditions import in_condition
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column
+from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request
@@ -29,6 +30,7 @@ def run_query() -> None:
         selected_columns=[
             SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
         ],
+        condition=in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
     )
 
     query_settings = HTTPQuerySettings(referrer="asd")
