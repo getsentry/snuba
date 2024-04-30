@@ -1340,9 +1340,6 @@ def _replace_time_condition(
     if max_days is not None:
         max_days = int(max_days)
 
-    import pdb
-
-    pdb.set_trace()
     if isinstance(query, (LogicalQuery, StorageQuery)):
         new_top_level = _align_max_days_date_align(
             query.get_from_clause().key, top_level, max_days, date_align
