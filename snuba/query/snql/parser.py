@@ -1433,44 +1433,6 @@ def _align_max_days_date_align(
     return list(map(replace_cond, old_top_level))
 
 
-def validate_entities_with_query(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
-) -> None:
-    if isinstance(query, StorageQuery):
-        return
-    elif isinstance(query, LogicalQuery):
-        if isinstance(query.get_from_clause(), QueryStorage):
-            return
-        elif isinstance(query.get_from_clause(), QueryEntity):
-            entity = get_entity(query.get_from_clause().key)
-        else:
-            entity = None
-        assert entity is not None
-        try:
-            for v in entity.get_validators():
-                v.validate(query)
-        except InvalidQueryException as e:
-            raise ParsingException(
-                f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                should_report=e.should_report,
-            )
-    else:
-        from_clause = query.get_from_clause()
-        if isinstance(from_clause, JoinClause):
-            alias_map = from_clause.get_alias_node_map()
-            for alias, node in alias_map.items():
-                assert isinstance(node.data_source, QueryEntity)  # mypy
-                entity = get_entity(node.data_source.key)
-                try:
-                    for v in entity.get_validators():
-                        v.validate(query, alias)
-                except InvalidQueryException as e:
-                    raise ParsingException(
-                        f"validation failed for entity {node.data_source.key.value}: {e}",
-                        should_report=e.should_report,
-                    )
-
-
 def _select_entity_for_dataset(
     dataset: Dataset,
 ) -> Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]], None]:
