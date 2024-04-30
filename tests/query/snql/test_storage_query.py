@@ -108,11 +108,11 @@ test_cases = [
     pytest.param(
         """MATCH {
             MATCH STORAGE(metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100
-        } SELECT max(duration_ms) AS max_duration"""
+        } SELECT max(duration) AS max_duration"""
         % added_condition,
         CompositeQuery(
             from_clause=StorageQuery(
-                QueryStorage(key=StorageKey("metrics_summaries"), sample=0.1),
+                QueryStorage(key=StorageKey("metrics_summaries")),
                 selected_columns=[
                     SelectedExpression(
                         "trace_id", Column("_snuba_trace_id", None, "trace_id")
@@ -148,7 +148,7 @@ test_cases = [
 def test_format_expressions(query_body: str, expected_query: StorageQuery) -> None:
     # dataset does not matter :D
     events = get_dataset("events")
-    query, _ = parse_snql_query(query_body, events)
+    query = parse_snql_query(query_body, events)
     eq, reason = query.equals(expected_query)
     # this is an easier diff to parse as a human
     assert repr(query) == repr(expected_query)

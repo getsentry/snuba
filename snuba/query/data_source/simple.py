@@ -63,6 +63,13 @@ class Storage(SimpleDataSource):
     def human_readable_id(self) -> str:
         return f"STORAGE({self.key.value})"
 
+    def get_columns(self) -> PhysicalColumnSet:
+        """There should be no operations done on a Storage except to get the storage key
+        Therefore the columns are empty
+        """
+        raise NotImplementedError()
+        return PhysicalColumnSet([])
+
 
 @dataclass(frozen=True)
 class Table(SimpleDataSource):
