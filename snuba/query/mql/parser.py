@@ -1008,9 +1008,9 @@ def populate_query_from_mql_context(
     mql_context = MQLContext.from_dict(mql_context_dict)
 
     # List of entity key/alias tuples
-    entity_data: list[tuple[EntityKey, str]] = []
+    entity_data: list[tuple[EntityKey, str | None]] = []
     if isinstance(query, LogicalQuery):
-        entity_data.append((query.get_from_clause().key, ""))
+        entity_data.append((query.get_from_clause().key, None))
     elif isinstance(query, CompositeQuery):
         join_clause = query.get_from_clause()
         assert isinstance(join_clause, JoinClause)
@@ -1022,11 +1022,11 @@ def populate_query_from_mql_context(
             entity_data.append((data_source.key, alias))
 
     selected_time_found = False
-    for entity_key, alias in entity_data:
-        time_condition = start_end_time_condition(mql_context, entity_key, alias)
-        scope_condition = scope_conditions(mql_context, alias)
+    for entity_key, table_alias in entity_data:
+        time_condition = start_end_time_condition(mql_context, entity_key, table_alias)
+        scope_condition = scope_conditions(mql_context, table_alias)
         granularity_condition, with_totals, orderby, selected_time = rollup_expressions(
-            mql_context, alias
+            mql_context, table_alias
         )
 
         context_condition = combine_and_conditions(
@@ -1035,8 +1035,8 @@ def populate_query_from_mql_context(
         query.add_condition_to_ast(context_condition)
 
         query.set_totals(with_totals)
-        # TODO: Not sure it is a good idea to have multiple orderby expressions
-        query.set_ast_orderby([orderby])
+        if orderby:
+            query.set_ast_orderby([orderby])
 
         if selected_time:
             selected_time_found = True
@@ -1061,6 +1061,7 @@ def populate_query_from_mql_context(
         other_aliases = [d[1] for d in entity_data if d[1] != base_node_alias]
         new_conditions = []
         for other in other_aliases:
+            assert other is not None  # mypy, this should never be None for joins
             condition = JoinCondition(
                 left=JoinConditionExpression(base_node_alias, "time"),
                 right=JoinConditionExpression(other, "time"),
