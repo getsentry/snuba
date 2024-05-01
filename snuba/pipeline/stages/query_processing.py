@@ -1,3 +1,4 @@
+from snuba import state
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
 from snuba.datasets.plans.entity_validation import run_entity_validators
@@ -47,7 +48,8 @@ class StorageProcessingStage(
     def _apply_default_subscriptable_mapping(
         self, query: ClickhouseQuery | CompositeQuery[Table]
     ) -> None:
-        query.transform_expressions(transform_subscriptables)
+        if state.get_config("apply_default_subscriptable_mapping", 1):
+            query.transform_expressions(transform_subscriptables)
 
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
