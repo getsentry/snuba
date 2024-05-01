@@ -33,6 +33,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.indexer.resolver import resolve_mappings
+from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.logical import StorageQuery
 from snuba.query.mql.mql_context import MQLContext
@@ -691,7 +692,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
-def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
+def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
     information provided.
@@ -788,7 +789,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
             mri = extract_mri(parsed)  # Only works for single type formulas
             entity_key = select_entity(mri, dataset)
 
-            query = LogicalQuery(
+            query = EntityQuery(
                 from_clause=QueryEntity(
                     key=entity_key, schema=get_entity(entity_key).get_data_model()
                 ),
@@ -821,7 +822,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
 
             entity_key = select_entity(metric_value, dataset)
 
-            query = LogicalQuery(
+            query = EntityQuery(
                 from_clause=QueryEntity(
                     key=entity_key, schema=get_entity(entity_key).get_data_model()
                 ),
@@ -863,7 +864,7 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
 
 
 def populate_start_end_time(
-    query: LogicalQuery, mql_context: MQLContext, entity_key: EntityKey
+    query: EntityQuery, mql_context: MQLContext, entity_key: EntityKey
 ) -> None:
     try:
         start = parse_datetime(mql_context.start)
@@ -1025,8 +1026,8 @@ def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
 
 
 def populate_query_from_mql_context(
-    query: LogicalQuery, mql_context_dict: dict[str, Any]
-) -> tuple[LogicalQuery, MQLContext]:
+    query: EntityQuery, mql_context_dict: dict[str, Any]
+) -> tuple[EntityQuery, MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
     entity_key = query.get_from_clause().key
 
