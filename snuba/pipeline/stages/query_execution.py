@@ -74,6 +74,8 @@ class ExecutionStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> QueryResult:
+        import pdb
+        pdb.set_trace()
         cluster = self.get_cluster(pipe_input.data, pipe_input.query_settings)
         if pipe_input.query_settings.get_dry_run():
             return _dry_run_query_runner(

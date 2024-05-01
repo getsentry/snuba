@@ -1191,6 +1191,16 @@ def test_format_expressions_from_snql(query_body: str, expected_query: Query) ->
     assert eq, reason
 
 
+def test_alias_bug():
+    query_body = """ MATCH {
+	MATCH (metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE project_id=1 AND end_timestamp>=toDateTime('2021-01-01') AND end_timestamp<toDateTime('2021-01-02') LIMIT 100
+} SELECT max(duration) AS max_duration"""
+    events = get_dataset("events")
+    query = parse_snql_query(str(query_body), events)
+    print(query)
+
+
+
 def test_shadowing() -> None:
     with pytest.raises(AliasShadowingException):
         parse_snql_query(

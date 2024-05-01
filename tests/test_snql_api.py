@@ -1434,6 +1434,24 @@ class TestSnQLApi(BaseApiTest):
         # platform is not nullable but can be cast to nullable
         assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
 
+    def test_bullshit_join(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data = json.dumps({
+                "dataset": "events",
+                "legacy": True,
+                "app_id": "legacy",
+                "tenant_ids": {
+                    "organization_id": self.org_id,
+                    "referrer": "join.tag.test",
+                },
+                "parent_api": "/api/0/issues|groups/{issue_id}/tags/",
+                # "query": """MATCH { MATCH (events: events) -[attributes]-> (group_attributes: group_attributes) SELECT events.group_id, count() AS `event_count`, max(events.timestamp) AS `last_seen` BY events.group_id WHERE events.project_id IN array(4553884953739266) AND group_attributes.project_id IN array(4553884953739266) AND events.timestamp >= toDateTime('2024-01-24T16:59:49.431129') AND events.timestamp < toDateTime('2024-04-23T16:59:49.431129') AND group_attributes.group_status = 0 } SELECT _snuba_events.group_id WHERE _snuba_last_seen >= toDateTime('2024-04-09T16:59:49.431129') ORDER BY _snuba_event_count DESC LIMIT 10000"""
+                "query": """MATCH { MATCH (events: events) -[attributes]-> (group_attributes: group_attributes) SELECT events.group_id, count() AS `event_count`, max(events.timestamp) AS `last_seen` BY events.group_id WHERE events.project_id IN array(4553884953739266) AND group_attributes.project_id IN array(4553884953739266) AND events.timestamp >= toDateTime('2024-01-24T16:59:49.431129') AND events.timestamp < toDateTime('2024-04-23T16:59:49.431129') AND group_attributes.group_status = 0 } SELECT group_id WHERE last_seen >= toDateTime('2024-04-09T16:59:49.431129') ORDER BY event_count DESC LIMIT 10000"""
+            })
+        )
+        assert response.status_code == 200
+
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
