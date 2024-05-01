@@ -1,3 +1,10 @@
+Attempted to get the simple case working (single entity) without subqueries.
+
+Ran into (in hindsight) an obvious error: formulas with different filters in the components don't work.
+
+------
+
+
 pytest tests/query/joins/test_metrics_subqueries.py
 
 More progress, groupby is not working. Need to add groupby to SubqueryDraft, and eventually figure out how to get that working

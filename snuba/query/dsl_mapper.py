@@ -59,7 +59,7 @@ tags_raw_match = SubscriptableReferenceMatch(
 
 def tags_raw_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, SubscriptableReference)
-    return f"snuba_tags_raw(int({exp.key.value}))"
+    return f"tags_raw['{exp.key.value}']"
 
 
 literals_tuple_match = FunctionCallMatch(
@@ -202,7 +202,6 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
             parameters += ","
 
         return f"f.{exp.function_name}({parameters}alias={repr(exp.alias)})"
-        # return f"FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}{parameters})"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         if res := self.ast_repr(exp):

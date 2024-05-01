@@ -19,21 +19,22 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
+    NestedColumn,
     and_cond,
     arrayElement,
     column,
     divide,
     equals,
     greaterOrEquals,
-    in_fn,
+    in_cond,
     less,
     literal,
     literals_tuple,
     multiply,
     or_cond,
     plus,
-    snuba_tags_raw,
 )
 from snuba.query.dsl_mapper import query_repr
 from snuba.query.expressions import (
@@ -50,6 +51,7 @@ from snuba.query.mql.parser import parse_mql_query
 
 # import pytest
 
+tags_raw = NestedColumn("tags_raw")
 
 # Commonly used expressions
 from_distributions = from_clause = QueryEntity(
@@ -119,11 +121,11 @@ def test_simple_formula() -> None:
                 column("timestamp", None, "_snuba_timestamp"),
                 literal(datetime(2023, 11, 23, 22, 30)),
             ),
-            in_fn(
+            in_cond(
                 column("project_id", None, "_snuba_project_id"),
                 literals_tuple(None, [literal(11)]),
             ),
-            in_fn(
+            in_cond(
                 column("org_id", None, "_snuba_org_id"),
                 literals_tuple(None, [literal(1)]),
             ),
@@ -132,7 +134,7 @@ def test_simple_formula() -> None:
                 literal("transactions"),
             ),
             equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(snuba_tags_raw(int(222222)), literal("200")),
+            equals(tags_raw["222222"], literal("200")),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
         ),
@@ -220,11 +222,11 @@ def test_simple_formula_with_leading_literals() -> None:
                 column("timestamp", None, "_snuba_timestamp"),
                 literal(datetime(2023, 11, 23, 22, 30)),
             ),
-            in_fn(
+            in_cond(
                 column("project_id", None, "_snuba_project_id"),
                 literals_tuple(None, [literal(11)]),
             ),
-            in_fn(
+            in_cond(
                 column("org_id", None, "_snuba_org_id"),
                 literals_tuple(None, [literal(1)]),
             ),
@@ -233,7 +235,7 @@ def test_simple_formula_with_leading_literals() -> None:
                 literal("transactions"),
             ),
             equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(snuba_tags_raw(int(222222)), literal("200")),
+            equals(tags_raw["222222"], literal("200")),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
         ),
@@ -291,8 +293,8 @@ def test_groupby() -> None:
                     "_snuba_aggregate_value",
                 ),
             ),
-            SelectedExpression("transaction", snuba_tags_raw(int(333333))),
-            SelectedExpression("transaction", snuba_tags_raw(int(333333))),
+            SelectedExpression("transaction", tags_raw["333333"]),
+            SelectedExpression("transaction", tags_raw["333333"]),
             SelectedExpression(
                 "time",
                 FunctionCall(
@@ -316,11 +318,11 @@ def test_groupby() -> None:
                 column("timestamp", None, "_snuba_timestamp"),
                 literal(datetime(2023, 11, 23, 22, 30)),
             ),
-            in_fn(
+            in_cond(
                 column("project_id", None, "_snuba_project_id"),
                 literals_tuple(None, [literal(11)]),
             ),
-            in_fn(
+            in_cond(
                 column("org_id", None, "_snuba_org_id"),
                 literals_tuple(None, [literal(1)]),
             ),
@@ -329,13 +331,13 @@ def test_groupby() -> None:
                 literal("transactions"),
             ),
             equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(snuba_tags_raw(int(222222)), literal("200")),
+            equals(tags_raw["222222"], literal("200")),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
         ),
         groupby=[
-            snuba_tags_raw(int(333333)),
-            snuba_tags_raw(int(333333)),
+            tags_raw["333333"],
+            tags_raw["333333"],
             FunctionCall(
                 "_snuba_time",
                 "toStartOfInterval",
@@ -396,8 +398,8 @@ def test_curried_aggregate() -> None:
                     "_snuba_aggregate_value",
                 ),
             ),
-            SelectedExpression("transaction", snuba_tags_raw(int(333333))),
-            SelectedExpression("transaction", snuba_tags_raw(int(333333))),
+            SelectedExpression("transaction", tags_raw["333333"]),
+            SelectedExpression("transaction", tags_raw["333333"]),
             SelectedExpression(
                 "time",
                 FunctionCall(
@@ -421,11 +423,11 @@ def test_curried_aggregate() -> None:
                 column("timestamp", None, "_snuba_timestamp"),
                 literal(datetime(2023, 11, 23, 22, 30)),
             ),
-            in_fn(
+            in_cond(
                 column("project_id", None, "_snuba_project_id"),
                 literals_tuple(None, [literal(11)]),
             ),
-            in_fn(
+            in_cond(
                 column("org_id", None, "_snuba_org_id"),
                 literals_tuple(None, [literal(1)]),
             ),
@@ -434,13 +436,13 @@ def test_curried_aggregate() -> None:
                 literal("transactions"),
             ),
             equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(snuba_tags_raw(int(222222)), literal("200")),
+            equals(tags_raw["222222"], literal("200")),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
         ),
         groupby=[
-            snuba_tags_raw(int(333333)),
-            snuba_tags_raw(int(333333)),
+            tags_raw["333333"],
+            tags_raw["333333"],
             FunctionCall(
                 "_snuba_time",
                 "toStartOfInterval",
@@ -528,11 +530,11 @@ def test_bracketing_rules() -> None:
                 column("timestamp", None, "_snuba_timestamp"),
                 literal(datetime(2023, 11, 23, 22, 30)),
             ),
-            in_fn(
+            in_cond(
                 column("project_id", None, "_snuba_project_id"),
                 literals_tuple(None, [literal(11)]),
             ),
-            in_fn(
+            in_cond(
                 column("org_id", None, "_snuba_org_id"),
                 literals_tuple(None, [literal(1)]),
             ),
@@ -599,80 +601,88 @@ def test_mismatch_groupby() -> None:
         parse_mql_query(str(query_body), mql_context, generic_metrics)
 
 
-@pytest.mark.xfail()
 def test_formula_filters() -> None:
     query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}"
-    expected_selected = SelectedExpression(
-        "aggregate_value",
-        divide(
-            timeseries(
-                "sumIf",
-                123456,
-                binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
-                ),
-            ),
-            timeseries(
-                "maxIf",
-                123456,
-                binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
-                ),
-            ),
-            "_snuba_aggregate_value",
-        ),
-    )
-    filter_in_select_condition = or_cond(
-        and_cond(
-            equals(
-                tag_column("status_code"),
-                Literal(None, "200"),
-            ),
-            equals(
-                Column("_snuba_metric_id", None, "metric_id"),
-                Literal(None, 123456),
-            ),
-        ),
-        and_cond(
-            equals(
-                tag_column("status_code"),
-                Literal(None, "200"),
-            ),
-            equals(
-                Column("_snuba_metric_id", None, "metric_id"),
-                Literal(None, 123456),
-            ),
-        ),
-    )
     expected = Query(
-        from_distributions,
+        from_clause=from_clause,
         selected_columns=[
-            expected_selected,
+            SelectedExpression(
+                "aggregate_value",
+                divide(
+                    f.sum(column("value", None, "_snuba_value"), alias=None),
+                    f.max(column("value", None, "_snuba_value"), alias=None),
+                    "_snuba_aggregate_value",
+                ),
+            ),
             SelectedExpression(
                 "time",
-                time_expression,
+                f.toStartOfInterval(
+                    column("timestamp", None, "_snuba_timestamp"),
+                    f.toIntervalSecond(literal(60), alias=None),
+                    literal("Universal"),
+                    alias="_snuba_time",
+                ),
             ),
         ],
-        groupby=[time_expression],
-        condition=binary_condition(
-            "and",
-            filter_in_select_condition,
-            formula_condition,
+        array_join=None,
+        condition=and_cond(
+            greaterOrEquals(
+                column("timestamp", None, "_snuba_timestamp"),
+                literal(datetime(2023, 11, 23, 18, 30)),
+            ),
+            less(
+                column("timestamp", None, "_snuba_timestamp"),
+                literal(datetime(2023, 11, 23, 22, 30)),
+            ),
+            in_cond(
+                column("project_id", None, "_snuba_project_id"),
+                literals_tuple(None, [literal(11)]),
+            ),
+            in_cond(
+                column("org_id", None, "_snuba_org_id"),
+                literals_tuple(None, [literal(1)]),
+            ),
+            equals(
+                column("use_case_id", None, "_snuba_use_case_id"),
+                literal("transactions"),
+            ),
+            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
+            equals(tags_raw["222222"], literal("200")),
+            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+            equals(tags_raw["222222"], literal("200")),
+            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
         ),
-        order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=time_expression,
+        groupby=[
+            f.toStartOfInterval(
+                column("timestamp", None, "_snuba_timestamp"),
+                f.toIntervalSecond(literal(60), alias=None),
+                literal("Universal"),
+                alias="_snuba_time",
             )
         ],
+        having=None,
+        order_by=[
+            OrderBy(
+                OrderByDirection.ASC,
+                f.toStartOfInterval(
+                    column("timestamp", None, "_snuba_timestamp"),
+                    f.toIntervalSecond(literal(60), alias=None),
+                    literal("Universal"),
+                    alias="_snuba_time",
+                ),
+            )
+        ],
+        limitby=None,
         limit=1000,
         offset=0,
+        totals=False,
+        granularity=None,
     )
-
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    print(query_repr(query))
     eq, reason = query.equals(expected)
     assert eq, reason
 

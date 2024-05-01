@@ -44,7 +44,7 @@ class _FunctionCall:
         return Literal(None, arg)
 
     def __call__(
-        self, *args: Expression | OptionalScalarType, **kwargs: str
+        self, *args: Expression | OptionalScalarType, **kwargs: str | None
     ) -> FunctionCall:
         alias = kwargs.pop("alias", None)
         if kwargs:

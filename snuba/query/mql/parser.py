@@ -690,6 +690,11 @@ def build_formula_query_from_clause(
     if join_nodes is None:
         raise InvalidQueryException("Could not parse formula")
 
+    # We use the group by for the ON conditions, so make sure they are all the same
+    groupbys = join_nodes[0].groupby
+    if not all(node.groupby == groupbys for node in join_nodes):
+        raise InvalidQueryException("All terms in a formula must have the same groupby")
+
     entity_keys = set([select_entity(node.mri or "", dataset) for node in join_nodes])
     if len(entity_keys) == 1:
         # The query only references a single entity, so it's not necessary to build a join clause
@@ -703,11 +708,6 @@ def build_formula_query_from_clause(
             ),
             join_nodes,
         )
-
-    # We use the group by for the ON conditions, so make sure they are all the same
-    groupbys = join_nodes[0].groupby
-    if not all(node.groupby == groupbys for node in join_nodes):
-        raise InvalidQueryException("All terms in a formula must have the same groupby")
 
     # Used to cache query entities to avoid building multiple times
     entities: dict[EntityKey, QueryEntity] = {}
