@@ -2,7 +2,10 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
-from snuba.query.conditions import get_first_level_and_conditions
+from snuba.query.conditions import (
+    get_first_level_and_conditions,
+    get_first_level_or_conditions,
+)
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -37,6 +40,18 @@ def and_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     return f"and_cond({parameters})"
 
 
+or_cond_match = FunctionCallMatch(
+    StringMatch("or"),
+)
+
+
+def or_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
+    assert isinstance(exp, FunctionCall)
+    conditions = get_first_level_or_conditions(exp)
+    parameters = ", ".join([arg.accept(visitor) for arg in conditions])
+    return f"or_cond({parameters})"
+
+
 tags_raw_match = SubscriptableReferenceMatch(
     column_name=StringMatch("tags_raw"),
 )
@@ -44,7 +59,7 @@ tags_raw_match = SubscriptableReferenceMatch(
 
 def tags_raw_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, SubscriptableReference)
-    return f"snuba_tags_raw(int({exp.key.value}))"
+    return f"tags_raw['{exp.key.value}']"
 
 
 literals_tuple_match = FunctionCallMatch(
@@ -110,14 +125,13 @@ def binary_function_match(fn_name: str) -> Pattern[Expression]:
 
 def binary_function_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, FunctionCall)
-    alias = f", {repr(exp.alias)}" if exp.alias else ""
     if exp.function_name in ["plus", "minus", "multiply", "divide"]:
+        alias = f", {repr(exp.alias)}" if exp.alias else ""
         return f"{exp.function_name}({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)}{alias})"
     elif exp.function_name in ["greaterOrEquals", "less", "equals"]:
-        alias = ""
-        return f"{exp.function_name}({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)}{alias})"
+        return f"{exp.function_name}({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)})"
     elif exp.function_name == "in":
-        return f"in_fn({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)}{alias})"
+        return f"in_cond({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)})"
 
     return exp.accept(visitor)
 
@@ -126,6 +140,7 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
     def __init__(self) -> None:
         self._mappers: dict[Pattern[Expression], MapFn] = {
             and_cond_match: and_cond_repr,
+            or_cond_match: or_cond_repr,
             tags_raw_match: tags_raw_repr,
             literals_tuple_match: literals_tuple_repr,
             literals_array_match: literals_array_repr,
@@ -183,11 +198,10 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
             return res
         parameters = ""
         if exp.parameters:
-            raw_parameters = ", ".join([arg.accept(self) for arg in exp.parameters])
-            if len(exp.parameters) == 1:
-                raw_parameters += ","
-            parameters = f", ({raw_parameters})"
-        return f"FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}{parameters})"
+            parameters = ", ".join([arg.accept(self) for arg in exp.parameters])
+            parameters += ","
+
+        return f"f.{exp.function_name}({parameters}alias={repr(exp.alias)})"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         if res := self.ast_repr(exp):

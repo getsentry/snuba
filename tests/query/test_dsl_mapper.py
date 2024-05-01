@@ -50,7 +50,7 @@ tests = [
                 ),
             ),
         ),
-        """and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])))""",
+        """and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_cond(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])))""",
     ),
     pytest.param(
         FunctionCall(
@@ -192,7 +192,7 @@ tests = [
                 ),
             ),
         ),
-        """and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])), in_fn(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 1, 36))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 5, 4, 15))), equals(column('metric_id', None, '_snuba_metric_id'), literal(567890)))""",
+        """and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_cond(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])), in_cond(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 1, 36))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 5, 4, 15))), equals(column('metric_id', None, '_snuba_metric_id'), literal(567890)))""",
     ),
     pytest.param(
         combine_and_conditions(
@@ -338,7 +338,7 @@ tests = [
                 ),
             ]
         ),
-        """and_cond(greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(11)])), in_fn(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), equals(column('granularity', None, '_snuba_granularity'), literal(60)), equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_fn(snuba_tags_raw(int(888)), literals_tuple(None, [literal('dist1'), literal('dist2')])))""",
+        """and_cond(greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), in_cond(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(11)])), in_cond(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), equals(column('granularity', None, '_snuba_granularity'), literal(60)), equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], literals_tuple(None, [literal('dist1'), literal('dist2')])))""",
     ),
 ]
 
@@ -571,12 +571,12 @@ query_tests = [
         ),
         """Query(
         from_clause=from_clause,
-        selected_columns=[SelectedExpression('aggregate_value', FunctionCall('_snuba_aggregate_value', 'sum', (column('value', None, '_snuba_value'),)))],
+        selected_columns=[SelectedExpression('aggregate_value', f.sum(column('value', None, '_snuba_value'),alias='_snuba_aggregate_value'))],
         array_join=None,
-        condition=and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(60)), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])), in_fn(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_fn(snuba_tags_raw(int(888)), literals_tuple(None, [literal('dist1'), literal('dist2')]))),
+        condition=and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(60)), in_cond(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])), in_cond(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], literals_tuple(None, [literal('dist1'), literal('dist2')]))),
         groupby=None,
         having=None,
-        order_by=[OrderBy(OrderByDirection.ASC, FunctionCall('_snuba_aggregate_value', 'sum', (column('value', None, '_snuba_value'),)))],
+        order_by=[OrderBy(OrderByDirection.ASC, f.sum(column('value', None, '_snuba_value'),alias='_snuba_aggregate_value'))],
         limitby=None,
         limit=1000,
         offset=0,
