@@ -111,6 +111,16 @@ test_cases = [
         } SELECT max(duration) AS max_duration"""
         % added_condition,
         CompositeQuery(
+            selected_columns=[
+                SelectedExpression(
+                    "max_duration",
+                    FunctionCall(
+                        "_snuba_max_duration",
+                        "max",
+                        (Column("_snuba_duration_ms", None, "_snuba_duration"),),
+                    ),
+                )
+            ],
             from_clause=StorageQuery(
                 QueryStorage(key=StorageKey("metrics_summaries")),
                 selected_columns=[
@@ -126,19 +136,30 @@ test_cases = [
                 limit=100,
                 offset=0,
             ),
-            selected_columns=[
-                SelectedExpression(
-                    "max_duration",
-                    FunctionCall(
-                        "_snuba_max_duration",
-                        "max",
-                        (Column("_snuba_duration", None, "_snuba_duration"),),
-                    ),
-                )
-            ],
         ),
         id="composite_query",
     ),
+    pytest.param(
+        """ MATCH STORAGE(metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
+        % added_condition,
+        StorageQuery(
+            QueryStorage(key=StorageKey("metrics_summaries")),
+            selected_columns=[
+                SelectedExpression(
+                    "trace_id", Column("_snuba_trace_id", None, "trace_id")
+                ),
+                SelectedExpression(
+                    "duration", Column("_snuba_duration_ms", None, "duration_ms")
+                ),
+            ],
+            granularity=None,
+            condition=required_condition,
+            limit=100,
+            offset=0,
+        ),
+        id="subquery",
+    ),
+
     # test groupby
     # test join doesn't work
 ]

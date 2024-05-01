@@ -235,6 +235,8 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     @staticmethod
     def __extract_alias_from_match(alias: Union[Node, List[Node]]) -> str:
+        import pdb
+        pdb.set_trace()
         extracted_alias: str
         if isinstance(alias, list):
             # Validate that we are parsing an expression that is
@@ -246,7 +248,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
                 raise ParsingException(f"Error parsing quoted alias: {alias}")
             extracted_alias = alias[1].text
         else:
-            extracted_alias = alias.text
+            extracted_alias = alias.match
         return extracted_alias
 
     def visit_query_exp(
@@ -1268,6 +1270,8 @@ def _mangle_query_aliases(
     alias_prefix = "_snuba_"
 
     def mangle_aliases(exp: Expression) -> Expression:
+        import pdb
+        pdb.set_trace()
         alias = exp.alias
         if alias is not None:
             return replace(exp, alias=f"{alias_prefix}{alias}")
@@ -1275,17 +1279,23 @@ def _mangle_query_aliases(
         return exp
 
     def mangle_column_value(exp: Expression) -> Expression:
+        import pdb
+        pdb.set_trace()
         if not isinstance(exp, Column):
             return exp
 
         return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
-
+    import pdb
+    pdb.set_trace()
     query.transform_expressions(mangle_aliases, skip_array_join=True)
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.
-    if isinstance(query.get_from_clause(), LogicalQuery):
+    if isinstance(query.get_from_clause(), (LogicalQuery, StorageQuery)):
         query.transform_expressions(mangle_column_value)
+    import pdb
+    pdb.set_trace()
+    print(query)
 
 
 def validate_identifiers_in_lambda(
@@ -1509,7 +1519,7 @@ def _post_process(
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
-        if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
+        if isinstance(from_clause, (LogicalQuery, CompositeQuery, StorageQuery)):
             _post_process(from_clause, funcs, settings)
             query.set_from_clause(from_clause)
 
