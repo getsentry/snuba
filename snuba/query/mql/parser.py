@@ -322,7 +322,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[InitialParseResult,],
+            Tuple[
+                InitialParseResult,
+            ],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -788,7 +790,6 @@ def convert_formula_to_query(
     query, nodes = build_formula_query_from_clause(parsed, dataset)
 
     def alias_wrap(alias: str | None) -> str | None:
-        print("ALIAS", f"'''{alias}'''")
         return None if isinstance(query, LogicalQuery) else alias
 
     # Build SelectedExpression from root tree

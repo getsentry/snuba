@@ -13,16 +13,16 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import (
-    arrayElement,
-    snuba_tags_raw,
     and_cond,
+    arrayElement,
     column,
-    literal,
-    in_fn,
-    greaterOrEquals,
-    literals_tuple,
-    less,
     equals,
+    greaterOrEquals,
+    in_fn,
+    less,
+    literal,
+    literals_tuple,
+    snuba_tags_raw,
 )
 from snuba.query.expressions import (
     Column,
@@ -359,7 +359,10 @@ mql_test_cases = [
             },
         },
         Query(
-            from_clause=from_clause,
+            from_clause=QueryEntity(
+                EntityKey.GENERIC_METRICS_SETS,
+                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+            ),
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
@@ -562,7 +565,10 @@ mql_test_cases = [
             },
         },
         Query(
-            from_clause=from_clause,
+            from_clause=QueryEntity(
+                EntityKey.METRICS_DISTRIBUTIONS,
+                get_entity(EntityKey.METRICS_DISTRIBUTIONS).get_data_model(),
+            ),
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
@@ -642,7 +648,7 @@ mql_test_cases = [
         id="Select metric with filter for metrics dataset",
     ),
     pytest.param(
-        """max(d:transactions/duration@millisecond){bar:" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)""",
+        """max(d:transactions/duration@millisecond){bar:" !\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)""",
         {
             "start": "2024-01-07T13:35:00+00:00",
             "end": "2024-01-08T13:40:00+00:00",
@@ -880,7 +886,10 @@ mql_test_cases = [
             },
         },
         Query(
-            from_clause=from_clause,
+            from_clause=QueryEntity(
+                EntityKey.GENERIC_METRICS_SETS,
+                get_entity(EntityKey.GENERIC_METRICS_SETS).get_data_model(),
+            ),
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
@@ -901,26 +910,29 @@ mql_test_cases = [
             array_join=None,
             condition=and_cond(
                 greaterOrEquals(
-                    column("timestamp", "_snuba_timestamp"),
+                    column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 1, 36)),
                 ),
                 less(
-                    column("timestamp", "_snuba_timestamp"),
+                    column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 5, 4, 15)),
                 ),
                 in_fn(
-                    column("project_id", "_snuba_project_id"),
+                    column("project_id", None, "_snuba_project_id"),
                     literals_tuple(None, [literal(1)]),
                 ),
                 in_fn(
-                    column("org_id", "_snuba_org_id"),
+                    column("org_id", None, "_snuba_org_id"),
                     literals_tuple(None, [literal(1)]),
                 ),
                 equals(
-                    column("use_case_id", "_snuba_use_case_id"), literal("transactions")
+                    column("use_case_id", None, "_snuba_use_case_id"),
+                    literal("transactions"),
                 ),
-                equals(column("granularity", "_snuba_granularity"), literal(3600)),
-                equals(column("metric_id", "_snuba_metric_id"), literal(567890)),
+                equals(
+                    column("granularity", None, "_snuba_granularity"), literal(3600)
+                ),
+                equals(column("metric_id", None, "_snuba_metric_id"), literal(567890)),
             ),
             groupby=None,
             having=None,
