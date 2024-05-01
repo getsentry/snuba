@@ -7,17 +7,24 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
-from snuba.query.data_source.simple import Storage as QueryStorage
+from snuba.query.data_source.simple import Storage as QueryStorage, Entity as QueryEntity
 from snuba.query.dsl import NestedColumn, and_cond, equals
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import StorageQuery
+from snuba.query.logical import StorageQuery, Query as LogicalQuery
 from snuba.query.snql.parser import parse_snql_query
+from snuba.datasets.entities.entity_key import EntityKey
 
 tags = NestedColumn("tags")
 
 
+class DummyEntity(QueryEntity):
+
+    def __eq__(self, other):
+        return True
+
+
 def build_cond(tn: str) -> str:
-    time_column = "finish_ts" if tn == "t" else "timestamp"
+    time_column = "end_timestamp"
     tn = tn + "." if tn else ""
     return f"{tn}project_id=1 AND {tn}{time_column}>=toDateTime('2021-01-01') AND {tn}{time_column}<toDateTime('2021-01-02')"
 
@@ -32,12 +39,12 @@ required_condition = and_cond(
     and_cond(
         binary_condition(
             "greaterOrEquals",
-            Column("_snuba_timestamp", None, "timestamp"),
+            Column("_snuba_end_timestamp", None, "end_timestamp"),
             Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
         ),
         binary_condition(
             "less",
-            Column("_snuba_timestamp", None, "timestamp"),
+            Column("_snuba_end_timestamp", None, "end_timestamp"),
             Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
         ),
     ),
@@ -128,7 +135,7 @@ test_cases = [
                         "trace_id", Column("_snuba_trace_id", None, "trace_id")
                     ),
                     SelectedExpression(
-                        "duration", Column("_snuba_duration", None, "duration_ms")
+                        "duration", Column("_snuba_duration_ms", None, "duration_ms")
                     ),
                 ],
                 granularity=None,
@@ -159,7 +166,40 @@ test_cases = [
         ),
         id="subquery",
     ),
-
+    pytest.param(
+        """MATCH {
+            MATCH (metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100
+        } SELECT max(duration) AS max_duration"""
+        % added_condition,
+        CompositeQuery(
+            selected_columns=[
+                SelectedExpression(
+                    "max_duration",
+                    FunctionCall(
+                        "_snuba_max_duration",
+                        "max",
+                        (Column("_snuba_duration_ms", None, "_snuba_duration_ms"),),
+                    ),
+                )
+            ],
+            from_clause=LogicalQuery(
+                DummyEntity(EntityKey("metrics_summaries"), None, None),
+                selected_columns=[
+                    SelectedExpression(
+                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
+                    ),
+                    SelectedExpression(
+                        "duration", Column("_snuba_duration_ms", None, "duration_ms")
+                    ),
+                ],
+                granularity=None,
+                condition=required_condition,
+                limit=100,
+                offset=0,
+            ),
+        ),
+        id="composite_logical",
+    ),
     # test groupby
     # test join doesn't work
 ]
