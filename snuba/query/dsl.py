@@ -84,6 +84,12 @@ def divide(
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
+def in_fn(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "in", (lhs, rhs))
+
+
 # boolean functions
 def binary_condition(
     function_name: str, lhs: Expression, rhs: Expression
@@ -93,6 +99,14 @@ def binary_condition(
 
 def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
     return binary_condition("equals", lhs, rhs)
+
+
+def greaterOrEquals(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("greaterOrEquals", lhs, rhs)
+
+
+def less(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("less", lhs, rhs)
 
 
 def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:
