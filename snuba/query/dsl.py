@@ -53,9 +53,20 @@ class _FunctionCall:
         return FunctionCall(alias, self.name, tuple(transformed_args))
 
 
-class Functions:
+class _Functions:
     def __getattr__(self, name: str) -> _FunctionCall:
         return _FunctionCall(name)
+
+
+"""
+Usage:
+
+from snuba.query.dsl import Functions as f
+assert f.equals(1, 1, alias="eq") == FunctionCall(
+    "eq", "equals" (Literal(None, 1), Literal(None, 1))
+)
+"""
+Functions = _Functions()
 
 
 def column(

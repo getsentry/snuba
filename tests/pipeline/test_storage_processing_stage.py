@@ -18,13 +18,13 @@ from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_processing import StorageProcessingStage
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
-from snuba.query.dsl import Functions, NestedColumn, column, equals, literal
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import NestedColumn, column, equals, literal
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.utils.metrics.timer import Timer
 
 tags = NestedColumn("tags")
-f = Functions()
 
 
 class NoopCHQueryProcessor(ClickhouseQueryProcessor):
