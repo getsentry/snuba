@@ -38,14 +38,18 @@ class _FunctionCall:
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def __call__(self, *args: Expression | OptionalScalarType, **kwargs: str):
+    def _arg_to_literal_expr(self, arg: Expression | OptionalScalarType) -> Expression:
+        if isinstance(arg, Expression):
+            return arg
+        return Literal(None, arg)
+
+    def __call__(
+        self, *args: Expression | OptionalScalarType, **kwargs: str
+    ) -> FunctionCall:
         alias = kwargs.pop("alias", None)
         if kwargs:
             raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
-        transformed_args = [
-            Literal(None, arg) if isinstance(arg, OptionalScalarType) else arg
-            for arg in args
-        ]
+        transformed_args = [self._arg_to_literal_expr(arg) for arg in args]
         return FunctionCall(alias, self.name, tuple(transformed_args))
 
 

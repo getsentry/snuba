@@ -46,7 +46,7 @@ class StorageProcessingStage(
 ):
     def _apply_default_subscriptable_mapping(
         self, query: ClickhouseQuery | CompositeQuery[Table]
-    ):
+    ) -> None:
         query.transform_expressions(transform_subscriptables)
 
     def _process_data(

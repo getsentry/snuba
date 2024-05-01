@@ -106,7 +106,7 @@ def test_basic(mock_storage: ReadableTableStorage) -> None:
     assert actual == expected
 
 
-def test_default_subscriptable(mock_storage: ReadableTableStorage):
+def test_default_subscriptable(mock_storage: ReadableTableStorage) -> None:
     query = Query(
         from_clause=Table(
             "dontmatter",
