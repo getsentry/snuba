@@ -896,7 +896,7 @@ mod tests {
         "retention_days": 90,
         "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
         "type": "d",
-        "value": {"format": "base64", "data": "KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw"}
+        "value": {"format": "zstd", "data": "KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw"}
     }"#;
 
     #[test]
@@ -1033,7 +1033,7 @@ mod tests {
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
-                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 675)])
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 681)])
                 })
             }
         );
