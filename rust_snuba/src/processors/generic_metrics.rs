@@ -15,6 +15,7 @@ use crate::{
 
 use rust_arroyo::backends::kafka::types::{Headers, KafkaPayload};
 use rust_arroyo::{counter, timer};
+use zstd::stream::decode_all;
 
 use super::utils::enforce_retention;
 
@@ -120,6 +121,7 @@ impl Decodable<8> for f64 {
 enum EncodedSeries<T> {
     Array { data: Vec<T> },
     Base64 { data: String },
+    Zstd { data: String },
 }
 
 impl<T> EncodedSeries<T> {
@@ -133,26 +135,51 @@ impl<T> EncodedSeries<T> {
                 counter!("generic_metrics.encoded_receive_count", 1, "format" => "base64");
 
                 let decoded_bytes = BASE64_NOPAD.decode(data.as_bytes())?;
-                if decoded_bytes.len() % T::SIZE == 0 {
-                    let res = Ok(decoded_bytes
-                        .chunks_exact(T::SIZE)
-                        .map(TryInto::try_into)
-                        .map(Result::unwrap) // OK to unwrap, `chunks_exact` always yields slices of the right length
-                        .map(T::decode_bytes)
-                        .collect());
+                let res = decode_encoded_into_numeric_array(decoded_bytes)?;
 
-                    counter!("generic_metrics.encoded_success_count", 1, "format" => "base64");
+                counter!("generic_metrics.encoded_success_count", 1, "format" => "base64");
 
-                    res
-                } else {
-                    Err(anyhow!(
-                        "Decoded Base64 cannot be chunked into {}, got {}",
-                        T::SIZE,
-                        decoded_bytes.len()
-                    ))
-                }
+                Ok(res)
+            }
+            EncodedSeries::Zstd { data } => {
+                counter!("generic_metrics.encoded_receive_count", 1, "format" => "zstd");
+
+                let decoded_bytes = BASE64_NOPAD.decode(data.as_bytes())?;
+
+                // Convert vec into a slice
+                let bytes_slice = decoded_bytes.as_slice();
+                let zstd_decompressed = decode_all(bytes_slice)?;
+                let res = decode_encoded_into_numeric_array(zstd_decompressed)?;
+
+                counter!("generic_metrics.encoded_success_count", 1, "format" => "zstd");
+
+                Ok(res)
             }
         }
+    }
+}
+
+fn decode_encoded_into_numeric_array<T, const SIZE: usize>(
+    data: Vec<u8>,
+) -> Result<Vec<T>, anyhow::Error>
+where
+    T: Decodable<SIZE>,
+{
+    if data.len() % T::SIZE == 0 {
+        let res = Ok(data
+            .chunks_exact(T::SIZE)
+            .map(TryInto::try_into)
+            .map(Result::unwrap) // OK to unwrap, `chunks_exact` always yields slices of the right length
+            .map(T::decode_bytes)
+            .collect());
+
+        res
+    } else {
+        Err(anyhow!(
+            "Decoded Base64 cannot be chunked into {}, got {}",
+            T::SIZE,
+            data.len()
+        ))
     }
 }
 
@@ -842,6 +869,36 @@ mod tests {
         "value": {"format": "base64", "data": "AQAAAAcAAAA"}
     }"#;
 
+    const DUMMY_ZSTD_ENCODED_SET_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"s:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_set_k_VUW93LMS"}},
+        "type": "s",
+        "value": {"format": "zstd", "data": "KLUv/QBYQQAAAQAAAAcAAAA"}
+    }"#;
+
+    const DUMMY_ZSTD_ENCODED_DISTRIBUTION_MESSAGE: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": {"format": "base64", "data": "KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw"}
+    }"#;
+
     #[test]
     fn test_base64_decode_f64() {
         assert!(
@@ -852,6 +909,19 @@ mod tests {
             .ok()
             .unwrap()
                 == vec![3f64, 1f64, 2f64]
+        )
+    }
+
+    #[test]
+    fn test_zstd_decode_f64() {
+        assert!(
+            EncodedSeries::<f64>::Zstd {
+                data: "KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw".to_string(),
+            }
+            .try_into_vec()
+            .ok()
+            .unwrap()
+                == vec![1f64, 2f64, 3f64]
         )
     }
 
@@ -913,10 +983,80 @@ mod tests {
     }
 
     #[test]
+    fn test_distribution_processor_with_v3_distribution_message() {
+        let result: Result<InsertBatch, Error> = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_ZSTD_ENCODED_DISTRIBUTION_MESSAGE,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+            },
+            distribution_values: vec![1f64, 2f64, 3f64],
+            enable_histogram: None,
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 675)])
+                })
+            }
+        );
+    }
+
+    #[test]
     fn test_base64_decode_32() {
         assert!(
             EncodedSeries::<u32>::Base64 {
                 data: "AQAAAAcAAAA".to_string(),
+            }
+            .try_into_vec()
+            .ok()
+            .unwrap()
+                == vec![1u32, 7u32]
+        )
+    }
+
+    #[test]
+    fn test_zstd_decode_32() {
+        assert!(
+            EncodedSeries::<u32>::Zstd {
+                data: "KLUv/QBYQQAAAQAAAAcAAAA".to_string(),
             }
             .try_into_vec()
             .ok()
@@ -985,6 +1125,62 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 653)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_set_processor_with_v3_set_message() {
+        let result = test_processor_with_payload(
+            &(process_set_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_ZSTD_ENCODED_SET_MESSAGE,
+        );
+        let expected_row = SetsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "set".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+            },
+            set_values: vec![1u32, 7u32],
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 663)])
                 })
             }
         );

@@ -51,6 +51,7 @@ serde_path_to_error = "0.1.15"
 hyper = "1.2.0"
 tokio-stream = "0.1.15"
 data-encoding = "2.5.0"
+zstd = "0.12.3"
 
 
 [patch.crates-io]
