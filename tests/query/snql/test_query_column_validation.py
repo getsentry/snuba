@@ -462,3 +462,12 @@ def test_entity_column_validation(
     query, _ = parse_snql_query(query_body, events)
     eq, reason = query.equals(expected_query)
     assert eq, reason
+
+
+@pytest.mark.redis_db
+def test_split_by_char_query() -> None:
+    query_body = "MATCH (transactions) SELECT project_id AS project_id WHERE project_id IN splitByChar(',', '123,456,789') AND finish_ts >= toDateTime('2021-01-01') AND finish_ts < toDateTime('2021-01-01')"
+
+    events = get_dataset("transactions")
+
+    parse_snql_query(query_body, events)

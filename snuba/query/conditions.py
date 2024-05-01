@@ -383,5 +383,18 @@ def build_match(
                     ),
                 ),
             ),
+            FunctionCallPattern(
+                Or([String(op) for op in array_ops]),
+                (
+                    column_match,
+                    Param(
+                        "rhs",
+                        FunctionCallPattern(
+                            String("splitByChar"),
+                            all_parameters=AnyExpression(),
+                        ),
+                    ),
+                ),
+            ),
         ]
     )
