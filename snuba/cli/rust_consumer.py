@@ -153,13 +153,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=int,
     help="Unix timestamp after which to stop processing messages",
 )
-@click.option(
-    "--debug-mode",
-    type=bool,
-    is_flag=True,
-    help="Prints out ClickHouse authorization information for debugging",
-    default=False,
-)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -183,7 +176,6 @@ def rust_consumer(
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
-    debug_mode: bool,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
@@ -227,7 +219,6 @@ def rust_consumer(
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
-        debug_mode,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,

@@ -37,7 +37,6 @@ pub fn consumer(
     use_rust_processor: bool,
     enforce_schema: bool,
     max_poll_interval_ms: usize,
-    debug_mode: bool,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
@@ -53,7 +52,6 @@ pub fn consumer(
             use_rust_processor,
             enforce_schema,
             max_poll_interval_ms,
-            debug_mode,
             python_max_queue_depth,
             health_check_file,
             stop_at_timestamp,
@@ -72,7 +70,6 @@ pub fn consumer_impl(
     use_rust_processor: bool,
     enforce_schema: bool,
     max_poll_interval_ms: usize,
-    debug_mode: bool,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
@@ -94,14 +91,6 @@ pub fn consumer_impl(
             storage.clickhouse_cluster.http_port,
             storage.clickhouse_cluster.database,
         );
-        if debug_mode {
-            tracing::info!(
-                "ClickHouse username: {}, ClickHouse password: {}",
-                storage.clickhouse_cluster.user,
-                storage.clickhouse_cluster.password
-            );
-        }
-        //tracing::info!(storage.message_processor, "Message Processor")
     }
 
     // TODO: Support multiple storages
