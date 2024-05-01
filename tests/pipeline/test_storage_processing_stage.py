@@ -16,11 +16,15 @@ from snuba.datasets.storages.factory import get_config_built_storages
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_processing import StorageProcessingStage
+from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Table
-from snuba.query.dsl import equals, literal
+from snuba.query.dsl import Functions, NestedColumn, column, equals, literal
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.utils.metrics.timer import Timer
+
+tags = NestedColumn("tags")
+f = Functions()
 
 
 class NoopCHQueryProcessor(ClickhouseQueryProcessor):
@@ -100,3 +104,50 @@ def test_basic(mock_storage: ReadableTableStorage) -> None:
         )
     )
     assert actual == expected
+
+
+def test_default_subscriptable(mock_storage: ReadableTableStorage):
+    query = Query(
+        from_clause=Table(
+            "dontmatter",
+            ColumnSet([]),
+            storage_key=mock_storage.get_storage_key(),
+        ),
+        selected_columns=[SelectedExpression('tags["something"]', tags["something"])],
+        condition=None,
+    )
+    result = StorageProcessingStage().execute(
+        QueryPipelineResult(
+            data=query,
+            timer=Timer("test"),
+            query_settings=HTTPQuerySettings(),
+            error=None,
+        )
+    )
+    assert not result.error
+    expected = Query(
+        from_clause=Table(
+            table_name=mock_storage.get_schema().get_table_name(),  # type: ignore
+            schema=mock_storage.get_schema().get_columns(),
+            storage_key=mock_storage.get_storage_key(),
+            allocation_policies=mock_storage.get_allocation_policies(),
+            final=query.get_from_clause().final,
+            sampling_rate=query.get_from_clause().sampling_rate,
+            mandatory_conditions=mock_storage.get_schema()
+            .get_data_source()
+            .get_mandatory_conditions(),
+        ),
+        selected_columns=[
+            SelectedExpression(
+                'tags["something"]',
+                f.arrayElement(
+                    column("tags.value"),
+                    f.indexOf(column("tags.key"), "something"),
+                    alias="_snuba_tags[something]",
+                ),
+            )
+        ],
+        condition=equals(literal(1), literal(1)),
+    )
+    assert repr(result.data) == repr(expected)
+    assert result.data == expected

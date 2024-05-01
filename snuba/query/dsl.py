@@ -13,6 +13,47 @@ from snuba.query.expressions import (
 # verbose to build.
 
 
+class NestedColumn:
+    """Usage:
+    tags = NestedColumn("tags")
+    assert tags["some_key"] == SubscriptableReference(
+        "_snuba_tags[some_key]",
+        Column("_snuba_tags"), None, "tags"),
+        Literal(None, "some_key")
+    )
+    """
+
+    def __init__(self, column_name: str) -> None:
+        self.column_name = column_name
+
+    def __getitem__(self, key: str) -> SubscriptableReference:
+        return SubscriptableReference(
+            f"_snuba_{self.column_name}[{key}]",
+            Column(f"_snuba_{self.column_name}", None, self.column_name),
+            Literal(None, key),
+        )
+
+
+class _FunctionCall:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __call__(self, *args: Expression | OptionalScalarType, **kwargs: str):
+        alias = kwargs.pop("alias", None)
+        if kwargs:
+            raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
+        transformed_args = [
+            Literal(None, arg) if isinstance(arg, OptionalScalarType) else arg
+            for arg in args
+        ]
+        return FunctionCall(alias, self.name, tuple(transformed_args))
+
+
+class Functions:
+    def __getattr__(self, name: str) -> _FunctionCall:
+        return _FunctionCall(name)
+
+
 def column(
     column_name: str, table_name: str | None = None, alias: str | None = None
 ) -> Column:
@@ -21,18 +62,6 @@ def column(
 
 def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
     return Literal(alias, value)
-
-
-def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
-    return SubscriptableReference(
-        f"_snuba_tags_raw[{indexer_mapping}]",
-        Column(
-            "_snuba_tags_raw",
-            None,
-            "tags_raw",
-        ),
-        Literal(None, str(indexer_mapping)),
-    )
 
 
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
