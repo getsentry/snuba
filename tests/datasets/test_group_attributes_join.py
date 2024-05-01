@@ -117,7 +117,7 @@ class TestEventsGroupAttributes(BaseApiTest):
             "ntime": self.next_time,
         }
 
-        query, _ = parse_snql_query(str(query_body), get_dataset("events"))
+        query = parse_snql_query(str(query_body), get_dataset("events"))
         attribution_info = AttributionInfo(
             app_id=AppID(key=""),
             tenant_ids={},
@@ -133,7 +133,6 @@ class TestEventsGroupAttributes(BaseApiTest):
             query=query,
             query_settings=settings,
             attribution_info=attribution_info,
-            snql_anonymized="",
         )
 
         pipeline_result = EntityProcessingStage().execute(
@@ -351,7 +350,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
                 {"stats": {}, "sql": "", "experiments": {}},
             )
 
-        query, _ = parse_snql_query(str(query_body), get_dataset("search_issues"))
+        query = parse_snql_query(str(query_body), get_dataset("search_issues"))
         attribution_info = AttributionInfo(
             app_id=AppID(key=""),
             tenant_ids={},
@@ -367,7 +366,6 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             query=query,
             query_settings=settings,
             attribution_info=attribution_info,
-            snql_anonymized="",
         )
 
         pipeline_result = EntityProcessingStage().execute(
