@@ -59,9 +59,7 @@ def get_fake_metadata() -> SnubaQueryMetadata:
             "",
             {},
             LogicalQuery(
-                from_clause=Entity(
-                    key=EntityKey.TRANSACTIONS, schema=EntityColumnSet([])
-                )
+                from_clause=Entity(key=EntityKey.TRANSACTIONS, schema=ColumnSet([]))
             ),
             HTTPQuerySettings(),
             AttributionInfo(
