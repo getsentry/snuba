@@ -6,6 +6,11 @@ import sentry_sdk
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
+from snuba.clickhouse.translators.snuba.mapping import (
+    SnubaClickhouseMappingTranslator,
+    TranslationMappers,
+)
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import RelationalSource
 from snuba.datasets.schemas.tables import TableSource
@@ -22,6 +27,7 @@ from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.data_source.simple import Table
+from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.processors.physical.conditions_enforcer import (
     MandatoryConditionEnforcer,
@@ -91,6 +97,26 @@ def build_best_plan(
         db_query_processors=db_query_processors,
         storage_set_key=storage.get_storage_set_key(),
     )
+
+
+def transform_subscriptables(expression: Expression) -> Expression:
+    # IF we are in the storage processing stage and we have a subscriptable reference, we just
+    # assume that it maps to an associative array column with the same name and `value` as the
+    # name of the value column
+    if isinstance(expression, SubscriptableReference):
+        res = SubscriptableMapper(
+            expression.column.table_name,
+            expression.column.column_name,
+            expression.column.table_name,
+            expression.column.column_name,
+            "value",
+        ).attempt_map(
+            expression, SnubaClickhouseMappingTranslator(TranslationMappers())
+        )
+        if res is None:
+            raise ValueError(f"Could not map subscriptable reference: {expression}")
+        return res
+    return expression
 
 
 @with_span()
