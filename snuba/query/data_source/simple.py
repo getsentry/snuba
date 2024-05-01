@@ -4,7 +4,7 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
-from snuba.clickhouse.columns import ColumnSet as PhysicalColumnSet
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
@@ -34,16 +34,30 @@ class SimpleDataSource(DataSource, ABC):
 
 
 @dataclass(frozen=True)
-class Entity(SimpleDataSource):
+class LogicalDataSource(SimpleDataSource):
+    key: EntityKey | StorageKey
+    schema: ColumnSet
+    sample: Optional[float] = None
+
+    def get_columns(self) -> ColumnSet:
+        return self.schema
+
+    @property
+    def human_readable_id(self) -> str:
+        return str(self.key)
+
+
+@dataclass(frozen=True)
+class Entity(LogicalDataSource):
     """
     Represents an Entity in the logical query.
     """
 
     key: EntityKey
-    schema: EntityColumnSet
+    schema: ColumnSet
     sample: Optional[float] = None
 
-    def get_columns(self) -> EntityColumnSet:
+    def get_columns(self) -> ColumnSet:
         return self.schema
 
     @property
@@ -52,23 +66,23 @@ class Entity(SimpleDataSource):
 
 
 @dataclass(frozen=True)
-class Storage(SimpleDataSource):
+class Storage(LogicalDataSource):
     """An datasource that is just a pointer to a storage. Acts as an adapter class to be
     able to query storages directly from SnQL"""
 
     key: StorageKey
+    schema: ColumnSet = ColumnSet([])
     sample: Optional[float] = None
 
     @property
     def human_readable_id(self) -> str:
         return f"STORAGE({self.key.value})"
 
-    def get_columns(self) -> PhysicalColumnSet:
+    def get_columns(self) -> ColumnSet:
         """There should be no operations done on a Storage except to get the storage key
         Therefore the columns are empty
         """
         raise NotImplementedError()
-        return PhysicalColumnSet([])
 
 
 @dataclass(frozen=True)
@@ -78,7 +92,7 @@ class Table(SimpleDataSource):
     """
 
     table_name: str
-    schema: PhysicalColumnSet
+    schema: ColumnSet
     storage_key: StorageKey
     # By default a table has a regular passthrough policy.
     # this is overwridden by the query pipeline if there
@@ -93,7 +107,7 @@ class Table(SimpleDataSource):
     # the processors that consume these fields to access the storage.
     mandatory_conditions: Sequence[FunctionCall] = field(default_factory=list)
 
-    def get_columns(self) -> PhysicalColumnSet:
+    def get_columns(self) -> ColumnSet:
         return self.schema
 
     @property
