@@ -2066,7 +2066,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events_entity = get_entity(EntityKey.EVENTS)
 
     with mock.patch.object(events_entity, "get_join_relationship", events_mock):
-        query, _ = parse_snql_query(query_body, events)
+        query = parse_snql_query(query_body, events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

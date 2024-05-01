@@ -3319,7 +3319,7 @@ def test_format_expressions_from_mql(
     query_body: str, mql_context: Dict[str, Any], expected_query: Query, dataset: str
 ) -> None:
     generic_metrics = get_dataset(dataset)
-    query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected_query)
     assert eq, reason
 
@@ -3491,7 +3491,7 @@ def test_invalid_format_expressions_from_mql(
 ) -> None:
     generic_metrics = get_dataset("generic_metrics")
     with pytest.raises(type(error), match=re.escape(str(error))):
-        query, _ = parse_mql_query(query_body, mql_context, generic_metrics)
+        parse_mql_query(query_body, mql_context, generic_metrics)
 
 
 def test_pushdown_error_query() -> None:

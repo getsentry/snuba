@@ -1,33 +1,29 @@
 from typing import Callable, Sequence
 
-
-from snuba.query.matchers import (
-    AnyExpression as AnyExpressionMatch,
-    FunctionCall as FunctionCallMatch,
-    Pattern,
-    Literal as LiteralMatch,
-    SubscriptableReference as SubscriptableReferenceMatch,
-    String as StringMatch,
-)
+from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query.conditions import (
     get_first_level_and_conditions,
     get_first_level_or_conditions,
 )
-from snuba.query import SelectedExpression, OrderBy, LimitBy
-from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.expressions import (
-    Expression,
-    FunctionCall,
-    ExpressionVisitor,
+    Argument,
     Column,
+    CurriedFunctionCall,
+    Expression,
+    ExpressionVisitor,
+    FunctionCall,
+    Lambda,
     Literal,
     SubscriptableReference,
-    CurriedFunctionCall,
-    Argument,
-    Lambda,
 )
-
+from snuba.query.logical import Query as LogicalQuery
+from snuba.query.matchers import AnyExpression as AnyExpressionMatch
+from snuba.query.matchers import FunctionCall as FunctionCallMatch
+from snuba.query.matchers import Literal as LiteralMatch
+from snuba.query.matchers import Pattern
+from snuba.query.matchers import String as StringMatch
+from snuba.query.matchers import SubscriptableReference as SubscriptableReferenceMatch
 
 MapFn = Callable[[Expression, ExpressionVisitor[str]], str]
 
@@ -202,11 +198,11 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
             return res
         parameters = ""
         if exp.parameters:
-            raw_parameters = ", ".join([arg.accept(self) for arg in exp.parameters])
-            if len(exp.parameters) == 1:
-                raw_parameters += ","
-            parameters = f", ({raw_parameters})"
-        return f"FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}{parameters})"
+            parameters = ", ".join([arg.accept(self) for arg in exp.parameters])
+            parameters += ","
+
+        return f"f.{exp.function_name}({parameters}alias={repr(exp.alias)})"
+        # return f"FunctionCall({repr(exp.alias)}, {repr(exp.function_name)}{parameters})"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         if res := self.ast_repr(exp):

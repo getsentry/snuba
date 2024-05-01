@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.11.6
+ARG PYTHON_VERSION=3.11.8
 
 FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
 WORKDIR /usr/src/snuba
@@ -100,7 +100,7 @@ RUN set -ex; \
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
-ENV NODE_VERSION=19
+ENV NODE_VERSION=20
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \

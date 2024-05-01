@@ -30,7 +30,7 @@ def test_get_time_range() -> None:
 
     events = get_dataset("events")
     entity = get_entity(EntityKey.EVENTS)
-    query, _ = parse_snql_query(body, events)
+    query = parse_snql_query(body, events)
     assert isinstance(query, Query)
     processors = entity.get_query_processors()
     for processor in processors:

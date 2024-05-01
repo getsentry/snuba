@@ -12,6 +12,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.processor import InsertEvent
 from snuba.query import SelectedExpression
+from snuba.query.conditions import in_condition
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -75,6 +76,7 @@ def test_transform_column_names() -> None:
                 ),
             ),
         ],
+        condition=in_condition(Column(None, None, "project_id"), [Literal(None, 1)]),
     )
     query_settings = HTTPQuerySettings(referrer="asd")
 
@@ -87,7 +89,6 @@ def test_transform_column_names() -> None:
             id="asd",
             original_body={},
             query=query,
-            snql_anonymized="",
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),
