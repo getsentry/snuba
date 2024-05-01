@@ -25,10 +25,9 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
-from snuba.clickhouse.columns import Array
+from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
@@ -1194,7 +1193,7 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 def _unpack_array_conditions(
     query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    schema: EntityColumnSet,
+    schema: ColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
     array_columns: Set[str] = set()
@@ -1279,6 +1278,7 @@ def _mangle_query_aliases(
             return exp
 
         return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
+
     query.transform_expressions(mangle_aliases, skip_array_join=True)
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
