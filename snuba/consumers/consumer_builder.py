@@ -77,6 +77,7 @@ class ConsumerBuilder:
         enforce_schema: bool,
         profile_path: Optional[str] = None,
         max_poll_interval_ms: Optional[int] = None,
+        debug_mode: Optional[bool] = False,
         health_check_file: Optional[str] = None,
         group_instance_id: Optional[str] = None,
         skip_write: bool = False,
@@ -152,6 +153,7 @@ class ConsumerBuilder:
         self.output_block_size = processing_params.output_block_size
         self.__profile_path = profile_path
         self.max_poll_interval_ms = max_poll_interval_ms
+        self.debug_mode = debug_mode
         self.health_check_file = health_check_file
         self.group_instance_id = group_instance_id
 

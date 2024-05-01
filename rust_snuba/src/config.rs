@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
+use tracing::field::{Field, Visit};
+
 #[derive(Clone, Default)]
 pub struct ProcessorConfig {
     pub env_config: EnvConfig,
