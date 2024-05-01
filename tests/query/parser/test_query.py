@@ -1191,26 +1191,6 @@ def test_format_expressions_from_snql(query_body: str, expected_query: Query) ->
     assert eq, reason
 
 
-def test_alias_bug() -> None:
-    def build_cond(tn: str) -> str:
-        time_column = "end_timestamp"
-        tn = tn + "." if tn else ""
-        return f"{tn}project_id=1 AND {tn}{time_column}>=toDateTime('2021-01-01') AND {tn}{time_column}<toDateTime('2021-01-02')"
-
-    added_condition = build_cond("")
-
-    events = get_dataset("events")
-    query_body = """ MATCH (metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100""" % added_condition
-    print(query_body)
-
-
-    query = parse_snql_query(str(query_body), events)
-    import pdb
-    pdb.set_trace()
-    print(query)
-
-
-
 def test_shadowing() -> None:
     with pytest.raises(AliasShadowingException):
         parse_snql_query(
