@@ -83,6 +83,7 @@ TOOL_RESOURCES = {
     "production-queries": ToolResource("production-queries"),
     "system-queries": ToolResource("system-queries"),
     "clickhouse-migrations": ToolResource("clickhouse-migrations"),
+    "snuba-explain": ToolResource("snuba-explain"),
     "all": ToolResource("all"),
 }
 
@@ -159,6 +160,7 @@ ROLES = {
                     TOOL_RESOURCES["production-queries"],
                     TOOL_RESOURCES["system-queries"],
                     TOOL_RESOURCES["clickhouse-migrations"],
+                    TOOL_RESOURCES["snuba-explain"],
                 ]
             )
         },
