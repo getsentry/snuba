@@ -1230,7 +1230,7 @@ def _mangle_query_aliases(
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.
-    if isinstance(query.get_from_clause(), LogicalQuery):
+    if isinstance(query.get_from_clause(), (LogicalQuery, CompositeQuery)):
         query.transform_expressions(mangle_column_value)
 
 
