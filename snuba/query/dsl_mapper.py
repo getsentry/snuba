@@ -18,9 +18,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.matchers import AnyExpression as AnyExpressionMatch
 from snuba.query.matchers import FunctionCall as FunctionCallMatch
-from snuba.query.matchers import Literal as LiteralMatch
 from snuba.query.matchers import Pattern
 from snuba.query.matchers import String as StringMatch
 from snuba.query.matchers import SubscriptableReference as SubscriptableReferenceMatch
@@ -52,6 +50,17 @@ def or_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     return f"or_cond({parameters})"
 
 
+in_cond_match = FunctionCallMatch(
+    StringMatch("in"),
+)
+
+
+def in_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
+    assert isinstance(exp, FunctionCall)
+    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
+    return f"in_cond({parameters})"
+
+
 tags_raw_match = SubscriptableReferenceMatch(
     column_name=StringMatch("tags_raw"),
 )
@@ -62,99 +71,55 @@ def tags_raw_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     return f"tags_raw['{exp.key.value}']"
 
 
-literals_tuple_match = FunctionCallMatch(
-    StringMatch("tuple"),
-    all_parameters=LiteralMatch(),
+tags_match = SubscriptableReferenceMatch(
+    column_name=StringMatch("tags"),
 )
 
 
-def literals_tuple_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
-    assert isinstance(exp, FunctionCall)
-    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
-    return f"literals_tuple({repr(exp.alias)}, [{parameters}])"
-
-
-literals_array_match = FunctionCallMatch(
-    StringMatch("array"),
-    all_parameters=LiteralMatch(),
-)
-
-
-def literals_array_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
-    assert isinstance(exp, FunctionCall)
-    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
-    return f"literals_array({repr(exp.alias)}, [{parameters}])"
-
-
-array_element_match = FunctionCallMatch(
-    StringMatch("arrayElement"),
-)
-
-
-def array_element_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
-    assert isinstance(exp, FunctionCall)
-    return f"arrayElement({repr(exp.alias)}, {exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)})"
-
-
-tuple_element_match = FunctionCallMatch(
-    StringMatch("tupleElement"),
-)
-
-
-def tuple_element_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
-    assert isinstance(exp, FunctionCall)
-    return f"tupleElement({repr(exp.alias)}, {exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)})"
-
-
-array_join_match = FunctionCallMatch(
-    StringMatch("arrayJoin"),
-)
-
-
-def array_join_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
-    assert isinstance(exp, FunctionCall)
-    return f"arrayJoin({repr(exp.alias)}, {exp.parameters[0].accept(visitor)})"
-
-
-def binary_function_match(fn_name: str) -> Pattern[Expression]:
-    return FunctionCallMatch(
-        StringMatch(fn_name),
-        parameters=(AnyExpressionMatch(), AnyExpressionMatch()),
-    )
-
-
-def binary_function_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
-    assert isinstance(exp, FunctionCall)
-    if exp.function_name in ["plus", "minus", "multiply", "divide"]:
-        alias = f", {repr(exp.alias)}" if exp.alias else ""
-        return f"{exp.function_name}({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)}{alias})"
-    elif exp.function_name in ["greaterOrEquals", "less", "equals"]:
-        return f"{exp.function_name}({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)})"
-    elif exp.function_name == "in":
-        return f"in_cond({exp.parameters[0].accept(visitor)}, {exp.parameters[1].accept(visitor)})"
-
-    return exp.accept(visitor)
+def tags_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
+    assert isinstance(exp, SubscriptableReference)
+    return f"tags['{exp.key.value}']"
 
 
 class DSLMapperVisitor(ExpressionVisitor[str]):
+    """
+    This visitor is meant to take an AST object, and output a string representation of that object,
+    that is valid Python code using the DSL classes defined in snuba.query.dsl.
+
+    E.g. Literal(None, 1) -> "literal(1)"
+
+    These code snippets can then be pasted into tests to replace the raw AST objects, and make the
+    tests easier to read and edit.
+
+    In order for the strings to work, there are a couple assumptions being made. Notably that the
+    dsl.Functions class is being imported, and that NestedColumn objects are created for tags and
+    tags_raw.
+
+    ```python
+    from snuba.query.dsl import (
+        Functions as f,
+        NestedColumn,
+    )
+
+    tags = NestedColumn("tags")
+    tags_raw = NestedColumn("tags_raw")
+    ```
+
+    There are helper functions wrapping this visitor:
+    `ast_repr` takes an Expression, LimitBy or SelectedExpression, or a sequence of any of those,
+    and returns the correct string representation.
+    `query_repr` takes a LogicalQuery or ClickhouseQuery object, and returns a string representation
+    of the entire query, converting each clause to a dsl string.
+
+    """
+
     def __init__(self) -> None:
         self._mappers: dict[Pattern[Expression], MapFn] = {
             and_cond_match: and_cond_repr,
             or_cond_match: or_cond_repr,
+            in_cond_match: in_cond_repr,
             tags_raw_match: tags_raw_repr,
-            literals_tuple_match: literals_tuple_repr,
-            literals_array_match: literals_array_repr,
-            array_element_match: array_element_repr,
-            tuple_element_match: tuple_element_repr,
-            array_join_match: array_join_repr,
-            binary_function_match("plus"): binary_function_repr,
-            binary_function_match("minus"): binary_function_repr,
-            binary_function_match("multiply"): binary_function_repr,
-            binary_function_match("divide"): binary_function_repr,
-            binary_function_match("equals"): binary_function_repr,
-            binary_function_match("greaterOrEquals"): binary_function_repr,
-            binary_function_match("less"): binary_function_repr,
-            binary_function_match("in"): binary_function_repr,
+            tags_match: tags_repr,
         }
 
     def ast_repr(self, exp: Expression) -> str | None:
@@ -199,9 +164,10 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
         parameters = ""
         if exp.parameters:
             parameters = ", ".join([arg.accept(self) for arg in exp.parameters])
-            parameters += ","
 
-        return f"f.{exp.function_name}({parameters}alias={repr(exp.alias)})"
+        alias = f"alias={repr(exp.alias)}" if exp.alias else ""
+        alias = f", {alias}" if (parameters and alias) else alias
+        return f"f.{exp.function_name}({parameters}{alias})"
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         if res := self.ast_repr(exp):
