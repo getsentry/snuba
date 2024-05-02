@@ -42,16 +42,6 @@ schema:
 storages:
   - storage: metrics_summaries
     is_writable: true
-    translation_mappers:
-      subscriptables:
-        - mapper: SubscriptableMapper
-          args:
-            from_column_table: null
-            from_column_name: tags
-            to_nested_col_table: null
-            to_nested_col_name: tags
-            value_subcolumn_name: value
-            nullable: false
 
 storage_selector:
   selector: DefaultQueryStorageSelector

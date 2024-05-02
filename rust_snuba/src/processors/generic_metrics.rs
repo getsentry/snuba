@@ -15,9 +15,10 @@ use crate::{
 
 use rust_arroyo::backends::kafka::types::{Headers, KafkaPayload};
 use rust_arroyo::{counter, timer};
-static BASE64: data_encoding::Encoding = data_encoding::BASE64;
 
 use super::utils::enforce_retention;
+
+static BASE64_NOPAD: data_encoding::Encoding = data_encoding::BASE64_NOPAD;
 
 const GRANULARITY_TEN_SECONDS: u8 = 0;
 const GRANULARITY_ONE_MINUTE: u8 = 1;
@@ -131,7 +132,7 @@ impl<T> EncodedSeries<T> {
             EncodedSeries::Base64 { data, .. } => {
                 counter!("generic_metrics.encoded_receive_count", 1, "format" => "base64");
 
-                let decoded_bytes = BASE64.decode(data.as_bytes())?;
+                let decoded_bytes = BASE64_NOPAD.decode(data.as_bytes())?;
                 if decoded_bytes.len() % T::SIZE == 0 {
                     let res = Ok(decoded_bytes
                         .chunks_exact(T::SIZE)
@@ -838,7 +839,7 @@ mod tests {
         "retention_days": 90,
         "mapping_meta":{"d":{"65560":"s:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_set_k_VUW93LMS"}},
         "type": "s",
-        "value": {"format": "base64", "data": "AQAAAAcAAAA="}
+        "value": {"format": "base64", "data": "AQAAAAcAAAA"}
     }"#;
 
     #[test]
@@ -915,7 +916,7 @@ mod tests {
     fn test_base64_decode_32() {
         assert!(
             EncodedSeries::<u32>::Base64 {
-                data: "AQAAAAcAAAA=".to_string(),
+                data: "AQAAAAcAAAA".to_string(),
             }
             .try_into_vec()
             .ok()
@@ -927,7 +928,7 @@ mod tests {
     #[test]
     fn test_base64_decode_32_invalid() {
         assert!(EncodedSeries::<u32>::Base64 {
-            data: "AQAAAAcAAA=".to_string(),
+            data: "AQAAAAcAAA".to_string(),
         }
         .try_into_vec()
         .is_err())
@@ -983,7 +984,7 @@ mod tests {
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
-                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 654)])
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 653)])
                 })
             }
         );
