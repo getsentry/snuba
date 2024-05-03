@@ -35,17 +35,19 @@ impl BatchFactory {
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
         headers.insert(
-            "X-Clickhouse-User",
-            HeaderValue::from_str(clickhouse_user).unwrap(),
-        );
-        headers.insert(
-            "X-ClickHouse-Key",
-            HeaderValue::from_str(clickhouse_password).unwrap(),
-        );
-        headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
         );
+        headers.insert(
+            "X-Clickhouse-User",
+            HeaderValue::from_str(clickhouse_user).unwrap(),
+        );
+        if !clickhouse_password.is_empty() {
+            headers.insert(
+                "X-ClickHouse-Key",
+                HeaderValue::from_str(clickhouse_password).unwrap(),
+            );
+        }
 
         let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
         let url = format!("http://{hostname}:{http_port}?{query_params}");
@@ -89,7 +91,12 @@ impl BatchFactory {
                     .await?;
 
                 if res.status() != reqwest::StatusCode::OK {
-                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                    let status = res.status();
+                    anyhow::bail!(
+                        "Error writing to clickhouse: {}, got status: {}",
+                        res.text().await?,
+                        status
+                    );
                 }
 
                 Ok(())
