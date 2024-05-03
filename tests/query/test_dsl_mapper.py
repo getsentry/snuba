@@ -1,14 +1,14 @@
-import pytest
-
 from datetime import datetime
 
+import pytest
+
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.query.logical import Query as LogicalQuery
 from snuba.query.conditions import combine_and_conditions
+from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl_mapper import DSLMapperVisitor, query_repr
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -16,9 +16,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-
-from snuba.query.dsl_mapper import DSLMapperVisitor, query_repr
-
+from snuba.query.logical import Query as LogicalQuery
 
 tests = [
     pytest.param(
@@ -52,7 +50,7 @@ tests = [
                 ),
             ),
         ),
-        """and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])))""",
+        """and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(1))))""",
     ),
     pytest.param(
         FunctionCall(
@@ -68,7 +66,7 @@ tests = [
                             None,
                             "granularity",
                         ),
-                        Literal(None, 3600),
+                        Literal(None, 60),
                     ),
                 ),
                 FunctionCall(
@@ -79,11 +77,15 @@ tests = [
                             None,
                             "in",
                             (
-                                Column("_snuba_project_id", None, "project_id"),
+                                Column(
+                                    "_snuba_project_id",
+                                    None,
+                                    "project_id",
+                                ),
                                 FunctionCall(
                                     None,
                                     "tuple",
-                                    (Literal(None, 1),),
+                                    (Literal(None, 11),),
                                 ),
                             ),
                         ),
@@ -138,7 +140,9 @@ tests = [
                                                         ),
                                                         Literal(
                                                             None,
-                                                            datetime(2021, 1, 1, 1, 36),
+                                                            datetime(
+                                                                2023, 11, 23, 18, 30
+                                                            ),
                                                         ),
                                                     ),
                                                 ),
@@ -158,27 +162,65 @@ tests = [
                                                                 Literal(
                                                                     None,
                                                                     datetime(
-                                                                        2021,
-                                                                        1,
-                                                                        5,
-                                                                        4,
-                                                                        15,
+                                                                        2023,
+                                                                        11,
+                                                                        23,
+                                                                        22,
+                                                                        30,
                                                                     ),
                                                                 ),
                                                             ),
                                                         ),
                                                         FunctionCall(
                                                             None,
-                                                            "equals",
+                                                            "and",
                                                             (
-                                                                Column(
-                                                                    "_snuba_metric_id",
+                                                                FunctionCall(
                                                                     None,
-                                                                    "metric_id",
+                                                                    "equals",
+                                                                    (
+                                                                        Column(
+                                                                            "_snuba_metric_id",
+                                                                            None,
+                                                                            "metric_id",
+                                                                        ),
+                                                                        Literal(
+                                                                            None,
+                                                                            123456,
+                                                                        ),
+                                                                    ),
                                                                 ),
-                                                                Literal(
+                                                                FunctionCall(
                                                                     None,
-                                                                    567890,
+                                                                    "in",
+                                                                    (
+                                                                        SubscriptableReference(
+                                                                            "_snuba_tags_raw[888]",
+                                                                            column=Column(
+                                                                                "_snuba_tags_raw",
+                                                                                None,
+                                                                                "tags_raw",
+                                                                            ),
+                                                                            key=Literal(
+                                                                                None,
+                                                                                "888",
+                                                                            ),
+                                                                        ),
+                                                                        FunctionCall(
+                                                                            None,
+                                                                            "tuple",
+                                                                            (
+                                                                                Literal(
+                                                                                    None,
+                                                                                    "dist1",
+                                                                                ),
+                                                                                Literal(
+                                                                                    None,
+                                                                                    "dist2",
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                    ),
                                                                 ),
                                                             ),
                                                         ),
@@ -194,7 +236,7 @@ tests = [
                 ),
             ),
         ),
-        """and_cond(equals(column('granularity', None, '_snuba_granularity'), literal(3600)), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(1)])), in_fn(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 1, 36))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 5, 4, 15))), equals(column('metric_id', None, '_snuba_metric_id'), literal(567890)))""",
+        """and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(11))), in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2'))))""",
     ),
     pytest.param(
         combine_and_conditions(
@@ -340,7 +382,7 @@ tests = [
                 ),
             ]
         ),
-        """and_cond(greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), in_fn(column('project_id', None, '_snuba_project_id'), literals_tuple(None, [literal(11)])), in_fn(column('org_id', None, '_snuba_org_id'), literals_tuple(None, [literal(1)])), equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), equals(column('granularity', None, '_snuba_granularity'), literal(60)), equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_fn(snuba_tags_raw(int(888)), literals_tuple(None, [literal('dist1'), literal('dist2')])))""",
+        """and_cond(f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 18, 30))), f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2023, 11, 23, 22, 30))), in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(11))), in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2'))))""",
     ),
 ]
 
@@ -571,7 +613,20 @@ query_tests = [
             ],
             limit=1000,
         ),
-        """asd""",
+        """Query(
+        from_clause=from_clause,
+        selected_columns=[SelectedExpression('aggregate_value', f.sum(column('value', None, '_snuba_value'), alias='_snuba_aggregate_value'))],
+        array_join=None,
+        condition=and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(1))), in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2')))),
+        groupby=None,
+        having=None,
+        order_by=[OrderBy(OrderByDirection.ASC, f.sum(column('value', None, '_snuba_value'), alias='_snuba_aggregate_value'))],
+        limitby=None,
+        limit=1000,
+        offset=0,
+        totals=False,
+        granularity=None,
+    )""",
     )
 ]
 

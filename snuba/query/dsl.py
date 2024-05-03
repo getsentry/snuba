@@ -128,6 +128,12 @@ def divide(
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
+def if_in(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "in", (lhs, rhs))
+
+
 # boolean functions
 def binary_condition(
     function_name: str, lhs: Expression, rhs: Expression

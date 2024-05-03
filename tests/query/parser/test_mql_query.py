@@ -10,19 +10,15 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
+    NestedColumn,
     and_cond,
     arrayElement,
     column,
-    equals,
-    greaterOrEquals,
-    in_fn,
-    less,
+    in_cond,
     literal,
-    literals_tuple,
-    snuba_tags_raw,
 )
 from snuba.query.expressions import (
     Column,
@@ -35,11 +31,15 @@ from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
 from snuba.query.parser.exceptions import ParsingException
 
+tags = NestedColumn("tags")
+tags_raw = NestedColumn("tags_raw")
+
 # Commonly used expressions
 from_distributions = from_clause = QueryEntity(
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
+
 
 time_expression = FunctionCall(
     "_snuba_time",
@@ -88,8 +88,8 @@ mql_test_cases = [
                         (column("value", None, "_snuba_value"),),
                     ),
                 ),
-                SelectedExpression("transaction", snuba_tags_raw(int(111111))),
-                SelectedExpression("status_code", snuba_tags_raw(int(222222))),
+                SelectedExpression("transaction", tags_raw["111111"]),
+                SelectedExpression("status_code", tags_raw["222222"]),
                 SelectedExpression(
                     "time",
                     FunctionCall(
@@ -105,36 +105,40 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2023, 11, 23, 18, 30)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2023, 11, 23, 22, 30)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(11)]),
+                    f.tuple(literal(11)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                in_fn(
-                    snuba_tags_raw(int(888)),
-                    literals_tuple(None, [literal("dist1"), literal("dist2")]),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
+                in_cond(
+                    tags_raw["888"],
+                    f.tuple(literal("dist1"), literal("dist2")),
                 ),
             ),
             groupby=[
-                snuba_tags_raw(int(111111)),
-                snuba_tags_raw(int(222222)),
+                tags_raw["111111"],
+                tags_raw["222222"],
                 FunctionCall(
                     "_snuba_time",
                     "toStartOfInterval",
@@ -206,31 +210,35 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 0, 0)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 2, 0, 0)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                in_fn(
-                    snuba_tags_raw(int(888)),
-                    literals_tuple(None, [literal("dist1"), literal("dist2")]),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
+                in_cond(
+                    tags_raw["888"],
+                    f.tuple(literal("dist1"), literal("dist2")),
                 ),
             ),
             groupby=None,
@@ -288,28 +296,32 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 0, 0)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 2, 0, 0)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
             ),
             groupby=None,
             having=None,
@@ -372,45 +384,47 @@ mql_test_cases = [
                         (column("value", None, "_snuba_value"),),
                     ),
                 ),
-                SelectedExpression("transaction", snuba_tags_raw(int(111111))),
+                SelectedExpression("transaction", tags_raw["111111"]),
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 1, 36)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 5, 4, 15)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(
+                f.equals(
                     column("granularity", None, "_snuba_granularity"), literal(3600)
                 ),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(567890)),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(567890)
+                ),
                 FunctionCall(
                     None,
                     "notIn",
                     (
-                        snuba_tags_raw(int(888888)),
-                        literals_tuple(None, [literal("dist1"), literal("dist2")]),
+                        tags_raw["888888"],
+                        f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
-                equals(snuba_tags_raw(int(777777)), literal("bar")),
+                f.equals(tags_raw["777777"], literal("bar")),
             ),
-            groupby=[snuba_tags_raw(int(111111))],
+            groupby=[tags_raw["111111"]],
             having=None,
             order_by=None,
             limitby=None,
@@ -462,8 +476,8 @@ mql_test_cases = [
                         literal(1),
                     ),
                 ),
-                SelectedExpression("transaction", snuba_tags_raw(int(111111))),
-                SelectedExpression("status_code", snuba_tags_raw(int(222222))),
+                SelectedExpression("transaction", tags_raw["111111"]),
+                SelectedExpression("status_code", tags_raw["222222"]),
                 SelectedExpression(
                     "time",
                     FunctionCall(
@@ -479,36 +493,40 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2023, 11, 23, 18, 30)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2023, 11, 23, 22, 30)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(11)]),
+                    f.tuple(literal(11)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                in_fn(
-                    snuba_tags_raw(int(888)),
-                    literals_tuple(None, [literal("dist1"), literal("dist2")]),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
+                in_cond(
+                    tags_raw["888"],
+                    f.tuple(literal("dist1"), literal("dist2")),
                 ),
             ),
             groupby=[
-                snuba_tags_raw(int(111111)),
-                snuba_tags_raw(int(222222)),
+                tags_raw["111111"],
+                tags_raw["222222"],
                 FunctionCall(
                     "_snuba_time",
                     "toStartOfInterval",
@@ -589,35 +607,39 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 0, 0)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 2, 0, 0)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("sessions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                in_fn(
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
+                in_cond(
                     SubscriptableReference(
                         "_snuba_tags[111]",
                         column("tags", None, "_snuba_tags"),
                         literal("111"),
                     ),
-                    literals_tuple(None, [literal(222), literal(333)]),
+                    f.tuple(literal(222), literal(333)),
                 ),
             ),
             groupby=[
@@ -683,7 +705,7 @@ mql_test_cases = [
                         (column("value", None, "_snuba_value"),),
                     ),
                 ),
-                SelectedExpression("transaction", snuba_tags_raw(int(141516))),
+                SelectedExpression("transaction", tags_raw["141516"]),
                 SelectedExpression(
                     "time",
                     FunctionCall(
@@ -699,37 +721,41 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2024, 1, 7, 13, 35)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2024, 1, 8, 13, 40)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                equals(
-                    snuba_tags_raw(int(111213)),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
+                f.equals(
+                    tags_raw["111213"],
                     literal(
                         " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
                     ),
                 ),
             ),
             groupby=[
-                snuba_tags_raw(int(141516)),
+                tags_raw["141516"],
                 FunctionCall(
                     "_snuba_time",
                     "toStartOfInterval",
@@ -806,31 +832,35 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 0, 0)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 2, 0, 0)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-                in_fn(
-                    snuba_tags_raw(int(888)),
-                    literals_tuple(None, [literal("dist1"), literal("dist2")]),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                ),
+                in_cond(
+                    tags_raw["888"],
+                    f.tuple(literal("dist1"), literal("dist2")),
                 ),
             ),
             groupby=None,
@@ -909,30 +939,32 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 1, 36)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 5, 4, 15)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"),
                     literal("transactions"),
                 ),
-                equals(
+                f.equals(
                     column("granularity", None, "_snuba_granularity"), literal(3600)
                 ),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(567890)),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(567890)
+                ),
             ),
             groupby=None,
             having=None,
@@ -980,30 +1012,34 @@ mql_test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                greaterOrEquals(
+                f.greaterOrEquals(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 1, 0, 0)),
                 ),
-                less(
+                f.less(
                     column("timestamp", None, "_snuba_timestamp"),
                     literal(datetime(2021, 1, 2, 0, 0)),
                 ),
-                in_fn(
+                in_cond(
                     column("project_id", None, "_snuba_project_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                in_fn(
+                in_cond(
                     column("org_id", None, "_snuba_org_id"),
-                    literals_tuple(None, [literal(1)]),
+                    f.tuple(literal(1)),
                 ),
-                equals(
+                f.equals(
                     column("use_case_id", None, "_snuba_use_case_id"), literal("custom")
                 ),
-                equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-                equals(column("metric_id", None, "_snuba_metric_id"), literal(111111)),
-                equals(snuba_tags_raw(int(222222)), literal("transaction")),
-                equals(
-                    snuba_tags_raw(int(333333)),
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
+                f.equals(
+                    column("metric_id", None, "_snuba_metric_id"), literal(111111)
+                ),
+                f.equals(tags_raw["222222"], literal("transaction")),
+                f.equals(
+                    tags_raw["333333"],
                     literal("sentry.tasks.store.save_event_transaction"),
                 ),
             ),
@@ -1058,16 +1094,16 @@ mql_test_cases = [
     #             SelectedExpression(
     #                 "transaction",
     #                 SubscriptableReference(
-    #                     "_snuba_tags_raw[111111]",
-    #                     Column("_snuba_tags_raw", None, "tags_raw"),
+    #                     "_tags_raw[111111]",
+    #                     Column("_tags_raw", None, "tags_raw"),
     #                     Literal(None, "111111"),
     #                 ),
     #             ),
     #             SelectedExpression(
     #                 "status_code",
     #                 SubscriptableReference(
-    #                     "_snuba_tags_raw[222222]",
-    #                     Column("_snuba_tags_raw", None, "tags_raw"),
+    #                     "_tags_raw[222222]",
+    #                     Column("_tags_raw", None, "tags_raw"),
     #                     Literal(None, "222222"),
     #                 ),
     #             ),
@@ -1078,43 +1114,43 @@ mql_test_cases = [
     #         ],
     #         groupby=[
     #             SubscriptableReference(
-    #                 "_snuba_tags_raw[111111]",
-    #                 Column("_snuba_tags_raw", None, "tags_raw"),
+    #                 "_tags_raw[111111]",
+    #                 Column("_tags_raw", None, "tags_raw"),
     #                 Literal(None, "111111"),
     #             ),
     #             SubscriptableReference(
-    #                 "_snuba_tags_raw[222222]",
-    #                 Column("_snuba_tags_raw", None, "tags_raw"),
+    #                 "_tags_raw[222222]",
+    #                 Column("_tags_raw", None, "tags_raw"),
     #                 Literal(None, "222222"),
     #             ),
     #             time_expression,
     #         ],
     #         condition=and_cond(
-    #             greaterOrEquals(
+    #             f.greaterOrEquals(
     #                 column("timestamp", None, "_snuba_timestamp"),
     #                 literal(datetime(2023, 11, 23, 18, 30)),
     #             ),
-    #             less(
+    #             f.less(
     #                 column("timestamp", None, "_snuba_timestamp"),
     #                 literal(datetime(2023, 11, 23, 22, 30)),
     #             ),
-    #             in_fn(
+    #             in_cond(
     #                 column("project_id", None, "_snuba_project_id"),
-    #                 literals_tuple(None, [literal(11)]),
+    #                 f.tuple(literal(11)),
     #             ),
-    #             in_fn(
+    #             in_cond(
     #                 column("org_id", None, "_snuba_org_id"),
-    #                 literals_tuple(None, [literal(1)]),
+    #                 f.tuple(literal(1)),
     #             ),
-    #             equals(
+    #             f.equals(
     #                 column("use_case_id", None, "_snuba_use_case_id"),
     #                 literal("transactions"),
     #             ),
-    #             equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-    #             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-    #             in_fn(
-    #                 snuba_tags_raw(int(888)),
-    #                 literals_tuple(None, [literal("dist1"), literal("dist2")]),
+    #             f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
+    #             f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+    #             in_cond(
+    #                 tags_raw["888"],
+    #                 f.tuple(literal("dist1"), literal("dist2")),
     #             ),
     #         ),
     #         order_by=[
@@ -1166,31 +1202,31 @@ mql_test_cases = [
     #         ],
     #         array_join=None,
     #         condition=and_cond(
-    #             greaterOrEquals(
+    #             f.greaterOrEquals(
     #                 column("timestamp", None, "_snuba_timestamp"),
     #                 literal(datetime(2021, 1, 1, 0, 0)),
     #             ),
-    #             less(
+    #             f.less(
     #                 column("timestamp", None, "_snuba_timestamp"),
     #                 literal(datetime(2021, 1, 2, 0, 0)),
     #             ),
-    #             in_fn(
+    #             in_cond(
     #                 column("project_id", None, "_snuba_project_id"),
-    #                 literals_tuple(None, [literal(1)]),
+    #                 f.tuple(literal(1)),
     #             ),
-    #             in_fn(
+    #             in_cond(
     #                 column("org_id", None, "_snuba_org_id"),
-    #                 literals_tuple(None, [literal(1)]),
+    #                 f.tuple(literal(1)),
     #             ),
-    #             equals(
+    #             f.equals(
     #                 column("use_case_id", None, "_snuba_use_case_id"),
     #                 literal("transactions"),
     #             ),
-    #             equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-    #             equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-    #             in_fn(
-    #                 snuba_tags_raw(int(888)),
-    #                 literals_tuple(None, [literal("dist1"), literal("dist2")]),
+    #             f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
+    #             f.equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
+    #             in_cond(
+    #                 tags_raw["888"],
+    #                 f.tuple(literal("dist1"), literal("dist2")),
     #             ),
     #         ),
     #         groupby=None,
@@ -1465,9 +1501,9 @@ mql_test_cases = [
     #             SelectedExpression(
     #                 "transaction",
     #                 SubscriptableReference(
-    #                     "_snuba_tags_raw[111111]",
+    #                     "_tags_raw[111111]",
     #                     Column(
-    #                         "_snuba_tags_raw",
+    #                         "_tags_raw",
     #                         None,
     #                         "tags_raw",
     #                     ),
@@ -1617,9 +1653,9 @@ mql_test_cases = [
     #                                                                             "notIn",
     #                                                                             (
     #                                                                                 SubscriptableReference(
-    #                                                                                     "_snuba_tags_raw[888888]",
+    #                                                                                     "_tags_raw[888888]",
     #                                                                                     column=Column(
-    #                                                                                         "_snuba_tags_raw",
+    #                                                                                         "_tags_raw",
     #                                                                                         None,
     #                                                                                         "tags_raw",
     #                                                                                     ),
@@ -1649,9 +1685,9 @@ mql_test_cases = [
     #                                                                             "equals",
     #                                                                             (
     #                                                                                 SubscriptableReference(
-    #                                                                                     "_snuba_tags_raw[777777]",
+    #                                                                                     "_tags_raw[777777]",
     #                                                                                     column=Column(
-    #                                                                                         "_snuba_tags_raw",
+    #                                                                                         "_tags_raw",
     #                                                                                         None,
     #                                                                                         "tags_raw",
     #                                                                                     ),
@@ -1685,9 +1721,9 @@ mql_test_cases = [
     #         order_by=[],
     #         groupby=[
     #             SubscriptableReference(
-    #                 "_snuba_tags_raw[111111]",
+    #                 "_tags_raw[111111]",
     #                 Column(
-    #                     "_snuba_tags_raw",
+    #                     "_tags_raw",
     #                     None,
     #                     "tags_raw",
     #                 ),
@@ -1747,16 +1783,16 @@ mql_test_cases = [
     #             SelectedExpression(
     #                 "transaction",
     #                 SubscriptableReference(
-    #                     "_snuba_tags_raw[111111]",
-    #                     Column("_snuba_tags_raw", None, "tags_raw"),
+    #                     "_tags_raw[111111]",
+    #                     Column("_tags_raw", None, "tags_raw"),
     #                     Literal(None, "111111"),
     #                 ),
     #             ),
     #             SelectedExpression(
     #                 "status_code",
     #                 SubscriptableReference(
-    #                     "_snuba_tags_raw[222222]",
-    #                     Column("_snuba_tags_raw", None, "tags_raw"),
+    #                     "_tags_raw[222222]",
+    #                     Column("_tags_raw", None, "tags_raw"),
     #                     Literal(None, "222222"),
     #                 ),
     #             ),
@@ -1767,13 +1803,13 @@ mql_test_cases = [
     #         ],
     #         groupby=[
     #             SubscriptableReference(
-    #                 "_snuba_tags_raw[111111]",
-    #                 Column("_snuba_tags_raw", None, "tags_raw"),
+    #                 "_tags_raw[111111]",
+    #                 Column("_tags_raw", None, "tags_raw"),
     #                 Literal(None, "111111"),
     #             ),
     #             SubscriptableReference(
-    #                 "_snuba_tags_raw[222222]",
-    #                 Column("_snuba_tags_raw", None, "tags_raw"),
+    #                 "_tags_raw[222222]",
+    #                 Column("_tags_raw", None, "tags_raw"),
     #                 Literal(None, "222222"),
     #             ),
     #             time_expression,
@@ -1920,9 +1956,9 @@ mql_test_cases = [
     #                                                                     "in",
     #                                                                     (
     #                                                                         SubscriptableReference(
-    #                                                                             "_snuba_tags_raw[888]",
+    #                                                                             "_tags_raw[888]",
     #                                                                             column=Column(
-    #                                                                                 "_snuba_tags_raw",
+    #                                                                                 "_tags_raw",
     #                                                                                 None,
     #                                                                                 "tags_raw",
     #                                                                             ),
@@ -2284,8 +2320,8 @@ mql_test_cases = [
     #             SelectedExpression(
     #                 "transaction",
     #                 SubscriptableReference(
-    #                     "_snuba_tags_raw[141516]",
-    #                     Column("_snuba_tags_raw", None, "tags_raw"),
+    #                     "_tags_raw[141516]",
+    #                     Column("_tags_raw", None, "tags_raw"),
     #                     Literal(None, "141516"),
     #                 ),
     #             ),
@@ -2450,9 +2486,9 @@ mql_test_cases = [
     #                                                                     function_name="equals",
     #                                                                     parameters=(
     #                                                                         SubscriptableReference(
-    #                                                                             alias="_snuba_tags_raw[111213]",
+    #                                                                             alias="_tags_raw[111213]",
     #                                                                             column=Column(
-    #                                                                                 alias="_snuba_tags_raw",
+    #                                                                                 alias="_tags_raw",
     #                                                                                 table_name=None,
     #                                                                                 column_name="tags_raw",
     #                                                                             ),
@@ -2483,9 +2519,9 @@ mql_test_cases = [
     #         ),
     #         groupby=[
     #             SubscriptableReference(
-    #                 "_snuba_tags_raw[141516]",
+    #                 "_tags_raw[141516]",
     #                 Column(
-    #                     "_snuba_tags_raw",
+    #                     "_tags_raw",
     #                     None,
     #                     "tags_raw",
     #                 ),
@@ -2724,9 +2760,9 @@ mql_test_cases = [
     #                                                                     "in",
     #                                                                     (
     #                                                                         SubscriptableReference(
-    #                                                                             "_snuba_tags_raw[888]",
+    #                                                                             "_tags_raw[888]",
     #                                                                             column=Column(
-    #                                                                                 "_snuba_tags_raw",
+    #                                                                                 "_tags_raw",
     #                                                                                 None,
     #                                                                                 "tags_raw",
     #                                                                             ),
@@ -3235,9 +3271,9 @@ mql_test_cases = [
     #                                                                             "equals",
     #                                                                             (
     #                                                                                 SubscriptableReference(
-    #                                                                                     "_snuba_tags_raw[222222]",
+    #                                                                                     "_tags_raw[222222]",
     #                                                                                     column=Column(
-    #                                                                                         "_snuba_tags_raw",
+    #                                                                                         "_tags_raw",
     #                                                                                         None,
     #                                                                                         "tags_raw",
     #                                                                                     ),
@@ -3257,9 +3293,9 @@ mql_test_cases = [
     #                                                                             "equals",
     #                                                                             (
     #                                                                                 SubscriptableReference(
-    #                                                                                     "_snuba_tags_raw[333333]",
+    #                                                                                     "_tags_raw[333333]",
     #                                                                                     column=Column(
-    #                                                                                         "_snuba_tags_raw",
+    #                                                                                         "_tags_raw",
     #                                                                                         None,
     #                                                                                         "tags_raw",
     #                                                                                     ),
@@ -3320,7 +3356,7 @@ def test_format_expressions_from_mql(
 ) -> None:
     generic_metrics = get_dataset(dataset)
     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected_query)
+    eq, reason = query.f.equals(expected_query)
     assert eq, reason
 
 
