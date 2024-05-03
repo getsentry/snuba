@@ -115,6 +115,64 @@ def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> 
     with pytest.raises(InvalidExpressionException):
         FunctionCallsValidator().validate(expression, data_source)
 
+    import os
+
+    from tests.query.parser.test_formula_mql_query import astlogger
+
+    with open(
+        os.path.abspath(
+            "tests/query/parser/unit_tests/test_parse_mql_query_initial.py"
+        ),
+        "w",
+    ) as f:
+        f.write(
+            """
+from datetime import datetime
+
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import (
+    and_cond,
+    column,
+    divide,
+    equals,
+    greaterOrEquals,
+    in_fn,
+    less,
+    literal,
+    literals_tuple,
+    plus,
+    snuba_tags_raw,
+    multiply
+)
+from snuba.query.expressions import CurriedFunctionCall, FunctionCall
+from snuba.query.logical import Query
+from snuba.query.mql.parser import parse_mql_query_body
+import pytest
+
+from_clause = QueryEntity(
+    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+)
+
+test_cases = [
+"""
+        )
+        for mql_str, dsl_str in astlogger["parse_mql"]:
+            f.write(f"pytest.param('{repr(mql_str)}',{dsl_str}),\n")
+        f.write(
+            """
+]
+
+@pytest.mark.parametrize("mql, expected", test_cases)
+def test_initial_parse(mql: str, expected: Query) -> None:
+    actual = parse_mql_query_body(mql)
+    assert actual == expected
+"""
+        )
+
 
 @pytest.mark.parametrize("expression, should_raise", test_expressions)
 @pytest.mark.redis_db

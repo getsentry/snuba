@@ -15,6 +15,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.ast_logger import Logger as KylesLogger
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -25,6 +26,7 @@ from snuba.query.conditions import (
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.dsl import arrayElement
+from snuba.query.dsl_mapper import query_repr
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
     Column,
@@ -1077,13 +1079,24 @@ def parse_mql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
+    kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
         query = parse_mql_query_body(body, dataset)
+
+    if kylelog is not None:
+        kylelog.eat("parse_mql", (body, query_repr(query)))
+        last = query_repr(query)
+
     with sentry_sdk.start_span(
         op="parser", description="populate_query_from_mql_context"
     ):
         query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
+
+    if kylelog is not None:
+        kylelog.eat("populate", (last, query_repr(query)))
+        last = query_repr(query)
+
     with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
         resolve_mappings(query, mql_context.indexer_mappings, dataset)
 
@@ -1093,15 +1106,30 @@ def parse_mql_query(
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
     # before we run the anonymizer and the rest of the post processors
+    last = query_repr(query)
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
+    if kylelog is not None:
+        kylelog.eat("treeify", (last, query_repr(query)))
+        last = query_repr(query)
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
             query,
-            MQL_POST_PROCESSORS,
+            POST_PROCESSORS,
             settings,
         )
+        if kylelog is not None:
+            kylelog.eat("post_process", (last, query_repr(query)))
+            last = query_repr(query)
+        _post_process(
+            query,
+            [quantiles_to_quantile],
+            settings,
+        )
+        if kylelog is not None:
+            kylelog.eat("mql_post_process", (last, query_repr(query)))
+            last = query_repr(query)
 
     # Filter in select optimizer
     with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
@@ -1116,8 +1144,12 @@ def parse_mql_query(
             _post_process(query, custom_processing, settings)
 
     # Time based processing
+    last = query_repr(query)
     with sentry_sdk.start_span(op="processor", description="time_based_processing"):
         _post_process(query, [_replace_time_condition], settings)
+    if kylelog is not None:
+        kylelog.eat("time_proc", (last, query_repr(query)))
+        last = query_repr(query)
 
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):

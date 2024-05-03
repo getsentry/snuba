@@ -192,3 +192,15 @@ def countIf(
 
 def identity(expression: Expression, alias: Optional[str]) -> FunctionCall:
     return FunctionCall(alias, "identity", (expression,))
+
+
+def in_fn(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("in", lhs, rhs)
+
+
+def greaterOrEquals(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("greaterOrEquals", lhs, rhs)
+
+
+def less(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("less", lhs, rhs)

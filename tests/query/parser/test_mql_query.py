@@ -30,6 +30,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
 from snuba.query.parser.exceptions import ParsingException
+from tests.query.parser.test_formula_mql_query import astlogger
 
 tags = NestedColumn("tags")
 tags_raw = NestedColumn("tags_raw")
@@ -2431,7 +2432,9 @@ def test_format_expressions_from_mql(
     query_body: str, mql_context: Dict[str, Any], expected_query: Query, dataset: str
 ) -> None:
     generic_metrics = get_dataset(dataset)
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected_query)
     assert eq, reason
 
@@ -2603,10 +2606,10 @@ def test_invalid_format_expressions_from_mql(
 ) -> None:
     generic_metrics = get_dataset("generic_metrics")
     with pytest.raises(type(error), match=re.escape(str(error))):
-        parse_mql_query(query_body, mql_context, generic_metrics)
+        parse_mql_query(query_body, mql_context, generic_metrics, kylelog=astlogger)
 
 
-def test_pushdown_error_query():
+def test_pushdown_error_query() -> None:
     mql = '((avg(d:transactions/duration@millisecond) * 100.0) * 100.0){transaction:"getsentry.tasks.calculate_spike_projections"}'
     context = {
         "end": "2024-04-08T06:49:00+00:00",

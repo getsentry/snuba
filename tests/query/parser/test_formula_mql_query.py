@@ -9,6 +9,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.ast_logger import Logger as KylesLogger
 from snuba.query.conditions import binary_condition
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import (
@@ -191,6 +192,8 @@ mql_context = {
     "limit": None,
     "offset": None,
 }
+astlogger = KylesLogger()
+# astlogger = ASTLogger("tests/query/parser/unit_tests/test_parse_mql_query_initial.py")
 
 
 def timeseries(
@@ -301,7 +304,9 @@ def test_simple_formula() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -367,7 +372,9 @@ def test_simple_formula_with_leading_literals() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -433,7 +440,9 @@ def test_groupby() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -528,7 +537,9 @@ def test_curried_aggregate() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -599,7 +610,9 @@ def test_bracketing_rules() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -614,7 +627,9 @@ def test_mismatch_groupby() -> None:
         Exception,
         match=re.escape("All terms in a formula must have the same groupby"),
     ):
-        parse_mql_query(str(query_body), mql_context, generic_metrics)
+        parse_mql_query(
+            str(query_body), mql_context, generic_metrics, kylelog=astlogger
+        )
 
 
 def test_formula_filters() -> None:
@@ -689,7 +704,9 @@ def test_formula_filters() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -770,7 +787,9 @@ def test_formula_groupby() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -826,7 +845,9 @@ def test_formula_scalar_value() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -875,7 +896,9 @@ def test_arbitrary_functions() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -924,7 +947,9 @@ def test_arbitrary_functions_with_formula() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -982,6 +1007,8 @@ def test_arbitrary_functions_with_formula_and_filters() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query(
+        str(query_body), mql_context, generic_metrics, kylelog=astlogger
+    )
     eq, reason = query.equals(expected)
     assert eq, reason
