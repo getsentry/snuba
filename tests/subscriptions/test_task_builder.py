@@ -126,7 +126,7 @@ TEST_CASES = [
     pytest.param(
         JitteredTaskBuilder(),
         "jittered",
-        [(ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=2), 0))],
+        [(ALIGNED_TIMESTAMP, build_subscription(timedelta(minutes=3), 0))],
         [
             (
                 ALIGNED_TIMESTAMP,
@@ -134,7 +134,7 @@ TEST_CASES = [
                     datetime.fromtimestamp(ALIGNED_TIMESTAMP),
                     SubscriptionWithMetadata(
                         EntityKey.EVENTS,
-                        build_subscription(timedelta(minutes=2), 0),
+                        build_subscription(timedelta(minutes=3), 0),
                         1,
                     ),
                 ),
