@@ -2632,4 +2632,4 @@ def test_pushdown_error_query() -> None:
         },
         "start": "2024-04-08T05:48:00+00:00",
     }
-    parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    parse_mql_query(mql, context, get_dataset("generic_metrics"), kylelog=astlogger)

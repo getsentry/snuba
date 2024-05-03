@@ -1085,7 +1085,7 @@ def parse_mql_query(
         query = parse_mql_query_body(body, dataset)
 
     if kylelog is not None:
-        kylelog.eat("parse_mql", (body, query_repr(query)))
+        kylelog.eat("parse_mql", ((body, dataset), query_repr(query)))
         last = query_repr(query)
 
     with sentry_sdk.start_span(

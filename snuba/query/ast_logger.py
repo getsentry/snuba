@@ -74,8 +74,7 @@ from_clause = QueryEntity(
         """
         Given val, saves its string representation as a python line.
         """
-        strval = "'" + str(val) + "'"
-        self.write(f"{varname} = {strval}", indent=indent)
+        self.write(f"{varname} = {repr(val)}", indent=indent)
 
     def save_query(self, varname: str, query: Query, indent: int = 0) -> None:
         self.write(f"{varname} = {query_repr(query)}", indent=indent)
