@@ -40,3 +40,9 @@ class Dataset:
 
     def get_all_entities(self) -> Sequence[Entity]:
         return [get_entity(entity_key) for entity_key in self.__all_entities]
+
+    def __repr__(self) -> str:
+        # import down here bc of circular import
+        from snuba.datasets.factory import get_dataset_name
+
+        return f"get_dataset({repr(get_dataset_name(self))})"
