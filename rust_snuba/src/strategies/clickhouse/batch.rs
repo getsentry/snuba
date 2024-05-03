@@ -1,15 +1,17 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
+use rust_arroyo::gauge;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use std::mem;
 use tokio::runtime::Handle;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::types::RowData;
 
-const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
+const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000;
+const CHANNEL_CAPACITY: usize = 4_096;
 
 pub struct BatchFactory {
     client: Client,
@@ -72,7 +74,7 @@ impl BatchFactory {
             // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
             // however to enforce any limit locally because it would mean that in the Drop impl of
             // Batch, the send may block or fail
-            let (sender, receiver) = unbounded_channel();
+            let (sender, receiver) = channel(CHANNEL_CAPACITY);
 
             let url = self.url.clone();
             let query = self.query.clone();
@@ -82,9 +84,7 @@ impl BatchFactory {
                 let res = client
                     .post(&url)
                     .query(&[("query", &query)])
-                    .body(reqwest::Body::wrap_stream(UnboundedReceiverStream::new(
-                        receiver,
-                    )))
+                    .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
                     .send()
                     .await?;
 
@@ -112,7 +112,7 @@ pub struct HttpBatch {
     current_chunk: Vec<u8>,
     num_rows: usize,
     num_bytes: usize,
-    sender: Option<UnboundedSender<Result<Vec<u8>, anyhow::Error>>>,
+    sender: Option<Sender<Result<Vec<u8>, anyhow::Error>>>,
     result_handle: Option<JoinHandle<Result<(), anyhow::Error>>>,
 }
 
@@ -143,7 +143,12 @@ impl HttpBatch {
             // not very memory efficient, especially with jemalloc
             let chunk = mem::take(&mut self.current_chunk);
             if let Some(ref sender) = self.sender {
-                sender.send(Ok(chunk))?;
+                sender.try_send(Ok(chunk))?;
+                gauge!(
+                    "rust_consumer.mpsc_channel_size",
+                    (CHANNEL_CAPACITY - sender.capacity()) as u64
+                );
+                dbg!(CHANNEL_CAPACITY - sender.capacity());
             }
         }
 
@@ -168,7 +173,7 @@ impl Drop for HttpBatch {
         // in case the batch was not explicitly finished, send an error into the channel to abort
         // the request
         if let Some(ref mut sender) = self.sender {
-            let _ = sender.send(Err(anyhow::anyhow!(
+            let _ = sender.try_send(Err(anyhow::anyhow!(
                 "the batch got dropped without being finished explicitly"
             )));
         }
