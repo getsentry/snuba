@@ -9,18 +9,16 @@ from snuba.datasets.plans.storage_processing import (
     build_best_plan,
     transform_subscriptables,
 )
-from snuba.pipeline.composite_entity_processing import (
-    translate_composite_query,
-    try_translate_storage_query,
-)
+from snuba.pipeline.composite_entity_processing import translate_composite_query
 from snuba.pipeline.composite_storage_processing import (
     apply_composite_storage_processors,
     build_best_plan_for_composite_query,
 )
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
+from snuba.pipeline.storage_query_identity_translate import try_translate_storage_query
+from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity, Table
-from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.request import Request
 
@@ -40,7 +38,9 @@ class EntityProcessingStage(
         if isinstance(query, LogicalQuery) and isinstance(
             query.get_from_clause(), Entity
         ):
-            run_entity_validators(cast(EntityQuery, query), pipe_input.query_settings)
+            run_entity_validators(
+                cast(ProcessableQuery[Entity], query), pipe_input.query_settings
+            )
             return run_entity_processing_executor(query, pipe_input.query_settings)
         elif isinstance(query, CompositeQuery):
             # if we were not able to translate the storage query earlier and we got to this point, this is
