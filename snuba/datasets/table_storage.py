@@ -28,8 +28,6 @@ from snuba.utils.streams.configuration_builder import get_default_kafka_configur
 from snuba.utils.streams.topics import Topic, get_topic_creation_config
 from snuba.writer import BatchWriter
 
-clients = {}
-
 
 class KafkaTopicSpec:
     def __init__(self, topic: Topic) -> None:
