@@ -8,16 +8,57 @@ from snuba.query.logical import Query
 
 
 class Logger:
+    """
+    Used for tracking intermediate IO contracts of components.
+
+    Say you have INPUT -> t1 -> t2 -> t3 -> OUT
+    and you want to get the indermediate IO for each stage.
+    You can do
+    INPUT -> eat -> t1 -> eat -> t2 -> eat -> t3 -> eat -> OUT
+    then the state of the logger will be
+    [
+    (IN, t1_out)
+    (t2_in, t2_out)
+    (t3_in, OUT)
+    ]
+    """
+
     def __init__(self) -> None:
-        self.d: dict[str, list] = dict()
+        self.logged: list[list[tuple[Any, Any]]] = []
 
-    def eat(self, tag: str, val: Any) -> None:
-        if tag not in self.d:
-            self.d[tag] = []
-        self.d[tag].append(val)
+    def begin(self, val: Any) -> None:
+        """
+        Begins a new pipeline logging chain
+        """
+        self.logged.append([])
+        self.isInput = True
+        self.log(val)
 
-    def __getitem__(self, key: Any) -> list:
-        return self.d[key]
+    def log(self, val: Any) -> None:
+        """
+        Logs the given val as the current output/input.
+        Each time this function is called it swaps between treating
+        the input as input or output, it is up to the user to ensure
+        they use it properly.
+        """
+        if len(self.logged) == 0:
+            raise ValueError("Begin must be called before eat")
+
+        if self.isInput:
+            self.logged[len(self.logged) - 1].append((val, None))
+        else:
+            # (val, None) -> (val, newval)
+            t = self.logged[len(self.logged) - 1]
+            t[len(t) - 1] = (t[len(t) - 1][0], val)
+
+        self.isInput = not self.isInput
+
+    def pipe(self, val: Any) -> None:
+        """
+        Logs the given val as the current output and the next input
+        """
+        self.log(val)
+        self.log(val)
 
 
 class ASTLogger:

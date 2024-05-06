@@ -117,12 +117,10 @@ def test_invalid_function_name(expression: FunctionCall, should_raise: bool) -> 
 
     import os
 
-    from tests.query.parser.test_formula_mql_query import astlogger
+    # from tests.query.parser.test_formula_mql_query import astlogger
 
     with open(
-        os.path.abspath(
-            "tests/query/parser/unit_tests/test_parse_mql_query_initial.py"
-        ),
+        os.path.abspath(""),
         "w",
     ) as f:
         f.write(
@@ -160,9 +158,9 @@ from snuba.query.parser.exceptions import ParsingException
 test_cases = [
 """
         )
-        for input, dsl_query in astlogger["parse_mql"]:
-            mql, dataset = input
-            f.write(f"pytest.param({repr(mql)},{repr(dataset)},{dsl_query}),\n")
+        # for input, dsl_query in astlogger["parse_mql"]:
+        # mql, dataset = input
+        # f.write(f"pytest.param({repr(mql)},{repr(dataset)},{dsl_query}),\n")
         f.write(
             """
 ]
