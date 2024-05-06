@@ -218,7 +218,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": """MATCH {
-                        MATCH (discover_events )
+                        MATCH (discover_events)
                         SELECT count() AS count BY project_id, tags[custom_tag]
                         WHERE type != 'transaction' AND project_id = %s
                         AND timestamp >= toDateTime('%s')
@@ -239,6 +239,35 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_join_query_in_sub_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": """MATCH {
+                        MATCH (events: events) -[attributes]-> (group_attributes: group_attributes)
+                        SELECT events.group_id, count() AS `event_count`, max(events.timestamp) AS `last_seen`
+                        BY events.group_id
+                        WHERE events.project_id IN array(4553884953739266)
+                        AND group_attributes.project_id IN array(4553884953739266)
+                        AND events.timestamp >= toDateTime('2024-01-24T16:59:49.431129')
+                        AND events.timestamp < toDateTime('2024-04-23T16:59:49.431129')
+                        AND group_attributes.group_status = 0
+                    }
+                    SELECT events.group_id WHERE last_seen >= toDateTime('2024-04-09T16:59:49.431129')
+                    ORDER BY event_count DESC LIMIT 10000""",
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
 
     def test_max_limit(self) -> None:
         response = self.post(

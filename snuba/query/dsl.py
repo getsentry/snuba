@@ -17,7 +17,6 @@ from snuba.query.expressions import (
 
 class NestedColumn:
     """Usage:
-
     tags = NestedColumn("tags")
     assert tags["some_key"] == SubscriptableReference(
         "_snuba_tags[some_key]",
@@ -35,6 +34,41 @@ class NestedColumn:
             Column(f"_snuba_{self.column_name}", None, self.column_name),
             Literal(None, key),
         )
+
+
+class _FunctionCall:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def _arg_to_literal_expr(self, arg: Expression | OptionalScalarType) -> Expression:
+        if isinstance(arg, Expression):
+            return arg
+        return Literal(None, arg)
+
+    def __call__(
+        self, *args: Expression | OptionalScalarType, **kwargs: str
+    ) -> FunctionCall:
+        alias = kwargs.pop("alias", None)
+        if kwargs:
+            raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
+        transformed_args = [self._arg_to_literal_expr(arg) for arg in args]
+        return FunctionCall(alias, self.name, tuple(transformed_args))
+
+
+class _Functions:
+    def __getattr__(self, name: str) -> _FunctionCall:
+        return _FunctionCall(name)
+
+
+"""
+Usage:
+
+from snuba.query.dsl import Functions as f
+assert f.equals(1, 1, alias="eq") == FunctionCall(
+    "eq", "equals" (Literal(None, 1), Literal(None, 1))
+)
+"""
+Functions = _Functions()
 
 
 def column(
@@ -94,6 +128,12 @@ def divide(
     lhs: Expression, rhs: Expression, alias: Optional[str] = None
 ) -> FunctionCall:
     return FunctionCall(alias, "divide", (lhs, rhs))
+
+
+def if_in(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "in", (lhs, rhs))
 
 
 # boolean functions
