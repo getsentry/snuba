@@ -65,6 +65,7 @@ class KafkaTopicSpec:
         config = get_default_kafka_configuration(self.__topic, None)
         client = AdminClient(config)
         topic_name = self.get_physical_topic_name()
+        print(topic_name)
         return len(
             client.describe_topics(_TopicCollection([topic_name]))[topic_name]
             .result()
