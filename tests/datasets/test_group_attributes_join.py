@@ -404,6 +404,9 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             },
         }
 
+    @pytest.mark.xfail(
+        reason="The search_issues and group_attributes storage sets are not on the same query node anymore. This should fail since their relationship is no longer in JOINABLE_STORAGE_SETS."
+    )
     def query_search_issues_joined_group_attributes(self):
         query_template = (
             "MATCH (s: search_issues) -[attributes]-> (g: group_attributes) "
