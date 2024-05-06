@@ -6,11 +6,11 @@ from snuba.datasets.plans.entity_validation import run_entity_validators
 from snuba.datasets.plans.storage_processing import (
     apply_storage_processors,
     build_best_plan,
-    get_query_data_source,
 )
-from snuba.datasets.plans.translator.query import identity_translate
-from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.composite_entity_processing import translate_composite_query
+from snuba.pipeline.composite_entity_processing import (
+    translate_composite_query,
+    try_translate_storage_query,
+)
 from snuba.pipeline.composite_storage_processing import (
     apply_composite_storage_processors,
     build_best_plan_for_composite_query,
@@ -18,8 +18,8 @@ from snuba.pipeline.composite_storage_processing import (
 from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity, Table
+from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.logical import StorageQuery
 from snuba.request import Request
 
 
@@ -30,29 +30,25 @@ class EntityProcessingStage(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
         # TODO: support composite queries for storage queries
-        if isinstance(pipe_input.data.query, StorageQuery):
-            res = identity_translate(pipe_input.data.query)
-            storage = get_storage(pipe_input.data.query.get_from_clause().key)
-            res.set_from_clause(
-                get_query_data_source(
-                    storage.get_schema().get_data_source(),
-                    allocation_policies=storage.get_allocation_policies(),
-                    final=pipe_input.data.query.get_final(),
-                    sampling_rate=pipe_input.data.query.get_sample(),
-                    storage_key=storage.get_storage_key(),
-                )
-            )
-            return res
-        elif isinstance(pipe_input.data.query, LogicalQuery):
-            run_entity_validators(pipe_input.data.query, pipe_input.query_settings)
-            return run_entity_processing_executor(
-                pipe_input.data.query, pipe_input.query_settings
-            )
-        else:
+        query = pipe_input.data.query
+        translated_storage_query = try_translate_storage_query(query)
+        if translated_storage_query:
+            return translated_storage_query
+
+        if isinstance(query, LogicalQuery) and isinstance(
+            query.get_from_clause(), Entity
+        ):
+            run_entity_validators(cast(EntityQuery, query), pipe_input.query_settings)
+            return run_entity_processing_executor(query, pipe_input.query_settings)
+        elif isinstance(query, CompositeQuery):
+            # if we were not able to translate the storage query earlier and we got to this point, this is
+            # definitely a composite entity query
             return translate_composite_query(
-                cast(CompositeQuery[Entity], pipe_input.data.query),
+                cast(CompositeQuery[Entity], query),
                 pipe_input.query_settings,
             )
+        else:
+            raise NotImplementedError(f"Unknown query type {type(query)}, {query}")
 
 
 class StorageProcessingStage(

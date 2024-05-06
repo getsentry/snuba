@@ -17,7 +17,7 @@ from snuba.query.data_source.join import (
     JoinNode,
     JoinVisitor,
 )
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.expressions import Column, Expression
 from snuba.query.joins.classifier import (
     AliasGenerator,
@@ -33,7 +33,7 @@ class SubqueryDraft:
     Data structure used to progressively build a subquery.
     """
 
-    def __init__(self, data_source: Entity) -> None:
+    def __init__(self, data_source: LogicalDataSource) -> None:
         self.__data_source = data_source
         self.__selected_expressions: set[SelectedExpression] = set()
         self.__conditions: list[Expression] = []
@@ -48,7 +48,7 @@ class SubqueryDraft:
     def set_granularity(self, granularity: int | None) -> None:
         self.__granularity = granularity
 
-    def build_query(self) -> ProcessableQuery[Entity]:
+    def build_query(self) -> ProcessableQuery[LogicalDataSource]:
         return LogicalQuery(
             from_clause=self.__data_source,
             selected_columns=list(
@@ -68,7 +68,9 @@ def aliasify_column(col_name: str) -> str:
     return f"_snuba_{col_name}"
 
 
-class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
+class SubqueriesInitializer(
+    JoinVisitor[Mapping[str, SubqueryDraft], LogicalDataSource]
+):
     """
     Visits a join clause and generates SubqueryDraft instances
     for each node. It adds the columns needed for the ON clause
@@ -76,14 +78,14 @@ class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
     """
 
     def visit_individual_node(
-        self, node: IndividualNode[Entity]
+        self, node: IndividualNode[LogicalDataSource]
     ) -> Mapping[str, SubqueryDraft]:
         entity = node.data_source
-        assert isinstance(entity, Entity)
+        assert isinstance(entity, LogicalDataSource)
         return {node.alias: SubqueryDraft(entity)}
 
     def visit_join_clause(
-        self, node: JoinClause[Entity]
+        self, node: JoinClause[LogicalDataSource]
     ) -> Mapping[str, SubqueryDraft]:
         combined = {**node.left_node.accept(self), **node.right_node.accept(self)}
         for condition in node.keys:
@@ -115,7 +117,7 @@ class SubqueriesInitializer(JoinVisitor[Mapping[str, SubqueryDraft], Entity]):
         return combined
 
 
-class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
+class SubqueriesReplacer(JoinVisitor[JoinNode[LogicalDataSource], LogicalDataSource]):
     """
     Replaces the entities in the original joins with the relevant
     SubqueryDraft objects.
@@ -125,11 +127,13 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
         self.__subqueries = subqueries
 
     def visit_individual_node(
-        self, node: IndividualNode[Entity]
-    ) -> IndividualNode[Entity]:
+        self, node: IndividualNode[LogicalDataSource]
+    ) -> IndividualNode[LogicalDataSource]:
         return IndividualNode(node.alias, self.__subqueries[node.alias].build_query())
 
-    def visit_join_clause(self, node: JoinClause[Entity]) -> JoinClause[Entity]:
+    def visit_join_clause(
+        self, node: JoinClause[LogicalDataSource]
+    ) -> JoinClause[LogicalDataSource]:
         """
         This tweaks the names of the columns in the ON clause as they
         cannot reference the entity fields directly (as in the original
@@ -196,7 +200,7 @@ def _alias_generator() -> Generator[str, None, None]:
         yield f"_snuba_gen_{i}"
 
 
-def generate_subqueries(query: CompositeQuery[Entity]) -> None:
+def generate_subqueries(query: CompositeQuery[LogicalDataSource]) -> None:
     """
     Generates correct subqueries for each of the entities referenced in
     a join query, and pushes down all expressions that can be executed

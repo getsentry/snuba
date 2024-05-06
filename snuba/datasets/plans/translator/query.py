@@ -4,10 +4,9 @@ from snuba.clickhouse.translators.snuba.mapping import (
     TranslationMappers,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.logical import StorageQuery
 
 
-def identity_translate(query: LogicalQuery | StorageQuery) -> ClickhouseQuery:
+def identity_translate(query: LogicalQuery) -> ClickhouseQuery:
     """
     Utility method to build a Clickhouse Query from a Logical Query
     without transforming anything.

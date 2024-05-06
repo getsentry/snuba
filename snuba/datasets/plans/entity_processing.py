@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Optional, Sequence, cast
 
 import sentry_sdk
 
@@ -20,6 +20,7 @@ from snuba.datasets.storage import (
     ReadableStorage,
     ReadableTableStorage,
 )
+from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
@@ -118,7 +119,7 @@ class EntityProcessingExecutor:
 
         return clickhouse_query
 
-    def execute(self, query: LogicalQuery, settings: QuerySettings) -> Query:
+    def execute(self, query: EntityQuery, settings: QuerySettings) -> Query:
         from snuba.pipeline.processors import execute_entity_processors
 
         execute_entity_processors(query, settings)
@@ -138,5 +139,7 @@ def run_entity_processing_executor(
     entity = get_entity(entity_key)
     assert isinstance(entity, PluggableEntity)
     entity_processing_executor = entity.get_processing_executor()
-    physical_query = entity_processing_executor.execute(query, query_settings)
+    physical_query = entity_processing_executor.execute(
+        cast(EntityQuery, query), query_settings
+    )
     return physical_query

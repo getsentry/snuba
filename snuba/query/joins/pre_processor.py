@@ -13,6 +13,7 @@ from snuba.query.data_source.join import (
     entity_from_node,
 )
 from snuba.query.data_source.simple import Entity
+from snuba.query.exceptions import InvalidQueryException
 
 
 class QualifiedCol(NamedTuple):
@@ -140,18 +141,22 @@ def get_equivalent_columns(
             visited_nodes = traverse_graph(n, visited_nodes)
         return visited_nodes
 
+    for node in join.get_alias_node_map().values():
+        if not isinstance(node, Entity):
+            raise InvalidQueryException("Joins not supported for storage queries")
+
     entities_in_join = {
         entity_from_node(node) for node in join.get_alias_node_map().values()
     }
     adjacency_sets = join.accept(EquivalenceExtractor(entities_in_join))
     connected_components: MutableMapping[QualifiedCol, Set[QualifiedCol]] = {}
 
-    for node in adjacency_sets:
-        if node not in connected_components:
-            component = traverse_graph(node, set())
-            for node in component:
+    for qualified_col in adjacency_sets:
+        if qualified_col not in connected_components:
+            component = traverse_graph(qualified_col, set())
+            for component_node in component:
                 equivalent_nodes = copy(component)
-                equivalent_nodes.remove(node)
-                connected_components[node] = equivalent_nodes
+                equivalent_nodes.remove(component_node)
+                connected_components[qualified_col] = equivalent_nodes
 
     return connected_components
