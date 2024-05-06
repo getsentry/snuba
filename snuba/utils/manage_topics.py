@@ -18,8 +18,8 @@ def create_topics(client: AdminClient, topics: Sequence[Topic]) -> None:
         logger.debug("Adding topic %s to creation list", topic_spec.topic_name)
         topics_to_create[topic_spec.topic_name] = NewTopic(
             topic_spec.topic_name,
-            num_partitions=topic_spec.partitions_number,
-            replication_factor=topic_spec.replication_factor,
+            num_partitions=1,
+            replication_factor=1,
             config=topic_spec.topic_creation_config,
         )
 
