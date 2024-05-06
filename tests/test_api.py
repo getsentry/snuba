@@ -2154,7 +2154,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
     def test(self) -> None:
         admin_client = AdminClient(get_default_kafka_configuration())
-        create_topics(admin_client, [SnubaTopic.DEAD_LETTER_QUERYLOG])
+        create_topics(admin_client, [SnubaTopic.EVENTS])
 
         expected_uuid = uuid.uuid1()
 
