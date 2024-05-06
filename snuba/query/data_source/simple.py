@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
@@ -71,7 +70,7 @@ class Storage(LogicalDataSource):
     able to query storages directly from SnQL"""
 
     key: StorageKey
-    schema: ColumnSet = ColumnSet([])
+    schema: ColumnSet = field(default_factory=lambda: ColumnSet([]))
     sample: Optional[float] = None
 
     @property

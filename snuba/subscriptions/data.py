@@ -206,7 +206,9 @@ class SubscriptionData:
             dataset,
             timer,
             referrer,
-            custom_processing,
+            # subscriptions are tied to entities, these validators are going to run on the entity
+            # anyways so it's okay that the post-processing is done without type safety
+            custom_processing,  # type: ignore
         )
         return request
 

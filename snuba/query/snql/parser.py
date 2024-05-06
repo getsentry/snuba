@@ -48,6 +48,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
@@ -60,7 +61,6 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.logical import StorageQuery
 from snuba.query.matchers import Any as AnyMatch
 from snuba.query.matchers import AnyExpression, AnyOptionalString
 from snuba.query.matchers import Column as ColumnMatch
@@ -250,12 +250,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Union[
-        LogicalQuery,
-        CompositeQuery[QueryEntity],
-        StorageQuery,
-        CompositeQuery[QueryStorage],
-    ]:
+    ) -> Union[LogicalQuery, CompositeQuery[LogicalDataSource]]:
         args: MutableMapping[str, Any] = {}
         (
             data_source,
@@ -286,23 +281,17 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
             args["groupby"] = [gb.expression for gb in args["groupby"]]
 
-        if isinstance(
-            data_source, (CompositeQuery, LogicalQuery, JoinClause, StorageQuery)
-        ):
+        if isinstance(data_source, (CompositeQuery, LogicalQuery, JoinClause)):
             args["from_clause"] = data_source
-            return cast(
-                CompositeQuery[QueryEntity] | CompositeQuery[QueryStorage],
-                CompositeQuery(**args),
-            )
+            return CompositeQuery(**args)
 
         args.update({"prewhere": None, "from_clause": data_source})
         if isinstance(data_source, QueryEntity):
             # TODO: How sample rate gets stored needs to be addressed in a future PR
             args["sample"] = data_source.sample
 
-        if isinstance(data_source, QueryEntity):
-            return LogicalQuery(**args)
-        return StorageQuery(**args)
+        assert isinstance(data_source, (QueryEntity, QueryStorage))
+        return LogicalQuery(**args)
 
     def visit_match_clause(
         self,
@@ -313,21 +302,21 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             Any,
             Union[
                 QueryEntity,
-                CompositeQuery[QueryEntity | QueryStorage],
+                CompositeQuery[LogicalDataSource],
                 LogicalQuery,
                 RelationshipTuple,
                 Sequence[RelationshipTuple],
             ],
         ],
     ) -> Union[
-        CompositeQuery[QueryEntity | QueryStorage],
+        CompositeQuery[LogicalDataSource],
         LogicalQuery,
         QueryEntity,
         # joins not availble for storage queries as of 2024-04-12
         JoinClause[QueryEntity],
     ]:
         _, _, _, match = visited_children
-        if isinstance(match, (CompositeQuery, LogicalQuery, StorageQuery)):
+        if isinstance(match, (CompositeQuery, LogicalQuery)):
             return match
         elif isinstance(match, RelationshipTuple):
             join_clause = build_join_clause([match])
@@ -337,11 +326,6 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
         ):
             join_clause = build_join_clause(match)
             return join_clause
-        if not isinstance(match, (QueryEntity, QueryStorage)):
-            import pdb
-
-            pdb.set_trace()
-            print(match)
 
         assert isinstance(match, (QueryEntity, QueryStorage))  # mypy
         return match
@@ -457,14 +441,9 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_subquery(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> Union[
-        LogicalQuery,
-        StorageQuery,
-        CompositeQuery[QueryEntity],
-        CompositeQuery[QueryStorage],
-    ]:
+    ) -> Union[LogicalQuery, CompositeQuery[LogicalDataSource]]:
         _, query, _ = visited_children
-        assert isinstance(query, (CompositeQuery, LogicalQuery, StorageQuery))  # mypy
+        assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
         return query
 
     def visit_function_name(self, node: Node, visited_children: Iterable[Any]) -> str:
@@ -962,7 +941,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
 def parse_snql_query_initial(
     body: str,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]:
+) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -993,7 +972,7 @@ def parse_snql_query_initial(
             message, _ = message.split("\n", 1)
         raise ParsingException(message)
 
-    assert isinstance(parsed, (CompositeQuery, LogicalQuery, StorageQuery))  # mypy
+    assert isinstance(parsed, (CompositeQuery, LogicalQuery))  # mypy
 
     # Add these defaults here to avoid them getting applied to subqueries
     limit = parsed.get_limit()
@@ -1011,7 +990,7 @@ def parse_snql_query_initial(
 
 
 def _qualify_columns(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     All columns in a join query should be qualified with the entity alias, e.g. e.event_id
@@ -1041,7 +1020,7 @@ def _qualify_columns(
 
 
 def _treeify_or_and_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
@@ -1073,7 +1052,7 @@ DATETIME_MATCH = FunctionCallMatch(
 
 
 def _parse_datetime_literals(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
@@ -1099,7 +1078,7 @@ ARRAY_JOIN_MATCH = FunctionCallMatch(
 
 
 def _array_join_transformation(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     def parse(exp: Expression) -> Expression:
         result = ARRAY_JOIN_MATCH.match(exp)
@@ -1192,7 +1171,7 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 
 def _unpack_array_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
     schema: ColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
@@ -1228,7 +1207,7 @@ def _unpack_array_conditions(
 
 
 def _array_column_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     Find conditions on array columns, and if those columns are not in the array join,
@@ -1252,7 +1231,7 @@ def _array_column_conditions(
 
 
 def _mangle_query_aliases(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery],
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
 ) -> None:
     """
     If a query has a subquery, the inner query will get its aliases mangled. This is
@@ -1283,13 +1262,12 @@ def _mangle_query_aliases(
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.
-    if isinstance(query.get_from_clause(), (LogicalQuery, StorageQuery)):
+    if isinstance(query.get_from_clause(), LogicalQuery):
         query.transform_expressions(mangle_column_value)
-    print(query)
 
 
 def validate_identifiers_in_lambda(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     Check to make sure that any identifiers referenced in a lambda were defined in that lambda
@@ -1323,10 +1301,8 @@ def validate_identifiers_in_lambda(
 
 def _replace_time_condition(
     query: Union[
-        CompositeQuery[QueryEntity],
-        CompositeQuery[QueryStorage],
+        CompositeQuery[LogicalDataSource],
         LogicalQuery,
-        StorageQuery,
     ]
 ) -> None:
     condition = query.get_condition()
@@ -1340,7 +1316,7 @@ def _replace_time_condition(
     if max_days is not None:
         max_days = int(max_days)
 
-    if isinstance(query, (LogicalQuery, StorageQuery)):
+    if isinstance(query, LogicalQuery):
         new_top_level = _align_max_days_date_align(
             query.get_from_clause().key, top_level, max_days, date_align
         )
@@ -1435,10 +1411,8 @@ def _align_max_days_date_align(
 
 def _select_entity_for_dataset(
     dataset: Dataset,
-) -> Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]], None]:
-    def selector(
-        query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]
-    ) -> None:
+) -> Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]:
+    def selector(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
         # If you are doing a JOIN, then you have to specify the entity
         if isinstance(query, CompositeQuery):
             return
@@ -1490,9 +1464,9 @@ def _select_entity_for_dataset(
 
 
 def _post_process(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery],
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
     funcs: Sequence[
-        Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]], None]
+        Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
     ],
     settings: QuerySettings | None = None,
 ) -> None:
@@ -1509,7 +1483,7 @@ def _post_process(
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
-        if isinstance(from_clause, (LogicalQuery, CompositeQuery, StorageQuery)):
+        if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
             _post_process(from_clause, funcs, settings)
             query.set_from_clause(from_clause)
 
@@ -1532,7 +1506,7 @@ VALIDATORS = [
 
 
 CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery, StorageQuery]], None]
+    Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
 ]
 
 
@@ -1541,12 +1515,7 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Union[
-    CompositeQuery[QueryEntity],
-    LogicalQuery,
-    CompositeQuery[QueryStorage],
-    StorageQuery,
-]:
+) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 

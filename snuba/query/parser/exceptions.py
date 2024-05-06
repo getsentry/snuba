@@ -1,7 +1,7 @@
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity, Storage
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.exceptions import InvalidQueryException, ValidationException
-from snuba.query.logical import Query, StorageQuery
+from snuba.query.logical import Query
 
 
 class ParsingException(InvalidQueryException):
@@ -24,7 +24,7 @@ class PostProcessingError(Exception):
 
     def __init__(
         self,
-        query: Query | StorageQuery | CompositeQuery[Entity] | CompositeQuery[Storage],
+        query: Query | CompositeQuery[LogicalDataSource],
         message: str | None = None,
     ):
         super().__init__(message)
