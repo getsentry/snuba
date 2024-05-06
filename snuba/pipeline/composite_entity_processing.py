@@ -151,10 +151,10 @@ class _LogicalDataSourceFinder(
 
     def __init__(self) -> None:
         self.has_join = False
-        self.simple_data_sources: set[LogicalDataSource] = set([])
+        self.simple_data_sources: list[LogicalDataSource] = []
 
     def _visit_simple_source(self, data_source: LogicalDataSource) -> None:
-        self.simple_data_sources.add(data_source)
+        self.simple_data_sources.append(data_source)
 
     def _visit_join(self, data_source: JoinClause[LogicalDataSource]) -> None:
         self.has_join = True
