@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping, Union, cast
+from typing import Mapping, Union
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
@@ -27,8 +27,7 @@ def translate_composite_query(
     Converts a logical composite query to a physical composite query.
     """
     add_equivalent_conditions(query)
-    # TODO: unnecessary cast
-    generate_subqueries(cast(CompositeQuery[LogicalDataSource], query))
+    generate_subqueries(query)
     physical_query = _translate_logical_composite_query(query, query_settings)
     return physical_query
 
