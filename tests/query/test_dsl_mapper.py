@@ -614,7 +614,7 @@ query_tests = [
             limit=1000,
         ),
         """Query(
-        from_clause=from_clause,
+        from_clause=Entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS,get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model()),
         selected_columns=[SelectedExpression('aggregate_value', f.sum(column('value', None, '_snuba_value'), alias='_snuba_aggregate_value'))],
         array_join=None,
         condition=and_cond(f.equals(column('granularity', None, '_snuba_granularity'), literal(60)), in_cond(column('project_id', None, '_snuba_project_id'), f.tuple(literal(1))), in_cond(column('org_id', None, '_snuba_org_id'), f.tuple(literal(1))), f.equals(column('use_case_id', None, '_snuba_use_case_id'), literal('transactions')), f.greaterOrEquals(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 1, 0, 0))), f.less(column('timestamp', None, '_snuba_timestamp'), literal(datetime(2021, 1, 2, 0, 0))), f.equals(column('metric_id', None, '_snuba_metric_id'), literal(123456)), in_cond(tags_raw['888'], f.tuple(literal('dist1'), literal('dist2')))),
