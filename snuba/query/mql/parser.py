@@ -321,9 +321,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[
-                InitialParseResult,
-            ],
+            Tuple[InitialParseResult,],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -695,9 +693,9 @@ def build_formula_query_from_clause(
     if not all(node.groupby == groupbys for node in join_nodes):
         raise InvalidQueryException("All terms in a formula must have the same groupby")
 
-    entity_keys = set([select_entity(node.mri or "", dataset) for node in join_nodes])
+    entity_keys = [select_entity(node.mri or "", dataset) for node in join_nodes]
     if len(entity_keys) == 1:
-        # The query only references a single entity, so it's not necessary to build a join clause
+        # The query only has a single aggregation, so it's not necessary to build a join clause
         # across entities.
         entity_key = entity_keys.pop()
         return (

@@ -12,6 +12,7 @@ from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.equivalence_adder import add_equivalent_conditions
 from snuba.query.joins.subquery_generator import generate_subqueries
+from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 
@@ -23,7 +24,23 @@ def translate_composite_query(
     Converts a logical composite query to a physical composite query.
     """
     add_equivalent_conditions(query)
-    generate_subqueries(query)
+    # Adding this hack here for now, but this could probably be handled better with the
+    # new execution pipeline stages
+    from_clause = query.get_from_clause()
+    is_metrics_query = True
+    if isinstance(from_clause, JoinClause):
+        nodes = from_clause.get_alias_node_map()
+        for node in nodes.values():
+            if isinstance(node.data_source, Entity):
+                if not node.data_source.key.value.startswith("generic_metrics"):
+                    is_metrics_query = False
+    else:
+        is_metrics_query = False
+
+    if is_metrics_query:
+        generate_metrics_subqueries(query)
+    else:
+        generate_subqueries(query)
     physical_query = _translate_logical_composite_query(query, query_settings)
     return physical_query
 

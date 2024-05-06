@@ -32,7 +32,6 @@ from snuba.query.joins.subquery_generator import (
     SubqueryDraft,
     generate_subqueries,
 )
-from snuba.query.logical import Query as LogicalQuery
 
 
 class MetricsSubqueriesInitializer(SubqueriesInitializer):
@@ -232,23 +231,6 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
 
     query.set_ast_selected_columns(selected_columns)
 
-    # query.set_ast_selected_columns(
-    #     [
-    #         SelectedExpression(
-    #             name=s.name,
-    #             expression=_process_root(s.expression, subqueries, alias_generator),
-    #         )
-    #         for s in query.get_selected_columns()
-    #     ]
-    # )
-    # This is working correctly for everything except the aggregate value function
-
-    # array_join = query.get_arrayjoin()
-    # if array_join is not None:
-    #     query.set_arrayjoin(
-    #         [_process_root(el, subqueries, alias_generator) for el in array_join]
-    #     )
-
     ast_condition = query.get_condition()
     if ast_condition is not None:
         main_conditions = []
@@ -277,9 +259,6 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
         else:
             query.set_ast_condition(None)
 
-    for s in subqueries.values():
-        s.set_granularity(query.get_granularity())
-
     # TODO: push down the group by when it is the same as the join key.
     query.set_ast_groupby(
         [
@@ -287,17 +266,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             for e in query.get_groupby()
         ]
     )
-
-    # having = query.get_having()
-    # if having is not None:
-    #     query.set_ast_having(
-    #         combine_and_conditions(
-    #             [
-    #                 _process_root(c, subqueries, alias_generator)
-    #                 for c in get_first_level_and_conditions(having)
-    #             ]
-    #         )
-    #     )
+    print("GROUP", query.get_groupby())
 
     query.set_ast_orderby(
         [
@@ -310,24 +279,5 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             for orderby in query.get_orderby()
         ]
     )
-
-    # print("SUBS", subqueries["d0"])
-    # print("SUB", subqueries["d0"])
-
-    # limitby = query.get_limitby()
-    # if limitby is not None:
-    #     query.set_limitby(
-    #         replace(
-    #             limitby,
-    #             columns=[
-    #                 _process_root(
-    #                     column,
-    #                     subqueries,
-    #                     alias_generator,
-    #                 )
-    #                 for column in limitby.columns
-    #             ],
-    #         )
-    #     )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))

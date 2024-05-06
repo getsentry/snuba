@@ -66,6 +66,7 @@ class SubqueryDraft:
                     key=lambda selected: selected.name or "",
                 )
             ),
+            groupby=self.__groupby,
             condition=(
                 combine_and_conditions(self.__conditions) if self.__conditions else None
             ),
@@ -181,7 +182,7 @@ def _process_root(
     print("EXP", expression)
     subexpressions = expression.accept(BranchCutter(alias_generator))
     print("SUB", subexpressions)
-    breakpoint()
+    # breakpoint()
     return _push_down_branches(subexpressions, subqueries, alias_generator)
 
 

@@ -1,3 +1,38 @@
+Latest bug:
+
+pytest tests/test_metrics_mql_api.py -k "test_simple_formula" -vvv
+
+For some reason the aliases in the ON condition are not right: ON d0._snuba_time=d1._snuba_time
+I think this might actually be the subquery generator:
+
+SELECT (toStartOfInterval((timestamp AS _snuba_timestamp), toIntervalSecond(60), 'Universal') AS `_snuba_d1.time`
+
+Why is the table name being put in the alias?
+
+
+2024-05-03 13:08:39,757 Error running query: SELECT (plus((d0._snuba_gen_1 AS _snuba_gen_1), (d1._snuba_gen_2 AS _snuba_gen_2)) AS _snuba_aggregate_value), (d1.`_snuba_d1.time` AS `_snuba_d1.time`), (d0.`_snuba_d0.time` AS `_snuba_d0.time`) FROM (SELECT (toStartOfInterval((timestamp AS _snuba_timestamp), toIntervalSecond(60), 'Universal') AS `_snuba_d1.time`), (avgMerge(avg) AS _snuba_gen_2) FROM generic_metric_distributions_aggregated_local WHERE greaterOrEquals(_snuba_timestamp, toDateTime('2024-05-02T09:15:00', 'Universal')) AND less(_snuba_timestamp, toDateTime('2024-05-02T15:15:00', 'Universal')) AND in((project_id AS _snuba_project_id), (1, 2)) AND in((org_id AS _snuba_org_id), tuple(101)) AND equals((use_case_id AS _snuba_use_case_id), 'performance') AND equals((granularity AS _snuba_granularity), 1) AND equals((metric_id AS _snuba_metric_id), 1068) AND greaterOrEquals(timestamp, toDateTime('2024-05-02T09:15:00', 'Universal')) AND less(timestamp, toDateTime('2024-05-02T15:15:00', 'Universal')) AND in(project_id, (1, 2)) AND in(org_id, tuple(101)) AND equals(use_case_id, 'performance') AND equals(granularity, 1) AND equals(metric_id, 1068) GROUP BY `_snuba_d1.time`) d1 INNER JOIN (SELECT (toStartOfInterval((timestamp AS _snuba_timestamp), toIntervalSecond(60), 'Universal') AS `_snuba_d0.time`), (avgMerge(avg) AS _snuba_gen_1) FROM generic_metric_distributions_aggregated_local WHERE greaterOrEquals(_snuba_timestamp, toDateTime('2024-05-02T09:15:00', 'Universal')) AND less(_snuba_timestamp, toDateTime('2024-05-02T15:15:00', 'Universal')) AND in((project_id AS _snuba_project_id), (1, 2)) AND in((org_id AS _snuba_org_id), tuple(101)) AND equals((use_case_id AS _snuba_use_case_id), 'performance') AND equals((granularity AS _snuba_granularity), 1) AND equals((metric_id AS _snuba_metric_id), 1068) AND greaterOrEquals(timestamp, toDateTime('2024-05-02T09:15:00', 'Universal')) AND less(timestamp, toDateTime('2024-05-02T15:15:00', 'Universal')) AND in(project_id, (1, 2)) AND in(org_id, tuple(101)) AND equals(use_case_id, 'performance') AND equals(granularity, 1) AND equals(metric_id, 1068) GROUP BY `_snuba_d0.time`) d0 ON d0._snuba_time=d1._snuba_time GROUP BY `_snuba_d1.time`, `_snuba_d0.time` ORDER BY `_snuba_d0.time` ASC LIMIT 1000 OFFSET 0
+DB::Exception: There's no column 'd0._snuba_time' in table 'd0': While processing d0._snuba_time: While processing  INNER JOIN ...  ON d0._snuba_time = d1._snuba_time. Stack trace:
+
+0. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, int, bool) @ 0x8e29de8 in /usr/bin/clickhouse
+1. DB::TranslateQualifiedNamesMatcher::visit(DB::ASTIdentifier&, std::__1::shared_ptr<DB::IAST>&, DB::TranslateQualifiedNamesMatcher::Data&) @ 0x11e5ab9c in /usr/bin/clickhouse
+2. DB::TranslateQualifiedNamesMatcher::visit(std::__1::shared_ptr<DB::IAST>&, DB::TranslateQualifiedNamesMatcher::Data&) @ 0x11e5a748 in /usr/bin/clickhouse
+3. DB::InDepthNodeVisitor<DB::TranslateQualifiedNamesMatcher, true, false, std::__1::shared_ptr<DB::IAST> >::visit(std::__1::shared_ptr<DB::IAST>&) @ 0x11e07bac in /usr/bin/clickhouse
+4. DB::InDepthNodeVisitor<DB::TranslateQualifiedNamesMatcher, true, false, std::__1::shared_ptr<DB::IAST> >::visit(std::__1::shared_ptr<DB::IAST>&) @ 0x11e07bec in /usr/bin/clickhouse
+5. DB::InDepthNodeVisitor<DB::TranslateQualifiedNamesMatcher, true, false, std::__1::shared_ptr<DB::IAST> >::visit(std::__1::shared_ptr<DB::IAST>&) @ 0x11e07bec in /usr/bin/clickhouse
+6. DB::TranslateQualifiedNamesMatcher::visit(std::__1::shared_ptr<DB::IAST>&, DB::TranslateQualifiedNamesMatcher::Data&) @ 0x11e5a79c in /usr/bin/clickhouse
+
+
+
+-----
+
+
+Subqueries almost working!
+
+I am duplicating all the conditions though. Not sure why, but it makes the queries really heavyweight.
+
+-------
+
+
 Attempted to get the simple case working (single entity) without subqueries.
 
 Ran into (in hindsight) an obvious error: formulas with different filters in the components don't work.
