@@ -88,12 +88,6 @@ impl BatchFactory {
                     sleep(Duration::from_millis(800)).await;
                 }
 
-                if receiver.is_closed() && receiver.is_empty() {
-                    // batch is finished and we never had any data to write
-                    // to clickhouse
-                    return Ok(());
-                }
-
                 if !receiver.is_empty() {
                     // only make the request to clickhouse if there is data
                     // being added to the receiver stream from the sender
