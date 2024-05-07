@@ -131,7 +131,7 @@ that when someone is passing in an EntityQuery its datasource is actually an Ent
 """
 
 
-class EntityQuery(Query, ProcessableQuery[Entity], metaclass=_FlexibleQueryType):
+class EntityQuery(Query, metaclass=_FlexibleQueryType):
     @classmethod
     def data_source(cls) -> Type[Entity]:
         return Entity
@@ -145,7 +145,7 @@ class EntityQuery(Query, ProcessableQuery[Entity], metaclass=_FlexibleQueryType)
         return cast("EntityQuery", query)
 
 
-class StorageQuery(Query, ProcessableQuery[Storage], metaclass=_FlexibleQueryType):
+class StorageQuery(Query, metaclass=_FlexibleQueryType):
     @classmethod
     def data_source(cls) -> Type[Storage]:
         return Storage
