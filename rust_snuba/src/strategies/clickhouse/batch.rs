@@ -83,7 +83,7 @@ impl BatchFactory {
 
             let result_handle = self.handle.spawn(async move {
                 while receiver.is_empty() && !receiver.is_closed() {
-                    // continously check on the recevier stream, only when it's
+                    // continously check on the receiver stream, only when it's
                     // not empty do we write to clickhouse
                     sleep(Duration::from_millis(800)).await;
                 }
@@ -96,7 +96,7 @@ impl BatchFactory {
 
                 if !receiver.is_empty() {
                     // only make the request to clickhouse if there is data
-                    // being added to the reciever stream from the sender
+                    // being added to the receiver stream from the sender
                     let res = client
                         .post(&url)
                         .query(&[("query", &query)])
