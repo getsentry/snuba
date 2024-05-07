@@ -185,7 +185,7 @@ jobs:
           fi
 
   tests:
-    needs: [linting, snuba-image]
+    needs: [linting]
     name: Tests and code coverage
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -268,16 +268,16 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   sentry:
-    needs: [snuba-image, files-changed]
+    needs: [files-changed]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       matrix:
-        instance: [0, 1, 2, 3]
+        instance: [0, 1, 2, 3, 4, 5]
     env:
       MIGRATIONS_TEST_MIGRATE: 1
       # XXX: `MATRIX_INSTANCE_TOTAL` must be hardcoded to the length of `strategy.matrix.instance`.
-      MATRIX_INSTANCE_TOTAL: 4
+      MATRIX_INSTANCE_TOTAL: 6
       TEST_GROUP_STRATEGY: ROUND_ROBIN
 
     steps:
@@ -378,7 +378,7 @@ jobs:
         run: pytest -k 'not __In' tests -vv -m snuba_ci
 
   clickhouse-versions:
-    needs: [linting, snuba-image]
+    needs: [linting]
     name: Tests on multiple clickhouse versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
