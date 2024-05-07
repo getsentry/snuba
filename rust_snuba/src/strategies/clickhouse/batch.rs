@@ -19,6 +19,7 @@ pub struct BatchFactory {
     skip_write: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl BatchFactory {
     pub fn new(
         hostname: &str,
@@ -27,10 +28,20 @@ impl BatchFactory {
         database: &str,
         concurrency: &ConcurrencyConfig,
         skip_write: bool,
+        clickhouse_user: &str,
+        clickhouse_password: &str,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(3);
+        let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
+        headers.insert(
+            "X-Clickhouse-User",
+            HeaderValue::from_str(clickhouse_user).unwrap(),
+        );
+        headers.insert(
+            "X-ClickHouse-Key",
+            HeaderValue::from_str(clickhouse_password).unwrap(),
+        );
         headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
@@ -186,6 +197,8 @@ mod tests {
             "testdb",
             &concurrency,
             false,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -217,6 +230,8 @@ mod tests {
             "testdb",
             &concurrency,
             false,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -250,6 +265,8 @@ mod tests {
             "testdb",
             &concurrency,
             true,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -283,6 +300,8 @@ mod tests {
             "testdb",
             &concurrency,
             true,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();

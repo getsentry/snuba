@@ -7,6 +7,6 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --label-selector="service=snuba,component=${SNUBA_COMPONENT_NAME}" \
   --container-name="${SNUBA_COMPONENT_NAME}" \
   "snuba-query-replayer" \
-  "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  "us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
   -- \
   snuba query-replayer "${args[@]}"

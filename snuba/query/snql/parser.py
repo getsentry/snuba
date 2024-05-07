@@ -72,10 +72,8 @@ from snuba.query.parser import (
     validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException, PostProcessingError
-from snuba.query.parser.validation import validate_query
 from snuba.query.query_settings import QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
-from snuba.query.snql.anonymize import format_snql_anonymized
 from snuba.query.snql.discover_entity_selection import select_discover_entity
 from snuba.query.snql.expression_visitor import (
     HighPriArithmetic,
@@ -1232,7 +1230,7 @@ def _mangle_query_aliases(
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.
-    if isinstance(query.get_from_clause(), LogicalQuery):
+    if isinstance(query.get_from_clause(), (LogicalQuery, CompositeQuery)):
         query.transform_expressions(mangle_column_value)
 
 
@@ -1371,36 +1369,6 @@ def _align_max_days_date_align(
     return list(map(replace_cond, old_top_level))
 
 
-def validate_entities_with_query(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
-) -> None:
-    if isinstance(query, LogicalQuery):
-        entity = get_entity(query.get_from_clause().key)
-        try:
-            for v in entity.get_validators():
-                v.validate(query)
-        except InvalidQueryException as e:
-            raise ParsingException(
-                f"validation failed for entity {query.get_from_clause().key.value}: {e}",
-                should_report=e.should_report,
-            )
-    else:
-        from_clause = query.get_from_clause()
-        if isinstance(from_clause, JoinClause):
-            alias_map = from_clause.get_alias_node_map()
-            for alias, node in alias_map.items():
-                assert isinstance(node.data_source, QueryEntity)  # mypy
-                entity = get_entity(node.data_source.key)
-                try:
-                    for v in entity.get_validators():
-                        v.validate(query, alias)
-                except InvalidQueryException as e:
-                    raise ParsingException(
-                        f"validation failed for entity {node.data_source.key.value}: {e}",
-                        should_report=e.should_report,
-                    )
-
-
 def _select_entity_for_dataset(
     dataset: Dataset,
 ) -> Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]:
@@ -1491,8 +1459,6 @@ POST_PROCESSORS = [
 
 VALIDATORS = [
     validate_identifiers_in_lambda,
-    validate_query,
-    validate_entities_with_query,
 ]
 
 
@@ -1506,10 +1472,9 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Tuple[Union[CompositeQuery[QueryEntity], LogicalQuery], str]:
+) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
-    snql_anonymized = ""
 
     if settings and settings.get_dry_run():
         explain_meta.set_original_ast(str(query))
@@ -1520,9 +1485,6 @@ def parse_snql_query(
         # before we run the anonymizer and the rest of the post processors
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
-
-        with sentry_sdk.start_span(op="parser", description="anonymize_snql_query"):
-            snql_anonymized = format_snql_anonymized(query).get_sql()
 
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
@@ -1547,8 +1509,8 @@ def parse_snql_query(
         # Validating
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
-        return query, snql_anonymized
+        return query
     except InvalidQueryException:
         raise
     except Exception:
-        raise PostProcessingError(query, snql_anonymized)
+        raise PostProcessingError(query)

@@ -1,5 +1,86 @@
 # Changelog
 
+## 24.4.2
+
+### Various fixes & improvements
+
+- feat(generic-metrics): Add success metric around Base64 message processing (#5830) by @ayirr7
+- chore(deps): bump python and node (#5829) by @mdtro
+- ref: remove pushing to legacy gcr (#5819) by @asottile-sentry
+- Enables Clickhouse Authorization (#5818) by @xurui-c
+- remove ConditionSimplifierProcessor (#5820) by @volokluev
+- chore(dev-exp): Remove old pipeline code (#5821) by @enochtangg
+- Revert "feat(generic-metrics): Add support for subscriptions to gauges (#5736)" (d0c50931) by @getsentry-bot
+- feat(generic-metrics): Add Base64 decoding to Snuba processors (#5761) by @ayirr7
+- feat(generic-metrics): Add support for subscriptions to gauges (#5736) by @ayirr7
+- add a metric for how many queries are waiting for readthrough cache (#5817) by @volokluev
+- ref: use artifact registry (#5816) by @asottile-sentry
+- feat(meta): Create distributions meta tables (#5748) by @evanh
+- chore: Bump Kafka schema version to 0.1.71 (#5814) by @ayirr7
+- Remove unnecessary test (#5812) by @ayirr7
+- feat(meta): Create gauges meta tables (#5749) by @evanh
+- Revert "Revert "ref: dual-write docker image to artifact registry (#5798)"" (#5813) by @volokluev
+- fix: Don't log this every time, it clogs the logs up (#5799) by @evanh
+- feat(devexp): Split entity and storage processing for composite queries (#5785) by @enochtangg
+- feat(meta) Create sets meta tables (#5747) by @evanh
+- Emit a metric when replacements are skipped (#5809) by @xurui-c
+- Revert "ref: dual-write docker image to artifact registry (#5798)" (b69f85f5) by @getsentry-bot
+- ref: dual-write docker image to artifact registry (#5798) by @asottile-sentry
+- fix(meta) Rename counter tables for consistency (#5797) by @evanh
+- fix(22.8) don't use ifnull for cardinality casting (#5807) by @volokluev
+
+_Plus 14 more_
+
+## 24.4.1
+
+### Various fixes & improvements
+
+- feat(replays): add migration for replay_id in discover (#5790) by @JoshFerge
+- feat: replacer defaults to auto.offset.reset=earliest (#5772) by @lynnagara
+- feat(migrations): add discover local (#5788) by @dbanda
+- fix(spans): Let null domain be null (#5780) by @phacops
+- feat(meta): Adjust partitioning/settings of counters meta tables (#5784) by @evanh
+- Revert "feat(replays): add replay_id column to merged discover table (#5777)" (2f1509fc) by @getsentry-bot
+- fix: fix mypy --strict vscode (#5781) by @kylemumma
+- feat(replays): add replay_id column to merged discover table (#5777) by @JoshFerge
+- ref: Rust consumer should not skip writes by default (#5778) by @lynnagara
+- chore(on-call): Add CrossOrgQueryAllocationPolicy to errors (#5774) by @enochtangg
+- inc-715: rust consumer can stop processing messages at specific timestamp (#5779) by @lynnagara
+- meta: Bump new development version (2248bb55)
+- fix(meta): Remove experimental meta tables (#5733) by @evanh
+- ref(card-an): Allow the new meta tables in the cardinality analyzer (#5769) by @evanh
+
+## 24.4.0
+
+### Various fixes & improvements
+
+- chore(on-call): Add metric for concurrent queries by referrer that violate policy (#5767) by @enochtangg
+- ref: make auto.offset.reset=earliest everywhere (#5765) by @lynnagara
+- feat(trace): Add trace id to transactions (#5768) by @wmak
+- fix(spans): Move span id above trace id in the prewhere (#5766) by @wmak
+- feat(meta): Add record meta column to gauges (#5760) by @evanh
+- feat(meta): Add record meta column to distributions (#5759) by @evanh
+- feat(meta): Add record_meta column to sets (#5735) by @evanh
+- ref: bump sentry-kafka-schemas to 0.1.68 (#5764) by @getsentry-bot
+- chore(capman): set default bytes scanned limit for rejecting policy (#5755) by @volokluev
+- ref(ch-upgrades): create dist tables functionality (#5737) by @MeredithAnya
+- perf(metrics): Use kafka header optimization (#5756) by @nikhars
+- feat(meta): Add updated versions of meta tables for counters (#5734) by @evanh
+- chore(rust): Update dependencies (#5751) by @nikhars
+- chore: update sdk version (#5754) by @kylemumma
+- fix: Fix default auto-offset-reset value (#5753) by @lynnagara
+- lower max query size to 128KiB (#5750) by @enochtangg
+- clean up old simple pipeline (#5732) by @enochtangg
+- feat(capman): Long term rejection allocation policy (#5718) by @volokluev
+- ref(fetcher): --tables optional now (#5730) by @MeredithAnya
+- fix: parser, bug in pushdown filter (#5731) by @kylemumma
+- feat(generic-metrics): Add a killswitch to processor (#5617) by @ayirr7
+- feat(replays): Replace python processor with a rust-based processor (#5380) by @cmanallen
+- feat(replay): add ReplayViewedEvent to replay processor (#5712) by @aliu3ntry
+- chore(deps): bump h2 from 0.3.22 to 0.3.26 in /rust_snuba (#5727) by @dependabot
+
+_Plus 52 more_
+
 ## 24.3.0
 
 ### Various fixes & improvements

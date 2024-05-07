@@ -10,14 +10,15 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import SelectedExpression
+from snuba.query.conditions import in_condition
 from snuba.query.data_source.simple import Entity
-from snuba.query.expressions import Column
+from snuba.query.expressions import Column, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query as _run_query
 
 
 def run_query() -> None:
@@ -29,6 +30,7 @@ def run_query() -> None:
         selected_columns=[
             SelectedExpression("event_id", Column("_snuba_event_id", None, "event_id")),
         ],
+        condition=in_condition(Column(None, None, "project_id"), [Literal(None, 123)]),
     )
 
     query_settings = HTTPQuerySettings(referrer="asd")
@@ -36,13 +38,12 @@ def run_query() -> None:
     dataset = get_dataset("events")
     timer = Timer("test")
 
-    result = parse_and_run_query(
+    result = _run_query(
         dataset,
         Request(
             id="asd",
             original_body={},
             query=query,
-            snql_anonymized="",
             query_settings=query_settings,
             attribution_info=AttributionInfo(
                 get_app_id("blah"),

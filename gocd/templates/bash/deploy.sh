@@ -5,7 +5,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
 /devinfra/scripts/k8s/k8stunnel \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
   --container-name="api" \
   --container-name="consumer" \
   --container-name="errors-consumer" \
@@ -49,13 +49,13 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="metrics-summaries-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
   --type="cronjob" \
   --container-name="cleanup" \
   --container-name="optimize" \
   --container-name="cardinality-report" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \
-  --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
   --type="statefulset" \
   --container-name="spans-exp-static-on"

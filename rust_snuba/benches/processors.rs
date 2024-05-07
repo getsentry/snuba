@@ -96,6 +96,7 @@ fn create_factory(
             logical_topic_name: "shared-resources-usage".to_string(),
             broker_config: BrokerConfig::default(),
         },
+        None,
     );
     Box::new(factory)
 }
