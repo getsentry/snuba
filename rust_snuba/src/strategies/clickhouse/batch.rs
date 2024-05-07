@@ -81,15 +81,17 @@ impl BatchFactory {
             let client = self.client.clone();
 
             let result_handle = self.handle.spawn(async move {
-                let res = client
-                    .post(&url)
-                    .query(&[("query", &query)])
-                    .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
-                    .send()
-                    .await?;
+                if !receiver.is_empty() && !receiver.is_closed() {
+                    let res = client
+                        .post(&url)
+                        .query(&[("query", &query)])
+                        .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
+                        .send()
+                        .await?;
 
-                if res.status() != reqwest::StatusCode::OK {
-                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                    if res.status() != reqwest::StatusCode::OK {
+                        anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                    }
                 }
 
                 Ok(())
@@ -216,6 +218,37 @@ mod tests {
         concurrency.handle().block_on(batch.finish()).unwrap();
 
         mock.assert();
+    }
+
+    #[test]
+    fn test_empty_batch() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).any_request();
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            false,
+            "default",
+            "",
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows([].to_vec()))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert_hits(0);
     }
 
     #[test]
