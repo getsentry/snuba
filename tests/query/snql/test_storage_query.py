@@ -11,7 +11,7 @@ from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.dsl import NestedColumn, and_cond, equals
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.logical import StorageQuery
+from snuba.query.logical import Query, StorageQuery
 from snuba.query.snql.parser import parse_snql_query
 
 tags = NestedColumn("tags")
@@ -53,61 +53,67 @@ required_condition = and_cond(
 test_cases = [
     pytest.param(
         f"MATCH STORAGE(metric_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
-        StorageQuery(
-            QueryStorage(key=StorageKey("metric_summaries")),
-            selected_columns=[
-                SelectedExpression(
-                    "4-5",
-                    FunctionCall(
-                        "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+        StorageQuery.from_query(
+            Query(
+                QueryStorage(key=StorageKey("metric_summaries")),
+                selected_columns=[
+                    SelectedExpression(
+                        "4-5",
+                        FunctionCall(
+                            "_snuba_4-5", "minus", (Literal(None, 4), Literal(None, 5))
+                        ),
                     ),
-                ),
-                SelectedExpression(
-                    "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                ),
-            ],
-            granularity=60,
-            condition=required_condition,
-            limit=1000,
-            offset=0,
+                    SelectedExpression(
+                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
+                    ),
+                ],
+                granularity=60,
+                condition=required_condition,
+                limit=1000,
+                offset=0,
+            )
         ),
         id="basic_storage_query",
     ),
     pytest.param(
         f"MATCH STORAGE(metrics_summaries) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
-        StorageQuery(
-            QueryStorage(key=StorageKey("metrics_summaries")),
-            selected_columns=[
-                SelectedExpression(
-                    "trace_id", Column("_snuba_trace_id", None, "trace_id")
+        StorageQuery.from_query(
+            Query(
+                QueryStorage(key=StorageKey("metrics_summaries")),
+                selected_columns=[
+                    SelectedExpression(
+                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
+                    ),
+                ],
+                granularity=None,
+                condition=and_cond(
+                    equals(tags["something"], Literal(None, "something_else")),
+                    required_condition,
                 ),
-            ],
-            granularity=None,
-            condition=and_cond(
-                equals(tags["something"], Literal(None, "something_else")),
-                required_condition,
-            ),
-            limit=1000,
-            offset=0,
+                limit=1000,
+                offset=0,
+            )
         ),
         id="nested field query",
     ),
     pytest.param(
         f"MATCH STORAGE(metrics_summaries SAMPLE 0.1) SELECT trace_id WHERE tags[something] = 'something_else' AND {added_condition} ",
-        StorageQuery(
-            QueryStorage(key=StorageKey("metrics_summaries"), sample=0.1),
-            selected_columns=[
-                SelectedExpression(
-                    "trace_id", Column("_snuba_trace_id", None, "trace_id")
+        StorageQuery.from_query(
+            Query(
+                QueryStorage(key=StorageKey("metrics_summaries"), sample=0.1),
+                selected_columns=[
+                    SelectedExpression(
+                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
+                    ),
+                ],
+                granularity=None,
+                condition=and_cond(
+                    equals(tags["something"], "something_else"),
+                    required_condition,
                 ),
-            ],
-            granularity=None,
-            condition=and_cond(
-                equals(tags["something"], "something_else"),
-                required_condition,
-            ),
-            limit=1000,
-            offset=0,
+                limit=1000,
+                offset=0,
+            )
         ),
         id="basic_query-sample",
     ),
@@ -127,7 +133,7 @@ test_cases = [
                     ),
                 )
             ],
-            from_clause=StorageQuery(
+            from_clause=Query(
                 QueryStorage(key=StorageKey("metrics_summaries")),
                 selected_columns=[
                     SelectedExpression(
@@ -149,20 +155,22 @@ test_cases = [
     pytest.param(
         """ MATCH STORAGE(metrics_summaries) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
         % added_condition,
-        StorageQuery(
-            QueryStorage(key=StorageKey("metrics_summaries")),
-            selected_columns=[
-                SelectedExpression(
-                    "trace_id", Column("_snuba_trace_id", None, "trace_id")
-                ),
-                SelectedExpression(
-                    "duration", Column("_snuba_duration_ms", None, "duration_ms")
-                ),
-            ],
-            granularity=None,
-            condition=required_condition,
-            limit=100,
-            offset=0,
+        StorageQuery.from_query(
+            Query(
+                QueryStorage(key=StorageKey("metrics_summaries")),
+                selected_columns=[
+                    SelectedExpression(
+                        "trace_id", Column("_snuba_trace_id", None, "trace_id")
+                    ),
+                    SelectedExpression(
+                        "duration", Column("_snuba_duration_ms", None, "duration_ms")
+                    ),
+                ],
+                granularity=None,
+                condition=required_condition,
+                limit=100,
+                offset=0,
+            )
         ),
         id="subquery",
     ),
