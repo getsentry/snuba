@@ -789,7 +789,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
             mri = extract_mri(parsed)  # Only works for single type formulas
             entity_key = select_entity(mri, dataset)
 
-            query = EntityQuery(
+            query = LogicalQuery(
                 from_clause=QueryEntity(
                     key=entity_key, schema=get_entity(entity_key).get_data_model()
                 ),
@@ -822,7 +822,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
 
             entity_key = select_entity(metric_value, dataset)
 
-            query = EntityQuery(
+            query = LogicalQuery(
                 from_clause=QueryEntity(
                     key=entity_key, schema=get_entity(entity_key).get_data_model()
                 ),
@@ -832,7 +832,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
             )
     except Exception as e:
         raise e
-    return query
+    return EntityQuery.from_query(query)
 
 
 METRICS_ENTITIES = {

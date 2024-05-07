@@ -139,6 +139,11 @@ class EntityQuery(Query, ProcessableQuery[Entity], metaclass=_FlexibleQueryType)
     def get_from_clause(self) -> Entity:
         return cast(Entity, super().get_from_clause())
 
+    @classmethod
+    def from_query(cls, query: Query) -> "EntityQuery":
+        assert isinstance(query.get_from_clause(), cls.data_source())
+        return cast("EntityQuery", query)
+
 
 class StorageQuery(Query, ProcessableQuery[Storage], metaclass=_FlexibleQueryType):
     @classmethod
@@ -147,3 +152,8 @@ class StorageQuery(Query, ProcessableQuery[Storage], metaclass=_FlexibleQueryTyp
 
     def get_from_clause(self) -> Storage:
         return cast(Storage, super().get_from_clause())
+
+    @classmethod
+    def from_query(cls, query: Query) -> "StorageQuery":
+        assert isinstance(query.get_from_clause(), cls.data_source())
+        return cast("StorageQuery", query)
