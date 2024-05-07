@@ -6,6 +6,7 @@ use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::types::RowData;
@@ -81,7 +82,21 @@ impl BatchFactory {
             let client = self.client.clone();
 
             let result_handle = self.handle.spawn(async move {
-                if !receiver.is_empty() && !receiver.is_closed() {
+                while receiver.is_empty() && !receiver.is_closed() {
+                    // continously check on the recevier stream, only when it's
+                    // not empty do we write to clickhouse
+                    sleep(Duration::from_millis(800)).await;
+                }
+
+                if receiver.is_closed() && receiver.is_empty() {
+                    // batch is finished and we never had any data to write
+                    // to clickhouse
+                    return Ok(());
+                }
+
+                if !receiver.is_empty() {
+                    // only make the request to clickhouse if there is data
+                    // being added to the reciever stream from the sender
                     let res = client
                         .post(&url)
                         .query(&[("query", &query)])
