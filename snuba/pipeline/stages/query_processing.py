@@ -29,7 +29,6 @@ class EntityProcessingStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
-        # TODO: support composite queries for storage queries
         query = pipe_input.data.query
         translated_storage_query = try_translate_storage_query(query)
         if translated_storage_query:
