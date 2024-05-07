@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
@@ -16,7 +16,7 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: Sequence[operations.SqlOperation] = []
+        ops: List[operations.SqlOperation] = []
         for index in indexes:
             index_name, index_expression, index_type, granularity = index
             ops.append(
@@ -33,7 +33,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return ops
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        ops: Sequence[operations.SqlOperation] = []
+        ops: List[operations.SqlOperation] = []
         for index in indexes:
             index_name, _, _, _ = index
             ops.append(
