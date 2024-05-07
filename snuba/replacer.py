@@ -28,7 +28,7 @@ from arroyo.processing.strategies.abstract import (
 )
 from arroyo.types import BrokerValue, Commit, Message, Partition
 
-from snuba import settings
+from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import (
     ClickhouseClientSettings,
@@ -588,6 +588,9 @@ class ReplacerWorker:
         )
         projects_exceeding_limit = (
             self.__processing_time_counter.get_projects_exceeding_limit()
+        )
+        state.set_config_auto_replacements_bypass_projects(
+            projects_exceeding_limit, end_time
         )
         logger.info(
             "projects_exceeding_limit = {}".format(

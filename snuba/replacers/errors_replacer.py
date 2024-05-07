@@ -53,7 +53,7 @@ from snuba.replacers.replacer_processor import (
     ReplacerProcessor,
     ReplacerState,
 )
-from snuba.state import get_config
+from snuba.state import get_config, get_config_auto_replacements_bypass_projects
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 """
@@ -203,7 +203,12 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
         if processed is not None:
+            auto_bypass_projects = list(
+                get_config_auto_replacements_bypass_projects(datetime.now())
+            )
             bypass_projects = get_config("replacements_bypass_projects", "[]")
+            if bypass_projects is not None:
+                auto_bypass_projects.extend(bypass_projects)
             projects = json.loads(cast(str, bypass_projects))
             if processed.get_project_id() in projects:
                 # For a persistent non rate limited logger
