@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable, Optional, Sequence, cast
+from abc import ABCMeta
+from typing import Any, Callable, Iterable, Optional, Sequence, Type, cast
 
 from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
 from snuba.query.data_source.simple import Entity, LogicalDataSource, Storage
@@ -81,11 +82,68 @@ class Query(ProcessableQuery[LogicalDataSource]):
         pass
 
 
-class EntityQuery(Query, ProcessableQuery[Entity]):
+class _FlexibleQueryType(ABCMeta):
+    def __call__(cls, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            f"{cls.__name__} class cannot be instantiated directly, use snuba.query.logical.Query"
+        )
+
+    def __instancecheck__(self, instance: Any) -> bool:
+        if isinstance(instance, ProcessableQuery):
+            data_source_type = cast(type, getattr(self, "data_source", object)())
+            instance_data_source = instance.get_from_clause()
+            return isinstance(instance_data_source, data_source_type)
+        else:
+            return False
+
+
+"""
+Below are two query classes which can be used as hints to the type checker but not instantiated directly
+
+They exist for the following reason:
+
+There are parts of the codebase which can ONLY operate on entity queries or stoarge queries, but MOST
+operations that operate on queries do not care about the data source (e.g. they are transforming some expression)
+
+For those parts of the codebase that need that specificity, functions can be typed like this:
+
+>>> def my_entity_transformation(query: EntityQuery):
+>>>    pass
+
+similar results can be achieved by writing:
+
+>>> def my_entity_transformation(query: ProcessableQuery[Entity]):
+>>>    pass
+
+However it cannot be asserted at runtime that
+
+>>> isinstance(query, ProcessableQuery[Entity])
+
+mypy generics are not present at runtime and there are lot of checks in this codebase that look like:
+
+
+>>> isinstnace(query, EntityQuery):
+>>>     do_something()
+
+These classes give us the best of both worlds by allowing the strict typing and the runtime checking which makes sure
+that when someone is passing in an EntityQuery its datasource is actually an Entity
+
+"""
+
+
+class EntityQuery(Query, ProcessableQuery[Entity], metaclass=_FlexibleQueryType):
+    @classmethod
+    def data_source(cls) -> Type[Entity]:
+        return Entity
+
     def get_from_clause(self) -> Entity:
         return cast(Entity, super().get_from_clause())
 
 
-class StorageQuery(Query, ProcessableQuery[Storage]):
+class StorageQuery(Query, ProcessableQuery[Storage], metaclass=_FlexibleQueryType):
+    @classmethod
+    def data_source(cls) -> Type[Storage]:
+        return Storage
+
     def get_from_clause(self) -> Storage:
         return cast(Storage, super().get_from_clause())
