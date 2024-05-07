@@ -122,7 +122,7 @@ However it cannot be asserted at runtime that
 mypy generics are not present at runtime and there are lot of checks in this codebase that look like:
 
 
->>> isinstnace(query, EntityQuery):
+>>> isinstance(query, EntityQuery):
 >>>     do_something()
 
 These classes give us the best of both worlds by allowing the strict typing and the runtime checking which makes sure
