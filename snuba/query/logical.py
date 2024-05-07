@@ -102,7 +102,7 @@ Below are two query classes which can be used as hints to the type checker but n
 
 They exist for the following reason:
 
-There are parts of the codebase which can ONLY operate on entity queries or stoarge queries, but MOST
+There are parts of the codebase which can ONLY operate on entity queries or storage queries, but MOST
 operations that operate on queries do not care about the data source (e.g. they are transforming some expression)
 
 For those parts of the codebase that need that specificity, functions can be typed like this:
