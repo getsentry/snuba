@@ -2226,6 +2226,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         Test that ensures that the passed entity is the selected one, not the dataset's default
         entity
         """
+        admin_client = AdminClient(get_default_kafka_configuration())
+        create_topics(admin_client, [SnubaTopic.METRICS])
 
         expected_uuid = uuid.uuid1()
         entity_key = EntityKey.METRICS_COUNTERS
