@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations
 table_name_prefix = "spans"
 storage_set = StorageSetKey.SPANS
 indexes = [
-    ("bf_tags_key", "tags.key", "bloom_filter(bloom_filter(0.0))", 1),
+    ("bf_tags_key", "tags.key", "bloom_filter(0.0)", 1),
     ("bf_tags_hash_map", "_tags_hash_map", "bloom_filter(0.0)", 1),
     ("bf_sentry_tags_hash_map", "_sentry_tags_hash_map", "bloom_filter(0.0)", 1),
 ]
