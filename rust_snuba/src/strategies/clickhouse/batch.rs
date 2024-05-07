@@ -10,7 +10,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::types::RowData;
 
-const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000;
+const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
 const CHANNEL_CAPACITY: usize = 8_192;
 
 pub struct BatchFactory {
