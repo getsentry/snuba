@@ -10,13 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
-from snuba.query.data_source.simple import (
-    Entity,
-    LogicalDataSource,
-    SimpleDataSource,
-    Storage,
-    Table,
-)
+from snuba.query.data_source.simple import LogicalDataSource, SimpleDataSource, Table
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr

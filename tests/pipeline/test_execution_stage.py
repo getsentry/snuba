@@ -5,7 +5,6 @@ from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.pipeline.query_pipeline import QueryPipelineResult
