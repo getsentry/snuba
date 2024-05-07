@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
-from snuba.clickhouse.columns import Column
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import Column, ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
