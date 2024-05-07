@@ -12,6 +12,7 @@ from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.dsl import NestedColumn, and_cond, equals
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query, StorageQuery
+from snuba.query.parser.exceptions import ParsingException
 from snuba.query.snql.parser import parse_snql_query
 
 tags = NestedColumn("tags")
@@ -178,7 +179,7 @@ test_cases = [
 
 
 @pytest.mark.parametrize("query_body, expected_query", test_cases)
-def test_format_expressions(query_body: str, expected_query: StorageQuery) -> None:
+def test_parse_storage_query(query_body: str, expected_query: StorageQuery) -> None:
     # dataset does not matter :D
     events = get_dataset("events")
     query = parse_snql_query(query_body, events)
@@ -187,3 +188,11 @@ def test_format_expressions(query_body: str, expected_query: StorageQuery) -> No
     assert repr(query) == repr(expected_query)
     # get a structural diff too
     assert eq, reason
+
+
+def test_fail_join() -> None:
+    # dataset does not matter :D
+    query_body = """ MATCH STORAGE(metrics_summaries: m) -[something]-> (t: transactions) SELECT trace_id, duration_ms AS duration WHERE %s LIMIT 100"""
+    events = get_dataset("events")
+    with pytest.raises(ParsingException):
+        parse_snql_query(query_body, events)

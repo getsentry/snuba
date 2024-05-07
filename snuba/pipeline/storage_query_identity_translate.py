@@ -22,7 +22,7 @@ def try_translate_storage_query(
         if not finder.has_join:
             return _translate_storage_query(query)
         else:
-            raise InvalidQueryException("Joins not supporterd for storage queries")
+            raise InvalidQueryException("Joins not supported for storage queries")
     elif finder.is_mixed_data_source_query:
         raise InvalidQueryException(
             "Queries on storages and entities are not supported",
