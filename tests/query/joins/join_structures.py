@@ -32,7 +32,7 @@ def build_node(
     condition: Optional[Expression],
     granularity: Optional[int] = None,
 ) -> IndividualNode[Entity]:
-    return IndividualNode(  # type: ignore
+    return IndividualNode(
         alias=alias,
         data_source=EntityQuery.from_query(
             LogicalQuery(  # type: ignore
