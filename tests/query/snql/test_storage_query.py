@@ -174,8 +174,6 @@ test_cases = [
         ),
         id="subquery",
     ),
-    # test groupby
-    # test join doesn't work
 ]
 
 
