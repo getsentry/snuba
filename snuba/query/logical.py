@@ -13,8 +13,10 @@ class Query(ProcessableQuery[LogicalDataSource]):
     Represents the logical query during query processing.
     This means the query class used between parsing and query translation.
 
-    TODO: This query is supposed to rely on entities as data source.
-    This will happen in a following step.
+    A logical query can have either an Entity or a Storage as it's from_clause.
+
+    If a function needs to operate on entities or storages specifically,
+    use the StorageQuery, EntityQuery classes specified below
     """
 
     def __init__(
