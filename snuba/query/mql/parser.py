@@ -1080,18 +1080,17 @@ def parse_mql_query(
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     assert kylelog
-    kylelog.begin((body, dataset))
+    kylelog.begin(repr((body, dataset)))
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
         query = parse_mql_query_body(body, dataset)
+    kylelog.log(query_repr(query))
 
-    kylelog.pipe(query_repr(query))
-
+    kylelog.log(f"({query_repr(query)}, {repr(mql_context_dict)})")
     with sentry_sdk.start_span(
         op="parser", description="populate_query_from_mql_context"
     ):
         query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
-
-    kylelog.log(query_repr(query))
+    kylelog.log(f"({query_repr(query)}, {repr(mql_context)})")
 
     with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
         resolve_mappings(query, mql_context.indexer_mappings, dataset)

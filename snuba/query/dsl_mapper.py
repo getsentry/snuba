@@ -34,8 +34,8 @@ and_cond_match = FunctionCallMatch(
 
 def and_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, FunctionCall)
-    conditions = get_first_level_and_conditions(exp)
-    parameters = ", ".join([arg.accept(visitor) for arg in conditions])
+    # conditions = get_first_level_and_conditions(exp)
+    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
     return f"and_cond({parameters})"
 
 

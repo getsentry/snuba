@@ -25,13 +25,15 @@ from snuba.query.dsl import (
 )
 from snuba.query.expressions import CurriedFunctionCall
 from snuba.query.logical import Query
-from snuba.query.mql.parser import parse_mql_query_body
+from snuba.query.mql.parser import parse_mql_query_body, populate_query_from_mql_context
 from snuba.query.parser.exceptions import ParsingException
 
 test_cases = [
     pytest.param(
-        "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
-        get_dataset("generic_metrics"),
+        (
+            "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -75,8 +77,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
-        get_dataset("generic_metrics"),
+        (
+            "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -123,8 +127,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
-        get_dataset("generic_metrics"),
+        (
+            "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -171,8 +177,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
-        get_dataset("generic_metrics"),
+        (
+            "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -223,8 +231,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))",
-        get_dataset("generic_metrics"),
+        (
+            "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -283,13 +293,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code",
-        get_dataset("generic_metrics"),
-        None,
-    ),
-    pytest.param(
-        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}",
-        get_dataset("generic_metrics"),
+        (
+            "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -336,8 +343,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction",
-        get_dataset("generic_metrics"),
+        (
+            "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -387,8 +396,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100",
-        get_dataset("generic_metrics"),
+        (
+            "(sum(`d:transactions/duration@millisecond`) / sum(`d:transactions/duration@millisecond`)) + 100",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -432,8 +443,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "apdex(sum(`d:transactions/duration@millisecond`), 123) / max(`d:transactions/duration@millisecond`)",
-        get_dataset("generic_metrics"),
+        (
+            "apdex(sum(`d:transactions/duration@millisecond`), 123) / max(`d:transactions/duration@millisecond`)",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -474,18 +487,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 123)",
-        get_dataset("generic_metrics"),
-        None,
-    ),
-    pytest.param(
-        'apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
-        None,
-    ),
-    pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
-        get_dataset("generic_metrics"),
+        (
+            'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -523,8 +528,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
+        (
+            'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -553,8 +560,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "sum(`d:transactions/duration@millisecond`){}",
-        get_dataset("generic_metrics"),
+        (
+            "sum(`d:transactions/duration@millisecond`){}",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -580,8 +589,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'quantiles(0.5, 0.75)(s:transactions/user@none{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
-        get_dataset("generic_metrics"),
+        (
+            'quantiles(0.5, 0.75)(s:transactions/user@none{!dist:["dist1", "dist2"]}){foo: bar} by (transaction)',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_SETS,
@@ -617,8 +628,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'quantiles(0.5)(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
-        get_dataset("generic_metrics"),
+        (
+            'quantiles(0.5)(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]} by (transaction, status_code)',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -659,8 +672,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`d:sessions/duration@second`){release:["foo", "bar"]} by release',
-        get_dataset("metrics"),
+        (
+            'sum(`d:sessions/duration@second`){release:["foo", "bar"]} by release',
+            get_dataset("metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.METRICS_DISTRIBUTIONS,
@@ -688,8 +703,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'max(d:transactions/duration@millisecond){bar:" !\\"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)',
-        get_dataset("generic_metrics"),
+        (
+            'max(d:transactions/duration@millisecond){bar:" !\\"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"} by (transaction)',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -726,8 +743,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'apdex(sum(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
+        (
+            'apdex(sum(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -759,8 +778,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "topK(10)(sum(s:transactions/user@none), 300)",
-        get_dataset("generic_metrics"),
+        (
+            "topK(10)(sum(s:transactions/user@none), 300)",
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_SETS,
@@ -794,8 +815,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'avg(d:custom/sentry.event_manager.save_transactions.fetch_organizations@second){(event_type:"transaction" AND transaction:"sentry.tasks.store.save_event_transaction")}',
-        get_dataset("generic_metrics"),
+        (
+            'avg(d:custom/sentry.event_manager.save_transactions.fetch_organizations@second){(event_type:"transaction" AND transaction:"sentry.tasks.store.save_event_transaction")}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -831,8 +854,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
+        (
+            'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -861,8 +886,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
+        (
+            'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -891,8 +918,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
+        (
+            'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -921,8 +950,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
+        (
+            'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -951,14 +982,10 @@ test_cases = [
         ),
     ),
     pytest.param(
-        'sum(`transaction.duration`){dist:["dist1", "dist2"]}',
-        get_dataset("generic_metrics"),
-        None,
-    ),
-    pytest.param("sum(`transaction.duration", get_dataset("generic_metrics"), None),
-    pytest.param(
-        '((avg(d:transactions/duration@millisecond) * 100.0) * 100.0){transaction:"getsentry.tasks.calculate_spike_projections"}',
-        get_dataset("generic_metrics"),
+        (
+            '((avg(d:transactions/duration@millisecond) * 100.0) * 100.0){transaction:"getsentry.tasks.calculate_spike_projections"}',
+            get_dataset("generic_metrics"),
+        ),
         Query(
             from_clause=Entity(
                 EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
@@ -1006,42 +1033,40 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("mql, dataset, expected", test_cases)
-def test_autogenerated(mql: str, dataset: Dataset, expected: Query) -> None:
-    actual = parse_mql_query_body(mql, dataset)
+@pytest.mark.parametrize("theinput, expected", test_cases)
+def test_autogenerated(theinput: tuple[str, Dataset], expected: Query) -> None:
+    actual = parse_mql_query_body(*theinput)
     assert actual == expected
 
 
-def test_mismatch_groupby() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code"
-    with pytest.raises(
-        Exception,
-        match=re.escape("All terms in a formula must have the same groupby"),
-    ):
-        parse_mql_query_body(str(query_body), get_dataset("generic_metrics"))
-
-
-def test_invalid_mri() -> None:
-    mql = 'sum(`transaction.duration`){dist:["dist1", "dist2"]}'
-    expected = ParsingException("MQL endpoint only supports MRIs")
-    with pytest.raises(type(expected), match=re.escape(str(expected))):
-        parse_mql_query_body(mql, get_dataset("generic_metrics"))
-
-
-def test_invalid_mql() -> None:
-    mql = "sum(`transaction.duration"
-    expected = ParsingException("Parsing error on line 1 at 'um(`transacti'")
-    with pytest.raises(type(expected), match=re.escape(str(expected))):
-        parse_mql_query_body(mql, get_dataset("generic_metrics"))
-
-
-@pytest.mark.xfail(reason="Not implemented yet")
-def test_apdex1() -> None:
-    query_body = "apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 123)"
-    parse_mql_query_body(query_body, get_dataset("generic_metrics"))
-
-
-@pytest.mark.xfail(reason="Not implemented yet")
-def test_apdex2() -> None:
-    query_body = 'apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}'
-    parse_mql_query_body(query_body, get_dataset("generic_metrics"))
+failure_cases = [
+    (
+        (
+            "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code",
+            get_dataset("generic_metrics"),
+        ),
+        None,
+    ),
+    (
+        (
+            "apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 123)",
+            get_dataset("generic_metrics"),
+        ),
+        None,
+    ),
+    (
+        (
+            'apdex(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`), 500){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
+        None,
+    ),
+    (
+        (
+            'sum(`transaction.duration`){dist:["dist1", "dist2"]}',
+            get_dataset("generic_metrics"),
+        ),
+        None,
+    ),
+    (("sum(`transaction.duration", get_dataset("generic_metrics")), None),
+]
