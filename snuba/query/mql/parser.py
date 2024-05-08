@@ -23,6 +23,7 @@ from snuba.query.conditions import (
     combine_and_conditions,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.dsl import arrayElement
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
@@ -33,6 +34,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.indexer.resolver import resolve_mappings
+from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.mql.mql_context import MQLContext
 from snuba.query.parser.exceptions import ParsingException
@@ -690,7 +692,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return children
 
 
-def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
+def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
     information provided.
@@ -830,7 +832,7 @@ def parse_mql_query_body(body: str, dataset: Dataset) -> LogicalQuery:
             )
     except Exception as e:
         raise e
-    return query
+    return EntityQuery.from_query(query)
 
 
 METRICS_ENTITIES = {
@@ -862,7 +864,7 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
 
 
 def populate_start_end_time(
-    query: LogicalQuery, mql_context: MQLContext, entity_key: EntityKey
+    query: EntityQuery, mql_context: MQLContext, entity_key: EntityKey
 ) -> None:
     try:
         start = parse_datetime(mql_context.start)
@@ -1024,8 +1026,8 @@ def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
 
 
 def populate_query_from_mql_context(
-    query: LogicalQuery, mql_context_dict: dict[str, Any]
-) -> tuple[LogicalQuery, MQLContext]:
+    query: EntityQuery, mql_context_dict: dict[str, Any]
+) -> tuple[EntityQuery, MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
     entity_key = query.get_from_clause().key
 
@@ -1039,7 +1041,7 @@ def populate_query_from_mql_context(
 
 
 def quantiles_to_quantile(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
@@ -1061,7 +1063,7 @@ def quantiles_to_quantile(
 
 
 CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
 ]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
@@ -1075,7 +1077,7 @@ def parse_mql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
         query = parse_mql_query_body(body, dataset)
     with sentry_sdk.start_span(
