@@ -429,8 +429,6 @@ jobs:
     needs: [snuba-image]
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # temporary, remove once we are confident the action is working
-    continue-on-error: true
 
     steps:
       - name: Checkout Snuba
