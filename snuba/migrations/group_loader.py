@@ -240,6 +240,7 @@ class SessionsLoader(DirectoryLoader):
             "0002_sessions_aggregates",
             "0003_sessions_matview",
             "0004_sessions_ttl",
+            "0005_drop_sessions_tables",
         ]
 
 
