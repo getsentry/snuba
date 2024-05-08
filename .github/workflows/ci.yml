@@ -276,15 +276,6 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
-      - name: Pull the image
-        env:
-          IMAGE_URL: ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-        shell: bash
-        run: |
-          echo "We poll for the Docker image that the GCB/GHA build produces until it succeeds or this job times out."
-          echo "Polling for $IMAGE_URL"
-          timeout 20m bash -c 'until docker pull "$IMAGE_URL" 2>/dev/null; do sleep 10; done'
-
       - name: Checkout sentry
         uses: actions/checkout@v2
         with:
