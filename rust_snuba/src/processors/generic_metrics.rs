@@ -852,8 +852,7 @@ mod tests {
             .ok()
             .unwrap()
                 == vec![3f64, 1f64, 2f64]
-        );
-        panic!()
+        )
     }
 
     #[test]
