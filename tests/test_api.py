@@ -187,6 +187,7 @@ class TestApi(SimpleAPITest):
         )
         res = clickhouse.execute("SELECT count() FROM %s" % self.table).results
         assert res[0][0] == 330
+        assert False
 
         rollup_mins = 60
         for p in self.project_ids:
