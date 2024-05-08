@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Iterator
 
 from snuba.query.dsl_mapper import query_repr
 from snuba.query.logical import Query
@@ -24,11 +24,13 @@ class Logger:
     """
 
     def __init__(self) -> None:
+        # the inner list is a "trace" (not sentry trace): -> t1 -> t2 -> t3 ->
+        # the tuple is (in, out)
         self.logged: list[list[tuple[Any, Any]]] = []
 
     def begin(self, val: Any) -> None:
         """
-        Begins a new pipeline logging chain
+        Begins a new "trace" (not sentry trace): -> t1 -> t2 -> t3 ->
         """
         self.logged.append([])
         self.isInput = True
@@ -37,9 +39,10 @@ class Logger:
     def log(self, val: Any) -> None:
         """
         Logs the given val as the current output/input.
-        Each time this function is called it swaps between treating
-        the input as input or output, it is up to the user to ensure
-        they use it properly.
+        Swaps between treating val as input or output.
+
+        eg. log(1) log(2) log(3) log(4)
+            [(1,2),(3,4)]
         """
         if len(self.logged) == 0:
             raise ValueError("Begin must be called before eat")
@@ -59,6 +62,12 @@ class Logger:
         """
         self.log(val)
         self.log(val)
+
+    def __getitem__(self, val: Any) -> list[tuple[Any, Any]]:
+        return self.logged[val]
+
+    def __iter__(self) -> Iterator[list[tuple[Any, Any]]]:
+        return iter(self.logged)
 
 
 class ASTLogger:

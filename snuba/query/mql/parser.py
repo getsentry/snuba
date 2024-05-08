@@ -1068,9 +1068,7 @@ CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
 ]
 
-MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
-    quantiles_to_quantile,
-]
+MQL_POST_PROCESSORS: CustomProcessors = [quantiles_to_quantile]
 
 
 def parse_mql_query(
@@ -1118,7 +1116,7 @@ def parse_mql_query(
         kylelog.pipe(query_repr(query))
         _post_process(
             query,
-            [quantiles_to_quantile],
+            MQL_POST_PROCESSORS,
             settings,
         )
         kylelog.log(query_repr(query))
