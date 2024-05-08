@@ -1,4 +1,5 @@
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storage import Storage
 from snuba.pipeline.storage_query_identity_translate import try_translate_storage_query
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -8,7 +9,9 @@ from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
 
 
-def test_translate_simple(mock_storage, mock_query_storage: QueryStorage) -> None:
+def test_translate_simple(
+    mock_storage: Storage, mock_query_storage: QueryStorage
+) -> None:
     input_query = Query(
         mock_query_storage,
         selected_columns=[
@@ -26,7 +29,9 @@ def test_translate_simple(mock_storage, mock_query_storage: QueryStorage) -> Non
     assert isinstance(storage_query, ClickhouseQuery)
 
 
-def test_translate_composite(mock_storage, mock_query_storage) -> None:
+def test_translate_composite(
+    mock_storage: Storage, mock_query_storage: QueryStorage
+) -> None:
     input_query = CompositeQuery(
         selected_columns=[
             SelectedExpression(
