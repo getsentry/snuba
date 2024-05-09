@@ -1085,8 +1085,8 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    assert kylelog
-    kylelog.begin(repr((body, dataset, mql_context_dict, settings)))
+    # assert kylelog
+    # kylelog.begin(repr((body, dataset, mql_context_dict, settings)))
     res = MQLParseFirstHalf().execute(
         # query_settings and timer are dummy and dont matter
         QueryPipelineResult(
@@ -1097,11 +1097,11 @@ def parse_mql_query(
         )
     )
     if res.error:
-        kylelog.log(res.error)
+        # kylelog.log(res.error)
         raise res.error
     assert res.data  # since theres no res.error, data is guarenteed
     query = res.data
-    kylelog.log(query_repr(query))
+    # kylelog.log(query_repr(query))
 
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them

@@ -33,6 +33,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.ast_logger import Logger as KylesLogger
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     FUNCTION_TO_OPERATOR,
@@ -50,6 +51,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.data_source.simple import Storage as QueryStorage
+from snuba.query.dsl_mapper import query_repr
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -1044,6 +1046,7 @@ def _treeify_or_and_conditions(
             return exp
 
     query.transform_expressions(transform)
+    return query
 
 
 DATETIME_MATCH = FunctionCallMatch(
@@ -1515,13 +1518,20 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
+    kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
-        query = parse_snql_query_initial(body)
+    assert kylelog
+    kylelog.begin(repr(body))
+    try:
+        with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
+            query = parse_snql_query_initial(body)
 
-    if settings and settings.get_dry_run():
-        explain_meta.set_original_ast(str(query))
-
+        if settings and settings.get_dry_run():
+            explain_meta.set_original_ast(str(query))
+        kylelog.log(query_repr(query))
+    except Exception as e:
+        kylelog.log(e)
+        raise
     try:
         # NOTE (volo): The anonymizer that runs after this function call chokes on
         # OR and AND clauses with multiple parameters so we have to treeify them

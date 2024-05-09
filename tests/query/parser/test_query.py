@@ -25,6 +25,7 @@ from snuba.query.expressions import (
 from snuba.query.logical import Query
 from snuba.query.parser.exceptions import AliasShadowingException, CyclicAliasException
 from snuba.query.snql.parser import parse_snql_query
+from tests.query.parser.test_formula_mql_query import astlogger
 
 
 def with_required(condition: Optional[Expression] = None) -> Expression:
@@ -1185,7 +1186,7 @@ snql_test_cases = [
 @pytest.mark.parametrize("query_body, expected_query", snql_test_cases)
 def test_format_expressions_from_snql(query_body: str, expected_query: Query) -> None:
     events = get_dataset("events")
-    query = parse_snql_query(str(query_body), events)
+    query = parse_snql_query(str(query_body), events, kylelog=astlogger)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason
@@ -1202,6 +1203,7 @@ def test_shadowing() -> None:
             AND timestamp < toDateTime('2020-01-02 12:00:00')
             """,
             get_dataset("events"),
+            kylelog=astlogger,
         )
 
 
@@ -1216,6 +1218,7 @@ def test_circular_aliases() -> None:
             AND timestamp < toDateTime('2020-01-02 12:00:00')
             """,
             get_dataset("events"),
+            kylelog=astlogger,
         )
 
     with pytest.raises(CyclicAliasException):
@@ -1228,6 +1231,7 @@ def test_circular_aliases() -> None:
             AND timestamp < toDateTime('2020-01-02 12:00:00')
             """,
             get_dataset("events"),
+            kylelog=astlogger,
         )
 
 
@@ -1237,7 +1241,7 @@ def test_treeify() -> None:
     WHERE project_id IN array(4552673527463954) AND timestamp < toDateTime('2023-09-22T18:18:10.891157') AND timestamp >= toDateTime('2023-06-24T18:18:10.891157')
     HAVING or(1, 1, 1, 1) != 0 LIMIT 10
     """
-    query_ast = parse_snql_query(query, get_dataset("replays"))
+    query_ast = parse_snql_query(query, get_dataset("replays"), kylelog=astlogger)
     having = query_ast.get_having()
     expected = binary_condition(
         ConditionFunctions.NEQ,

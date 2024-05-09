@@ -8,6 +8,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.parser.exceptions import AliasShadowingException, ParsingException
 from snuba.query.snql.parser import parse_snql_query
+from tests.query.parser.test_formula_mql_query import astlogger
 
 test_cases = [
     pytest.param(
@@ -47,4 +48,4 @@ def test_failures(
         events = get_dataset("events")
         request = json_to_snql(query_body, "events")
         request.validate()
-        parse_snql_query(str(request.query), events)
+        parse_snql_query(str(request.query), events, kylelog=astlogger)
