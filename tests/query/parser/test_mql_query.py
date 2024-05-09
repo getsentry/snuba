@@ -31,7 +31,6 @@ from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
 from snuba.query.parser.exceptions import ParsingException
 from tests.query.parser.test_formula_mql_query import astlogger
-from snuba.query.snql.parser import _treeify_or_and_conditions
 
 tags = NestedColumn("tags")
 tags_raw = NestedColumn("tags_raw")
@@ -125,37 +124,51 @@ mql_test_cases = [
                 ),
                 time_expression,
             ],
-            condition=_treeify_or_and_conditions(
+            condition=and_cond(
+                f.equals(
+                    column("granularity", None, "_snuba_granularity"), literal(60)
+                ),
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
                     in_cond(
                         column("project_id", None, "_snuba_project_id"),
                         f.tuple(literal(11)),
                     ),
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        and_cond(
+                            f.equals(
+                                column("use_case_id", None, "_snuba_use_case_id"),
+                                literal("transactions"),
+                            ),
+                            and_cond(
+                                f.greaterOrEquals(
+                                    column("timestamp", None, "_snuba_timestamp"),
+                                    literal(datetime(2023, 11, 23, 18, 30)),
+                                ),
+                                and_cond(
+                                    f.less(
+                                        column("timestamp", None, "_snuba_timestamp"),
+                                        literal(datetime(2023, 11, 23, 22, 30)),
+                                    ),
+                                    and_cond(
+                                        f.equals(
+                                            column(
+                                                "metric_id", None, "_snuba_metric_id"
+                                            ),
+                                            literal(123456),
+                                        ),
+                                        in_cond(
+                                            tags_raw["888"],
+                                            f.tuple(literal("dist1"), literal("dist2")),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
                     ),
-                    f.equals(
-                        column("use_case_id", None, "_snuba_use_case_id"),
-                        literal("transactions"),
-                    ),
-                    f.greaterOrEquals(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2023, 11, 23, 18, 30)),
-                    ),
-                    f.less(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2023, 11, 23, 22, 30)),
-                    ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                    in_cond(
-                        tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
-                    ),
-                )
+                ),
             ),
             order_by=[
                 OrderBy(

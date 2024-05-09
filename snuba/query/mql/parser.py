@@ -1074,7 +1074,7 @@ CustomProcessors = Sequence[
     Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
 ]
 
-MQL_POST_PROCESSORS: CustomProcessors = [quantiles_to_quantile]
+MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [quantiles_to_quantile]
 
 
 def parse_mql_query(
@@ -1085,23 +1085,20 @@ def parse_mql_query(
     settings: QuerySettings | None = None,
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    # assert kylelog
-    # kylelog.begin(repr((body, dataset, mql_context_dict, settings)))
+    timer = Timer("mql_pipeline")
     res = MQLParseFirstHalf().execute(
         # query_settings and timer are dummy and dont matter
         QueryPipelineResult(
             data=(body, dataset, mql_context_dict, settings),
             error=None,
             query_settings=HTTPQuerySettings(),
-            timer=Timer("dummy"),
+            timer=timer,
         )
     )
     if res.error:
-        # kylelog.log(res.error)
         raise res.error
     assert res.data  # since theres no res.error, data is guarenteed
     query = res.data
-    # kylelog.log(query_repr(query))
 
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
@@ -1109,39 +1106,35 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
 
-    with sentry_sdk.start_span(op="processor", description="post_processors"):
-        _post_process(
-            query,
-            POST_PROCESSORS,
-            settings,
+    assert kylelog
+    kylelog.begin(
+        "(\n"
+        + f"{query_repr(query)}, "
+        + f"{repr('MQL_POST_PROCESSORS')}, "
+        + f"{'None' if settings is None else repr('mqlsetting')}, "
+        + f"{repr(custom_processing)}, "
+        + ")"
+    )
+
+    res = PostProcessAndValidateQuery().execute(
+        QueryPipelineResult(
+            data=(
+                query,
+                MQL_POST_PROCESSORS,
+                settings,
+                custom_processing,
+            ),
+            error=None,
+            query_settings=HTTPQuerySettings(),
+            timer=timer,
         )
-        _post_process(
-            query,
-            MQL_POST_PROCESSORS,
-            settings,
-        )
-
-    # Filter in select optimizer
-    with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
-        if settings is None:
-            FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
-        else:
-            FilterInSelectOptimizer().process_query(query, settings)
-
-    # Custom processing to tweak the AST before validation
-    with sentry_sdk.start_span(op="processor", description="custom_processing"):
-        if custom_processing is not None:
-            _post_process(query, custom_processing, settings)
-
-    # Time based processing
-    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
-        _post_process(query, [_replace_time_condition], settings)
-
-    # Validating
-    with sentry_sdk.start_span(op="validate", description="expression_validators"):
-        _post_process(query, VALIDATORS)
-
-    return query
+    )
+    if res.error:
+        kylelog.log(type(res.error).__name__)
+        raise res.error
+    assert res.data  # since theres no res.error, data is guarenteed
+    kylelog.log(query_repr(res.data))
+    return res.data
 
 
 class MQLParseFirstHalf(
@@ -1174,5 +1167,60 @@ class MQLParseFirstHalf(
 
         if settings and settings.get_dry_run():
             explain_meta.set_original_ast(str(query))
+
+        return query
+
+
+class PostProcessAndValidateQuery(
+    QueryPipelineStage[
+        tuple[
+            LogicalQuery,
+            CustomProcessors,
+            QuerySettings | None,
+            CustomProcessors | None,
+        ],
+        LogicalQuery,
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[
+                LogicalQuery,
+                CustomProcessors,
+                QuerySettings | None,
+                CustomProcessors | None,
+            ]
+        ],
+    ) -> LogicalQuery:
+        query, post_processors, settings, custom_processing = pipe_input.data
+        with sentry_sdk.start_span(op="processor", description="post_processors"):
+            _post_process(
+                query,
+                post_processors,
+                settings,
+            )
+
+        # Filter in select optimizer
+        with sentry_sdk.start_span(
+            op="processor", description="filter_in_select_optimize"
+        ):
+            if settings is None:
+                FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
+            else:
+                FilterInSelectOptimizer().process_query(query, settings)
+
+        # Custom processing to tweak the AST before validation
+        with sentry_sdk.start_span(op="processor", description="custom_processing"):
+            if custom_processing is not None:
+                _post_process(query, custom_processing, settings)
+
+        # Time based processing
+        with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+            _post_process(query, [_replace_time_condition], settings)
+
+        # Validating
+        with sentry_sdk.start_span(op="validate", description="expression_validators"):
+            _post_process(query, VALIDATORS)
 
         return query

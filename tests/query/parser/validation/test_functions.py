@@ -12,7 +12,6 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.data_source import DataSource
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl_mapper import query_repr
 from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.parser.validation.functions import FunctionCallsValidator
@@ -145,7 +144,7 @@ def kylewrite() -> None:
 
     with open(
         os.path.abspath(
-            "tests/query/parser/unit_tests/test_parse_snql_query_initial.py"
+            "tests/query/parser/unit_tests/test_post_process_and_validate_query.py"
         ),
         "w",
     ) as f:
