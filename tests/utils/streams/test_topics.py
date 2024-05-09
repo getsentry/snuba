@@ -16,10 +16,6 @@ def test_valid_topics() -> None:
                 Topic.ATTRIBUTION,
                 Topic.CDC,
                 Topic.SESSIONS,
-                Topic.SESSIONS_COMMIT_LOG,
-                Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
-                Topic.SUBSCRIPTION_RESULTS_SESSIONS,
-                Topic.DEAD_LETTER_SESSIONS,
             )
 
             if topic not in deprecated_topics:

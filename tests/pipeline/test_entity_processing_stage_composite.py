@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import cast
 
 import pytest
 
@@ -436,7 +437,7 @@ def test_composite(
     request = Request(
         id="",
         original_body={"query": "placeholder"},
-        query=logical_query,
+        query=cast(LogicalQuery, logical_query),
         query_settings=HTTPQuerySettings(),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
