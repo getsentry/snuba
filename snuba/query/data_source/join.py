@@ -162,7 +162,6 @@ class JoinClause(DataSource, JoinNode[TSimpleDataSource], Generic[TSimpleDataSou
 
     def __post_init__(self) -> None:
         column_set = self.get_columns()
-
         for condition in self.keys:
             assert f"{condition.left.table_alias}.{condition.left.column}" in column_set
             assert (
