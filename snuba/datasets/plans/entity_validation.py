@@ -10,7 +10,7 @@ from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException, ValidationException
-from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import EntityQuery
 from snuba.query.parser.validation.functions import FunctionCallsValidator
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
@@ -29,12 +29,12 @@ def _validate_query(query: Query) -> None:
 
 
 def _validate_entities_with_query(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[QueryEntity], EntityQuery]
 ) -> None:
     """
     Applies all validator defined on the entities in the query
     """
-    if isinstance(query, LogicalQuery):
+    if isinstance(query, EntityQuery):
         entity = get_entity(query.get_from_clause().key)
         try:
             for v in entity.get_validators():
@@ -65,7 +65,7 @@ VALIDATORS = [_validate_query, _validate_entities_with_query]
 
 
 def run_entity_validators(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    query: Union[CompositeQuery[QueryEntity], EntityQuery],
     settings: QuerySettings | None = None,
 ) -> None:
     """
@@ -84,5 +84,5 @@ def run_entity_validators(
 
     if isinstance(query, CompositeQuery):
         from_clause = query.get_from_clause()
-        if isinstance(from_clause, (LogicalQuery, CompositeQuery)):
+        if isinstance(from_clause, (EntityQuery, CompositeQuery)):
             run_entity_validators(from_clause, settings)

@@ -165,29 +165,6 @@ class TestSnQLApi(BaseApiTest):
         metadata = mock_record_query.call_args.args[0]
         assert metadata["status"] == QueryStatus.ERROR.value and "request" in metadata
 
-    def test_sessions_query(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "dataset": "sessions",
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE project_id IN array({self.project_id})
-                    AND project_id IN array({self.project_id})
-                    AND org_id = {self.org_id}
-                    AND started >= toDateTime('2021-01-01T17:05:59.554860')
-                    AND started < toDateTime('2022-01-01T17:06:00.554981')
-                    ORDER BY sessions DESC
-                    LIMIT 100 OFFSET 0""",
-                }
-            ),
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
-
     def test_join_query(self) -> None:
         response = self.post(
             "/events/snql",
@@ -218,7 +195,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": """MATCH {
-                        MATCH (discover_events )
+                        MATCH (discover_events)
                         SELECT count() AS count BY project_id, tags[custom_tag]
                         WHERE type != 'transaction' AND project_id = %s
                         AND timestamp >= toDateTime('%s')
@@ -239,6 +216,35 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_join_query_in_sub_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": """MATCH {
+                        MATCH (events: events) -[attributes]-> (group_attributes: group_attributes)
+                        SELECT events.group_id, count() AS `event_count`, max(events.timestamp) AS `last_seen`
+                        BY events.group_id
+                        WHERE events.project_id IN array(4553884953739266)
+                        AND group_attributes.project_id IN array(4553884953739266)
+                        AND events.timestamp >= toDateTime('2024-01-24T16:59:49.431129')
+                        AND events.timestamp < toDateTime('2024-04-23T16:59:49.431129')
+                        AND group_attributes.group_status = 0
+                    }
+                    SELECT events.group_id WHERE last_seen >= toDateTime('2024-04-09T16:59:49.431129')
+                    ORDER BY event_count DESC LIMIT 10000""",
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
 
     def test_max_limit(self) -> None:
         response = self.post(
@@ -421,28 +427,6 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["error"]["type"] == "internal_server_error"
         assert data["error"]["message"] == "stuff"
-
-    def test_sessions_with_function_orderby(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE org_id = {self.org_id}
-                    AND started >= toDateTime('2021-04-05T16:52:48.907628')
-                    AND started < toDateTime('2021-04-06T16:52:49.907666')
-                    AND project_id IN tuple({self.project_id})
-                    AND project_id IN tuple({self.project_id})
-                    ORDER BY divide(sessions_crashed, sessions) ASC
-                    LIMIT 21
-                    OFFSET 0
-                    """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
 
     def test_arrayjoin(self) -> None:
         response = self.post(

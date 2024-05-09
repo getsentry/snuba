@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Sequence
 
 from snuba.query.expressions import (
@@ -128,6 +130,12 @@ def divide(
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
+def if_in(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "in", (lhs, rhs))
+
+
 # boolean functions
 def binary_condition(
     function_name: str, lhs: Expression, rhs: Expression
@@ -135,8 +143,12 @@ def binary_condition(
     return FunctionCall(None, function_name, (lhs, rhs))
 
 
-def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("equals", lhs, rhs)
+def equals(
+    lhs: Expression | OptionalScalarType, rhs: Expression | OptionalScalarType
+) -> FunctionCall:
+    left = lhs if isinstance(lhs, Expression) else Literal(None, lhs)
+    right = rhs if isinstance(rhs, Expression) else Literal(None, rhs)
+    return binary_condition("equals", left, right)
 
 
 def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:
