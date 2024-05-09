@@ -12,22 +12,27 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_raw_dist",
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_dist",
+                target=operations.OperationTarget.DISTRIBUTED,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_mv_local",
+                target=operations.OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_hourly_local",
+                target=operations.OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=StorageSetKey.SESSIONS,
                 table_name="sessions_raw_local",
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
 
