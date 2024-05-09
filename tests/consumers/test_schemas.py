@@ -52,6 +52,7 @@ def _generate_tests() -> Iterator[Case]:
 
 
 @pytest.mark.parametrize("case", _generate_tests())
+@pytest.mark.redis_db
 def test_all_schemas(case: Case) -> None:
     """
     "Assert" that no message processor crashes under the example payloads in
