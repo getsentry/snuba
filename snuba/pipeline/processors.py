@@ -1,12 +1,12 @@
 import sentry_sdk
 
 from snuba.datasets.entities.factory import get_entity
-from snuba.query.logical import Query as LogicalQuery
+from snuba.query.logical import EntityQuery
 from snuba.query.query_settings import QuerySettings
 from snuba.state import explain_meta
 
 
-def execute_entity_processors(query: LogicalQuery, settings: QuerySettings) -> None:
+def execute_entity_processors(query: EntityQuery, settings: QuerySettings) -> None:
     """
     Executes the entity query processors for the query. These are taken
     from the entity.

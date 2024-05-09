@@ -36,7 +36,6 @@ def _translate_logical_composite_query(
     executes all entity processors associated with each sub-query node,
     and builds a physical composite query.
     """
-
     translated_source = CompositeDataSourceTransformer(settings).visit(
         query.get_from_clause()
     )
