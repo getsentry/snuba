@@ -1,4 +1,5 @@
 import RuntimeConfig from "SnubaAdmin/runtime_config";
+import AutoReplacementsBypassProjects from "SnubaAdmin/auto_replacements_bypass_projects";
 import AuditLog from "SnubaAdmin/runtime_config/auditlog";
 import ClickhouseMigrations from "SnubaAdmin/clickhouse_migrations";
 import ClickhouseQueries from "SnubaAdmin/clickhouse_queries";
@@ -16,6 +17,11 @@ import Welcome from "SnubaAdmin/welcome";
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
+  {
+    id: "auto-replacements-bypass-projects",
+    display: "Bypassed Replacements Projects",
+    component: AutoReplacementsBypassProjects,
+  },
   {
     id: "capacity-management",
     display: "🪫 Capacity Management",

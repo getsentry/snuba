@@ -4,6 +4,7 @@ import io
 import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
+from datetime import datetime
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import sentry_sdk
@@ -343,6 +344,16 @@ def cardinality_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.KAFKA])
 def kafka_topics() -> Response:
     return make_response(jsonify(get_broker_data()), 200)
+
+
+@application.route("/auto-replacements-bypass-projects")
+@check_tool_perms(tools=[AdminTools.AUTO_REPLACEMENTS_BYPASS_PROJECTS])
+def auto_replacements_bypass_projects() -> Response:
+    return Response(
+        json.dumps(state.get_config_auto_replacements_bypass_projects(datetime.now())),
+        200,
+        {"Content-Type": "application/json"},
+    )
 
 
 # Sample cURL command:

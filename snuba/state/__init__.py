@@ -340,7 +340,7 @@ def set_config_auto_replacements_bypass_projects(
 
 def get_config_auto_replacements_bypass_projects(curr_time: datetime) -> Sequence[int]:
     projects_within_expiry = _filter_projects_within_expiry(curr_time)
-    return [int(project_id) for project_id in projects_within_expiry.keys()]
+    return projects_within_expiry.keys()
 
 
 def _filter_projects_within_expiry(curr_time: datetime) -> Mapping[int, bytes]:
