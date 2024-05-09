@@ -1021,7 +1021,7 @@ def _qualify_columns(
 
 def _treeify_or_and_conditions(
     query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
-) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
+) -> None:
     """
     look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
                               and(a, b, c) and turn them into and(a, and(b, c))
@@ -1044,7 +1044,6 @@ def _treeify_or_and_conditions(
             return exp
 
     query.transform_expressions(transform)
-    return query
 
 
 DATETIME_MATCH = FunctionCallMatch(
