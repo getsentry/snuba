@@ -42,7 +42,6 @@ config_hash = "snuba-config"
 config_auto_replacements_bypass_projects_hash = (
     "snuba-config-auto-replacements-bypass-projects-hash"
 )
-auto_replacements_bypass_projects_key = "auto-replacements-bypass-projects"
 config_description_hash = "snuba-config-description"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
@@ -327,56 +326,37 @@ def get_all_config_descriptions() -> Mapping[str, Optional[str]]:
 def set_config_auto_replacements_bypass_projects(
     new_project_ids: Sequence[int], curr_time: datetime
 ) -> None:
-    projects_within_expiry = dict(_filter_projects_within_expiry(curr_time))
-    for project_id in new_project_ids:
-        if project_id not in projects_within_expiry:
-            projects_within_expiry[project_id] = curr_time
     try:
-        rds.hset(
-            config_auto_replacements_bypass_projects_hash,
-            auto_replacements_bypass_projects_key,
-            pickle.dumps(projects_within_expiry),
-        )
+        projects_within_expiry = dict(_filter_projects_within_expiry(curr_time))
+        for project_id in new_project_ids:
+            if project_id not in projects_within_expiry:
+                expiry = pickle.dumps(curr_time + expiry_window)
+                rds.hset(
+                    config_auto_replacements_bypass_projects_hash, project_id, expiry
+                )
     except Exception as e:
         logger.exception(e)
 
 
 def get_config_auto_replacements_bypass_projects(curr_time: datetime) -> Sequence[int]:
-    # try:
-    #     auto_replacements_bypass_projects = rds.hgetall(config_auto_replacements_bypass_projects_hash)
-    #     return {
-    #         k.decode("utf-8"): d.decode("utf-8")
-    #         for k, d in auto_replacements_bypass_projects.items()
-    #         if d is not None
-    #     }
-    # except Exception as e:
-    #     logger.exception(e)
-    #     return {}
-
     projects_within_expiry = _filter_projects_within_expiry(curr_time)
-    return list(projects_within_expiry.keys())
+    return [int(project_id) for project_id in projects_within_expiry.keys()]
 
 
-def _filter_projects_within_expiry(curr_time: datetime) -> Mapping[int, datetime]:
-    curr_projects = pickle.loads(
-        get_raw_configs(config_auto_replacements_bypass_projects_hash)[
-            auto_replacements_bypass_projects_key
-        ]
-    )
+def _filter_projects_within_expiry(curr_time: datetime) -> Mapping[int, bytes]:
+    curr_projects = {
+        int(k.decode("utf-8")): pickle.loads(v)
+        for k, v in rds.hgetall(config_auto_replacements_bypass_projects_hash).items()
+    }
+
     projects_within_expiry = {}
-    for project in curr_projects:
-        if curr_projects[project] <= curr_time:
-            projects_within_expiry[project] = curr_projects[project]
+    for project_id in curr_projects:
+        if curr_time <= curr_projects[project_id]:
+            projects_within_expiry[project_id] = pickle.dumps(curr_projects[project_id])
 
-    rds.hdel(
-        config_auto_replacements_bypass_projects_hash,
-        auto_replacements_bypass_projects_key,
-    )
-    rds.hset(
-        config_auto_replacements_bypass_projects_hash,
-        auto_replacements_bypass_projects_key,
-        pickle.dumps(projects_within_expiry),
-    )
+    rds.delete(config_auto_replacements_bypass_projects_hash)
+    if projects_within_expiry:
+        rds.hmset(config_auto_replacements_bypass_projects_hash, projects_within_expiry)
 
     return projects_within_expiry
 
