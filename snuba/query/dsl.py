@@ -151,24 +151,16 @@ def equals(
     return binary_condition("equals", left, right)
 
 
-def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:
+def and_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall:
     """
     if only lhs and rhs are given, return and(lhs, rhs)
     otherwise (more than 2 conditions are given), returns and(lhs, and(rhs, and(...)))
     """
-    if len(args) == 0:
-        return binary_condition("and", lhs, rhs)
-
-    sofar = args[len(args) - 1]
-    for i in range(len(args) - 2, -1, -1):
-        sofar = binary_condition("and", args[i], sofar)
-    sofar = binary_condition("and", rhs, sofar)
-    sofar = binary_condition("and", lhs, sofar)
-    return sofar
+    return FunctionCall(None, "and", (lhs, rhs, *args))
 
 
-def or_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("or", lhs, rhs)
+def or_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall:
+    return FunctionCall(None, "or", (lhs, rhs, *args))
 
 
 def in_cond(lhs: Expression, rhs: Expression) -> FunctionCall:
