@@ -14,6 +14,11 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.pipeline.query_pipeline import (
+    QueryPipelineData,
+    QueryPipelineResult,
+    QueryPipelineStage,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -53,6 +58,7 @@ from snuba.query.snql.parser import (
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
 from snuba.utils.constants import GRANULARITIES_AVAILABLE
+from snuba.utils.metrics.timer import Timer
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
@@ -1078,17 +1084,19 @@ def parse_mql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_body(body, dataset)
-    with sentry_sdk.start_span(
-        op="parser", description="populate_query_from_mql_context"
-    ):
-        query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
-    with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
-        resolve_mappings(query, mql_context.indexer_mappings, dataset)
-
-    if settings and settings.get_dry_run():
-        explain_meta.set_original_ast(str(query))
+    res = MQLParseFirstHalf().execute(
+        # query_settings and timer are dummy and dont matter
+        QueryPipelineResult(
+            data=(body, dataset, mql_context_dict, settings),
+            error=None,
+            query_settings=HTTPQuerySettings(),
+            timer=Timer("dummy"),
+        )
+    )
+    if res.error:
+        raise res.error
+    assert res.data  # since theres no res.error, data is guarenteed
+    query = res.data
 
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
@@ -1124,3 +1132,37 @@ def parse_mql_query(
         _post_process(query, VALIDATORS)
 
     return query
+
+
+class MQLParseFirstHalf(
+    QueryPipelineStage[
+        tuple[str, Dataset, dict[str, Any], QuerySettings | None], LogicalQuery
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[str, Dataset, dict[str, Any], QuerySettings | None]
+        ],
+    ) -> LogicalQuery:
+        mql_str, dataset, mql_context_dict, settings = pipe_input.data
+
+        with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
+            query = parse_mql_query_body(mql_str, dataset)
+
+        with sentry_sdk.start_span(
+            op="parser", description="populate_query_from_mql_context"
+        ):
+            query, mql_context = populate_query_from_mql_context(
+                query, mql_context_dict
+            )
+
+        with sentry_sdk.start_span(
+            op="processor", description="resolve_indexer_mappings"
+        ):
+            resolve_mappings(query, mql_context.indexer_mappings, dataset)
+
+        if settings and settings.get_dry_run():
+            explain_meta.set_original_ast(str(query))
+
+        return query
