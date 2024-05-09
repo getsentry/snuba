@@ -628,7 +628,9 @@ def _raw_query(
         )
 
 
-def _get_allocation_policies(query: Query | CompositeQuery[Table]):
+def _get_allocation_policies(
+    query: Query | CompositeQuery[Table],
+) -> list[AllocationPolicy]:
     collector = _PolicyCollector()
     collector.visit(query)
     return collector.policies

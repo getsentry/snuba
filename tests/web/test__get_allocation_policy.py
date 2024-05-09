@@ -24,7 +24,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.web.db_query import _get_allocation_policies
 
 
-class PermissiveJoinClause(JoinClause):
+class PermissiveJoinClause(JoinClause[Table]):
     def __post_init__(self) -> None:
         """JoinClause verifies that the join clause is references
         valid columns, these tests do not care about columns"""
