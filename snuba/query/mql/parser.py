@@ -1084,13 +1084,13 @@ def parse_mql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    res = MQLParseFirstHalf().execute(
+    res = ParsePopulateResolveMQL().execute(
         # query_settings and timer are dummy and dont matter
         QueryPipelineResult(
             data=(body, dataset, mql_context_dict, settings),
             error=None,
             query_settings=HTTPQuerySettings(),
-            timer=Timer("dummy"),
+            timer=Timer("mql_pipeline"),
         )
     )
     if res.error:
@@ -1134,7 +1134,7 @@ def parse_mql_query(
     return query
 
 
-class MQLParseFirstHalf(
+class ParsePopulateResolveMQL(
     QueryPipelineStage[
         tuple[str, Dataset, dict[str, Any], QuerySettings | None], LogicalQuery
     ]
