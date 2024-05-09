@@ -14,6 +14,11 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.pipeline.query_pipeline import (
+    QueryPipelineData,
+    QueryPipelineResult,
+    QueryPipelineStage,
+)
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.ast_logger import Logger as KylesLogger
 from snuba.query.composite import CompositeQuery
@@ -55,6 +60,7 @@ from snuba.query.snql.parser import (
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
 from snuba.utils.constants import GRANULARITIES_AVAILABLE
+from snuba.utils.metrics.timer import Timer
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
@@ -1080,31 +1086,28 @@ def parse_mql_query(
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     assert kylelog
-    kylelog.begin(repr((body, dataset)))
-    with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_body(body, dataset)
+    kylelog.begin(repr((body, dataset, mql_context_dict, settings)))
+    res = MQLParseFirstHalf().execute(
+        # query_settings and timer are dummy and dont matter
+        QueryPipelineResult(
+            data=(body, dataset, mql_context_dict, settings),
+            error=None,
+            query_settings=HTTPQuerySettings(),
+            timer=Timer("dummy"),
+        )
+    )
+    if res.error:
+        kylelog.log(res.error)
+        raise res.error
+    assert res.data  # since theres no res.error, data is guarenteed
+    query = res.data
     kylelog.log(query_repr(query))
-
-    kylelog.log(f"({query_repr(query)}, {repr(mql_context_dict)})")
-    with sentry_sdk.start_span(
-        op="parser", description="populate_query_from_mql_context"
-    ):
-        query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
-    kylelog.log(f"({query_repr(query)}, {repr(mql_context)})")
-
-    with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
-        resolve_mappings(query, mql_context.indexer_mappings, dataset)
-
-    if settings and settings.get_dry_run():
-        explain_meta.set_original_ast(str(query))
 
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
     # before we run the anonymizer and the rest of the post processors
-    kylelog.log(query_repr(query))
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
-    kylelog.pipe(query_repr(query))
 
     with sentry_sdk.start_span(op="processor", description="post_processors"):
         _post_process(
@@ -1112,13 +1115,11 @@ def parse_mql_query(
             POST_PROCESSORS,
             settings,
         )
-        kylelog.pipe(query_repr(query))
         _post_process(
             query,
             MQL_POST_PROCESSORS,
             settings,
         )
-        kylelog.log(query_repr(query))
 
     # Filter in select optimizer
     with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
@@ -1133,13 +1134,45 @@ def parse_mql_query(
             _post_process(query, custom_processing, settings)
 
     # Time based processing
-    kylelog.log(query_repr(query))
     with sentry_sdk.start_span(op="processor", description="time_based_processing"):
         _post_process(query, [_replace_time_condition], settings)
-    kylelog.log(query_repr(query))
 
     # Validating
     with sentry_sdk.start_span(op="validate", description="expression_validators"):
         _post_process(query, VALIDATORS)
 
     return query
+
+
+class MQLParseFirstHalf(
+    QueryPipelineStage[
+        tuple[str, Dataset, dict[str, Any], QuerySettings | None], LogicalQuery
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[str, Dataset, dict[str, Any], QuerySettings | None]
+        ],
+    ) -> LogicalQuery:
+        mql_str, dataset, mql_context_dict, settings = pipe_input.data
+
+        with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
+            query = parse_mql_query_body(mql_str, dataset)
+
+        with sentry_sdk.start_span(
+            op="parser", description="populate_query_from_mql_context"
+        ):
+            query, mql_context = populate_query_from_mql_context(
+                query, mql_context_dict
+            )
+
+        with sentry_sdk.start_span(
+            op="processor", description="resolve_indexer_mappings"
+        ):
+            resolve_mappings(query, mql_context.indexer_mappings, dataset)
+
+        if settings and settings.get_dry_run():
+            explain_meta.set_original_ast(str(query))
+
+        return query
