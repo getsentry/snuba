@@ -166,14 +166,12 @@ where
     T: Decodable<SIZE>,
 {
     if data.len() % T::SIZE == 0 {
-        let res = Ok(data
+        Ok(data
             .chunks_exact(T::SIZE)
             .map(TryInto::try_into)
             .map(Result::unwrap) // OK to unwrap, `chunks_exact` always yields slices of the right length
             .map(T::decode_bytes)
-            .collect());
-
-        res
+            .collect())
     } else {
         Err(anyhow!(
             "Decoded Base64 cannot be chunked into {}, got {}",
@@ -927,7 +925,7 @@ mod tests {
 
     #[test]
     fn test_distribution_processor_with_v2_distribution_message() {
-        let result: Result<InsertBatch, Error> = test_processor_with_payload(
+        let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
                     rust_arroyo::backends::kafka::types::KafkaPayload,
@@ -984,7 +982,7 @@ mod tests {
 
     #[test]
     fn test_distribution_processor_with_v3_distribution_message() {
-        let result: Result<InsertBatch, Error> = test_processor_with_payload(
+        let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
                     rust_arroyo::backends::kafka::types::KafkaPayload,
