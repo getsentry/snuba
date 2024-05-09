@@ -43,7 +43,6 @@ from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionEr
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -79,26 +78,25 @@ RespTuple = Tuple[Text, int, Dict[Any, Any]]
 
 
 def truncate_dataset(dataset: Dataset) -> None:
-    all_storage_keys = get_all_storage_keys()
-    for storage_key in all_storage_keys:
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-        for node in nodes:
-            clickhouse = cluster.get_node_connection(
-                ClickhouseClientSettings.MIGRATE, node
-            )
+    for entity in dataset.get_all_entities():
+        for storage in entity.get_all_storages():
+            cluster = storage.get_cluster()
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                clickhouse = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
 
-            database = cluster.get_database()
+                database = cluster.get_database()
 
-            schema = storage.get_schema()
+                schema = storage.get_schema()
 
-            if not isinstance(schema, TableSchema):
-                return
+                if not isinstance(schema, TableSchema):
+                    return
 
-            table = schema.get_local_table_name()
+                table = schema.get_local_table_name()
 
-            clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
+                clickhouse.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table}")
 
 
 application = Flask(__name__, static_url_path="")
