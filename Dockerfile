@@ -148,14 +148,6 @@ EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
-FROM application_base as application
-USER 0
-RUN set -ex; \
-    apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \
-    rm /tmp/build-deps.txt; \
-    rm -rf /var/lib/apt/lists/*;
-USER snuba
-
 FROM application_base AS testing
 
 USER 0
