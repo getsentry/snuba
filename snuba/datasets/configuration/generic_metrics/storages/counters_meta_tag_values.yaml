@@ -29,6 +29,7 @@ schema:
   local_table_name: generic_metric_counters_meta_tag_values_local
   dist_table_name: generic_metric_counters_meta_tag_values_dist
 
+required_time_column: timestamp
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:

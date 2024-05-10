@@ -53,10 +53,10 @@ required_condition = and_cond(
 
 test_cases = [
     pytest.param(
-        f"MATCH STORAGE(metric_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
+        f"MATCH STORAGE(metrics_summaries) SELECT 4-5, trace_id WHERE {added_condition} GRANULARITY 60",
         StorageQuery.from_query(
             Query(
-                QueryStorage(key=StorageKey("metric_summaries")),
+                QueryStorage(key=StorageKey("metrics_summaries")),
                 selected_columns=[
                     SelectedExpression(
                         "4-5",
