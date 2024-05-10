@@ -239,7 +239,7 @@ pub fn consumer_impl(
 
     if let Err(error) = processor.run() {
         let error: &dyn std::error::Error = &error;
-        tracing::error!(error);
+        tracing::error!("{:?}", error);
         1
     } else {
         0

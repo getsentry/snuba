@@ -16,6 +16,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import sentry_sdk
@@ -24,13 +25,13 @@ from parsimonious.grammar import Grammar
 from parsimonious.nodes import Node, NodeVisitor
 
 from snuba import state
-from snuba.clickhouse.columns import Array
+from snuba.clickhouse.columns import Array, ColumnSet
 from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -47,6 +48,8 @@ from snuba.query.conditions import (
 )
 from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import LogicalDataSource
+from snuba.query.data_source.simple import Storage as QueryStorage
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -109,7 +112,7 @@ snql_grammar = Grammar(
     r"""
     query_exp             = match_clause select_clause group_by_clause? arrayjoin_clause? where_clause? having_clause? order_by_clause? limit_by_clause? limit_clause? offset_clause? granularity_clause? totals_clause? space*
 
-    match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single )
+    match_clause          = space* "MATCH" space+ (relationships / subquery / entity_single / storage_single)
     select_clause         = space+ "SELECT" space+ select_list
     group_by_clause       = space+ "BY" space+ group_list
     arrayjoin_clause      = space+ "ARRAY JOIN" space+ arrayjoin_entity arrayjoin_optional
@@ -123,6 +126,7 @@ snql_grammar = Grammar(
     totals_clause         = space+ "TOTALS" space+ boolean_literal
 
     entity_single         = open_paren space* entity_name sample_clause? space* close_paren
+    storage_single        = "STORAGE" space* open_paren space* storage_name sample_clause? space* close_paren
     entity_match          = open_paren entity_alias colon space* entity_name sample_clause? space* close_paren
     relationship_link     = ~r"-\[" relationship_name ~r"\]->"
     relationship_match    = space* entity_match space* relationship_link space* entity_match
@@ -194,6 +198,7 @@ snql_grammar = Grammar(
     function_name         = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_alias          = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     entity_name           = ~r"[a-zA-Z_]+"
+    storage_name          = ~r"[a-zA-Z_]+"
     relationship_name     = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
     arrow                 = "->"
     open_brace            = "{"
@@ -245,7 +250,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_query_exp(
         self, node: Node, visited_children: Iterable[Any]
-    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
+    ) -> Union[LogicalQuery, CompositeQuery[LogicalDataSource]]:
         args: MutableMapping[str, Any] = {}
         (
             data_source,
@@ -285,6 +290,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             # TODO: How sample rate gets stored needs to be addressed in a future PR
             args["sample"] = data_source.sample
 
+        assert isinstance(data_source, (QueryEntity, QueryStorage))
         return LogicalQuery(**args)
 
     def visit_match_clause(
@@ -296,16 +302,17 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             Any,
             Union[
                 QueryEntity,
-                CompositeQuery[QueryEntity],
+                CompositeQuery[LogicalDataSource],
                 LogicalQuery,
                 RelationshipTuple,
                 Sequence[RelationshipTuple],
             ],
         ],
     ) -> Union[
-        CompositeQuery[QueryEntity],
+        CompositeQuery[LogicalDataSource],
         LogicalQuery,
         QueryEntity,
+        # joins not availble for storage queries as of 2024-04-12
         JoinClause[QueryEntity],
     ]:
         _, _, _, match = visited_children
@@ -320,7 +327,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             join_clause = build_join_clause(match)
             return join_clause
 
-        assert isinstance(match, QueryEntity)  # mypy
+        assert isinstance(match, (QueryEntity, QueryStorage))  # mypy
         return match
 
     def visit_entity_single(
@@ -335,6 +342,19 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             sample = None
 
         return QueryEntity(name, get_entity(name).get_data_model(), sample)
+
+    def visit_storage_single(
+        self,
+        node: Node,
+        visited_children: Tuple[
+            Any, Any, Any, Any, StorageKey, Union[Optional[float], Node], Any, Any
+        ],
+    ) -> QueryStorage:
+        _, _, _, _, storage_key, sample, _, _ = visited_children
+        if isinstance(sample, Node):
+            sample = None
+
+        return QueryStorage(key=storage_key, sample=sample)
 
     def visit_entity_match(
         self,
@@ -359,6 +379,14 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
             return EntityKey(node.text)
         except Exception:
             raise ParsingException(f"{node.text} is not a valid entity name")
+
+    def visit_storage_name(
+        self, node: Node, visited_children: Tuple[Any]
+    ) -> StorageKey:
+        try:
+            return StorageKey(node.text)
+        except Exception:
+            raise ParsingException(f"{node.text} is not a valid Storage name")
 
     def visit_relationships(
         self,
@@ -413,7 +441,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
     def visit_subquery(
         self, node: Node, visited_children: Tuple[Any, Node, Any]
-    ) -> Union[LogicalQuery, CompositeQuery[QueryEntity]]:
+    ) -> Union[LogicalQuery, CompositeQuery[LogicalDataSource]]:
         _, query, _ = visited_children
         assert isinstance(query, (CompositeQuery, LogicalQuery))  # mypy
         return query
@@ -913,7 +941,7 @@ class SnQLVisitor(NodeVisitor):  # type: ignore
 
 def parse_snql_query_initial(
     body: str,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -961,7 +989,9 @@ def parse_snql_query_initial(
     return parsed
 
 
-def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+def _qualify_columns(
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
+) -> None:
     """
     All columns in a join query should be qualified with the entity alias, e.g. e.event_id
     Take those aliases and put them in the table name. This has to be done in a post
@@ -990,7 +1020,7 @@ def _qualify_columns(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) ->
 
 
 def _treeify_or_and_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
@@ -1022,7 +1052,7 @@ DATETIME_MATCH = FunctionCallMatch(
 
 
 def _parse_datetime_literals(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     def parse(exp: Expression) -> Expression:
         result = DATETIME_MATCH.match(exp)
@@ -1048,7 +1078,7 @@ ARRAY_JOIN_MATCH = FunctionCallMatch(
 
 
 def _array_join_transformation(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     def parse(exp: Expression) -> Expression:
         result = ARRAY_JOIN_MATCH.match(exp)
@@ -1141,8 +1171,8 @@ def _transform_array_condition(array_columns: Set[str], exp: Expression) -> Expr
 
 
 def _unpack_array_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    schema: EntityColumnSet,
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    schema: ColumnSet,
     entity_alias: Optional[str] = None,
 ) -> None:
     array_columns: Set[str] = set()
@@ -1177,7 +1207,7 @@ def _unpack_array_conditions(
 
 
 def _array_column_conditions(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     Find conditions on array columns, and if those columns are not in the array join,
@@ -1190,16 +1220,18 @@ def _array_column_conditions(
         return
 
     if isinstance(from_clause, QueryEntity):
-        _unpack_array_conditions(query, from_clause.schema)
+        _unpack_array_conditions(cast(LogicalQuery, query), from_clause.schema)
     elif isinstance(from_clause, JoinClause):
         alias_map = from_clause.get_alias_node_map()
         for alias, node in alias_map.items():
-            assert isinstance(node.data_source, QueryEntity)  # mypy
-            _unpack_array_conditions(query, node.data_source.schema, alias)
+            if isinstance(node.data_source, QueryEntity):  # mypy
+                _unpack_array_conditions(
+                    cast(LogicalQuery, query), node.data_source.schema, alias
+                )
 
 
 def _mangle_query_aliases(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
 ) -> None:
     """
     If a query has a subquery, the inner query will get its aliases mangled. This is
@@ -1230,12 +1262,12 @@ def _mangle_query_aliases(
 
     # Check if this query has a subquery. If it does, we need to mangle the column name as well
     # and keep track of what we mangled by updating the mappings in memory.
-    if isinstance(query.get_from_clause(), LogicalQuery):
+    if isinstance(query.get_from_clause(), (LogicalQuery, CompositeQuery)):
         query.transform_expressions(mangle_column_value)
 
 
 def validate_identifiers_in_lambda(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
 ) -> None:
     """
     Check to make sure that any identifiers referenced in a lambda were defined in that lambda
@@ -1268,7 +1300,10 @@ def validate_identifiers_in_lambda(
 
 
 def _replace_time_condition(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery]
+    query: Union[
+        CompositeQuery[LogicalDataSource],
+        LogicalQuery,
+    ]
 ) -> None:
     condition = query.get_condition()
     top_level = (
@@ -1293,7 +1328,7 @@ def _replace_time_condition(
 
         alias_map = from_clause.get_alias_node_map()
         for alias, node in alias_map.items():
-            assert isinstance(node.data_source, QueryEntity)  # mypy
+            assert isinstance(node.data_source, (QueryEntity, QueryStorage))  # mypy
             new_top_level = _align_max_days_date_align(
                 node.data_source.key, top_level, max_days, date_align, alias
             )
@@ -1302,12 +1337,17 @@ def _replace_time_condition(
 
 
 def _align_max_days_date_align(
-    key: EntityKey,
+    key: EntityKey | StorageKey,
     old_top_level: Sequence[Expression],
     max_days: Optional[int],
     date_align: int,
     alias: Optional[str] = None,
 ) -> Sequence[Expression]:
+    if isinstance(key, StorageKey):
+        # TODO: Make this work for storage queries as well
+        # required_time_column should be a field on the storage if
+        # we support this
+        return old_top_level
     entity = get_entity(key)
     if not entity.required_time_column:
         return old_top_level
@@ -1371,8 +1411,8 @@ def _align_max_days_date_align(
 
 def _select_entity_for_dataset(
     dataset: Dataset,
-) -> Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]:
-    def selector(query: Union[CompositeQuery[QueryEntity], LogicalQuery]) -> None:
+) -> Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]:
+    def selector(query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]) -> None:
         # If you are doing a JOIN, then you have to specify the entity
         if isinstance(query, CompositeQuery):
             return
@@ -1383,6 +1423,7 @@ def _select_entity_for_dataset(
             # so only do this selection in that case. If someone wants the "discover" entity specifically
             # then their query will have to only use fields from that entity.
             if query_entity.key == EntityKey.DISCOVER:
+                assert isinstance(query, LogicalQuery)
                 selected_entity_key = select_discover_entity(query)
                 selected_entity = get_entity(selected_entity_key)
                 query_entity = QueryEntity(
@@ -1423,8 +1464,10 @@ def _select_entity_for_dataset(
 
 
 def _post_process(
-    query: Union[CompositeQuery[QueryEntity], LogicalQuery],
-    funcs: Sequence[Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]],
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
+    funcs: Sequence[
+        Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
+    ],
     settings: QuerySettings | None = None,
 ) -> None:
     for func in funcs:
@@ -1463,7 +1506,7 @@ VALIDATORS = [
 
 
 CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
 ]
 
 
@@ -1472,7 +1515,7 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
+) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
     with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
         query = parse_snql_query_initial(body)
 
@@ -1502,8 +1545,6 @@ def parse_snql_query(
         with sentry_sdk.start_span(op="processor", description="time_based_processing"):
             _post_process(query, [_replace_time_condition], settings)
 
-        # XXX: Select the entity to be used for the query. This step is temporary. Eventually
-        # entity selection will be moved to Sentry and specified for all SnQL queries.
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
 
         # Validating

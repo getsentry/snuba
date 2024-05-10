@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Generator, Mapping
+from typing import Generator, Mapping, cast
 
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -49,18 +49,21 @@ class SubqueryDraft:
         self.__granularity = granularity
 
     def build_query(self) -> ProcessableQuery[Entity]:
-        return LogicalQuery(
-            from_clause=self.__data_source,
-            selected_columns=list(
-                sorted(
-                    self.__selected_expressions,
-                    key=lambda selected: selected.name or "",
-                )
+        return cast(
+            ProcessableQuery[Entity],
+            LogicalQuery(
+                from_clause=self.__data_source,
+                selected_columns=list(
+                    sorted(
+                        self.__selected_expressions,
+                        key=lambda selected: selected.name or "",
+                    )
+                ),
+                condition=combine_and_conditions(self.__conditions)
+                if self.__conditions
+                else None,
+                granularity=self.__granularity,
             ),
-            condition=combine_and_conditions(self.__conditions)
-            if self.__conditions
-            else None,
-            granularity=self.__granularity,
         )
 
 

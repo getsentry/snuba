@@ -378,6 +378,7 @@ class SpansLoader(DirectoryLoader):
             "0010_spans_add_compression",
             "0011_spans_add_index_on_trace_id",
             "0012_spans_add_index_on_transaction_name",
+            "0013_spans_add_indexes_for_tag_columns",
         ]
 
 
@@ -388,6 +389,7 @@ class GroupAttributesLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_group_attributes",
+            "0002_add_priority_to_group_attributes",
         ]
 
 

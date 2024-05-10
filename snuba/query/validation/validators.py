@@ -16,7 +16,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
@@ -140,7 +139,7 @@ class EntityContainsColumnsValidator(QueryValidator):
 
     def __init__(
         self,
-        entity_data_model: EntityColumnSet,
+        entity_data_model: ColumnSet,
         mappers: list[TranslationMappers],
         validation_mode: ColumnValidationMode,
     ) -> None:

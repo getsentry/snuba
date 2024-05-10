@@ -1,4 +1,4 @@
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set, Tuple, cast
 
 import pytest
 from snuba_sdk.legacy import json_to_snql
@@ -8,7 +8,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.entity_validation import run_entity_validators
 from snuba.datasets.plans.translator.query import identity_translate
 from snuba.query.exceptions import ValidationException
-from snuba.query.logical import Query
+from snuba.query.logical import EntityQuery, Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
 
@@ -183,14 +183,14 @@ def test_find_projects(
             request.validate()
             query = parse_snql_query(str(request.query), events)
             assert isinstance(query, Query)
-            run_entity_validators(query, HTTPQuerySettings())
+            run_entity_validators(cast(EntityQuery, query), HTTPQuerySettings())
             identity_translate(query)
     else:
         request = json_to_snql(query_body, "events")
         request.validate()
         query = parse_snql_query(str(request.query), events)
         assert isinstance(query, Query)
-        run_entity_validators(query, HTTPQuerySettings())
+        run_entity_validators(cast(EntityQuery, query), HTTPQuerySettings())
         translated_query = identity_translate(query)
         project_ids_ast = get_object_ids_in_query_ast(translated_query, "project_id")
         assert project_ids_ast == expected_projects
