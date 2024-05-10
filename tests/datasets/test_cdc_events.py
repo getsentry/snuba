@@ -136,7 +136,7 @@ class TestCdcEvents(BaseApiTest):
         )
         data = json.loads(response.data)
 
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         assert len(data["data"]) == expected_rows, data
 
     @pytest.mark.clickhouse_db
@@ -176,5 +176,5 @@ class TestCdcEvents(BaseApiTest):
             ),
         )
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         assert len(data["data"]) == expected_rows, data
