@@ -1,15 +1,18 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
+use rust_arroyo::gauge;
 use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use std::mem;
 use tokio::runtime::Handle;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio::time::{sleep, Duration};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::types::RowData;
 
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
+const CHANNEL_CAPACITY: usize = 8_192;
 
 pub struct BatchFactory {
     client: Client,
@@ -19,6 +22,7 @@ pub struct BatchFactory {
     skip_write: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl BatchFactory {
     pub fn new(
         hostname: &str,
@@ -27,10 +31,20 @@ impl BatchFactory {
         database: &str,
         concurrency: &ConcurrencyConfig,
         skip_write: bool,
+        clickhouse_user: &str,
+        clickhouse_password: &str,
     ) -> Self {
-        let mut headers = HeaderMap::with_capacity(3);
+        let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
         headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip,deflate"));
+        headers.insert(
+            "X-Clickhouse-User",
+            HeaderValue::from_str(clickhouse_user).unwrap(),
+        );
+        headers.insert(
+            "X-ClickHouse-Key",
+            HeaderValue::from_str(clickhouse_password).unwrap(),
+        );
         headers.insert(
             "X-ClickHouse-Database",
             HeaderValue::from_str(database).unwrap(),
@@ -61,24 +75,32 @@ impl BatchFactory {
             // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
             // however to enforce any limit locally because it would mean that in the Drop impl of
             // Batch, the send may block or fail
-            let (sender, receiver) = unbounded_channel();
+            let (sender, receiver) = channel(CHANNEL_CAPACITY);
 
             let url = self.url.clone();
             let query = self.query.clone();
             let client = self.client.clone();
 
             let result_handle = self.handle.spawn(async move {
-                let res = client
-                    .post(&url)
-                    .query(&[("query", &query)])
-                    .body(reqwest::Body::wrap_stream(UnboundedReceiverStream::new(
-                        receiver,
-                    )))
-                    .send()
-                    .await?;
+                while receiver.is_empty() && !receiver.is_closed() {
+                    // continously check on the receiver stream, only when it's
+                    // not empty do we write to clickhouse
+                    sleep(Duration::from_millis(800)).await;
+                }
 
-                if res.status() != reqwest::StatusCode::OK {
-                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                if !receiver.is_empty() {
+                    // only make the request to clickhouse if there is data
+                    // being added to the receiver stream from the sender
+                    let res = client
+                        .post(&url)
+                        .query(&[("query", &query)])
+                        .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
+                        .send()
+                        .await?;
+
+                    if res.status() != reqwest::StatusCode::OK {
+                        anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                    }
                 }
 
                 Ok(())
@@ -101,7 +123,7 @@ pub struct HttpBatch {
     current_chunk: Vec<u8>,
     num_rows: usize,
     num_bytes: usize,
-    sender: Option<UnboundedSender<Result<Vec<u8>, anyhow::Error>>>,
+    sender: Option<Sender<Result<Vec<u8>, anyhow::Error>>>,
     result_handle: Option<JoinHandle<Result<(), anyhow::Error>>>,
 }
 
@@ -132,7 +154,11 @@ impl HttpBatch {
             // not very memory efficient, especially with jemalloc
             let chunk = mem::take(&mut self.current_chunk);
             if let Some(ref sender) = self.sender {
-                sender.send(Ok(chunk))?;
+                sender.try_send(Ok(chunk))?;
+                gauge!(
+                    "rust_consumer.mpsc_channel_size",
+                    (CHANNEL_CAPACITY - sender.capacity()) as u64
+                );
             }
         }
 
@@ -157,7 +183,7 @@ impl Drop for HttpBatch {
         // in case the batch was not explicitly finished, send an error into the channel to abort
         // the request
         if let Some(ref mut sender) = self.sender {
-            let _ = sender.send(Err(anyhow::anyhow!(
+            let _ = sender.try_send(Err(anyhow::anyhow!(
                 "the batch got dropped without being finished explicitly"
             )));
         }
@@ -186,6 +212,8 @@ mod tests {
             "testdb",
             &concurrency,
             false,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -199,6 +227,37 @@ mod tests {
         concurrency.handle().block_on(batch.finish()).unwrap();
 
         mock.assert();
+    }
+
+    #[test]
+    fn test_empty_batch() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).any_request();
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            false,
+            "default",
+            "",
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows([].to_vec()))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert_hits(0);
     }
 
     #[test]
@@ -217,6 +276,8 @@ mod tests {
             "testdb",
             &concurrency,
             false,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -250,6 +311,8 @@ mod tests {
             "testdb",
             &concurrency,
             true,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();
@@ -283,6 +346,8 @@ mod tests {
             "testdb",
             &concurrency,
             true,
+            "default",
+            "",
         );
 
         let mut batch = factory.new_batch();

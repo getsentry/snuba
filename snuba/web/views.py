@@ -68,7 +68,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -371,7 +371,7 @@ def dataset_query(
     _get_and_log_referrer(request, body)
 
     try:
-        result = parse_and_run_query(dataset, request, timer)
+        result = run_query(dataset, request, timer)
         assert result.extra["stats"]
     except QueryException as exception:
         status = 500

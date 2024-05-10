@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import cast
 
 import pytest
 
@@ -328,7 +329,7 @@ TEST_CASES = [
                 ),
                 SelectedExpression(
                     "_snuba_right",
-                    Column("_snuba_right", "groups", "right_col"),
+                    Column("_snuba_right", "groups", "status"),
                 ),
             ],
             condition=binary_condition(
@@ -398,7 +399,7 @@ TEST_CASES = [
                             ),
                             SelectedExpression(
                                 "_snuba_right",
-                                Column("_snuba_right", None, "right_col"),
+                                Column("_snuba_right", None, "status"),
                             ),
                         ],
                     ),
@@ -436,8 +437,7 @@ def test_composite(
     request = Request(
         id="",
         original_body={"query": "placeholder"},
-        query=logical_query,
-        snql_anonymized="",
+        query=cast(LogicalQuery, logical_query),
         query_settings=HTTPQuerySettings(),
         attribution_info=AttributionInfo(
             get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None

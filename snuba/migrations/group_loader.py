@@ -388,6 +388,7 @@ class GroupAttributesLoader(DirectoryLoader):
     def get_migrations(self) -> Sequence[str]:
         return [
             "0001_group_attributes",
+            "0002_add_priority_to_group_attributes",
         ]
 
 

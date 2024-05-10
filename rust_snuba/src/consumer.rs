@@ -80,7 +80,18 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    tracing::info!(?consumer_config.storages, "Starting Rust consumer");
+    for storage in &consumer_config.storages {
+        tracing::info!(
+            "Storage: {}, ClickHouse Table Name: {}, Message Processor: {:?}, ClickHouse host: {}, ClickHouse port: {}, ClickHouse HTTP port: {}, ClickHouse database: {}",
+            storage.name,
+            storage.clickhouse_table_name,
+            &storage.message_processor,
+            storage.clickhouse_cluster.host,
+            storage.clickhouse_cluster.port,
+            storage.clickhouse_cluster.http_port,
+            storage.clickhouse_cluster.database,
+        );
+    }
 
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
@@ -235,7 +246,7 @@ pub fn consumer_impl(
 
     if let Err(error) = processor.run() {
         let error: &dyn std::error::Error = &error;
-        tracing::error!(error);
+        tracing::error!("{:?}", error);
         1
     } else {
         0

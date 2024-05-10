@@ -46,7 +46,7 @@ from snuba.utils.streams.configuration_builder import build_kafka_consumer_confi
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web import QueryException
 from snuba.web.constants import NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +274,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 "subscriptions_executor",
             )
 
-            result = parse_and_run_query(
+            result = run_query(
                 self.__dataset,
                 request,
                 timer,

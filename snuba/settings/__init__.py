@@ -129,10 +129,10 @@ DOGSTATSD_SAMPLING_RATES = {
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
-CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
+CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASSWORD", "")
 
 CLICKHOUSE_TRACE_USER = os.environ.get("CLICKHOUSE_TRACE_USER", "default")
-CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
+CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASSWORD", "")
 
 # Redis Options
 
@@ -435,10 +435,6 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
-USE_CARDINALITY_CASTER = 0
-
-USE_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
-TRY_NEW_QUERY_PIPELINE_SAMPLE_RATE = 0.0
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

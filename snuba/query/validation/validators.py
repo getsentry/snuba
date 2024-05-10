@@ -16,7 +16,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
@@ -94,8 +93,15 @@ class EntityRequiredColumnValidator(QueryValidator):
     This validator checks if the Query contains filters by all of the required columns.
     """
 
-    def __init__(self, required_filter_columns: Sequence[str]) -> None:
+    def __init__(
+        self,
+        required_filter_columns: Sequence[str],
+        required_str_columns: Sequence[str] | None = None,
+    ) -> None:
         self.required_columns = set(required_filter_columns)
+        self.required_str_columns = (
+            set(required_str_columns) if required_str_columns else set()
+        )
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         condition = query.get_condition()
@@ -106,6 +112,15 @@ class EntityRequiredColumnValidator(QueryValidator):
             for col in self.required_columns:
                 match = build_match(
                     col=col, ops=[ConditionFunctions.EQ], param_type=int, alias=alias
+                )
+                found = any(match.match(cond) for cond in top_level)
+                if not found:
+                    missing.add(col)
+
+        if self.required_str_columns:
+            for col in self.required_str_columns:
+                match = build_match(
+                    col=col, ops=[ConditionFunctions.EQ], param_type=str, alias=alias
                 )
                 found = any(match.match(cond) for cond in top_level)
                 if not found:
@@ -124,7 +139,7 @@ class EntityContainsColumnsValidator(QueryValidator):
 
     def __init__(
         self,
-        entity_data_model: EntityColumnSet,
+        entity_data_model: ColumnSet,
         mappers: list[TranslationMappers],
         validation_mode: ColumnValidationMode,
     ) -> None:

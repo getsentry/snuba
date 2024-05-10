@@ -175,7 +175,6 @@ function(region) {
               checks: {
                 jobs: {
                   checks: {
-                    timeout: 1800,
                     elastic_profile_id: 'snuba',
                     tasks: [
                       gocdtasks.script(importstr '../bash/check-github.sh'),

@@ -49,9 +49,7 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
             tracing::debug!("performing write");
             let skip_write = http_batch.finish().await.map_err(RunTaskError::Other)?;
 
-            if skip_write {
-                tracing::info!("skipping write of {} rows", num_rows);
-            } else {
+            if !skip_write {
                 tracing::info!("Inserted {} rows", num_rows);
             }
 

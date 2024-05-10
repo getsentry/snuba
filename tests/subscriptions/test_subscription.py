@@ -8,8 +8,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
-from snuba.query.exceptions import InvalidQueryException
-from snuba.query.parser.exceptions import ParsingException
+from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.validation.validators import ColumnValidationMode
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import SubscriptionData
@@ -86,7 +85,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
-        with raises(ParsingException):
+        with raises(ValidationException):
             creator.create(
                 subscription,
                 self.timer,

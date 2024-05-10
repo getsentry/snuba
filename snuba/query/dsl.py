@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Sequence
 
 from snuba.query.expressions import (
@@ -13,6 +15,62 @@ from snuba.query.expressions import (
 # verbose to build.
 
 
+class NestedColumn:
+    """Usage:
+    tags = NestedColumn("tags")
+    assert tags["some_key"] == SubscriptableReference(
+        "_snuba_tags[some_key]",
+        Column("_snuba_tags"), None, "tags"),
+        Literal(None, "some_key")
+    )
+    """
+
+    def __init__(self, column_name: str) -> None:
+        self.column_name = column_name
+
+    def __getitem__(self, key: str) -> SubscriptableReference:
+        return SubscriptableReference(
+            f"_snuba_{self.column_name}[{key}]",
+            Column(f"_snuba_{self.column_name}", None, self.column_name),
+            Literal(None, key),
+        )
+
+
+class _FunctionCall:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def _arg_to_literal_expr(self, arg: Expression | OptionalScalarType) -> Expression:
+        if isinstance(arg, Expression):
+            return arg
+        return Literal(None, arg)
+
+    def __call__(
+        self, *args: Expression | OptionalScalarType, **kwargs: str
+    ) -> FunctionCall:
+        alias = kwargs.pop("alias", None)
+        if kwargs:
+            raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
+        transformed_args = [self._arg_to_literal_expr(arg) for arg in args]
+        return FunctionCall(alias, self.name, tuple(transformed_args))
+
+
+class _Functions:
+    def __getattr__(self, name: str) -> _FunctionCall:
+        return _FunctionCall(name)
+
+
+"""
+Usage:
+
+from snuba.query.dsl import Functions as f
+assert f.equals(1, 1, alias="eq") == FunctionCall(
+    "eq", "equals" (Literal(None, 1), Literal(None, 1))
+)
+"""
+Functions = _Functions()
+
+
 def column(
     column_name: str, table_name: str | None = None, alias: str | None = None
 ) -> Column:
@@ -21,18 +79,6 @@ def column(
 
 def literal(value: OptionalScalarType, alias: str | None = None) -> Literal:
     return Literal(alias, value)
-
-
-def snuba_tags_raw(indexer_mapping: int) -> SubscriptableReference:
-    return SubscriptableReference(
-        f"_snuba_tags_raw[{indexer_mapping}]",
-        Column(
-            "_snuba_tags_raw",
-            None,
-            "tags_raw",
-        ),
-        Literal(None, str(indexer_mapping)),
-    )
 
 
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
@@ -84,6 +130,12 @@ def divide(
     return FunctionCall(alias, "divide", (lhs, rhs))
 
 
+def if_in(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return FunctionCall(alias, "in", (lhs, rhs))
+
+
 # boolean functions
 def binary_condition(
     function_name: str, lhs: Expression, rhs: Expression
@@ -91,8 +143,12 @@ def binary_condition(
     return FunctionCall(None, function_name, (lhs, rhs))
 
 
-def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("equals", lhs, rhs)
+def equals(
+    lhs: Expression | OptionalScalarType, rhs: Expression | OptionalScalarType
+) -> FunctionCall:
+    left = lhs if isinstance(lhs, Expression) else Literal(None, lhs)
+    right = rhs if isinstance(rhs, Expression) else Literal(None, rhs)
+    return binary_condition("equals", left, right)
 
 
 def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:

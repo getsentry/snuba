@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import textwrap
 import uuid
-from typing import Any, Dict, MutableMapping, Optional, Protocol, Tuple, Type, Union
+from typing import Any, Dict, MutableMapping, Optional, Protocol, Type, Union
 
 import sentry_sdk
 
@@ -14,7 +14,7 @@ from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
@@ -44,7 +44,7 @@ class Parser(Protocol):
         settings: QuerySettings,
         dataset: Dataset,
         custom_processing: Optional[CustomProcessors] = ...,
-    ) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+    ) -> Union[Query, CompositeQuery[LogicalDataSource]]:
         ...
 
 
@@ -53,7 +53,7 @@ def parse_snql_query(
     settings: QuerySettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
-) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+) -> Union[Query, CompositeQuery[LogicalDataSource]]:
     return _parse_snql_query(
         request_parts.query["query"], dataset, custom_processing, settings
     )
@@ -64,7 +64,7 @@ def parse_mql_query(
     settings: QuerySettings,
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
-) -> Tuple[Union[Query, CompositeQuery[Entity]], str]:
+) -> Union[Query, CompositeQuery[LogicalDataSource]]:
     return _parse_mql_query(
         request_parts.query["query"],
         request_parts.query["mql_context"],
@@ -121,14 +121,11 @@ def build_request(
             referrer = _get_referrer(request_parts, referrer)
             settings_obj = _get_settings_object(settings_class, request_parts, referrer)
             try:
-                query, snql_anonymized = parser(
-                    request_parts, settings_obj, dataset, custom_processing
-                )
+                query = parser(request_parts, settings_obj, dataset, custom_processing)
             except PostProcessingError as exception:
                 query = exception.query
-                snql_anonymized = exception.snql_anonymized
                 request = _build_request(
-                    body, request_parts, referrer, settings_obj, query, snql_anonymized
+                    body, request_parts, referrer, settings_obj, query
                 )
                 query_metadata = SnubaQueryMetadata(
                     request, get_dataset_name(dataset), timer
@@ -136,9 +133,7 @@ def build_request(
                 state.record_query(query_metadata.to_dict())
                 raise
 
-            request = _build_request(
-                body, request_parts, referrer, settings_obj, query, snql_anonymized
-            )
+            request = _build_request(body, request_parts, referrer, settings_obj, query)
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
             record_invalid_request(
@@ -218,7 +213,7 @@ def _get_settings_object(
     return None  # type: ignore
 
 
-def _get_project_id(query: Query | CompositeQuery[Entity]) -> int | None:
+def _get_project_id(query: Query | CompositeQuery[LogicalDataSource]) -> int | None:
     project_ids = get_object_ids_in_query_ast(query, "project_id")
     if project_ids is not None and len(project_ids) == 1:
         return project_ids.pop()
@@ -238,8 +233,7 @@ def _build_request(
     request_parts: RequestParts,
     referrer: str,
     settings: QuerySettings,
-    query: Query | CompositeQuery[Entity],
-    snql_anonymized: str,
+    query: Query | CompositeQuery[LogicalDataSource],
 ) -> Request:
     org_ids = get_object_ids_in_query_ast(query, "org_id")
     if org_ids is not None and len(org_ids) == 1:
@@ -257,5 +251,4 @@ def _build_request(
         query=query,
         attribution_info=attribution_info,
         query_settings=settings,
-        snql_anonymized=snql_anonymized,
     )
