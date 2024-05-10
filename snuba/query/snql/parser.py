@@ -1316,7 +1316,10 @@ def validate_column_aliases_in_subqueries(
     selected_columns = from_clause.get_selected_columns()
     for s in selected_columns:
         if isinstance(s.expression, Column):
-            if s.name != s.expression.column_name:
+            table_name = (
+                s.expression.table_name + "." if s.expression.table_name else ""
+            )
+            if s.name != f"{table_name}{s.expression.column_name}":
                 raise InvalidExpressionException(
                     "aliasing a column in a subquery is not permitted"
                 )
