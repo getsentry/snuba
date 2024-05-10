@@ -1299,6 +1299,32 @@ def validate_identifiers_in_lambda(
         raise InvalidExpressionException(f"identifier(s) {ident_str} not defined")
 
 
+def validate_column_aliases_in_subqueries(
+    query: CompositeQuery[LogicalDataSource] | LogicalQuery,
+) -> None:
+    """
+    It is not permitted to alias a column in an inner subquery, since that will break the aliasing
+    conventions on subqueries.
+    """
+    if not isinstance(query, CompositeQuery):
+        return
+
+    from_clause = query.get_from_clause()
+    if not isinstance(from_clause, (CompositeQuery, LogicalQuery)):
+        return
+
+    selected_columns = from_clause.get_selected_columns()
+    for s in selected_columns:
+        if isinstance(s.expression, Column):
+            if s.name != s.expression.column_name:
+                raise InvalidExpressionException(
+                    "aliasing a column in a subquery is not permitted"
+                )
+
+    if isinstance(from_clause.get_from_clause(), CompositeQuery):
+        validate_column_aliases_in_subqueries(from_clause)
+
+
 def _replace_time_condition(
     query: Union[
         CompositeQuery[LogicalDataSource],
@@ -1502,6 +1528,7 @@ POST_PROCESSORS = [
 
 VALIDATORS = [
     validate_identifiers_in_lambda,
+    validate_column_aliases_in_subqueries,
 ]
 
 
