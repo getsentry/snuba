@@ -40,7 +40,6 @@ pub struct ConsumerStrategyFactory {
     logical_topic_name: String,
     max_batch_size: usize,
     max_batch_time: Duration,
-    skip_write: bool,
     processing_concurrency: ConcurrencyConfig,
     clickhouse_concurrency: ConcurrencyConfig,
     commitlog_concurrency: ConcurrencyConfig,
@@ -65,7 +64,6 @@ impl ConsumerStrategyFactory {
         logical_topic_name: String,
         max_batch_size: usize,
         max_batch_time: Duration,
-        skip_write: bool,
         processing_concurrency: ConcurrencyConfig,
         clickhouse_concurrency: ConcurrencyConfig,
         commitlog_concurrency: ConcurrencyConfig,
@@ -87,7 +85,6 @@ impl ConsumerStrategyFactory {
             logical_topic_name,
             max_batch_size,
             max_batch_time,
-            skip_write,
             processing_concurrency,
             clickhouse_concurrency,
             commitlog_concurrency,
@@ -128,7 +125,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     self.physical_topic_name,
                     self.physical_consumer_group.clone(),
                     &self.commitlog_concurrency,
-                    self.skip_write,
+                    false,
                 ))
             } else {
                 Box::new(next_step)
@@ -138,8 +135,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
-            match (self.skip_write, self.env_config.record_cogs, cogs_label) {
-                (false, true, Some(resource_id)) => Box::new(RecordCogs::new(
+            match (self.env_config.record_cogs, cogs_label) {
+                (true, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
                     resource_id,
                     self.accountant_topic_config.broker_config.clone(),
@@ -161,7 +158,6 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.storage_config.clickhouse_table_name,
             &self.storage_config.clickhouse_cluster.database,
             &self.clickhouse_concurrency,
-            self.skip_write,
             &self.storage_config.clickhouse_cluster.user,
             &self.storage_config.clickhouse_cluster.password,
         );
@@ -213,7 +209,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     producer,
                     replacements_destination,
                     &self.replacements_concurrency,
-                    self.skip_write,
+                    false,
                 );
 
                 return make_rust_processor_with_replacements(
