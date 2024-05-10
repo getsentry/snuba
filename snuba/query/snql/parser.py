@@ -30,7 +30,10 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range_expressions
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -1343,18 +1346,22 @@ def _align_max_days_date_align(
     date_align: int,
     alias: Optional[str] = None,
 ) -> Sequence[Expression]:
+    data_source: Entity | Storage | None = None
+    data_source_name = "entity"
     if isinstance(key, StorageKey):
         # TODO: Make this work for storage queries as well
         # required_time_column should be a field on the storage if
         # we support this
-        return old_top_level
-    entity = get_entity(key)
-    if not entity.required_time_column:
+        data_source = get_storage(key)
+        data_source_name = "storage"
+    else:
+        data_source = get_entity(key)
+    if not data_source.required_time_column:
         return old_top_level
 
     # If there is an = or IN condition on time, we don't need to do any of this
     match = build_match(
-        col=entity.required_time_column,
+        col=data_source.required_time_column,
         ops=[ConditionFunctions.EQ],
         param_type=datetime,
         alias=alias,
@@ -1363,17 +1370,17 @@ def _align_max_days_date_align(
         return old_top_level
 
     lower, upper = get_time_range_expressions(
-        old_top_level, entity.required_time_column, alias
+        old_top_level, data_source.required_time_column, alias
     )
     if not lower:
         raise ParsingException(
-            f"Missing >= condition with a datetime literal on column {entity.required_time_column} for entity {key.value}. "
-            f"Example: {entity.required_time_column} >= toDateTime('2023-05-16 00:00')"
+            f"Missing >= condition with a datetime literal on column {data_source.required_time_column} for {data_source_name} {key.value}. "
+            f"Example: {data_source.required_time_column} >= toDateTime('2023-05-16 00:00')"
         )
     elif not upper:
         raise ParsingException(
-            f"Missing < condition with a datetime literal on column {entity.required_time_column} for entity {key.value}. "
-            f"Example: {entity.required_time_column} < toDateTime('2023-05-16 00:00')"
+            f"Missing < condition with a datetime literal on column {data_source.required_time_column} for {data_source_name} {key.value}. "
+            f"Example: {data_source.required_time_column} < toDateTime('2023-05-16 00:00')"
         )
 
     from_date, from_exp = lower
@@ -1385,7 +1392,8 @@ def _align_max_days_date_align(
     to_date = to_date - timedelta(seconds=(to_date - to_date.min).seconds % date_align)
     if from_date > to_date:
         raise ParsingException(
-            f"invalid time conditions on entity {key.value}", should_report=False
+            f"invalid time conditions on {data_source_name} {key.value}",
+            should_report=False,
         )
 
     if max_days is not None and (to_date - from_date).days > max_days:

@@ -60,7 +60,7 @@ class Storage(ABC):
         return self.__readiness_state
 
     @property
-    def required_time_column(self):
+    def required_time_column(self) -> str | None:
         return self.__required_time_column
 
 
