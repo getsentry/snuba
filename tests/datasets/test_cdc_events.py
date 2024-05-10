@@ -130,10 +130,12 @@ class TestCdcEvents(BaseApiTest):
                         "btime": self.base_time,
                         "ntime": self.next_time,
                     },
+                    "tenant_ids": {"organization_id": 1, "referrer": "abcd"},
                 }
             ),
         )
         data = json.loads(response.data)
+
         assert response.status_code == 200
         assert len(data["data"]) == expected_rows, data
 
@@ -169,6 +171,7 @@ class TestCdcEvents(BaseApiTest):
                         "btime": self.base_time,
                         "ntime": self.next_time,
                     },
+                    "tenant_ids": {"organization_id": 1, "referrer": "abcd"},
                 }
             ),
         )
