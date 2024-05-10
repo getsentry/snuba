@@ -40,10 +40,12 @@ class Storage(ABC):
         storage_set_key: StorageSetKey,
         schema: Schema,
         readiness_state: ReadinessState,
+        required_time_column: Optional[str] = None,
     ):
         self.__storage_set_key = storage_set_key
         self.__schema = schema
         self.__readiness_state = readiness_state
+        self.__required_time_column = required_time_column
 
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
@@ -56,6 +58,10 @@ class Storage(ABC):
 
     def get_readiness_state(self) -> ReadinessState:
         return self.__readiness_state
+
+    @property
+    def required_time_column(self):
+        return self.__required_time_column
 
 
 class ReadableStorage(Storage):
@@ -126,12 +132,18 @@ class ReadableTableStorage(ReadableStorage):
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
+        required_time_column: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
-        super().__init__(storage_set_key, schema, readiness_state)
+        super().__init__(
+            storage_set_key,
+            schema,
+            readiness_state,
+            required_time_column=required_time_column,
+        )
 
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
@@ -161,6 +173,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
+        required_time_column: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         super().__init__(
@@ -171,6 +184,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             query_processors,
             mandatory_condition_checkers,
             allocation_policies,
+            required_time_column=required_time_column,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(

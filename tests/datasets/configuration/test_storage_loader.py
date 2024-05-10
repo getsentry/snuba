@@ -42,6 +42,8 @@ schema:
   local_table_name: "test"
   dist_table_name: "test"
 
+required_time_column: timestamp
+
 query_processors:
   -
     processor: MappingOptimizer
@@ -100,6 +102,7 @@ allocation_policies:
                 )["group_by_overflow_mode"]
                 == "any"
             )
+            assert storage.required_time_column == "timestamp"
             assert len(policies := storage.get_allocation_policies()) == 2
             assert set([p.config_key() for p in policies]) == {
                 "BytesScannedWindowAllocationPolicy",
