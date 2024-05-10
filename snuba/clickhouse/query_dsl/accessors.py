@@ -10,7 +10,7 @@ from snuba.query.conditions import (
     get_first_level_and_conditions,
     is_in_condition_pattern,
 )
-from snuba.query.data_source.simple import Entity, SimpleDataSource, Table
+from snuba.query.data_source.simple import LogicalDataSource, SimpleDataSource, Table
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
@@ -149,7 +149,7 @@ def get_time_range_expressions(
 
 
 def get_time_range(
-    query: Union[ProcessableQuery[Table], ProcessableQuery[Entity]],
+    query: Union[ProcessableQuery[Table], ProcessableQuery[LogicalDataSource]],
     timestamp_field: str,
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     """

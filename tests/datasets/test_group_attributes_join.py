@@ -161,9 +161,119 @@ class TestEventsGroupAttributes(BaseApiTest):
             data=json.dumps({"dataset": "events", "query": query_body}),
         )
 
+    def query_events_inner_joined_group_attributes(self):
+        query_template = (
+            "MATCH (e: events) -[attributes_inner]-> (g: group_attributes) "
+            "SELECT e.event_id, "
+            "g.group_id, g.group_status, g.group_substatus, "
+            "g.group_first_seen, "
+            "g.group_num_comments, "
+            "g.assignee_user_id, "
+            "g.assignee_team_id, "
+            "g.owner_suspect_commit_user_id, "
+            "g.owner_ownership_rule_user_id, "
+            "g.owner_ownership_rule_team_id, "
+            "g.owner_codeowners_user_id, "
+            "g.owner_codeowners_team_id WHERE "
+            "e.project_id = %(project_id)s AND "
+            "g.project_id = %(project_id)s AND "
+            "g.group_id = %(group_id)s AND "
+            "e.timestamp >= toDateTime('%(btime)s') AND "
+            "e.timestamp < toDateTime('%(ntime)s')"
+        )
+        query_body = query_template % {
+            "project_id": self.project_id,
+            "group_id": self.event["group_id"],
+            "btime": self.base_time,
+            "ntime": self.next_time,
+        }
+
+        query = parse_snql_query(str(query_body), get_dataset("events"))
+        attribution_info = AttributionInfo(
+            app_id=AppID(key=""),
+            tenant_ids={},
+            referrer="",
+            team=None,
+            feature=None,
+            parent_api=None,
+        )
+        settings = HTTPQuerySettings()
+        request = Request(
+            id="123",
+            original_body=query_body,
+            query=query,
+            query_settings=settings,
+            attribution_info=attribution_info,
+        )
+
+        pipeline_result = EntityProcessingStage().execute(
+            QueryPipelineResult(
+                data=request,
+                query_settings=settings,
+                timer=Timer(name="bloop"),
+                error=None,
+            )
+        )
+        clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
+
+        assert isinstance(clickhouse_query, CompositeQuery)
+        assert isinstance(clickhouse_query.get_from_clause(), JoinClause)
+        right_node = clickhouse_query.get_from_clause().right_node
+        assert isinstance(right_node.data_source.get_from_clause(), Table)
+        # make sure we're explicitly applying FINAL when querying on group_attributes table
+        # so deduplication happens when we join the entity from events -> group_attributes
+        assert right_node.data_source.get_from_clause().final
+        assert right_node.data_source.get_from_clause().table_name.startswith(
+            "group_attributes"
+        )
+
+        return self.app.post(
+            "/events/snql",
+            data=json.dumps({"dataset": "events", "query": query_body}),
+        )
+
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_group_attributes_join(self) -> None:
+        response = self.query_events_inner_joined_group_attributes()
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert (
+            data["data"][0].items()
+            == {
+                "e.event_id": self.event["event_id"],
+                "g.group_id": self.initial_group_attributes["group_id"],
+                "g.group_status": self.initial_group_attributes["group_status"],
+                "g.group_substatus": self.initial_group_attributes["group_substatus"],
+                "g.group_first_seen": _convert_clickhouse_datetime_str(
+                    self.initial_group_attributes["group_first_seen"]
+                ),
+                "g.group_num_comments": self.initial_group_attributes[
+                    "group_num_comments"
+                ],
+                "g.assignee_user_id": self.initial_group_attributes["assignee_user_id"],
+                "g.assignee_team_id": self.initial_group_attributes["assignee_team_id"],
+                "g.owner_suspect_commit_user_id": self.initial_group_attributes[
+                    "owner_suspect_commit_user_id"
+                ],
+                "g.owner_ownership_rule_user_id": self.initial_group_attributes[
+                    "owner_ownership_rule_user_id"
+                ],
+                "g.owner_ownership_rule_team_id": self.initial_group_attributes[
+                    "owner_ownership_rule_team_id"
+                ],
+                "g.owner_codeowners_user_id": self.initial_group_attributes[
+                    "owner_codeowners_user_id"
+                ],
+                "g.owner_codeowners_team_id": self.initial_group_attributes[
+                    "owner_codeowners_team_id"
+                ],
+            }.items()
+        )
+
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    def test_group_attributes_inner_join(self) -> None:
         response = self.query_events_joined_group_attributes()
         data = json.loads(response.data)
         assert response.status_code == 200
@@ -294,6 +404,9 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             },
         }
 
+    @pytest.mark.xfail(
+        reason="The search_issues and group_attributes storage sets are not on the same query node anymore. This should fail since their relationship is no longer in JOINABLE_STORAGE_SETS."
+    )
     def query_search_issues_joined_group_attributes(self):
         query_template = (
             "MATCH (s: search_issues) -[attributes]-> (g: group_attributes) "

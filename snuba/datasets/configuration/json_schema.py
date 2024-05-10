@@ -540,6 +540,10 @@ V1_READABLE_STORAGE_SCHEMA = {
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "required_time_column": {
+            "type": ["string", "null"],
+            "description": "The name of the required time column specifed in schema",
+        },
     },
     "required": [
         "version",
@@ -570,6 +574,10 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "writer_options": {
             "type": "object",
             "description": "Extra Clickhouse fields that are used for consumer writes",
+        },
+        "required_time_column": {
+            "type": ["string", "null"],
+            "description": "The name of the required time column specifed in schema",
         },
     },
     "required": [
