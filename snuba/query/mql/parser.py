@@ -1106,6 +1106,7 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
 
+    """
     assert kylelog
     kylelog.begin(
         "(\n"
@@ -1114,6 +1115,7 @@ def parse_mql_query(
         + f"{repr(custom_processing)}, "
         + ")"
     )
+    """
 
     res = PostProcessAndValidateQuery().execute(
         QueryPipelineResult(
@@ -1128,10 +1130,10 @@ def parse_mql_query(
         )
     )
     if res.error:
-        kylelog.log(type(res.error).__name__)
+        # kylelog.log(type(res.error).__name__)
         raise res.error
     assert res.data  # since theres no res.error, data is guarenteed
-    kylelog.log(query_repr(res.data))
+    # kylelog.log(query_repr(res.data))
     return res.data
 
 

@@ -32,6 +32,11 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.pipeline.query_pipeline import (
+    QueryPipelineData,
+    QueryPipelineResult,
+    QueryPipelineStage,
+)
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.ast_logger import Logger as KylesLogger
 from snuba.query.composite import CompositeQuery
@@ -51,6 +56,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.data_source.simple import Storage as QueryStorage
+from snuba.query.dsl_mapper import query_repr
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -76,7 +82,7 @@ from snuba.query.parser import (
     validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException, PostProcessingError
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.discover_entity_selection import select_discover_entity
 from snuba.query.snql.expression_visitor import (
@@ -104,6 +110,7 @@ from snuba.query.snql.expression_visitor import (
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
+from snuba.utils.metrics.timer import Timer
 
 MAX_LIMIT = 10000
 
@@ -1518,25 +1525,74 @@ def parse_snql_query(
     settings: QuerySettings | None = None,
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    # assert kylelog
-    # kylelog.begin(repr(body))
+    assert kylelog
     try:
         with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
             query = parse_snql_query_initial(body)
 
         if settings and settings.get_dry_run():
             explain_meta.set_original_ast(str(query))
-        # kylelog.log(query_repr(query))
-    except Exception as e:
-        # kylelog.log(e)
-        raise e
-    try:
+
         # NOTE (volo): The anonymizer that runs after this function call chokes on
         # OR and AND clauses with multiple parameters so we have to treeify them
         # before we run the anonymizer and the rest of the post processors
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
 
+        # dummy settings and timer dont matter
+        dummy_settings = HTTPQuerySettings()
+        dummy_timer = Timer("snql_pipeline")
+        kylelog.begin(
+            "(\n"
+            + f"{query_repr(query)}, "
+            + f"{repr(dataset)}, "
+            + f"{repr(settings)}, "
+            + f"{repr(custom_processing)}, "
+            + ")"
+        )
+        res = PostProcessAndValidateQuery().execute(
+            QueryPipelineResult(
+                data=(query, dataset, settings, custom_processing),
+                error=None,
+                query_settings=dummy_settings,
+                timer=dummy_timer,
+            )
+        )
+        if res.error:
+            kylelog.log(res.error)
+            raise res.error
+        assert res.data  # since theres no res.error, data is guaranteed
+        kylelog.log(query_repr(res.data))
+        return res.data
+    except InvalidQueryException:
+        raise
+    except Exception:
+        raise PostProcessingError(query)
+
+
+class PostProcessAndValidateQuery(
+    QueryPipelineStage[
+        tuple[
+            LogicalQuery | CompositeQuery[LogicalDataSource],
+            Dataset,
+            QuerySettings | None,
+            CustomProcessors | None,
+        ],
+        LogicalQuery | CompositeQuery[LogicalDataSource],
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[
+                LogicalQuery | CompositeQuery[LogicalDataSource],
+                Dataset,
+                QuerySettings | None,
+                CustomProcessors | None,
+            ]
+        ],
+    ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
+        query, dataset, settings, custom_processing = pipe_input.data
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
                 query,
@@ -1558,8 +1614,5 @@ def parse_snql_query(
         # Validating
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
+
         return query
-    except InvalidQueryException:
-        raise
-    except Exception:
-        raise PostProcessingError(query)

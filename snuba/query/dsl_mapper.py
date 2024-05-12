@@ -3,7 +3,7 @@ from typing import Callable, Sequence
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import Entity, LogicalDataSource
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -180,10 +180,10 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
         )
 
     def visit_argument(self, exp: Argument) -> str:
-        return repr(exp)
+        return f"Argument({repr(exp.alias)}, {repr(exp.name)})"
 
     def visit_lambda(self, exp: Lambda) -> str:
-        return repr(exp)
+        return f"Lambda({repr(exp.alias)}, {repr(exp.parameters)}, {exp.transformation.accept(self)})"
 
     def visit_selected_expression(self, exp: SelectedExpression) -> str:
         return f"SelectedExpression({repr(exp.name)}, {exp.expression.accept(self)})"
@@ -224,7 +224,9 @@ def ast_repr(
     return f"[{', '.join(strings)}]"
 
 
-def query_repr(query: LogicalQuery | ClickhouseQuery | CompositeQuery[Entity]) -> str:
+def query_repr(
+    query: LogicalQuery | ClickhouseQuery | CompositeQuery[LogicalDataSource],
+) -> str:
     visitor = DSLMapperVisitor()
     selected = ast_repr(query.get_selected_columns(), visitor)
     arrayjoin = ast_repr(query.get_arrayjoin(), visitor)
