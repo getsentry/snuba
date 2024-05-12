@@ -193,7 +193,6 @@ mql_context = {
     "offset": None,
 }
 astlogger = KylesLogger()
-# astlogger = ASTLogger("tests/query/parser/unit_tests/test_parse_mql_query_initial.py")
 
 
 def timeseries(

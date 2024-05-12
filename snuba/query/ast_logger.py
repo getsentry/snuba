@@ -69,6 +69,9 @@ class Logger:
     def __iter__(self) -> Iterator[list[tuple[Any, Any]]]:
         return iter(self.logged)
 
+    def __len__(self) -> int:
+        return len(self.logged)
+
 
 class ASTLogger:
     """
