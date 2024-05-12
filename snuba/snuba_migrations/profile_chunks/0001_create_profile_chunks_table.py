@@ -17,8 +17,13 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("profiler_id", UUID()),
     Column("chunk_id", UUID()),
-    Column("start_timestamp", DateTime64(Modifiers(codecs=["DoubleDelta"]))),
-    Column("end_timestamp", DateTime64(Modifiers(codecs=["DoubleDelta"]))),
+    Column(
+        "start_timestamp",
+        DateTime64(size=6, modifiers=Modifiers(codecs=["DoubleDelta"])),
+    ),
+    Column(
+        "end_timestamp", DateTime64(size=6, modifiers=Modifiers(codecs=["DoubleDelta"]))
+    ),
     Column("retention_days", UInt(16)),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
