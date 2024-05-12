@@ -67,7 +67,6 @@ SIMPLE_COLUMN_TYPES: dict[str, Type[ColumnType[SchemaModifiers]]] = {
     **NUMBER_COLUMN_TYPES,
     "String": String,
     "DateTime": DateTime,
-    "DateTime64": DateTime64,
     "UUID": UUID,
     "IPv4": IPv4,
     "IPv6": IPv6,
@@ -117,6 +116,12 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = FixedString(col["args"]["length"], modifiers)
     elif col["type"] == "Enum":
         column_type = Enum(col["args"]["values"], modifiers)
+    elif col["type"] == "DateTime64":
+        column_type = DateTime64(
+            precision=col["args"].get("precision", 3),
+            timezone=col["args"].get("timezone"),
+            modifiers=modifiers,
+        )
     assert column_type is not None
     return column_type
 

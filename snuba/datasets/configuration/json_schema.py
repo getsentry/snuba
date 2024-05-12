@@ -141,7 +141,7 @@ FIXED_STRING_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={"enum": ["String", "DateTime", "DateTime64", "UUID", "IPv4", "IPv6"]},
+    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
     args={
         "type": "object",
         "properties": {},
@@ -189,12 +189,25 @@ ENUM_SCHEMA = make_column_schema(
     },
 )
 
+DATETIME64_SCHEMA = make_column_schema(
+    column_type={"const": "DateTime64"},
+    args={
+        "type": "object",
+        "properties": {
+            "precision": {"type": "integer"},
+            "timezone": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
+)
+
 SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
     ENUM_SCHEMA,
+    DATETIME64_SCHEMA,
 ]
 
 # Array inner types are the same as normal column types except they don't have a name
