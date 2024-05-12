@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
@@ -85,6 +86,13 @@ TEST_CASES = [
         DateTime(Modifier(nullable=True)),
         "DateTime",
         id="datetimes",
+    ),
+    pytest.param(
+        DateTime64(),
+        DateTime64(),
+        DateTime64(Modifier(nullable=True)),
+        "DateTime64",
+        id="datetime64s",
     ),
     pytest.param(
         Array(String(Modifier(nullable=True))),

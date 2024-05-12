@@ -141,7 +141,7 @@ FIXED_STRING_SCHEMA = make_column_schema(
 
 
 NO_ARG_SCHEMA = make_column_schema(
-    column_type={"enum": ["String", "DateTime", "UUID", "IPv4", "IPv6"]},
+    column_type={"enum": ["String", "DateTime", "DateTime64", "UUID", "IPv4", "IPv6"]},
     args={
         "type": "object",
         "properties": {},
