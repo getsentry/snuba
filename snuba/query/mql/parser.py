@@ -1110,7 +1110,6 @@ def parse_mql_query(
     kylelog.begin(
         "(\n"
         + f"{query_repr(query)}, "
-        + f"{repr('MQL_POST_PROCESSORS')}, "
         + f"{'None' if settings is None else repr('mqlsetting')}, "
         + f"{repr(custom_processing)}, "
         + ")"
@@ -1120,7 +1119,6 @@ def parse_mql_query(
         QueryPipelineResult(
             data=(
                 query,
-                MQL_POST_PROCESSORS,
                 settings,
                 custom_processing,
             ),
@@ -1175,7 +1173,6 @@ class PostProcessAndValidateQuery(
     QueryPipelineStage[
         tuple[
             LogicalQuery,
-            CustomProcessors,
             QuerySettings | None,
             CustomProcessors | None,
         ],
@@ -1187,17 +1184,16 @@ class PostProcessAndValidateQuery(
         pipe_input: QueryPipelineData[
             tuple[
                 LogicalQuery,
-                CustomProcessors,
                 QuerySettings | None,
                 CustomProcessors | None,
             ]
         ],
     ) -> LogicalQuery:
-        query, post_processors, settings, custom_processing = pipe_input.data
+        query, settings, custom_processing = pipe_input.data
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
                 query,
-                post_processors,
+                MQL_POST_PROCESSORS,
                 settings,
             )
 

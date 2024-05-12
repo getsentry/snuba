@@ -51,7 +51,6 @@ from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.data_source.simple import Storage as QueryStorage
-from snuba.query.dsl_mapper import query_repr
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import (
     Argument,
@@ -1046,7 +1045,6 @@ def _treeify_or_and_conditions(
             return exp
 
     query.transform_expressions(transform)
-    return query
 
 
 DATETIME_MATCH = FunctionCallMatch(
@@ -1520,18 +1518,18 @@ def parse_snql_query(
     settings: QuerySettings | None = None,
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    assert kylelog
-    kylelog.begin(repr(body))
+    # assert kylelog
+    # kylelog.begin(repr(body))
     try:
         with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
             query = parse_snql_query_initial(body)
 
         if settings and settings.get_dry_run():
             explain_meta.set_original_ast(str(query))
-        kylelog.log(query_repr(query))
+        # kylelog.log(query_repr(query))
     except Exception as e:
-        kylelog.log(e)
-        raise
+        # kylelog.log(e)
+        raise e
     try:
         # NOTE (volo): The anonymizer that runs after this function call chokes on
         # OR and AND clauses with multiple parameters so we have to treeify them
