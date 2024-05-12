@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { id: "config", display: "⚙️ Runtime Config", component: RuntimeConfig },
   {
     id: "auto-replacements-bypass-projects",
-    display: "Bypassed Replacements Projects",
+    display: "👻 Replacements",
     component: AutoReplacementsBypassProjects,
   },
   {

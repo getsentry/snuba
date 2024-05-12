@@ -1,1 +1,4 @@
-export type AutoReplacementsBypassProjectsData = any;
+type AutoReplacementsBypassProjectsData = any;
+type ExpiryWindow = number;
+
+export { AutoReplacementsBypassProjectsData, ExpiryWindow };
