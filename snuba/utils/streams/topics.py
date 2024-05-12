@@ -40,8 +40,11 @@ class Topic(Enum):
     SUBSCRIPTION_RESULTS_GENERIC_METRICS = "generic-metrics-subscription-results"
 
     QUERYLOG = "snuba-queries"
+
     PROFILES = "processed-profiles"
     PROFILES_FUNCTIONS = "profiles-call-tree"
+    PROFILE_CHUNKS = "snuba-profile-chunks"
+
     REPLAYEVENTS = "ingest-replay-events"
     GENERIC_METRICS = "snuba-generic-metrics"
     GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
