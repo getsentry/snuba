@@ -88,11 +88,18 @@ TEST_CASES = [
         id="datetimes",
     ),
     pytest.param(
-        DateTime64(),
-        DateTime64(),
-        DateTime64(Modifier(nullable=True)),
-        "DateTime64",
-        id="datetime64s",
+        DateTime64(3, "America/New_York"),
+        DateTime64(3, "America/New_York"),
+        DateTime64(9, Modifier(nullable=True)),
+        "DateTime64(3, 'America/New_York')",
+        id="datetime64s_tz",
+    ),
+    pytest.param(
+        DateTime64(3),
+        DateTime64(3),
+        DateTime64(9, Modifier(nullable=True)),
+        "DateTime64(3)",
+        id="datetime64s_notz",
     ),
     pytest.param(
         Array(String(Modifier(nullable=True))),

@@ -560,7 +560,40 @@ class DateTime(ColumnType[TModifiers]):
 
 
 class DateTime64(ColumnType[TModifiers]):
-    pass
+    def __init__(
+        self,
+        size: int = 3,
+        timezone: Optional[str] = None,
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.timezone = timezone
+        assert size <= 9
+        self.size = size
+
+    def _repr_content(self) -> str:
+        content = f"{self.size}"
+        if self.timezone:
+            content += f", '{self.timezone}'"
+        return content
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers()
+            == cast(DateTime64[TModifiers], other).get_modifiers()
+            and self.size == cast(DateTime64[TModifiers], other).size
+            and self.timezone == cast(DateTime64[TModifiers], other).timezone
+        )
+
+    def _for_schema_impl(self) -> str:
+        return f"DateTime64({self._repr_content()})"
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> DateTime64[TModifiers]:
+        return DateTime64(size=self.size, timezone=self.timezone, modifiers=modifiers)
+
+    def get_raw(self) -> DateTime64[TModifiers]:
+        return DateTime64(size=self.size, timezone=self.timezone)
 
 
 class Enum(ColumnType[TModifiers]):
