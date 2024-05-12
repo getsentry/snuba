@@ -18,12 +18,7 @@ storages:
 storage_selector:
   selector: DefaultQueryStorageSelector
 
-query_processors:
-  - processor: TimeSeriesProcessor
-    args:
-      time_parse_columns:
-        - start_timestamp
-        - end_timestamp
+query_processors: []
 
 validate_data_model: error
 validators:
