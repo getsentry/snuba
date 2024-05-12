@@ -72,6 +72,7 @@ class TypeModifiers(ABC):
 
 TModifiers = TypeVar("TModifiers", bound=TypeModifiers)
 
+
 # Unfortunately we cannot easily make these classes dataclasses (which
 # would provide a convenient default implementation for all __repr__
 # and __eq__ methods and allow for immutability) while keeping the
@@ -555,6 +556,10 @@ class Date(ColumnType[TModifiers]):
 
 
 class DateTime(ColumnType[TModifiers]):
+    pass
+
+
+class DateTime64(ColumnType[TModifiers]):
     pass
 
 
