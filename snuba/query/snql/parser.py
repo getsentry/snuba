@@ -1525,7 +1525,7 @@ def parse_snql_query(
     settings: QuerySettings | None = None,
     kylelog: KylesLogger | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
-    assert kylelog
+    assert kylelog is not None
     try:
         with sentry_sdk.start_span(op="parser", description="parse_snql_query_initial"):
             query = parse_snql_query_initial(body)
