@@ -6,8 +6,8 @@ schema:
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: profiler_id, type: UUID },
     { name: chunk_id, type: UUID },
-    { name: start_timestamp, type: DateTime64 },
-    { name: end_timestamp, type: DateTime64 },
+    { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
+    { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
   ]
 required_time_column: start_timestamp
 
@@ -21,10 +21,9 @@ storage_selector:
 query_processors:
   - processor: TimeSeriesProcessor
     args:
-      time_group_columns:
-        time: received
       time_parse_columns:
-        - received
+        - start_timestamp
+        - end_timestamp
 
 validate_data_model: error
 validators:
