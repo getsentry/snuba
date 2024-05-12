@@ -17,7 +17,7 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
 
-    let mut row = ProfileChunk {
+    let mut row = Chunk {
         chunk: msg,
         offset: metadata.offset,
         partition: metadata.partition,
@@ -47,7 +47,7 @@ struct InputMessage {
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct Chunk {
     #[serde(flatten)]
-    Chunk: InputMessage,
+    chunk: InputMessage,
 
     #[serde(default)]
     offset: u64,
@@ -72,7 +72,7 @@ mod tests {
             "project_id": 1,
             "received": 1694357860,
             "retention_days": 30,
-            "start_timestamp": 1710805688.1234567,
+            "start_timestamp": 1710805688.1234567
         }"#;
         let payload = KafkaPayload::new(None, None, Some(data.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
