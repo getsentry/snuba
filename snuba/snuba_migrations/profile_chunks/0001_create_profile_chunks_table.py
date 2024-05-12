@@ -19,10 +19,17 @@ columns: List[Column[Modifiers]] = [
     Column("chunk_id", UUID()),
     Column(
         "start_timestamp",
-        DateTime64(size=6, modifiers=Modifiers(codecs=["DoubleDelta"])),
+        DateTime64(
+            precision=6,
+            modifiers=Modifiers(codecs=["DoubleDelta"]),
+        ),
     ),
     Column(
-        "end_timestamp", DateTime64(size=6, modifiers=Modifiers(codecs=["DoubleDelta"]))
+        "end_timestamp",
+        DateTime64(
+            precision=6,
+            modifiers=Modifiers(codecs=["DoubleDelta"]),
+        ),
     ),
     Column("retention_days", UInt(16)),
     Column("partition", UInt(16)),
@@ -46,7 +53,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     sample_by="cityHash64(profiler_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
-                    ttl="end_timestamp + toIntervalDay(retention_days)",
+                    ttl="toDateTime(end_timestamp) + toIntervalDay(retention_days)",
                     version_column="deleted",
                 ),
                 target=OperationTarget.LOCAL,
