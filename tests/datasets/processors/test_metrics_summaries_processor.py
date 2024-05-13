@@ -1,4 +1,5 @@
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from typing import Any, Mapping, Sequence
 
 import pytest
@@ -17,18 +18,22 @@ METRICS_SUMMARY_SCHEMA: Codec[MetricsSummary] = get_codec("snuba-metrics-summari
 
 
 def build_metrics_summary_payload() -> MetricsSummary:
+
+    received_timestamp = time.time() - timedelta(days=1) - timedelta(minutes=5)
+    end_timestamp = time.time() - timedelta(days=1)
+
     return MetricsSummary(
         {
             "count": 1,
             "duration_ms": 1000,
-            "end_timestamp": 1707862430.123,
+            "end_timestamp": end_timestamp,
             "group": "deadbeefdeadbeef",
             "is_segment": False,
             "max": 1.0,
             "min": 1.0,
             "mri": "t:namespace/name@unit",
             "project_id": 42,
-            "received": 1707862428.123,
+            "received": received_timestamp,
             "retention_days": 90,
             "segment_id": "deadbeefdeadbeef",
             "span_id": "deadbeefdeadbeef",
