@@ -152,10 +152,6 @@ def equals(
 
 
 def and_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall:
-    """
-    if only lhs and rhs are given, return and(lhs, rhs)
-    otherwise (more than 2 conditions are given), returns and(lhs, and(rhs, and(...)))
-    """
     return FunctionCall(None, "and", (lhs, rhs, *args))
 
 
