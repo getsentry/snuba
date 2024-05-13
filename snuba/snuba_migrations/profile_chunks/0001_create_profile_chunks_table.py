@@ -11,8 +11,6 @@ table_prefix = "profile_chunks"
 local_table_name = f"{table_prefix}_local"
 dist_table_name = f"{table_prefix}_dist"
 
-UNKNOWN_SPAN_STATUS = 2
-
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("profiler_id", UUID()),
