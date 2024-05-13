@@ -32,7 +32,6 @@ pub fn consumer(
     auto_offset_reset: &str,
     no_strict_offset_reset: bool,
     consumer_config_raw: &str,
-    skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
     enforce_schema: bool,
@@ -47,7 +46,6 @@ pub fn consumer(
             auto_offset_reset,
             no_strict_offset_reset,
             consumer_config_raw,
-            skip_write,
             concurrency,
             use_rust_processor,
             enforce_schema,
@@ -65,7 +63,6 @@ pub fn consumer_impl(
     auto_offset_reset: &str,
     no_strict_offset_reset: bool,
     consumer_config_raw: &str,
-    skip_write: bool,
     concurrency: usize,
     use_rust_processor: bool,
     enforce_schema: bool,
@@ -163,30 +160,27 @@ pub fn consumer_impl(
 
     // DLQ policy applies only if we are not skipping writes, otherwise we don't want to be
     // writing to the DLQ topics in prod.
-    let dlq_policy = match skip_write {
-        true => None,
-        false => consumer_config.dlq_topic.map(|dlq_topic_config| {
-            let producer_config =
-                KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
-            let producer = KafkaProducer::new(producer_config);
+    let dlq_policy = consumer_config.dlq_topic.map(|dlq_topic_config| {
+        let producer_config =
+            KafkaConfig::new_producer_config(vec![], Some(dlq_topic_config.broker_config));
+        let producer = KafkaProducer::new(producer_config);
 
-            let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
-                producer,
-                Topic::new(&dlq_topic_config.physical_topic_name),
-            ));
+        let kafka_dlq_producer = Box::new(KafkaDlqProducer::new(
+            producer,
+            Topic::new(&dlq_topic_config.physical_topic_name),
+        ));
 
-            let handle = dlq_concurrency_config.handle();
-            DlqPolicy::new(
-                handle,
-                kafka_dlq_producer,
-                DlqLimit {
-                    max_invalid_ratio: None,
-                    max_consecutive_count: None,
-                },
-                None,
-            )
-        }),
-    };
+        let handle = dlq_concurrency_config.handle();
+        DlqPolicy::new(
+            handle,
+            kafka_dlq_producer,
+            DlqLimit {
+                max_invalid_ratio: None,
+                max_consecutive_count: None,
+            },
+            None,
+        )
+    });
 
     let commit_log_producer = if let Some(topic_config) = consumer_config.commit_log_topic {
         let producer_config =
@@ -217,7 +211,6 @@ pub fn consumer_impl(
         logical_topic_name,
         max_batch_size,
         max_batch_time,
-        skip_write,
         ConcurrencyConfig::new(concurrency),
         ConcurrencyConfig::new(2),
         ConcurrencyConfig::new(2),

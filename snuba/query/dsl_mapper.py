@@ -3,6 +3,7 @@ from typing import Callable, Sequence
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
 from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import get_first_level_or_conditions
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import (
     Argument,

@@ -19,7 +19,6 @@ pub struct BatchFactory {
     url: String,
     query: String,
     handle: Handle,
-    skip_write: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -30,7 +29,6 @@ impl BatchFactory {
         table: &str,
         database: &str,
         concurrency: &ConcurrencyConfig,
-        skip_write: bool,
         clickhouse_user: &str,
         clickhouse_password: &str,
     ) -> Self {
@@ -64,50 +62,43 @@ impl BatchFactory {
             url,
             query,
             handle: concurrency.handle(),
-            skip_write,
         }
     }
 
     pub fn new_batch(&self) -> HttpBatch {
-        let (sender, result_handle) = if self.skip_write {
-            (None, None)
-        } else {
-            // this channel is effectively bounded due to max-batch-size and max-batch-time. it is hard
-            // however to enforce any limit locally because it would mean that in the Drop impl of
-            // Batch, the send may block or fail
-            let (sender, receiver) = channel(CHANNEL_CAPACITY);
+        let (sender, receiver) = channel(CHANNEL_CAPACITY);
 
-            let url = self.url.clone();
-            let query = self.query.clone();
-            let client = self.client.clone();
+        let url = self.url.clone();
+        let query = self.query.clone();
+        let client = self.client.clone();
 
-            let result_handle = self.handle.spawn(async move {
-                while receiver.is_empty() && !receiver.is_closed() {
-                    // continously check on the receiver stream, only when it's
-                    // not empty do we write to clickhouse
-                    sleep(Duration::from_millis(800)).await;
+        let result_handle = self.handle.spawn(async move {
+            while receiver.is_empty() && !receiver.is_closed() {
+                // continously check on the receiver stream, only when it's
+                // not empty do we write to clickhouse
+                sleep(Duration::from_millis(800)).await;
+            }
+
+            if !receiver.is_empty() {
+                // only make the request to clickhouse if there is data
+                // being added to the receiver stream from the sender
+                let res = client
+                    .post(&url)
+                    .query(&[("query", &query)])
+                    .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
+                    .send()
+                    .await?;
+
+                if res.status() != reqwest::StatusCode::OK {
+                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
                 }
+            }
 
-                if !receiver.is_empty() {
-                    // only make the request to clickhouse if there is data
-                    // being added to the receiver stream from the sender
-                    let res = client
-                        .post(&url)
-                        .query(&[("query", &query)])
-                        .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
-                        .send()
-                        .await?;
+            Ok(())
+        });
 
-                    if res.status() != reqwest::StatusCode::OK {
-                        anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
-                    }
-                }
-
-                Ok(())
-            });
-
-            (Some(sender), Some(result_handle))
-        };
+        let sender = Some(sender);
+        let result_handle = Some(result_handle);
 
         HttpBatch {
             current_chunk: Vec::new(),
@@ -211,7 +202,6 @@ mod tests {
             "testtable",
             "testdb",
             &concurrency,
-            false,
             "default",
             "",
         );
@@ -244,7 +234,6 @@ mod tests {
             "testtable",
             "testdb",
             &concurrency,
-            false,
             "default",
             "",
         );
@@ -275,7 +264,6 @@ mod tests {
             "testtable",
             "testdb",
             &concurrency,
-            false,
             "default",
             "",
         );
@@ -289,76 +277,6 @@ mod tests {
             .unwrap();
 
         // drop the batch -- it should not finish the request
-        drop(batch);
-
-        // ensure there has not been any HTTP request
-        mock.assert_hits(0);
-    }
-
-    #[test]
-    fn test_skip_write() {
-        let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(POST).any_request();
-            then.status(200).body("hi");
-        });
-
-        let concurrency = ConcurrencyConfig::new(1);
-        let factory = BatchFactory::new(
-            &server.host(),
-            server.port(),
-            "testtable",
-            "testdb",
-            &concurrency,
-            true,
-            "default",
-            "",
-        );
-
-        let mut batch = factory.new_batch();
-
-        batch
-            .write_rows(&RowData::from_encoded_rows(vec![
-                br#"{"hello": "world"}"#.to_vec()
-            ]))
-            .unwrap();
-
-        // finish the batch, but since we have skip_write=true, there should not be a http request
-        concurrency.handle().block_on(batch.finish()).unwrap();
-
-        // ensure there has not been any HTTP request
-        mock.assert_hits(0);
-    }
-
-    #[test]
-    fn test_drop_and_skip_write() {
-        let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(POST).any_request();
-            then.status(200).body("hi");
-        });
-
-        let concurrency = ConcurrencyConfig::new(1);
-        let factory = BatchFactory::new(
-            &server.host(),
-            server.port(),
-            "testtable",
-            "testdb",
-            &concurrency,
-            true,
-            "default",
-            "",
-        );
-
-        let mut batch = factory.new_batch();
-
-        batch
-            .write_rows(&RowData::from_encoded_rows(vec![
-                br#"{"hello": "world"}"#.to_vec()
-            ]))
-            .unwrap();
-
-        // drop the batch -- it should not finish the request, but also we have skip_write=true
         drop(batch);
 
         // ensure there has not been any HTTP request
