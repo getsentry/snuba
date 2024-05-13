@@ -1039,6 +1039,8 @@ def _treeify_or_and_conditions(
     codebase which assume `or` and `and` have two arguments
 
     Adding this post-process step is easier than changing the rest of the query pipeline
+
+    Note: does not apply to the conditions of a from_clause subquery (the nested one)
     """
 
     def transform(exp: Expression) -> Expression:
