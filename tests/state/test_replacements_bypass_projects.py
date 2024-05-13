@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+from freezegun import freeze_time
 
 from snuba.replacers.replacements_utils import (
     EXPIRY_WINDOW,
@@ -9,13 +10,13 @@ from snuba.replacers.replacements_utils import (
 )
 
 
+@freeze_time("2024-5-13 09:00:00")
 class TestState:
-    def setup_method(self) -> None:
-        self.start_test_time = datetime.now()
-        self.proj1_add_time = self.start_test_time
-        self.proj2_add_time = self.start_test_time + timedelta(minutes=2)
-        self.proj1_expiry = self.proj1_add_time + EXPIRY_WINDOW
-        self.proj2_expiry = self.proj2_add_time + EXPIRY_WINDOW
+    start_test_time = datetime.now()
+    proj1_add_time = start_test_time
+    proj2_add_time = start_test_time + timedelta(minutes=2)
+    proj1_expiry = proj1_add_time + EXPIRY_WINDOW
+    proj2_expiry = proj2_add_time + EXPIRY_WINDOW
 
     @pytest.mark.redis_db
     def test_project_does_not_expire_within_expiry(self) -> None:
