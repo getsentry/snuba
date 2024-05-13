@@ -15,6 +15,7 @@ from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.redis import all_redis_clients
 
@@ -177,8 +178,8 @@ def _build_migrations_cache() -> None:
                     ] = create_table_query
 
 
-def _clear_db() -> None:
-    for storage_key in get_all_storage_keys():
+def _clear_db(storage_keys: List[StorageKey]) -> None:
+    for storage_key in storage_keys:
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
         database = cluster.get_database()
@@ -199,9 +200,23 @@ def _clear_db() -> None:
 def clickhouse_db(
     request: pytest.FixtureRequest, create_databases: None
 ) -> Generator[None, None, None]:
-    if not request.node.get_closest_marker("clickhouse_db"):
+
+    clickhouse_marker = request.node.get_closest_marker("clickhouse_db")
+    if not clickhouse_marker:
         # Make people use the marker explicitly so `-m` works on CLI
         pytest.fail("Need to use clickhouse_db marker if clickhouse_db fixture is used")
+    storage_keys = clickhouse_marker.kwargs.get("storage_keys", None)
+    if not storage_keys:
+        raise Exception(
+            "You must specify the storage keys you are running the test again in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
+        )
+    storage_keys = [StorageKey(s) for s in storage_keys]
+    tables_to_migrate = set(
+        [
+            get_storage(storage_key).get_schema().get_data_source().get_table_name()
+            for storage_key in storage_keys
+        ]
+    )
 
     from snuba.migrations.runner import Runner
 
@@ -220,6 +235,9 @@ def clickhouse_db(
                 for table_name, create_table_query in tables.items():
                     if (node.host_name, node.port, table_name) in applied_nodes:
                         continue
+                    if table_name not in tables_to_migrate:
+                        continue
+
                     create_table_query = create_table_query.replace(
                         "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
                     ).replace(
@@ -230,7 +248,7 @@ def clickhouse_db(
                 applied_nodes.add((node.host_name, node.port, table_name))
         yield
     finally:
-        _clear_db()
+        _clear_db(storage_keys)
 
 
 @pytest.fixture(autouse=True)

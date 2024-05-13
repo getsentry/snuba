@@ -51,7 +51,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
         return
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors", "errors_ro"])
 @pytest.mark.redis_db
 class TestSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
@@ -103,6 +103,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200, data
 
+    @pytest.mark.clickhouse_db(storage_keys=["errors", "errors_ro"])
     def test_simple_query(self) -> None:
         response = self.post(
             "/discover/snql",
@@ -653,6 +654,9 @@ class TestSnQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
+    @pytest.mark.clickhouse_db(
+        storage_keys=["discover", "transactions", "errors", "errors_ro"]
+    )
     def test_transaction_group_ids_with_results(self) -> None:
         unique = "100"
         hash = md5(unique.encode("utf-8")).hexdigest()
@@ -1419,7 +1423,6 @@ class TestSnQLApi(BaseApiTest):
         assert "cast(platform, 'Nullable(String)') AS _snuba_platform" in data["sql"]
 
 
-@pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestSnQLApiErrorsRO(TestSnQLApi):
     """
