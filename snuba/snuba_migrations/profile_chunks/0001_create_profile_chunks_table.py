@@ -6,7 +6,7 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 
-storage_set = StorageSetKey.PROFILE_CHUNKS
+storage_set = StorageSetKey.PROFILES
 table_prefix = "profile_chunks"
 local_table_name = f"{table_prefix}_local"
 dist_table_name = f"{table_prefix}_dist"
