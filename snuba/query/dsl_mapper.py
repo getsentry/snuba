@@ -2,10 +2,8 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
-from snuba.query.conditions import (
-    get_first_level_and_conditions,
-    get_first_level_or_conditions,
-)
+from snuba.query.conditions import get_first_level_or_conditions
+from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -33,8 +31,7 @@ and_cond_match = FunctionCallMatch(
 
 def and_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, FunctionCall)
-    conditions = get_first_level_and_conditions(exp)
-    parameters = ", ".join([arg.accept(visitor) for arg in conditions])
+    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
     return f"and_cond({parameters})"
 
 
@@ -235,8 +232,15 @@ def query_repr(query: LogicalQuery | ClickhouseQuery) -> str:
     condition = ast_repr(query.get_condition(), visitor)
     groupby = ast_repr(query.get_groupby(), visitor)
 
+    qfrom = query.get_from_clause()
+    if isinstance(qfrom, Entity):
+        key = qfrom.key
+        from_clause = f"Entity({key},get_entity({key}).get_data_model())"
+    else:
+        from_clause = "from_clause"
+
     return f"""Query(
-        from_clause=from_clause,
+        from_clause={from_clause},
         selected_columns={selected},
         array_join={arrayjoin},
         condition={condition},
