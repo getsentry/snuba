@@ -15,7 +15,6 @@ class Topic(Enum):
     METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
     OUTCOMES_BILLING = "outcomes-billing"
-    SESSIONS = "ingest-sessions"
     METRICS_COMMIT_LOG = "snuba-metrics-commit-log"
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
