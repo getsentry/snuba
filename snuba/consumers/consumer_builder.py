@@ -79,7 +79,6 @@ class ConsumerBuilder:
         max_poll_interval_ms: Optional[int] = None,
         health_check_file: Optional[str] = None,
         group_instance_id: Optional[str] = None,
-        skip_write: bool = False,
     ) -> None:
         assert len(consumer_config.storages) == 1, "Only one storage supported"
         storage_key = StorageKey(consumer_config.storages[0].name)
@@ -91,7 +90,6 @@ class ConsumerBuilder:
         self.__kafka_params = kafka_params
         self.consumer_group = kafka_params.group_id
         self.__enforce_schema = enforce_schema
-        self.__skip_write = skip_write
 
         broker_config = build_kafka_consumer_configuration(
             self.__consumer_config.raw_topic.broker_config,
@@ -254,7 +252,6 @@ class ConsumerBuilder:
             output_block_size=self.output_block_size,
             initialize_parallel_transform=setup_sentry,
             health_check_file=self.health_check_file,
-            skip_write=self.__skip_write,
             metrics_tags=self.metrics_tags,
         )
 

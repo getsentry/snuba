@@ -72,6 +72,7 @@ class TypeModifiers(ABC):
 
 TModifiers = TypeVar("TModifiers", bound=TypeModifiers)
 
+
 # Unfortunately we cannot easily make these classes dataclasses (which
 # would provide a convenient default implementation for all __repr__
 # and __eq__ methods and allow for immutability) while keeping the
@@ -556,6 +557,53 @@ class Date(ColumnType[TModifiers]):
 
 class DateTime(ColumnType[TModifiers]):
     pass
+
+
+class DateTime64(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        precision: int = 3,
+        timezone: Optional[str] = None,
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        assert precision <= 9
+        super().__init__(modifiers)
+        self.timezone = timezone
+        self.precision = precision
+
+    def _repr_content(self) -> str:
+        content = f"{self.precision}"
+        if self.timezone:
+            content += f", '{self.timezone}'"
+        return content
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers()
+            == cast(
+                DateTime64[TModifiers],
+                other,
+            ).get_modifiers()
+            and self.precision == cast(DateTime64[TModifiers], other).precision
+            and self.timezone == cast(DateTime64[TModifiers], other).timezone
+        )
+
+    def _for_schema_impl(self) -> str:
+        return f"DateTime64({self._repr_content()})"
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> DateTime64[TModifiers]:
+        return DateTime64(
+            precision=self.precision,
+            timezone=self.timezone,
+            modifiers=modifiers,
+        )
+
+    def get_raw(self) -> DateTime64[TModifiers]:
+        return DateTime64(
+            precision=self.precision,
+            timezone=self.timezone,
+        )
 
 
 class Enum(ColumnType[TModifiers]):

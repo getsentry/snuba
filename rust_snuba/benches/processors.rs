@@ -78,7 +78,6 @@ fn create_factory(
         schema.into(),
         1_000,
         Duration::from_millis(10),
-        true,
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,

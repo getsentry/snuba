@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
@@ -29,7 +30,7 @@ grammar = Grammar(
     type             = primitive / lowcardinality / agg / nullable / array
     primitive        = basic_type / uint / float / fixedstring / enum
     # DateTime must come before Date
-    basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
+    basic_type       = "DateTime" / "DateTime64" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
     uint             = "UInt" uint_size
     uint_size        = "8" / "16" / "32" / "64"
     float            = "Float" float_size
@@ -71,6 +72,7 @@ def merge_modifiers(
 _TYPES: dict[str, type[ColumnType[MigrationModifiers]]] = {
     "Date": Date,
     "DateTime": DateTime,
+    "DateTime64": DateTime64,
     "IPv4": IPv4,
     "IPv6": IPv6,
     "String": String,

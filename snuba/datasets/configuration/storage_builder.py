@@ -48,6 +48,7 @@ SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
 ALLOCATION_POLICIES = "allocation_policies"
+REQUIRED_TIME_COLUMN = "required_time_column"
 
 
 def build_storage_from_config(
@@ -93,6 +94,7 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         ]
         if ALLOCATION_POLICIES in config
         else [],
+        REQUIRED_TIME_COLUMN: config.get(REQUIRED_TIME_COLUMN, None),
     }
 
 

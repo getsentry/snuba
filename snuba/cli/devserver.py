@@ -4,7 +4,6 @@ from snuba import settings
 
 COMMON_RUST_CONSUMER_DEV_OPTIONS = [
     "--use-rust-processor",
-    "--no-skip-write",
     "--auto-offset-reset=latest",
     "--no-strict-offset-reset",
     "--log-level=debug",
