@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import logging
 import os
 import time
@@ -17,9 +16,9 @@ from snuba.clusters.cluster import (
     ConnectionId,
     UndefinedClickhouseCluster,
 )
-from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import Storage
+from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.environment import setup_logging
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
@@ -122,15 +121,13 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
 
 
 def filter_checked_storages() -> List[Storage]:
-    datasets = [get_dataset(name) for name in get_enabled_dataset_names()]
-    entities = itertools.chain(*[dataset.get_all_entities() for dataset in datasets])
-
-    storages: List[Storage] = []
-    for entity in entities:
-        for storage in entity.get_all_storages():
-            if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
-                storages.append(storage)
-    return storages
+    filtered_storages: List[Storage] = []
+    all_storage_keys = get_all_storage_keys()
+    for storage_key in all_storage_keys:
+        storage = get_storage(storage_key)
+        if storage.get_readiness_state().value in settings.SUPPORTED_STATES:
+            filtered_storages.append(storage)
+    return filtered_storages
 
 
 def check_clickhouse(metric_tags: dict[str, Any] | None = None) -> bool:
