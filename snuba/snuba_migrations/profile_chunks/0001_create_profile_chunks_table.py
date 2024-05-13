@@ -48,9 +48,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(project_id, cityHash64(profiler_id), start_timestamp, end_timestamp, cityHash64(chunk_id))",
+                    order_by="(project_id, profiler_id, start_timestamp, end_timestamp, cityHash64(chunk_id))",
                     partition_by="(retention_days, toStartOfDay(start_timestamp))",
-                    sample_by="cityHash64(profiler_id)",
+                    sample_by="cityHash64(chunk_id)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
                     ttl="toDateTime(end_timestamp) + toIntervalDay(retention_days)",
