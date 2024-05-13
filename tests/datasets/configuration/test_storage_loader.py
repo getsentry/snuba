@@ -8,6 +8,7 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     DateTime,
+    DateTime64,
     Enum,
     Float,
     Nested,
@@ -121,6 +122,11 @@ allocation_policies:
             {"name": "string_col", "type": "String"},
             {"name": "time_col", "type": "DateTime"},
             {
+                "name": "time64_col",
+                "type": "DateTime64",
+                "args": {"precision": 3, "timezone": "America/New_York"},
+            },
+            {
                 "name": "nested_col",
                 "type": "Nested",
                 "args": {
@@ -171,6 +177,7 @@ allocation_policies:
             Column("float_col", Float(32)),
             Column("string_col", String()),
             Column("time_col", DateTime()),
+            Column("time64_col", DateTime64(3, "America/New_York")),
             Column("nested_col", Nested([Column("sub_col", UInt(64))])),
             Column("func_col", AggregateFunction("uniqCombined64", [UInt(64)])),
             Column(
