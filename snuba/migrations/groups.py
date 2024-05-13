@@ -174,7 +174,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     ),
     MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
         loader=ProfileChunksLoader(),
-        storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
+        storage_sets_keys={StorageSetKey.PROFILES},
         readiness_state=ReadinessState.PARTIAL,
     ),
 }
