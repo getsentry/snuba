@@ -1037,25 +1037,27 @@ test_cases = [
             ],
             array_join=[column("exception_stacks.type", None, "exception_stacks.type")],
             condition=and_cond(
-                f.like(
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
-                    literal("Arithmetic%"),
-                ),
                 and_cond(
+                    f.like(
+                        column(
+                            "exception_stacks.type",
+                            None,
+                            "_snuba_exception_stacks.type",
+                        ),
+                        literal("Arithmetic%"),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -1131,31 +1133,33 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.arrayExists(
-                    Lambda(
-                        None,
-                        ("x",),
-                        f.assumeNotNull(
-                            f.like(Argument(None, "x"), literal("Arithmetic%"))
+                and_cond(
+                    f.arrayExists(
+                        Lambda(
+                            None,
+                            ("x",),
+                            f.assumeNotNull(
+                                f.like(Argument(None, "x"), literal("Arithmetic%"))
+                            ),
+                        ),
+                        column(
+                            "exception_stacks.type",
+                            None,
+                            "_snuba_exception_stacks.type",
                         ),
                     ),
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
-                ),
-                and_cond(
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -1238,57 +1242,58 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.arrayExists(
-                            Lambda(
-                                None,
-                                ("x",),
-                                f.assumeNotNull(
-                                    f.equals(
-                                        Argument(None, "x"),
-                                        literal("ArithmeticException"),
-                                    )
-                                ),
-                            ),
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                        ),
-                        f.arrayExists(
-                            Lambda(
-                                None,
-                                ("x",),
-                                f.assumeNotNull(
-                                    f.equals(
-                                        Argument(None, "x"), literal("RuntimeException")
-                                    )
-                                ),
-                            ),
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.arrayExists(
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    f.assumeNotNull(
+                                        f.equals(
+                                            Argument(None, "x"),
+                                            literal("ArithmeticException"),
+                                        )
+                                    ),
+                                ),
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                            ),
+                            f.arrayExists(
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    f.assumeNotNull(
+                                        f.equals(
+                                            Argument(None, "x"),
+                                            literal("RuntimeException"),
+                                        )
+                                    ),
+                                ),
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -1380,57 +1385,58 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.arrayExists(
-                            Lambda(
-                                None,
-                                ("x",),
-                                f.assumeNotNull(
-                                    f.equals(
-                                        Argument(None, "x"),
-                                        literal("ArithmeticException"),
-                                    )
-                                ),
-                            ),
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                        ),
-                        f.arrayExists(
-                            Lambda(
-                                None,
-                                ("x",),
-                                f.assumeNotNull(
-                                    f.equals(
-                                        Argument(None, "x"), literal("RuntimeException")
-                                    )
-                                ),
-                            ),
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.arrayExists(
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    f.assumeNotNull(
+                                        f.equals(
+                                            Argument(None, "x"),
+                                            literal("ArithmeticException"),
+                                        )
+                                    ),
+                                ),
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                            ),
+                            f.arrayExists(
+                                Lambda(
+                                    None,
+                                    ("x",),
+                                    f.assumeNotNull(
+                                        f.equals(
+                                            Argument(None, "x"),
+                                            literal("RuntimeException"),
+                                        )
+                                    ),
+                                ),
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -1508,28 +1514,30 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(f.ifNull(tags["foo"], literal("")), literal("baz")),
-                        f.equals(
-                            f.ifNull(tags["foo.bar"], literal("")), literal("qux")
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                f.ifNull(tags["foo"], literal("")), literal("baz")
+                            ),
+                            f.equals(
+                                f.ifNull(tags["foo.bar"], literal("")), literal("qux")
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -1612,40 +1620,40 @@ test_cases = [
             ],
             array_join=[column("exception_stacks", None, "exception_stacks")],
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                            literal("ArithmeticException"),
-                        ),
-                        f.equals(
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                            literal("RuntimeException"),
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                                literal("ArithmeticException"),
+                            ),
+                            f.equals(
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                                literal("RuntimeException"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -1731,40 +1739,40 @@ test_cases = [
                 column("hierarchical_hashes", None, "hierarchical_hashes"),
             ],
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                            literal("ArithmeticException"),
-                        ),
-                        f.equals(
-                            column(
-                                "exception_stacks.type",
-                                None,
-                                "_snuba_exception_stacks.type",
-                            ),
-                            literal("RuntimeException"),
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                                literal("ArithmeticException"),
+                            ),
+                            f.equals(
+                                column(
+                                    "exception_stacks.type",
+                                    None,
+                                    "_snuba_exception_stacks.type",
+                                ),
+                                literal("RuntimeException"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
