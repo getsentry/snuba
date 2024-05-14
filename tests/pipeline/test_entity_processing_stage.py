@@ -76,8 +76,10 @@ def test_basic(
             selected_columns=[SelectedExpression("timestamp", column("timestamp"))],
             condition=and_cond(
                 equals(literal(1), literal(1)),
-                equals(column("org_id"), literal(1)),
-                equals(column("project_id"), literal(1)),
+                and_cond(
+                    equals(column("org_id"), literal(1)),
+                    equals(column("project_id"), literal(1)),
+                ),
             ),
             limit=1000,
         ),

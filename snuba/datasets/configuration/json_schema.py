@@ -731,7 +731,6 @@ V1_DATASET_SCHEMA = {
         "version",
         "kind",
         "name",
-        "entities",
     ],
     "additionalProperties": False,
 }

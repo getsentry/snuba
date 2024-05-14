@@ -120,8 +120,8 @@ class TestEventsGroupAttributes(BaseApiTest):
         query = parse_snql_query(str(query_body), get_dataset("events"))
         attribution_info = AttributionInfo(
             app_id=AppID(key=""),
-            tenant_ids={},
-            referrer="",
+            tenant_ids={"organization_id": 1234, "referrer": "abcd"},
+            referrer="abcd",
             team=None,
             feature=None,
             parent_api=None,
@@ -158,7 +158,13 @@ class TestEventsGroupAttributes(BaseApiTest):
 
         return self.app.post(
             "/events/snql",
-            data=json.dumps({"dataset": "events", "query": query_body}),
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": query_body,
+                    "tenant_ids": attribution_info.tenant_ids,
+                }
+            ),
         )
 
     def query_events_inner_joined_group_attributes(self):
@@ -191,8 +197,8 @@ class TestEventsGroupAttributes(BaseApiTest):
         query = parse_snql_query(str(query_body), get_dataset("events"))
         attribution_info = AttributionInfo(
             app_id=AppID(key=""),
-            tenant_ids={},
-            referrer="",
+            tenant_ids={"organization_id": 1234, "referrer": "abcd"},
+            referrer="abcd",
             team=None,
             feature=None,
             parent_api=None,
@@ -229,7 +235,13 @@ class TestEventsGroupAttributes(BaseApiTest):
 
         return self.app.post(
             "/events/snql",
-            data=json.dumps({"dataset": "events", "query": query_body}),
+            data=json.dumps(
+                {
+                    "dataset": "events",
+                    "query": query_body,
+                    "tenant_ids": attribution_info.tenant_ids,
+                }
+            ),
         )
 
     @pytest.mark.clickhouse_db
@@ -237,7 +249,7 @@ class TestEventsGroupAttributes(BaseApiTest):
     def test_group_attributes_join(self) -> None:
         response = self.query_events_inner_joined_group_attributes()
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         assert (
             data["data"][0].items()
             == {
@@ -276,7 +288,7 @@ class TestEventsGroupAttributes(BaseApiTest):
     def test_group_attributes_inner_join(self) -> None:
         response = self.query_events_joined_group_attributes()
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, data
         assert (
             data["data"][0].items()
             == {
@@ -466,8 +478,8 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
         query = parse_snql_query(str(query_body), get_dataset("search_issues"))
         attribution_info = AttributionInfo(
             app_id=AppID(key=""),
-            tenant_ids={},
-            referrer="",
+            tenant_ids={"organization_id": 1234, "referrer": "abcd"},
+            referrer="abcd",
             team=None,
             feature=None,
             parent_api=None,
@@ -511,7 +523,13 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
 
         return self.app.post(
             "/search_issues/snql",
-            data=json.dumps({"dataset": "search_issues", "query": query_body}),
+            data=json.dumps(
+                {
+                    "dataset": "search_issues",
+                    "query": query_body,
+                    "tenant_ids": attribution_info.tenant_ids,
+                }
+            ),
         )
 
     @pytest.mark.clickhouse_db
