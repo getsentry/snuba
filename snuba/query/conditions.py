@@ -288,7 +288,7 @@ def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expr
     rollout_percent = get_float_config(
         "use_new_combine_conditions_percent", default=0.0
     )
-    assert isinstance(rollout_percent, float)
+    rollout_percent = rollout_percent if isinstance(rollout_percent, float) else 0.00
     if random.random() < rollout_percent:
         return _combine_conditions_new(conditions, function)
     else:
