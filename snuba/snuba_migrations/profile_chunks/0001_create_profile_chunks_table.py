@@ -32,7 +32,6 @@ columns: List[Column[Modifiers]] = [
     Column("retention_days", UInt(16)),
     Column("partition", UInt(16)),
     Column("offset", UInt(64)),
-    Column("deleted", UInt(8)),
 ]
 
 
@@ -52,7 +51,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
                     ttl="toDateTime(end_timestamp) + toIntervalDay(retention_days)",
-                    version_column="deleted",
                 ),
                 target=OperationTarget.LOCAL,
             ),
