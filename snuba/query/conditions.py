@@ -283,11 +283,41 @@ def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
 
 
 def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
-    flag = False
+    flag = True
     if flag:
         return _combine_conditions_new(conditions, function)
     else:
         return _combine_conditions_old(conditions, function)
+
+
+def extract_conds(
+    exp: FunctionCall, found: list[Expression] | None
+) -> Sequence[Expression]:
+    if found is None:
+        found = []
+    assert exp.function_name == "and"
+    assert isinstance(exp.parameters[0], FunctionCall) and exp.parameters[
+        0
+    ].function_name not in ["and", "or"]
+    found.append(exp.parameters[0])
+    if (
+        isinstance(exp.parameters[1], FunctionCall)
+        and exp.parameters[1].function_name == "and"
+    ):
+        return extract_conds(exp.parameters[1], found)
+    else:
+        found.append(exp.parameters[1])
+        return found
+
+
+def helper(expected, actual) -> str:
+    from snuba.query.dsl_mapper import DSLMapperVisitor, ast_repr
+
+    cond = expected.get_condition()
+    assert cond and isinstance(cond, FunctionCall)
+    tmp = combine_and_conditions(extract_conds(cond, None))
+    assert tmp == actual.get_condition()
+    return ast_repr(tmp, DSLMapperVisitor())
 
 
 def _combine_conditions_new(

@@ -112,22 +112,22 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                in_cond(
-                    column("tags[sentry:dist]"),
-                    f.tuple(literal("dist1"), literal("dist2")),
-                ),
                 and_cond(
+                    in_cond(
+                        column("tags[sentry:dist]"),
+                        f.tuple(literal("dist1"), literal("dist2")),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=[
