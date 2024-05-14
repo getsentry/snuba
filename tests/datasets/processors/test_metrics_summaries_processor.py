@@ -1,4 +1,3 @@
-import time
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Sequence
 
@@ -19,8 +18,10 @@ METRICS_SUMMARY_SCHEMA: Codec[MetricsSummary] = get_codec("snuba-metrics-summari
 
 def build_metrics_summary_payload() -> MetricsSummary:
 
-    received_timestamp = time.time() - timedelta(days=1) - timedelta(minutes=5)
-    end_timestamp = time.time() - timedelta(days=1)
+    received_timestamp = datetime.timestamp(
+        datetime.now() - timedelta(days=1) - timedelta(minutes=5)
+    )
+    end_timestamp = datetime.timestamp(datetime.now() - timedelta(days=1))
 
     return MetricsSummary(
         {
