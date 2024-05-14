@@ -12,11 +12,16 @@ from typing import Optional
 
 import pytest
 
+from snuba import state
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.conditions import BooleanFunctions, binary_condition
+from snuba.query.conditions import (
+    BooleanFunctions,
+    binary_condition,
+    get_first_level_and_conditions,
+)
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import NestedColumn, and_cond, divide, equals, or_cond
 from snuba.query.expressions import (
@@ -694,3 +699,50 @@ def test_custom_processing() -> None:
     We also currently have no tests that use custom processing to my knowledge.
     """
     pass
+
+
+@pytest.mark.redis_db
+def test_recursion_error_query_tuple() -> None:
+    state.set_config("use_new_combine_conditions", 0)
+    # conds = " OR ".join([f'(release:"backend@{e}" AND project_id:1)' for e in range(4)])
+    conds = "(a:1 AND b:1) OR (a:2 AND b:2) OR (a:3 AND b:3) OR (a:4 AND b:4)"
+    error_mql = (
+        "(sum(d:transactions/duration@millisecond) by (release, project_id) * 1000000.0){("
+        + conds
+        + ")}"
+    )
+    context = {
+        "start": "2024-03-25T00:00:00+00:00",
+        "end": "2024-04-25T00:00:00+00:00",
+        "rollup": {
+            "orderby": "DESC",
+            "granularity": 86400,
+            "interval": None,
+            "with_totals": "True",
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1, 11276],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 9223372036854775909,
+            "release": 9223372036854776016,
+        },
+        "limit": 323,
+        "offset": None,
+    }
+    query = parse_mql_query(error_mql, context, get_dataset("generic_metrics"))
+    cond = query.get_condition()
+    assert cond is not None
+    old_top_level_conds = get_first_level_and_conditions(cond)
+
+    state.set_config("use_new_combine_conditions", 1)
+    query2 = parse_mql_query(error_mql, context, get_dataset("generic_metrics"))
+    cond2 = query2.get_condition()
+    assert cond2 is not None
+    new_top_level_conds = get_first_level_and_conditions(cond2)
+    assert len(old_top_level_conds) == len(new_top_level_conds)
+    assert sorted(old_top_level_conds, key=repr) == sorted(
+        new_top_level_conds, key=repr
+    )
