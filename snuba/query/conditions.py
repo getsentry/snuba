@@ -286,7 +286,7 @@ def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
 
 def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
     rollout_percent = get_float_config(
-        "use_new_combine_conditions_percent", default=1.0
+        "use_new_combine_conditions_percent", default=0.0
     )
     assert isinstance(rollout_percent, float)
     if random.random() < rollout_percent:
