@@ -49,7 +49,6 @@ class Topic(Enum):
     GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
     GROUP_ATTRIBUTES = "group-attributes"
 
-    ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
