@@ -339,6 +339,16 @@ fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &Messa
     false
 }
 
+fn parse_materialization_version(config: Result<Option<String>, Error>) -> u8 {
+    if let Some(mat_version) = config.ok().flatten() {
+        let mat_version_int = mat_version.parse::<u8>().unwrap();
+        return mat_version_int;
+    }
+
+    // return the currently used materialization version if runtime config is not set
+    2u8
+}
+
 fn process_message<T>(
     payload: KafkaPayload,
     config: &ProcessorConfig,
@@ -579,7 +589,9 @@ impl Parse for DistributionsRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: 2,
+            materialization_version: parse_materialization_version(get_str_config(
+                "gen_metrics_dist_mat_version",
+            )),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
