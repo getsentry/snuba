@@ -523,6 +523,8 @@ struct DistributionsRawRow {
     distribution_values: Vec<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enable_histogram: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disable_percentiles: Option<u8>,
 }
 
 impl Parse for DistributionsRawRow {
@@ -554,11 +556,14 @@ impl Parse for DistributionsRawRow {
             GRANULARITY_ONE_DAY,
         ];
         let mut enable_histogram = None;
+        let mut disable_percentiles = None;
         let aggregate_option = from.aggregation_option.unwrap_or_default();
         if aggregate_option == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         } else if aggregate_option == "hist" {
             enable_histogram = Some(1);
+        } else if aggregate_option == "no_percentile" {
+            disable_percentiles = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
         let record_meta = should_record_meta(from.use_case_id.as_str());
@@ -585,6 +590,7 @@ impl Parse for DistributionsRawRow {
             common_fields,
             distribution_values,
             enable_histogram,
+            disable_percentiles,
         }))
     }
 }
@@ -806,6 +812,22 @@ mod tests {
         "aggregation_option": "hist"
     }"#;
 
+    const DUMMY_DISTRIBUTION_MESSAGE_WITH_PERCENTILE_AGGREGATE_OPTION: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": [0, 1, 2, 3, 4, 5],
+        "aggregation_option": "no_percentile"
+    }"#;
+
     const DUMMY_GAUGE_MESSAGE: &str = r#"{
         "version": 2,
         "use_case_id": "spans",
@@ -966,6 +988,7 @@ mod tests {
             },
             distribution_values: vec![3f64, 1f64, 2f64],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1023,6 +1046,7 @@ mod tests {
             },
             distribution_values: vec![1f64, 2f64, 3f64],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1468,6 +1492,7 @@ mod tests {
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1525,6 +1550,7 @@ mod tests {
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1582,6 +1608,7 @@ mod tests {
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1591,6 +1618,64 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 667)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_distribution_aggregate_option_percentiles() {
+        let result = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_DISTRIBUTION_MESSAGE_WITH_PERCENTILE_AGGREGATE_OPTION,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+            },
+            distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            enable_histogram: None,
+            disable_percentiles: Some(1),
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 676)])
                 })
             }
         );
