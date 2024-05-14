@@ -180,10 +180,10 @@ class DSLMapperVisitor(ExpressionVisitor[str]):
         )
 
     def visit_argument(self, exp: Argument) -> str:
-        return repr(exp)
+        return f"Argument({repr(exp.alias)}, {repr(exp.name)})"
 
     def visit_lambda(self, exp: Lambda) -> str:
-        return repr(exp)
+        return f"Lambda({repr(exp.alias)}, {repr(exp.parameters)}, {exp.transformation.accept(self)})"
 
     def visit_selected_expression(self, exp: SelectedExpression) -> str:
         return f"SelectedExpression({repr(exp.name)}, {exp.expression.accept(self)})"

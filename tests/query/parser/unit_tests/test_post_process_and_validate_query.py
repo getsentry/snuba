@@ -237,22 +237,22 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                in_cond(
-                    tags["sentry:dist"], f.tuple(literal("dist1"), literal("dist2"))
-                ),
                 and_cond(
+                    in_cond(
+                        tags["sentry:dist"], f.tuple(literal("dist1"), literal("dist2"))
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -592,29 +592,29 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    f.foo(
-                        f.goo(
-                            column("partition", None, "_snuba_partition"),
-                            alias="_snuba_issue_id",
-                        ),
-                        alias="_snuba_group_id",
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        f.foo(
+                            f.goo(
+                                column("partition", None, "_snuba_partition"),
+                                alias="_snuba_issue_id",
+                            ),
+                            alias="_snuba_group_id",
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
@@ -940,31 +940,33 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.arrayExists(
-                    Lambda(
-                        None,
-                        ("x",),
-                        f.assumeNotNull(
-                            f.like(Argument(None, "x"), literal("Arithmetic%"))
+                and_cond(
+                    f.arrayExists(
+                        Lambda(
+                            None,
+                            ("x",),
+                            f.assumeNotNull(
+                                f.like(Argument(None, "x"), literal("Arithmetic%"))
+                            ),
+                        ),
+                        column(
+                            "exception_stacks.type",
+                            None,
+                            "_snuba_exception_stacks.type",
                         ),
                     ),
-                    column(
-                        "exception_stacks.type", None, "_snuba_exception_stacks.type"
-                    ),
-                ),
-                and_cond(
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp", None, "_snuba_timestamp"),
-                            literal(datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        f.equals(
-                            column("project_id", None, "_snuba_project_id"), literal(1)
-                        ),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                    f.equals(
+                        column("project_id", None, "_snuba_project_id"), literal(1)
                     ),
                 ),
             ),
