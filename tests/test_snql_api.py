@@ -51,7 +51,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
         return
 
 
-@pytest.mark.clickhouse_db(storage_keys=["errors", "errors_ro"])
+@pytest.mark.clickhouse_db(storage_keys=["errors", "errors_ro", "transactions"])
 @pytest.mark.redis_db
 class TestSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
@@ -79,6 +79,7 @@ class TestSnQLApi(BaseApiTest):
             [get_raw_transaction()],
         )
 
+    @pytest.mark.clickhouse_db(storage_keys=["generic_metrics_gauges"])
     def test_avg_gauges(self) -> None:
         # est that `avg(value)` works on gauges even thouh that agregate function doesn't exist on the table
         query = """MATCH (generic_metrics_gauges) SELECT avg(value) AS
@@ -218,6 +219,7 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
 
+    @pytest.mark.clickhouse_db(storage_keys=["group_attributes"])
     def test_join_query_in_sub_query(self) -> None:
         response = self.post(
             "/events/snql",
@@ -631,6 +633,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
+    @pytest.mark.clickhouse_db(storage_keys=["discover"])
     def test_nullable_query(self) -> None:
         response = self.post(
             "/discover/snql",
@@ -892,6 +895,7 @@ class TestSnQLApi(BaseApiTest):
             "type": "Float64",
         } in result["meta"]
 
+    @pytest.mark.clickhouse_db(storage_keys=["discover"])
     def test_duplicate_alias_bug(self) -> None:
         response = self.post(
             "/discover/snql",
@@ -1231,6 +1235,7 @@ class TestSnQLApi(BaseApiTest):
             response.status_code == 500 or response.status_code == 400
         )  # TODO: This should be a 400, and will change once we can properly categorise these errors
 
+    @pytest.mark.clickhouse_db(storage_keys=["group_attributes"])
     def test_timeseries_processor_join_query(self) -> None:
         response = self.post(
             "/events/snql",
@@ -1319,6 +1324,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
+    @pytest.mark.clickhouse_db(storage_keys=["group_attributes"])
     def test_tags_column_in_join(self) -> None:
         response = self.post(
             "/events/snql",
@@ -1351,6 +1357,7 @@ class TestSnQLApi(BaseApiTest):
 
         assert response.status_code == 200
 
+    @pytest.mark.clickhouse_db(storage_keys=["spans"])
     def test_hexint_in_condition(self) -> None:
         response = self.post(
             "/events/snql",
@@ -1379,6 +1386,7 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert "9533608433997996441" in data["sql"], data["sql"]  # Hexint was applied
 
+    @pytest.mark.clickhouse_db(storage_keys=["discover"])
     def test_low_cardinality_processor(self) -> None:
         response = self.post(
             "/discover/snql",
