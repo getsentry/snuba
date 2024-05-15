@@ -298,7 +298,7 @@ def extract_conds(
     assert exp.function_name == "and"
     assert isinstance(exp.parameters[0], FunctionCall) and exp.parameters[
         0
-    ].function_name not in ["and", "or"]
+    ].function_name not in ["and"]
     found.append(exp.parameters[0])
     if (
         isinstance(exp.parameters[1], FunctionCall)
