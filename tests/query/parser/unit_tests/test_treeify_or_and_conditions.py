@@ -30,20 +30,17 @@ def test_simple() -> None:
     expected = Query(
         from_dist,
         condition=and_cond(
-            literal(1),
+            and_cond(literal(1), literal(1)),
             and_cond(
                 literal(1),
-                and_cond(
+                or_cond(
                     literal(1),
                     or_cond(
-                        literal(1),
                         or_cond(
-                            or_cond(
-                                and_cond(literal(1), and_cond(literal(1), literal(1))),
-                                literal(1),
-                            ),
                             and_cond(literal(1), and_cond(literal(1), literal(1))),
+                            literal(1),
                         ),
+                        and_cond(literal(1), and_cond(literal(1), literal(1))),
                     ),
                 ),
             ),
