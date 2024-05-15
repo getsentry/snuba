@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Mapping, Optional, Sequence
 
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.entity_subscriptions.processors import EntitySubscriptionProcessor
 from snuba.datasets.entity_subscriptions.validators import EntitySubscriptionValidator
 from snuba.datasets.storage import (
@@ -18,7 +18,6 @@ from snuba.query.validation.validators import (
     QueryValidator,
 )
 from snuba.utils.describer import Describable, Description, Property
-from snuba.utils.schemas import ColumnSet
 
 
 class Entity(Describable, ABC):
@@ -44,7 +43,7 @@ class Entity(Describable, ABC):
         # Eventually, the EntityColumnSet should be passed in
         # For now, just convert it so we have the right
         # type from here on
-        self.__data_model = EntityColumnSet(abstract_column_set.columns)
+        self.__data_model = ColumnSet(abstract_column_set.columns)
 
         self.__join_relationships = join_relationships
         self.__subscription_processors = subscription_processors
@@ -71,7 +70,7 @@ class Entity(Describable, ABC):
         """
         return []
 
-    def get_data_model(self) -> EntityColumnSet:
+    def get_data_model(self) -> ColumnSet:
         """
         Now the data model is flat so this is just a simple ColumnSet object. We can expand this
         to also include relationships between entities.

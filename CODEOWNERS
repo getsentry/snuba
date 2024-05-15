@@ -15,6 +15,7 @@
 
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
+/rust_snuba/src/processors/replays.rs @getsentry/replay-backend
 
 # Legal
 /LICENSE.md  @getsentry/owners-legal

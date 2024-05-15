@@ -93,7 +93,6 @@ JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
                 StorageSetKey.GROUP_ATTRIBUTES,
             }
         ),
-        frozenset({StorageSetKey.SEARCH_ISSUES, StorageSetKey.GROUP_ATTRIBUTES}),
     }
 )
 

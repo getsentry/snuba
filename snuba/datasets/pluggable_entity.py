@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
-from snuba.clickhouse.columns import Column
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
+from snuba.clickhouse.columns import Column, ColumnSet
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.storage_selectors import QueryStorageSelector
 from snuba.datasets.entity import Entity
@@ -63,7 +62,7 @@ class PluggableEntity(Entity):
         mappers = [s.translation_mappers for s in self.storages]
         return [
             EntityContainsColumnsValidator(
-                EntityColumnSet(self.columns),
+                ColumnSet(self.columns),
                 mappers,
                 self.validate_data_model or ColumnValidationMode.ERROR,
             ),
@@ -73,8 +72,8 @@ class PluggableEntity(Entity):
     def get_query_processors(self) -> Sequence[LogicalQueryProcessor]:
         return self.query_processors
 
-    def get_data_model(self) -> EntityColumnSet:
-        return EntityColumnSet(self.columns)
+    def get_data_model(self) -> ColumnSet:
+        return ColumnSet(self.columns)
 
     def get_join_relationship(self, relationship: str) -> Optional[JoinRelationship]:
         return self.join_relationships.get(relationship)

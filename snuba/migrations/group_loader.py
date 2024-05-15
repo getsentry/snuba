@@ -240,6 +240,7 @@ class SessionsLoader(DirectoryLoader):
             "0002_sessions_aggregates",
             "0003_sessions_matview",
             "0004_sessions_ttl",
+            "0005_drop_sessions_tables",
         ]
 
 
@@ -378,6 +379,7 @@ class SpansLoader(DirectoryLoader):
             "0010_spans_add_compression",
             "0011_spans_add_index_on_trace_id",
             "0012_spans_add_index_on_transaction_name",
+            "0013_spans_add_indexes_for_tag_columns",
         ]
 
 

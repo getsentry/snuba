@@ -4,7 +4,6 @@ from snuba import settings
 
 COMMON_RUST_CONSUMER_DEV_OPTIONS = [
     "--use-rust-processor",
-    "--no-skip-write",
     "--auto-offset-reset=latest",
     "--no-strict-offset-reset",
     "--log-level=debug",
@@ -314,6 +313,19 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "--entity=generic_metrics_counters",
                             "--consumer-group=snuba-generic-metrics-counters-subscriptions-schedulers",
                             "--followed-consumer-group=snuba-generic-metrics-counters-consumers",
+                            "--auto-offset-reset=latest",
+                            "--log-level=debug",
+                            "--schedule-ttl=10",
+                        ],
+                    ),
+                    (
+                        "subscriptions-scheduler-generic-metrics-gauges",
+                        [
+                            "snuba",
+                            "subscriptions-scheduler",
+                            "--entity=generic_metrics_gauges",
+                            "--consumer-group=snuba-generic-metrics-gauges-subscriptions-schedulers",
+                            "--followed-consumer-group=snuba-generic-metrics-gauges-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
                             "--schedule-ttl=10",

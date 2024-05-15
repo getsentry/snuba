@@ -1498,7 +1498,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_min_count",
                         "min",
-                        (Column("_snuba_max_count", None, "max_count"),),
+                        (Column("_snuba_max_count", None, "_snuba_max_count"),),
                     ),
                 ),
             ],

@@ -127,7 +127,6 @@ query_processors:
       prewhere_candidates:
         - event_id
         - release
-        - message
         - transaction_name
         - environment
         - project_id
