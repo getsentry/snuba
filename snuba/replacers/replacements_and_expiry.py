@@ -18,7 +18,7 @@ config_auto_replacements_bypass_projects_hash = (
 REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY = "replacements_expiry_window_minutes"
 
 
-def get_minutes(key: str, default: int) -> int:
+def get_expiry_window_or_counter_window_size(key: str, default: int) -> int:
     minutes = get_int_config(key=key, default=default)
     return int(minutes) if minutes else default
 
@@ -32,7 +32,9 @@ def set_config_auto_replacements_bypass_projects(
         for project_id in new_project_ids:
             if project_id not in projects_within_expiry:
                 expiry = curr_time + timedelta(
-                    minutes=get_minutes(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
+                    minutes=get_expiry_window_or_counter_window_size(
+                        REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5
+                    )
                 )
                 pipeline.hset(
                     config_auto_replacements_bypass_projects_hash,

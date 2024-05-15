@@ -352,11 +352,16 @@ def kafka_topics() -> Response:
 @application.route("/auto-replacements-bypass-projects")
 @check_tool_perms(tools=[AdminTools.AUTO_REPLACEMENTS_BYPASS_PROJECTS])
 def auto_replacements_bypass_projects() -> Response:
-    return Response(
-        json.dumps(get_config_auto_replacements_bypass_projects(datetime.now())),
-        200,
-        {"Content-Type": "application/json"},
-    )
+    def serialize(project_id: int, expiry: datetime) -> Any:
+        return {"projectID": project_id, "expiry": str(expiry)}
+
+    data = [
+        serialize(project_id, expiry)
+        for [project_id, expiry] in get_config_auto_replacements_bypass_projects(
+            datetime.now()
+        ).items()
+    ]
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
 # Sample cURL command:

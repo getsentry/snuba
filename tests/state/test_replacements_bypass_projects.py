@@ -6,7 +6,7 @@ from freezegun import freeze_time
 from snuba.replacers.replacements_and_expiry import (
     REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY,
     get_config_auto_replacements_bypass_projects,
-    get_minutes,
+    get_expiry_window_or_counter_window_size,
     set_config_auto_replacements_bypass_projects,
 )
 
@@ -14,7 +14,9 @@ from snuba.replacers.replacements_and_expiry import (
 @freeze_time("2024-5-13 09:00:00")
 class TestState:
     start_test_time = datetime.now()
-    expiry_window_minutes = get_minutes(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
+    expiry_window_minutes = get_expiry_window_or_counter_window_size(
+        REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5
+    )
     proj1_add_time = start_test_time
     proj2_add_time = start_test_time + timedelta(minutes=expiry_window_minutes // 2)
     proj1_expiry = proj1_add_time + timedelta(minutes=expiry_window_minutes)

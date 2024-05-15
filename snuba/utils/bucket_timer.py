@@ -5,8 +5,9 @@ from datetime import datetime, timedelta
 from typing import List, MutableMapping
 
 from snuba import environment, state
-from snuba.replacers.replacements_and_expiry import get_minutes
-from snuba.settings import COUNTER_WINDOW_SIZE_MINUTES_KEY
+from snuba.replacers.replacements_and_expiry import (
+    get_expiry_window_or_counter_window_size,
+)
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "bucket_timer")
@@ -24,8 +25,9 @@ def ceil_minute(time: datetime) -> datetime:
 
 Buckets = MutableMapping[datetime, MutableMapping[int, timedelta]]
 
+# Counter utility class window size in minutes
 COUNTER_WINDOW_SIZE = timedelta(
-    minutes=get_minutes(COUNTER_WINDOW_SIZE_MINUTES_KEY, 10)
+    minutes=get_expiry_window_or_counter_window_size("counter_window_size_minutes", 10)
 )
 
 

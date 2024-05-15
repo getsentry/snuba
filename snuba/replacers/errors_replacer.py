@@ -211,10 +211,13 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             auto_bypass_projects = list(
                 get_config_auto_replacements_bypass_projects(datetime.now()).keys()
             )
+            projects_to_skip = auto_bypass_projects
             if manual_bypass_projects is not None:
-                auto_bypass_projects.extend(ast.literal_eval(manual_bypass_projects))
-            projects = json.loads(cast(str, str(auto_bypass_projects)))
-            if processed.get_project_id() in projects:
+                try:
+                    projects_to_skip.extend(ast.literal_eval(manual_bypass_projects))
+                except Exception as e:
+                    logger.exception(e)
+            if processed.get_project_id() in projects_to_skip:
                 # For a persistent non rate limited logger
                 logger.info(
                     f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",
