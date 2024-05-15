@@ -1,13 +1,16 @@
 use std::time::Duration;
 
-use rust_arroyo::processing::strategies::ProcessingStrategy;
+use rust_arroyo::processing::strategies::{
+    CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
+};
+use rust_arroyo::types::Message;
 
 pub struct SetJoinTimeout<N> {
     next_step: N,
     new_timeout: Option<Duration>,
 }
 
-impl SetJoinTimeout<N> {
+impl<N> SetJoinTimeout<N> {
     pub fn new(next_step: N, new_timeout: Option<Duration>) -> Self {
         SetJoinTimeout {
             new_timeout,
@@ -32,7 +35,11 @@ where
         self.next_step.terminate()
     }
 
-    fn join(&mut self, timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
+    fn close(&mut self) {
+        self.next_step.close();
+    }
+
+    fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.join(self.new_timeout)
     }
 }

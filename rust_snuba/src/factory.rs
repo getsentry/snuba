@@ -277,7 +277,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         if let Some(path) = &self.health_check_file {
             Box::new(HealthCheck::new(next_step, path))
         } else {
-            next_step
+            Box::new(next_step)
         }
     }
 }
