@@ -45,7 +45,6 @@ interface Client {
   getAutoReplacementsBypassProjects: () => Promise<
     AutoReplacementsBypassProjectsData[]
   >;
-  getExpiryWindow: () => Promise<number>;
   createNewConfig: (
     key: ConfigKey,
     value: ConfigValue,
@@ -120,10 +119,6 @@ function Client() {
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
       }).then((resp) => resp.json());
-    },
-    getExpiryWindow: () => {
-      const url = baseUrl + "expiry-window";
-      return fetch(url).then((resp) => resp.json());
     },
     createNewConfig: (
       key: ConfigKey,

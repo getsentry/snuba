@@ -381,8 +381,8 @@ STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
-# Counter utility class window size in minutes
-COUNTER_WINDOW_SIZE_MINUTES = 10
+# Counter utility class window size in minutes hash key
+COUNTER_WINDOW_SIZE_MINUTES_KEY = "counter_window_size_minutes"
 
 
 # Slicing Configuration

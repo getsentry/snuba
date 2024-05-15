@@ -65,7 +65,6 @@ def run(module: str, bind: str, **kwargs: bool | int | str | None) -> NoReturn:
         "vacuum": True,
         "virtualenv": sys.prefix,
         "wsgi_env_behavior": "holy",
-        "py_autoreload": 1,
         f"{protocol}_socket": bind,
         **kwargs,
     }

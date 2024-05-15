@@ -70,8 +70,7 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
-from snuba.replacers.replacements_utils import (
-    EXPIRY_WINDOW,
+from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
@@ -358,12 +357,6 @@ def auto_replacements_bypass_projects() -> Response:
         200,
         {"Content-Type": "application/json"},
     )
-
-
-@application.route("/expiry-window")
-@check_tool_perms(tools=[AdminTools.AUTO_REPLACEMENTS_BYPASS_PROJECTS])
-def expiry_window() -> Response:
-    return make_response(jsonify(str(EXPIRY_WINDOW)), 200)
 
 
 # Sample cURL command:

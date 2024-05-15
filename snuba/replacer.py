@@ -38,7 +38,7 @@ from snuba.clusters.cluster import (
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
-from snuba.replacers.replacements_utils import (
+from snuba.replacers.replacements_and_expiry import (
     redis_client,
     set_config_auto_replacements_bypass_projects,
 )
@@ -47,7 +47,7 @@ from snuba.replacers.replacer_processor import (
     ReplacementMessage,
     ReplacementMessageMetadata,
 )
-from snuba.state import get_config, get_int_config, get_str_config
+from snuba.state import get_int_config, get_str_config
 from snuba.utils.bucket_timer import Counter
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.rate_limiter import RateLimiter
@@ -591,11 +591,6 @@ class ReplacerWorker:
         projects_exceeding_limit = (
             self.__processing_time_counter.get_projects_exceeding_limit()
         )
-        # this is for testing purely on S4S, will delete immediately after testing
-        if 2 not in projects_exceeding_limit and get_config(
-            "use_auto_replacements_bypass", 0
-        ):
-            projects_exceeding_limit.append(2)
         set_config_auto_replacements_bypass_projects(projects_exceeding_limit, end_time)
         logger.info(
             "projects_exceeding_limit = {}".format(

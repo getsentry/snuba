@@ -8,37 +8,40 @@ logger = logging.getLogger(__name__)
 
 
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.state import get_int_config
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 config_auto_replacements_bypass_projects_hash = (
     "snuba-config-auto-replacements-bypass-projects-hash"
 )
-EXPIRY_WINDOW = timedelta(minutes=5)
+
+REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY = "replacements_expiry_window_minutes"
+
+
+def get_minutes(key: str, default: int) -> int:
+    minutes = get_int_config(key=key, default=default)
+    return int(minutes) if minutes else default
 
 
 def set_config_auto_replacements_bypass_projects(
     new_project_ids: Sequence[int], curr_time: datetime
 ) -> None:
     try:
-        _filter_projects_within_expiry(curr_time)
-        projects_within_expiry = _retrieve_projects_from_redis()
+        projects_within_expiry = get_config_auto_replacements_bypass_projects(curr_time)
+        pipeline = redis_client.pipeline()
         for project_id in new_project_ids:
             if project_id not in projects_within_expiry:
-                expiry = curr_time + EXPIRY_WINDOW
-                redis_client.hset(
+                expiry = curr_time + timedelta(
+                    minutes=get_minutes(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
+                )
+                pipeline.hset(
                     config_auto_replacements_bypass_projects_hash,
                     project_id,
                     expiry.isoformat(),
                 )
+        pipeline.execute()
     except Exception as e:
         logger.exception(e)
-
-
-def get_config_auto_replacements_bypass_projects(
-    curr_time: datetime,
-) -> Mapping[int, datetime]:
-    _filter_projects_within_expiry(curr_time)
-    return _retrieve_projects_from_redis()
 
 
 def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
@@ -54,9 +57,20 @@ def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
         return {}
 
 
-def _filter_projects_within_expiry(curr_time: datetime) -> None:
+def get_config_auto_replacements_bypass_projects(
+    curr_time: datetime,
+) -> Mapping[int, datetime]:
     curr_projects = _retrieve_projects_from_redis()
 
+    valid_projects = {}
+    pipeline = redis_client.pipeline()
     for project_id in curr_projects:
         if curr_projects[project_id] < curr_time:
-            redis_client.hdel(config_auto_replacements_bypass_projects_hash, project_id)
+            pipeline.hdel(config_auto_replacements_bypass_projects_hash, project_id)
+        else:
+            valid_projects[project_id] = pipeline.hget(
+                config_auto_replacements_bypass_projects_hash, project_id
+            )
+    pipeline.execute()
+
+    return valid_projects

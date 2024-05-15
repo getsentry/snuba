@@ -47,7 +47,7 @@ from snuba.processor import (
     _hashify,
 )
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
-from snuba.replacers.replacements_utils import (
+from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
@@ -207,13 +207,12 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
 
         if processed is not None:
             manual_bypass_projects = get_config("replacements_bypass_projects", "[]")
-            if get_config("use_auto_replacements_bypass", 0):
-                auto_bypass_projects = list(
-                    get_config_auto_replacements_bypass_projects(datetime.now())
-                )
-                if manual_bypass_projects is not None:
-                    auto_bypass_projects.extend(manual_bypass_projects)
-            projects = json.loads(cast(str, manual_bypass_projects))
+            auto_bypass_projects = list(
+                get_config_auto_replacements_bypass_projects(datetime.now())
+            )
+            if manual_bypass_projects is not None:
+                auto_bypass_projects.extend(manual_bypass_projects)
+            projects = json.loads(cast(str, auto_bypass_projects))
             if processed.get_project_id() in projects:
                 # For a persistent non rate limited logger
                 logger.info(
