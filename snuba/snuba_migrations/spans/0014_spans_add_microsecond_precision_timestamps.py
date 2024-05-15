@@ -31,7 +31,7 @@ class Migration(migration.ClickhouseNodeMigration):
                             ),
                         ),
                         target=OperationTarget.LOCAL,
-                        after="start_timestamp",
+                        after=timestamp_column,
                     ),
                     operations.AddColumn(
                         storage_set=storage_set_name,
