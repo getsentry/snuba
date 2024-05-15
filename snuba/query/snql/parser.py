@@ -1544,14 +1544,13 @@ def parse_snql_query(
             _post_process(query, [_treeify_or_and_conditions], settings)
 
         # dummy settings and timer dont matter
-        dummy_settings = HTTPQuerySettings()
-        dummy_timer = Timer("snql_pipeline")
+        timer = Timer("snql_pipeline")
         res = PostProcessAndValidateQuery().execute(
             QueryPipelineResult(
-                data=(query, dataset, settings, custom_processing),
+                data=(query, dataset, custom_processing),
                 error=None,
-                query_settings=dummy_settings,
-                timer=dummy_timer,
+                query_settings=settings or HTTPQuerySettings(),
+                timer=timer,
             )
         )
         if res.error:
@@ -1569,7 +1568,6 @@ class PostProcessAndValidateQuery(
         tuple[
             LogicalQuery | CompositeQuery[LogicalDataSource],
             Dataset,
-            QuerySettings | None,
             CustomProcessors | None,
         ],
         LogicalQuery | CompositeQuery[LogicalDataSource],
@@ -1581,12 +1579,12 @@ class PostProcessAndValidateQuery(
             tuple[
                 LogicalQuery | CompositeQuery[LogicalDataSource],
                 Dataset,
-                QuerySettings | None,
                 CustomProcessors | None,
             ]
         ],
     ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
-        query, dataset, settings, custom_processing = pipe_input.data
+        query, dataset, custom_processing = pipe_input.data
+        settings = pipe_input.query_settings
 
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
