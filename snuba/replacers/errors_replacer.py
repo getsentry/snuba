@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import random
@@ -208,11 +209,11 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
         if processed is not None:
             manual_bypass_projects = get_config("replacements_bypass_projects", "[]")
             auto_bypass_projects = list(
-                get_config_auto_replacements_bypass_projects(datetime.now())
+                get_config_auto_replacements_bypass_projects(datetime.now()).keys()
             )
             if manual_bypass_projects is not None:
-                auto_bypass_projects.extend(manual_bypass_projects)
-            projects = json.loads(cast(str, auto_bypass_projects))
+                auto_bypass_projects.extend(ast.literal_eval(manual_bypass_projects))
+            projects = json.loads(cast(str, str(auto_bypass_projects)))
             if processed.get_project_id() in projects:
                 # For a persistent non rate limited logger
                 logger.info(
