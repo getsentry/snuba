@@ -17,6 +17,7 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
+from snuba.migrations.groups import get_migration_group_from_storage_set
 from snuba.redis import all_redis_clients
 
 MIGRATIONS_CACHE: Dict[Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]] = {}
@@ -193,29 +194,41 @@ def _clear_db(storage_keys: List[StorageKey]) -> None:
                 connection = cluster.get_node_connection(
                     ClickhouseClientSettings.MIGRATE, node
                 )
-                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+                print(f"DROP TABLE IF EXISTS {database}.{table_name}")
+                connection.execute(f"DROP TABLE IF EXISTS {database}.{table_name}")
+                print(f"DROP TABLE IF EXISTS {database}.migrations_local")
+                connection.execute(f"DROP TABLE IF EXISTS {database}.migrations_local")
+                connection.execute(f"DROP TABLE IF EXISTS {database}.migrations_dist")
 
 
 @pytest.fixture
 def clickhouse_db(
     request: pytest.FixtureRequest, create_databases: None
 ) -> Generator[None, None, None]:
+    from functools import reduce
 
-    clickhouse_marker = request.node.get_closest_marker("clickhouse_db")
-    if not clickhouse_marker:
+    clickhouse_markers = list(request.node.iter_markers("clickhouse_db"))
+    if not clickhouse_markers:
         # Make people use the marker explicitly so `-m` works on CLI
         pytest.fail("Need to use clickhouse_db marker if clickhouse_db fixture is used")
-    storage_keys = clickhouse_marker.kwargs.get("storage_keys", None)
+    storage_keys = reduce(
+        lambda x, y: x.union(y),
+        [set(m.kwargs.get("storage_keys", [])) for m in clickhouse_markers],
+    )
     if not storage_keys:
         raise Exception(
             "You must specify the storage keys you are running the test again in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
         )
     storage_keys = [StorageKey(s) for s in storage_keys]
+    storage_sets = [get_storage(s).get_storage_set_key() for s in storage_keys]
     tables_to_migrate = set(
         [
             get_storage(storage_key).get_schema().get_data_source().get_table_name()
             for storage_key in storage_keys
         ]
+    )
+    migration_groups_to_run = set(
+        [get_migration_group_from_storage_set(ssk) for ssk in storage_sets]
     )
 
     from snuba.migrations.runner import Runner
@@ -223,8 +236,10 @@ def clickhouse_db(
     try:
         reset_dataset_factory()
         if not MIGRATIONS_CACHE:
-            Runner().run_all(force=True)
-            _build_migrations_cache()
+            for group in migration_groups_to_run:
+                print("RUN THE MIGRATIONS", migration_groups_to_run)
+                Runner().run_all(force=True, group=group)
+            # _build_migrations_cache()
         else:
             # apply migrations from cache
             applied_nodes = set()
