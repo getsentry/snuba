@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.5.0
+
+### Various fixes & improvements
+
+- ref(rust-consumer): join-timeout per-step (#5918) by @untitaker
+- ref: Bump arroyo (#5917) by @untitaker
+- ref(api): parse pipeline tests, mql after treeify #5894 (#5894) by @kylemumma
+- one more auto-offset-reset earliest (#5909) by @lynnagara
+- fix: Temporarily remove check for coupled migrations and code changes (#5903) by @ayirr7
+- ref: bump sentry-kafka-schemas to 0.1.82 (#5906) by @getsentry-bot
+- fix(CI): Make timestamp relative for metrics summaries test  (#5904) by @ayirr7
+- feat(generic-metrics): Retry adding gauges subscriptions topics + configs (#5892) by @ayirr7
+- ref(api): parse pipeline tests, snql pipeline before treeify (#5886) by @kylemumma
+- sessions: drop the clickhouse tables (#5882) by @lynnagara
+- feat: Add support for DateTime64 column type (#5896) by @phacops
+- fix: dlq-consumer should default to auto-offset-reset earliest (#5893) by @lynnagara
+- fix(capman): make allocation policies work with joins (#5887) by @volokluev
+- ref(devexp): Make entities optional in dataset config (#5879) by @enochtangg
+- ref(api): parse pipeline tests, mql pipeline before treeify (#5885) by @kylemumma
+- bump snuba-sdk to 2.0.34 (#5884) by @enochtangg
+- chore(self-hosted): Remove dependency on snuba-image build step during e2e action (#5891) by @hubertdeng123
+- remove skip-write flag (#5846) by @john-z-yang
+- feat(devexp): Add required_time_column to storage (#5889) by @volokluev
+- feat(spans): Add indexes for tag columns (#5871) by @phacops
+- feat(generic-metrics): Add zstd decompression to generic metrics processor (#5845) by @ayirr7
+- snuba devserver fix? (#5873) by @MeredithAnya
+- update CLICKHOUSE_SERVER_MIN_VERSION and CLICKHOUSE_SERVER_MAX_VERSION (#5853) by @MeredithAnya
+- fix: Handle tag columns in low cardinality processor (#5875) by @evanh
+
+_Plus 35 more_
+
 ## 24.4.2
 
 ### Various fixes & improvements
