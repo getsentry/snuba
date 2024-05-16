@@ -56,7 +56,7 @@ grammar = Grammar(
     comma            = ","
     space            = " "
     quote            = "'"
-    datetime64              = "DateTime64" open_paren datetime64_precision (comma space* quote datetime64_timezone quote)? close_paren
+    datetime64              = "DateTime64" (open_paren datetime64_precision (comma space* quote datetime64_timezone quote)? close_paren)?
     datetime64_precision    = "3" / "6" / "9"
     datetime64_timezone     = ~r"[a-zA-Z0-9_/]+"
     """
@@ -187,13 +187,20 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         (
             _type,
+            precision_timezone_group,
+        ) = visited_children
+        if isinstance(precision_timezone_group, list) is False:
+            return DateTime64()
+        print(precision_timezone_group, "====================")
+        (
             _parenthesis,
             precision,
-            group,
+            timezone_group,
             _parenthesis,
-        ) = visited_children
-        if group.children:
-            (_comma, _space, _quote, timezone, _quote) = group
+        ) = precision_timezone_group
+        if isinstance(timezone_group, list):
+            (_comma, _space, _quote, timezone, _quote) = timezone_group
+            timezone = timezone.text
         else:
             timezone = None
         return DateTime64(precision=int(precision.text), timezone=timezone)
