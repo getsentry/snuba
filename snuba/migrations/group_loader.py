@@ -380,6 +380,7 @@ class SpansLoader(DirectoryLoader):
             "0011_spans_add_index_on_trace_id",
             "0012_spans_add_index_on_transaction_name",
             "0013_spans_add_indexes_for_tag_columns",
+            "0014_spans_add_microsecond_precision_timestamps",
         ]
 
 
