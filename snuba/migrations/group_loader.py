@@ -404,3 +404,13 @@ class MetricsSummariesLoader(DirectoryLoader):
             "0002_metrics_summaries_add_tags_hashmap",
             "0003_metrics_summaries_add_segment_id_duration_group_columns",
         ]
+
+
+class ProfileChunksLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.profile_chunks")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_create_profile_chunks_table",
+        ]
