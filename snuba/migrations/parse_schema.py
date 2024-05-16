@@ -191,7 +191,6 @@ class Visitor(NodeVisitor):  # type: ignore
         ) = visited_children
         if isinstance(precision_timezone_group, list) is False:
             return DateTime64()
-        print(precision_timezone_group, "====================")
         (
             _parenthesis,
             precision,
