@@ -9,6 +9,7 @@ from snuba.clickhouse.columns import (
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
@@ -90,6 +91,19 @@ test_data = [
     (
         ("DateTime", "", "", "DoubleDelta, LZ4"),
         (DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
+    ),
+    # DateTime64
+    (
+        ("DateTime64", "", "", ""),
+        DateTime64(3),
+    ),
+    (
+        ("DateTime64(6)", "", "", ""),
+        DateTime64(6),
+    ),
+    (
+        ("DateTime64(9, 'America/New_York')", "", "", ""),
+        DateTime64(9, "America/New_York"),
     ),
 ]
 

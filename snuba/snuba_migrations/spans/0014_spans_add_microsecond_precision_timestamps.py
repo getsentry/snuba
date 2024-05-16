@@ -24,7 +24,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         storage_set=storage_set_name,
                         table_name=local_table_name,
                         column=Column(
-                            f"{timestamp_column}_micro",
+                            f"{timestamp_column}_precise",
                             DateTime64(
                                 precision=6,
                                 modifiers=Modifiers(codecs=["DoubleDelta"]),
@@ -37,7 +37,7 @@ class Migration(migration.ClickhouseNodeMigration):
                         storage_set=storage_set_name,
                         table_name=dist_table_name,
                         column=Column(
-                            f"{timestamp_column}_micro",
+                            f"{timestamp_column}_precise",
                             DateTime64(
                                 precision=6,
                                 modifiers=Modifiers(codecs=["DoubleDelta"]),
@@ -58,13 +58,13 @@ class Migration(migration.ClickhouseNodeMigration):
                     operations.DropColumn(
                         storage_set=storage_set_name,
                         table_name=dist_table_name,
-                        column_name=f"{timestamp_column}_micro",
+                        column_name=f"{timestamp_column}_precise",
                         target=OperationTarget.DISTRIBUTED,
                     ),
                     operations.DropColumn(
                         storage_set=storage_set_name,
                         table_name=local_table_name,
-                        column_name=f"{timestamp_column}_micro",
+                        column_name=f"{timestamp_column}_precise",
                         target=OperationTarget.LOCAL,
                     ),
                 ]
