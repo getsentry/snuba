@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from unittest import mock
 
 import pytest
 from freezegun import freeze_time
@@ -73,3 +74,29 @@ class TestState:
             )
             == set()
         )
+
+    @mock.patch(
+        "snuba.replacers.replacements_and_expiry.get_expiry_window_or_counter_window_size",
+    )
+    @pytest.mark.redis_db
+    def test_expiry_window_changes(self, mock: mock.MagicMock) -> None:
+        mock.side_effect = [5, 10]
+        set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
+        set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
+        # project 1 expires after 5 minutes
+        assert set(
+            get_config_auto_replacements_bypass_projects(
+                self.proj1_add_time + timedelta(minutes=6)
+            )
+        ) == set([2])
+        # project 2 expires at 10 minutes
+        assert set(
+            get_config_auto_replacements_bypass_projects(
+                self.proj2_add_time + timedelta(minutes=9)
+            )
+        ) == set([2])
+        assert set(
+            get_config_auto_replacements_bypass_projects(
+                self.proj2_add_time + timedelta(minutes=11)
+            )
+        ) == set([])
