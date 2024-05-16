@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from typing import Any, Mapping, Optional, Sequence, Set, Union
 
 from snuba.query.dsl import literals_tuple
@@ -12,6 +13,7 @@ from snuba.query.matchers import Integer
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Or, Param, Pattern, String
 from snuba.query.matchers import SubscriptableReference as SubscriptableReferencePattern
+from snuba.state import get_float_config
 
 
 class ConditionFunctions:
@@ -283,6 +285,39 @@ def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
 
 
 def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
+    rollout_percent = get_float_config(
+        "use_new_combine_conditions_percent", default=0.0
+    )
+    rollout_percent = rollout_percent if isinstance(rollout_percent, float) else 0.00
+    if random.random() < rollout_percent:
+        return _combine_conditions_new(conditions, function)
+    else:
+        return _combine_conditions_old(conditions, function)
+
+
+def _combine_conditions_new(
+    conditions: Sequence[Expression], function: str
+) -> Expression:
+    assert function in (BooleanFunctions.AND, BooleanFunctions.OR)
+    assert len(conditions) > 0
+    if len(conditions) == 1:
+        return conditions[0]
+
+    new_conds: list[Expression] = []
+    if len(conditions) % 2 == 0:
+        start = 0
+    else:
+        new_conds.append(conditions[0])
+        start = 1
+    for i in range(start, len(conditions) - 1, 2):
+        new_conds.append(binary_condition(function, conditions[i], conditions[i + 1]))
+
+    return _combine_conditions_new(new_conds, function)
+
+
+def _combine_conditions_old(
+    conditions: Sequence[Expression], function: str
+) -> Expression:
     """
     Combine multiple independent conditions in a single function
     representing an AND or an OR.

@@ -27,6 +27,7 @@ use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
+use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
 };
@@ -151,6 +152,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.clickhouse_concurrency,
         ));
 
+        let next_step = SetJoinTimeout::new(next_step, None);
+
         // Batch insert rows
         let batch_factory = BatchFactory::new(
             &self.storage_config.clickhouse_cluster.host,
@@ -190,7 +193,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         .flush_empty_batches(true);
 
         // Transform messages
-        let processor = match (
+        let next_step = match (
             self.use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
@@ -266,10 +269,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             }
         };
 
+        // force message processor to drop all in-flight messages, as it is not worth the time
+        // spent in rebalancing to wait for them and it is idempotent anyway. later, we overwrite
+        // the timeout again for the clickhouse writer step
+        let next_step = SetJoinTimeout::new(next_step, Some(Duration::from_secs(0)));
+
         if let Some(path) = &self.health_check_file {
-            Box::new(HealthCheck::new(processor, path))
+            Box::new(HealthCheck::new(next_step, path))
         } else {
-            processor
+            Box::new(next_step)
         }
     }
 }
