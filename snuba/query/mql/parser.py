@@ -1084,13 +1084,15 @@ def parse_mql_query(
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
 ) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
+    # dummy variables that dont matter
+    dummy_timer = Timer("mql_pipeline")
+    dummy_settings = HTTPQuerySettings()
     res = ParsePopulateResolveMQL().execute(
-        # query_settings and timer are dummy and dont matter
         QueryPipelineResult(
             data=(body, dataset, mql_context_dict, settings),
             error=None,
-            query_settings=HTTPQuerySettings(),
-            timer=Timer("mql_pipeline"),
+            query_settings=dummy_settings,
+            timer=dummy_timer,
         )
     )
     if res.error:
@@ -1104,34 +1106,22 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
 
-    with sentry_sdk.start_span(op="processor", description="post_processors"):
-        _post_process(
-            query,
-            MQL_POST_PROCESSORS,
-            settings,
+    res = PostProcessAndValidateMQLQuery().execute(
+        QueryPipelineResult(
+            data=(
+                query,
+                dummy_settings,
+                custom_processing,
+            ),
+            error=None,
+            query_settings=HTTPQuerySettings(),
+            timer=dummy_timer,
         )
-
-    # Filter in select optimizer
-    with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
-        if settings is None:
-            FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
-        else:
-            FilterInSelectOptimizer().process_query(query, settings)
-
-    # Custom processing to tweak the AST before validation
-    with sentry_sdk.start_span(op="processor", description="custom_processing"):
-        if custom_processing is not None:
-            _post_process(query, custom_processing, settings)
-
-    # Time based processing
-    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
-        _post_process(query, [_replace_time_condition], settings)
-
-    # Validating
-    with sentry_sdk.start_span(op="validate", description="expression_validators"):
-        _post_process(query, VALIDATORS)
-
-    return query
+    )
+    if res.error:
+        raise res.error
+    assert res.data  # since theres no res.error, data is guarenteed
+    return res.data
 
 
 class ParsePopulateResolveMQL(
@@ -1164,5 +1154,58 @@ class ParsePopulateResolveMQL(
 
         if settings and settings.get_dry_run():
             explain_meta.set_original_ast(str(query))
+
+        return query
+
+
+class PostProcessAndValidateMQLQuery(
+    QueryPipelineStage[
+        tuple[
+            LogicalQuery,
+            QuerySettings | None,
+            CustomProcessors | None,
+        ],
+        LogicalQuery,
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[
+                LogicalQuery,
+                QuerySettings | None,
+                CustomProcessors | None,
+            ]
+        ],
+    ) -> LogicalQuery:
+        query, settings, custom_processing = pipe_input.data
+        with sentry_sdk.start_span(op="processor", description="post_processors"):
+            _post_process(
+                query,
+                MQL_POST_PROCESSORS,
+                settings,
+            )
+
+        # Filter in select optimizer
+        with sentry_sdk.start_span(
+            op="processor", description="filter_in_select_optimize"
+        ):
+            if settings is None:
+                FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
+            else:
+                FilterInSelectOptimizer().process_query(query, settings)
+
+        # Custom processing to tweak the AST before validation
+        with sentry_sdk.start_span(op="processor", description="custom_processing"):
+            if custom_processing is not None:
+                _post_process(query, custom_processing, settings)
+
+        # Time based processing
+        with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+            _post_process(query, [_replace_time_condition], settings)
+
+        # Validating
+        with sentry_sdk.start_span(op="validate", description="expression_validators"):
+            _post_process(query, VALIDATORS)
 
         return query
