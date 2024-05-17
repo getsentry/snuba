@@ -114,7 +114,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         // Commit offsets
-        let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
+        let next_step = CommitOffsets::new(Duration::from_secs(1));
 
         // Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
