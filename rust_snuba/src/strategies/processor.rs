@@ -384,7 +384,6 @@ mod tests {
         let message = Message::new_broker_message(payload, partition, 0, Utc::now());
 
         strategy.submit(message).unwrap(); // Does not error
-        strategy.close();
         let _ = strategy.join(None);
     }
 }
