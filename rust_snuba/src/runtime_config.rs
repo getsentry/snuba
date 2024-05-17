@@ -4,6 +4,7 @@ use pyo3::prelude::{PyModule, Python};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use rust_arroyo::timer;
 use rust_arroyo::utils::timing::Deadline;
 
 static CONFIG: RwLock<BTreeMap<String, (Option<String>, Deadline)>> = RwLock::new(BTreeMap::new());
@@ -32,10 +33,7 @@ pub fn get_str_config(key: &str) -> Result<Option<String>, Error> {
         Ok(CONFIG.read().get(key).unwrap().0.clone())
     });
 
-    timer!(
-        "runtime_config.get_str_config"
-        deadline.elapsed()
-    );
+    timer!("runtime_config.get_str_config", deadline.elapsed());
 
     rv
 }

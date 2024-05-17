@@ -83,10 +83,6 @@ where
         self.next_step.submit(message)
     }
 
-    fn close(&mut self) {
-        self.next_step.close()
-    }
-
     fn terminate(&mut self) {
         self.next_step.terminate()
     }

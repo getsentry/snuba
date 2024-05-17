@@ -185,10 +185,6 @@ impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
         self.inner.submit(message)
     }
 
-    fn close(&mut self) {
-        self.inner.close();
-    }
-
     fn terminate(&mut self) {
         self.inner.terminate();
     }
