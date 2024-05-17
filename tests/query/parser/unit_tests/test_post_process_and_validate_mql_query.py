@@ -160,48 +160,49 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
+                and_cond(
+                    or_cond(
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
                         f.equals(
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
                     ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -373,48 +374,49 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
+                and_cond(
+                    or_cond(
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
                         f.equals(
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
                     ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -585,48 +587,49 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
+                and_cond(
+                    or_cond(
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
                         f.equals(
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
                     ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -811,48 +814,49 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
+                and_cond(
+                    or_cond(
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
                         f.equals(
                             column("metric_id", None, "_snuba_metric_id"),
                             literal(123456),
                         ),
                     ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -1041,12 +1045,18 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
+                and_cond(
                     or_cond(
                         or_cond(
-                            f.equals(
-                                column("metric_id", None, "_snuba_metric_id"),
-                                literal(123456),
+                            or_cond(
+                                f.equals(
+                                    column("metric_id", None, "_snuba_metric_id"),
+                                    literal(123456),
+                                ),
+                                f.equals(
+                                    column("metric_id", None, "_snuba_metric_id"),
+                                    literal(123456),
+                                ),
                             ),
                             f.equals(
                                 column("metric_id", None, "_snuba_metric_id"),
@@ -1058,40 +1068,35 @@ test_cases = [
                             literal(123456),
                         ),
                     ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -1265,52 +1270,52 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
-                        f.equals(
-                            column("metric_id", None, "_snuba_metric_id"),
-                            literal(123456),
-                        ),
-                    ),
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
-                        f.equals(
-                            column("metric_id", None, "_snuba_metric_id"),
-                            literal(123456),
-                        ),
-                    ),
-                ),
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
+                    or_cond(
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
                     ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -1489,52 +1494,52 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
-                        f.equals(
-                            column("metric_id", None, "_snuba_metric_id"),
-                            literal(123456),
-                        ),
-                    ),
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
-                        f.equals(
-                            column("metric_id", None, "_snuba_metric_id"),
-                            literal(123456),
-                        ),
-                    ),
-                ),
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
+                    or_cond(
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("200")),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(123456),
+                            ),
+                        ),
                     ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -1699,44 +1704,46 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
+                    or_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
                     ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -1894,44 +1901,46 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                or_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
-                    ),
-                ),
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
+                    or_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
                     ),
                     and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
                         in_cond(
                             column("project_id", None, "_snuba_project_id"),
                             f.tuple(literal(11)),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("org_id", None, "_snuba_org_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                f.equals(
-                                    column("use_case_id", None, "_snuba_use_case_id"),
-                                    literal("transactions"),
-                                ),
-                                and_cond(
-                                    f.greaterOrEquals(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 18, 30)),
-                                    ),
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                 ),
@@ -2085,47 +2094,45 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(11)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(11)),
+                        ),
                     ),
                     and_cond(
                         in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2023, 11, 23, 18, 30)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(123456),
-                                        ),
-                                        in_cond(
-                                            tags_raw["888"],
-                                            f.tuple(literal("dist1"), literal("dist2")),
-                                        ),
-                                    ),
-                                ),
-                            ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        in_cond(
+                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
                         ),
                     ),
                 ),
@@ -2236,47 +2243,45 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
                     ),
                     and_cond(
                         in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 2, 0, 0)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(123456),
-                                        ),
-                                        in_cond(
-                                            tags_raw["888"],
-                                            f.tuple(literal("dist1"), literal("dist2")),
-                                        ),
-                                    ),
-                                ),
-                            ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 2, 0, 0)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        in_cond(
+                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
                         ),
                     ),
                 ),
@@ -2370,39 +2375,39 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
+                    f.equals(
+                        column("granularity", None, "_snuba_granularity"), literal(60)
                     ),
                     and_cond(
                         in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
+                        in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 2, 0, 0)),
-                                    ),
-                                    f.equals(
-                                        column("metric_id", None, "_snuba_metric_id"),
-                                        literal(123456),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                    ),
+                    and_cond(
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 2, 0, 0)),
+                        ),
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
                         ),
                     ),
                 ),
@@ -2518,50 +2523,45 @@ test_cases = [
                     column("granularity", None, "_snuba_granularity"), literal(3600)
                 ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
-                    ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        and_cond(
+                            in_cond(
+                                column("project_id", None, "_snuba_project_id"),
+                                f.tuple(literal(1)),
+                            ),
+                            in_cond(
+                                column("org_id", None, "_snuba_org_id"),
+                                f.tuple(literal(1)),
+                            ),
                         ),
                         and_cond(
                             f.equals(
                                 column("use_case_id", None, "_snuba_use_case_id"),
                                 literal("transactions"),
                             ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 1, 36)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 5, 4, 15)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(567890),
-                                        ),
-                                        and_cond(
-                                            f.notIn(
-                                                tags_raw["888888"],
-                                                f.tuple(
-                                                    literal("dist1"), literal("dist2")
-                                                ),
-                                            ),
-                                            f.equals(
-                                                tags_raw["777777"], literal("bar")
-                                            ),
-                                        ),
-                                    ),
-                                ),
+                            f.greaterOrEquals(
+                                column("timestamp", None, "_snuba_timestamp"),
+                                literal(datetime(2021, 1, 1, 1, 36)),
                             ),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            f.less(
+                                column("timestamp", None, "_snuba_timestamp"),
+                                literal(datetime(2021, 1, 5, 4, 15)),
+                            ),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(567890),
+                            ),
+                        ),
+                        and_cond(
+                            f.notIn(
+                                tags_raw["888888"],
+                                f.tuple(literal("dist1"), literal("dist2")),
+                            ),
+                            f.equals(tags_raw["777777"], literal("bar")),
                         ),
                     ),
                 ),
@@ -2707,47 +2707,45 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(11)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(11)),
+                        ),
                     ),
                     and_cond(
                         in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2023, 11, 23, 18, 30)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2023, 11, 23, 22, 30)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(123456),
-                                        ),
-                                        in_cond(
-                                            tags_raw["888"],
-                                            f.tuple(literal("dist1"), literal("dist2")),
-                                        ),
-                                    ),
-                                ),
-                            ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        in_cond(
+                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
                         ),
                     ),
                 ),
@@ -2856,48 +2854,44 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
                     ),
                     and_cond(
                         in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("sessions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 2, 0, 0)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(123456),
-                                        ),
-                                        in_cond(
-                                            tags["111"],
-                                            f.tuple(literal(222), literal(333)),
-                                        ),
-                                    ),
-                                ),
-                            ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("sessions"),
                         ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 2, 0, 0)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        in_cond(tags["111"], f.tuple(literal(222), literal(333))),
                     ),
                 ),
             ),
@@ -3038,48 +3032,47 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
                     ),
                     and_cond(
                         in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2024, 1, 7, 13, 35)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2024, 1, 8, 13, 40)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(123456),
-                                        ),
-                                        f.equals(
-                                            tags_raw["111213"],
-                                            literal(
-                                                " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
-                                            ),
-                                        ),
-                                    ),
-                                ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2024, 1, 7, 13, 35)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2024, 1, 8, 13, 40)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        f.equals(
+                            tags_raw["111213"],
+                            literal(
+                                " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
                             ),
                         ),
                     ),
@@ -3195,47 +3188,45 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(60)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", None, "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
                     ),
                     and_cond(
                         in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 2, 0, 0)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(123456),
-                                        ),
-                                        in_cond(
-                                            tags_raw["888"],
-                                            f.tuple(literal("dist1"), literal("dist2")),
-                                        ),
-                                    ),
-                                ),
-                            ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 2, 0, 0)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        in_cond(
+                            tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
                         ),
                     ),
                 ),
@@ -3342,39 +3333,39 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"), literal(3600)
-                ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
+                    f.equals(
+                        column("granularity", None, "_snuba_granularity"), literal(3600)
                     ),
                     and_cond(
                         in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
+                        in_cond(
                             column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
                         ),
-                        and_cond(
-                            f.equals(
-                                column("use_case_id", None, "_snuba_use_case_id"),
-                                literal("transactions"),
-                            ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 1, 36)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 5, 4, 15)),
-                                    ),
-                                    f.equals(
-                                        column("metric_id", None, "_snuba_metric_id"),
-                                        literal(567890),
-                                    ),
-                                ),
-                            ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 1, 1, 36)),
+                        ),
+                    ),
+                    and_cond(
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2021, 1, 5, 4, 15)),
+                        ),
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(567890),
                         ),
                     ),
                 ),
@@ -3476,50 +3467,44 @@ test_cases = [
                     column("granularity", None, "_snuba_granularity"), literal(60)
                 ),
                 and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
-                    ),
                     and_cond(
-                        in_cond(
-                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        and_cond(
+                            in_cond(
+                                column("project_id", None, "_snuba_project_id"),
+                                f.tuple(literal(1)),
+                            ),
+                            in_cond(
+                                column("org_id", None, "_snuba_org_id"),
+                                f.tuple(literal(1)),
+                            ),
                         ),
                         and_cond(
                             f.equals(
                                 column("use_case_id", None, "_snuba_use_case_id"),
                                 literal("custom"),
                             ),
-                            and_cond(
-                                f.greaterOrEquals(
-                                    column("timestamp", None, "_snuba_timestamp"),
-                                    literal(datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                and_cond(
-                                    f.less(
-                                        column("timestamp", None, "_snuba_timestamp"),
-                                        literal(datetime(2021, 1, 2, 0, 0)),
-                                    ),
-                                    and_cond(
-                                        f.equals(
-                                            column(
-                                                "metric_id", None, "_snuba_metric_id"
-                                            ),
-                                            literal(111111),
-                                        ),
-                                        and_cond(
-                                            f.equals(
-                                                tags_raw["222222"],
-                                                literal("transaction"),
-                                            ),
-                                            f.equals(
-                                                tags_raw["333333"],
-                                                literal(
-                                                    "sentry.tasks.store.save_event_transaction"
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
+                            f.greaterOrEquals(
+                                column("timestamp", None, "_snuba_timestamp"),
+                                literal(datetime(2021, 1, 1, 0, 0)),
+                            ),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            f.less(
+                                column("timestamp", None, "_snuba_timestamp"),
+                                literal(datetime(2021, 1, 2, 0, 0)),
+                            ),
+                            f.equals(
+                                column("metric_id", None, "_snuba_metric_id"),
+                                literal(111111),
+                            ),
+                        ),
+                        and_cond(
+                            f.equals(tags_raw["222222"], literal("transaction")),
+                            f.equals(
+                                tags_raw["333333"],
+                                literal("sentry.tasks.store.save_event_transaction"),
                             ),
                         ),
                     ),
@@ -3677,53 +3662,46 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    tags_raw["9223372036854776020"],
-                    literal("getsentry.tasks.calculate_spike_projections"),
-                ),
                 and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"),
-                        literal(9223372036854775909),
+                    and_cond(
+                        f.equals(
+                            tags_raw["9223372036854776020"],
+                            literal("getsentry.tasks.calculate_spike_projections"),
+                        ),
+                        f.equals(
+                            column("metric_id", None, "_snuba_metric_id"),
+                            literal(9223372036854775909),
+                        ),
                     ),
                     and_cond(
                         f.equals(
                             column("granularity", None, "_snuba_granularity"),
                             literal(60),
                         ),
-                        and_cond(
-                            in_cond(
-                                column("project_id", None, "_snuba_project_id"),
-                                f.tuple(literal(1)),
-                            ),
-                            and_cond(
-                                in_cond(
-                                    column("org_id", None, "_snuba_org_id"),
-                                    f.tuple(literal(1)),
-                                ),
-                                and_cond(
-                                    f.equals(
-                                        column(
-                                            "use_case_id", None, "_snuba_use_case_id"
-                                        ),
-                                        literal("'transactions'"),
-                                    ),
-                                    and_cond(
-                                        f.greaterOrEquals(
-                                            column(
-                                                "timestamp", None, "_snuba_timestamp"
-                                            ),
-                                            literal(datetime(2024, 4, 8, 5, 48)),
-                                        ),
-                                        f.less(
-                                            column(
-                                                "timestamp", None, "_snuba_timestamp"
-                                            ),
-                                            literal(datetime(2024, 4, 8, 6, 49)),
-                                        ),
-                                    ),
-                                ),
-                            ),
+                        in_cond(
+                            column("project_id", None, "_snuba_project_id"),
+                            f.tuple(literal(1)),
+                        ),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        in_cond(
+                            column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", None, "_snuba_use_case_id"),
+                            literal("'transactions'"),
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2024, 4, 8, 5, 48)),
+                        ),
+                        f.less(
+                            column("timestamp", None, "_snuba_timestamp"),
+                            literal(datetime(2024, 4, 8, 6, 49)),
                         ),
                     ),
                 ),
