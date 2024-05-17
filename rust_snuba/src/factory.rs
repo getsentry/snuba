@@ -166,8 +166,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
 
         let accumulator = Arc::new(
-            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch<RowData>| {
-                batch.merge(small_batch)
+            |batch: BytesInsertBatch<HttpBatch>,
+             small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.merge(small_batch.into_payload()))
             },
         );
 
