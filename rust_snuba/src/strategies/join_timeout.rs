@@ -35,10 +35,6 @@ where
         self.next_step.terminate()
     }
 
-    fn close(&mut self) {
-        self.next_step.close();
-    }
-
     fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.join(self.new_timeout)
     }
