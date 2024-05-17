@@ -55,6 +55,10 @@ def test_simple() -> None:
 
 
 def test_composite() -> None:
+    """
+    Note: does not apply to the conditions of a from_clause subquery (the nested one)
+        this is bc transform_expressions is not implemented for composite queries
+    """
     query = CompositeQuery(
         from_clause=Query(
             from_dist,
