@@ -1,3 +1,4 @@
+import typing
 from datetime import datetime, timedelta
 from unittest import mock
 
@@ -15,8 +16,9 @@ from snuba.state import get_int_config
 @freeze_time("2024-5-13 09:00:00")
 class TestState:
     start_test_time = datetime.now()
-    expiry_window_minutes = get_int_config(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
-    assert expiry_window_minutes is not None
+    expiry_window_minutes = typing.cast(
+        int, get_int_config(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
+    )
     proj1_add_time = start_test_time
     proj2_add_time = start_test_time + timedelta(minutes=expiry_window_minutes // 2)
     proj1_expiry = proj1_add_time + timedelta(minutes=expiry_window_minutes)

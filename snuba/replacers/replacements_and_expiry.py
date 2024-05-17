@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import typing
 from datetime import datetime, timedelta
 from typing import Mapping, Sequence
 
@@ -23,10 +24,9 @@ def set_config_auto_replacements_bypass_projects(
 ) -> None:
     try:
         projects_within_expiry = get_config_auto_replacements_bypass_projects(curr_time)
-        expiry_window = int(
-            get_int_config(key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5)
+        expiry_window = typing.cast(
+            int, get_int_config(key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5)
         )
-        assert expiry_window is not None
         pipeline = redis_client.pipeline()
         for project_id in new_project_ids:
             if project_id not in projects_within_expiry:

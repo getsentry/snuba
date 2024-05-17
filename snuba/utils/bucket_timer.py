@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, MutableMapping
@@ -38,10 +39,9 @@ class Counter:
 
         percentage = state.get_config("project_quota_time_percentage", 1.0)
         assert isinstance(percentage, float)
-        counter_window_size_minutes = get_int_config(
-            key="counter_window_size_minutes", default=10
+        counter_window_size_minutes = typing.cast(
+            int, get_int_config(key="counter_window_size_minutes", default=10)
         )
-        assert counter_window_size_minutes is not None
         self.counter_window_size = timedelta(minutes=counter_window_size_minutes)
         self.limit = self.counter_window_size * percentage
 
