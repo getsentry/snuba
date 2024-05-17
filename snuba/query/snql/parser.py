@@ -1543,7 +1543,6 @@ def parse_snql_query(
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
 
-        # dummy settings and timer dont matter
         timer = Timer("snql_pipeline")
         res = PostProcessAndValidateQuery().execute(
             QueryPipelineResult(
