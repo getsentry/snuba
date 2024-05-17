@@ -75,12 +75,12 @@ class TestState:
             == set()
         )
 
-    @mock.patch(
-        "snuba.state.get_int_config",
-    )
     @pytest.mark.redis_db
+    @mock.patch(
+        "snuba.replacers.replacements_and_expiry.get_int_config",
+    )
     def test_expiry_window_changes(self, mock: mock.MagicMock) -> None:
-        mock.return_value = [5, 10]
+        mock.side_effect = [5, 10]
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
         # project 1 expires after 5 minutes

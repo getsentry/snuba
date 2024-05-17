@@ -23,8 +23,8 @@ def set_config_auto_replacements_bypass_projects(
 ) -> None:
     try:
         projects_within_expiry = get_config_auto_replacements_bypass_projects(curr_time)
-        expiry_window = get_int_config(
-            key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5
+        expiry_window = int(
+            get_int_config(key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5)
         )
         assert expiry_window is not None
         pipeline = redis_client.pipeline()
