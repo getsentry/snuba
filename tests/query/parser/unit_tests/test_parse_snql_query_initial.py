@@ -1,3 +1,8 @@
+"""
+These tests were auto-generated, many of them may be unnecessary or redundant, feel free to remove some.
+This tests the first stage of the SnQL parsing pipeline, which looks like SnQL->AST.
+"""
+
 from typing import Type
 
 import pytest

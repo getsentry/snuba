@@ -1,3 +1,8 @@
+"""
+These tests were auto-generated, many of them may be unnecessary or redundant, feel free to remove some.
+This tests the final stage of the MQL parsing pipeline, which looks like AST->AST.
+"""
+
 from datetime import datetime
 
 import pytest
