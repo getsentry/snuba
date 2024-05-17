@@ -173,7 +173,6 @@ mod tests {
             .unwrap();
 
         strategy.poll().unwrap();
-        strategy.close();
         strategy.join(None).unwrap();
 
         assert_eq!(produced_payloads.lock().unwrap().len(), 1);

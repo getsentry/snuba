@@ -349,7 +349,6 @@ mod tests {
             strategy.poll().unwrap();
         }
 
-        strategy.close();
         strategy.join(None).unwrap();
 
         let produced = produced_payloads.lock().unwrap();
