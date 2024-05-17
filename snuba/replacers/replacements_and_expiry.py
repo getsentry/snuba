@@ -18,24 +18,19 @@ config_auto_replacements_bypass_projects_hash = (
 REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY = "replacements_expiry_window_minutes"
 
 
-def get_expiry_window_or_counter_window_size(key: str, default: int) -> int:
-    minutes = get_int_config(key=key, default=default)
-    return int(minutes) if minutes else default
-
-
 def set_config_auto_replacements_bypass_projects(
     new_project_ids: Sequence[int], curr_time: datetime
 ) -> None:
     try:
         projects_within_expiry = get_config_auto_replacements_bypass_projects(curr_time)
+        expiry_window = get_int_config(
+            key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5
+        )
+        assert expiry_window is not None
         pipeline = redis_client.pipeline()
         for project_id in new_project_ids:
             if project_id not in projects_within_expiry:
-                expiry = curr_time + timedelta(
-                    minutes=get_expiry_window_or_counter_window_size(
-                        REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5
-                    )
-                )
+                expiry = curr_time + timedelta(minutes=expiry_window)
                 pipeline.hset(
                     config_auto_replacements_bypass_projects_hash,
                     project_id,
@@ -70,9 +65,7 @@ def get_config_auto_replacements_bypass_projects(
         if curr_projects[project_id] < curr_time:
             pipeline.hdel(config_auto_replacements_bypass_projects_hash, project_id)
         else:
-            valid_projects[project_id] = pipeline.hget(
-                config_auto_replacements_bypass_projects_hash, project_id
-            )
+            valid_projects[project_id] = curr_projects[project_id]
     pipeline.execute()
 
     return valid_projects

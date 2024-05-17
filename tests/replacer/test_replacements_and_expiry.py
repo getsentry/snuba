@@ -7,17 +7,16 @@ from freezegun import freeze_time
 from snuba.replacers.replacements_and_expiry import (
     REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY,
     get_config_auto_replacements_bypass_projects,
-    get_expiry_window_or_counter_window_size,
     set_config_auto_replacements_bypass_projects,
 )
+from snuba.state import get_int_config
 
 
 @freeze_time("2024-5-13 09:00:00")
 class TestState:
     start_test_time = datetime.now()
-    expiry_window_minutes = get_expiry_window_or_counter_window_size(
-        REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5
-    )
+    expiry_window_minutes = get_int_config(REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, 5)
+    assert expiry_window_minutes is not None
     proj1_add_time = start_test_time
     proj2_add_time = start_test_time + timedelta(minutes=expiry_window_minutes // 2)
     proj1_expiry = proj1_add_time + timedelta(minutes=expiry_window_minutes)
@@ -61,6 +60,7 @@ class TestState:
 
     @pytest.mark.redis_db
     def test_expiry_does_not_update(self) -> None:
+        assert self.expiry_window_minutes is not None
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         set_config_auto_replacements_bypass_projects(
             [1],
@@ -76,11 +76,11 @@ class TestState:
         )
 
     @mock.patch(
-        "snuba.replacers.replacements_and_expiry.get_expiry_window_or_counter_window_size",
+        "snuba.state.get_int_config",
     )
     @pytest.mark.redis_db
     def test_expiry_window_changes(self, mock: mock.MagicMock) -> None:
-        mock.side_effect = [5, 10]
+        mock.return_value = [5, 10]
         set_config_auto_replacements_bypass_projects([1], self.proj1_add_time)
         set_config_auto_replacements_bypass_projects([2], self.proj2_add_time)
         # project 1 expires after 5 minutes

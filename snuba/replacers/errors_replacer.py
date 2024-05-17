@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import logging
 import random
@@ -214,7 +213,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             projects_to_skip = auto_bypass_projects
             if manual_bypass_projects is not None:
                 try:
-                    projects_to_skip.extend(ast.literal_eval(manual_bypass_projects))
+                    projects_to_skip.extend(json.loads(manual_bypass_projects))
                 except Exception as e:
                     logger.exception(e)
             if processed.get_project_id() in projects_to_skip:
