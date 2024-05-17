@@ -435,3 +435,54 @@ def test_custom_processing() -> None:
     We also currently have no tests that use custom processing to my knowledge.
     """
     pass
+
+
+def test_recursion_error() -> None:
+    NUM_CONDS = 500
+
+    conds = " OR ".join(["a:1" for i in range(NUM_CONDS)])
+    mql = f"sum(`d:transactions/duration@millisecond`){{{conds}}}"
+    context = {
+        "start": "2021-01-01T00:00:00",
+        "end": "2021-01-02T00:00:00",
+        "rollup": {
+            "orderby": "ASC",
+            "granularity": 60,
+            "interval": None,
+            "with_totals": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1],
+            "use_case_id": "transactions",
+        },
+        "limit": None,
+        "offset": None,
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "dist": 888,
+        },
+    }
+    parse_mql_query(mql, context, get_dataset("generic_metrics"))
+
+    def snql_conditions_with_default(*conditions: str) -> str:
+        DEFAULT_TEST_QUERY_CONDITIONS = [
+            "timestamp >= toDateTime('2021-01-01T00:00:00')",
+            "timestamp < toDateTime('2021-01-02T00:00:00')",
+            "project_id = 1",
+        ]
+        return " AND ".join(list(conditions) + DEFAULT_TEST_QUERY_CONDITIONS)
+
+    conds = " OR ".join(
+        ["(group_id=268128807 AND group_id=268128807)" for i in range(NUM_CONDS)]
+    )
+    snql = """
+    MATCH (events)
+    SELECT group_id, goo(partition) AS issue_id,
+            foo(zoo(offset)) AS offset
+    WHERE {conditions}
+    ORDER BY group_id ASC
+    """.format(
+        conditions=snql_conditions_with_default(conds)
+    )
+    parse_snql_query(snql, get_dataset("events"))

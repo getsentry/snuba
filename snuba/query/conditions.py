@@ -283,7 +283,7 @@ def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
 
 
 def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
-    flag = True
+    flag = False
     if flag:
         return _combine_conditions_new(conditions, function)
     else:
