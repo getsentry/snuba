@@ -35,6 +35,11 @@ from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.pipeline.query_pipeline import (
+    QueryPipelineData,
+    QueryPipelineResult,
+    QueryPipelineStage,
+)
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -78,7 +83,7 @@ from snuba.query.parser import (
     validate_aliases,
 )
 from snuba.query.parser.exceptions import ParsingException, PostProcessingError
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.query.snql.discover_entity_selection import select_discover_entity
 from snuba.query.snql.expression_visitor import (
@@ -106,6 +111,7 @@ from snuba.query.snql.expression_visitor import (
 from snuba.query.snql.joins import RelationshipTuple, build_join_clause
 from snuba.state import explain_meta
 from snuba.util import parse_datetime
+from snuba.utils.metrics.timer import Timer
 
 MAX_LIMIT = 10000
 
@@ -1537,29 +1543,64 @@ def parse_snql_query(
         with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
             _post_process(query, [_treeify_or_and_conditions], settings)
 
+        timer = Timer("snql_pipeline")
+        res = PostProcessAndValidateQuery().execute(
+            QueryPipelineResult(
+                data=(query, dataset, custom_processing),
+                error=None,
+                query_settings=settings or HTTPQuerySettings(),
+                timer=timer,
+            )
+        )
+        if res.error:
+            raise res.error
+        assert res.data  # since theres no res.error, data is guaranteed
+        return res.data
+    except InvalidQueryException:
+        raise
+    except Exception:
+        raise PostProcessingError(query)
+
+
+class PostProcessAndValidateQuery(
+    QueryPipelineStage[
+        tuple[
+            LogicalQuery | CompositeQuery[LogicalDataSource],
+            Dataset,
+            CustomProcessors | None,
+        ],
+        LogicalQuery | CompositeQuery[LogicalDataSource],
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[
+                LogicalQuery | CompositeQuery[LogicalDataSource],
+                Dataset,
+                CustomProcessors | None,
+            ]
+        ],
+    ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
+        query, dataset, custom_processing = pipe_input.data
+        settings = pipe_input.query_settings
+
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
                 query,
                 POST_PROCESSORS,
                 settings,
             )
-
         # Custom processing to tweak the AST before validation
         with sentry_sdk.start_span(op="processor", description="custom_processing"):
             if custom_processing is not None:
                 _post_process(query, custom_processing, settings)
-
         # Time based processing
         with sentry_sdk.start_span(op="processor", description="time_based_processing"):
             _post_process(query, [_replace_time_condition], settings)
-
         _post_process(query, [_select_entity_for_dataset(dataset)], settings)
-
         # Validating
         with sentry_sdk.start_span(op="validate", description="expression_validators"):
             _post_process(query, VALIDATORS)
+
         return query
-    except InvalidQueryException:
-        raise
-    except Exception:
-        raise PostProcessingError(query)
