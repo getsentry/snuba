@@ -15,26 +15,19 @@ pub fn process_message(
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let msg: InputMessage = serde_json::from_slice(payload_bytes)?;
+    let msg: FromChunkMessage = serde_json::from_slice(payload_bytes)?;
+    let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
+    let mut chunk: Chunk = msg.try_into()?;
 
-    let mut row = Chunk {
-        chunk: msg,
-        offset: metadata.offset,
-        partition: metadata.partition,
-    };
+    chunk.offset = metadata.offset;
+    chunk.partition = metadata.partition;
+    chunk.retention_days = Some(enforce_retention(chunk.retention_days, &config.env_config));
 
-    row.chunk.retention_days = Some(enforce_retention(
-        row.chunk.retention_days,
-        &config.env_config,
-    ));
-
-    let origin_timestamp = DateTime::from_timestamp(row.chunk.received, 0);
-
-    InsertBatch::from_rows([row], origin_timestamp)
+    InsertBatch::from_rows([chunk], origin_timestamp)
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
-struct InputMessage {
+#[derive(Debug, Deserialize, JsonSchema)]
+struct FromChunkMessage {
     project_id: u64,
     profiler_id: Uuid,
     chunk_id: Uuid,
@@ -44,15 +37,36 @@ struct InputMessage {
     retention_days: Option<u16>,
 }
 
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Default, Serialize, JsonSchema)]
 struct Chunk {
-    #[serde(flatten)]
-    chunk: InputMessage,
-
+    project_id: u64,
+    profiler_id: Uuid,
+    chunk_id: Uuid,
+    #[serde(rename(serialize = "start_timestamp"))]
+    start_timestamp_micro: u64,
+    #[serde(rename(serialize = "end_timestamp"))]
+    end_timestamp_micro: u64,
+    retention_days: Option<u16>,
     #[serde(default)]
     offset: u64,
     #[serde(default)]
     partition: u16,
+}
+
+impl TryFrom<FromChunkMessage> for Chunk {
+    type Error = anyhow::Error;
+
+    fn try_from(from: FromChunkMessage) -> anyhow::Result<Chunk> {
+        Ok(Self {
+            chunk_id: from.chunk_id,
+            end_timestamp_micro: (from.end_timestamp * 1e6) as u64,
+            profiler_id: from.profiler_id,
+            project_id: from.project_id,
+            retention_days: from.retention_days,
+            start_timestamp_micro: (from.start_timestamp * 1e6) as u64,
+            ..Default::default()
+        })
+    }
 }
 
 #[cfg(test)]
@@ -86,6 +100,6 @@ mod tests {
 
     #[test]
     fn schema() {
-        run_schema_type_test::<InputMessage>("snuba-profile-chunks", None);
+        run_schema_type_test::<FromChunkMessage>("snuba-profile-chunks", None);
     }
 }
