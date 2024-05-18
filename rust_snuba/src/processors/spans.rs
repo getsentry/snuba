@@ -35,6 +35,7 @@ pub fn process_message(
 struct FromSpanMessage {
     description: Option<String>,
     duration_ms: u32,
+    #[serde(alias = "end_timestamp_micro")]
     end_timestamp_precise: Option<f64>,
     event_id: Option<Uuid>,
     exclusive_time_ms: f64,
@@ -48,6 +49,7 @@ struct FromSpanMessage {
     segment_id: Option<String>,
     sentry_tags: Option<BTreeMap<String, String>>,
     span_id: String,
+    #[serde(alias = "start_timestamp_micro")]
     start_timestamp_precise: Option<f64>,
     start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
