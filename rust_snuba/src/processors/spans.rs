@@ -69,7 +69,7 @@ struct Span {
     duration: u32,
     end_ms: u16,
     end_timestamp: u64,
-    end_timestamp_precise: f64,
+    end_timestamp_precise: u64,
     exclusive_time: f64,
     group: u64,
     #[serde(default)]
@@ -100,7 +100,7 @@ struct Span {
     span_status: u8,
     start_ms: u16,
     start_timestamp: u64,
-    start_timestamp_precise: f64,
+    start_timestamp_precise: u64,
     status: u32,
     #[serde(rename(serialize = "tags.key"))]
     tag_keys: Vec<String>,
@@ -151,7 +151,7 @@ impl TryFrom<FromSpanMessage> for Span {
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
-            end_timestamp_precise: from.end_timestamp_precise.unwrap_or_default(),
+            end_timestamp_precise: (from.end_timestamp_precise.unwrap_or_default() * 1e6) as u64,
             exclusive_time: from.exclusive_time_ms,
             group,
             is_segment: if from.is_segment { 1 } else { 0 },
@@ -176,7 +176,8 @@ impl TryFrom<FromSpanMessage> for Span {
             span_status: status as u8,
             start_ms: (from.start_timestamp_ms % 1000) as u16,
             start_timestamp: from.start_timestamp_ms / 1000,
-            start_timestamp_precise: from.start_timestamp_precise.unwrap_or_default(),
+            start_timestamp_precise: (from.start_timestamp_precise.unwrap_or_default() * 1e6)
+                as u64,
             status: status as u32,
             tag_keys,
             tag_values,
