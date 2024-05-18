@@ -115,7 +115,7 @@ storages:
             from_table_name: null
             from_col_name: timestamp
             to_table_name: null
-            to_col_name: end_timestamp_precise
+            to_col_name: end_timestamp
       subscriptables:
         - mapper: SubscriptableMapper
           args:
