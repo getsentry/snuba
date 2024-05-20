@@ -50,6 +50,7 @@ def set_config_auto_replacements_bypass_projects(
             tags={},
         )
     except Exception as e:
+        metrics.increment("set_config_auto_replacements_bypass_projects_error")
         logger.exception(e)
 
 
@@ -69,6 +70,7 @@ def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
         )
         return projects
     except Exception as e:
+        metrics.increment("retrieve_projects_from_redis_error")
         logger.exception(e)
         return {}
 
