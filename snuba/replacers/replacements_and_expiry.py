@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import typing
 from datetime import datetime, timedelta
 from typing import Mapping, Sequence
@@ -28,7 +29,7 @@ def set_config_auto_replacements_bypass_projects(
 ) -> None:
     try:
         projects_within_expiry = get_config_auto_replacements_bypass_projects(curr_time)
-        start = datetime.now()
+        start = time.time()
         expiry_window = typing.cast(
             int, get_int_config(key=REPLACEMENTS_EXPIRY_WINDOW_MINUTES_KEY, default=5)
         )
@@ -45,7 +46,7 @@ def set_config_auto_replacements_bypass_projects(
 
         metrics.timing(
             "set_config_auto_replacements_bypass_projects_duration",
-            datetime.now().timestamp() - start.timestamp(),
+            time.time() - start,
             tags={},
         )
     except Exception as e:
@@ -54,7 +55,7 @@ def set_config_auto_replacements_bypass_projects(
 
 def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
     try:
-        start = datetime.now()
+        start = time.time()
         projects = {
             int(k.decode("utf-8")): datetime.fromisoformat(v.decode("utf-8"))
             for k, v in redis_client.hgetall(
@@ -63,7 +64,7 @@ def _retrieve_projects_from_redis() -> Mapping[int, datetime]:
         }
         metrics.timing(
             "retrieve_projects_from_redis_duration",
-            datetime.now().timestamp() - start.timestamp(),
+            time.time() - start,
             tags={},
         )
         return projects
@@ -76,7 +77,7 @@ def get_config_auto_replacements_bypass_projects(
     curr_time: datetime,
 ) -> Mapping[int, datetime]:
     curr_projects = _retrieve_projects_from_redis()
-    start = datetime.now()
+    start = time.time()
     valid_projects = {}
     pipeline = redis_client.pipeline()
     for project_id in curr_projects:
@@ -87,7 +88,7 @@ def get_config_auto_replacements_bypass_projects(
     pipeline.execute()
     metrics.timing(
         "deleting_expired_projects",
-        datetime.now().timestamp() - start.timestamp(),
+        time.time() - start,
         tags={},
     )
     return valid_projects
