@@ -2,7 +2,7 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
-from snuba.query.conditions import get_first_level_or_conditions
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import (
     Argument,
@@ -42,8 +42,7 @@ or_cond_match = FunctionCallMatch(
 
 def or_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, FunctionCall)
-    conditions = get_first_level_or_conditions(exp)
-    parameters = ", ".join([arg.accept(visitor) for arg in conditions])
+    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
     return f"or_cond({parameters})"
 
 
@@ -225,7 +224,7 @@ def ast_repr(
     return f"[{', '.join(strings)}]"
 
 
-def query_repr(query: LogicalQuery | ClickhouseQuery) -> str:
+def query_repr(query: LogicalQuery | ClickhouseQuery | CompositeQuery[Entity]) -> str:
     visitor = DSLMapperVisitor()
     selected = ast_repr(query.get_selected_columns(), visitor)
     arrayjoin = ast_repr(query.get_arrayjoin(), visitor)

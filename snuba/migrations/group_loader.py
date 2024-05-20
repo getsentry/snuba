@@ -240,6 +240,7 @@ class SessionsLoader(DirectoryLoader):
             "0002_sessions_aggregates",
             "0003_sessions_matview",
             "0004_sessions_ttl",
+            "0005_drop_sessions_tables",
         ]
 
 
@@ -379,6 +380,7 @@ class SpansLoader(DirectoryLoader):
             "0011_spans_add_index_on_trace_id",
             "0012_spans_add_index_on_transaction_name",
             "0013_spans_add_indexes_for_tag_columns",
+            "0014_spans_add_microsecond_precision_timestamps",
         ]
 
 
@@ -402,4 +404,14 @@ class MetricsSummariesLoader(DirectoryLoader):
             "0001_metrics_summaries_create_table",
             "0002_metrics_summaries_add_tags_hashmap",
             "0003_metrics_summaries_add_segment_id_duration_group_columns",
+        ]
+
+
+class ProfileChunksLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.profile_chunks")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_create_profile_chunks_table",
         ]

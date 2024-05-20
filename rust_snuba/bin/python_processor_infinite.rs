@@ -51,7 +51,6 @@ fn main() {
 
     println!("join");
 
-    step.close();
     step.join(None).unwrap();
 
     println!("{}", output.load(Ordering::Relaxed))
