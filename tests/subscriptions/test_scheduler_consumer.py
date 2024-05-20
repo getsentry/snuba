@@ -39,15 +39,11 @@ commit_codec = CommitCodec()
 
 @pytest.mark.redis_db
 def test_scheduler_consumer(tmpdir: LocalPath) -> None:
-    settings.KAFKA_TOPIC_MAP = {
-        "events": "events-test",
-        "snuba-commit-log": "snuba-commit-log-test",
-    }
+    settings.TOPIC_PARTITION_COUNTS = {"events": 2}
     importlib.reload(scheduler_consumer)
 
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [SnubaTopic.EVENTS], 2)
-    create_topics(admin_client, [SnubaTopic.COMMIT_LOG], 1)
+    create_topics(admin_client, [SnubaTopic.COMMIT_LOG])
 
     metrics_backend = TestingMetricsBackend()
     entity_name = "events"
@@ -56,7 +52,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     assert storage is not None
     stream_loader = storage.get_table_writer().get_stream_loader()
 
-    commit_log_topic = Topic("snuba-commit-log-test")
+    commit_log_topic = Topic("snuba-commit-log")
 
     mock_scheduler_producer = mock.Mock()
 
@@ -142,7 +138,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     assert (tmpdir / "health.txt").check()
     assert mock_scheduler_producer.produce.call_count == 2
 
-    settings.KAFKA_TOPIC_MAP = {}
+    settings.TOPIC_PARTITION_COUNTS = {}
 
 
 def test_tick_time_shift() -> None:

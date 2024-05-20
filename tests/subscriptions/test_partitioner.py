@@ -1,5 +1,6 @@
 import pytest
 
+from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
@@ -43,8 +44,7 @@ class TestBuildRequest(BaseSubscriptionTest):
     @pytest.mark.parametrize("subscription", TESTS)
     @pytest.mark.clickhouse_db
     def test(self, subscription: SubscriptionData) -> None:
-        kafka_topic_spec = KafkaTopicSpec(Topic.EVENTS)
-        kafka_topic_spec.partitions_number = 64
-        partitioner = TopicSubscriptionDataPartitioner(kafka_topic_spec)
+        settings.TOPIC_PARTITION_COUNTS = {"events": 64}
+        partitioner = TopicSubscriptionDataPartitioner(KafkaTopicSpec(Topic.EVENTS))
 
         assert partitioner.build_partition_id(subscription) == 18
