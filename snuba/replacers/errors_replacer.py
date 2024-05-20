@@ -47,6 +47,9 @@ from snuba.processor import (
     _hashify,
 )
 from snuba.replacers.projects_query_flags import ProjectsQueryFlags
+from snuba.replacers.replacements_and_expiry import (
+    get_config_auto_replacements_bypass_projects,
+)
 from snuba.replacers.replacer_processor import Replacement as ReplacementBase
 from snuba.replacers.replacer_processor import (
     ReplacementMessage,
@@ -203,9 +206,17 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
         if processed is not None:
-            bypass_projects = get_config("replacements_bypass_projects", "[]")
-            projects = json.loads(cast(str, bypass_projects))
-            if processed.get_project_id() in projects:
+            manual_bypass_projects = get_config("replacements_bypass_projects", "[]")
+            auto_bypass_projects = list(
+                get_config_auto_replacements_bypass_projects(datetime.now()).keys()
+            )
+            projects_to_skip = auto_bypass_projects
+            if manual_bypass_projects is not None:
+                try:
+                    projects_to_skip.extend(json.loads(manual_bypass_projects))
+                except Exception as e:
+                    logger.exception(e)
+            if processed.get_project_id() in projects_to_skip:
                 # For a persistent non rate limited logger
                 logger.info(
                     f"Skipping replacement for project. Data {message}, Partition: {message.metadata.partition_index}, Offset: {message.metadata.offset}",

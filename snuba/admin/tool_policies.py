@@ -19,6 +19,7 @@ class AdminTools(Enum):
 
     ALL = "all"
     CONFIGURATION = "configuration"
+    AUTO_REPLACEMENTS_BYPASS_PROJECTS = "auto-replacements-bypass-projects"
     SNQL_TO_SQL = "snql-to-sql"
     SYSTEM_QUERIES = "system-queries"
     MIGRATIONS = "clickhouse-migrations"
