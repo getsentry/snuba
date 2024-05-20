@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import typing
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, MutableMapping
 
-from snuba import environment, settings, state
+from snuba import environment, state
+from snuba.state import get_int_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 metrics = MetricsWrapper(environment.metrics, "bucket_timer")
@@ -22,8 +24,6 @@ def ceil_minute(time: datetime) -> datetime:
 
 Buckets = MutableMapping[datetime, MutableMapping[int, timedelta]]
 
-COUNTER_WINDOW_SIZE = timedelta(minutes=settings.COUNTER_WINDOW_SIZE_MINUTES)
-
 
 class Counter:
     """
@@ -39,11 +39,15 @@ class Counter:
 
         percentage = state.get_config("project_quota_time_percentage", 1.0)
         assert isinstance(percentage, float)
-        self.limit = COUNTER_WINDOW_SIZE * percentage
+        counter_window_size_minutes = typing.cast(
+            int, get_int_config(key="counter_window_size_minutes", default=10)
+        )
+        self.counter_window_size = timedelta(minutes=counter_window_size_minutes)
+        self.limit = self.counter_window_size * percentage
 
     def __trim_expired_buckets(self, now: datetime) -> None:
         current_minute = floor_minute(now)
-        window_start = current_minute - COUNTER_WINDOW_SIZE
+        window_start = current_minute - self.counter_window_size
         new_buckets: Buckets = {}
         for min, dict in self.buckets.items():
             if min >= window_start:
