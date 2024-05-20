@@ -31,22 +31,27 @@ def build_cond(tn: str) -> str:
 
 added_condition = build_cond("")
 
-required_condition = and_cond(
+required_conditions = [
     equals(
         Column("_snuba_project_id", None, "project_id"),
         Literal(None, 1),
     ),
+    binary_condition(
+        "greaterOrEquals",
+        Column("_snuba_end_timestamp", None, "end_timestamp"),
+        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+    ),
+    binary_condition(
+        "less",
+        Column("_snuba_end_timestamp", None, "end_timestamp"),
+        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+    ),
+]
+required_condition = and_cond(
+    required_conditions[0],
     and_cond(
-        binary_condition(
-            "greaterOrEquals",
-            Column("_snuba_end_timestamp", None, "end_timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-        ),
-        binary_condition(
-            "less",
-            Column("_snuba_end_timestamp", None, "end_timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-        ),
+        required_conditions[1],
+        required_conditions[2],
     ),
 )
 
@@ -88,8 +93,11 @@ test_cases = [
                 ],
                 granularity=None,
                 condition=and_cond(
-                    equals(tags["something"], Literal(None, "something_else")),
-                    required_condition,
+                    and_cond(
+                        equals(tags["something"], Literal(None, "something_else")),
+                        required_conditions[0],
+                    ),
+                    and_cond(required_conditions[1], required_conditions[2]),
                 ),
                 limit=1000,
                 offset=0,
@@ -109,8 +117,11 @@ test_cases = [
                 ],
                 granularity=None,
                 condition=and_cond(
-                    equals(tags["something"], "something_else"),
-                    required_condition,
+                    and_cond(
+                        equals(tags["something"], "something_else"),
+                        required_conditions[0],
+                    ),
+                    and_cond(required_conditions[1], required_conditions[2]),
                 ),
                 limit=1000,
                 offset=0,
