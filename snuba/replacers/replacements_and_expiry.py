@@ -13,7 +13,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import get_int_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
-metrics = MetricsWrapper(environment.metrics, "bucket_timer")
+metrics = MetricsWrapper(environment.metrics, "replacements_and_expiry")
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 config_auto_replacements_bypass_projects_hash = (
@@ -86,7 +86,7 @@ def get_config_auto_replacements_bypass_projects(
             valid_projects[project_id] = curr_projects[project_id]
     pipeline.execute()
     metrics.timing(
-        "get_config_auto_replacements_bypass_projects",
+        "deleting_expired_projects",
         datetime.now().timestamp() - start.timestamp(),
         tags={},
     )
