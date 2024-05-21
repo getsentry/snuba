@@ -85,6 +85,9 @@ class EventsLoader(DirectoryLoader):
             "0022_add_main_thread_column_errors_ro",
             "0023_add_trace_sampled_num_processing_errors_columns",
             "0024_add_trace_sampled_num_processing_errors_columns_ro",
+            "0025_events_kyles_example",
+            "0026_events_kyles_remove",
+            "0027_events_kyles_modify",
         ]
 
 
