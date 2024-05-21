@@ -14,13 +14,18 @@ from snuba.clusters.cluster import (
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.factory import reset_dataset_factory
 from snuba.datasets.schemas.tables import WritableTableSchema
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_sentry
 from snuba.migrations.groups import get_migration_group_from_storage_set
 from snuba.redis import all_redis_clients
 
-MIGRATIONS_CACHE: Dict[Tuple[ClickhouseCluster, ClickhouseNode], Dict[str, str]] = {}
+CreateTableStatement = str
+
+MIGRATIONS_CACHE: Dict[
+    StorageKey, Dict[ClickhouseNode, list[CreateTableStatement]]
+] = {}
+MIGRATED_STORAGE_KEYS = set()
 
 
 def pytest_configure() -> None:
@@ -149,56 +154,20 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     yield
 
 
-def _build_migrations_cache() -> None:
-    for storage_key in get_all_storage_keys():
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        database = cluster.get_database()
-        nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-        for node in nodes:
-            if (cluster, node) not in MIGRATIONS_CACHE:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
-                rows = connection.execute(
-                    f"SELECT name, create_table_query FROM system.tables WHERE database='{database}'"
-                )
-                mv_tables = []
-                non_mv_tables = []
-                for table_name, create_table_query in rows.results:
-                    if "MATERIALIZED VIEW" in create_table_query:
-                        mv_tables.append((table_name, create_table_query))
-                    else:
-                        non_mv_tables.append((table_name, create_table_query))
-                # when using the MIGRATIONS_CACHE we should make sure local
-                # tables are created before materialized views that depend on them
-                all_tables = mv_tables + non_mv_tables
-                for table_name, create_table_query in all_tables:
-                    MIGRATIONS_CACHE.setdefault((cluster, node), {})[
-                        table_name
-                    ] = create_table_query
+def _run_migration_with_cache(storage_keys: list[StorageKey]):
+    from snuba.migrations.runner import Runner
 
+    storage_keys_to_run = [sk for sk in storage_keys if sk not in MIGRATED_STORAGE_KEYS]
+    storage_sets = [get_storage(s).get_storage_set_key() for s in storage_keys_to_run]
+    migration_groups_to_run = set(
+        [get_migration_group_from_storage_set(ssk) for ssk in storage_sets]
+    )
 
-def _clear_db(storage_keys: List[StorageKey]) -> None:
-    for storage_key in storage_keys:
-        storage = get_storage(storage_key)
-        cluster = storage.get_cluster()
-        database = cluster.get_database()
+    for group in migration_groups_to_run:
+        Runner().run_all(force=True, group=group)
 
-        schema = storage.get_schema()
-        if isinstance(schema, WritableTableSchema):
-            table_name = schema.get_local_table_name()
-
-            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-            for node in nodes:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
-                print(f"DROP TABLE IF EXISTS {database}.{table_name}")
-                connection.execute(f"DROP TABLE IF EXISTS {database}.{table_name}")
-                print(f"DROP TABLE IF EXISTS {database}.migrations_local")
-                connection.execute(f"DROP TABLE IF EXISTS {database}.migrations_local")
-                connection.execute(f"DROP TABLE IF EXISTS {database}.migrations_dist")
+    for s in storage_keys:
+        MIGRATED_STORAGE_KEYS.add(s)
 
 
 @pytest.fixture
@@ -220,47 +189,10 @@ def clickhouse_db(
             "You must specify the storage keys you are running the test again in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
         )
     storage_keys = [StorageKey(s) for s in storage_keys]
-    storage_sets = [get_storage(s).get_storage_set_key() for s in storage_keys]
-    tables_to_migrate = set(
-        [
-            get_storage(storage_key).get_schema().get_data_source().get_table_name()
-            for storage_key in storage_keys
-        ]
-    )
-    migration_groups_to_run = set(
-        [get_migration_group_from_storage_set(ssk) for ssk in storage_sets]
-    )
-
-    from snuba.migrations.runner import Runner
 
     try:
         reset_dataset_factory()
-        if not MIGRATIONS_CACHE:
-            for group in migration_groups_to_run:
-                print("RUN THE MIGRATIONS", migration_groups_to_run)
-                Runner().run_all(force=True, group=group)
-            # _build_migrations_cache()
-        else:
-            # apply migrations from cache
-            applied_nodes = set()
-            for (cluster, node), tables in MIGRATIONS_CACHE.items():
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
-                for table_name, create_table_query in tables.items():
-                    if (node.host_name, node.port, table_name) in applied_nodes:
-                        continue
-                    if table_name not in tables_to_migrate:
-                        continue
-
-                    create_table_query = create_table_query.replace(
-                        "CREATE TABLE", "CREATE TABLE IF NOT EXISTS"
-                    ).replace(
-                        "CREATE MATERIALIZED VIEW",
-                        "CREATE MATERIALIZED VIEW IF NOT EXISTS",
-                    )
-                    connection.execute(create_table_query)
-                applied_nodes.add((node.host_name, node.port, table_name))
+        _run_migration_with_cache(storage_keys)
         yield
     finally:
         _clear_db(storage_keys)
@@ -332,3 +264,21 @@ def snuba_set_config(request: pytest.FixtureRequest) -> SnubaSetConfig:
 def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> None:
     snuba_set_config("use_cache", False)
     snuba_set_config("use_readthrough_query_cache", 0)
+
+
+def _clear_db(storage_keys: List[StorageKey]) -> None:
+    for storage_key in storage_keys:
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        database = cluster.get_database()
+
+        schema = storage.get_schema()
+        if isinstance(schema, WritableTableSchema):
+            table_name = schema.get_local_table_name()
+
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
