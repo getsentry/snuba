@@ -1287,6 +1287,39 @@ mod tests {
     }
 
     #[test]
+    fn test_dont_use_new_matview_dist() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("2".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_use_new_matview_dist() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("3".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            3
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview_non_dist() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("3".to_string()));
+        let metric_type = "counter".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
     fn test_should_record_meta_yes() {
         let use_case_invalid = "escalating_issues";
         assert_eq!(should_record_meta(use_case_invalid), Some(0));
