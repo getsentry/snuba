@@ -17,7 +17,7 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromChunkMessage = serde_json::from_slice(payload_bytes)?;
     let origin_timestamp = DateTime::from_timestamp(msg.received, 0);
-    let mut chunk: Chunk = msg.try_into()?;
+    let mut chunk: Chunk = msg.into();
 
     chunk.offset = metadata.offset;
     chunk.partition = metadata.partition;
@@ -53,11 +53,9 @@ struct Chunk {
     partition: u16,
 }
 
-impl TryFrom<FromChunkMessage> for Chunk {
-    type Error = anyhow::Error;
-
-    fn try_from(from: FromChunkMessage) -> anyhow::Result<Chunk> {
-        Ok(Self {
+impl From<FromChunkMessage> for Chunk {
+    fn from(from: FromChunkMessage) -> Chunk {
+        Self {
             chunk_id: from.chunk_id,
             end_timestamp_micro: (from.end_timestamp * 1e6) as u64,
             profiler_id: from.profiler_id,
@@ -65,7 +63,7 @@ impl TryFrom<FromChunkMessage> for Chunk {
             retention_days: from.retention_days,
             start_timestamp_micro: (from.start_timestamp * 1e6) as u64,
             ..Default::default()
-        })
+        }
     }
 }
 
