@@ -592,7 +592,7 @@ def test_allocation_policy_updates_quota() -> None:
             nonlocal queries_run_duplicate
             queries_run_duplicate += 1
 
-    # both policies should error
+    # the first policy will error and short circuit the rest
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
@@ -633,19 +633,11 @@ def test_allocation_policy_updates_quota() -> None:
                 "storage_key": "StorageKey.DOESNTMATTER",
             },
         },
-        "CountQueryPolicyDuplicate": {
-            "can_run": False,
-            "max_threads": 0,
-            "explanation": {
-                "reason": "can only run 2 queries!",
-                "storage_key": "StorageKey.DOESNTMATTER",
-            },
-        },
     }
     cause = e.value.__cause__
     assert isinstance(cause, AllocationPolicyViolations)
     assert "CountQueryPolicy" in cause.violations
-    assert "CountQueryPolicyDuplicate" in cause.violations
+    assert "CountQueryPolicyDuplicate" not in cause.violations
 
 
 @pytest.mark.redis_db
