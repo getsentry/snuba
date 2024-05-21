@@ -183,6 +183,7 @@ class ReplaysLoader(DirectoryLoader):
             "0017_add_component_name_column",
             "0018_add_viewed_by_id_column",
             "0019_add_materialization",
+            "0020_add_dist_migration_for_materialization",
         ]
 
 
