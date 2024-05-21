@@ -249,15 +249,12 @@ allocation_policies:
         - organization_id
         - referrer
         - project_id
-  - name: BytesScannedWindowAllocationPolicy
+  - name: BytesScannedRejectingPolicy
     args:
       required_tenant_types:
         - organization_id
+        - project_id
         - referrer
-      default_config_overrides:
-        is_enforced: 1
-        throttled_thread_number: 1
-        org_limit_bytes_scanned: 10000000
   - name: CrossOrgQueryAllocationPolicy
     args:
       required_tenant_types:
@@ -269,12 +266,15 @@ allocation_policies:
         getsentry.tasks.backfill_grouping_records:
           max_threads: 2
           concurrent_limit: 4
-  - name: BytesScannedRejectingPolicy
+  - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
-        - project_id
         - referrer
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 10000000
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser

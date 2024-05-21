@@ -256,23 +256,8 @@ def test_db_query_success() -> None:
         trace_id="trace_id",
         robust=False,
     )
+
     assert stats["quota_allowance"] == {
-        "BytesScannedWindowAllocationPolicy": {
-            "can_run": True,
-            "explanation": {
-                "storage_key": "StorageKey.ERRORS_RO",
-            },
-            "max_threads": 10,
-        },
-        "ConcurrentRateLimitAllocationPolicy": {
-            "can_run": True,
-            "explanation": {
-                "overrides": {},
-                "reason": "within limit",
-                "storage_key": "StorageKey.ERRORS_RO",
-            },
-            "max_threads": 10,
-        },
         "ReferrerGuardRailPolicy": {
             "can_run": True,
             "max_threads": 10,
@@ -283,17 +268,38 @@ def test_db_query_success() -> None:
                 "storage_key": "StorageKey.ERRORS_RO",
             },
         },
+        "ConcurrentRateLimitAllocationPolicy": {
+            "can_run": True,
+            "max_threads": 10,
+            "explanation": {
+                "reason": "within limit",
+                "overrides": {},
+                "storage_key": "StorageKey.ERRORS_RO",
+            },
+        },
         "BytesScannedRejectingPolicy": {
             "can_run": True,
-            "explanation": {},
             "max_threads": 10,
+            "explanation": {
+                "reason": "within_limit",
+                "storage_key": "StorageKey.ERRORS_RO",
+            },
         },
         "CrossOrgQueryAllocationPolicy": {
             "can_run": True,
-            "explanation": {},
             "max_threads": 10,
+            "explanation": {
+                "reason": "pass_through",
+                "storage_key": "StorageKey.ERRORS_RO",
+            },
+        },
+        "BytesScannedWindowAllocationPolicy": {
+            "can_run": True,
+            "max_threads": 10,
+            "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
         },
     }
+
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
