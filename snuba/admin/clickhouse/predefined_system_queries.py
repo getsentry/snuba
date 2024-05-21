@@ -126,7 +126,7 @@ class ColumnSizeOnDisk(SystemQuery):
         sum(rows) rows_cnt,
         round(usize / rows_cnt, 2) avg_row_size
     FROM system.parts_columns
-    WHERE (active = 1) AND (table = {{table}})
+    WHERE (active = 1) AND (table = '{{table}}')
     GROUP BY
         table,
         column
