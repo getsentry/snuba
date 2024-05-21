@@ -1,3 +1,8 @@
+"""
+These tests were auto-generated, many of them may be unnecessary or redundant, feel free to remove some.
+This tests the first stage of the SnQL parsing pipeline, which looks like SnQL->AST.
+"""
+
 from typing import Type
 
 import pytest
@@ -107,22 +112,22 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                in_cond(
-                    column("tags[sentry:dist]"),
-                    f.tuple(literal("dist1"), literal("dist2")),
-                ),
                 and_cond(
+                    in_cond(
+                        column("tags[sentry:dist]"),
+                        f.tuple(literal("dist1"), literal("dist2")),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=[
@@ -261,19 +266,19 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(f.foo(column("issue_id"), alias="group_id"), literal(1)),
                 and_cond(
+                    f.equals(f.foo(column("issue_id"), alias="group_id"), literal(1)),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -401,19 +406,19 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.like(column("exception_stacks.type"), literal("Arithmetic%")),
                 and_cond(
+                    f.like(column("exception_stacks.type"), literal("Arithmetic%")),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -440,19 +445,19 @@ test_cases = [
             ],
             array_join=[column("exception_stacks.type")],
             condition=and_cond(
-                f.like(column("exception_stacks.type"), literal("Arithmetic%")),
                 and_cond(
+                    f.like(column("exception_stacks.type"), literal("Arithmetic%")),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -482,19 +487,19 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.like(column("exception_stacks.type"), literal("Arithmetic%")),
                 and_cond(
+                    f.like(column("exception_stacks.type"), literal("Arithmetic%")),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -521,30 +526,31 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            column("exception_stacks.type"),
-                            literal("ArithmeticException"),
-                        ),
-                        f.equals(
-                            column("exception_stacks.type"), literal("RuntimeException")
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("ArithmeticException"),
+                            ),
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("RuntimeException"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -575,30 +581,31 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            column("exception_stacks.type"),
-                            literal("ArithmeticException"),
-                        ),
-                        f.equals(
-                            column("exception_stacks.type"), literal("RuntimeException")
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("ArithmeticException"),
+                            ),
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("RuntimeException"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -623,30 +630,31 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            f.ifNull(column("tags[foo]"), literal("")), literal("baz")
-                        ),
-                        f.equals(
-                            f.ifNull(column("tags[foo.bar]"), literal("")),
-                            literal("qux"),
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                f.ifNull(column("tags[foo]"), literal("")),
+                                literal("baz"),
+                            ),
+                            f.equals(
+                                f.ifNull(column("tags[foo.bar]"), literal("")),
+                                literal("qux"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=[column("tags_key")],
@@ -673,30 +681,31 @@ test_cases = [
             ],
             array_join=[column("exception_stacks")],
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            column("exception_stacks.type"),
-                            literal("ArithmeticException"),
-                        ),
-                        f.equals(
-                            column("exception_stacks.type"), literal("RuntimeException")
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("ArithmeticException"),
+                            ),
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("RuntimeException"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,
@@ -723,30 +732,31 @@ test_cases = [
             ],
             array_join=[column("exception_stacks"), column("hierarchical_hashes")],
             condition=and_cond(
-                f.equals(
-                    or_cond(
-                        f.equals(
-                            column("exception_stacks.type"),
-                            literal("ArithmeticException"),
-                        ),
-                        f.equals(
-                            column("exception_stacks.type"), literal("RuntimeException")
-                        ),
-                    ),
-                    literal(1),
-                ),
                 and_cond(
+                    f.equals(
+                        or_cond(
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("ArithmeticException"),
+                            ),
+                            f.equals(
+                                column("exception_stacks.type"),
+                                literal("RuntimeException"),
+                            ),
+                        ),
+                        literal(1),
+                    ),
                     f.greaterOrEquals(
                         column("timestamp"),
                         f.toDateTime(literal("2021-01-01T00:00:00")),
                     ),
-                    and_cond(
-                        f.less(
-                            column("timestamp"),
-                            f.toDateTime(literal("2021-01-02T00:00:00")),
-                        ),
-                        f.equals(column("project_id"), literal(1)),
+                ),
+                and_cond(
+                    f.less(
+                        column("timestamp"),
+                        f.toDateTime(literal("2021-01-02T00:00:00")),
                     ),
+                    f.equals(column("project_id"), literal(1)),
                 ),
             ),
             groupby=None,

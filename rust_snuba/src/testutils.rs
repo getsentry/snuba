@@ -50,7 +50,6 @@ impl<R: Send + Sync> ProcessingStrategy<BytesInsertBatch<R>> for TestStrategy<R>
         self.payloads.push(message.into_payload());
         Ok(())
     }
-    fn close(&mut self) {}
     fn terminate(&mut self) {}
     fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {
         Ok(None)

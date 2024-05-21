@@ -1,5 +1,7 @@
 """
-These tests were auto-generated, many of them may be unnecessary or redundant, feel free to remove some
+These tests were auto-generated, many of them may be unnecessary or redundant, feel free to remove some.
+This tests the first stage of the MQL parsing pipeline, which looks like MQL->AST.
+It includes parsing of regular and formula mql.
 """
 
 from datetime import datetime

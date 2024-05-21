@@ -13,6 +13,7 @@ from snuba.migrations.group_loader import (
     MetricsLoader,
     MetricsSummariesLoader,
     OutcomesLoader,
+    ProfileChunksLoader,
     ProfilesLoader,
     QuerylogLoader,
     ReplaysLoader,
@@ -43,6 +44,7 @@ class MigrationGroup(Enum):
     SPANS = "spans"
     GROUP_ATTRIBUTES = "group_attributes"
     METRICS_SUMMARIES = "metrics_summaries"
+    PROFILE_CHUNKS = "profile_chunks"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -59,6 +61,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
+    MigrationGroup.PROFILE_CHUNKS,
 }
 
 
@@ -169,6 +172,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={StorageSetKey.METRICS_SUMMARIES},
         readiness_state=ReadinessState.PARTIAL,
     ),
+    MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
+        loader=ProfileChunksLoader(),
+        storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
+        readiness_state=ReadinessState.PARTIAL,
+    ),
 }
 
 
@@ -204,8 +212,13 @@ def get_storage_set_keys(group: MigrationGroup) -> Set[StorageSetKey]:
 def get_group_readiness_state_from_storage_set(
     storage_set_key: StorageSetKey,
 ) -> ReadinessState:
-    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING[storage_set_key]
-    return _REGISTERED_MIGRATION_GROUPS[migration_group].readiness_state
+    migration_group = _STORAGE_SET_TO_MIGRATION_GROUP_MAPPING.get(storage_set_key, None)
+    if not migration_group:
+        return ReadinessState.LIMITED
+    registered_migration_group = _REGISTERED_MIGRATION_GROUPS.get(migration_group, None)
+    if registered_migration_group:
+        return registered_migration_group.readiness_state
+    return ReadinessState.LIMITED
 
 
 def get_group_readiness_state(group: MigrationGroup) -> ReadinessState:
