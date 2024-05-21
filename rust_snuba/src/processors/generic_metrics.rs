@@ -343,7 +343,7 @@ fn parse_dist_materialization_version(
     config: Result<Option<String>, Error>,
     metric_type: String,
 ) -> u8 {
-    if metric_type == "distribution".to_string() {
+    if metric_type == *"distribution" {
         if let Some(mat_version) = config.ok().flatten() {
             let mat_version_int = mat_version.parse::<u8>().unwrap();
             return mat_version_int;
