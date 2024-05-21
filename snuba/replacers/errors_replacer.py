@@ -217,6 +217,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 except Exception as e:
                     metrics.increment("errors_replacer_process_message_error")
                     logger.exception(e)
+            metrics.gauge("projects_to_skip", value=len(projects_to_skip))
             if processed.get_project_id() in projects_to_skip:
                 # For a persistent non rate limited logger
                 logger.info(
