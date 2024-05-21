@@ -215,6 +215,7 @@ class ErrorsReplacer(ReplacerProcessor[Replacement]):
                 try:
                     projects_to_skip.extend(json.loads(manual_bypass_projects))
                 except Exception as e:
+                    metrics.increment("errors_replacer_process_message_error")
                     logger.exception(e)
             if processed.get_project_id() in projects_to_skip:
                 # For a persistent non rate limited logger
