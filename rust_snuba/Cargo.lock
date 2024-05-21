@@ -2787,7 +2787,7 @@ dependencies = [
 [[package]]
 name = "rust_arroyo"
 version = "2.17.4"
-source = "git+https://github.com/getsentry/arroyo#78de503268513256653e3ad5c5365e3d4026e1a0"
+source = "git+https://github.com/getsentry/arroyo#b15d5467a4958b18ba50175e468e4b70535cb669"
 dependencies = [
  "chrono",
  "coarsetime",
@@ -3132,9 +3132,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_usage_accountant"
-version = "0.0.4"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fccc73f5028e49cd951c4f1a013a2b71372e8912295f05a7a3504b653f625ca"
+checksum = "94f0a631e328036db251337a0076dc5858a155f6831110c6417fe2537502ceae"
 dependencies = [
  "chrono",
  "rdkafka",

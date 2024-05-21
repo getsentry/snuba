@@ -36,72 +36,25 @@ use crate::strategies::replacements::ProduceReplacements;
 use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct ConsumerStrategyFactory {
-    storage_config: config::StorageConfig,
-    env_config: config::EnvConfig,
-    logical_topic_name: String,
-    max_batch_size: usize,
-    max_batch_time: Duration,
-    processing_concurrency: ConcurrencyConfig,
-    clickhouse_concurrency: ConcurrencyConfig,
-    commitlog_concurrency: ConcurrencyConfig,
-    replacements_concurrency: ConcurrencyConfig,
-    python_max_queue_depth: Option<usize>,
-    use_rust_processor: bool,
-    health_check_file: Option<String>,
-    enforce_schema: bool,
-    commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
-    replacements_config: Option<(KafkaConfig, Topic)>,
-    physical_consumer_group: String,
-    physical_topic_name: Topic,
-    accountant_topic_config: config::TopicConfig,
-    stop_at_timestamp: Option<i64>,
-}
-
-impl ConsumerStrategyFactory {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        storage_config: config::StorageConfig,
-        env_config: config::EnvConfig,
-        logical_topic_name: String,
-        max_batch_size: usize,
-        max_batch_time: Duration,
-        processing_concurrency: ConcurrencyConfig,
-        clickhouse_concurrency: ConcurrencyConfig,
-        commitlog_concurrency: ConcurrencyConfig,
-        replacements_concurrency: ConcurrencyConfig,
-        python_max_queue_depth: Option<usize>,
-        use_rust_processor: bool,
-        health_check_file: Option<String>,
-        enforce_schema: bool,
-        commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
-        replacements_config: Option<(KafkaConfig, Topic)>,
-        physical_consumer_group: String,
-        physical_topic_name: Topic,
-        accountant_topic_config: config::TopicConfig,
-        stop_at_timestamp: Option<i64>,
-    ) -> Self {
-        Self {
-            storage_config,
-            env_config,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            processing_concurrency,
-            clickhouse_concurrency,
-            commitlog_concurrency,
-            replacements_concurrency,
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file,
-            enforce_schema,
-            commit_log_producer,
-            replacements_config,
-            physical_consumer_group,
-            physical_topic_name,
-            accountant_topic_config,
-            stop_at_timestamp,
-        }
-    }
+    pub storage_config: config::StorageConfig,
+    pub env_config: config::EnvConfig,
+    pub logical_topic_name: String,
+    pub max_batch_size: usize,
+    pub max_batch_time: Duration,
+    pub processing_concurrency: ConcurrencyConfig,
+    pub clickhouse_concurrency: ConcurrencyConfig,
+    pub commitlog_concurrency: ConcurrencyConfig,
+    pub replacements_concurrency: ConcurrencyConfig,
+    pub python_max_queue_depth: Option<usize>,
+    pub use_rust_processor: bool,
+    pub health_check_file: Option<String>,
+    pub enforce_schema: bool,
+    pub commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
+    pub replacements_config: Option<(KafkaConfig, Topic)>,
+    pub physical_consumer_group: String,
+    pub physical_topic_name: Topic,
+    pub accountant_topic_config: config::TopicConfig,
+    pub stop_at_timestamp: Option<i64>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -114,7 +67,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         // Commit offsets
-        let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
+        let next_step = CommitOffsets::new(Duration::from_secs(1));
 
         // Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
@@ -166,8 +119,9 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         );
 
         let accumulator = Arc::new(
-            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch<RowData>| {
-                batch.merge(small_batch)
+            |batch: BytesInsertBatch<HttpBatch>,
+             small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.merge(small_batch.into_payload()))
             },
         );
 

@@ -4,6 +4,7 @@ import io
 import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
+from datetime import datetime
 from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import sentry_sdk
@@ -69,6 +70,9 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
+from snuba.replacers.replacements_and_expiry import (
+    get_config_auto_replacements_bypass_projects,
+)
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.web.views import dataset_query
@@ -343,6 +347,21 @@ def cardinality_queries() -> Response:
 @check_tool_perms(tools=[AdminTools.KAFKA])
 def kafka_topics() -> Response:
     return make_response(jsonify(get_broker_data()), 200)
+
+
+@application.route("/auto-replacements-bypass-projects")
+@check_tool_perms(tools=[AdminTools.AUTO_REPLACEMENTS_BYPASS_PROJECTS])
+def auto_replacements_bypass_projects() -> Response:
+    def serialize(project_id: int, expiry: datetime) -> Any:
+        return {"projectID": project_id, "expiry": str(expiry)}
+
+    data = [
+        serialize(project_id, expiry)
+        for [project_id, expiry] in get_config_auto_replacements_bypass_projects(
+            datetime.now()
+        ).items()
+    ]
+    return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
 # Sample cURL command:

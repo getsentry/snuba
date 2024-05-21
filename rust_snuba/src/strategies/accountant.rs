@@ -17,10 +17,13 @@ pub struct CogsAccountant {
 
 impl CogsAccountant {
     pub fn new(broker_config: HashMap<String, String>, topic_name: &str) -> Self {
-        let config = KafkaConfig::new_producer_config(broker_config);
+        let config = KafkaConfig {
+            config: broker_config,
+            topic: topic_name.to_owned(),
+        };
 
         Self {
-            accountant: UsageAccountant::new_with_kafka(config, Some(topic_name), None),
+            accountant: UsageAccountant::new_with_kafka(config, None),
             logged_warning: false,
         }
     }
@@ -81,10 +84,6 @@ where
         }
 
         self.next_step.submit(message)
-    }
-
-    fn close(&mut self) {
-        self.next_step.close()
     }
 
     fn terminate(&mut self) {

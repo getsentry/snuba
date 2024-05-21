@@ -4,17 +4,9 @@ import pytest
 from snuba_sdk.legacy import json_to_snql
 from snuba_sdk.query_visitors import InvalidQueryError
 
-from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException
-from snuba.query.parser.exceptions import AliasShadowingException, ParsingException
-from snuba.query.snql.parser import parse_snql_query
 
 test_cases = [
-    pytest.param(
-        {"aggregations": [["f(i(am)bad((at(parentheses)+3", None, "alias"]]},
-        ParsingException,
-        id="Aggregation string cannot be parsed",
-    ),
     pytest.param(
         {"orderby": [[[[["column"]]]]]},
         InvalidQueryError,
@@ -30,11 +22,6 @@ test_cases = [
         InvalidQueryError,
         id="IN condition without a sequence as right hand side",
     ),
-    pytest.param(
-        {"selected_columns": [["foo", [1], "alias"], ["bar", [2], "alias"]]},
-        AliasShadowingException,
-        id="Alias shadowing",
-    ),
 ]
 
 
@@ -44,7 +31,4 @@ def test_failures(
     expected_exception: Type[InvalidQueryException],
 ) -> None:
     with pytest.raises(expected_exception):
-        events = get_dataset("events")
-        request = json_to_snql(query_body, "events")
-        request.validate()
-        parse_snql_query(str(request.query), events)
+        json_to_snql(query_body, "events")

@@ -382,9 +382,6 @@ STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
-# Counter utility class window size in minutes
-COUNTER_WINDOW_SIZE_MINUTES = 10
-
 
 # Slicing Configuration
 
@@ -436,6 +433,8 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
+USE_NEW_COMBINE_CONDITIONS = False
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

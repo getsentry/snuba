@@ -215,8 +215,6 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
         Ok(())
     }
 
-    fn close(&mut self) {}
-
     fn terminate(&mut self) {
         self.next_step.terminate()
     }
@@ -260,8 +258,8 @@ impl ProcessingStrategy<KafkaPayload> for PythonTransformStep {
             }
         }
 
-        self.next_step.close();
         let next_commit = self.next_step.join(timeout)?;
+
         Ok(merge_commit_request(
             self.commit_request_carried_over.take(),
             next_commit,
