@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -23,6 +24,8 @@ def ceil_minute(time: datetime) -> datetime:
 
 
 Buckets = MutableMapping[datetime, MutableMapping[int, timedelta]]
+
+logger = logging.getLogger(__name__)
 
 
 class Counter:
@@ -89,11 +92,19 @@ class Counter:
             for project_id, processing_time in project_dict.items():
                 project_groups[project_id] += processing_time
 
+        logger.info("project_groups_size: %s" % len(project_groups))
+
         # Compare the replacement total grouped by project_id with system time limit
         projects_exceeding_time_limit = []
         for project_id, total_processing_time in project_groups.items():
+            logger.info(
+                "project_id: %s, total_processing_time: %s, limit: %s"
+                % (project_id, total_processing_time, self.limit)
+            )
             if total_processing_time > self.limit and len(project_groups) > 1:
                 projects_exceeding_time_limit.append(project_id)
+
+        logger.info("projects_exceeding_time_limit: %s", projects_exceeding_time_limit)
         metrics.timing(
             "get_projects_exceeding_limit_duration",
             datetime.now().timestamp() - now.timestamp(),
