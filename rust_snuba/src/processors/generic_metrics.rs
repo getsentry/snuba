@@ -577,7 +577,7 @@ impl Parse for DistributionsRawRow {
             granularities.push(GRANULARITY_TEN_SECONDS);
         } else if aggregate_option == "hist" {
             enable_histogram = Some(1);
-        } else if aggregate_option == "no_percentile" {
+        } else if aggregate_option == "disable_percentiles" {
             disable_percentiles = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
@@ -843,7 +843,7 @@ mod tests {
         "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
         "type": "d",
         "value": [0, 1, 2, 3, 4, 5],
-        "aggregation_option": "no_percentile"
+        "aggregation_option": "disable_percentiles"
     }"#;
 
     const DUMMY_GAUGE_MESSAGE: &str = r#"{
@@ -1737,7 +1737,7 @@ mod tests {
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
-                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 676)])
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 682)])
                 })
             }
         );
