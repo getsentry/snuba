@@ -345,8 +345,10 @@ fn parse_dist_materialization_version(
 ) -> u8 {
     if metric_type == *"distribution" {
         if let Some(mat_version) = config.ok().flatten() {
-            let mat_version_int = mat_version.parse::<u8>().unwrap();
-            return mat_version_int;
+            if !mat_version.trim().is_empty() {
+                let mat_version_int = mat_version.parse::<u8>().unwrap();
+                return mat_version_int;
+            }
         }
     }
 
@@ -1289,6 +1291,28 @@ mod tests {
     #[test]
     fn test_dont_use_new_matview_dist() {
         let fake_config: Result<Option<String>, _> = Ok(Some("2".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview_dist_space() {
+        let fake_config: Result<Option<String>, _> = Ok(Some(" ".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview_dist_empty() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("".to_string()));
         let metric_type = "distribution".to_string();
 
         assert_eq!(
