@@ -1329,6 +1329,17 @@ mod tests {
     }
 
     #[test]
+    fn test_dont_use_new_matview() {
+        let fake_config: Result<Option<String>, _> = Ok(None);
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
     fn test_validate_timeseries_id() {
         let org_id = 1;
         let project_id = 2;
