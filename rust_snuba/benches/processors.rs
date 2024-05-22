@@ -57,7 +57,6 @@ fn create_factory(
             user: "test".into(),
             password: "test".into(),
             database: "test".into(),
-            async_inserts: false,
         },
         message_processor: MessageProcessorConfig {
             python_class_name: python_class_name.into(),
@@ -83,6 +82,7 @@ fn create_factory(
         clickhouse_concurrency,
         commitlog_concurrency,
         replacements_concurrency,
+        async_inserts: false,
         python_max_queue_depth: None,
         use_rust_processor: true,
         health_check_file: None,
@@ -97,7 +97,6 @@ fn create_factory(
             broker_config: BrokerConfig::default(),
         },
         stop_at_timestamp: None,
-        async_inserts: false,
     };
     Box::new(factory)
 }

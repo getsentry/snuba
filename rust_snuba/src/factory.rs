@@ -45,6 +45,7 @@ pub struct ConsumerStrategyFactory {
     pub clickhouse_concurrency: ConcurrencyConfig,
     pub commitlog_concurrency: ConcurrencyConfig,
     pub replacements_concurrency: ConcurrencyConfig,
+    pub async_inserts: bool,
     pub python_max_queue_depth: Option<usize>,
     pub use_rust_processor: bool,
     pub health_check_file: Option<String>,
@@ -55,7 +56,6 @@ pub struct ConsumerStrategyFactory {
     pub physical_topic_name: Topic,
     pub accountant_topic_config: config::TopicConfig,
     pub stop_at_timestamp: Option<i64>,
-    pub async_inserts: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {

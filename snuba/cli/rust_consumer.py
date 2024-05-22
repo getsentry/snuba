@@ -130,6 +130,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=30000,
 )
 @click.option(
+    "--async-inserts",
+    is_flag=True,
+    default=False,
+    help="Enable async inserts for ClickHouse",
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -146,12 +152,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--stop-at-timestamp",
     type=int,
     help="Unix timestamp after which to stop processing messages",
-)
-@click.option(
-    "--async-inserts",
-    is_flag=True,
-    default=False,
-    help="Enable async inserts for ClickHouse",
 )
 def rust_consumer(
     *,
@@ -175,11 +175,11 @@ def rust_consumer(
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
+    async_inserts: bool,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
-    async_inserts: bool,
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -218,10 +218,10 @@ def rust_consumer(
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
+        async_inserts,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
-        async_inserts,
     )
 
     sys.exit(exitcode)
