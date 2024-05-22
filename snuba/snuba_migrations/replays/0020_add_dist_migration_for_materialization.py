@@ -34,6 +34,7 @@ def forward_iter() -> Iterator[operations.SqlOperation]:
             local_table_name="replays_aggregated_local",
             sharding_key=None,
         ),
+        target=operations.OperationTarget.DISTRIBUTED,
     )
 
 
@@ -41,6 +42,7 @@ def backward_iter() -> Iterator[operations.SqlOperation]:
     yield operations.DropTable(
         storage_set=StorageSetKey.REPLAYS,
         table_name="replays_aggregated_dist",
+        target=operations.OperationTarget.DISTRIBUTED,
     )
 
 
