@@ -254,7 +254,6 @@ struct CommonMetricFields {
 fn should_record_meta(use_case_id: &str) -> Option<u8> {
     match use_case_id {
         "escalating_issues" => Some(0),
-        "metric_stats" => Some(0),
         _ => Some(1),
     }
 }
@@ -1251,6 +1250,9 @@ mod tests {
 
         let use_case_valid = "spans";
         assert_eq!(should_record_meta(use_case_valid), Some(1));
+
+        let use_case_metric_stats = "metric_stats";
+        assert_eq!(should_record_meta(use_case_metric_stats), Some(1));
     }
 
     #[test]
