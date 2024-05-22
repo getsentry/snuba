@@ -87,7 +87,6 @@ pub struct ClickhouseConfig {
     pub user: String,
     pub password: String,
     pub database: String,
-    pub async_inserts: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]

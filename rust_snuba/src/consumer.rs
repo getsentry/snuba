@@ -39,6 +39,7 @@ pub fn consumer(
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
+    async_inserts: bool,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -53,6 +54,7 @@ pub fn consumer(
             python_max_queue_depth,
             health_check_file,
             stop_at_timestamp,
+            async_inserts,
         )
     });
 }
@@ -70,6 +72,7 @@ pub fn consumer_impl(
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
+    async_inserts: bool,
 ) -> usize {
     setup_logging();
 
@@ -225,6 +228,7 @@ pub fn consumer_impl(
         physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
         accountant_topic_config: consumer_config.accountant_topic,
         stop_at_timestamp,
+        async_inserts,
     };
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);

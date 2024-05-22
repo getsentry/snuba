@@ -55,6 +55,7 @@ pub struct ConsumerStrategyFactory {
     pub physical_topic_name: Topic,
     pub accountant_topic_config: config::TopicConfig,
     pub stop_at_timestamp: Option<i64>,
+    pub async_inserts: bool,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -116,7 +117,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.clickhouse_concurrency,
             &self.storage_config.clickhouse_cluster.user,
             &self.storage_config.clickhouse_cluster.password,
-            self.storage_config.clickhouse_cluster.async_inserts,
+            self.async_inserts,
         );
 
         let accumulator = Arc::new(
