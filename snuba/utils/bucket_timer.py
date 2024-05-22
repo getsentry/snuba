@@ -99,4 +99,7 @@ class Counter:
             datetime.now().timestamp() - now.timestamp(),
             tags={},
         )
+        metrics.gauge(
+            "bucket_timer_projects_to_skip", value=len(projects_exceeding_time_limit)
+        )
         return projects_exceeding_time_limit
