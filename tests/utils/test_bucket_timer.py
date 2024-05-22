@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from snuba.utils.bucket_timer import Counter, floor_minute
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 
 TEST_COUNTER_WINDOW_SIZE = timedelta(minutes=10)
 
@@ -46,3 +47,8 @@ def test_get_projects_exceeding_limit() -> None:
     exceeded_projects = counter.get_projects_exceeding_limit()
     assert len(exceeded_projects) == 1
     assert exceeded_projects[0] == 2
+    metric_calls = get_recorded_metric_calls(
+        "gauge", "bucket_timer.bucket_timer_projects_to_skip"
+    )
+    assert metric_calls is not None
+    assert len(metric_calls) == 1
