@@ -1320,15 +1320,6 @@ mod tests {
     }
 
     #[test]
-    fn test_should_record_meta_yes() {
-        let use_case_invalid = "escalating_issues";
-        assert_eq!(should_record_meta(use_case_invalid), Some(0));
-
-        let use_case_valid = "spans";
-        assert_eq!(should_record_meta(use_case_valid), Some(1));
-    }
-
-    #[test]
     fn test_dont_use_new_matview() {
         let fake_config: Result<Option<String>, _> = Ok(None);
         let metric_type = "distribution".to_string();
@@ -1337,6 +1328,15 @@ mod tests {
             parse_dist_materialization_version(fake_config, metric_type),
             2
         )
+    }
+
+    #[test]
+    fn test_should_record_meta_yes() {
+        let use_case_invalid = "escalating_issues";
+        assert_eq!(should_record_meta(use_case_invalid), Some(0));
+
+        let use_case_valid = "spans";
+        assert_eq!(should_record_meta(use_case_valid), Some(1));
     }
 
     #[test]
