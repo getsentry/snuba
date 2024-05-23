@@ -193,11 +193,14 @@ def test_get_filtered_mapping_keys(
 
 
 def with_required(condition: Expression) -> Expression:
+    assert not (
+        isinstance(condition, FunctionCall) and condition.function_name in ["and", "or"]
+    )
     return binary_condition(
         BooleanFunctions.AND,
-        condition,
         binary_condition(
             BooleanFunctions.AND,
+            condition,
             FunctionCall(
                 None,
                 "greaterOrEquals",
@@ -206,23 +209,23 @@ def with_required(condition: Expression) -> Expression:
                     Literal(None, datetime(2021, 1, 1, 0, 0)),
                 ),
             ),
-            binary_condition(
-                BooleanFunctions.AND,
-                FunctionCall(
-                    None,
-                    "less",
-                    (
-                        Column("_snuba_finish_ts", None, "finish_ts"),
-                        Literal(None, datetime(2021, 1, 2, 0, 0)),
-                    ),
+        ),
+        binary_condition(
+            BooleanFunctions.AND,
+            FunctionCall(
+                None,
+                "less",
+                (
+                    Column("_snuba_finish_ts", None, "finish_ts"),
+                    Literal(None, datetime(2021, 1, 2, 0, 0)),
                 ),
-                FunctionCall(
-                    None,
-                    "equals",
-                    (
-                        Column("_snuba_project_id", None, "project_id"),
-                        Literal(None, 1),
-                    ),
+            ),
+            FunctionCall(
+                None,
+                "equals",
+                (
+                    Column("_snuba_project_id", None, "project_id"),
+                    Literal(None, 1),
                 ),
             ),
         ),

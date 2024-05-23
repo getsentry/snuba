@@ -21,7 +21,11 @@ import {
   RunMigrationResult,
 } from "SnubaAdmin/clickhouse_migrations/types";
 import { TracingRequest, TracingResult } from "SnubaAdmin/tracing/types";
-import { SnQLRequest, SnQLResult, SnubaDatasetName } from "SnubaAdmin/snql_to_sql/types";
+import {
+  SnQLRequest,
+  SnQLResult,
+  SnubaDatasetName,
+} from "SnubaAdmin/snql_to_sql/types";
 
 import { KafkaTopicData } from "SnubaAdmin/kafka/types";
 import { QuerylogRequest, QuerylogResult } from "SnubaAdmin/querylog/types";
@@ -33,10 +37,14 @@ import {
 import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
+import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
   getConfigs: () => Promise<Config[]>;
+  getAutoReplacementsBypassProjects: () => Promise<
+    AutoReplacementsBypassProjectsData[]
+  >;
   createNewConfig: (
     key: ConfigKey,
     value: ConfigValue,
@@ -105,6 +113,12 @@ function Client() {
     getConfigs: () => {
       const url = baseUrl + "configs";
       return fetch(url).then((resp) => resp.json());
+    },
+    getAutoReplacementsBypassProjects: () => {
+      const url = baseUrl + "auto-replacements-bypass-projects";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json());
     },
     createNewConfig: (
       key: ConfigKey,

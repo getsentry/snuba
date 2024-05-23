@@ -185,10 +185,6 @@ impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
         self.inner.submit(message)
     }
 
-    fn close(&mut self) {
-        self.inner.close();
-    }
-
     fn terminate(&mut self) {
         self.inner.terminate();
     }
@@ -353,7 +349,6 @@ mod tests {
             strategy.poll().unwrap();
         }
 
-        strategy.close();
         strategy.join(None).unwrap();
 
         let produced = produced_payloads.lock().unwrap();

@@ -821,6 +821,9 @@ def _apply_allocation_policies_quota(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
+                if not can_run:
+                    break
+
         allowance_dicts = {
             key: quota_allowance.to_dict()
             for key, quota_allowance in quota_allowances.items()
