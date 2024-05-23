@@ -88,6 +88,7 @@ class Counter:
         now = datetime.now()
         self.__trim_expired_buckets(now)
         project_groups: dict[int, timedelta] = defaultdict(lambda: timedelta(seconds=0))
+        logger.debug("self.buckets_size: %s" % len(self.buckets))
         for project_dict in list(self.buckets.values()):
             for project_id, processing_time in project_dict.items():
                 project_groups[project_id] += processing_time
