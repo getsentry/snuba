@@ -9,6 +9,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::runtime_config::get_str_config;
 use crate::types::RowData;
 
 const CLICKHOUSE_HTTP_CHUNK_SIZE: usize = 1_000_000;
@@ -31,6 +32,7 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         clickhouse_user: &str,
         clickhouse_password: &str,
+        async_inserts: bool,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -48,7 +50,16 @@ impl BatchFactory {
             HeaderValue::from_str(database).unwrap(),
         );
 
-        let query_params = "load_balancing=in_order&insert_distributed_sync=1".to_string();
+        let mut query_params = String::new();
+        query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
+
+        if async_inserts {
+            let async_inserts_allowed = get_str_config("async_inserts_allowed").ok().flatten();
+            if async_inserts_allowed == Some("1".to_string()) {
+                query_params.push_str("&async_insert=1&wait_for_async_insert=1");
+            }
+        }
+
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
@@ -204,6 +215,41 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
+    }
+
+    #[test]
+    fn test_write_async() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
         );
 
         let mut batch = factory.new_batch();
@@ -236,6 +282,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
         );
 
         let mut batch = factory.new_batch();
@@ -266,6 +313,7 @@ mod tests {
             &concurrency,
             "default",
             "",
+            false,
         );
 
         let mut batch = factory.new_batch();
