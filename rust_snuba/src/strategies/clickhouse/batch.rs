@@ -53,9 +53,11 @@ impl BatchFactory {
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
 
-        let async_inserts_allowed = get_str_config("async_inserts_allowed").ok().flatten();
-        if async_inserts && async_inserts_allowed == Some(1.to_string()) {
-            query_params.push_str("&async_insert=1&wait_for_async_insert=1");
+        if async_inserts {
+            let async_inserts_allowed = get_str_config("async_inserts_allowed").ok().flatten();
+            if async_inserts_allowed == Some("1".to_string()) {
+                query_params.push_str("&async_insert=1&wait_for_async_insert=1");
+            }
         }
 
         let url = format!("http://{hostname}:{http_port}?{query_params}");
