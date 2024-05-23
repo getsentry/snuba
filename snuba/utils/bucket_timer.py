@@ -111,7 +111,12 @@ class Counter:
                 "project_id: %s, total_processing_time: %s, limit: %s"
                 % (project_id, total_processing_time, self.limit)
             )
-            if total_processing_time > self.limit and len(project_groups) > 1:
+            if total_processing_time > self.limit and (
+                len(project_groups) > 1
+                or get_int_config(
+                    "allows_skipping_single_project_replacements", default=0
+                )
+            ):
                 projects_exceeding_time_limit.append(project_id)
 
         logger.debug("projects_exceeding_time_limit: %s", projects_exceeding_time_limit)
