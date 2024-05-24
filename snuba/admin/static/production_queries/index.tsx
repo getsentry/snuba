@@ -94,7 +94,7 @@ function ProductionQueries(props: { api: Client }) {
     <div>
       <form>
         <h2>Run a SnQL Query</h2>
-        <ProjectsList projects={allowedProjects}/>
+        <ProjectsList projects={allowedProjects} />
         <div>
           <Textarea
             value={snql_query.query || ""}
@@ -160,7 +160,7 @@ function ProductionQueries(props: { api: Client }) {
                   Copy to clipboard (CSV)
                 </Button>
               </Button.Group>
-              <Space h="md"/>
+              <Space h="md" />
               <Table
                 headerData={queryResultHistory[0].columns}
                 rowData={queryResultHistory[0].rows}
@@ -197,7 +197,7 @@ function ProductionQueries(props: { api: Client }) {
 }
 
 function ProjectsList(props: { projects: string[] }) {
-  const [opened, {toggle}] = useDisclosure(false);
+  const [opened, { toggle }] = useDisclosure(false);
 
   return (
     <Box mb="xs" mx="auto">
