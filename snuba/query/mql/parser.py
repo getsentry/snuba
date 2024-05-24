@@ -341,15 +341,35 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         if isinstance(factor, FunctionCall):
             # If we have a parenthesized expression, we just return it.
             return factor
+
         condition_op, lhs, _, _, _, rhs = factor
         condition_op_value = (
             "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
         )
+
+        contains_wildcard, rhs = rhs
+
+        if contains_wildcard:
+            if not condition_op_value:
+                op = ConditionFunctions.LIKE
+            elif condition_op_value == "!":
+                op = ConditionFunctions.NOT_LIKE
+
+            return FunctionCall(
+                None,
+                op,
+                (
+                    Column(None, None, lhs[0]),
+                    Literal(None, rhs),
+                ),
+            )
+
         if isinstance(rhs, list):
             if not condition_op_value:
                 op = ConditionFunctions.IN
             elif condition_op_value == "!":
                 op = ConditionFunctions.NOT_IN
+
             return FunctionCall(
                 None,
                 op,
@@ -430,10 +450,36 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return node.text
 
     def visit_tag_value(
-        self, node: Node, children: Sequence[Sequence[str]]
-    ) -> Union[str, Sequence[str]]:
-        tag_value = children[0]
-        return tag_value
+        self, node: Node, children: Sequence[tuple[bool, Union[str, Sequence[str]]]]
+    ) -> tuple[bool, Union[str, Sequence[str]]]:
+        contains_wildcard, tag_value = children[0]
+        return contains_wildcard, tag_value
+
+    def visit_quoted_suffix_wildcard_tag_value(
+        self, node: Node, children: Sequence[Any]
+    ) -> tuple[bool, str]:
+        _, text_before_wildcard, _, _ = children
+        rhs = f"{text_before_wildcard}%"
+        return True, rhs
+
+    def visit_suffix_wildcard_tag_value(
+        self, node: Node, children: Sequence[Any]
+    ) -> tuple[bool, str]:
+        text_before_wildcard, _ = children
+        rhs = f"{text_before_wildcard}%"
+        return True, rhs
+
+    def visit_quoted_string_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> tuple[bool, str]:
+        text = str(node.text[1:-1])
+        match = text.replace('\\"', '"')
+        return False, match
+
+    def visit_unquoted_string_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> tuple[bool, str]:
+        return False, str(node.text)
 
     def visit_unquoted_string(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -444,9 +490,11 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         match = str(node.text[1:-1]).replace('\\"', '"')
         return match
 
-    def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
+    def visit_string_tuple(
+        self, node: Node, children: Sequence[Any]
+    ) -> tuple[bool, Sequence[str]]:
         _, _, first, zero_or_more_others, _, _ = children
-        return [first[0], *(v[0] for _, _, _, v in zero_or_more_others)]
+        return False, [first[0], *(v[0] for _, _, _, v in zero_or_more_others)]
 
     def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -1047,7 +1095,7 @@ def populate_query_from_mql_context(
 
 
 def quantiles_to_quantile(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
 ) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
