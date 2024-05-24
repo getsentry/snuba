@@ -1,8 +1,8 @@
-import React, {useEffect, useState} from "react";
+import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import {Table} from "SnubaAdmin/table";
-import {QueryResult, QueryResultColumnMeta, SnQLRequest} from "SnubaAdmin/production_queries/types";
-import {executeActionsStyle} from "SnubaAdmin/production_queries/styles";
+import { Table } from "SnubaAdmin/table";
+import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "SnubaAdmin/production_queries/types";
+import { executeActionsStyle } from "SnubaAdmin/production_queries/styles";
 import {
   Accordion,
   Box,
@@ -15,8 +15,8 @@ import {
   Text,
   Textarea,
 } from "@mantine/core";
-import {useDisclosure} from "@mantine/hooks";
-import {CSV} from "../cardinality_analyzer/CSV";
+import { useDisclosure } from "@mantine/hooks";
+import { CSV } from "../cardinality_analyzer/CSV";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -183,7 +183,7 @@ function ProductionQueries(props: { api: Client }) {
                       {queryResult.input_query}
                     </Accordion.Control>
                     <Accordion.Panel>
-                      <QueryResultHistoryItem queryResult={queryResult}/>
+                      <QueryResultHistoryItem queryResult={queryResult} />
                     </Accordion.Panel>
                   </Accordion.Item>
                 );
@@ -293,7 +293,7 @@ function QueryResultHistoryItem(props: { queryResult: QueryResult }) {
           Copy to clipboard (CSV)
         </Button>
       </Button.Group>
-      <Space h="md"/>
+      <Space h="md" />
       <Table
         headerData={props.queryResult.columns}
         rowData={props.queryResult.rows}
