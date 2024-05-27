@@ -342,6 +342,10 @@ class GenericMetricsLoader(DirectoryLoader):
             "0045_distributions_meta_tables",
             "0046_distributions_add_disable_percentiles",
             "0047_distributions_mv3",
+            "0048_counters_meta_tables_support_empty_tags",
+            "0049_sets_meta_tables_support_empty_tags",
+            "0050_distributions_meta_tables_support_empty_tags",
+            "0051_gauges_meta_tables_support_empty_tags",
         ]
 
 
