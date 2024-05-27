@@ -159,10 +159,11 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     # Confusingly it will also sometimes lower case ARRAY, so check for both.
     tables_set = set(parsed.tables)
     array_join = None
-    if "ARRAY" in parsed.tables_aliases:
-        array_join = "ARRAY"
-    elif "array" in parsed.tables_aliases:
-        array_join = "array"
+    array_join_keys = ["ARRAY", "array", "LEFT", "left"]
+    for ak in array_join_keys:
+        if ak in parsed.tables_aliases:
+            array_join = ak
+            break
 
     if array_join:
         for v in parsed.tables_aliases.values():
