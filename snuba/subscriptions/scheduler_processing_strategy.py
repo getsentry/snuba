@@ -22,6 +22,8 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import BrokerValue, Commit
 
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
@@ -462,13 +464,14 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                 try:
                     encoded_task = self.__encoder.encode(task)
                     encoded_tasks.append(encoded_task)
-
                 except InvalidQueryException:
-                    logger.warning(
-                        "Skipping malformed subscription query %r in scheduler",
-                        task.task.subscription.data.query,
-                    )
-                    continue
+                    entity = task.task.subscription.data.entity
+                    if get_entity_name(entity) == EntityKey.GENERIC_METRICS_GAUGES:
+                        logger.warning(
+                            "Skipping malformed subscription query %r in scheduler",
+                            task.task.subscription.data.query,
+                        )
+                        continue
 
         # Record the amount of time between the message timestamp and when scheduling
         # for that timestamp occurs
