@@ -55,16 +55,24 @@ def build_storage_from_config(
     config_file_path: str,
 ) -> ReadableTableStorage | WritableTableStorage:
     config = load_configuration_data(config_file_path, STORAGE_VALIDATORS)
+    return build_storage_from_yaml_dict(config)
 
-    storage_kwargs = __build_readable_storage_kwargs(config)
-    if config[KIND] == READABLE_STORAGE:
+
+def build_storage_from_yaml_dict(
+    yaml_dict: dict[str, Any],
+) -> ReadableTableStorage | WritableTableStorage:
+    """
+    Given a yaml storage as a dict (ex. returned by safe_load), returns a storage object.
+    """
+    storage_kwargs = __build_readable_storage_kwargs(yaml_dict)
+    if yaml_dict[KIND] == READABLE_STORAGE:
         return ReadableTableStorage(**storage_kwargs)
 
-    storage_kwargs = {**storage_kwargs, **__build_writable_storage_kwargs(config)}
-    if config[KIND] == WRITABLE_STORAGE:
+    storage_kwargs = {**storage_kwargs, **__build_writable_storage_kwargs(yaml_dict)}
+    if yaml_dict[KIND] == WRITABLE_STORAGE:
         return WritableTableStorage(**storage_kwargs)
 
-    storage_kwargs = {**storage_kwargs, **__build_cdc_storage_kwargs(config)}
+    storage_kwargs = {**storage_kwargs, **__build_cdc_storage_kwargs(yaml_dict)}
     return CdcStorage(**storage_kwargs)
 
 
