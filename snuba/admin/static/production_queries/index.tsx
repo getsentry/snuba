@@ -133,8 +133,12 @@ function ProductionQueries(props: { api: Client }) {
           <>
             <h2>Query results</h2>
             <div>
-              Execution Duration (ms): {queryResultHistory[0].duration_ms}
-              {QueryResultQuotaAllowance({queryResult: queryResultHistory[0]})}
+              <div id="queryResultInfo">
+                Execution Duration (ms): {queryResultHistory[0].duration_ms}
+                {QueryResultQuotaAllowance({
+                  queryResult: queryResultHistory[0],
+                })}
+              </div>
               <Button.Group>
                 <Button
                   variant="outline"
@@ -214,63 +218,85 @@ function ProjectsList(props: { projects: string[] }) {
   );
 }
 
+function renderThrottleStatus(isThrottled: boolean, reasonHeader: string[]) {
+  return isThrottled ? (
+    <Text
+      style={{ color: "darkorange", fontFamily: "Arial", fontSize: "medium" }}
+    >
+      Quota Allowance - Throttled <br />
+      {reasonHeader.map((line, index) => (
+        <ol>
+          <li key={index}>{line}</li>
+        </ol>
+      ))}
+    </Text>
+  ) : (
+    <Text style={{ color: "green", fontFamily: "Arial", fontSize: "medium" }}>
+      Quota Allowance - Not throttled <br />
+      SnQL Query executed with 10 threads.
+    </Text>
+  );
+}
+
+function renderPolicyDetails(props: { queryResult: QueryResult }) {
+  return (
+    <>
+      {props.queryResult.quota_allowance &&
+        Object.keys(props.queryResult.quota_allowance).map((policy, index) => {
+          const { can_run, ...policyDetails } =
+            props.queryResult.quota_allowance![policy]; // remove can_run from policyDetails
+          const policyDetailsString = JSON.stringify(policyDetails);
+          return (
+            <React.Fragment key={index}>
+              <Text size="xs">{policy}</Text>
+              <Text size="xs">{policyDetailsString}</Text>
+            </React.Fragment>
+          );
+        })}
+    </>
+  );
+}
+
 function QueryResultQuotaAllowance(props: { queryResult: QueryResult }) {
-  const isThrottled = props.queryResult.quota_allowance
-    && Object.values(props.queryResult.quota_allowance).some((policy) =>
-      policy.max_threads < 10);
+  const isThrottled: boolean =
+    (props.queryResult.quota_allowance &&
+      Object.values(props.queryResult.quota_allowance).some(
+        (policy) => policy.max_threads < 10,
+      )) || false;
   let reasonHeader: string[] = [];
   if (isThrottled) {
-    props.queryResult.quota_allowance && Object.keys(props.queryResult.quota_allowance).forEach(policyName => {
-      const policy = props.queryResult.quota_allowance![policyName];
-      if (policy.max_threads < 10 && policy.explanation.reason != null) {
-        reasonHeader.push(policyName + ': ' + policy.explanation.reason + '. SnQL Query executed with ' + policy.max_threads + ' threads.');
-      }
-    });
+    props.queryResult.quota_allowance &&
+      Object.keys(props.queryResult.quota_allowance).forEach((policyName) => {
+        const policy = props.queryResult.quota_allowance![policyName];
+        if (policy.max_threads < 10 && policy.explanation.reason != null) {
+          reasonHeader.push(
+            policyName + ": " + policy.explanation.reason +
+            ". SnQL Query executed with " + policy.max_threads + " threads.",
+          );
+        }
+      });
   }
-  return <>
-    {props.queryResult.quota_allowance && (
-      <Accordion multiple transitionDuration={0} chevronPosition="left">
-        <Accordion.Item value="0">
-          <Accordion.Control>
-            {isThrottled ? (
-              <Text style={{color: 'darkorange', fontFamily: 'Arial', fontSize: 'medium'}}> Quota
-                Allowance - Throttled <br/>
-                {reasonHeader.map((line, index) => (
-                  <ol>
-                    <li key={index}>
-                      {line}
-                    </li>
-                  </ol>
-                ))} </Text>
-            ) : (
-              <Text style={{color: 'green', fontFamily: 'Arial', fontSize: 'medium'}}> Quota
-                Allowance - Not throttled <br/>SnQL Query executed with 10 threads.</Text>
-            )}
-          </Accordion.Control>
-          <Accordion.Panel>
-            {Object.keys(props.queryResult.quota_allowance).map((policy, index) => {
-              const {can_run, ...policyDetails}
-                = props.queryResult.quota_allowance![policy]; // remove can_run from policyDetails
-              const policyDetailsString = JSON.stringify(policyDetails);
-              return (
-                <React.Fragment key={index}>
-                  <Text size="xs">{policy}</Text>
-                  <Text size="xs">{policyDetailsString}</Text>
-                </React.Fragment>
-              );
-            })}
-          </Accordion.Panel>
-        </Accordion.Item>
-      </Accordion>
-    )}
-  </>;
+  return (
+    <Accordion multiple transitionDuration={0} chevronPosition="left">
+      <Accordion.Item value="0">
+        <Accordion.Control>
+          {renderThrottleStatus(isThrottled, reasonHeader)}
+        </Accordion.Control>
+        <Accordion.Panel>
+          {renderPolicyDetails(props)}
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
 }
 
 function QueryResultHistoryItem(props: { queryResult: QueryResult }) {
   return (
     <div>
-      Execution Duration (ms): {props.queryResult.duration_ms}
-      {QueryResultQuotaAllowance({queryResult: props.queryResult})}
+      <div id="queryResultInfo">
+        Execution Duration (ms): {props.queryResult.duration_ms}
+        {QueryResultQuotaAllowance({ queryResult: props.queryResult })}
+      </div>
       <Button.Group>
         <Button
           variant="outline"
