@@ -14,7 +14,6 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, StringToIntDatetime};
-use crate::runtime_config::get_str_config;
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -39,10 +38,7 @@ pub fn process_message_with_replacement(
             let four = from_slice(payload_bytes).map(|_: FourTrain| ());
             let three = from_slice(payload_bytes).map(|_: ThreeTrain| ());
 
-            let format_full_invalid_payload = get_str_config("errors_format_full_invalid_payload").map_or(false, |o| o.map_or(false, |v| v.as_str() == "true"));
-
-            format!("payload start: {}\n\nerror trying to deserialize as event: {:?}\n\nerror trying to deserialize as replacement: {:?}",
-            if format_full_invalid_payload {String::from_utf8_lossy(payload_bytes)} else {String::from_utf8_lossy(&payload_bytes[..50])}, four, three)
+            format!("payload start: {}\n\nerror trying to deserialize as event: {:?}\n\nerror trying to deserialize as replacement: {:?}", String::from_utf8_lossy(&payload_bytes[..50]), four, three)
         })?;
 
     let (version, msg_type, error_event, replacement_event) = match msg {
