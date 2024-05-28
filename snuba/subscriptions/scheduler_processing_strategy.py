@@ -468,8 +468,9 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     entity = task.task.subscription.data.entity
                     if get_entity_name(entity) == EntityKey.GENERIC_METRICS_GAUGES:
                         logger.warning(
-                            "Skipping malformed subscription query %r in scheduler",
+                            "Skipping malformed subscription query %r with metadata %r in scheduler",
                             task.task.subscription.data.query,
+                            task.task.subscription.data.metadata,
                         )
                         continue
 
