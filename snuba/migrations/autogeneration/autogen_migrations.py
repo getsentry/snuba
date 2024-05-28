@@ -4,7 +4,9 @@ import requests
 import yaml
 
 from snuba.clickhouse.columns import Column, SchemaModifiers
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.utils import parse_columns
+from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget
 
 """
 This file is for autogenerating the migration for adding a column to your storage.
@@ -46,48 +48,136 @@ def get_new_columns(
     if old_storage == new_storage:
         print("storages are the same, nothing to do")
         return []
+
+    res, reason = _only_columns_changed(old_storage, new_storage)
+    if not res:
+        raise ValueError(
+            f"""Error: expected the only change in the storage to be columns but it wasnt.
+Message: {reason}"""
+        )
+
+    # columns
+    oldcols = old_storage["schema"]["columns"]
+    newcols = new_storage["schema"]["columns"]
+    l, r = 0, 0
+    while l < len(oldcols) and r < len(newcols):
+        if oldcols[l] == newcols[r]:
+            l += 1
+            r += 1
+        else:
+            if oldcols[l]["name"] == newcols[r]["name"]:
+                raise ValueError(
+                    f"""Error: column modification is unsupported, {oldcols[l]["name"]} was modified"""
+                )
+            # create the add migration
+            if l == 0:
+                raise ValueError(
+                    "Error: Adding a column to the beginning is currently unsupported, please add it anywhere else."
+                )
+            storage_set = StorageSetKey(old_storage["storage"]["set_key"])
+            newcol = parse_columns([newcols[r]])[0]
+            after = None if l == len(oldcols) else oldcols[l - 1]["name"]
+            col_migrations = [
+                AddColumn(
+                    storage_set=storage_set,
+                    table_name=old_storage["schema"]["local_table_name"],
+                    column=newcol,
+                    after=after,
+                    target=OperationTarget.LOCAL,
+                ),
+                AddColumn(
+                    storage_set=storage_set,
+                    table_name=old_storage["schema"]["dist_table_name"],
+                    column=newcol,
+                    after=after,
+                    target=OperationTarget.DISTRIBUTED,
+                ),
+            ]
+            r += 1
+    if l != len(oldcols):
+        raise ValueError(
+            f"Error: only column addition is currently supported, no modification or removal. Could not find a match for {oldcols[l]}"
+        )
+    if r < len(newcols):
+        # todo: build all these
+        pass
+    return []
+
+
+def _only_columns_changed(old_storage: dict, new_storage: dict) -> tuple[bool, str]:
+    if old_storage == new_storage:
+        return True, "storages are the exact same"
     # validate yamls
     diff = dict_diff(old_storage, new_storage)
-    if diff["in_d1_not_d2"] != set() or diff["in_d2_not_d1"] != set():
-        err_msg = f"""
-Error: expected old and new storages to have the same key set but they didnt.
-in_d1_not_d2: {diff["in_d1_not_d2"]}
-in_d2_not_d1: {diff["in_d2_not_d1"]}
-"""
-        raise ValueError(err_msg)
-
-    assert diff["different_values"]
+    if diff["in_d1_not_d2"] or diff["in_d2_not_d1"]:
+        return (
+            False,
+            f"""
+Old and new storages to have different key sets:
+in_old_not_new: {diff["in_d1_not_d2"]}
+in_new_not_old: {diff["in_d2_not_d1"]}
+""",
+        )
+    assert diff["different_values"]  # otherwise they are the exact same
     if (
         len(diff["different_values"].keys()) > 1
         or list(diff["different_values"].keys())[0] != "schema"
     ):
-        raise ValueError(
-            f"Error: expected the only changed field to be schema, but it was {diff['different_values'].keys()}"
+        return (
+            False,
+            f"expected only schema field to change, but got {diff['different_values'].keys()}",
         )
     # validate schemas
     schema_diff = dict_diff(
         diff["different_values"]["schema"]["d1"],
         diff["different_values"]["schema"]["d2"],
     )
-    if not (
-        schema_diff["in_d1_not_d2"] == set() and schema_diff["in_d2_not_d1"] == set()
-    ):
-        err_msg = f"""
-Error: expected old and new schemas to have the same key set but they didnt.
-in_d1_not_d2: {schema_diff["in_d1_not_d2"]}
-in_d2_not_d1: {schema_diff["in_d2_not_d1"]}
-"""
-        raise ValueError(err_msg)
-    assert schema_diff["different_values"]
+    if schema_diff["in_d1_not_d2"] or schema_diff["in_d2_not_d1"]:
+        return (
+            False,
+            f"""
+Old and new schemas have different keysets
+in_old_not_new: {schema_diff["in_d1_not_d2"]}
+in_new_not_old: {schema_diff["in_d2_not_d1"]}
+""",
+        )
+    assert schema_diff["different_values"]  # otherwise exact same
     if (
         len(schema_diff["different_values"].keys()) > 1
         or list(schema_diff["different_values"].keys())[0] != "columns"
     ):
-        raise ValueError(
-            f"Error: expected the only changed field to be column, but it was {schema_diff['different_values'].keys()}"
+        return (
+            False,
+            f"Expected the only changed field to be columns, but got {schema_diff['different_values'].keys()}",
         )
-    # columns
-    oldcols = {}
+    return True, ""
+
+
+def build_add_col_migrations(
+    colsToAdd: Column[SchemaModifiers],
+) -> tuple[list[AddColumn], list[DropColumn]]:
+    """
+    Given the columns to add to add to the storage,
+    builds and return the forward and backwards ops as a tuple.
+    """
+    return ([], [])
+
+
+STORAGE_YAML = "snuba/datasets/configuration/events/storages/errors.yaml"
+with open(os.path.abspath(os.path.expanduser(STORAGE_YAML)), "r") as f:
+    local_storage = yaml.safe_load(f)
+
+SNUBA_REPO = "https://raw.githubusercontent.com/getsentry/snuba/master"
+res = requests.get(f"{SNUBA_REPO}/{STORAGE_YAML}")
+origin_storage = yaml.safe_load(res.text)
+
+colsToAdd = get_new_columns(origin_storage, local_storage)
+forwardops, backwardsops = build_add_col_migrations(colsToAdd)
+print("hi")
+
+
+'''
+oldcols = {}
     for e in schema_diff["different_values"]["columns"]["d1"]:
         if e["name"] in oldcols:
             raise ValueError(
@@ -118,15 +208,4 @@ in_old_not_new: {col_diff["in_d1_not_d2"]}
         )
     assert col_diff["in_d2_not_d1"]
     return parse_columns([newcols[k] for k in col_diff["in_d2_not_d1"]])
-
-
-STORAGE_YAML = "snuba/datasets/configuration/events/storages/errors.yaml"
-with open(os.path.abspath(os.path.expanduser(STORAGE_YAML)), "r") as f:
-    local_storage = yaml.safe_load(f)
-
-SNUBA_REPO = "https://raw.githubusercontent.com/getsentry/snuba/master"
-res = requests.get(f"{SNUBA_REPO}/{STORAGE_YAML}")
-origin_storage = yaml.safe_load(res.text)
-
-colsToAdd = get_new_columns(origin_storage, local_storage)
-print("hi")
+'''
