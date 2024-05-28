@@ -5,7 +5,16 @@ import time
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
-from typing import Deque, Mapping, MutableMapping, NamedTuple, Optional, Tuple, cast
+from typing import (
+    Deque,
+    List,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    cast,
+)
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
@@ -447,7 +456,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             encoded_tasks = []
         else:
             tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
-            encoded_tasks = []
+            encoded_tasks: List[KafkaPayload] = []
 
             for task in tasks:
                 try:
@@ -455,7 +464,10 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                     encoded_tasks.append(encoded_task)
 
                 except InvalidQueryException:
-                    logger.warning("Skipping malformed subscription query in scheduler")
+                    logger.warning(
+                        "Skipping malformed subscription query %r in scheduler",
+                        task.task.subscription.data.query,
+                    )
                     continue
 
         # Record the amount of time between the message timestamp and when scheduling
