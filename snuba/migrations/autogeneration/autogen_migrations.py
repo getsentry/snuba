@@ -4,9 +4,8 @@ import requests
 import yaml
 
 from snuba.clickhouse.columns import Column, SchemaModifiers
-from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.utils import parse_columns
-from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget
+from snuba.migrations.operations import AddColumn, DropColumn
 
 """
 This file is for autogenerating the migration for adding a column to your storage.
@@ -32,24 +31,24 @@ def dict_diff(d1: dict, d2: dict) -> dict:
     return diff
 
 
-def get_new_columns(
-    old_storage: dict, new_storage: dict
+def get_added_columns(
+    oldstorage: str, newstorage: str
 ) -> list[Column[SchemaModifiers]]:
     """
-    Input
-        old_storage, this is a dictionary representation of a storage yaml file from yaml.safe_load
-            it represents the current state of the storage pre-migration
-        new_storage, similar to old_storage but this represents the new storage post-migration
+    Input:
+        old_storage, this is the old storage yaml in str format
+        new_storage, this is the new modified storage yaml in str format
 
-
-    Validates that the changes to the storage are supported, and returns the new columns
-    to be added by a migration.
+    Validates that the changes to the storage are supported, and returns the columns that were added.
     """
-    if old_storage == new_storage:
+    oldstorage_dict = yaml.safe_load(oldstorage)
+    newstorage_dict = yaml.safe_load(newstorage)
+
+    if oldstorage_dict == newstorage_dict:
         print("storages are the same, nothing to do")
         return []
 
-    res, reason = _only_columns_changed(old_storage, new_storage)
+    res, reason = _only_columns_changed(oldstorage_dict, newstorage_dict)
     if not res:
         raise ValueError(
             f"""Error: expected the only change in the storage to be columns but it wasnt.
@@ -57,51 +56,33 @@ Message: {reason}"""
         )
 
     # columns
-    oldcols = old_storage["schema"]["columns"]
-    newcols = new_storage["schema"]["columns"]
-    l, r = 0, 0
-    while l < len(oldcols) and r < len(newcols):
-        if oldcols[l] == newcols[r]:
-            l += 1
-            r += 1
+    oldstorage_cols = oldstorage_dict["schema"]["columns"]
+    newstorage_cols = newstorage_dict["schema"]["columns"]
+    left, right = 0, 0
+    addedcols = []
+    while left < len(oldstorage_cols) and right < len(newstorage_cols):
+        if oldstorage_cols[left] == newstorage_cols[right]:
+            left += 1
+            right += 1
         else:
-            if oldcols[l]["name"] == newcols[r]["name"]:
+            if oldstorage_cols[left]["name"] == newstorage_cols[right]["name"]:
                 raise ValueError(
-                    f"""Error: column modification is unsupported, {oldcols[l]["name"]} was modified"""
+                    f"""Error: column modification is unsupported, {oldstorage_cols[left]["name"]} was modified"""
                 )
-            # create the add migration
-            if l == 0:
+            elif left == 0:
                 raise ValueError(
                     "Error: Adding a column to the beginning is currently unsupported, please add it anywhere else."
                 )
-            storage_set = StorageSetKey(old_storage["storage"]["set_key"])
-            newcol = parse_columns([newcols[r]])[0]
-            after = None if l == len(oldcols) else oldcols[l - 1]["name"]
-            col_migrations = [
-                AddColumn(
-                    storage_set=storage_set,
-                    table_name=old_storage["schema"]["local_table_name"],
-                    column=newcol,
-                    after=after,
-                    target=OperationTarget.LOCAL,
-                ),
-                AddColumn(
-                    storage_set=storage_set,
-                    table_name=old_storage["schema"]["dist_table_name"],
-                    column=newcol,
-                    after=after,
-                    target=OperationTarget.DISTRIBUTED,
-                ),
-            ]
-            r += 1
-    if l != len(oldcols):
+            else:
+                addedcols += parse_columns([newstorage_cols[right]])
+                right += 1
+    if left != len(oldstorage_cols):
         raise ValueError(
-            f"Error: only column addition is currently supported, no modification or removal. Could not find a match for {oldcols[l]}"
+            f"Error: only column addition is currently supported, no modification or removal. Could not find a match for {oldstorage_cols[left]}"
         )
-    if r < len(newcols):
-        # todo: build all these
-        pass
-    return []
+    if right < len(newstorage_cols):
+        addedcols += parse_columns(newstorage_cols[right : len(newstorage_cols)])
+    return addedcols
 
 
 def _only_columns_changed(old_storage: dict, new_storage: dict) -> tuple[bool, str]:
@@ -153,6 +134,31 @@ in_new_not_old: {schema_diff["in_d2_not_d1"]}
     return True, ""
 
 
+"""
+def column_to_addcolumn_migration(list[Column] | Column) -> list[AddColumn] | AddColumn:
+    storage_set = StorageSetKey(old_storage["storage"]["set_key"])
+    newcol = parse_columns([newcols[r]])[0]
+    after = None if l == len(oldcols) else oldcols[l - 1]["name"]
+    col_migrations = [
+        AddColumn(
+            storage_set=storage_set,
+            table_name=old_storage["schema"]["local_table_name"],
+            column=newcol,
+            after=after,
+            target=OperationTarget.LOCAL,
+        ),
+        AddColumn(
+            storage_set=storage_set,
+            table_name=old_storage["schema"]["dist_table_name"],
+            column=newcol,
+            after=after,
+            target=OperationTarget.DISTRIBUTED,
+        ),
+    ]
+    return []
+"""
+
+
 def build_add_col_migrations(
     colsToAdd: Column[SchemaModifiers],
 ) -> tuple[list[AddColumn], list[DropColumn]]:
@@ -171,8 +177,8 @@ SNUBA_REPO = "https://raw.githubusercontent.com/getsentry/snuba/master"
 res = requests.get(f"{SNUBA_REPO}/{STORAGE_YAML}")
 origin_storage = yaml.safe_load(res.text)
 
-colsToAdd = get_new_columns(origin_storage, local_storage)
-forwardops, backwardsops = build_add_col_migrations(colsToAdd)
+# colsToAdd = get_added_columns(origin_storage, local_storage)
+# forwardops, backwardsops = build_add_col_migrations(colsToAdd)
 print("hi")
 
 
