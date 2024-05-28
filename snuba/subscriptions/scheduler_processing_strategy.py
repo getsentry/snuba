@@ -453,10 +453,10 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             self.__stale_threshold_seconds is not None
             and time.time() - tick.timestamps.lower > self.__stale_threshold_seconds
         ):
-            encoded_tasks = []
+            encoded_tasks: List[KafkaPayload] = []
         else:
             tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
-            encoded_tasks: List[KafkaPayload] = []
+            encoded_tasks = []
 
             for task in tasks:
                 try:
