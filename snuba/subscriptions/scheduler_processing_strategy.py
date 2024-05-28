@@ -14,6 +14,7 @@ from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import BrokerValue, Commit
 
 from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
 from snuba.subscriptions.data import SubscriptionScheduler
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
@@ -446,8 +447,16 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             encoded_tasks = []
         else:
             tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
+            encoded_tasks = []
 
-            encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+            for task in tasks:
+                try:
+                    encoded_task = self.__encoder.encode(task)
+                    encoded_tasks.append(encoded_task)
+
+                except InvalidQueryException:
+                    logger.warning("Skipping malformed subscription query in scheduler")
+                    continue
 
         # Record the amount of time between the message timestamp and when scheduling
         # for that timestamp occurs
