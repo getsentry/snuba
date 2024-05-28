@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import typing
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -25,8 +24,6 @@ def ceil_minute(time: datetime) -> datetime:
 
 Buckets = MutableMapping[datetime, MutableMapping[int, timedelta]]
 
-logger = logging.getLogger(__name__)
-
 
 class Counter:
     """
@@ -49,7 +46,6 @@ class Counter:
         self.limit = self.counter_window_size * percentage
 
     def __trim_expired_buckets(self, now: datetime) -> None:
-        logger.debug("Entering __trim_expired_buckets method")
         current_minute = floor_minute(now)
         window_start = current_minute - self.counter_window_size
         new_buckets: Buckets = {}
@@ -64,7 +60,6 @@ class Counter:
         start_minute: datetime,
         processing_time: timedelta,
     ) -> None:
-        logger.debug("Entering __add_to_bucket method")
         if start_minute in self.buckets:
             if project_id in self.buckets[start_minute]:
                 self.buckets[start_minute][project_id] += processing_time
@@ -77,7 +72,6 @@ class Counter:
     def record_time_spent(
         self, project_id: int, start: datetime, end: datetime
     ) -> None:
-        logger.debug("Entering record_time_spent method")
         start_minute = floor_minute(start)
         left = start
         right = ceil_minute(start)
@@ -88,29 +82,16 @@ class Counter:
         self.__add_to_bucket(project_id, start_minute, end - left)
 
     def get_projects_exceeding_limit(self) -> List[int]:
-        logger.debug("Entering get_projects_exceeding_limit method")
         now = datetime.now()
         self.__trim_expired_buckets(now)
         project_groups: dict[int, timedelta] = defaultdict(lambda: timedelta(seconds=0))
-        logger.debug("self.buckets_size: %s" % len(self.buckets))
         for project_dict in list(self.buckets.values()):
-            logger.debug("project_dict_size: %s" % len(project_dict))
             for project_id, processing_time in project_dict.items():
-                logger.debug(
-                    "project_id: %s, processing_time: %s"
-                    % (project_id, processing_time)
-                )
                 project_groups[project_id] += processing_time
-
-        logger.debug("project_groups_size: %s" % len(project_groups))
 
         # Compare the replacement total grouped by project_id with system time limit
         projects_exceeding_time_limit = []
         for project_id, total_processing_time in project_groups.items():
-            logger.debug(
-                "project_id: %s, total_processing_time: %s, limit: %s"
-                % (project_id, total_processing_time, self.limit)
-            )
             if total_processing_time > self.limit and (
                 len(project_groups) > 1
                 or get_int_config(
@@ -119,7 +100,6 @@ class Counter:
             ):
                 projects_exceeding_time_limit.append(project_id)
 
-        logger.debug("projects_exceeding_time_limit: %s", projects_exceeding_time_limit)
         metrics.timing(
             "get_projects_exceeding_limit_duration",
             datetime.now().timestamp() - now.timestamp(),
