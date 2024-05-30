@@ -1,14 +1,9 @@
-import pytest
-import yaml
-
-from snuba.clickhouse.columns import Column
-from snuba.migrations.autogeneration.autogen_migrations import get_added_columns
-from snuba.utils.schemas import SchemaModifiers, UInt
+from snuba.migrations.autogeneration.autogen_migrations import is_valid_add_column
 
 
-@pytest.fixture
-def mockstorageyaml() -> str:
-    return """
+def mockstoragewithcolumns(cols: list[str]) -> str:
+    colstr = ",\n            ".join([s for s in cols])
+    return f"""
 version: v1
 kind: writable_storage
 name: errors
@@ -19,9 +14,7 @@ readiness_state: complete
 schema:
     columns:
         [
-            { name: project_id, type: UInt, args: { size: 64 } },
-            { name: timestamp, type: DateTime },
-            { name: event_id, type: UUID }
+            {colstr}
         ]
     local_table_name: errors_local
     dist_table_name: errors_dist
@@ -32,19 +25,69 @@ schema:
 """
 
 
-def test_get_new_columns(mockstorageyaml: str) -> None:
-    new_storage = yaml.safe_load(mockstorageyaml)
-    new_storage["schema"]["columns"].append(
-        {
-            "name": "purple_melon",
-            "type": "UInt",
-            "args": {"schema_modifiers": ["readonly"], "size": 8},
-        },
-    )
-    cols = get_added_columns(mockstorageyaml, yaml.dump(new_storage))
-    expected = [
-        Column(
-            name="purple_melon", type=UInt(8, modifiers=SchemaModifiers(readonly=True))
-        )
+def test_is_valid_add_column_basic() -> None:
+    cols = [
+        "{ name: project_id, type: UInt, args: { size: 64 } }",
+        "{ name: timestamp, type: DateTime }",
+        "{ name: event_id, type: UUID }",
     ]
-    assert cols == expected
+    new_cols = [
+        "{ name: project_id, type: UInt, args: { size: 64 } }",
+        "{ name: timestamp, type: DateTime }",
+        "{ name: newcol1, type: DateTime }",
+        "{ name: event_id, type: UUID }",
+        "{ name: newcol2, type: UInt, args: { schema_modifiers: [readonly], size: 8 } }",
+    ]
+    res, _ = is_valid_add_column(
+        mockstoragewithcolumns(cols),
+        mockstoragewithcolumns(new_cols),
+    )
+    assert res
+
+
+def test_is_valid_add_column_modify() -> None:
+    cols = [
+        "{ name: timestamp, type: DateTime }",
+    ]
+    new_cols = [
+        "{ name: timestamp, type: UUID }",
+    ]
+    res, _ = is_valid_add_column(
+        mockstoragewithcolumns(cols),
+        mockstoragewithcolumns(new_cols),
+    )
+    assert not res
+
+
+def test_is_valid_add_column_reorder() -> None:
+    cols = [
+        "{ name: project_id, type: UInt, args: { size: 64 } }",
+        "{ name: timestamp, type: DateTime }",
+    ]
+    new_cols = [
+        "{ name: timestamp, type: DateTime }",
+        "{ name: project_id, type: UInt, args: { size: 64 } }",
+    ]
+    res, _ = is_valid_add_column(
+        mockstoragewithcolumns(cols),
+        mockstoragewithcolumns(new_cols),
+    )
+    assert not res
+
+
+def test_is_valid_add_column_delete() -> None:
+    cols = [
+        "{ name: project_id, type: UInt, args: { size: 64 } }",
+        "{ name: timestamp, type: DateTime }",
+        "{ name: event_id, type: UUID }",
+    ]
+    new_cols = [
+        "{ name: project_id, type: UInt, args: { size: 64 } }",
+        "{ name: timestamp, type: DateTime }",
+        "{ name: newcol1, type: DateTime }",
+    ]
+    res, _ = is_valid_add_column(
+        mockstoragewithcolumns(cols),
+        mockstoragewithcolumns(new_cols),
+    )
+    assert not res

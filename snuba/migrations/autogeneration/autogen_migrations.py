@@ -1,7 +1,5 @@
 import yaml
 
-from snuba.datasets.configuration.storage_builder import build_storage_from_yaml_dict
-
 """
 This file is for autogenerating the migration for adding a column to your storage.
 """
@@ -18,29 +16,28 @@ def is_valid_add_column(oldstorage: str, newstorage: str) -> tuple[bool, str]:
     """
     oldstorage_dict = yaml.safe_load(oldstorage)
     newstorage_dict = yaml.safe_load(newstorage)
-
     if oldstorage_dict == newstorage_dict:
         return True, "storages are the same"
 
-    # ensure both storages are valid
-    build_storage_from_yaml_dict(oldstorage_dict)
-    build_storage_from_yaml_dict(newstorage_dict)
-
-    # make sure the columns field is the only thing that changed
-    if not (
-        oldstorage_dict["schema"].pop("columns")
-        == newstorage_dict["schema"].pop("columns")
-    ):
+    # nothing changed but the columns
+    t1 = oldstorage_dict["schema"].pop("columns")
+    t2 = newstorage_dict["schema"].pop("columns")
+    if not (oldstorage_dict == newstorage_dict):
         return (
             False,
             "Expected the only change to the storage to be the columns, but that is not true",
         )
+    oldstorage_dict["schema"]["columns"] = t1
+    newstorage_dict["schema"]["columns"] = t2
 
-    # make sure the changes to columns reflect valid addition
+    # only changes to columns is additions
     oldstorage_cols = oldstorage_dict["schema"]["columns"]
     newstorage_cols = newstorage_dict["schema"]["columns"]
 
     colnames_old = set(e["name"] for e in oldstorage_cols)
+    colnames_new = set(e["name"] for e in newstorage_cols)
+    if not colnames_old.issubset(colnames_new):
+        return (False, "Column removal is not supported")
 
     pold, pnew = 0, 0
     while pold < len(oldstorage_cols) and pnew < len(newstorage_cols):
@@ -53,7 +50,7 @@ def is_valid_add_column(oldstorage: str, newstorage: str) -> tuple[bool, str]:
         elif curr_new["name"] in colnames_old:
             return (
                 False,
-                f"Modifications to columns was invalid, column '{curr_new['name']}' was modified or reordered",
+                f"Modification to columns in unsupported, column '{curr_new['name']}' was modified or reordered",
             )
         else:
             if pold == 0:
