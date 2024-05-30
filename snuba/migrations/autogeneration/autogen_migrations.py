@@ -13,7 +13,55 @@ This file is for autogenerating the migration for adding a column to your storag
 """
 
 
-def is_valid_add_column(oldstorage: str, newstorage: str) -> tuple[bool, str]:
+def generate_migration_ops(
+    oldstorage: str, newstorage: str
+) -> tuple[list[AddColumn], list[DropColumn]]:
+    """
+    Input:
+        old_storage, the old storage yaml in str format
+        new_storage, the modified storage yaml in str format
+
+    Returns a tuple (forwardops, backwardsops) this are the forward and backward migration
+    operations required to migrate the storage as described in the given yaml files.
+
+    Only supports adding columns, throws error for anything else.
+    """
+    valid, reason = _is_valid_add_column(oldstorage, newstorage)
+    if not valid:
+        raise ValueError(reason)
+
+    oldcol_names = set(
+        col["name"] for col in yaml.safe_load(oldstorage)["schema"]["columns"]
+    )
+    newstorage_dict = yaml.safe_load(newstorage)
+    newcols = newstorage_dict["schema"]["columns"]
+
+    forwardops: list[AddColumn] = []
+    for i, col in enumerate(newcols):
+        if col["name"] not in oldcol_names:
+            column = _schema_column_to_migration_column(parse_columns([col])[0])
+            after = newcols[i - 1]["name"]
+            storage_set = StorageSetKey(newstorage_dict["storage"]["set_key"])
+            forwardops += [
+                AddColumn(
+                    storage_set=storage_set,
+                    table_name=newstorage_dict["schema"]["local_table_name"],
+                    column=column,
+                    after=after,
+                    target=OperationTarget.LOCAL,
+                ),
+                AddColumn(
+                    storage_set=storage_set,
+                    table_name=newstorage_dict["schema"]["dist_table_name"],
+                    column=column,
+                    after=after,
+                    target=OperationTarget.DISTRIBUTED,
+                ),
+            ]
+    return (forwardops, [op.get_reverse() for op in reversed(forwardops)])
+
+
+def _is_valid_add_column(oldstorage: str, newstorage: str) -> tuple[bool, str]:
     """
     Input:
         old_storage, the old storage yaml in str format
@@ -89,51 +137,3 @@ def _schema_column_to_migration_column(
         raise ValueError("readonly modifier is not supported")
     newtype = newtype.set_modifiers(MigrationModifiers(nullable=mods.nullable))
     return Column(column.name, newtype)
-
-
-def generate_migration_ops(
-    oldstorage: str, newstorage: str
-) -> tuple[list[AddColumn], list[DropColumn]]:
-    """
-    Input:
-        old_storage, the old storage yaml in str format
-        new_storage, the modified storage yaml in str format
-
-    Returns a tuple (forwardops, backwardsops) this are the forward and backward migration
-    operations required to migrate the storage as described in the given yaml files.
-
-    Only supports adding columns, throws error for anything else.
-    """
-    valid, reason = is_valid_add_column(oldstorage, newstorage)
-    if not valid:
-        raise ValueError(reason)
-
-    oldcol_names = set(
-        col["name"] for col in yaml.safe_load(oldstorage)["schema"]["columns"]
-    )
-    newstorage_dict = yaml.safe_load(newstorage)
-    newcols = newstorage_dict["schema"]["columns"]
-
-    forwardops: list[AddColumn] = []
-    for i, col in enumerate(newcols):
-        if col["name"] not in oldcol_names:
-            column = _schema_column_to_migration_column(parse_columns([col])[0])
-            after = newcols[i - 1]["name"]
-            storage_set = StorageSetKey(newstorage_dict["storage"]["set_key"])
-            forwardops += [
-                AddColumn(
-                    storage_set=storage_set,
-                    table_name=newstorage_dict["schema"]["local_table_name"],
-                    column=column,
-                    after=after,
-                    target=OperationTarget.LOCAL,
-                ),
-                AddColumn(
-                    storage_set=storage_set,
-                    table_name=newstorage_dict["schema"]["dist_table_name"],
-                    column=column,
-                    after=after,
-                    target=OperationTarget.DISTRIBUTED,
-                ),
-            ]
-    return (forwardops, [op.get_reverse() for op in reversed(forwardops)])
