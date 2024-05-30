@@ -25,11 +25,6 @@ schema:
         args: { schema_modifiers: [nullable] },
       },
       {
-        name: purple_melon,
-        type: UInt,
-        args: { schema_modifiers: [readonly], size: 8 },
-      },
-      {
         name: ip_address_v6,
         type: IPv6,
         args: { schema_modifiers: [nullable] },
