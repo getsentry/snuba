@@ -30,7 +30,7 @@ CONSUMER_GROUP = "consumer_group"
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 class TestReplacer:
     @pytest.fixture(autouse=True)
