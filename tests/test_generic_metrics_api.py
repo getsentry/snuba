@@ -75,7 +75,7 @@ SHARED_MAPPING_META: Mapping[str, Mapping[str, str]] = {
 }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_sets"])
 @pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
@@ -211,7 +211,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][0]["unique_values"] == new_set_unique_count
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_distributions"])
 @pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
@@ -414,7 +414,7 @@ class TestGenericMetricsApiDistributions(BaseApiTest):
         assert "_raw_tags_hash" in data["sql"]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_counters"])
 @pytest.mark.redis_db
 class TestGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -530,7 +530,7 @@ class TestGenericMetricsApiCounters(BaseApiTest):
         assert len(data["data"]) == 1, data
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_counters"])
 @pytest.mark.redis_db
 class TestOrgGenericMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -672,7 +672,7 @@ class TestOrgGenericMetricsApiCounters(BaseApiTest):
         assert first_row["tag_string"] == "placeholder0001"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_gauges"])
 @pytest.mark.redis_db
 class TestOrgGenericMetricsApiGauges(BaseApiTest):
     @pytest.fixture
