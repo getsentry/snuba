@@ -783,6 +783,12 @@ def db_query(
                 query_id=query_id,
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
+        if stats.get("cache_hit"):
+            metrics.increment("cache_hit", tags={"dataset": dataset_name})
+        elif stats.get("cache_wait"):
+            metrics.increment("cache_wait", tags={"dataset": dataset_name})
+        else:
+            metrics.increment("cache_miss", tags={"dataset": dataset_name})
         if result:
             return result
         raise error or Exception(
