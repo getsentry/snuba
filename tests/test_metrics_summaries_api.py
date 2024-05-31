@@ -24,7 +24,7 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["metrics_summaries"])
 @pytest.mark.redis_db
 class TestMetricsSummariesApi(BaseApiTest):
     @pytest.fixture
