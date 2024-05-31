@@ -18,7 +18,7 @@ SNQL_ROUTE = "/transactions/snql"
 LIMIT_BY_COUNT = 5
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["transactions"])
 @pytest.mark.redis_db
 class TestTransactionsApi(BaseApiTest):
     @pytest.fixture
