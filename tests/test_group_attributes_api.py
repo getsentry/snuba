@@ -41,6 +41,7 @@ def kafka_metadata() -> KafkaMessageMetadata:
     return KafkaMessageMetadata(offset=0, partition=0, timestamp=datetime(1970, 1, 1))
 
 
+@pytest.mark.clickhouse_db(storage_keys=["group_attributes"])
 class TestGroupAttributesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
