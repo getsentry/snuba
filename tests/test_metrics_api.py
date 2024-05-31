@@ -72,7 +72,7 @@ have_generated_counters = False
 have_generated_dists = False
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["metrics_counters"])
 @pytest.mark.redis_db
 class TestMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -233,7 +233,7 @@ class TestMetricsApiCounters(BaseApiTest):
         assert aggregation["total_seconds"] == 3600
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["org_metrics_counters"])
 @pytest.mark.redis_db
 class TestOrgMetricsApiCounters(BaseApiTest):
     @pytest.fixture
@@ -375,7 +375,7 @@ class TestOrgMetricsApiCounters(BaseApiTest):
         ]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["metrics_sets"])
 @pytest.mark.redis_db
 class TestMetricsApiSets(BaseApiTest):
     @pytest.fixture
@@ -478,7 +478,7 @@ class TestMetricsApiSets(BaseApiTest):
         assert aggregation["unique_values"] == self.unique_set_values
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["metrics_distributions"])
 @pytest.mark.redis_db
 class TestMetricsApiDistributions(BaseApiTest):
     @pytest.fixture
