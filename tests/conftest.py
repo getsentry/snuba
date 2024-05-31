@@ -129,7 +129,7 @@ def block_clickhouse_db(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None
     from snuba.clusters.cluster import ClickhouseCluster
 
     blocked = BlockedObject(
-        "attempted to access clickhouse in test that does not use @pytest.mark.clickhouse_db"
+        "attempted to access clickhouse in test that does not use @pytest.mark.clickhouse_db(storage_keys=['errors'])"
     )
 
     monkeypatch.setattr(ClickhouseCluster, "get_query_connection", blocked)
