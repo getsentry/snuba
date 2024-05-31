@@ -27,21 +27,32 @@ def _ops_to_migration(
     definition for the migration as a str. The migration must be non-blocking.
     """
 
-    forwards_str = map(lambda op: f"operations.{repr(op)}", forwards_ops)
-    backwards_str = map(lambda op: f"operations.{repr(op)}", backwards_ops)
+    forwards_str = (
+        "[" + ", ".join([f"operations.{repr(op)}" for op in forwards_ops]) + "]"
+    )
+    backwards_str = (
+        "[" + ", ".join([f"operations.{repr(op)}" for op in backwards_ops]) + "]"
+    )
 
     return f"""
-from snuba.migrations.migration import ClickhouseNodeMigration
+from typing import Sequence
+
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import operations
+from snuba.migrations.columns import MigrationModifiers
+from snuba.migrations.migration import ClickhouseNodeMigration
+from snuba.migrations.operations import OperationTarget
+from snuba.utils import schemas
+from snuba.utils.schemas import Column
 
 class Migration(ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_ops(self) -> Sequence[SqlOperation]:
-        {forwards_str}
+    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
+        return {forwards_str}
 
-    def backwards_ops(self) -> Sequence[SqlOperation]:
-        {backwards_str}
+    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
+        return {backwards_str}
 """
 
 

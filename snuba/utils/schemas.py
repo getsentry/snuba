@@ -89,11 +89,11 @@ class ColumnType(Generic[TModifiers]):
         # return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
         repr_content = self._repr_content()
         if repr_content:
-            return "{}({}, modifiers={})".format(
+            return "schemas.{}({}, modifiers={})".format(
                 self.__class__.__name__, repr_content, repr(self.__modifiers)
             )
         else:
-            return "{}(modifiers={})".format(
+            return "schemas.{}(modifiers={})".format(
                 self.__class__.__name__, repr(self.__modifiers)
             )
 
