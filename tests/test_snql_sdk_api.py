@@ -29,7 +29,7 @@ from tests.fixtures import get_raw_event, get_raw_transaction
 from tests.helpers import write_unprocessed_events
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors", "transactions"])
 @pytest.mark.redis_db
 class TestSDKSnQLApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
@@ -435,6 +435,7 @@ class TestSDKSnQLApi(BaseApiTest):
         resp = json.loads(response.data)
         assert response.status_code == 400, resp
 
+    @pytest.mark.clickhouse_db(storage_keys=["generic_metrics_distributions"])
     def test_tags_raw_access(self) -> None:
         query = (
             Query(Entity("generic_metrics_distributions"))
