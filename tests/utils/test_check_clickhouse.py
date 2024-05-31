@@ -106,7 +106,7 @@ def temp_settings() -> Any:
     "snuba.utils.health_info.get_all_storage_keys",
     return_value=[StorageKey.ERRORS_RO],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_check_clickhouse(mock1: mock.MagicMock) -> None:
     assert check_clickhouse()
 
@@ -139,7 +139,7 @@ def test_dataset_undefined_storage_set(
     "snuba.utils.health_info.get_all_storage_keys",
     return_value=[StorageKey.ERRORS_RO],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_filter_checked_storages(mock1: mock.MagicMock, temp_settings: Any) -> None:
     temp_settings.SUPPORTED_STATES = {
         "limited",
