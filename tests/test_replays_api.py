@@ -13,7 +13,7 @@ from tests.fixtures import get_replay_event
 from tests.helpers import write_raw_unprocessed_events
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["replays"])
 @pytest.mark.redis_db
 class TestReplaysApi(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
