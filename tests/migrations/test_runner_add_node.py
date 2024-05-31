@@ -46,7 +46,7 @@ def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
 
 
 @pytest.mark.ci_only
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_add_node() -> None:
     host_name = os.environ.get("CLICKHOUSE_HOST", "127.0.0.1")
     port = int(os.environ.get("CLICKHOUSE_PORT", 9000))

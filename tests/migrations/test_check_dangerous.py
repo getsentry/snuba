@@ -31,7 +31,7 @@ def make_migration(op: SqlOperation) -> ClickhouseNodeMigration:
 
 
 @patch.object(SqlOperation, "execute")  # dont actually run the migrations
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 class TestDangerousMigration:
     table_name = "test_dangerous_migration"
     connection = None
