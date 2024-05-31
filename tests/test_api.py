@@ -28,7 +28,7 @@ from tests.conftest import SnubaSetConfig
 from tests.helpers import write_processed_messages
 
 
-@pytest.mark.clickhouse_db(storage_keys=["errors"])
+@pytest.mark.clickhouse_db(storage_keys=["errors"])(storage_keys=["errors"])
 @pytest.mark.redis_db
 class SimpleAPITest(BaseApiTest):
     @pytest.fixture(autouse=True)
@@ -161,7 +161,7 @@ class SimpleAPITest(BaseApiTest):
             return dbsize
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 class TestApi(SimpleAPITest):
     @pytest.fixture
@@ -2142,7 +2142,7 @@ class TestApi(SimpleAPITest):
         assert metadata["request"]["referrer"] == "test"
 
 
-@pytest.mark.clickhouse_db(storage_keys=["errors"])
+@pytest.mark.clickhouse_db(storage_keys=["errors"])(storage_keys=["errors"])
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
     dataset_name = "events"
@@ -2214,7 +2214,9 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert data.tenant_ids == dict()  # not saved to the redis store
         assert "tenant_ids" not in data.to_dict()  # doesn't show up in dictified data
 
-    @pytest.mark.clickhouse_db(storage_keys=["metrics_counters"])
+    @pytest.mark.clickhouse_db(storage_keys=["errors"])(
+        storage_keys=["metrics_counters"]
+    )
     def test_selected_entity_is_used(self) -> None:
         """
         Test that ensures that the passed entity is the selected one, not the dataset's default
@@ -2337,7 +2339,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         }
 
 
-@pytest.mark.clickhouse_db(storage_keys=["errors"])
+@pytest.mark.clickhouse_db(storage_keys=["errors"])(storage_keys=["errors"])
 @pytest.mark.redis_db
 class TestDeleteSubscriptionApi(BaseApiTest):
     dataset_name = "events"
@@ -2411,7 +2413,7 @@ class TestDeleteSubscriptionApi(BaseApiTest):
         }
 
 
-@pytest.mark.clickhouse_db(storage_keys=["errors_ro"])
+@pytest.mark.clickhouse_db(storage_keys=["errors"])(storage_keys=["errors_ro"])
 @pytest.mark.redis_db
 class TestAPIErrorsRO(TestApi):
     """
