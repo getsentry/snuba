@@ -47,6 +47,7 @@ class TransactionEvent:
     profile_id: Optional[str] = None
     replay_id: Optional[str] = None
     received: Optional[float] = None
+    additional_contexts: Optional[Mapping[str, Any]] = None
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
@@ -63,6 +64,11 @@ class TransactionEvent:
         if self.replay_id is None:
             return None
         return {"replay_id": self.replay_id}
+
+    def get_additional_contexts(self) -> Mapping[str, Any]:
+        if self.additional_contexts is None:
+            return {}
+        return self.additional_contexts
 
     def serialize(self) -> Tuple[int, str, Mapping[str, Any]]:
         return (
@@ -165,6 +171,7 @@ class TransactionEvent:
                         "experiments": {"test1": 1, "test2": 2},
                         "profile": self.get_profile_context(),
                         "replay": self.get_replay_context(),
+                        **self.get_additional_contexts(),
                     },
                     "tags": [
                         ["sentry:release", self.release],
@@ -527,3 +534,36 @@ class TestTransactionsProcessor:
         assert TransactionsMessageProcessor().process_message(
             payload, meta
         ) == InsertBatch([result], ANY)
+
+    def test_nested_context_keys(self) -> None:
+        message = self.__get_transaction_event()
+        message.additional_contexts = {
+            "os": {
+                "distribution": {
+                    "name": "ubuntu",
+                    "version": "18.04",
+                }
+            }
+        }
+        payload = message.serialize()
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+
+        processed_message = TransactionsMessageProcessor().process_message(
+            payload, meta
+        )
+
+        assert len(processed_message.rows) == 1
+
+        context_keys = processed_message.rows[0]["contexts.key"]
+        context_values = processed_message.rows[0]["contexts.value"]
+
+        assert "os.distribution.name" in context_keys
+        index = context_keys.index("os.distribution.name")
+        assert context_values[index] == "ubuntu"
+
+        assert "os.distribution.version" in context_keys
+        index = context_keys.index("os.distribution.version")
+        assert context_values[index] == "18.04"

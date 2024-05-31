@@ -82,15 +82,19 @@ def extract_extra_contexts(
     context_keys = []
     context_values = []
     valid_types = (int, float, str)
-    contexts_iter: Iterable[Tuple[str, Any]] = contexts.items()
+    contexts_queue: Iterable[Tuple[str, Any]] = contexts.items()
     if sort:
-        contexts_iter = sorted(contexts_iter)
-    for ctx_name, ctx_obj in contexts_iter:
+        # Reverse sort because we're using DFS
+        contexts_queue = sorted(contexts_queue, reverse=True)
+
+    while contexts_queue:
+        ctx_name, ctx_obj = contexts_queue.pop()
         if isinstance(ctx_obj, dict):
             ctx_obj.pop("type", None)  # ignore type alias
             ctx_iter: Iterable[Tuple[str, Any]] = ctx_obj.items()
             if sort:
                 ctx_iter = sorted(ctx_iter)
+
             for inner_ctx_name, ctx_value in ctx_iter:
                 if isinstance(ctx_value, valid_types):
                     value = _unicodify(ctx_value)
@@ -104,6 +108,8 @@ def extract_extra_contexts(
 
                         context_keys.append(unicode_key)
                         context_values.append(unicode_value)
+                elif isinstance(ctx_value, dict):
+                    contexts_queue.append((f"{ctx_name}.{inner_ctx_name}", ctx_value))
 
     return (context_keys, context_values)
 
