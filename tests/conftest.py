@@ -186,7 +186,7 @@ def clickhouse_db(
     )
     if not storage_keys:
         raise Exception(
-            "You must specify the storage keys you are running the test again in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
+            "You must specify the storage keys you are running the test against in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
         )
     storage_keys_list = [StorageKey(s) for s in storage_keys]
 
