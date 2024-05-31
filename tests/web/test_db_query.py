@@ -235,7 +235,7 @@ def _build_test_query(
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_db_query_success() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
@@ -306,7 +306,7 @@ def test_db_query_success() -> None:
     }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_bypass_cache_referrer() -> None:
     query, storage, _ = _build_test_query("count(distinct(project_id))")
@@ -359,7 +359,7 @@ def test_bypass_cache_referrer() -> None:
             }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_db_query_fail() -> None:
     query, storage, attribution_info = _build_test_query("count(non_existent_column)")
@@ -464,7 +464,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         ), "update_quota_balance should have been called even though the query was rejected but was not"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_allocation_policy_threads_applied_to_query() -> None:
     POLICY_THREADS = 4
@@ -531,7 +531,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
     assert query_metadata_list[0].stats["max_threads"] == POLICY_THREADS
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_allocation_policy_updates_quota() -> None:
     MAX_QUERIES_TO_RUN = 2
@@ -692,7 +692,7 @@ def test_clickhouse_settings_applied_to_query() -> None:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_db_query_ignore_consistent() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
