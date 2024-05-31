@@ -155,7 +155,7 @@ def get_row_count(storage: Storage) -> int:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["metrics_distributions"])
 def test_metrics_writing_e2e() -> None:
     distributions_storage = get_storage(StorageKey.METRICS_DISTRIBUTIONS)
     polymorphic_bucket = get_writable_storage(StorageKey.METRICS_RAW)
