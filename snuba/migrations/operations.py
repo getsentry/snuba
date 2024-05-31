@@ -31,6 +31,9 @@ class OperationTarget(Enum):
     DISTRIBUTED = "distributed"
     UNSET = "unset"  # target is not set. will throw an error if executed
 
+    def __repr__(self) -> str:
+        return f"OperationTarget.{self.value.upper()}"
+
 
 class SqlOperation(ABC):
     def __init__(
@@ -286,6 +289,12 @@ class AddColumn(SqlOperation):
             column_name=self.column.name,
             target=self.target,
         )
+
+    def __repr__(self) -> str:
+        # i = repr(self.column).rfind("[")
+        # assert i != -1
+        # column_repr = repr(self.column)[:i] + ")"
+        return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
 
 
 class DropColumn(SqlOperation):
