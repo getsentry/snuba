@@ -57,7 +57,7 @@ SHARED_MAPPING_META = {
 }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_counters"])
 @pytest.mark.redis_db
 class TestGenericMetricsSdkApiCounters(BaseApiTest):
     @pytest.fixture
@@ -361,7 +361,7 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         assert len(rows) == 0
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["metrics_counters"])
 @pytest.mark.redis_db
 class TestMetricsSdkApiCounters(TestGenericMetricsSdkApiCounters):
     @pytest.fixture
