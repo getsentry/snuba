@@ -119,7 +119,10 @@ def test_modify_column() -> None:
     new_cols = [
         "{ name: timestamp, type: UUID }",
     ]
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Modification to columns in unsupported, column 'timestamp' was modified or reordered",
+    ):
         generate_migration_ops(
             mockstoragewithcolumns(cols),
             mockstoragewithcolumns(new_cols),
@@ -135,7 +138,10 @@ def test_reorder_columns() -> None:
         "{ name: timestamp, type: DateTime }",
         "{ name: project_id, type: UInt, args: { size: 64 } }",
     ]
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match="Modification to columns in unsupported, column 'timestamp' was modified or reordered",
+    ):
         generate_migration_ops(
             mockstoragewithcolumns(cols),
             mockstoragewithcolumns(new_cols),
@@ -153,7 +159,7 @@ def test_delete_column() -> None:
         "{ name: timestamp, type: DateTime }",
         "{ name: newcol1, type: DateTime }",
     ]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Column removal is not supported"):
         generate_migration_ops(
             mockstoragewithcolumns(cols),
             mockstoragewithcolumns(new_cols),
