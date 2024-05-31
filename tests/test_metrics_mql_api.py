@@ -122,7 +122,7 @@ GAUGES = MetricFixture(
 DATASET = "generic_metrics"
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_counters"])
 @pytest.mark.redis_db
 class TestGenericMetricsMQLApi(BaseApiTest):
     @pytest.fixture
