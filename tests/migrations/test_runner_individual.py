@@ -40,7 +40,7 @@ def setup_teardown(clickhouse_db: None) -> Generator[None, None, None]:
     _drop_all_tables()
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_transactions_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.TRANSACTIONS)
 
@@ -115,7 +115,7 @@ def test_transactions_compatibility() -> None:
     ) == [(5,)]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def generate_transactions() -> None:
     from datetime import datetime
 
@@ -146,7 +146,7 @@ def generate_transactions() -> None:
     ).write(rows)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_groupedmessages_compatibility() -> None:
     cluster = get_cluster(StorageSetKey.EVENTS)
 
@@ -199,7 +199,7 @@ def test_groupedmessages_compatibility() -> None:
     assert outcome == [("project_id, id",)]
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def run_prior_migrations(
     migration_group: MigrationGroup, stop_migration_id: str, runner: Runner
 ) -> None:
@@ -228,7 +228,7 @@ def run_prior_migrations(
         )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def perform_select_query(
     columns: Sequence[str],
     table: str,
@@ -261,7 +261,7 @@ def perform_select_query(
     return connection.execute(full_query).results
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def get_count_from_storage(table_name: str, connection: ClickhousePool) -> int:
     return int(
         perform_select_query(["count()"], table_name, None, None, connection)[0][0]

@@ -45,7 +45,7 @@ for group in MigrationGroup:
         for migration_id, snuba_migration in all_migrations
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_validate_all_migrations(
     snuba_migration: migration.ClickhouseNodeMigration,
 ) -> None:
@@ -414,7 +414,7 @@ def test_conflicts(mock_get_local_table_name: Mock, mock_get_cluster: Mock) -> N
 
 
 @patch.object(validator, "_get_dist_connection")
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_parse_engine(mock_get_dist_connection: Mock) -> None:
     cluster = get_cluster(StorageSetKey.MIGRATIONS)
     connection = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
