@@ -154,7 +154,7 @@ def redis_db(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     yield
 
 
-def _run_migration_with_cache(storage_keys: list[StorageKey]):
+def _run_migration_with_cache(storage_keys: list[StorageKey]) -> None:
     from snuba.migrations.runner import Runner
 
     storage_keys_to_run = [sk for sk in storage_keys if sk not in MIGRATED_STORAGE_KEYS]
@@ -188,14 +188,14 @@ def clickhouse_db(
         raise Exception(
             "You must specify the storage keys you are running the test again in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
         )
-    storage_keys = [StorageKey(s) for s in storage_keys]
+    storage_keys_list = [StorageKey(s) for s in storage_keys]
 
     try:
         reset_dataset_factory()
-        _run_migration_with_cache(storage_keys)
+        _run_migration_with_cache(storage_keys_list)
         yield
     finally:
-        _clear_db(storage_keys)
+        _clear_db(storage_keys_list)
 
 
 @pytest.fixture(autouse=True)
@@ -280,5 +280,8 @@ def _clear_db(storage_keys: List[StorageKey]) -> None:
             for node in nodes:
                 connection = cluster.get_node_connection(
                     ClickhouseClientSettings.MIGRATE, node
+                )
+                print(
+                    f'connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")'
                 )
                 connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
