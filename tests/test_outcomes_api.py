@@ -14,7 +14,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["outcomes_hourly", "outcomes_raw"])
 @pytest.mark.redis_db
 class TestLegacyOutcomesApi(BaseApiTest):
     @pytest.fixture
@@ -301,7 +301,7 @@ class TestLegacyOutcomesApi(BaseApiTest):
         assert data["data"] == correct_data
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 class TestOutcomesAPI(BaseApiTest):
     def post(self, url: str, data: str) -> Any:
