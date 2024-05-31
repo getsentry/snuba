@@ -15,7 +15,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_processed_messages
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["spans"])
 @pytest.mark.redis_db
 class TestSpansApi(BaseApiTest):
     @pytest.fixture
