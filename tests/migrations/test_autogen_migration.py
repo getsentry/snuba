@@ -1,7 +1,10 @@
 import pytest
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.autogeneration.autogen_migrations import generate_migration_ops
+from snuba.migrations.autogeneration.autogen_migrations import (
+    generate_migration,
+    generate_migration_ops,
+)
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget
 from snuba.utils.schemas import Column, DateTime, UInt
@@ -49,6 +52,7 @@ def test_add_column() -> None:
     forwardops, backwardsops = generate_migration_ops(
         mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
     )
+    generate_migration(mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols))
     expected_forward = [
         AddColumn(
             storage_set=StorageSetKey("events"),

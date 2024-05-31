@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Sequence, cast
 
 import yaml
 
@@ -10,6 +10,38 @@ from snuba.utils.schemas import Column, ColumnType, SchemaModifiers
 
 """
 This file is for autogenerating the migration for adding a column to your storage.
+"""
+
+
+def generate_migration(oldstorage: str, newstorage: str) -> str:
+    forwards, backwards = generate_migration_ops(oldstorage, newstorage)
+    return _ops_to_migration(forwards, backwards)
+
+
+def _ops_to_migration(
+    forwards_ops: Sequence[AddColumn],
+    backwards_ops: Sequence[DropColumn],
+) -> str:
+    """
+    Given a lists of forward and backwards ops, returns a python class
+    definition for the migration as a str. The migration must be non-blocking.
+    """
+
+    forwards_str = map(lambda op: f"operations.{repr(op)}", forwards_ops)
+    backwards_str = map(lambda op: f"operations.{repr(op)}", backwards_ops)
+
+    return f"""
+from snuba.migrations.migration import ClickhouseNodeMigration
+from snuba.migrations import operations
+
+class Migration(ClickhouseNodeMigration):
+    blocking = False
+
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        {forwards_str}
+
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        {backwards_str}
 """
 
 
