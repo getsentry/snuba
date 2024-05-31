@@ -291,9 +291,6 @@ class AddColumn(SqlOperation):
         )
 
     def __repr__(self) -> str:
-        # i = repr(self.column).rfind("[")
-        # assert i != -1
-        # column_repr = repr(self.column)[:i] + ")"
         return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
 
 
@@ -323,6 +320,9 @@ class DropColumn(SqlOperation):
         return (
             f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
         )
+
+    def __repr__(self) -> str:
+        return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
 
 
 class ModifyColumn(SqlOperation):
