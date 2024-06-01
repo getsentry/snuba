@@ -283,6 +283,31 @@ class RedisCache(Cache[TValue]):
         else:
             raise ValueError("unexpected result from script")
 
+    def __get_readthrough_cache(
+        self,
+        key: str,
+        function: Callable[[], TValue],
+        record_cache_hit_type: Callable[[int], None],
+    ) -> TValue:
+        result_key = self.__build_key(key)
+
+        value = self.__client.get(result_key)
+
+        if value is not None:
+            record_cache_hit_type(RESULT_VALUE)
+            return self.__codec.decode(value)
+        else:
+            # If the value does not exist in the cache, execute the function
+            # and store the result in the cache
+            value = function()
+            self.__client.set(
+                result_key,
+                self.__codec.encode(value),
+                ex=get_config("cache_expiry_sec", 1),
+            )
+            record_cache_hit_type(RESULT_EXECUTE)
+            return value
+
     def get_readthrough(
         self,
         key: str,
@@ -297,9 +322,15 @@ class RedisCache(Cache[TValue]):
             return function()
 
         try:
-            return self.__get_readthrough(
-                key, function, record_cache_hit_type, timeout, timer
-            )
+            # set disable lua scripts to use the simple read through cache without queueing.
+            if get_config("read_through_cache.disable_lua_scripts", 0):
+                return self.__get_readthrough_cache(
+                    key, function, record_cache_hit_type
+                )
+            else:
+                return self.__get_readthrough(
+                    key, function, record_cache_hit_type, timeout, timer
+                )
         except (ConnectionError, ReadOnlyError, RedisTimeoutError, ValueError):
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise

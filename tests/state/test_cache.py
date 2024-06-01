@@ -138,6 +138,24 @@ def test_fail_open(bad_backend: Cache[bytes]) -> None:
 
 
 @pytest.mark.redis_db
+def test_get_readthrough_with_disable_lua_scripts(backend: Cache[bytes]) -> None:
+    set_config("read_through_cache.disable_lua_scripts", 1)
+    key = "key"
+    value = b"value"
+    function = mock.MagicMock(return_value=value)
+
+    assert backend.get(key) is None
+
+    with assert_changes(lambda: function.call_count, 0, 1):
+        assert backend.get_readthrough(key, function, noop, 5) == value
+
+    assert backend.get(key) == value
+
+    with assert_does_not_change(lambda: function.call_count, 1):
+        assert backend.get_readthrough(key, function, noop, 5) == value
+
+
+@pytest.mark.redis_db
 def test_get_readthrough(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
