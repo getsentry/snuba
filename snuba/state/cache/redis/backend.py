@@ -293,14 +293,14 @@ class RedisCache(Cache[TValue]):
     ) -> TValue:
         result_key = self.__build_key(key)
 
-        value = self.__client.get(result_key)
+        cached_value = self.__client.get(result_key)
         if timer is not None:
             timer.mark("cache_get")
         metric_tags = timer.tags if timer is not None else {}
 
-        if value is not None:
+        if cached_value is not None:
             record_cache_hit_type(RESULT_VALUE)
-            return self.__codec.decode(value)
+            return self.__codec.decode(cached_value)
         else:
             try:
                 value = self.__executor.submit(function).result(timeout)
