@@ -283,29 +283,41 @@ class RedisCache(Cache[TValue]):
         else:
             raise ValueError("unexpected result from script")
 
-    def __get_readthrough_cache(
+    def __get_value_with_simple_readthrough(
         self,
         key: str,
         function: Callable[[], TValue],
         record_cache_hit_type: Callable[[int], None],
+        timeout: int,
+        timer: Optional[Timer] = None,
     ) -> TValue:
         result_key = self.__build_key(key)
 
         value = self.__client.get(result_key)
+        if timer is not None:
+            timer.mark("cache_get")
+        metric_tags = timer.tags if timer is not None else {}
 
         if value is not None:
             record_cache_hit_type(RESULT_VALUE)
             return self.__codec.decode(value)
         else:
-            # If the value does not exist in the cache, execute the function
-            # and store the result in the cache
-            value = function()
-            self.__client.set(
-                result_key,
-                self.__codec.encode(value),
-                ex=get_config("cache_expiry_sec", 1),
-            )
-            record_cache_hit_type(RESULT_EXECUTE)
+            try:
+                value = self.__executor.submit(function).result(timeout)
+                self.__client.set(
+                    result_key,
+                    self.__codec.encode(value),
+                    ex=get_config("cache_expiry_sec", 1),
+                )
+                record_cache_hit_type(RESULT_EXECUTE)
+                if timer is not None:
+                    timer.mark("cache_set")
+            except concurrent.futures.TimeoutError as error:
+                metrics.increment("execute_timeout", tags=metric_tags)
+                raise TimeoutError("timed out while running query") from error
+            except Exception as e:
+                metrics.increment("execute_error", tags=metric_tags)
+                raise e
             return value
 
     def get_readthrough(
@@ -322,10 +334,10 @@ class RedisCache(Cache[TValue]):
             return function()
 
         try:
-            # set disable lua scripts to use the simple read through cache without queueing.
+            # set disable_lua_scripts to use the simple read-through cache without queueing.
             if get_config("read_through_cache.disable_lua_scripts", 0):
-                return self.__get_readthrough_cache(
-                    key, function, record_cache_hit_type
+                return self.__get_value_with_simple_readthrough(
+                    key, function, record_cache_hit_type, timeout, timer
                 )
             else:
                 return self.__get_readthrough(
