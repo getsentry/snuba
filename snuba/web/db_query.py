@@ -785,8 +785,8 @@ def db_query(
             )
         if stats.get("cache_hit"):
             metrics.increment("cache_hit", tags={"dataset": dataset_name})
-        elif stats.get("cache_wait"):
-            metrics.increment("cache_wait", tags={"dataset": dataset_name})
+        elif stats.get("is_duplicate"):
+            metrics.increment("cache_stampede", tags={"dataset": dataset_name})
         else:
             metrics.increment("cache_miss", tags={"dataset": dataset_name})
         if result:
