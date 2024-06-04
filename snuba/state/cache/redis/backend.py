@@ -1,5 +1,6 @@
 import concurrent.futures
 import logging
+import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
@@ -335,7 +336,12 @@ class RedisCache(Cache[TValue]):
 
         try:
             # set disable_lua_scripts to use the simple read-through cache without queueing.
-            if get_config("read_through_cache.disable_lua_scripts", 0):
+            sample_rate = get_config(
+                "read_through_cache.disable_lua_scripts_sample_rate", 0
+            )
+            assert sample_rate is not None
+            disable_lua_scripts = random.random() < float(sample_rate)
+            if disable_lua_scripts:
                 return self.__get_value_with_simple_readthrough(
                     key, function, record_cache_hit_type, timeout, timer
                 )

@@ -139,7 +139,7 @@ def test_fail_open(bad_backend: Cache[bytes]) -> None:
 
 @pytest.mark.redis_db
 def test_get_readthrough_with_disable_lua_scripts(backend: Cache[bytes]) -> None:
-    set_config("read_through_cache.disable_lua_scripts", 1)
+    set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
     key = "key"
     value = b"value"
     function = mock.MagicMock(return_value=value)
