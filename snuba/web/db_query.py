@@ -576,7 +576,7 @@ def _raw_query(
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
 
-            with sentry_sdk.get_current_scope() as scope:
+            with sentry_sdk.Scope.get_current_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
                     fingerprint.append(attribution_info.referrer)
@@ -589,7 +589,7 @@ def _raw_query(
         if request_status.slo == SLO.AGAINST:
             logger.exception("Error running query: %s\n%s", sql, cause)
 
-        with sentry_sdk.get_current_scope() as scope:
+        with sentry_sdk.Scope.get_current_scope() as scope:
             if scope.span:
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 
