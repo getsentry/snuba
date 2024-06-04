@@ -8,9 +8,9 @@ from typing import Any, Callable, Generator, List, Sequence, Tuple, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
+import sentry_sdk
 import simplejson as json
 from dateutil.parser import parse as parse_datetime
-from sentry_sdk import Client, Hub
 
 from snuba import settings, state
 from snuba.clusters.cluster import ClickhouseClientSettings
@@ -1576,7 +1576,16 @@ class TestApi(SimpleAPITest):
 
     def test_exception_captured_by_sentry(self) -> None:
         events: List[Any] = []
-        with Hub(Client(transport=events.append)):
+
+        class TestTransport(sentry_sdk.Transport):
+            def capture_envelope(self, envelope):
+                events.append(envelope)
+
+        hub: sentry_sdk.Hub = sentry_sdk.Hub.current
+        client = sentry_sdk.Client(transport=TestTransport())
+        hub.bind_client(client)
+
+        with hub:
             # This endpoint should return 500 as it internally raises an exception
             response = self.app.get("/tests/error")
 

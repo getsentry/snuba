@@ -32,31 +32,28 @@ def _profiler_main() -> None:
             # should be obvious why.
             logger.warn("starting ondemand profile for %s", own_hostname)
 
-            with sentry_sdk.Hub.main:
-                open_transaction: Union[
-                    Transaction, NoOpSpan, None
-                ] = sentry_sdk.start_transaction(
+            open_transaction: Union[Transaction, NoOpSpan, None] = (
+                sentry_sdk.start_transaction(
                     name=f"ondemand profile: {own_hostname}", sampled=True
                 )
-                assert isinstance(open_transaction, Transaction)
-                assert open_transaction._profile is not None
-                open_transaction._profile.sampled = True
-                if open_transaction._profile.scheduler is None:
-                    logger.warn(
-                        "unable to start ondemand profile, need to turn on profiling globally"
-                    )
-                    return
-
-                # Set main thread as active thread -- this current thread is
-                # fairly uninteresting to look at.
-                # The profile contains all threads anyway.
-                open_transaction._profile.active_thread_id = (
-                    threading.main_thread().ident
+            )
+            assert isinstance(open_transaction, Transaction)
+            assert open_transaction._profile is not None
+            open_transaction._profile.sampled = True
+            if open_transaction._profile.scheduler is None:
+                logger.warn(
+                    "unable to start ondemand profile, need to turn on profiling globally"
                 )
+                return
 
-                open_transaction.__enter__()
-                transaction_start = time.time()
-                current_transaction = open_transaction, transaction_start
+            # Set main thread as active thread -- this current thread is
+            # fairly uninteresting to look at.
+            # The profile contains all threads anyway.
+            open_transaction._profile.active_thread_id = threading.main_thread().ident
+
+            open_transaction.__enter__()
+            transaction_start = time.time()
+            current_transaction = open_transaction, transaction_start
 
             continue
 
