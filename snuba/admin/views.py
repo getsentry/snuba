@@ -108,7 +108,7 @@ def authorize() -> None:
     if request.endpoint != "health":
         user = authorize_request()
         logger.info("authorize.finished", user=user)
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.user = {"email": user.email}
             g.user = user
 

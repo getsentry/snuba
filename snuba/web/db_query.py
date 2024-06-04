@@ -13,8 +13,6 @@ import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
-from sentry_sdk import Hub
-from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings, state
 from snuba.attribution.attribution_info import AttributionInfo
@@ -363,7 +361,7 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    span = Hub.current.scope.span
+    span = sentry_sdk.get_current_span()
 
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
         "enable_bypass_cache_referrers"
@@ -578,7 +576,7 @@ def _raw_query(
             error_code = cause.code
             status = get_query_status_from_error_codes(error_code)
 
-            with configure_scope() as scope:
+            with sentry_sdk.get_current_scope() as scope:
                 fingerprint = ["{{default}}", str(cause.code), dataset_name]
                 if error_code not in constants.CLICKHOUSE_SYSTEMATIC_FAILURES:
                     fingerprint.append(attribution_info.referrer)
@@ -591,7 +589,7 @@ def _raw_query(
         if request_status.slo == SLO.AGAINST:
             logger.exception("Error running query: %s\n%s", sql, cause)
 
-        with configure_scope() as scope:
+        with sentry_sdk.get_current_scope() as scope:
             if scope.span:
                 sentry_sdk.set_tag("slo_status", request_status.status.value)
 

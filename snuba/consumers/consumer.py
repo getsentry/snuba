@@ -517,7 +517,7 @@ def process_message(
         decoded = codec.decode(message.payload.value, validate=False)
 
         if should_validate:
-            with sentry_sdk.push_scope() as scope:
+            with sentry_sdk.new_scope() as scope:
                 scope.add_attachment(
                     bytes=message.payload.value, filename="message.txt"
                 )
@@ -570,7 +570,7 @@ def process_message(
                 "processor": type(processor).__name__,
             },
         )
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_tag("invalid_message", "true")
             logger.warning(err, exc_info=True)
             value = message.value

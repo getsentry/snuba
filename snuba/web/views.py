@@ -238,7 +238,7 @@ def parse_request_body(http_request: Request) -> Dict[str, Any]:
 
 
 def _trace_transaction(dataset: Dataset) -> None:
-    with sentry_sdk.configure_scope() as scope:
+    with sentry_sdk.get_current_scope() as scope:
         if scope.span:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
             scope.span.set_tag("referrer", http_request.referrer)
