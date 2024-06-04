@@ -181,14 +181,14 @@ class ConsumerBuilder:
             configuration["group.instance.id"] = self.group_instance_id
 
         def log_general_error(e: KafkaError) -> None:
-            with sentry_sdk.Scope.get_current_scope() as scope:
-                scope.fingerprint = [e.code(), e.name()]
-                logger.warning(
-                    "Error callback from librdKafka %s, %s, %s",
-                    e.code(),
-                    e.name(),
-                    e.str(),
-                )
+            scope = sentry_sdk.Scope.get_current_scope()
+            scope.fingerprint = [e.code(), e.name()]
+            logger.warning(
+                "Error callback from librdKafka %s, %s, %s",
+                e.code(),
+                e.name(),
+                e.str(),
+            )
 
         configuration["error_cb"] = log_general_error
 
