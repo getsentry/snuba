@@ -106,6 +106,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=int,
 )
 @click.option(
+    "--clickhouse-concurrency",
+    type=int,
+    help="Number of concurrent clickhouse batches at one time.",
+)
+@click.option(
     "--use-rust-processor/--use-python-processor",
     "use_rust_processor",
     is_flag=True,
@@ -172,6 +177,7 @@ def rust_consumer(
     max_batch_time_ms: int,
     log_level: str,
     concurrency: Optional[int],
+    clickhouse_concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
@@ -215,6 +221,7 @@ def rust_consumer(
         no_strict_offset_reset,
         consumer_config_raw,
         concurrency or 1,
+        clickhouse_concurrency or 2,
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
