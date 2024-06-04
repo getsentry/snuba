@@ -32,10 +32,10 @@ def _profiler_main() -> None:
             # should be obvious why.
             logger.warn("starting ondemand profile for %s", own_hostname)
 
-            open_transaction: Union[Transaction, NoOpSpan, None] = (
-                sentry_sdk.start_transaction(
-                    name=f"ondemand profile: {own_hostname}", sampled=True
-                )
+            open_transaction: Union[
+                Transaction, NoOpSpan, None
+            ] = sentry_sdk.start_transaction(
+                name=f"ondemand profile: {own_hostname}", sampled=True
             )
             assert isinstance(open_transaction, Transaction)
             assert open_transaction._profile is not None
