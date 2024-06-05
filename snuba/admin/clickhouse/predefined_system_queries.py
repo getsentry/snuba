@@ -156,7 +156,6 @@ class PartCreations(SystemQuery):
         AND table = '{{table}}'
         AND event_time > now() - toIntervalMinute(10)
         and event_type = 'NewPart'
-
     """
 
 
