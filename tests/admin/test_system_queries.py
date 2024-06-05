@@ -60,5 +60,5 @@ ORDER BY table, flush_time
 """
 
 
-def test_is_query_select():
+def test_is_query_select() -> None:
     assert is_query_select(select_sql) == True
