@@ -48,7 +48,12 @@ from snuba.querylog.query_metadata import (
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
-from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
+from snuba.state.cache.redis.backend import (
+    RESULT_VALUE,
+    RESULT_WAIT,
+    SIMPLE_READTHROUGH,
+    RedisCache,
+)
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
     TABLE_RATE_LIMIT_NAME,
@@ -397,6 +402,8 @@ def execute_query_with_readthrough_caching(
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
+        elif hit_type == SIMPLE_READTHROUGH:
+            stats["lua_scripts_disabled"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
         if span:
             span.set_data("cache_status", span_tag)

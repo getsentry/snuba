@@ -28,7 +28,12 @@ from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import _get_query_settings_from_config, db_query
+from snuba.web.db_query import (
+    _get_cache_partition,
+    _get_query_settings_from_config,
+    db_query,
+    get_query_cache_key,
+)
 
 test_data = [
     pytest.param(
@@ -714,3 +719,51 @@ def test_db_query_ignore_consistent() -> None:
     )
     assert result.extra["stats"]["consistent"] is False
     assert result.extra["stats"]["max_threads"] == 10
+
+
+@pytest.mark.redis_db
+def test_db_query_with_disable_lua_scripts() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
+
+    mock_result = {
+        "data": [{"uniqExact(project_id)": 10001}],
+        "meta": [{"name": "uniqExact(project_id)", "type": "UInt64"}],
+        "profile": {
+            "blocks": 1,
+            "bytes": 64,
+            "elapsed": 0.021712779998779297,
+            "progress_bytes": 0,
+            "rows": 1,
+        },
+    }
+    mock_value = mock_result
+    formatted_query = format_query(query)
+    reader = mock.MagicMock()
+
+    with mock.patch(
+        "snuba.web.db_query.execute_query_with_rate_limits"
+    ) as mock_execute_query:
+        # Set the return value of the mock
+        mock_execute_query.return_value = mock_value
+
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+
+    assert result.extra["stats"]["lua_scripts_disabled"]
+    key = get_query_cache_key(formatted_query)
+    cached_value = _get_cache_partition(reader).get(key)
+    assert cached_value is not None, "cached_value is None"
+    assert mock_result["data"][0] == cached_value.get("data")[0]
+    assert mock_result["meta"][0] == cached_value.get("meta")[0]

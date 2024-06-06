@@ -30,6 +30,7 @@ metrics = MetricsWrapper(environment.metrics, "read_through_cache")
 RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
+SIMPLE_READTHROUGH = 3
 
 
 class RedisCache(Cache[TValue]):
@@ -292,6 +293,7 @@ class RedisCache(Cache[TValue]):
         timeout: int,
         timer: Optional[Timer] = None,
     ) -> TValue:
+        record_cache_hit_type(SIMPLE_READTHROUGH)
         result_key = self.__build_key(key)
 
         cached_value = self.__client.get(result_key)
