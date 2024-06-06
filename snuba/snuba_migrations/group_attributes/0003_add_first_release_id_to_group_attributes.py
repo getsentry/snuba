@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, UInt
+from snuba.clickhouse.columns import Column, UUID
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -16,7 +16,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_local",
                 column=Column(
-                    "group_first_release_id", UInt(8, Modifiers(nullable=True))
+                    "group_first_release_id",
+                    UUID(Modifiers(nullable=True)),
                 ),
                 target=OperationTarget.LOCAL,
                 after="group_priority",
@@ -25,7 +26,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_dist",
                 column=Column(
-                    "group_first_release_id", UInt(8, Modifiers(nullable=True))
+                    "group_first_release_id",
+                    UUID(Modifiers(nullable=True)),
                 ),
                 target=OperationTarget.DISTRIBUTED,
                 after="group_priority",
