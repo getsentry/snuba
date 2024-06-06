@@ -32,6 +32,7 @@ from snuba.web.db_query import (
     _get_cache_partition,
     _get_query_settings_from_config,
     db_query,
+    execute_query_with_readthrough_caching,
     get_query_cache_key,
 )
 
@@ -767,3 +768,58 @@ def test_db_query_with_disable_lua_scripts() -> None:
     assert cached_value is not None, "cached_value is None"
     assert mock_result["data"][0] == cached_value.get("data")[0]
     assert mock_result["meta"][0] == cached_value.get("meta")[0]
+
+
+@pytest.mark.redis_db
+@pytest.mark.parametrize(
+    "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith",
+    [
+        (0, 0, "test_query_id"),
+        (1, 1, "randomized-"),
+    ],
+)
+def test_clickhouse_settings_applied_to_query_id(
+    disable_lua_randomize_query_id: int,
+    disable_lua_scripts_sample_rate: int,
+    expected_startswith: str,
+) -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("disable_lua_randomize_query_id", disable_lua_randomize_query_id)
+    state.set_config(
+        "read_through_cache.disable_lua_scripts_sample_rate",
+        disable_lua_scripts_sample_rate,
+    )
+
+    query_settings = HTTPQuerySettings()
+    formatted_query = format_query(query)
+    reader = mock.MagicMock()
+    clickhouse_query_settings = {}
+    robust = False
+    referrer = "test"
+
+    with mock.patch(
+        "snuba.web.db_query.get_query_cache_key", return_value="test_query_id"
+    ) as mock_get_query_cache_key:
+        query_id = mock_get_query_cache_key(formatted_query)
+        with mock.patch(
+            "snuba.web.db_query.execute_query_with_rate_limits"
+        ) as mock_execute_query:
+            mock_execute_query.return_value = {
+                "data": [{"uniqExact(project_id)": 10001}],
+                "meta": [{"name": "uniqExact(project_id)", "type": "UInt64"}],
+            }
+            execute_query_with_readthrough_caching(
+                clickhouse_query=query,
+                query_settings=query_settings,
+                formatted_query=formatted_query,
+                reader=reader,
+                timer=Timer("foo"),
+                stats={},
+                clickhouse_query_settings=clickhouse_query_settings,
+                robust=robust,
+                query_id=query_id,
+                referrer=referrer,
+            )
+        assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
+        cached_value = _get_cache_partition(reader).get(query_id)
+        assert cached_value is not None, "cached_value is None"
