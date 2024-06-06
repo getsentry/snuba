@@ -215,6 +215,12 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
+    if not async_inserts:
+        # we don't want to allow increasing this if
+        # we aren't using async inserts since that will increase
+        # the number of inserts/sec on clickhouse
+        clickhouse_concurrency = 2
+
     exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
