@@ -406,7 +406,7 @@ def execute_query_with_readthrough_caching(
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
         elif hit_type == SIMPLE_READTHROUGH:
-            stats["lua_scripts_disabled"] = 1
+            stats["cache_hit_simple"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
         if span:
             span.set_data("cache_status", span_tag)

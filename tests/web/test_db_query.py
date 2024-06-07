@@ -33,7 +33,6 @@ from snuba.web.db_query import (
     _get_query_settings_from_config,
     db_query,
     execute_query_with_readthrough_caching,
-    get_query_cache_key,
 )
 
 test_data = [
@@ -723,77 +722,19 @@ def test_db_query_ignore_consistent() -> None:
 
 
 @pytest.mark.redis_db
-def test_db_query_with_disable_lua_scripts() -> None:
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
-
-    mock_result = {
-        "data": [{"uniqExact(project_id)": 10001}],
-        "meta": [{"name": "uniqExact(project_id)", "type": "UInt64"}],
-        "profile": {
-            "blocks": 1,
-            "bytes": 64,
-            "elapsed": 0.021712779998779297,
-            "progress_bytes": 0,
-            "rows": 1,
-        },
-    }
-    mock_value = mock_result
-    formatted_query = format_query(query)
-    reader = mock.MagicMock()
-
-    with mock.patch(
-        "snuba.web.db_query.execute_query_with_rate_limits"
-    ) as mock_execute_query:
-        # Set the return value of the mock
-        mock_execute_query.return_value = mock_value
-
-        result = db_query(
-            clickhouse_query=query,
-            query_settings=HTTPQuerySettings(),
-            attribution_info=attribution_info,
-            dataset_name="events",
-            query_metadata_list=[],
-            formatted_query=formatted_query,
-            reader=reader,
-            timer=Timer("foo"),
-            stats={},
-            trace_id="trace_id",
-            robust=False,
-        )
-
-    assert result.extra["stats"]["lua_scripts_disabled"]
-    key = get_query_cache_key(formatted_query)
-    cached_value = _get_cache_partition(reader).get(key)
-    assert cached_value is not None, "cached_value is None"
-    if mock_result["data"] and cached_value.get("data"):
-        mock_data = mock_result.get("data")
-        cached_data = cached_value.get("data")
-        if isinstance(mock_data, list) and isinstance(cached_data, list):
-            if mock_data and cached_data:
-                if mock_data[0] is not None and cached_data[0] is not None:
-                    assert mock_data[0] == cached_data[0]
-    if mock_result["meta"] and cached_value.get("meta"):
-        mock_meta = mock_result.get("meta")
-        cached_meta = cached_value.get("meta")
-        if isinstance(mock_meta, list) and isinstance(cached_meta, list):
-            if mock_meta and cached_meta:
-                if mock_meta[0] is not None and cached_meta[0] is not None:
-                    assert mock_meta[0] == cached_meta[0]
-
-
-@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 @pytest.mark.parametrize(
-    "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith",
+    "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith, test_cache_hit_simple",
     [
-        (0, 0, "test_query_id"),
-        (1, 1, "randomized-"),
+        (0, 0, "test_query_id", False),
+        (1, 1, "randomized-", True),
     ],
 )
 def test_clickhouse_settings_applied_to_query_id(
     disable_lua_randomize_query_id: int,
     disable_lua_scripts_sample_rate: int,
     expected_startswith: str,
+    test_cache_hit_simple: bool,
 ) -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
     state.set_config("disable_lua_randomize_query_id", disable_lua_randomize_query_id)
@@ -804,34 +745,30 @@ def test_clickhouse_settings_applied_to_query_id(
 
     query_settings = HTTPQuerySettings()
     formatted_query = format_query(query)
-    reader = mock.MagicMock()
+    reader = storage.get_cluster().get_reader()
     clickhouse_query_settings: Dict[str, Any] = {}
-    robust = False
-    referrer = "test"
+    stats: dict[str, Any] = {}
 
     with mock.patch(
         "snuba.web.db_query.get_query_cache_key", return_value="test_query_id"
     ) as mock_get_query_cache_key:
         query_id = mock_get_query_cache_key(formatted_query)
-        with mock.patch(
-            "snuba.web.db_query.execute_query_with_rate_limits"
-        ) as mock_execute_query:
-            mock_execute_query.return_value = {
-                "data": [{"uniqExact(project_id)": 10001}],
-                "meta": [{"name": "uniqExact(project_id)", "type": "UInt64"}],
-            }
-            execute_query_with_readthrough_caching(
-                clickhouse_query=query,
-                query_settings=query_settings,
-                formatted_query=formatted_query,
-                reader=reader,
-                timer=Timer("foo"),
-                stats={},
-                clickhouse_query_settings=clickhouse_query_settings,
-                robust=robust,
-                query_id=query_id,
-                referrer=referrer,
-            )
+        execute_query_with_readthrough_caching(
+            clickhouse_query=query,
+            query_settings=query_settings,
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats=stats,
+            clickhouse_query_settings=clickhouse_query_settings,
+            robust=False,
+            query_id=query_id,
+            referrer="test",
+        )
+        if test_cache_hit_simple:
+            assert stats["cache_hit_simple"] == 1
+        else:
+            assert "cache_hit_simple" not in stats
         assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
         cached_value = _get_cache_partition(reader).get(query_id)
         assert cached_value is not None, "cached_value is None"
