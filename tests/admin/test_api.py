@@ -184,7 +184,7 @@ def get_node_for_table(
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_system_query(admin_api: FlaskClient) -> None:
     _, host, port = get_node_for_table(admin_api, "errors")
     response = admin_api.post(
@@ -219,7 +219,7 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -237,7 +237,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -254,7 +254,7 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -271,7 +271,7 @@ def test_query_trace_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["querylog"])
 def test_querylog_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "querylog")
     response = admin_api.post(
@@ -285,7 +285,7 @@ def test_querylog_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -299,7 +299,7 @@ def test_querylog_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_querylog_describe(admin_api: FlaskClient) -> None:
     response = admin_api.get("/clickhouse_querylog_schema")
     assert response.status_code == 200
@@ -352,7 +352,7 @@ def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (functions)
@@ -371,7 +371,7 @@ def test_snuba_debug_valid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_snuba_debug_explain_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (functions)
@@ -580,7 +580,7 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
@@ -600,7 +600,7 @@ def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["transactions"])
 def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (transactions)
@@ -620,7 +620,7 @@ def test_prod_snql_query_multiple_allowed_projects(admin_api: FlaskClient) -> No
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
