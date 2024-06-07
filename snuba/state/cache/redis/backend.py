@@ -306,7 +306,7 @@ class RedisCache(Cache[TValue]):
             return self.__codec.decode(cached_value)
         else:
             try:
-                value = self.__executor.submit(function).result(timeout)
+                value = function()
                 self.__client.set(
                     result_key,
                     self.__codec.encode(value),
@@ -315,9 +315,6 @@ class RedisCache(Cache[TValue]):
                 record_cache_hit_type(RESULT_EXECUTE)
                 if timer is not None:
                     timer.mark("cache_set")
-            except concurrent.futures.TimeoutError as error:
-                metrics.increment("execute_timeout", tags=metric_tags)
-                raise TimeoutError("timed out while running query") from error
             except Exception as e:
                 metrics.increment("execute_error", tags=metric_tags)
                 raise e
@@ -341,8 +338,9 @@ class RedisCache(Cache[TValue]):
             sample_rate = get_config(
                 "read_through_cache.disable_lua_scripts_sample_rate", 0
             )
-            assert sample_rate is not None
-            disable_lua_scripts = random.random() < float(sample_rate)
+            disable_lua_scripts = sample_rate is not None and random.random() < float(
+                sample_rate
+            )
             if disable_lua_scripts:
                 return self.__get_value_with_simple_readthrough(
                     key, function, record_cache_hit_type, timeout, timer

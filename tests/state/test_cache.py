@@ -173,24 +173,6 @@ def test_get_readthrough_exception_with_disable_lua_scripts(
 
 
 @pytest.mark.redis_db
-def test_get_readthrough_missed_deadline_with_disable_lua_scripts(
-    backend: Cache[bytes],
-) -> None:
-    set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
-    key = "key"
-    value = b"value"
-
-    def function() -> bytes:
-        time.sleep(1.5)
-        return value
-
-    with pytest.raises(TimeoutError):
-        backend.get_readthrough(key, SingleCallFunction(function), noop, 1)
-
-    assert backend.get(key) is None
-
-
-@pytest.mark.redis_db
 def test_get_readthrough(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
