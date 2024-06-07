@@ -429,7 +429,6 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("logical_query, expected", TEST_CASES)
-@pytest.mark.clickhouse_db
 def test_composite(
     logical_query: CompositeQuery[Entity],
     expected: CompositeQuery[Table],
