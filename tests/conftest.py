@@ -188,6 +188,10 @@ def clickhouse_db(
         raise Exception(
             "You must specify the storage keys you are running the test against in the fixture: clickhouse.mark.clickhouse_db(storage_keys=['errors'])"
         )
+    if "trustme" in storage_keys:
+        # if none is passed in we trust the caller of the test to clean up after themselves
+        yield
+        return
     storage_keys_list = [StorageKey(s) for s in storage_keys]
 
     try:
