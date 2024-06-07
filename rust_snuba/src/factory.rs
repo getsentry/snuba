@@ -45,6 +45,7 @@ pub struct ConsumerStrategyFactory {
     pub clickhouse_concurrency: ConcurrencyConfig,
     pub commitlog_concurrency: ConcurrencyConfig,
     pub replacements_concurrency: ConcurrencyConfig,
+    pub async_inserts: bool,
     pub python_max_queue_depth: Option<usize>,
     pub use_rust_processor: bool,
     pub health_check_file: Option<String>,
@@ -116,6 +117,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.clickhouse_concurrency,
             &self.storage_config.clickhouse_cluster.user,
             &self.storage_config.clickhouse_cluster.password,
+            self.async_inserts,
         );
 
         let accumulator = Arc::new(

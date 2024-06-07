@@ -12,6 +12,7 @@ expression: snapshot_payload
     "duration": 1000,
     "end_ms": 371,
     "end_timestamp": 1715868486,
+    "end_timestamp_precise": 1715868486370551,
     "exclusive_time": 1000.0,
     "group": 16045690984833335023,
     "group_raw": 0,
@@ -66,6 +67,7 @@ expression: snapshot_payload
     "span_status": 0,
     "start_ms": 371,
     "start_timestamp": 1715868485,
+    "start_timestamp_precise": 1715868485370551,
     "status": 0,
     "tags.key": [
       "tag1",

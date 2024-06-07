@@ -183,6 +183,7 @@ class ReplaysLoader(DirectoryLoader):
             "0017_add_component_name_column",
             "0018_add_viewed_by_id_column",
             "0019_add_materialization",
+            "0020_add_dist_migration_for_materialization",
         ]
 
 
@@ -340,6 +341,12 @@ class GenericMetricsLoader(DirectoryLoader):
             "0043_sets_meta_tables",
             "0044_gauges_meta_tables",
             "0045_distributions_meta_tables",
+            "0046_distributions_add_disable_percentiles",
+            "0047_distributions_mv3",
+            "0048_counters_meta_tables_support_empty_tags",
+            "0049_sets_meta_tables_support_empty_tags",
+            "0050_distributions_meta_tables_support_empty_tags",
+            "0051_gauges_meta_tables_support_empty_tags",
         ]
 
 
@@ -392,6 +399,7 @@ class GroupAttributesLoader(DirectoryLoader):
         return [
             "0001_group_attributes",
             "0002_add_priority_to_group_attributes",
+            "0003_add_first_release_id_to_group_attributes",
         ]
 
 

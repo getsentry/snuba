@@ -254,7 +254,6 @@ struct CommonMetricFields {
 fn should_record_meta(use_case_id: &str) -> Option<u8> {
     match use_case_id {
         "escalating_issues" => Some(0),
-        "metric_stats" => Some(0),
         _ => Some(1),
     }
 }
@@ -337,6 +336,23 @@ fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &Messa
     }
 
     false
+}
+
+fn parse_dist_materialization_version(
+    config: Result<Option<String>, Error>,
+    metric_type: String,
+) -> u8 {
+    if metric_type == *"distribution" {
+        if let Some(mat_version) = config.ok().flatten() {
+            if !mat_version.trim().is_empty() {
+                let mat_version_int = mat_version.parse::<u8>().unwrap();
+                return mat_version_int;
+            }
+        }
+    }
+
+    // return the currently used materialization version if runtime config is not set
+    2u8
 }
 
 fn process_message<T>(
@@ -523,6 +539,8 @@ struct DistributionsRawRow {
     distribution_values: Vec<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enable_histogram: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disable_percentiles: Option<u8>,
 }
 
 impl Parse for DistributionsRawRow {
@@ -554,11 +572,14 @@ impl Parse for DistributionsRawRow {
             GRANULARITY_ONE_DAY,
         ];
         let mut enable_histogram = None;
+        let mut disable_percentiles = None;
         let aggregate_option = from.aggregation_option.unwrap_or_default();
         if aggregate_option == "ten_second" {
             granularities.push(GRANULARITY_TEN_SECONDS);
         } else if aggregate_option == "hist" {
             enable_histogram = Some(1);
+        } else if aggregate_option == "disable_percentiles" {
+            disable_percentiles = Some(1);
         }
         let retention_days = enforce_retention(Some(from.retention_days), &config.env_config);
         let record_meta = should_record_meta(from.use_case_id.as_str());
@@ -574,7 +595,10 @@ impl Parse for DistributionsRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: 2,
+            materialization_version: parse_dist_materialization_version(
+                get_str_config("gen_metrics_dist_mat_version"),
+                "distribution".to_string(),
+            ),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -585,6 +609,7 @@ impl Parse for DistributionsRawRow {
             common_fields,
             distribution_values,
             enable_histogram,
+            disable_percentiles,
         }))
     }
 }
@@ -806,6 +831,22 @@ mod tests {
         "aggregation_option": "hist"
     }"#;
 
+    const DUMMY_DISTRIBUTION_MESSAGE_WITH_PERCENTILE_AGGREGATE_OPTION: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": [0, 1, 2, 3, 4, 5],
+        "aggregation_option": "disable_percentiles"
+    }"#;
+
     const DUMMY_GAUGE_MESSAGE: &str = r#"{
         "version": 2,
         "use_case_id": "spans",
@@ -966,6 +1007,7 @@ mod tests {
             },
             distribution_values: vec![3f64, 1f64, 2f64],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1023,6 +1065,7 @@ mod tests {
             },
             distribution_values: vec![1f64, 2f64, 3f64],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1245,12 +1288,81 @@ mod tests {
     }
 
     #[test]
+    fn test_dont_use_new_matview_dist() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("2".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview_dist_space() {
+        let fake_config: Result<Option<String>, _> = Ok(Some(" ".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview_dist_empty() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_use_new_matview_dist() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("3".to_string()));
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            3
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview_non_dist() {
+        let fake_config: Result<Option<String>, _> = Ok(Some("3".to_string()));
+        let metric_type = "counter".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
+    fn test_dont_use_new_matview() {
+        let fake_config: Result<Option<String>, _> = Ok(None);
+        let metric_type = "distribution".to_string();
+
+        assert_eq!(
+            parse_dist_materialization_version(fake_config, metric_type),
+            2
+        )
+    }
+
+    #[test]
     fn test_should_record_meta_yes() {
         let use_case_invalid = "escalating_issues";
         assert_eq!(should_record_meta(use_case_invalid), Some(0));
 
         let use_case_valid = "spans";
         assert_eq!(should_record_meta(use_case_valid), Some(1));
+
+        let use_case_metric_stats = "metric_stats";
+        assert_eq!(should_record_meta(use_case_metric_stats), Some(1));
     }
 
     #[test]
@@ -1468,6 +1580,7 @@ mod tests {
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1525,6 +1638,7 @@ mod tests {
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1582,6 +1696,7 @@ mod tests {
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
+            disable_percentiles: None,
         };
         assert_eq!(
             result.unwrap(),
@@ -1591,6 +1706,64 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 667)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_distribution_aggregate_option_percentiles() {
+        let result = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_DISTRIBUTION_MESSAGE_WITH_PERCENTILE_AGGREGATE_OPTION,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 2,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+            },
+            distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            enable_histogram: None,
+            disable_percentiles: Some(1),
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 682)])
                 })
             }
         );

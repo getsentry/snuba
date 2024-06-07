@@ -92,8 +92,14 @@ class Counter:
         # Compare the replacement total grouped by project_id with system time limit
         projects_exceeding_time_limit = []
         for project_id, total_processing_time in project_groups.items():
-            if total_processing_time > self.limit and len(project_groups) > 1:
+            if total_processing_time > self.limit and (
+                len(project_groups) > 1
+                or get_int_config(
+                    "allows_skipping_single_project_replacements", default=0
+                )
+            ):
                 projects_exceeding_time_limit.append(project_id)
+
         metrics.timing(
             "get_projects_exceeding_limit_duration",
             datetime.now().timestamp() - now.timestamp(),

@@ -106,6 +106,11 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=int,
 )
 @click.option(
+    "--clickhouse-concurrency",
+    type=int,
+    help="Number of concurrent clickhouse batches at one time.",
+)
+@click.option(
     "--use-rust-processor/--use-python-processor",
     "use_rust_processor",
     is_flag=True,
@@ -128,6 +133,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     "--max-poll-interval-ms",
     type=int,
     default=30000,
+)
+@click.option(
+    "--async-inserts",
+    is_flag=True,
+    default=False,
+    help="Enable async inserts for ClickHouse",
 )
 @click.option(
     "--health-check-file",
@@ -166,9 +177,11 @@ def rust_consumer(
     max_batch_time_ms: int,
     log_level: str,
     concurrency: Optional[int],
+    clickhouse_concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
+    async_inserts: bool,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
@@ -202,15 +215,23 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
+    if not async_inserts:
+        # we don't want to allow increasing this if
+        # we aren't using async inserts since that will increase
+        # the number of inserts/sec on clickhouse
+        clickhouse_concurrency = 2
+
     exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
         consumer_config_raw,
         concurrency or 1,
+        clickhouse_concurrency or 2,
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
+        async_inserts,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,

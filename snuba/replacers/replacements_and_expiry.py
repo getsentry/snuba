@@ -42,6 +42,7 @@ def set_config_auto_replacements_bypass_projects(
                     project_id,
                     expiry.isoformat(),
                 )
+                metrics.increment("added_project_to_auto_skip")
         pipeline.execute()
 
         metrics.timing(
@@ -85,11 +86,12 @@ def get_config_auto_replacements_bypass_projects(
     for project_id in curr_projects:
         if curr_projects[project_id] < curr_time:
             pipeline.hdel(config_auto_replacements_bypass_projects_hash, project_id)
+            metrics.increment("deleted_project_from_auto_skip")
         else:
             valid_projects[project_id] = curr_projects[project_id]
     pipeline.execute()
     metrics.timing(
-        "deleting_expired_projects",
+        "deleting_expired_projects_duration",
         time.time() - start,
         tags={},
     )
