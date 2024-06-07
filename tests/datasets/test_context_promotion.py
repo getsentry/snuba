@@ -35,7 +35,7 @@ span_id_as_uint64 = int(span_id_hex, 16)
         ),
     ],
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors", "discover"])
 def test_span_id_promotion(
     entity_name: str, dataset_name: str, expected_table_name: str
 ) -> None:
