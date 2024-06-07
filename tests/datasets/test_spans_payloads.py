@@ -45,7 +45,7 @@ expected_for_required_fields = {
     "action": "",
     "deleted": 0,
     "description": "",
-    "domain": None,
+    "domain": "",
     "duration": 1234560123,
     "end_ms": 234,
     "end_timestamp": int(
@@ -242,7 +242,7 @@ class TestSpansPayloads:
 
 
 class TestWriteSpansClickhouse:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["spans"])
     def test_write_spans_to_clickhouse(self) -> None:
         storage = get_writable_storage(StorageKey.SPANS)
         batch = InsertBatch(rows=expected_results, origin_timestamp=None)
