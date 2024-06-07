@@ -288,7 +288,6 @@ class TransactionEvent:
         return ret
 
 
-@pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTransactionsProcessor:
     def __get_timestamps(self) -> Tuple[float, float]:
