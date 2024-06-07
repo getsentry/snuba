@@ -47,7 +47,7 @@ def subscription_data_builder() -> SubscriptionData:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_sets"])
 @pytest.mark.redis_db
 def test_entity_subscriptions_data() -> None:
     subscription_data = subscription_data_builder()
