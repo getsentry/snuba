@@ -110,7 +110,7 @@ test_data = [
     reason="This test still is flaky sometimes and then completely blocks CI / deployment"
 )
 class TestOptimize:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["errors"])
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
         "storage_key, create_event_row_for_date, current_time",
@@ -244,7 +244,9 @@ class TestOptimize:
         assert _get_metrics_tags(table, host) == expected
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
+@pytest.mark.redis_db
+@pytest.mark.ci_only
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
     Tests that a JobTimeoutException is raised when a cutoff time is reached.

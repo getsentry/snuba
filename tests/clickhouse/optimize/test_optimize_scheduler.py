@@ -254,6 +254,7 @@ def test_get_next_schedule(
         assert optimize_scheduler.get_next_schedule(partitions) == expected
 
 
+@pytest.mark.ci_only
 def test_get_next_schedule_raises_exception() -> None:
     optimize_scheduler = OptimizeScheduler(parallel=1)
     with time_machine.travel(
