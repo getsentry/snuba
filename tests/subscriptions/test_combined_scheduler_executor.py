@@ -44,7 +44,7 @@ def create_subscription() -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_combined_scheduler_and_executor(tmpdir: LocalPath) -> None:
     create_subscription()
     epoch = datetime(1970, 1, 1)
