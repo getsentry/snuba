@@ -38,9 +38,6 @@ storage_selector:
 
 query_processors:
   - processor: BasicFunctionsProcessor
-  - processor: UUIDColumnProcessor
-    args:
-      columns: [group_first_release_id]
 
 validate_data_model: error
 validators:
