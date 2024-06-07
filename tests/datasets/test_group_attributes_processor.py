@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+import uuid
 
 import pytest
 from sentry_kafka_schemas.schema_types.group_attributes_v1 import (

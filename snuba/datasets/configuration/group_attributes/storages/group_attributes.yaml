@@ -59,6 +59,9 @@ allocation_policies:
 query_processors:
   - processor: TableRateLimit
   - processor: ConsistencyEnforcerProcessor
+  - processor: UUIDColumnProcessor
+    args:
+      columns: [group_first_release_id]
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
