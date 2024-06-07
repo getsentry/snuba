@@ -74,7 +74,7 @@ class BaseTest:
         )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 class TestReplacer(BaseTest):
     @pytest.fixture(autouse=True)
