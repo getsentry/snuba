@@ -29,7 +29,13 @@ def get_tags() -> Generator[Mapping[str, str], None, None]:
         idx += 1
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(
+    storage_keys=[
+        "generic_metrics_sets_raw",
+        "generic_metrics_sets",
+        "generic_metrics_sets_meta",
+    ]
+)
 @pytest.mark.redis_db
 class TestGenericMetricsApiSets(BaseApiTest):
     @pytest.fixture
@@ -231,7 +237,7 @@ class TestGenericMetricsApiSets(BaseApiTest):
         assert data["data"][3] == {"tag_value": "test", "rank": values[3]}
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_counters"])
 @pytest.mark.redis_db
 class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
     @pytest.fixture
@@ -250,7 +256,7 @@ class TestGenericMetricsApiCounters(TestGenericMetricsApiSets):
         return 1.0
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_gauges"])
 @pytest.mark.redis_db
 class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
     @pytest.fixture
@@ -275,7 +281,7 @@ class TestGenericMetricsApiGauges(TestGenericMetricsApiSets):
         }
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["generic_metrics_distributions"])
 @pytest.mark.redis_db
 class TestGenericMetricsApiDistributions(TestGenericMetricsApiSets):
     @pytest.fixture
