@@ -749,26 +749,23 @@ def test_clickhouse_settings_applied_to_query_id(
     clickhouse_query_settings: Dict[str, Any] = {}
     stats: dict[str, Any] = {}
 
-    with mock.patch(
-        "snuba.web.db_query.get_query_cache_key", return_value="test_query_id"
-    ) as mock_get_query_cache_key:
-        query_id = mock_get_query_cache_key(formatted_query)
-        execute_query_with_readthrough_caching(
-            clickhouse_query=query,
-            query_settings=query_settings,
-            formatted_query=formatted_query,
-            reader=reader,
-            timer=Timer("foo"),
-            stats=stats,
-            clickhouse_query_settings=clickhouse_query_settings,
-            robust=False,
-            query_id=query_id,
-            referrer="test",
-        )
-        if test_cache_hit_simple:
-            assert stats["cache_hit_simple"] == 1
-        else:
-            assert "cache_hit_simple" not in stats
-        assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
-        cached_value = _get_cache_partition(reader).get(query_id)
-        assert cached_value is not None, "cached_value is None"
+    execute_query_with_readthrough_caching(
+        clickhouse_query=query,
+        query_settings=query_settings,
+        formatted_query=formatted_query,
+        reader=reader,
+        timer=Timer("foo"),
+        stats=stats,
+        clickhouse_query_settings=clickhouse_query_settings,
+        robust=False,
+        query_id="test_query_id",
+        referrer="test",
+    )
+
+    if test_cache_hit_simple:
+        assert stats["cache_hit_simple"] == 1
+    else:
+        assert "cache_hit_simple" not in stats
+    assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
+    cached_value = _get_cache_partition(reader).get("test_query_id")
+    assert cached_value is not None, "cached_value is None"
