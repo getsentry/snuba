@@ -16,7 +16,7 @@ from snuba.processor import InsertBatch
 from tests.helpers import write_processed_messages
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["groupedmessages"])
 @pytest.mark.redis_db
 class TestGroupedMessage:
     storage = get_writable_storage(StorageKey.GROUPEDMESSAGES)
