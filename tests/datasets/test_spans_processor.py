@@ -234,7 +234,7 @@ def get_span_event() -> SpanEventExample:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["spans"])
 @pytest.mark.redis_db
 class TestSpansProcessor:
     def test_required_clickhouse_columns_are_present(self) -> None:
