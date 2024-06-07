@@ -244,7 +244,7 @@ class TestEventsGroupAttributes(BaseApiTest):
             ),
         )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["errors", "group_attributes"])
     @pytest.mark.redis_db
     def test_group_attributes_join(self) -> None:
         response = self.query_events_inner_joined_group_attributes()
@@ -283,7 +283,7 @@ class TestEventsGroupAttributes(BaseApiTest):
             }.items()
         )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["errors", "group_attributes"])
     @pytest.mark.redis_db
     def test_group_attributes_inner_join(self) -> None:
         response = self.query_events_joined_group_attributes()
@@ -322,7 +322,7 @@ class TestEventsGroupAttributes(BaseApiTest):
             }.items()
         )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["errors", "group_attributes"])
     @pytest.mark.redis_db
     def test_group_attributes_join_after_delete(self) -> None:
         delete_row = self.initial_group_attributes.copy()
@@ -532,7 +532,9 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             ),
         )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(
+        storage_keys=["errors", "group_attributes", "search_issues"]
+    )
     @pytest.mark.redis_db
     def test_group_attributes_join(self) -> None:
         response = self.query_search_issues_joined_group_attributes()
@@ -573,7 +575,7 @@ class TestSearchIssuesGroupAttributes(BaseApiTest):
             }.items()
         )
 
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["errors", "search_issues"])
     @pytest.mark.redis_db
     def test_group_attributes_join_after_delete(self) -> None:
         delete_row = self.initial_group_attributes.copy()
