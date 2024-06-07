@@ -16,7 +16,7 @@ from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_events_processing() -> None:
     query_body = {
         "query": """

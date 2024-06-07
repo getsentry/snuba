@@ -18,7 +18,7 @@ from tests.helpers import write_unprocessed_events
 
 
 class TestEventsDataset:
-    @pytest.mark.clickhouse_db
+    @pytest.mark.clickhouse_db(storage_keys=["errors"])
     @pytest.mark.redis_db
     def test_tags_hash_map(self) -> None:
         """
