@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.5.1
+
+### Various fixes & improvements
+
+- chore(gocd): Bumping gocd-jsonnet version (#6000) by @IanWoodard
+- ref(async-inserts): Add system queries (#5998) by @MeredithAnya
+- Include metrics for the number of queries resulting in cache hits, misses, and waits associated with datasets. (#5991) by @nachivrn
+- fix(meta) Change the view to use LEFT ARRAY JOIN (#5975) by @evanh
+- Revert "add option to print full payload on invalid message (#5979)" (#5981) by @john-z-yang
+- fix(error): Skip lineno deserialization on failure (#5983) by @john-z-yang
+- feat(generic-metrics): Add gauges subscriptions consumers to Snuba deployment (#5980) by @ayirr7
+- add option to print full payload on invalid message (#5979) by @john-z-yang
+- chore: retire use_new_combine_conditions feature flag (#5977) by @kylemumma
+- ref(subscriptions): Add query-based exception handling in scheduler  (#5976) by @ayirr7
+- SNS 2645 - Surface allocation policy decisions in production queries tool (#5970) by @nachivrn
+- remove logging (#5978) by @xurui-c
+- fix(admin): Allow LEFT ARRAY JOIN in the admin tool (#5974) by @evanh
+- feat(replays): Add migration for distributed materialization (#5951) by @cmanallen
+- ref(async-inserts): allow async inserts as an option (#5955) by @MeredithAnya
+- allow one replacement project to be skipped (#5965) by @xurui-c
+- Debugging bucket timer (#5963) by @xurui-c
+- feat(generic-metrics): Add logic in distributions processor to drop percentiles (#5911) by @ayirr7
+- feat(generic-metrics): Add migrations for opt-in disabled percentiles (#5910) by @ayirr7
+- fix(clickhouse): Remove unecessary logging (#5958) by @nikhars
+- logging (#5959) by @xurui-c
+- feat(metrics): add metric_stats use case to generic metrics meta tables (#5954) by @shellmayr
+- number of projects skipped (#5952) by @xurui-c
+- fix(snuba-admin): Add quotes around ColumnSizeOnDisk's table value (#5953) by @phacops
+
+_Plus 28 more_
+
 ## 24.5.0
 
 ### Various fixes & improvements

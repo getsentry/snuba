@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.system_queries import validate_system_query
+from snuba.admin.clickhouse.system_queries import is_query_select, validate_system_query
 
 
 @pytest.mark.parametrize(
@@ -39,3 +39,26 @@ def test_valid_system_query(sql_query: str) -> None:
 def test_invalid_system_query(sql_query: str) -> None:
     with pytest.raises(InvalidCustomQuery):
         validate_system_query(sql_query)
+
+
+select_sql = """
+SELECT
+    table,
+    query,
+    format,
+    query_id,
+    bytes,
+    flush_time,
+    flush_query_id
+FROM
+    system.asynchronous_insert_log
+WHERE
+    status = 'Ok'
+    AND database = 'default'
+    AND flush_time > now() - toIntervalMinute(10)
+ORDER BY table, flush_time
+"""
+
+
+def test_is_query_select() -> None:
+    assert is_query_select(select_sql) == True
