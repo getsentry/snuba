@@ -31,6 +31,7 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="metrics-subscriptions-executor" \
   --container-name="outcomes-billing-consumer" \
   --container-name="outcomes-consumer" \
+  --container-name="profile-chunks-consumer" \
   --container-name="profiles-consumer" \
   --container-name="profiling-functions-consumer" \
   --container-name="querylog-consumer" \
