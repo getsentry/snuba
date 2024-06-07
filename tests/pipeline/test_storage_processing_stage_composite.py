@@ -483,7 +483,6 @@ TEST_CASES = [
 
 
 @pytest.mark.parametrize("clickhouse_query, processed_query", TEST_CASES)
-@pytest.mark.clickhouse_db
 def test_composite(
     clickhouse_query: CompositeQuery[Table],
     processed_query: CompositeQuery[Table],
