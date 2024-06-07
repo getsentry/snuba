@@ -115,7 +115,7 @@ def ch_query() -> Query:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["transactions"])
 @pytest.mark.redis_db
 def test_basic(ch_query: Query) -> None:
     attinfo = AttributionInfo(
@@ -153,7 +153,7 @@ def test_basic(ch_query: Query) -> None:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_dry_run(ch_query: Query) -> None:
     attinfo = AttributionInfo(
@@ -181,7 +181,7 @@ def test_dry_run(ch_query: Query) -> None:
     )
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_turbo(ch_query: Query) -> None:
     attinfo = AttributionInfo(
