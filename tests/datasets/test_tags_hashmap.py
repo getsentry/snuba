@@ -1,5 +1,3 @@
-import pytest
-
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_processing import (
@@ -13,7 +11,6 @@ from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
 
 
-@pytest.mark.clickhouse_db
 def test_tags_hashmap_optimization() -> None:
     dataset_name = "discover"
     query_str = """
