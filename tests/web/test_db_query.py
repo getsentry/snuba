@@ -747,6 +747,7 @@ def test_clickhouse_settings_applied_to_query_id(
     formatted_query = format_query(query)
     reader = storage.get_cluster().get_reader()
     clickhouse_query_settings: Dict[str, Any] = {}
+    query_id = "test_query_id"
     stats: dict[str, Any] = {}
 
     execute_query_with_readthrough_caching(
@@ -758,7 +759,7 @@ def test_clickhouse_settings_applied_to_query_id(
         stats=stats,
         clickhouse_query_settings=clickhouse_query_settings,
         robust=False,
-        query_id="test_query_id",
+        query_id=query_id,
         referrer="test",
     )
 
@@ -767,5 +768,5 @@ def test_clickhouse_settings_applied_to_query_id(
     else:
         assert "cache_hit_simple" not in stats
     assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
-    cached_value = _get_cache_partition(reader).get("test_query_id")
+    cached_value = _get_cache_partition(reader).get(query_id)
     assert cached_value is not None, "cached_value is None"
