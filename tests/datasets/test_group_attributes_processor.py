@@ -14,7 +14,6 @@ from snuba.datasets.processors.group_attributes_processor import (
 from snuba.processor import ProcessedMessage
 from snuba.writer import WriterTableRow
 
-
 RELEASE_ID = uuid.uuid4()
 
 
