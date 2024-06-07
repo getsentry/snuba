@@ -75,7 +75,6 @@ def build_metrics_summary_result(
     ]
 
 
-@pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestMetricsSummaryProcessor:
     def test_required_clickhouse_columns_are_present(self) -> None:
