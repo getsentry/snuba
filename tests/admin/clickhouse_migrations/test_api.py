@@ -61,8 +61,14 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.fixture
+def test_migration() -> None:
+    Runner().run_all(group=MigrationGroup.TEST_MIGRATION)
+    yield
+
+
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_migration_groups(admin_api: FlaskClient) -> None:
     runner = Runner()
     with patch("snuba.admin.auth.DEFAULT_ROLES", [generate_tool_test_role("all")]):
@@ -108,8 +114,7 @@ def test_migration_groups(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
-def test_list_migration_status(admin_api: FlaskClient) -> None:
+def test_list_migration_status(admin_api: FlaskClient, test_migration: Any) -> None:
     with patch(
         "snuba.admin.auth.DEFAULT_ROLES",
         [
@@ -170,7 +175,7 @@ def test_list_migration_status(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.parametrize("action", ["run", "reverse"])
 def test_run_reverse_migrations(admin_api: FlaskClient, action: str) -> None:
 
