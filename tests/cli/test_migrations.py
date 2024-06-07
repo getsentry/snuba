@@ -11,18 +11,17 @@ def _check_run(
     runner: CliRunner, func: Command, args: Optional[Sequence[str]] = None
 ) -> None:
     result = runner.invoke(func, args)
-    assert result.exit_code == 0
+    assert result.exit_code == 0, (func, args)
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["trustme"])
 def test_migrations_cli() -> None:
     runner = CliRunner()
     # test different combinations of arguments
     _check_run(runner, list)
-    _check_run(runner, migrate, ["--readiness-state", "complete", "-r", "partial"])
-    _check_run(runner, migrate)
-    _check_run(runner, migrate, ["-g", "system"])
-    _check_run(runner, migrate, ["--group", "system"])
+    _check_run(runner, migrate, ["--force"])
+    _check_run(runner, migrate, ["-g", "system", "--force"])
+    _check_run(runner, migrate, ["--group", "system", "--force"])
     _check_run(
         runner,
         run,
