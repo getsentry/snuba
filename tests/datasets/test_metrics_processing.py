@@ -213,7 +213,7 @@ TEST_CASES = [
 @pytest.mark.parametrize(
     "entity_name, column_name, entity_key, translated_value", TEST_CASES
 )
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_metrics_processing(
     entity_name: str,
     column_name: str,
