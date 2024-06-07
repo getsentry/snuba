@@ -186,7 +186,7 @@ class DummyReplacement(Replacement):
     "override_fixture, write_node_replacements_projects, expected_queries", TEST_CASES
 )
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_write_each_node(
     override_fixture: Callable[[bool], FakeClickhouseCluster],
     write_node_replacements_projects: str,
@@ -214,7 +214,7 @@ def test_write_each_node(
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_failing_query(
     override_cluster: Callable[[bool], FakeClickhouseCluster]
 ) -> None:
@@ -238,7 +238,7 @@ def test_failing_query(
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_load_balancing(
     override_cluster: Callable[[bool], FakeClickhouseCluster]
 ) -> None:
@@ -361,7 +361,7 @@ TEST_LOCAL_EXECUTOR = [
     "nodes, backup_connection, expected_queries", TEST_LOCAL_EXECUTOR
 )
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 def test_local_executor(
     nodes: Mapping[int, Sequence[Tuple[ClickhouseNode, bool]]],
     backup_connection: ClickhousePool,
