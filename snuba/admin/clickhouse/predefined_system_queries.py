@@ -134,6 +134,27 @@ class ColumnSizeOnDisk(SystemQuery):
     """
 
 
+class IndexSizeOnDisk(SystemQuery):
+    """
+    Lists the data skipping indexes as well as their sizes on disk. This table has no
+    sense of time, so it's just a snapshot of the current state.
+    """
+
+    sql = """
+    SELECT
+        name,
+        type_full,
+        expr,
+        granularity,
+        formatReadableSize(data_compressed_bytes AS size) AS compressed,
+        formatReadableSize(data_uncompressed_bytes AS usize) AS uncompressed,
+        round(usize / size, 2) AS compr_ratio,
+        marks
+    FROM system.data_skipping_indices
+    WHERE table = '{{table}}'
+    """
+
+
 class PartCreations(SystemQuery):
     """
     New parts created in the last 10 minutes. Replicas have event_type 'DownloadPart',
