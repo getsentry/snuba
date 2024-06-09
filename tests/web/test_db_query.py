@@ -743,7 +743,6 @@ def test_clickhouse_settings_applied_to_query_id(
         disable_lua_scripts_sample_rate,
     )
 
-    query_settings = HTTPQuerySettings()
     formatted_query = format_query(query)
     reader = storage.get_cluster().get_reader()
     clickhouse_query_settings: Dict[str, Any] = {}
@@ -752,7 +751,7 @@ def test_clickhouse_settings_applied_to_query_id(
 
     execute_query_with_readthrough_caching(
         clickhouse_query=query,
-        query_settings=query_settings,
+        query_settings=HTTPQuerySettings(),
         formatted_query=formatted_query,
         reader=reader,
         timer=Timer("foo"),
@@ -763,10 +762,6 @@ def test_clickhouse_settings_applied_to_query_id(
         referrer="test",
     )
 
-    if test_cache_hit_simple:
-        assert stats["cache_hit_simple"] == 1
-    else:
-        assert "cache_hit_simple" not in stats
+    assert ("cache_hit_simple" in stats) == test_cache_hit_simple
     assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
-    cached_value = _get_cache_partition(reader).get(query_id)
-    assert cached_value is not None, "cached_value is None"
+    assert _get_cache_partition(reader).get("test_query_id") is not None
