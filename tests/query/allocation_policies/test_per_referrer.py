@@ -52,6 +52,32 @@ class TestPerReferrerPolicy:
         ).can_run
 
     @pytest.mark.redis_db
+    def test_throttle(self) -> None:
+        policy = ReferrerGuardRailPolicy.from_kwargs(
+            **{
+                "storage_key": "generic_metrics_distributions",
+                "required_tenant_types": ["referrer"],
+            }
+        )
+
+        policy.set_config_value("default_concurrent_request_per_referrer", 4)
+        first_quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
+        )
+        assert first_quota_allowance.max_threads == policy.max_threads
+
+        second_quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
+        )
+        assert second_quota_allowance.max_threads == policy.max_threads
+
+        third_quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
+        )
+        assert third_quota_allowance.max_threads == policy.max_threads // 2
+        assert third_quota_allowance.can_run
+
+    @pytest.mark.redis_db
     def test_override(self):
         policy = ReferrerGuardRailPolicy.from_kwargs(
             **{
