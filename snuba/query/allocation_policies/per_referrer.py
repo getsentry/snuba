@@ -66,15 +66,12 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             AllocationPolicyConfig(
                 name="throttle_threshold",
                 description="The threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
-                param_types={"referrer": str},
                 value_type=int,
-                default=self.get_config_value("default_concurrent_request_per_referrer")
-                // 2,
+                default=50,
             ),
             AllocationPolicyConfig(
                 name="throttled_threads",
                 description="The throttled number of threads Clickhouse will use for the query.",
-                param_types={"referrer": str},
                 value_type=int,
                 default=_DEFAULT_MAX_THREADS // 2,
             ),
@@ -119,6 +116,11 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             rate_limit_params.concurrent_limit is not None
         ), "concurrent_limit must be set"
         num_threads = self._get_max_threads(referrer)
+        print("rate_limit_stats.concurrent", rate_limit_stats.concurrent)
+        print(
+            "self.get_config_value('throttle_threshold')",
+            self.get_config_value("throttle_threshold"),
+        )
         if rate_limit_stats.concurrent > self.get_config_value("throttle_threshold"):
             num_threads = self.get_config_value("throttled_threads")
         self.metrics.timing(

@@ -61,6 +61,7 @@ class TestPerReferrerPolicy:
         )
 
         policy.set_config_value("default_concurrent_request_per_referrer", 4)
+        policy.set_config_value("throttle_threshold", 2)
         first_quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
         )
