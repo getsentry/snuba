@@ -373,6 +373,18 @@ def dataset_query(
     try:
         result = run_query(dataset, request, timer)
         assert result.extra["stats"]
+    except InvalidQueryException as exception:
+        details = {
+            "type": "invalid_query",
+            "message": str(exception),
+        }
+        return Response(
+            json.dumps(
+                {"error": details},
+            ),
+            400,
+            {"Content-Type": "application/json"},
+        )
     except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
