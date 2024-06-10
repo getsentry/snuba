@@ -67,10 +67,6 @@ class BaseConcurrentRateLimitAllocationPolicy(AllocationPolicy):
         rate_limit_shard_factor = self.get_config_value("rate_limit_shard_factor")
         assert isinstance(rate_history_s, (int, float))
         assert isinstance(rate_limit_shard_factor, int)
-        assert (
-            rate_limit_params.concurrent_limit is not None
-        ), "concurrent_limit must be set"
-
         assert rate_limit_shard_factor > 0
 
         rate_limit_stats = rate_limit_start_request(

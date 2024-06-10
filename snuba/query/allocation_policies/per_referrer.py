@@ -100,6 +100,12 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             query_id,
             rate_limit_params,
         )
+        assert (
+            rate_limit_params.concurrent_limit is not None
+        ), "concurrent_limit must be set"
+        num_threads = self._get_max_threads(referrer)
+        if rate_limit_stats.concurrent >= rate_limit_params.concurrent_limit // 2:
+            num_threads = self._get_max_threads(referrer) // 2
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
@@ -112,7 +118,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         }
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=self._get_max_threads(referrer),
+            max_threads=num_threads,
             explanation=decision_explanation,
         )
 
