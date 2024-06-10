@@ -80,11 +80,13 @@ def run_query(
             record_query(request, timer, query_metadata, result)
         _set_query_final(request, result.extra)
     except InvalidQueryException as error:
-        # This execption is thrown when a query fails validation. The validation step is executed
-        # early in the query pipeline. As result, a query metadata object is not fully recorded yet
-        # and we should record the invalid request with the data we have.
         request_status = get_request_status(error)
-        record_invalid_request(timer, request_status, None, str(type(error).__name__))
+        record_invalid_request(
+            timer,
+            request_status,
+            request.attribution_info.referrer,
+            str(type(error).__name__),
+        )
         raise error
     except QueryException as error:
         _set_query_final(request, error.extra)
