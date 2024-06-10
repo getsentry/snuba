@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tempfile
 from dataclasses import asdict
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any, Generator, Mapping, Optional, Sequence, Type
 from unittest.mock import patch
 
 import pytest
@@ -62,7 +62,7 @@ def admin_api() -> FlaskClient:
 
 
 @pytest.fixture
-def test_migration() -> None:
+def test_migration() -> Generator[None, None, None]:
     Runner().run_all(group=MigrationGroup.TEST_MIGRATION)
     yield
 
