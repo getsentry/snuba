@@ -193,6 +193,7 @@ def clickhouse_db(
         yield
         return
     storage_keys_list = [StorageKey(s) for s in storage_keys]
+    _clear_db(storage_keys_list)
 
     try:
         reset_dataset_factory()
