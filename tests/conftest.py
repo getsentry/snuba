@@ -271,6 +271,8 @@ def disable_query_cache(snuba_set_config: SnubaSetConfig, redis_db: None) -> Non
 
 
 def _clear_db(storage_keys: List[StorageKey]) -> None:
+    cleared_nodes = set()
+
     for storage_key in storage_keys:
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
@@ -278,14 +280,21 @@ def _clear_db(storage_keys: List[StorageKey]) -> None:
 
         schema = storage.get_schema()
         if isinstance(schema, WritableTableSchema):
-            table_name = schema.get_local_table_name()
-
             nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+
             for node in nodes:
-                connection = cluster.get_node_connection(
-                    ClickhouseClientSettings.MIGRATE, node
-                )
-                print(
-                    f'connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")'
-                )
-                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+                if node not in cleared_nodes:
+                    connection = cluster.get_node_connection(
+                        ClickhouseClientSettings.MIGRATE, node
+                    )
+                    tables_to_clear = connection.execute(
+                        f"SELECT table FROM (SELECT table, sum(bytes) as size FROM system.parts WHERE active AND database='{database}' and table NOT LIKE 'migrations%' GROUP BY table) WHERE size > 0"
+                    )
+                    tables_to_clear_strs = [
+                        f"{database}.{r[0]}" for r in tables_to_clear.results
+                    ]
+                    for table_to_clear_str in tables_to_clear_strs:
+                        connection.execute(
+                            f"TRUNCATE TABLE IF EXISTS {table_to_clear_str}"
+                        )
+                    cleared_nodes.add(node)
