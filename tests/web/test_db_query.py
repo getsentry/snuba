@@ -765,3 +765,60 @@ def test_clickhouse_settings_applied_to_query_id(
     assert ("cache_hit_simple" in stats) == test_cache_hit_simple
     assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
     assert _get_cache_partition(reader).get("test_query_id") is not None
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_cache_metrics_with_simple_readthrough() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("disable_lua_randomize_query_id", 1)
+    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
+
+    formatted_query = format_query(query)
+    reader = storage.get_cluster().get_reader()
+
+    with mock.patch("snuba.web.db_query.metrics", new=mock.Mock()) as metrics_mock:
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert "cache_hit_simple" in result.extra["stats"]
+        # Assert on first call cache_miss is incremented
+        metrics_mock.assert_has_calls(
+            [
+                mock.call.increment("cache_miss", tags={"dataset": "events"}),
+                mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
+            ]
+        )
+
+        metrics_mock.reset_mock()
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert "cache_hit_simple" in result.extra["stats"]
+        # Assert on second call cache_hit is incremented
+        metrics_mock.assert_has_calls(
+            [
+                mock.call.increment("cache_hit", tags={"dataset": "events"}),
+                mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
+            ]
+        )

@@ -797,10 +797,10 @@ def db_query(
             metrics.increment("cache_hit", tags={"dataset": dataset_name})
         elif stats.get("is_duplicate"):
             metrics.increment("cache_stampede", tags={"dataset": dataset_name})
-        elif stats.get("cache_hit_simple"):
-            metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
         else:
             metrics.increment("cache_miss", tags={"dataset": dataset_name})
+        if stats.get("cache_hit_simple"):
+            metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
         if result:
             return result
         raise error or Exception(
