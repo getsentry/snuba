@@ -33,7 +33,9 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
     This concern is orthogonal to customer rate limits in its purpose. This rate limiter being tripped is a problem
     caused by sentry developers, not customer abuse. It either means that a feature was release that queries this referrer
     too much or that an appropriate rate limit was not set somewhere upstream. It affects customers randomly and basically
-    acts as a load shedder.
+    acts as a load shedder. As a referrer approaches the rate limiter's threshold for rejecting queries, that referrer's
+    queries will get throttled. The threshold for throttling and the (reduced) number of threads are configurable via
+    _REQUESTS_THROTTLE_DIVIDER and _THREADS_THROTTLE_DIVIDER
 
     For example, a product team may push out a feature that sends 20 snuba queries every 5 seconds on the UI.
     In that case, that feature should break but others should continue to be served.
@@ -121,11 +123,15 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             rate_limit_params.concurrent_limit is not None
         ), "concurrent_limit must be set"
         num_threads = self._get_max_threads(referrer)
-        requests_throttle_threshold = self.get_config_value(
-            "default_concurrent_request_per_referrer"
-        ) // self.get_config_value("requests_throttle_divider")
+        requests_throttle_threshold = max(
+            1,
+            self.get_config_value("default_concurrent_request_per_referrer")
+            // self.get_config_value("requests_throttle_divider"),
+        )
         if rate_limit_stats.concurrent > requests_throttle_threshold:
-            num_threads //= self.get_config_value("threads_throttle_divider")
+            num_threads = max(
+                1, num_threads // self.get_config_value("threads_throttle_divider")
+            )
             self.metrics.increment(
                 "concurrent_queries_throttled", tags={"referrer": referrer}
             )
