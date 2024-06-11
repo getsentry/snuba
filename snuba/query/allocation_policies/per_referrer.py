@@ -126,6 +126,9 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         ) * self.get_config_value("default_concurrent_request_per_referrer")
         if rate_limit_stats.concurrent > requests_throttle_threshold:
             num_threads *= self.get_config_value("threads_throttle_divider")
+            self.metrics.increment(
+                "concurrent_queries_throttled", tags={"referrer": referrer}
+            )
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
