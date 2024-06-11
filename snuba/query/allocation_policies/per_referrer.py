@@ -72,13 +72,13 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             ),
             AllocationPolicyConfig(
                 name="requests_throttle_divider",
-                description="The threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
+                description="default_concurrent_request_per_referrer divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
                 value_type=int,
                 default=_REQUESTS_THROTTLE_DIVIDER,
             ),
             AllocationPolicyConfig(
                 name="threads_throttle_divider",
-                description="The throttled number of threads Clickhouse will use for the query.",
+                description="max threads divided by this number is the number of threads we use to execute queries for a throttled referrer",
                 value_type=int,
                 default=_THREADS_THROTTLE_DIVIDER,
             ),
