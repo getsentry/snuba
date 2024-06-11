@@ -19,6 +19,11 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 logger = logging.getLogger("snuba.query.allocation_policy_per_referrer")
 
 _DEFAULT_MAX_THREADS = 10
+_DEFAULT_CONCURRENT_REQUEST_PER_REFERRER = 100
+_REFERRER_CONCURRENT_OVERRIDE = -1
+_REFERRER_MAX_THREADS_OVERRIDE = -1
+_REQUESTS_THROTTLE_DIVIDER = 0.5
+_THREADS_THROTTLE_DIVIDER = 0.5
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -47,33 +52,33 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 """,
                 value_type=int,
                 param_types={},
-                default=100,
+                default=_DEFAULT_CONCURRENT_REQUEST_PER_REFERRER,
             ),
             AllocationPolicyConfig(
                 name="referrer_concurrent_override",
                 description="""override the concurrent limit for a referrer""",
                 value_type=int,
                 param_types={"referrer": str},
-                default=-1,
+                default=_REFERRER_CONCURRENT_OVERRIDE,
             ),
             AllocationPolicyConfig(
                 name="referrer_max_threads_override",
                 description="""override the max_threads for a referrer, applies to every query made by that referrer""",
                 param_types={"referrer": str},
                 value_type=int,
-                default=-1,
+                default=_REFERRER_MAX_THREADS_OVERRIDE,
             ),
             AllocationPolicyConfig(
-                name="throttle_threshold",
+                name="requests_throttle_divider",
                 description="The threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
                 value_type=int,
-                default=50,
+                default=_REQUESTS_THROTTLE_DIVIDER,
             ),
             AllocationPolicyConfig(
-                name="throttled_threads",
+                name="threads_throttle_divider",
                 description="The throttled number of threads Clickhouse will use for the query.",
                 value_type=int,
-                default=_DEFAULT_MAX_THREADS // 2,
+                default=_THREADS_THROTTLE_DIVIDER,
             ),
         ]
 
@@ -116,8 +121,11 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             rate_limit_params.concurrent_limit is not None
         ), "concurrent_limit must be set"
         num_threads = self._get_max_threads(referrer)
-        if rate_limit_stats.concurrent > self.get_config_value("throttle_threshold"):
-            num_threads = self.get_config_value("throttled_threads")
+        requests_throttle_threshold = self.get_config_value(
+            "requests_throttle_divider"
+        ) * self.get_config_value("default_concurrent_request_per_referrer")
+        if rate_limit_stats.concurrent > requests_throttle_threshold:
+            num_threads *= self.get_config_value("threads_throttle_divider")
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
