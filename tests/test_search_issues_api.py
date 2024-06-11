@@ -45,6 +45,7 @@ def base_insert_event(
     )
 
 
+@pytest.mark.clickhouse_db(storage_keys=["search_issues"])
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
