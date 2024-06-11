@@ -167,11 +167,11 @@ impl HttpBatch {
 
     ///
     /// write_rows writes rows to an internal buffer, up until hitting the point of
-    /// CLICKHOUSE_HTTP_CHUNK_SIZE bytes. When it hits that threshold, it will flush
+    /// CLICKHOUSE_HTTP_CHUNK_SIZE_BYTES bytes. When it hits that threshold, it will flush
     /// the existing buffer to the channel in `sender`.
     ///
     pub fn write_rows(&mut self, data: &RowData) -> anyhow::Result<()> {
-        if self.current_chunk.len() > CLICKHOUSE_HTTP_CHUNK_SIZE {
+        if self.current_chunk.len() > CLICKHOUSE_HTTP_CHUNK_SIZE_BYTES {
             self.flush_chunk()?;
         }
 
