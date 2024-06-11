@@ -352,6 +352,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         rhs = filter_factor_value.value
 
         if contains_wildcard:
+            rhs = rhs[:-1] + "%"
             if not condition_op_value:
                 op = ConditionFunctions.LIKE
             elif condition_op_value == "!":
