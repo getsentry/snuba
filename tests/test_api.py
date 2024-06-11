@@ -1578,8 +1578,9 @@ class TestApi(SimpleAPITest):
         events: List[Any] = []
 
         class TestTransport(sentry_sdk.Transport):
-            def capture_envelope(self, envelope):
-                events.append(envelope)
+            def capture_envelope(self, envelope: Any) -> None:
+                for item in envelope:
+                    events.append(item.payload.json)
 
         hub: sentry_sdk.Hub = sentry_sdk.Hub.current
         client = sentry_sdk.Client(transport=TestTransport())
