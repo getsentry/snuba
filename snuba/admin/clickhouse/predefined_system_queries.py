@@ -132,3 +132,112 @@ class ColumnSizeOnDisk(SystemQuery):
         column
     ORDER BY size DESC;
     """
+
+
+class IndexSizeOnDisk(SystemQuery):
+    """
+    Lists the data skipping indexes as well as their sizes on disk. This table has no
+    sense of time, so it's just a snapshot of the current state.
+    """
+
+    sql = """
+    SELECT
+        name,
+        type_full,
+        expr,
+        granularity,
+        formatReadableSize(data_compressed_bytes AS size) AS compressed,
+        formatReadableSize(data_uncompressed_bytes AS usize) AS uncompressed,
+        round(usize / size, 2) AS compr_ratio,
+        marks
+    FROM system.data_skipping_indices
+    WHERE table = '{{table}}'
+    """
+
+
+class PartCreations(SystemQuery):
+    """
+    New parts created in the last 10 minutes. Replicas have event_type 'DownloadPart',
+    therefore we'll only see the new parts on the node that got the insert
+    """
+
+    sql = """
+    SELECT
+        hostName() AS node_name,
+        event_time,
+        part_name,
+        rows,
+        size_in_bytes AS bytes_on_disk,
+        partition_id,
+        part_type
+    FROM
+        system.part_log
+    WHERE
+        database = 'default'
+        AND table = '{{table}}'
+        AND event_time > now() - toIntervalMinute(10)
+        and event_type = 'NewPart'
+    """
+
+
+class AsyncInsertPendingFlushes(SystemQuery):
+    """
+    Current number of aysnc insert queries that are waiting to be flushed
+    """
+
+    # Insert is a keyword that isn't allowed, hence using 'like'
+    sql = """
+    SELECT
+        value as queries
+    FROM system.metrics
+    WHERE metric like 'PendingAsyncInser%'
+    """
+
+
+class AsyncInsertFlushes(SystemQuery):
+    """
+    Async insert queries (flushes) that happened in the last 10 minutes,
+    with a successful status
+    """
+
+    sql = """
+    SELECT
+        table,
+        query,
+        format,
+        query_id,
+        bytes,
+        flush_time,
+        flush_query_id
+    FROM
+        system.asynchronous_insert_log
+    WHERE
+        status = 'Ok'
+        AND database = 'default'
+        AND flush_time > now() - toIntervalMinute(10)
+    ORDER BY table, flush_time
+    """
+
+
+class AsyncInsertFlushErrors(SystemQuery):
+    """
+    Async insert queries that failed within the last 10 minutes
+    """
+
+    sql = """
+    SELECT
+        max(event_time) AS flush,
+        status,
+        exception,
+        any(query_id) AS query_id
+    FROM
+        system.asynchronous_insert_log
+    WHERE
+        database = 'default'
+        AND status <> 'Ok'
+        AND table = '{{table}}'
+        AND flush_time > now() - toIntervalMinute(10)
+    GROUP BY status, exception
+    ORDER BY
+        flush DESC
+    """
