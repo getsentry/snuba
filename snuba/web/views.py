@@ -374,6 +374,7 @@ def dataset_query(
         result = run_query(dataset, request, timer)
         assert result.extra["stats"]
     except InvalidQueryException as exception:
+        details: Mapping[str, Any]
         details = {
             "type": "invalid_query",
             "message": str(exception),
@@ -387,8 +388,6 @@ def dataset_query(
         )
     except QueryException as exception:
         status = 500
-        details: Mapping[str, Any]
-
         cause = exception.__cause__
         if isinstance(cause, (RateLimitExceeded, AllocationPolicyViolations)):
             status = 429
