@@ -123,6 +123,7 @@ def test_run_optimize_with_partition_tracker() -> None:
     clickhouse_pool = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
     table = storage.get_table_writer().get_schema().get_local_table_name()
     database = cluster.get_database()
+    assert database == "snuba_test"
     tracker = OptimizedPartitionTracker(
         redis_client=redis_client,
         host=cluster.get_host(),
