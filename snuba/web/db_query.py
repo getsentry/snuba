@@ -48,7 +48,12 @@ from snuba.querylog.query_metadata import (
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
-from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
+from snuba.state.cache.redis.backend import (
+    RESULT_VALUE,
+    RESULT_WAIT,
+    SIMPLE_READTHROUGH,
+    RedisCache,
+)
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
     TABLE_RATE_LIMIT_NAME,
@@ -384,7 +389,10 @@ def execute_query_with_readthrough_caching(
             robust,
         )
 
-    clickhouse_query_settings["query_id"] = query_id
+    if state.get_config("disable_lua_randomize_query_id", 0):
+        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
+    else:
+        clickhouse_query_settings["query_id"] = query_id
 
     if span:
         span.set_data("query_id", query_id)
@@ -397,6 +405,8 @@ def execute_query_with_readthrough_caching(
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
+        elif hit_type == SIMPLE_READTHROUGH:
+            stats["cache_hit_simple"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
         if span:
             span.set_data("cache_status", span_tag)
@@ -789,6 +799,8 @@ def db_query(
             metrics.increment("cache_stampede", tags={"dataset": dataset_name})
         else:
             metrics.increment("cache_miss", tags={"dataset": dataset_name})
+        if stats.get("cache_hit_simple"):
+            metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
         if result:
             return result
         raise error or Exception(

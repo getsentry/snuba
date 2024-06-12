@@ -224,11 +224,11 @@ function renderThrottleStatus(isThrottled: boolean, reasonHeader: string[]) {
       style={{ color: "darkorange", fontFamily: "Arial", fontSize: "medium" }}
     >
       Quota Allowance - Throttled <br />
+      <ol>
       {reasonHeader.map((line, index) => (
-        <ol>
           <li key={index}>{line}</li>
-        </ol>
       ))}
+      </ol>
     </Text>
   ) : (
     <Text style={{ color: "green", fontFamily: "Arial", fontSize: "medium" }}>

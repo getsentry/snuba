@@ -19,6 +19,11 @@ rds = get_redis_client(RedisClientKey.RATE_LIMITER)
 logger = logging.getLogger("snuba.query.allocation_policy_per_referrer")
 
 _DEFAULT_MAX_THREADS = 10
+_DEFAULT_CONCURRENT_REQUEST_PER_REFERRER = 100
+_REFERRER_CONCURRENT_OVERRIDE = -1
+_REFERRER_MAX_THREADS_OVERRIDE = -1
+_REQUESTS_THROTTLE_DIVIDER = 2
+_THREADS_THROTTLE_DIVIDER = 2
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -28,7 +33,9 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
     This concern is orthogonal to customer rate limits in its purpose. This rate limiter being tripped is a problem
     caused by sentry developers, not customer abuse. It either means that a feature was release that queries this referrer
     too much or that an appropriate rate limit was not set somewhere upstream. It affects customers randomly and basically
-    acts as a load shedder.
+    acts as a load shedder. As a referrer approaches the rate limiter's threshold for rejecting queries, that referrer's
+    queries will get throttled. The threshold for throttling and the (reduced) number of threads are configurable via
+    _REQUESTS_THROTTLE_DIVIDER and _THREADS_THROTTLE_DIVIDER
 
     For example, a product team may push out a feature that sends 20 snuba queries every 5 seconds on the UI.
     In that case, that feature should break but others should continue to be served.
@@ -47,21 +54,33 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 """,
                 value_type=int,
                 param_types={},
-                default=100,
+                default=_DEFAULT_CONCURRENT_REQUEST_PER_REFERRER,
             ),
             AllocationPolicyConfig(
                 name="referrer_concurrent_override",
                 description="""override the concurrent limit for a referrer""",
                 value_type=int,
                 param_types={"referrer": str},
-                default=-1,
+                default=_REFERRER_CONCURRENT_OVERRIDE,
             ),
             AllocationPolicyConfig(
                 name="referrer_max_threads_override",
                 description="""override the max_threads for a referrer, applies to every query made by that referrer""",
                 param_types={"referrer": str},
                 value_type=int,
-                default=-1,
+                default=_REFERRER_MAX_THREADS_OVERRIDE,
+            ),
+            AllocationPolicyConfig(
+                name="requests_throttle_divider",
+                description="default_concurrent_request_per_referrer divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
+                value_type=int,
+                default=_REQUESTS_THROTTLE_DIVIDER,
+            ),
+            AllocationPolicyConfig(
+                name="threads_throttle_divider",
+                description="max threads divided by this number is the number of threads we use to execute queries for a throttled referrer",
+                value_type=int,
+                default=_THREADS_THROTTLE_DIVIDER,
             ),
         ]
 
@@ -100,6 +119,22 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             query_id,
             rate_limit_params,
         )
+        assert (
+            rate_limit_params.concurrent_limit is not None
+        ), "concurrent_limit must be set"
+        num_threads = self._get_max_threads(referrer)
+        requests_throttle_threshold = max(
+            1,
+            self.get_config_value("default_concurrent_request_per_referrer")
+            // self.get_config_value("requests_throttle_divider"),
+        )
+        if rate_limit_stats.concurrent > requests_throttle_threshold:
+            num_threads = max(
+                1, num_threads // self.get_config_value("threads_throttle_divider")
+            )
+            self.metrics.increment(
+                "concurrent_queries_throttled", tags={"referrer": referrer}
+            )
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
@@ -112,7 +147,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         }
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=self._get_max_threads(referrer),
+            max_threads=num_threads,
             explanation=decision_explanation,
         )
 

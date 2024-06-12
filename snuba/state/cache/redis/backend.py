@@ -1,5 +1,6 @@
 import concurrent.futures
 import logging
+import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
@@ -29,6 +30,7 @@ metrics = MetricsWrapper(environment.metrics, "read_through_cache")
 RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
+SIMPLE_READTHROUGH = 3
 
 
 class RedisCache(Cache[TValue]):
@@ -283,6 +285,41 @@ class RedisCache(Cache[TValue]):
         else:
             raise ValueError("unexpected result from script")
 
+    def __get_value_with_simple_readthrough(
+        self,
+        key: str,
+        function: Callable[[], TValue],
+        record_cache_hit_type: Callable[[int], None],
+        timeout: int,
+        timer: Optional[Timer] = None,
+    ) -> TValue:
+        record_cache_hit_type(SIMPLE_READTHROUGH)
+        result_key = self.__build_key(key)
+
+        cached_value = self.__client.get(result_key)
+        if timer is not None:
+            timer.mark("cache_get")
+        metric_tags = timer.tags if timer is not None else {}
+
+        if cached_value is not None:
+            record_cache_hit_type(RESULT_VALUE)
+            return self.__codec.decode(cached_value)
+        else:
+            try:
+                value = function()
+                self.__client.set(
+                    result_key,
+                    self.__codec.encode(value),
+                    ex=get_config("cache_expiry_sec", 1),
+                )
+                record_cache_hit_type(RESULT_EXECUTE)
+                if timer is not None:
+                    timer.mark("cache_set")
+            except Exception as e:
+                metrics.increment("execute_error", tags=metric_tags)
+                raise e
+            return value
+
     def get_readthrough(
         self,
         key: str,
@@ -297,9 +334,21 @@ class RedisCache(Cache[TValue]):
             return function()
 
         try:
-            return self.__get_readthrough(
-                key, function, record_cache_hit_type, timeout, timer
+            # set disable_lua_scripts to use the simple read-through cache without queueing.
+            sample_rate = get_config(
+                "read_through_cache.disable_lua_scripts_sample_rate", 0
             )
+            disable_lua_scripts = sample_rate is not None and random.random() < float(
+                sample_rate
+            )
+            if disable_lua_scripts:
+                return self.__get_value_with_simple_readthrough(
+                    key, function, record_cache_hit_type, timeout, timer
+                )
+            else:
+                return self.__get_readthrough(
+                    key, function, record_cache_hit_type, timeout, timer
+                )
         except (ConnectionError, ReadOnlyError, RedisTimeoutError, ValueError):
             if settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES:
                 raise

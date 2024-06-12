@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Dict, Mapping, MutableMapping, Optional
 from unittest import mock
 
 import pytest
@@ -28,7 +28,12 @@ from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import _get_query_settings_from_config, db_query
+from snuba.web.db_query import (
+    _get_cache_partition,
+    _get_query_settings_from_config,
+    db_query,
+    execute_query_with_readthrough_caching,
+)
 
 test_data = [
     pytest.param(
@@ -279,9 +284,9 @@ def test_db_query_success() -> None:
         },
         "BytesScannedRejectingPolicy": {
             "can_run": True,
-            "max_threads": 10,
+            "max_threads": 5,
             "explanation": {
-                "reason": "within_limit",
+                "reason": "within_limit but throttled",
                 "storage_key": "StorageKey.ERRORS_RO",
             },
         },
@@ -713,4 +718,107 @@ def test_db_query_ignore_consistent() -> None:
         robust=False,
     )
     assert result.extra["stats"]["consistent"] is False
-    assert result.extra["stats"]["max_threads"] == 10
+    assert result.extra["stats"]["max_threads"] == 5
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+@pytest.mark.parametrize(
+    "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith, test_cache_hit_simple",
+    [
+        (0, 0, "test_query_id", False),
+        (1, 1, "randomized-", True),
+    ],
+)
+def test_clickhouse_settings_applied_to_query_id(
+    disable_lua_randomize_query_id: int,
+    disable_lua_scripts_sample_rate: int,
+    expected_startswith: str,
+    test_cache_hit_simple: bool,
+) -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("disable_lua_randomize_query_id", disable_lua_randomize_query_id)
+    state.set_config(
+        "read_through_cache.disable_lua_scripts_sample_rate",
+        disable_lua_scripts_sample_rate,
+    )
+
+    formatted_query = format_query(query)
+    reader = storage.get_cluster().get_reader()
+    clickhouse_query_settings: Dict[str, Any] = {}
+    query_id = "test_query_id"
+    stats: dict[str, Any] = {}
+
+    execute_query_with_readthrough_caching(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=formatted_query,
+        reader=reader,
+        timer=Timer("foo"),
+        stats=stats,
+        clickhouse_query_settings=clickhouse_query_settings,
+        robust=False,
+        query_id=query_id,
+        referrer="test",
+    )
+
+    assert ("cache_hit_simple" in stats) == test_cache_hit_simple
+    assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
+    assert _get_cache_partition(reader).get("test_query_id") is not None
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_cache_metrics_with_simple_readthrough() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("disable_lua_randomize_query_id", 1)
+    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
+
+    formatted_query = format_query(query)
+    reader = storage.get_cluster().get_reader()
+
+    with mock.patch("snuba.web.db_query.metrics", new=mock.Mock()) as metrics_mock:
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert "cache_hit_simple" in result.extra["stats"]
+        # Assert on first call cache_miss is incremented
+        metrics_mock.assert_has_calls(
+            [
+                mock.call.increment("cache_miss", tags={"dataset": "events"}),
+                mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
+            ]
+        )
+
+        metrics_mock.reset_mock()
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert "cache_hit_simple" in result.extra["stats"]
+        # Assert on second call cache_hit is incremented
+        metrics_mock.assert_has_calls(
+            [
+                mock.call.increment("cache_hit", tags={"dataset": "events"}),
+                mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
+            ]
+        )
