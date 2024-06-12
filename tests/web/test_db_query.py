@@ -284,7 +284,7 @@ def test_db_query_success() -> None:
         },
         "BytesScannedRejectingPolicy": {
             "can_run": True,
-            "max_threads": 10,
+            "max_threads": 5,
             "explanation": {
                 "reason": "within_limit but throttled",
                 "storage_key": "StorageKey.ERRORS_RO",
@@ -718,7 +718,7 @@ def test_db_query_ignore_consistent() -> None:
         robust=False,
     )
     assert result.extra["stats"]["consistent"] is False
-    assert result.extra["stats"]["max_threads"] == 10
+    assert result.extra["stats"]["max_threads"] == 5
 
 
 @pytest.mark.redis_db
