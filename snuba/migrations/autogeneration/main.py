@@ -11,6 +11,7 @@ def generate(local_storage_path: str) -> tuple[str, str]:
         .stdout.decode("utf-8")
         .strip()
     )
+    print(local_repo_path)
     local_storage_path = os.path.abspath(os.path.expanduser(local_storage_path))
     if not local_storage_path.startswith(local_repo_path):
         raise ValueError(
