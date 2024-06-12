@@ -278,6 +278,7 @@ def _clear_db(storage_keys: List[StorageKey]) -> None:
         storage = get_storage(storage_key)
         cluster = storage.get_cluster()
         database = cluster.get_database()
+        assert database == "snuba_test"
 
         schema = storage.get_schema()
         if isinstance(schema, WritableTableSchema):
