@@ -393,3 +393,4 @@ def generate(
     the commit, PR, and merging.
     """
     autogeneration.generate(storage_path)
+    click.echo("This function is under construction.")
