@@ -122,6 +122,8 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         assert (
             rate_limit_params.concurrent_limit is not None
         ), "concurrent_limit must be set"
+
+        is_throttled = False
         num_threads = self._get_max_threads(referrer)
         requests_throttle_threshold = max(
             1,
@@ -129,12 +131,14 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             // self.get_config_value("requests_throttle_divider"),
         )
         if rate_limit_stats.concurrent > requests_throttle_threshold:
+            is_throttled = True
             num_threads = max(
                 1, num_threads // self.get_config_value("threads_throttle_divider")
             )
             self.metrics.increment(
                 "concurrent_queries_throttled", tags={"referrer": referrer}
             )
+
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
@@ -149,6 +153,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             can_run=can_run,
             max_threads=num_threads,
             explanation=decision_explanation,
+            is_throttled=is_throttled,
         )
 
     def _update_quota_balance(

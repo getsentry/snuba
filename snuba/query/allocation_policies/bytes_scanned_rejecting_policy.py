@@ -219,7 +219,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     "tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"
                 },
             )
-            return QuotaAllowance(False, self.max_threads, explanation)
+            return QuotaAllowance(False, self.max_threads, explanation, True)
 
         throttle_threshold = max(
             1, scan_limit // self.get_config_value("bytes_throttle_divider")
@@ -237,8 +237,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     // self.get_config_value("threads_throttle_divider"),
                 ),
                 {"reason": "within_limit but throttled"},
+                True,
             )
-        return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"})
+        return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"}, False)
 
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError

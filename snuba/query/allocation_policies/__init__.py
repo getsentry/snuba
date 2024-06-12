@@ -96,6 +96,7 @@ class QuotaAllowance:
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
     explanation: dict[str, JsonSerializable]
+    is_throttled: bool = field(default=False)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
