@@ -7,12 +7,18 @@ import yaml
 
 def generate(local_storage_path: str) -> tuple[str, str]:
     local_repo_path = (
-        subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True)
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], capture_output=True, check=True
+        )
         .stdout.decode("utf-8")
         .strip()
     )
-    print(local_repo_path)
     local_storage_path = os.path.abspath(os.path.expanduser(local_storage_path))
+    # os.path.issubpath()
+    # replace startswith with issubpath
+    # https://docs.python.org/3/library/os.path.html#os.path.commonpath
+    # is there local_storage_path.is_subpath(local_repo_path)
+    # https://docs.python.org/3/library/os.path.html#os.path.relpath
     if not local_storage_path.startswith(local_repo_path):
         raise ValueError(
             f"Storage path '{local_storage_path}' is not in the git repository '{local_repo_path}'"
