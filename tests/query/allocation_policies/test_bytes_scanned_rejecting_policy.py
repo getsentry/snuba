@@ -108,6 +108,53 @@ def test_consume_quota(
 
 
 @pytest.mark.redis_db
+def test_throttles(
+    policy: BytesScannedRejectingPolicy,
+) -> None:
+    _configure_policy(policy)
+    policy.set_config_value("bytes_throttle_divider", 2)
+    policy.set_config_value("threads_throttle_divider", 2)
+    tenant_ids: dict[str, int | str] = {
+        "organization_id": 123,
+        "project_id": 12345,
+        "referrer": "some_referrer",
+    }
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={"profile": {"progress_bytes": 1}},
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.max_threads == MAX_THREAD_NUMBER
+    policy.update_quota_balance(
+        tenant_ids,
+        QUERY_ID,
+        QueryResultOrError(
+            query_result=QueryResult(
+                result={
+                    "profile": {"progress_bytes": PROJECT_REFERRER_SCAN_LIMIT // 2}
+                },
+                extra={"stats": {}, "sql": "", "experiments": {}},
+            ),
+            error=None,
+        ),
+    )
+
+    allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
+    assert allowance.max_threads == MAX_THREAD_NUMBER // 2
+    assert allowance.explanation["reason"] == "within_limit but throttled"
+
+
+@pytest.mark.redis_db
 def test_cross_org_query(policy: BytesScannedRejectingPolicy) -> None:
     _configure_policy(policy)
     tenant_ids: dict[str, int | str] = {

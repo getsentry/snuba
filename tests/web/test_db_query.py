@@ -286,7 +286,7 @@ def test_db_query_success() -> None:
             "can_run": True,
             "max_threads": 10,
             "explanation": {
-                "reason": "within_limit",
+                "reason": "within_limit but throttled",
                 "storage_key": "StorageKey.ERRORS_RO",
             },
         },
