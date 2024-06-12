@@ -722,7 +722,7 @@ def test_db_query_ignore_consistent() -> None:
 
 
 @pytest.mark.redis_db
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.parametrize(
     "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith, test_cache_hit_simple",
     [
@@ -767,7 +767,7 @@ def test_clickhouse_settings_applied_to_query_id(
     assert _get_cache_partition(reader).get("test_query_id") is not None
 
 
-@pytest.mark.clickhouse_db
+@pytest.mark.clickhouse_db(storage_keys=["errors"])
 @pytest.mark.redis_db
 def test_cache_metrics_with_simple_readthrough() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
