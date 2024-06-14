@@ -360,7 +360,6 @@ jobs:
       matrix:
         version:
           [
-            "23.3.19.33.altinitystable",
             "23.8.11.29.altinitystable",
           ]
 
