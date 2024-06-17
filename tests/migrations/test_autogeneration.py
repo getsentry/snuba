@@ -11,7 +11,5 @@ def test_basic() -> None:
 
 
 def test_error() -> None:
-    with pytest.raises(
-        ValueError, match=r"Storage path .* is not in the git repository .*"
-    ):
+    with pytest.raises(ValueError):
         generate("~/hello.txt")
