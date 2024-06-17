@@ -30,7 +30,7 @@ _PASS_THROUGH_REFERRERS = set(
         "subscriptions_executor",
         "tsdb-modelid:4.batch_alert_event_frequency",
         "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
-        "tsdb-modelid:4.batch_alert_event_frequency_percent"
+        "tsdb-modelid:4.batch_alert_event_frequency_percent",
     ]
 )
 
