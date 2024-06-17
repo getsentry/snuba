@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import sys
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -808,6 +809,24 @@ def db_query(
         )
 
 
+def _add_quota_summary(
+    stats: MutableMapping[str, Any],
+    max_runnable_threads: int,
+    limiting_policy: AllocationPolicy,
+    can_run: bool,
+    is_throttled: bool,
+):
+    quota_allowance_summary = {}
+    quota_allowance_summary["threads_used"] = max_runnable_threads
+
+    if not can_run:
+        rejection_info = {}
+        rejection_info["policy"] = limiting_policy.config_key()
+        rejection_info["rejection_threshold"] = limiting_policy.get_throttle_threshold()
+    quota_allowance_summary["policy"] = limiting_policy.config_key()
+    # quota_allowance_summary["quota_used"] = limiting_policy.c
+
+
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -822,6 +841,10 @@ def _apply_allocation_policies_quota(
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
     can_run = True
+    is_throttled = False
+    max_runnable_threads = sys.maxsize
+    limiting_policy = None
+
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -834,19 +857,28 @@ def _apply_allocation_policies_quota(
                     attribution_info.tenant_ids, query_id
                 )
                 can_run &= allowance.can_run
+                is_throttled = allowance.is_throttled
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
                 if not can_run:
+                    limiting_policy = allocation_policy
+                    max_runnable_threads = 0
                     break
+                if is_throttled:
+                    limiting_policy = allocation_policy
+                    max_runnable_threads = allowance.max_threads
 
         allowance_dicts = {
             key: quota_allowance.to_dict()
             for key, quota_allowance in quota_allowances.items()
         }
         stats["quota_allowance"] = allowance_dicts
+        _add_quota_summary(
+            stats, max_runnable_threads, limiting_policy, can_run, is_throttled
+        )
         if not can_run:
             raise AllocationPolicyViolations.from_args(quota_allowances)
         # Before allocation policies were a thing, the query pipeline would apply

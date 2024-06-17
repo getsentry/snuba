@@ -113,6 +113,7 @@ class QuotaAllowance:
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
             and self.explanation == other.explanation
+            and self.is_throttled == other.is_throttled
         )
 
 
@@ -769,6 +770,26 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
+        pass
+
+    @abstractmethod
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        pass
+
+    @abstractmethod
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        pass
+
+    @abstractmethod
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        pass
+
+    @abstractmethod
+    def get_quota_units(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_suggestion(self) -> str:
         pass
 
     def update_quota_balance(

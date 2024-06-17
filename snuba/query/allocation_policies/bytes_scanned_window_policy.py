@@ -126,6 +126,15 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
 
         return True, ""
 
+    def _get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def _get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def _get_units(self) -> str:
+        return "None"
+
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:

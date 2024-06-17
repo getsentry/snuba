@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
+import typing
 from typing import Any, cast
 
 from clickhouse_driver import errors
@@ -156,6 +158,34 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             "customer tenant key is neither project_id or organization_id, this should never happen",
         )
 
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return max(
+            1,
+            typing.cast(
+                int,
+                self.get_rejection_threshold(tenant_ids)
+                // self.get_config_value("bytes_throttle_divider"),
+            ),
+        )
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        (
+            customer_tenant_key,
+            customer_tenant_value,
+        ) = self._get_customer_tenant_key_and_value(tenant_ids)
+        referrer = tenant_ids.get("referrer", "no_referrer")
+        if referrer in _PASS_THROUGH_REFERRERS:
+            return sys.maxsize
+        return self.__get_scan_limit(
+            customer_tenant_key, customer_tenant_value, referrer
+        )
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return self.get_rejection_threshold() - 1
+
+    def get_quota_units(self) -> str:
+        return "bytes"
+
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
@@ -221,9 +251,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
             return QuotaAllowance(False, self.max_threads, explanation, True)
 
-        throttle_threshold = max(
-            1, scan_limit // self.get_config_value("bytes_throttle_divider")
-        )
+        throttle_threshold = self.get_throttle_threshold(tenant_ids)
         if granted_quota.granted < throttle_threshold:
             self.metrics.increment(
                 "bytes_scanned_queries_throttled",

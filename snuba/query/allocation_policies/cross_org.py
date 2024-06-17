@@ -76,6 +76,15 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 )
         super().set_config_value(config_key, value, params, user)
 
+    def _get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def _get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def _get_units(self) -> str:
+        return "None"
+
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
         return super()._additional_config_definitions() + [
             AllocationPolicyConfig(
