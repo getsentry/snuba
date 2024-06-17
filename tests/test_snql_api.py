@@ -40,6 +40,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
             can_run=False,
             max_threads=0,
             explanation={"reason": "policy rejects all queries"},
+            is_throttled=True,
         )
 
     def _update_quota_balance(
@@ -1289,7 +1290,7 @@ class TestSnQLApi(BaseApiTest):
             assert response.status_code == 429
             assert (
                 response.json["error"]["message"]
-                == "Query on could not be run due to allocation policies, details: {'RejectAllocationPolicy123': {'can_run': False, 'max_threads': 0, 'explanation': {'reason': 'policy rejects all queries', 'storage_key': 'StorageKey.DOESNTMATTER'}}}"
+                == "Query on could not be run due to allocation policies, details: {'RejectAllocationPolicy123': {'can_run': False, 'max_threads': 0, 'explanation': {'reason': 'policy rejects all queries', 'storage_key': 'StorageKey.DOESNTMATTER'}, 'is_throttled': False}}"
             )
 
     def test_tags_key_column(self) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any, cast
@@ -96,6 +97,7 @@ class QuotaAllowance:
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
     explanation: dict[str, JsonSerializable]
+    is_throttled: bool
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -112,6 +114,7 @@ class QuotaAllowance:
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
             and self.explanation == other.explanation
+            and self.is_throttled == other.is_throttled
         )
 
 
@@ -731,11 +734,13 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> QuotaAllowance:
         try:
             if not self.is_active:
-                allowance = QuotaAllowance(True, self.max_threads, {})
+                allowance = QuotaAllowance(True, self.max_threads, {}, False)
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
         except InvalidTenantsForAllocationPolicy as e:
-            allowance = QuotaAllowance(False, 0, cast(dict[str, Any], e.to_dict()))
+            allowance = QuotaAllowance(
+                False, 0, cast(dict[str, Any], e.to_dict()), False
+            )
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -799,6 +804,26 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         pass
 
+    @abstractmethod
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        pass
+
+    @abstractmethod
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        pass
+
+    @abstractmethod
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        pass
+
+    @abstractmethod
+    def get_quota_units(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_suggestion(self) -> str:
+        pass
+
 
 class PassthroughPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -808,7 +833,10 @@ class PassthroughPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         return QuotaAllowance(
-            can_run=True, max_threads=self.max_threads, explanation={}
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={},
+            is_throttled=True,
         )
 
     def _update_quota_balance(
@@ -818,6 +846,21 @@ class PassthroughPolicy(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         pass
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return sys.maxsize
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return sys.maxsize
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return 0
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"
 
 
 DEFAULT_PASSTHROUGH_POLICY = PassthroughPolicy(

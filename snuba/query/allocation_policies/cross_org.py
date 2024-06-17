@@ -167,6 +167,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
+                is_throttled=False,
             )
 
         concurrent_limit = self._get_concurrent_limit(referrer)
@@ -186,6 +187,7 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             can_run=can_run,
             max_threads=self._get_max_threads(referrer),
             explanation=decision_explanation,
+            is_throttled=False,
         )
 
     def _update_quota_balance(
@@ -207,3 +209,18 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
             22,
         )
         self._end_query(query_id, rate_limit_params, result_or_error)
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"

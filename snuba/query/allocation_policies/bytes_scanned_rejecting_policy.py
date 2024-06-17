@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
+import typing
 from typing import Any, cast
 
 from clickhouse_driver import errors
@@ -169,6 +171,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "cross_org_query"},
+                is_throttled=False,
             )
         (
             customer_tenant_key,
@@ -176,10 +179,8 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         ) = self._get_customer_tenant_key_and_value(tenant_ids)
         referrer = tenant_ids.get("referrer", "no_referrer")
         if referrer in _PASS_THROUGH_REFERRERS:
-            return QuotaAllowance(True, self.max_threads, {})
-        scan_limit = self.__get_scan_limit(
-            customer_tenant_key, customer_tenant_value, referrer
-        )
+            return QuotaAllowance(True, self.max_threads, {}, False)
+        scan_limit = self.get_rejection_threshold(tenant_ids)
 
         timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
             [
@@ -219,12 +220,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     "tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"
                 },
             )
-            return QuotaAllowance(False, self.max_threads, explanation)
+            return QuotaAllowance(False, self.max_threads, explanation, True)
 
-        throttle_threshold = max(
-            1, scan_limit // self.get_config_value("bytes_throttle_divider")
-        )
-        if granted_quota.granted < throttle_threshold:
+        if granted_quota.granted < self.get_throttle_threshold(tenant_ids):
             self.metrics.increment(
                 "bytes_scanned_queries_throttled",
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
@@ -237,8 +235,9 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     // self.get_config_value("threads_throttle_divider"),
                 ),
                 {"reason": "within_limit but throttled"},
+                True,
             )
-        return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"})
+        return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"}, False)
 
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
@@ -285,9 +284,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             customer_tenant_key,
             customer_tenant_value,
         ) = self._get_customer_tenant_key_and_value(tenant_ids)
-        scan_limit = self.__get_scan_limit(
-            customer_tenant_key, customer_tenant_value, referrer
-        )
+        scan_limit = self.get_rejection_threshold(tenant_ids)
         # we can assume that the requested quota was granted (because it was)
         # we just need to update the quota with however many bytes were consumed
         _RATE_LIMITER.use_quotas(
@@ -314,3 +311,71 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             ],
             timestamp=int(time.time()),
         )
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return max(
+            1,
+            typing.cast(
+                int,
+                self.get_rejection_threshold(tenant_ids)
+                // self.get_config_value("bytes_throttle_divider"),
+            ),
+        )
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        (
+            customer_tenant_key,
+            customer_tenant_value,
+        ) = self._get_customer_tenant_key_and_value(tenant_ids)
+        referrer = tenant_ids.get("referrer", "no_referrer")
+        if referrer in _PASS_THROUGH_REFERRERS:
+            return sys.maxsize
+        return self.__get_scan_limit(
+            customer_tenant_key, customer_tenant_value, referrer
+        )
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        ids_are_valid, why = self._are_tenant_ids_valid(tenant_ids)
+        if not ids_are_valid:
+            raise InvalidTenantsForAllocationPolicy.from_args(
+                tenant_ids, self.__class__.__name__, why
+            )
+        (
+            customer_tenant_key,
+            customer_tenant_value,
+        ) = self._get_customer_tenant_key_and_value(tenant_ids)
+        referrer = tenant_ids.get("referrer", "no_referrer")
+        scan_limit = self.get_rejection_threshold(tenant_ids)
+
+        _, granted_quotas = _RATE_LIMITER.check_within_quotas(
+            [
+                RequestedQuota(
+                    self.runtime_config_prefix,
+                    # request a big number because we don't know how much we actually
+                    # will use in this query. this doesn't use up any quota, we just want to know how much is left
+                    UNREASONABLY_LARGE_NUMBER_OF_BYTES_SCANNED_PER_QUERY,
+                    [
+                        Quota(
+                            # TODO: Make window configurable but I don't know exactly how the rate limiter
+                            # reacts to such changes
+                            window_seconds=self.WINDOW_SECONDS,
+                            granularity_seconds=self.WINDOW_GRANULARITY_SECONDS,
+                            limit=scan_limit,
+                            prefix_override=f"{self.runtime_config_prefix}-{customer_tenant_key}-{customer_tenant_value}-{referrer}",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        used_quota = 0
+        for granted_quota in granted_quotas:
+            used_quota += granted_quota.granted
+
+        return used_quota
+
+    def get_quota_units(self) -> str:
+        return "bytes"
+
+    def get_suggestion(self) -> str:
+        return "scan less bytes"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import typing
 
 from snuba.query.allocation_policies import (
     AllocationPolicyConfig,
@@ -111,7 +112,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         referrer = str(tenant_ids.get("referrer", "no_referrer"))
-        concurrent_limit = self._get_concurrent_limit(referrer)
+        concurrent_limit = self.get_rejection_threshold(tenant_ids)
         rate_limit_params = RateLimitParameters(
             self.rate_limit_name, referrer, None, concurrent_limit
         )
@@ -122,19 +123,18 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         assert (
             rate_limit_params.concurrent_limit is not None
         ), "concurrent_limit must be set"
+
+        is_throttled = False
         num_threads = self._get_max_threads(referrer)
-        requests_throttle_threshold = max(
-            1,
-            self.get_config_value("default_concurrent_request_per_referrer")
-            // self.get_config_value("requests_throttle_divider"),
-        )
-        if rate_limit_stats.concurrent > requests_throttle_threshold:
+        if rate_limit_stats.concurrent > self.get_throttle_threshold(tenant_ids):
             num_threads = max(
                 1, num_threads // self.get_config_value("threads_throttle_divider")
             )
             self.metrics.increment(
                 "concurrent_queries_throttled", tags={"referrer": referrer}
             )
+            is_throttled = True
+
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
@@ -149,6 +149,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             can_run=can_run,
             max_threads=num_threads,
             explanation=decision_explanation,
+            is_throttled=is_throttled,
         )
 
     def _update_quota_balance(
@@ -166,3 +167,27 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             22,
         )
         self._end_query(query_id, rate_limit_params, result_or_error)
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        referrer = str(tenant_ids.get("referrer", "no_referrer"))
+        return max(
+            1,
+            typing.cast(
+                int,
+                self._get_concurrent_limit(referrer)
+                // self.get_config_value("requests_throttle_divider"),
+            ),
+        )
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        referrer = str(tenant_ids.get("referrer", "no_referrer"))
+        return self._get_concurrent_limit(referrer)
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "queries"
+
+    def get_suggestion(self) -> str:
+        return "send less concurrent queries"

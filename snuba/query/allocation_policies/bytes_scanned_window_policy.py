@@ -133,23 +133,28 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
         if not ids_are_valid:
             if self.is_enforced:
                 return QuotaAllowance(
-                    can_run=False, max_threads=0, explanation={"reason": why}
+                    can_run=False,
+                    max_threads=0,
+                    explanation={"reason": why},
+                    is_throttled=False,
                 )
         if self.is_cross_org_query(tenant_ids):
             return QuotaAllowance(
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "cross_org_query"},
+                is_throttled=False,
             )
         referrer = tenant_ids.get("referrer", "no_referrer")
         org_id = tenant_ids.get("organization_id", None)
         if referrer in _PASS_THROUGH_REFERRERS:
-            return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(True, self.max_threads, {}, False)
         if referrer in _SINGLE_THREAD_REFERRERS:
             return QuotaAllowance(
                 can_run=True,
                 max_threads=1,
                 explanation={"reason": "low priority referrer"},
+                is_throttled=False,
             )
         if org_id is not None:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(org_id)
@@ -188,8 +193,8 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
                 if self.is_enforced:
                     num_threads = self.get_config_value("throttled_thread_number")
 
-            return QuotaAllowance(True, num_threads, explanation)
-        return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(True, num_threads, explanation, True)
+        return QuotaAllowance(True, self.max_threads, {}, False)
 
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
@@ -276,3 +281,18 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             org_limit_bytes_scanned = self.get_config_value("org_limit_bytes_scanned")
 
         return int(org_limit_bytes_scanned)
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"

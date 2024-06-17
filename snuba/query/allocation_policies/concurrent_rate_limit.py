@@ -223,12 +223,14 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
+                is_throttled=False,
             )
         if self.is_cross_org_query(tenant_ids):
             return QuotaAllowance(
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "cross_org"},
+                is_throttled=False,
             )
 
         rate_limit_params, overrides = self._get_rate_limit_params(tenant_ids)
@@ -237,7 +239,10 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             rate_limit_params,
         )
         return QuotaAllowance(
-            within_rate_limit, self.max_threads, {"reason": why, "overrides": overrides}
+            within_rate_limit,
+            self.max_threads,
+            {"reason": why, "overrides": overrides},
+            False,
         )
 
     def _update_quota_balance(
@@ -250,3 +255,18 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             return
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"
