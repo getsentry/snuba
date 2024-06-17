@@ -764,7 +764,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 },
             )
         if not self.is_enforced:
-            return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(True, self.max_threads, {}, True)
         # make sure we always know which storage key we rejected a query from
         allowance.explanation["storage_key"] = str(self._storage_key)
         return allowance

@@ -427,7 +427,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
-            return QuotaAllowance(True, 1, {})
+            return QuotaAllowance(True, 1, {}, False)
 
         def _update_quota_balance(
             self,
@@ -436,6 +436,21 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
             result_or_error: QueryResultOrError,
         ) -> None:
             pass
+
+        def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_units(self) -> str:
+            return "No units"
+
+        def get_suggestion(self) -> str:
+            return "No suggestion"
 
     def mock_get_policies() -> list[AllocationPolicy]:
         policy = FakePolicy(StorageKey("nothing"), [], {})

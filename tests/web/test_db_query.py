@@ -272,6 +272,7 @@ def test_db_query_success() -> None:
                 "referrer": "something",
                 "storage_key": "StorageKey.ERRORS_RO",
             },
+            "is_throttled": False,
         },
         "ConcurrentRateLimitAllocationPolicy": {
             "can_run": True,
@@ -281,6 +282,7 @@ def test_db_query_success() -> None:
                 "overrides": {},
                 "storage_key": "StorageKey.ERRORS_RO",
             },
+            "is_throttled": False,
         },
         "BytesScannedRejectingPolicy": {
             "can_run": True,
@@ -289,6 +291,7 @@ def test_db_query_success() -> None:
                 "reason": "within_limit but throttled",
                 "storage_key": "StorageKey.ERRORS_RO",
             },
+            "is_throttled": True,
         },
         "CrossOrgQueryAllocationPolicy": {
             "can_run": True,
@@ -297,11 +300,13 @@ def test_db_query_success() -> None:
                 "reason": "pass_through",
                 "storage_key": "StorageKey.ERRORS_RO",
             },
+            "is_throttled": False,
         },
         "BytesScannedWindowAllocationPolicy": {
             "can_run": True,
             "max_threads": 10,
             "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
+            "is_throttled": True,
         },
     }
 
@@ -415,6 +420,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 can_run=False,
                 max_threads=0,
                 explanation={"reason": "policy rejects all queries"},
+                is_throttled=False,
             )
 
         def _update_quota_balance(
@@ -426,6 +432,21 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             nonlocal update_called
             update_called = True
             return
+
+        def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_units(self) -> str:
+            return "No units"
+
+        def get_suggestion(self) -> str:
+            return "No suggestion"
 
     with mock.patch(
         "snuba.web.db_query._get_allocation_policies",
@@ -457,6 +478,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                     "storage_key": "StorageKey.DOESNTMATTER",
                 },
                 "max_threads": 0,
+                "is_throttled": False,
             }
         }
         # extra data contains policy failure information
@@ -491,6 +513,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
                 can_run=True,
                 max_threads=POLICY_THREADS,
                 explanation={"reason": "Throttle everything!"},
+                is_throttled=False,
             )
 
         def _update_quota_balance(
@@ -501,6 +524,21 @@ def test_allocation_policy_threads_applied_to_query() -> None:
         ) -> None:
             return
 
+        def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_units(self) -> str:
+            return "No units"
+
+        def get_suggestion(self) -> str:
+            return "No suggestion"
+
     class ThreadLimitPolicyDuplicate(ThreadLimitPolicy):
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
@@ -509,6 +547,7 @@ def test_allocation_policy_threads_applied_to_query() -> None:
                 can_run=True,
                 max_threads=POLICY_THREADS + 1,
                 explanation={"reason": "Throttle everything!"},
+                is_throttled=False,
             )
 
     # Should limit to minimal threads across policies
@@ -563,6 +602,7 @@ def test_allocation_policy_updates_quota() -> None:
                 can_run=can_run,
                 max_threads=0,
                 explanation={"reason": f"can only run {queries_run} queries!"},
+                is_throttled=False,
             )
 
         def _update_quota_balance(
@@ -573,6 +613,21 @@ def test_allocation_policy_updates_quota() -> None:
         ) -> None:
             nonlocal queries_run
             queries_run += 1
+
+        def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_units(self) -> str:
+            return "No units"
+
+        def get_suggestion(self) -> str:
+            return "No suggestion"
 
     queries_run_duplicate = 0
 
@@ -592,6 +647,7 @@ def test_allocation_policy_updates_quota() -> None:
                 explanation={
                     "reason": f"can only run {queries_run_duplicate} queries!"
                 },
+                is_throttled=False,
             )
 
         def _update_quota_balance(
@@ -602,6 +658,21 @@ def test_allocation_policy_updates_quota() -> None:
         ) -> None:
             nonlocal queries_run_duplicate
             queries_run_duplicate += 1
+
+        def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+            return -1
+
+        def get_quota_units(self) -> str:
+            return "No units"
+
+        def get_suggestion(self) -> str:
+            return "No suggestion"
 
     # the first policy will error and short circuit the rest
     query, storage, attribution_info = _build_test_query(
@@ -643,6 +714,7 @@ def test_allocation_policy_updates_quota() -> None:
                 "reason": "can only run 2 queries!",
                 "storage_key": "StorageKey.DOESNTMATTER",
             },
+            "is_throttled": False,
         },
     }
     cause = e.value.__cause__

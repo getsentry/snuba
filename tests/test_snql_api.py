@@ -40,7 +40,7 @@ class RejectAllocationPolicy123(AllocationPolicy):
             can_run=False,
             max_threads=0,
             explanation={"reason": "policy rejects all queries"},
-            is_throttled=True,
+            is_throttled=False,
         )
 
     def _update_quota_balance(
@@ -50,6 +50,21 @@ class RejectAllocationPolicy123(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         return
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"
 
 
 @pytest.mark.clickhouse_db

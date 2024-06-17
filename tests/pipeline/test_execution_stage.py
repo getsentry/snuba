@@ -41,7 +41,9 @@ class MockAllocationPolicy(AllocationPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
+        return QuotaAllowance(
+            can_run=True, max_threads=1, explanation={}, is_throttled=False
+        )
 
     def _update_quota_balance(
         self,
@@ -50,6 +52,21 @@ class MockAllocationPolicy(AllocationPolicy):
         result_or_error: QueryResultOrError,
     ) -> None:
         self.did_update = True
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"
 
 
 def get_fake_metadata() -> SnubaQueryMetadata:

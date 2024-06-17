@@ -60,14 +60,18 @@ class RejectingEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=False, max_threads=10, explanation={})
+        return QuotaAllowance(
+            can_run=False, max_threads=10, explanation={}, is_throttled=False
+        )
 
 
 class ThrottleEverythingAllocationPolicy(PassthroughPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
+        return QuotaAllowance(
+            can_run=True, max_threads=1, explanation={}, is_throttled=True
+        )
 
 
 class BadlyWrittenAllocationPolicy(PassthroughPolicy):
@@ -191,6 +195,21 @@ class SomeParametrizedConfigPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
     ) -> None:
         pass
+
+    def get_throttle_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_rejection_threshold(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_used(self, tenant_ids: dict[str, str | int]) -> int:
+        return -1
+
+    def get_quota_units(self) -> str:
+        return "No units"
+
+    def get_suggestion(self) -> str:
+        return "No suggestion"
 
 
 class TestAllocationPolicyLogs(TestCase):
