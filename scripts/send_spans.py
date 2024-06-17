@@ -91,8 +91,15 @@ def create_span(
     duration_ms: int,
     start_timestamp: datetime.datetime,
     transaction_name: str,
+    add_datetimes: bool = False,
 ) -> Span:
     end_timestamp = start_timestamp + datetime.timedelta(milliseconds=duration_ms)
+    datetime_fields = {}
+    if add_datetimes:
+        datetime_fields = {
+            "start_datetime": start_timestamp.isoformat(),
+            "end_datetime": end_timestamp.isoformat(),
+        }
     return {
         "event_id": uuid.uuid4().hex,
         "organization_id": ORGANIZATION_ID,
@@ -123,6 +130,7 @@ def create_span(
                 "unit": "unit",
             },
         },
+        **datetime_fields,
     }
 
 
@@ -144,6 +152,7 @@ def generate_span_branch(
     span_count: int = 0,
     prefix: str = "",
     verbose: bool = False,
+    add_datetimes: bool = False,
 ) -> tuple[list[Span], int]:
     duration = 0
     spans = []
@@ -158,6 +167,7 @@ def generate_span_branch(
             duration_ms=span_duration,
             start_timestamp=start_timestamp + datetime.timedelta(milliseconds=duration),
             transaction_name=transaction_name,
+            add_datetimes=add_datetimes,
         )
 
         to_split_or_not_to_split = random.random()
@@ -174,6 +184,7 @@ def generate_span_branch(
                     + datetime.timedelta(milliseconds=duration),
                     parent_span_id=span["span_id"],
                     prefix=prefix + " ",
+                    add_datetimes=add_datetimes,
                 )
                 if verbose:
                     print(f"{prefix}T /")
@@ -190,6 +201,7 @@ def generate_span_branch(
                     parent_span_id=span["span_id"],
                     span_count=span_count,
                     prefix=prefix + " ",
+                    add_datetimes=add_datetimes,
                 )
                 if verbose:
                     print(f"{prefix} /")
@@ -217,6 +229,7 @@ def create_transaction(
     start_timestamp: datetime.datetime,
     parent_span_id: str = None,
     prefix: str = "",
+    add_datetimes: bool = False,
 ) -> tuple[list[dict[str, Any]], int]:
     transaction_name = get_transaction_name(project_id)
     root_span = create_span(
@@ -228,6 +241,7 @@ def create_transaction(
         duration_ms=0,
         start_timestamp=start_timestamp,
         transaction_name=transaction_name,
+        add_datetimes=add_datetimes,
     )
     if root_span["parent_span_id"] is None:
         root_span["parent_span_id"] = root_span["span_id"]
@@ -239,14 +253,17 @@ def create_transaction(
         transaction_name=transaction_name,
         parent_span_id=root_span["span_id"],
         prefix=prefix,
+        add_datetimes=add_datetimes,
     )
     update_span_duration(root_span, duration)
     return [root_span] + spans, duration
 
 
-def create_trace() -> list[dict[str, Any]]:
+def create_trace(add_datetimes: bool) -> list[dict[str, Any]]:
     trace_id = uuid.uuid4().hex
-    spans, _ = create_transaction(trace_id, 1, datetime.datetime.now())
+    spans, _ = create_transaction(
+        trace_id, 1, datetime.datetime.now(), add_datetimes=add_datetimes
+    )
     return spans
 
 
@@ -334,6 +351,14 @@ def write_to_stdout(messages: list[Span], dryrun: bool, verbose: bool) -> None:
     help="Number of spans to generate.",
 )
 @click.option(
+    "--add-datetimes",
+    "-ad",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Add datetimes to the spans along with timestamps.",
+)
+@click.option(
     "--dryrun",
     "-d",
     is_flag=True,
@@ -355,6 +380,7 @@ def main(
     kafka_host: str,
     kafka_topic: str,
     spans: str,
+    add_datetimes: bool,
     dryrun: bool,
     verbose: bool,
 ):
@@ -379,7 +405,7 @@ def main(
         raise ValueError(f"Unknown output type: {output}")
 
     try:
-        messages = create_trace()
+        messages = create_trace(add_datetimes)
         producer(messages, dryrun, verbose)
 
         if spans:
@@ -387,8 +413,8 @@ def main(
             limit = int(spans)
 
             while created < limit:
-                messages = create_trace()
-                producer(messages, host, dryrun, quiet)
+                messages = create_trace(add_datetimes)
+                producer(messages, dryrun, verbose)
                 created += len(messages)
                 if verbose:
                     print(f"Created {created} spans.")
