@@ -26,7 +26,11 @@ logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
 _PASS_THROUGH_REFERRERS = set(
     [
+        # these referrers are tied to ingest and are better limited by the ReferrerGuardRailPolicy
         "subscriptions_executor",
+        "tsdb-modelid:4.batch_alert_event_frequency",
+        "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
+        "tsdb-modelid:4.batch_alert_event_frequency_percent"
     ]
 )
 
