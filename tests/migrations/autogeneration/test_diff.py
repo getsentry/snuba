@@ -1,7 +1,7 @@
 import pytest
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations.autogeneration.autogen_migrations import generate_migration_ops
+from snuba.migrations.autogeneration.diff import generate_migration_ops
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget
 from snuba.utils.schemas import Column, DateTime, UInt

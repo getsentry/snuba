@@ -18,7 +18,7 @@ def generate_migration_ops(
 ) -> tuple[list[AddColumn], list[DropColumn]]:
     """
     Input:
-        old_storage, the old storage yaml in str format
+        old_storage, the original storage yaml in str format
         new_storage, the modified storage yaml in str format
 
     Returns a tuple (forwardops, backwardsops) this are the forward and backward migration
