@@ -1,5 +1,33 @@
 # Changelog
 
+## 24.6.0
+
+### Various fixes & improvements
+
+- chore(on-call): Properly handling query validation errors (#6019) by @enochtangg
+- update CH version used in CI (#6027) by @volokluev
+- code (#6026) by @xurui-c
+- code (#6024) by @xurui-c
+- doc(rs): some docs for the ClickHouse batch module (#6020) by @onewland
+- chore(gocd): Bumping gocd-jsonnet version (#6021) by @IanWoodard
+- [CapMan] change default throttle values (#6022) by @xurui-c
+- [CapMan] Add throttling to ReferrerGuardRail policy (#6014) by @xurui-c
+- feat(issue-search): Add group_first_release_id to GroupAttributes processor (#5987) by @snigdhas
+- Fixing the metric increment for cache hit/miss and (#6018) by @nachivrn
+- ref(ci): update clickhouse versions (#6016) by @MeredithAnya
+- update docs for snuba storage queries (#6013) by @enochtangg
+- In the Snuba Admin Production queries UI (#6015) by @nachivrn
+- SNS-2737: Making changes for a simple readthrough cache without queuing (#5992) by @nachivrn
+- chore(profiles-chunks): Add missing consumer to deployment list (#6001) by @rgibert
+- fix(gocd): Updating canary checks to happen after the deploy goes out (#6004) by @IanWoodard
+- ref(admin): Add a system query for data skipping indexes (#6008) by @evanh
+- feat(issue-search): Add group_first_release_id to the GroupAttributes table (#5986) by @snigdhas
+- ref: sentry-kafka-schemas 0.1.90 (#6007) by @lynnagara
+- ref(async-inserts): add clickhouse-concurrency cli arg (#5999) by @MeredithAnya
+- fix: snuba admin queries check (#6005) by @MeredithAnya
+- add tags[environment] to discover low cardinality processor (#5997) by @enochtangg
+- meta: Bump new development version (9dac11b7)
+
 ## 24.5.1
 
 ### Various fixes & improvements
