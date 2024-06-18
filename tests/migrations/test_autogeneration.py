@@ -14,6 +14,10 @@ def test_basic() -> None:
     os.makedirs(dir)
     try:
         subprocess.run(["git", "init"], cwd=dir, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "me@email.com"], cwd=dir, check=True
+        )
+        subprocess.run(["git", "config", "user.name", "Jane Doe"], cwd=dir, check=True)
         # make a fake storage
         with open(os.path.join(dir, fname), "w") as f:
             f.write("hello world\n")
