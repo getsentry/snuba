@@ -1,10 +1,10 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Column
+from snuba.clickhouse.columns import UUID, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.operations import OperationTarget, SqlOperation
+from snuba.migrations.operations import SqlOperation
 
 
 class Migration(migration.ClickhouseNodeMigration):
