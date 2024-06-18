@@ -4,7 +4,7 @@ from snuba.clickhouse.columns import UUID, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.operations import SqlOperation
+from snuba.migrations.operations import OperationTarget, SqlOperation
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -18,6 +18,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column(
                     "group_first_release_id", UInt(64, Modifiers(nullable=True))
                 ),
+                target=OperationTarget.LOCAL,
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
@@ -25,6 +26,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 column=Column(
                     "group_first_release_id", UInt(64, Modifiers(nullable=True))
                 ),
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
 
@@ -32,12 +34,14 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.ModifyColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
-                table_name="group_attributes_local",
+                table_name="group_attributes_dist",
                 column=Column("group_first_release_id", UUID(Modifiers(nullable=True))),
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.ModifyColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
-                table_name="group_attributes_dist",
+                table_name="group_attributes_local",
                 column=Column("group_first_release_id", UUID(Modifiers(nullable=True))),
+                target=OperationTarget.LOCAL,
             ),
         ]
