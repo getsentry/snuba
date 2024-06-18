@@ -29,7 +29,7 @@ Frontend makes 1-3 backend calls, which make 1-3 API calls
 PROJECTS = [1, 2, 3]
 ORGANIZATION_ID = 1123
 RECEIVED = datetime.datetime.now().timestamp()
-CUSTOM_TAGS = [
+CUSTOM_TAGS: list[tuple[str, Callable[[], Any]]] = [
     ("tag1", partial(random.randint, 0, 10)),
     ("tag2", lambda: str(uuid.uuid4())),
     ("tag3", partial(random.randint, 0, 100000)),
@@ -55,6 +55,8 @@ def get_transaction_name(project_id: int) -> str:
         return f"transaction_2_{randint(1, 5)}"
     elif project_id == 3:
         return "database_transaction"
+
+    raise ValueError(f"Unknown project_id: {project_id}")
 
 
 ACTIONS = ["GET", "PUT", "POST", "DELETE"]
@@ -178,7 +180,7 @@ def generate_span_branch(
 
         to_split_or_not_to_split = random.random()
         if span_count < 100 and to_split_or_not_to_split < 0.3:
-            subspans = []
+            subspans: list[Span] = []
             subduration = 0
             if project_id != 3 and to_split_or_not_to_split < 0.15:
                 if verbose:
@@ -233,7 +235,7 @@ def create_transaction(
     trace_id: str,
     project_id: int,
     start_timestamp: datetime.datetime,
-    parent_span_id: str = None,
+    parent_span_id: str | None = None,
     prefix: str = "",
     add_datetimes: bool = False,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -287,7 +289,7 @@ def create_kafka_producer(host: str, topic: str) -> tuple[Producer, Any]:
                 print(f"{i + 1} / {len(messages)}")
                 print(json.dumps(message))
             if not dryrun:
-                producer.produce(
+                kafka_producer.produce(
                     Topic(name=(topic)),
                     KafkaPayload(
                         key=None, value=json.dumps(message).encode("utf-8"), headers=[]
@@ -392,14 +394,14 @@ def main(
     add_datetimes: bool,
     dryrun: bool,
     verbose: bool,
-):
+) -> None:
     to_close = None
     if output == "stdout":
         producer = write_to_stdout
     elif output == "file":
         if not file:
             raise ValueError("--file/-f must be specified when using file output.")
-        producer, to_close = create_file_producer(file)
+        producer, to_close = create_file_producer(file)  # type: ignore
     elif output == "kafka":
         if not kafka_host:
             raise ValueError(
@@ -409,7 +411,7 @@ def main(
             raise ValueError(
                 "--kafka-topic/-t must be specified when using kafka output."
             )
-        producer, to_close = create_kafka_producer(kafka_host, kafka_topic)
+        producer, to_close = create_kafka_producer(kafka_host, kafka_topic)  # type: ignore
     else:
         raise ValueError(f"Unknown output type: {output}")
 
