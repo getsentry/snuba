@@ -10,8 +10,6 @@ from random import randint
 from typing import Any, Callable
 
 import click
-from arroyo.backends.kafka import KafkaPayload, KafkaProducer
-from arroyo.types import Topic
 
 """
 Traces across 3 services:
@@ -97,15 +95,26 @@ def create_span(
     datetime_fields = {}
     if add_datetimes:
         datetime_fields = {
-            "start_datetime": start_timestamp.isoformat(),
-            "end_datetime": end_timestamp.isoformat(),
+            "start_timestamp": start_timestamp.replace(microsecond=0).isoformat(),
+            "end_timestamp": end_timestamp.replace(microsecond=0).isoformat(),
+            "end_timestamp_ms": int(end_timestamp.timestamp() * 1000),
         }
+    measurements = {
+        "measurement1": {
+            "value": random.random(),
+            "unit": "unit",
+        },
+        "measurement2": {
+            "value": random.randint(1, 100000),
+            "unit": "unit",
+        },
+    }
     return {
         "event_id": uuid.uuid4().hex,
         "organization_id": ORGANIZATION_ID,
         "project_id": project_id,
         "trace_id": trace_id,
-        "span_id": uuid.uuid4().hex[:16],
+        "span_id": int(uuid.uuid4().hex[:16], 16),
         "parent_span_id": parent_span_id,
         "segment_id": segment_id,
         "profile_id": uuid.uuid4().hex,
@@ -120,15 +129,10 @@ def create_span(
         "description": "This is a span",
         "tags": custom_tags(project_id),
         "sentry_tags": sentry_tags(transaction_name),
-        "measurements": {
-            "measurement1": {
-                "value": random.random(),
-                "unit": "unit",
-            },
-            "measurement2": {
-                "value": random.randint(1, 100000),
-                "unit": "unit",
-            },
+        "measurements": measurements,
+        "measurements_flattened": {
+            "measurement1": measurements["measurement1"]["value"],
+            "measurement2": measurements["measurement2"]["value"],
         },
         **datetime_fields,
     }
@@ -138,6 +142,8 @@ def update_span_duration(span: Span, duration_ms: int) -> Span:
     start_timestamp = datetime.datetime.fromtimestamp(span["start_timestamp_precise"])
     end_timestamp = start_timestamp + datetime.timedelta(milliseconds=duration_ms)
     span["end_timestamp_precise"] = end_timestamp.timestamp()
+    span["end_timestamp_ms"] = int(end_timestamp.timestamp() * 1000)
+    span["end_timestamp"] = end_timestamp.replace(microsecond=0).isoformat()
     span["duration_ms"] = duration_ms + 10
     span["exclusive_time_ms"] = 10
     return span
@@ -267,7 +273,10 @@ def create_trace(add_datetimes: bool) -> list[dict[str, Any]]:
     return spans
 
 
-def create_kafka_producer(host: str, topic: str) -> tuple[Producer, KafkaProducer]:
+def create_kafka_producer(host: str, topic: str) -> tuple[Producer, Any]:
+    from arroyo.backends.kafka import KafkaPayload, KafkaProducer
+    from arroyo.types import Topic
+
     conf = {"bootstrap.servers": host}
 
     kafka_producer = KafkaProducer(conf)
@@ -338,7 +347,7 @@ def write_to_stdout(messages: list[Span], dryrun: bool, verbose: bool) -> None:
     help="The host and port for kafka.",
 )
 @click.option(
-    "--kakfa-topic",
+    "--kafka-topic",
     "-t",
     default="snuba-spans",
     show_default=True,
