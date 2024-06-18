@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 
 import click
 
+import snuba.migrations.autogeneration as autogeneration
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -378,3 +379,18 @@ def add_node(
         password=password,
         database=database,
     )
+
+
+@migrations.command()
+@click.argument("storage_path", type=str)
+def generate(
+    storage_path: str,
+) -> None:
+    """
+    Given a path to modified storage yaml definition (inside of snuba repo),
+    creates a snuba migration for the given modifications.
+    The migration will be written into the local directory. The user is responsible for making
+    the commit, PR, and merging.
+    """
+    autogeneration.generate(storage_path)
+    click.echo("This function is under construction.")
