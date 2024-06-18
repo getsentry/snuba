@@ -1,13 +1,11 @@
 import os
 import subprocess
 
-import yaml
-
 
 def generate(storage_path: str) -> tuple[str, str]:
-    storage_path = os.path.abspath(os.path.expanduser(storage_path))
+    storage_path = os.path.realpath(os.path.abspath(os.path.expanduser(storage_path)))
 
-    # get the version of the storage at HEAD
+    # get the version of the file at HEAD
     try:
         repo_path = (
             subprocess.run(
@@ -23,27 +21,18 @@ def generate(storage_path: str) -> tuple[str, str]:
             .stdout.decode("utf-8")
             .strip()
         )
-        if not repo_path.endswith("snuba"):
-            raise ValueError(
-                "expected git repo to end with 'snuba' but got: " + repo_path
-            )
-        assert storage_path.startswith(repo_path)  # should always hold
-        rel_storage_path = storage_path[len(repo_path) + 1 :]
-        old_storage = (
-            subprocess.run(
-                ["git", "show", f"HEAD:{rel_storage_path}"],
-                capture_output=True,
-                check=True,
-            )
-            .stdout.decode("utf-8")
-            .strip()
-        )
+        repo_rel_path = os.path.relpath(storage_path, repo_path)
+        old_storage = subprocess.run(
+            ["git", "show", f"HEAD:{repo_rel_path}"],
+            cwd=repo_path,
+            capture_output=True,
+            check=True,
+        ).stdout.decode("utf-8")
     except subprocess.CalledProcessError as e:
         raise ValueError(e.stderr.decode("utf-8")) from e
-    old_storage = yaml.safe_load(old_storage)
 
     # get the user-provided (modified) storage
     with open(storage_path, "r") as f:
-        new_storage = yaml.safe_load(f)
+        new_storage = f.read()
 
     return old_storage, new_storage
