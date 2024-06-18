@@ -45,6 +45,10 @@ def custom_tags(project_id: int) -> dict[str, str]:
         taggen = random.choice(CUSTOM_TAGS)
         tags[f"{taggen[0]}-{project_id}"] = str(taggen[1]())
 
+    for i in range(random.randint(5, 100)):
+        # Medium cardinality
+        tags[f"tag{i}"] = f"value{i}_{random.randint(1, 1000000)}"
+
     return tags
 
 
