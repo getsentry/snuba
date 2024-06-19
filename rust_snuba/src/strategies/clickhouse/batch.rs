@@ -42,6 +42,7 @@ impl BatchFactory {
         clickhouse_user: &str,
         clickhouse_password: &str,
         async_inserts: bool,
+        batch_write_timeout: Option<Duration>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -72,10 +73,18 @@ impl BatchFactory {
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
-        let client = ClientBuilder::new()
-            .default_headers(headers)
-            .build()
-            .unwrap();
+        let client = if let Some(timeout_duration) = batch_write_timeout {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .timeout(timeout_duration)
+                .build()
+                .unwrap()
+        } else {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap()
+        };
 
         BatchFactory {
             client,

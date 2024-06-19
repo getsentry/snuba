@@ -22,6 +22,7 @@ use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
+use crate::strategies::clickhouse::batch;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
 #[pyfunction]
@@ -41,6 +42,7 @@ pub fn consumer(
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
+    batch_write_timeout_ms: Option<u64>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -57,6 +59,7 @@ pub fn consumer(
             python_max_queue_depth,
             health_check_file,
             stop_at_timestamp,
+            batch_write_timeout_ms,
         )
     });
 }
@@ -76,12 +79,16 @@ pub fn consumer_impl(
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
+    batch_write_timeout_ms: Option<u64>,
 ) -> usize {
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
+
+    let batch_write_timeout =
+        batch_write_timeout_ms.map_or(None, |v| Some(Duration::from_millis(v)));
 
     for storage in &consumer_config.storages {
         tracing::info!(
@@ -232,6 +239,7 @@ pub fn consumer_impl(
         physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
         accountant_topic_config: consumer_config.accountant_topic,
         stop_at_timestamp,
+        batch_write_timeout,
     };
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
