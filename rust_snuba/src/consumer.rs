@@ -86,7 +86,7 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    let batch_write_timeout = batch_write_timeout_ms.map(|v| Duration::from_millis(v));
+    let batch_write_timeout = batch_write_timeout_ms.map(Duration::from_millis);
 
     for storage in &consumer_config.storages {
         tracing::info!(
