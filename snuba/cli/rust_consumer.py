@@ -186,6 +186,7 @@ def rust_consumer(
     health_check_file: Optional[str],
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
+    batch_write_timeout_ms: Optional[int]
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -235,6 +236,7 @@ def rust_consumer(
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
+        batch_write_timeout_ms,
     )
 
     sys.exit(exitcode)

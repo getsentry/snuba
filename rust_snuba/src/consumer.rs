@@ -22,7 +22,6 @@ use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::processors;
-use crate::strategies::clickhouse::batch;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
 #[pyfunction]
@@ -87,8 +86,7 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    let batch_write_timeout =
-        batch_write_timeout_ms.map_or(None, |v| Some(Duration::from_millis(v)));
+    let batch_write_timeout = batch_write_timeout_ms.map(|v| Some(Duration::from_millis(v)));
 
     for storage in &consumer_config.storages {
         tracing::info!(
