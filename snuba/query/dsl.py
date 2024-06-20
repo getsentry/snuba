@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional, Sequence
 
 from snuba.query.expressions import (
@@ -141,8 +143,12 @@ def binary_condition(
     return FunctionCall(None, function_name, (lhs, rhs))
 
 
-def equals(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("equals", lhs, rhs)
+def equals(
+    lhs: Expression | OptionalScalarType, rhs: Expression | OptionalScalarType
+) -> FunctionCall:
+    left = lhs if isinstance(lhs, Expression) else Literal(None, lhs)
+    right = rhs if isinstance(rhs, Expression) else Literal(None, rhs)
+    return binary_condition("equals", left, right)
 
 
 def greaterOrEquals(lhs: Expression, rhs: Expression) -> FunctionCall:
@@ -153,24 +159,12 @@ def less(lhs: Expression, rhs: Expression) -> FunctionCall:
     return binary_condition("less", lhs, rhs)
 
 
-def and_cond(lhs: FunctionCall, rhs: FunctionCall, *args: FunctionCall) -> FunctionCall:
-    """
-    if only lhs and rhs are given, return and(lhs, rhs)
-    otherwise (more than 2 conditions are given), returns and(lhs, and(rhs, and(...)))
-    """
-    if len(args) == 0:
-        return binary_condition("and", lhs, rhs)
-
-    sofar = args[len(args) - 1]
-    for i in range(len(args) - 2, -1, -1):
-        sofar = binary_condition("and", args[i], sofar)
-    sofar = binary_condition("and", rhs, sofar)
-    sofar = binary_condition("and", lhs, sofar)
-    return sofar
+def and_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall:
+    return FunctionCall(None, "and", (lhs, rhs, *args))
 
 
-def or_cond(lhs: FunctionCall, rhs: FunctionCall) -> FunctionCall:
-    return binary_condition("or", lhs, rhs)
+def or_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall:
+    return FunctionCall(None, "or", (lhs, rhs, *args))
 
 
 def in_cond(lhs: Expression, rhs: Expression) -> FunctionCall:

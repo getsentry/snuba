@@ -2,10 +2,8 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query import LimitBy, OrderBy, SelectedExpression
-from snuba.query.conditions import (
-    get_first_level_and_conditions,
-    get_first_level_or_conditions,
-)
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -33,8 +31,7 @@ and_cond_match = FunctionCallMatch(
 
 def and_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, FunctionCall)
-    conditions = get_first_level_and_conditions(exp)
-    parameters = ", ".join([arg.accept(visitor) for arg in conditions])
+    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
     return f"and_cond({parameters})"
 
 
@@ -45,8 +42,7 @@ or_cond_match = FunctionCallMatch(
 
 def or_cond_repr(exp: Expression, visitor: ExpressionVisitor[str]) -> str:
     assert isinstance(exp, FunctionCall)
-    conditions = get_first_level_or_conditions(exp)
-    parameters = ", ".join([arg.accept(visitor) for arg in conditions])
+    parameters = ", ".join([arg.accept(visitor) for arg in exp.parameters])
     return f"or_cond({parameters})"
 
 
@@ -228,15 +224,22 @@ def ast_repr(
     return f"[{', '.join(strings)}]"
 
 
-def query_repr(query: LogicalQuery | ClickhouseQuery) -> str:
+def query_repr(query: LogicalQuery | ClickhouseQuery | CompositeQuery[Entity]) -> str:
     visitor = DSLMapperVisitor()
     selected = ast_repr(query.get_selected_columns(), visitor)
     arrayjoin = ast_repr(query.get_arrayjoin(), visitor)
     condition = ast_repr(query.get_condition(), visitor)
     groupby = ast_repr(query.get_groupby(), visitor)
 
+    qfrom = query.get_from_clause()
+    if isinstance(qfrom, Entity):
+        key = qfrom.key
+        from_clause = f"Entity({key},get_entity({key}).get_data_model())"
+    else:
+        from_clause = "from_clause"
+
     return f"""Query(
-        from_clause=from_clause,
+        from_clause={from_clause},
         selected_columns={selected},
         array_join={arrayjoin},
         condition={condition},

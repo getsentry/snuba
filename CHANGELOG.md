@@ -1,5 +1,95 @@
 # Changelog
 
+## 24.6.0
+
+### Various fixes & improvements
+
+- chore(on-call): Properly handling query validation errors (#6019) by @enochtangg
+- update CH version used in CI (#6027) by @volokluev
+- code (#6026) by @xurui-c
+- code (#6024) by @xurui-c
+- doc(rs): some docs for the ClickHouse batch module (#6020) by @onewland
+- chore(gocd): Bumping gocd-jsonnet version (#6021) by @IanWoodard
+- [CapMan] change default throttle values (#6022) by @xurui-c
+- [CapMan] Add throttling to ReferrerGuardRail policy (#6014) by @xurui-c
+- feat(issue-search): Add group_first_release_id to GroupAttributes processor (#5987) by @snigdhas
+- Fixing the metric increment for cache hit/miss and (#6018) by @nachivrn
+- ref(ci): update clickhouse versions (#6016) by @MeredithAnya
+- update docs for snuba storage queries (#6013) by @enochtangg
+- In the Snuba Admin Production queries UI (#6015) by @nachivrn
+- SNS-2737: Making changes for a simple readthrough cache without queuing (#5992) by @nachivrn
+- chore(profiles-chunks): Add missing consumer to deployment list (#6001) by @rgibert
+- fix(gocd): Updating canary checks to happen after the deploy goes out (#6004) by @IanWoodard
+- ref(admin): Add a system query for data skipping indexes (#6008) by @evanh
+- feat(issue-search): Add group_first_release_id to the GroupAttributes table (#5986) by @snigdhas
+- ref: sentry-kafka-schemas 0.1.90 (#6007) by @lynnagara
+- ref(async-inserts): add clickhouse-concurrency cli arg (#5999) by @MeredithAnya
+- fix: snuba admin queries check (#6005) by @MeredithAnya
+- add tags[environment] to discover low cardinality processor (#5997) by @enochtangg
+- meta: Bump new development version (9dac11b7)
+
+## 24.5.1
+
+### Various fixes & improvements
+
+- chore(gocd): Bumping gocd-jsonnet version (#6000) by @IanWoodard
+- ref(async-inserts): Add system queries (#5998) by @MeredithAnya
+- Include metrics for the number of queries resulting in cache hits, misses, and waits associated with datasets. (#5991) by @nachivrn
+- fix(meta) Change the view to use LEFT ARRAY JOIN (#5975) by @evanh
+- Revert "add option to print full payload on invalid message (#5979)" (#5981) by @john-z-yang
+- fix(error): Skip lineno deserialization on failure (#5983) by @john-z-yang
+- feat(generic-metrics): Add gauges subscriptions consumers to Snuba deployment (#5980) by @ayirr7
+- add option to print full payload on invalid message (#5979) by @john-z-yang
+- chore: retire use_new_combine_conditions feature flag (#5977) by @kylemumma
+- ref(subscriptions): Add query-based exception handling in scheduler  (#5976) by @ayirr7
+- SNS 2645 - Surface allocation policy decisions in production queries tool (#5970) by @nachivrn
+- remove logging (#5978) by @xurui-c
+- fix(admin): Allow LEFT ARRAY JOIN in the admin tool (#5974) by @evanh
+- feat(replays): Add migration for distributed materialization (#5951) by @cmanallen
+- ref(async-inserts): allow async inserts as an option (#5955) by @MeredithAnya
+- allow one replacement project to be skipped (#5965) by @xurui-c
+- Debugging bucket timer (#5963) by @xurui-c
+- feat(generic-metrics): Add logic in distributions processor to drop percentiles (#5911) by @ayirr7
+- feat(generic-metrics): Add migrations for opt-in disabled percentiles (#5910) by @ayirr7
+- fix(clickhouse): Remove unecessary logging (#5958) by @nikhars
+- logging (#5959) by @xurui-c
+- feat(metrics): add metric_stats use case to generic metrics meta tables (#5954) by @shellmayr
+- number of projects skipped (#5952) by @xurui-c
+- fix(snuba-admin): Add quotes around ColumnSizeOnDisk's table value (#5953) by @phacops
+
+_Plus 28 more_
+
+## 24.5.0
+
+### Various fixes & improvements
+
+- ref(rust-consumer): join-timeout per-step (#5918) by @untitaker
+- ref: Bump arroyo (#5917) by @untitaker
+- ref(api): parse pipeline tests, mql after treeify #5894 (#5894) by @kylemumma
+- one more auto-offset-reset earliest (#5909) by @lynnagara
+- fix: Temporarily remove check for coupled migrations and code changes (#5903) by @ayirr7
+- ref: bump sentry-kafka-schemas to 0.1.82 (#5906) by @getsentry-bot
+- fix(CI): Make timestamp relative for metrics summaries test  (#5904) by @ayirr7
+- feat(generic-metrics): Retry adding gauges subscriptions topics + configs (#5892) by @ayirr7
+- ref(api): parse pipeline tests, snql pipeline before treeify (#5886) by @kylemumma
+- sessions: drop the clickhouse tables (#5882) by @lynnagara
+- feat: Add support for DateTime64 column type (#5896) by @phacops
+- fix: dlq-consumer should default to auto-offset-reset earliest (#5893) by @lynnagara
+- fix(capman): make allocation policies work with joins (#5887) by @volokluev
+- ref(devexp): Make entities optional in dataset config (#5879) by @enochtangg
+- ref(api): parse pipeline tests, mql pipeline before treeify (#5885) by @kylemumma
+- bump snuba-sdk to 2.0.34 (#5884) by @enochtangg
+- chore(self-hosted): Remove dependency on snuba-image build step during e2e action (#5891) by @hubertdeng123
+- remove skip-write flag (#5846) by @john-z-yang
+- feat(devexp): Add required_time_column to storage (#5889) by @volokluev
+- feat(spans): Add indexes for tag columns (#5871) by @phacops
+- feat(generic-metrics): Add zstd decompression to generic metrics processor (#5845) by @ayirr7
+- snuba devserver fix? (#5873) by @MeredithAnya
+- update CLICKHOUSE_SERVER_MIN_VERSION and CLICKHOUSE_SERVER_MAX_VERSION (#5853) by @MeredithAnya
+- fix: Handle tag columns in low cardinality processor (#5875) by @evanh
+
+_Plus 35 more_
+
 ## 24.4.2
 
 ### Various fixes & improvements

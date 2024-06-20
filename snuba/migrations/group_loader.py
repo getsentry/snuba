@@ -183,6 +183,7 @@ class ReplaysLoader(DirectoryLoader):
             "0017_add_component_name_column",
             "0018_add_viewed_by_id_column",
             "0019_add_materialization",
+            "0020_add_dist_migration_for_materialization",
         ]
 
 
@@ -240,6 +241,7 @@ class SessionsLoader(DirectoryLoader):
             "0002_sessions_aggregates",
             "0003_sessions_matview",
             "0004_sessions_ttl",
+            "0005_drop_sessions_tables",
         ]
 
 
@@ -339,6 +341,12 @@ class GenericMetricsLoader(DirectoryLoader):
             "0043_sets_meta_tables",
             "0044_gauges_meta_tables",
             "0045_distributions_meta_tables",
+            "0046_distributions_add_disable_percentiles",
+            "0047_distributions_mv3",
+            "0048_counters_meta_tables_support_empty_tags",
+            "0049_sets_meta_tables_support_empty_tags",
+            "0050_distributions_meta_tables_support_empty_tags",
+            "0051_gauges_meta_tables_support_empty_tags",
         ]
 
 
@@ -378,6 +386,8 @@ class SpansLoader(DirectoryLoader):
             "0010_spans_add_compression",
             "0011_spans_add_index_on_trace_id",
             "0012_spans_add_index_on_transaction_name",
+            "0013_spans_add_indexes_for_tag_columns",
+            "0014_spans_add_microsecond_precision_timestamps",
         ]
 
 
@@ -389,6 +399,7 @@ class GroupAttributesLoader(DirectoryLoader):
         return [
             "0001_group_attributes",
             "0002_add_priority_to_group_attributes",
+            "0003_add_first_release_id_to_group_attributes",
         ]
 
 
@@ -401,4 +412,14 @@ class MetricsSummariesLoader(DirectoryLoader):
             "0001_metrics_summaries_create_table",
             "0002_metrics_summaries_add_tags_hashmap",
             "0003_metrics_summaries_add_segment_id_duration_group_columns",
+        ]
+
+
+class ProfileChunksLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.profile_chunks")
+
+    def get_migrations(self) -> Sequence[str]:
+        return [
+            "0001_create_profile_chunks_table",
         ]

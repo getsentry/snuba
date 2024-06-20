@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
@@ -27,7 +28,8 @@ from snuba.migrations.columns import MigrationModifiers
 grammar = Grammar(
     r"""
     type             = primitive / lowcardinality / agg / nullable / array
-    primitive        = basic_type / uint / float / fixedstring / enum
+    # datetime64 needs to be before basic_type to not be parsed as DateTime
+    primitive        = datetime64 / basic_type / uint / float / fixedstring / enum
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
     uint             = "UInt" uint_size
@@ -54,6 +56,9 @@ grammar = Grammar(
     comma            = ","
     space            = " "
     quote            = "'"
+    datetime64              = "DateTime64" (open_paren datetime64_precision (comma space* quote datetime64_timezone quote)? close_paren)?
+    datetime64_precision    = "3" / "6" / "9"
+    datetime64_timezone     = ~r"[a-zA-Z0-9_/]+"
     """
 )
 
@@ -176,6 +181,28 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return Array(inner_type)
+
+    def visit_datetime64(
+        self, node: None, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        (
+            _type,
+            precision_timezone_group,
+        ) = visited_children
+        if isinstance(precision_timezone_group, list) is False:
+            return DateTime64()
+        (
+            _parenthesis,
+            precision,
+            timezone_group,
+            _parenthesis,
+        ) = precision_timezone_group
+        if isinstance(timezone_group, list):
+            (_comma, _space, _quote, timezone, _quote) = timezone_group
+            timezone = timezone.text
+        else:
+            timezone = None
+        return DateTime64(precision=int(precision.text), timezone=timezone)
 
     def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
         if isinstance(visited_children, list) and len(visited_children) == 1:

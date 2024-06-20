@@ -19,6 +19,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "SPANS": "spans",
     "GROUP_ATTRIBUTES": "group_attributes",
     "METRICS_SUMMARIES": "metrics_summaries",
+    "PROFILE_CHUNKS": "profile_chunks",
 }
 
 
@@ -93,7 +94,6 @@ JOINABLE_STORAGE_SETS: FrozenSet[FrozenSet[StorageSetKey]] = frozenset(
                 StorageSetKey.GROUP_ATTRIBUTES,
             }
         ),
-        frozenset({StorageSetKey.SEARCH_ISSUES, StorageSetKey.GROUP_ATTRIBUTES}),
     }
 )
 

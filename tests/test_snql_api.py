@@ -165,29 +165,6 @@ class TestSnQLApi(BaseApiTest):
         metadata = mock_record_query.call_args.args[0]
         assert metadata["status"] == QueryStatus.ERROR.value and "request" in metadata
 
-    def test_sessions_query(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "dataset": "sessions",
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE project_id IN array({self.project_id})
-                    AND project_id IN array({self.project_id})
-                    AND org_id = {self.org_id}
-                    AND started >= toDateTime('2021-01-01T17:05:59.554860')
-                    AND started < toDateTime('2022-01-01T17:06:00.554981')
-                    ORDER BY sessions DESC
-                    LIMIT 100 OFFSET 0""",
-                }
-            ),
-        )
-        data = json.loads(response.data)
-
-        assert response.status_code == 200
-        assert data["data"] == []
-
     def test_join_query(self) -> None:
         response = self.post(
             "/events/snql",
@@ -218,7 +195,7 @@ class TestSnQLApi(BaseApiTest):
             data=json.dumps(
                 {
                     "query": """MATCH {
-                        MATCH (discover_events )
+                        MATCH (discover_events)
                         SELECT count() AS count BY project_id, tags[custom_tag]
                         WHERE type != 'transaction' AND project_id = %s
                         AND timestamp >= toDateTime('%s')
@@ -239,6 +216,35 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == [{"avg_count": 1.0}]
+
+    def test_join_query_in_sub_query(self) -> None:
+        response = self.post(
+            "/events/snql",
+            data=json.dumps(
+                {
+                    "query": """MATCH {
+                        MATCH (events: events) -[attributes]-> (group_attributes: group_attributes)
+                        SELECT events.group_id, count() AS `event_count`, max(events.timestamp) AS `last_seen`
+                        BY events.group_id
+                        WHERE events.project_id IN array(4553884953739266)
+                        AND group_attributes.project_id IN array(4553884953739266)
+                        AND events.timestamp >= toDateTime('2024-01-24T16:59:49.431129')
+                        AND events.timestamp < toDateTime('2024-04-23T16:59:49.431129')
+                        AND group_attributes.group_status = 0
+                    }
+                    SELECT events.group_id WHERE last_seen >= toDateTime('2024-04-09T16:59:49.431129')
+                    ORDER BY event_count DESC LIMIT 10000""",
+                    "turbo": False,
+                    "consistent": False,
+                    "debug": True,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == []
 
     def test_max_limit(self) -> None:
         response = self.post(
@@ -421,28 +427,6 @@ class TestSnQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["error"]["type"] == "internal_server_error"
         assert data["error"]["message"] == "stuff"
-
-    def test_sessions_with_function_orderby(self) -> None:
-        response = self.post(
-            "/sessions/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (sessions)
-                    SELECT project_id, release BY release, project_id
-                    WHERE org_id = {self.org_id}
-                    AND started >= toDateTime('2021-04-05T16:52:48.907628')
-                    AND started < toDateTime('2021-04-06T16:52:49.907666')
-                    AND project_id IN tuple({self.project_id})
-                    AND project_id IN tuple({self.project_id})
-                    ORDER BY divide(sessions_crashed, sessions) ASC
-                    LIMIT 21
-                    OFFSET 0
-                    """,
-                    "tenant_ids": {"referrer": "r", "organization_id": 123},
-                }
-            ),
-        )
-        assert response.status_code == 200
 
     def test_arrayjoin(self) -> None:
         response = self.post(
@@ -1152,67 +1136,71 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400
 
     def test_invalid_tag_queries(self) -> None:
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (discover)
-                    SELECT count() AS `count`
-                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
-                    WHERE ifNull(tags[user_flow], '') = 'buy'
-                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN array({self.project_id})
-                    AND environment = 'www.something.com'
-                    AND tags[error_code] = '2300'
-                    AND tags[count] = 419
-                    ORDER BY time ASC LIMIT 10000
-                    GRANULARITY 3600""",
-                    "turbo": False,
-                    "consistent": True,
-                    "debug": True,
-                }
-            ),
-        )
+        with patch(
+            "snuba.querylog._record_failure_metric_with_status"
+        ) as record_failure_metric_mock:
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover)
+                        SELECT count() AS `count`
+                        BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                        WHERE ifNull(tags[user_flow], '') = 'buy'
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN array({self.project_id})
+                        AND environment = 'www.something.com'
+                        AND tags[error_code] = '2300'
+                        AND tags[count] = 419
+                        ORDER BY time ASC LIMIT 10000
+                        GRANULARITY 3600""",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                    }
+                ),
+            )
 
-        assert response.status_code == 400
-        data = response.json
-        assert data["error"]["type"] == "invalid_query"
-        assert (
-            data["error"]["message"]
-            == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
-        )
+            assert response.status_code == 400
+            data = response.json
+            assert data["error"]["type"] == "invalid_query"
+            assert (
+                data["error"]["message"]
+                == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
+            )
 
-        response = self.post(
-            "/discover/snql",
-            data=json.dumps(
-                {
-                    "query": f"""MATCH (discover)
-                    SELECT count() AS `count`
-                    BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
-                    WHERE ifNull(tags[user_flow], '') = 'buy'
-                    AND timestamp >= toDateTime('{self.base_time.isoformat()}')
-                    AND timestamp < toDateTime('{self.next_time.isoformat()}')
-                    AND project_id IN array({self.project_id})
-                    AND environment = 'www.something.com'
-                    AND tags[error_code] IN array('2300')
-                    AND tags[count] IN array(419, 70, 175, 181, 58)
-                    ORDER BY time ASC LIMIT 10000
-                    GRANULARITY 3600""",
-                    "turbo": False,
-                    "consistent": True,
-                    "debug": True,
-                }
-            ),
-        )
+            response = self.post(
+                "/discover/snql",
+                data=json.dumps(
+                    {
+                        "query": f"""MATCH (discover)
+                        SELECT count() AS `count`
+                        BY time, tags[error_code] AS `error_code`, tags[count] AS `count`
+                        WHERE ifNull(tags[user_flow], '') = 'buy'
+                        AND timestamp >= toDateTime('{self.base_time.isoformat()}')
+                        AND timestamp < toDateTime('{self.next_time.isoformat()}')
+                        AND project_id IN array({self.project_id})
+                        AND environment = 'www.something.com'
+                        AND tags[error_code] IN array('2300')
+                        AND tags[count] IN array(419, 70, 175, 181, 58)
+                        ORDER BY time ASC LIMIT 10000
+                        GRANULARITY 3600""",
+                        "turbo": False,
+                        "consistent": True,
+                        "debug": True,
+                    }
+                ),
+            )
 
-        assert response.status_code == 400
-        data = response.json
-        assert data["error"]["type"] == "invalid_query"
-        assert (
-            data["error"]["message"]
-            == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
-        )
+            assert response.status_code == 400
+            data = response.json
+            assert data["error"]["type"] == "invalid_query"
+            assert (
+                data["error"]["message"]
+                == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
+            )
+            assert record_failure_metric_mock.call_count == 2
 
     def test_datetime_condition_types(self) -> None:
         response = self.post(

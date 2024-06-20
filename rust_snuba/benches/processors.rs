@@ -72,32 +72,32 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let replacements_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
-    let factory = ConsumerStrategyFactory::new(
-        storage,
-        EnvConfig::default(),
-        schema.into(),
-        1_000,
-        Duration::from_millis(10),
-        true,
+    let factory = ConsumerStrategyFactory {
+        storage_config: storage,
+        env_config: EnvConfig::default(),
+        logical_topic_name: schema.into(),
+        max_batch_size: 1_000,
+        max_batch_time: Duration::from_millis(10),
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,
         replacements_concurrency,
-        None,
-        true,
-        None,
-        false,
-        None,
-        None,
-        "test-group".to_owned(),
-        Topic::new("test"),
-        TopicConfig {
+        async_inserts: false,
+        python_max_queue_depth: None,
+        use_rust_processor: true,
+        health_check_file: None,
+        enforce_schema: false,
+        commit_log_producer: None,
+        replacements_config: None,
+        physical_consumer_group: "test-group".to_owned(),
+        physical_topic_name: Topic::new("test"),
+        accountant_topic_config: TopicConfig {
             physical_topic_name: "shared-resources-usage".to_string(),
             logical_topic_name: "shared-resources-usage".to_string(),
             broker_config: BrokerConfig::default(),
         },
-        None,
-    );
+        stop_at_timestamp: None,
+    };
     Box::new(factory)
 }
 

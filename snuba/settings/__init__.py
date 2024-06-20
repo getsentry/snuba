@@ -114,6 +114,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "group_attributes",
             "generic_metrics_gauges",
             "metrics_summaries",
+            "profile_chunks",
         },
         "single_node": True,
     },
@@ -380,9 +381,6 @@ ROOT_REPO_PATH = f"{Path(__file__).parent.parent.parent.as_posix()}"
 STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
-
-# Counter utility class window size in minutes
-COUNTER_WINDOW_SIZE_MINUTES = 10
 
 
 # Slicing Configuration

@@ -14,7 +14,12 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
-from snuba.query import SelectedExpression
+from snuba.pipeline.query_pipeline import (
+    QueryPipelineData,
+    QueryPipelineResult,
+    QueryPipelineStage,
+)
+from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -30,6 +35,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.dsl import arrayElement
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import (
@@ -40,6 +46,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.indexer.resolver import resolve_mappings
+from snuba.query.logical import EntityQuery
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.mql.context_population import (
     limit_value,
@@ -55,15 +62,17 @@ from snuba.query.processors.logical.filter_in_select_optimizer import (
 )
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import (
+    MAX_LIMIT,
     POST_PROCESSORS,
     VALIDATORS,
     _post_process,
     _replace_time_condition,
     _treeify_or_and_conditions,
 )
-from snuba.state import explain_meta, get_int_config
+from snuba.state import explain_meta
 from snuba.util import parse_datetime
 from snuba.utils.constants import GRANULARITIES_AVAILABLE
+from snuba.utils.metrics.timer import Timer
 
 # The parser returns a bunch of different types, so create a single aggregate type to
 # capture everything.
@@ -321,7 +330,9 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         self,
         node: Node,
         children: Tuple[
-            Tuple[InitialParseResult,],
+            Tuple[
+                InitialParseResult,
+            ],
             Sequence[list[SelectedExpression]],
         ],
     ) -> InitialParseResult:
@@ -940,9 +951,7 @@ def convert_timeseries_to_query(
     return query
 
 
-def parse_mql_query_body(
-    body: str, dataset: Dataset
-) -> LogicalQuery | CompositeQuery[QueryEntity]:
+def parse_mql_query_body(body: str, dataset: Dataset) -> EntityQuery:
     """
     Parse the MQL to create an initial query. Then augments that query using the context
     information provided.
@@ -997,12 +1006,174 @@ def parse_mql_query_body(
 
     except Exception as e:
         raise e
-    return query
+    return EntityQuery.from_query(query)
+
+
+def populate_start_end_time(
+    query: EntityQuery, mql_context: MQLContext, entity_key: EntityKey
+) -> None:
+    try:
+        start = parse_datetime(mql_context.start)
+        end = parse_datetime(mql_context.end)
+    except Exception as e:
+        raise ParsingException("Invalid start or end time") from e
+
+    entity = get_entity(entity_key)
+    required_timestamp_column = (
+        entity.required_time_column if entity.required_time_column else "timestamp"
+    )
+    filters = []
+    filters.append(
+        binary_condition(
+            ConditionFunctions.GTE,
+            Column(None, None, column_name=required_timestamp_column),
+            Literal(None, value=start),
+        ),
+    )
+    filters.append(
+        binary_condition(
+            ConditionFunctions.LT,
+            Column(None, None, column_name=required_timestamp_column),
+            Literal(None, value=end),
+        ),
+    )
+    query.add_condition_to_ast(combine_and_conditions(filters))
+
+
+def populate_scope(query: LogicalQuery, mql_context: MQLContext) -> None:
+    filters = []
+    filters.append(
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(alias=None, table_name=None, column_name="project_id"),
+            FunctionCall(
+                alias=None,
+                function_name="tuple",
+                parameters=tuple(
+                    Literal(alias=None, value=project_id)
+                    for project_id in mql_context.scope.project_ids
+                ),
+            ),
+        )
+    )
+    filters.append(
+        binary_condition(
+            ConditionFunctions.IN,
+            Column(alias=None, table_name=None, column_name="org_id"),
+            FunctionCall(
+                alias=None,
+                function_name="tuple",
+                parameters=tuple(
+                    Literal(alias=None, value=int(org_id))
+                    for org_id in mql_context.scope.org_ids
+                ),
+            ),
+        )
+    )
+    filters.append(
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(alias=None, table_name=None, column_name="use_case_id"),
+            Literal(alias=None, value=mql_context.scope.use_case_id),
+        )
+    )
+    query.add_condition_to_ast(combine_and_conditions(filters))
+
+
+def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
+    rollup = mql_context.rollup
+
+    # Validate/populate granularity
+    if rollup.granularity not in GRANULARITIES_AVAILABLE:
+        raise ParsingException(
+            f"granularity '{rollup.granularity}' is not valid, must be one of {GRANULARITIES_AVAILABLE}"
+        )
+
+    query.add_condition_to_ast(
+        binary_condition(
+            ConditionFunctions.EQ,
+            Column(None, None, "granularity"),
+            Literal(None, rollup.granularity),
+        )
+    )
+
+    # Validate totals/orderby
+    if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
+        raise ParsingException("with_totals must be a string, either 'True' or 'False'")
+    if rollup.orderby is not None and rollup.orderby not in ("ASC", "DESC"):
+        raise ParsingException("orderby must be either 'ASC' or 'DESC'")
+    if rollup.interval is not None and rollup.orderby is not None:
+        raise ParsingException("orderby is not supported when interval is specified")
+    if rollup.interval and (
+        rollup.interval < GRANULARITIES_AVAILABLE[0]
+        or rollup.interval < rollup.granularity
+    ):
+        raise ParsingException(
+            f"interval {rollup.interval} must be greater than or equal to granularity {rollup.granularity}"
+        )
+
+    with_totals = rollup.with_totals == "True"
+    if rollup.interval:
+        # If an interval is specified, then we need to group the time by that interval,
+        # return the time in the select, and order the results by that time.
+        time_expression = FunctionCall(
+            "time",
+            "toStartOfInterval",
+            parameters=(
+                Column(None, None, "timestamp"),
+                FunctionCall(
+                    None,
+                    "toIntervalSecond",
+                    (Literal(None, rollup.interval),),
+                ),
+                Literal(None, "Universal"),
+            ),
+        )
+        selected = list(query.get_selected_columns())
+        selected.append(SelectedExpression("time", time_expression))
+        query.set_ast_selected_columns(selected)
+
+        groupby = query.get_groupby()
+        if groupby:
+            query.set_ast_groupby(list(groupby) + [time_expression])
+        else:
+            query.set_ast_groupby([time_expression])
+
+        orderby = OrderBy(OrderByDirection.ASC, time_expression)
+        query.set_ast_orderby([orderby])
+
+        if with_totals:
+            query.set_totals(True)
+    elif rollup.orderby is not None:
+        direction = (
+            OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
+        )
+        orderby = OrderBy(direction, Column(None, None, AGGREGATE_ALIAS))
+        query.set_ast_orderby([orderby])
+
+
+def populate_limit(query: LogicalQuery, mql_context: MQLContext) -> None:
+    limit = 1000
+    if mql_context.limit:
+        if mql_context.limit > MAX_LIMIT:
+            raise ParsingException(
+                "queries cannot have a limit higher than 10000", should_report=False
+            )
+        limit = mql_context.limit
+
+    query.set_limit(limit)
+
+
+def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
+    if mql_context.offset:
+        if mql_context.offset < 0:
+            raise ParsingException("offset must be greater than or equal to 0")
+        query.set_offset(mql_context.offset)
 
 
 def populate_query_from_mql_context(
-    query: LogicalQuery | CompositeQuery[QueryEntity], mql_context_dict: dict[str, Any]
-) -> tuple[LogicalQuery | CompositeQuery[QueryEntity], MQLContext]:
+    query: EntityQuery, mql_context_dict: dict[str, Any]
+) -> tuple[EntityQuery, MQLContext]:
     mql_context = MQLContext.from_dict(mql_context_dict)
 
     # List of entity key/alias tuples
@@ -1098,7 +1269,7 @@ def quantiles_to_quantile(query: CompositeQuery[QueryEntity] | LogicalQuery) -> 
 
 
 CustomProcessors = Sequence[
-    Callable[[Union[CompositeQuery[QueryEntity], LogicalQuery]], None]
+    Callable[[Union[CompositeQuery[LogicalDataSource], LogicalQuery]], None]
 ]
 
 MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
@@ -1112,18 +1283,22 @@ def parse_mql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
     settings: QuerySettings | None = None,
-) -> Union[CompositeQuery[QueryEntity], LogicalQuery]:
-    with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
-        query = parse_mql_query_body(body, dataset)
-    with sentry_sdk.start_span(
-        op="parser", description="populate_query_from_mql_context"
-    ):
-        query, mql_context = populate_query_from_mql_context(query, mql_context_dict)
-    with sentry_sdk.start_span(op="processor", description="resolve_indexer_mappings"):
-        resolve_mappings(query, mql_context.indexer_mappings, dataset)
-
-    if settings and settings.get_dry_run():
-        explain_meta.set_original_ast(str(query))
+) -> Union[CompositeQuery[LogicalDataSource], LogicalQuery]:
+    # dummy variables that dont matter
+    dummy_timer = Timer("mql_pipeline")
+    dummy_settings = HTTPQuerySettings()
+    res = ParsePopulateResolveMQL().execute(
+        QueryPipelineResult(
+            data=(body, dataset, mql_context_dict, settings),
+            error=None,
+            query_settings=dummy_settings,
+            timer=dummy_timer,
+        )
+    )
+    if res.error:
+        raise res.error
+    assert res.data  # since theres no res.error, data is guarenteed
+    query = res.data
 
     # NOTE (volo): The anonymizer that runs after this function call chokes on
     # OR and AND clauses with multiple parameters so we have to treeify them
@@ -1131,32 +1306,106 @@ def parse_mql_query(
     with sentry_sdk.start_span(op="processor", description="treeify_conditions"):
         _post_process(query, [_treeify_or_and_conditions], settings)
 
-    with sentry_sdk.start_span(op="processor", description="post_processors"):
-        _post_process(
-            query,
-            MQL_POST_PROCESSORS,
-            settings,
+    res = PostProcessAndValidateMQLQuery().execute(
+        QueryPipelineResult(
+            data=(
+                query,
+                dummy_settings,
+                custom_processing,
+            ),
+            error=None,
+            query_settings=HTTPQuerySettings(),
+            timer=dummy_timer,
         )
+    )
+    if res.error:
+        raise res.error
+    assert res.data  # since theres no res.error, data is guarenteed
+    return res.data
 
-    # Filter in select optimizer
-    with sentry_sdk.start_span(op="processor", description="filter_in_select_optimize"):
-        if isinstance(query, LogicalQuery):
+
+class ParsePopulateResolveMQL(
+    QueryPipelineStage[
+        tuple[str, Dataset, dict[str, Any], QuerySettings | None], LogicalQuery
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[str, Dataset, dict[str, Any], QuerySettings | None]
+        ],
+    ) -> LogicalQuery:
+        mql_str, dataset, mql_context_dict, settings = pipe_input.data
+
+        with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
+            query = parse_mql_query_body(mql_str, dataset)
+
+        with sentry_sdk.start_span(
+            op="parser", description="populate_query_from_mql_context"
+        ):
+            query, mql_context = populate_query_from_mql_context(
+                query, mql_context_dict
+            )
+
+        with sentry_sdk.start_span(
+            op="processor", description="resolve_indexer_mappings"
+        ):
+            resolve_mappings(query, mql_context.indexer_mappings, dataset)
+
+        if settings and settings.get_dry_run():
+            explain_meta.set_original_ast(str(query))
+
+        return query
+
+
+class PostProcessAndValidateMQLQuery(
+    QueryPipelineStage[
+        tuple[
+            LogicalQuery,
+            QuerySettings | None,
+            CustomProcessors | None,
+        ],
+        LogicalQuery,
+    ]
+):
+    def _process_data(
+        self,
+        pipe_input: QueryPipelineData[
+            tuple[
+                LogicalQuery,
+                QuerySettings | None,
+                CustomProcessors | None,
+            ]
+        ],
+    ) -> LogicalQuery:
+        query, settings, custom_processing = pipe_input.data
+        with sentry_sdk.start_span(op="processor", description="post_processors"):
+            _post_process(
+                query,
+                MQL_POST_PROCESSORS,
+                settings,
+            )
+
+        # Filter in select optimizer
+        with sentry_sdk.start_span(
+            op="processor", description="filter_in_select_optimize"
+        ):
             if settings is None:
                 FilterInSelectOptimizer().process_query(query, HTTPQuerySettings())
             else:
                 FilterInSelectOptimizer().process_query(query, settings)
 
-    # Custom processing to tweak the AST before validation
-    with sentry_sdk.start_span(op="processor", description="custom_processing"):
-        if custom_processing is not None:
-            _post_process(query, custom_processing, settings)
+        # Custom processing to tweak the AST before validation
+        with sentry_sdk.start_span(op="processor", description="custom_processing"):
+            if custom_processing is not None:
+                _post_process(query, custom_processing, settings)
 
-    # Time based processing
-    with sentry_sdk.start_span(op="processor", description="time_based_processing"):
-        _post_process(query, [_replace_time_condition], settings)
+        # Time based processing
+        with sentry_sdk.start_span(op="processor", description="time_based_processing"):
+            _post_process(query, [_replace_time_condition], settings)
 
-    # Validating
-    with sentry_sdk.start_span(op="validate", description="expression_validators"):
-        _post_process(query, VALIDATORS)
+        # Validating
+        with sentry_sdk.start_span(op="validate", description="expression_validators"):
+            _post_process(query, VALIDATORS)
 
-    return query
+        return query

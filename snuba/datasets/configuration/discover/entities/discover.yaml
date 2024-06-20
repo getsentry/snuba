@@ -463,6 +463,7 @@ query_processors:
         - app_start_type
         - transaction_source
         - version
+        - tags[environment]
 
 
 validate_data_model: error

@@ -11,8 +11,8 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.equivalence_adder import add_equivalent_conditions
-from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
+from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
 
@@ -53,7 +53,6 @@ def _translate_logical_composite_query(
     executes all entity processors associated with each sub-query node,
     and builds a physical composite query.
     """
-
     translated_source = CompositeDataSourceTransformer(settings).visit(
         query.get_from_clause()
     )

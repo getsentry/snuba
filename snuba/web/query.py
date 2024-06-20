@@ -12,9 +12,9 @@ from snuba.pipeline.stages.query_processing import (
     EntityProcessingStage,
     StorageProcessingStage,
 )
-from snuba.query.exceptions import QueryPlanException
-from snuba.querylog import record_query
-from snuba.querylog.query_metadata import SnubaQueryMetadata
+from snuba.query.exceptions import InvalidQueryException, QueryPlanException
+from snuba.querylog import record_invalid_request, record_query
+from snuba.querylog.query_metadata import SnubaQueryMetadata, get_request_status
 from snuba.request import Request
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
@@ -79,6 +79,15 @@ def run_query(
         if not request.query_settings.get_dry_run():
             record_query(request, timer, query_metadata, result)
         _set_query_final(request, result.extra)
+    except InvalidQueryException as error:
+        request_status = get_request_status(error)
+        record_invalid_request(
+            timer,
+            request_status,
+            request.attribution_info.referrer,
+            str(type(error).__name__),
+        )
+        raise error
     except QueryException as error:
         _set_query_final(request, error.extra)
         record_query(request, timer, query_metadata, error)

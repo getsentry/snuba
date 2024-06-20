@@ -47,11 +47,7 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
             let write_start = SystemTime::now();
 
             tracing::debug!("performing write");
-            let skip_write = http_batch.finish().await.map_err(RunTaskError::Other)?;
-
-            if !skip_write {
-                tracing::info!("Inserted {} rows", num_rows);
-            }
+            http_batch.finish().await.map_err(RunTaskError::Other)?;
 
             let write_finish = SystemTime::now();
 
@@ -97,10 +93,6 @@ impl ProcessingStrategy<BytesInsertBatch<HttpBatch>> for ClickhouseWriterStep {
         message: Message<BytesInsertBatch<HttpBatch>>,
     ) -> Result<(), SubmitError<BytesInsertBatch<HttpBatch>>> {
         self.inner.submit(message)
-    }
-
-    fn close(&mut self) {
-        self.inner.close();
     }
 
     fn terminate(&mut self) {

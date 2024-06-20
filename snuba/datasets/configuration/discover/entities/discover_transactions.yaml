@@ -334,6 +334,7 @@ query_processors:
         - transaction_op
         - platform
         - environment
+        - tags[environment]
         - release
         - dist
         - sdk_name

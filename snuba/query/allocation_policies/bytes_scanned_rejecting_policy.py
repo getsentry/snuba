@@ -41,6 +41,8 @@ DEFAULT_OVERRIDE_LIMIT = -1
 PETABYTE = 10**12
 DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * PETABYTE)
 DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
+DEFAULT_BYTES_THROTTLE_DIVIDER = 2
+DEFAULT_THREADS_THROTTLE_DIVIDER = 2
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
@@ -90,6 +92,18 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 "If a clickhouse query times out, how many bytes does the policy assume the query scanned? Increasing the number increases the penalty for queries that time out",
                 int,
                 DEFAULT_TIMEOUT_PENALIZATION,
+            ),
+            AllocationPolicyConfig(
+                "bytes_throttle_divider",
+                "Divide the scan limit by this number gives the throttling threshold",
+                int,
+                DEFAULT_BYTES_THROTTLE_DIVIDER,
+            ),
+            AllocationPolicyConfig(
+                "threads_throttle_divider",
+                "max threads divided by this number is the number of threads we use to execute queries for a throttled (project_id|organization_id, referrer)",
+                int,
+                DEFAULT_BYTES_THROTTLE_DIVIDER,
             ),
         ]
 
@@ -206,6 +220,24 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 },
             )
             return QuotaAllowance(False, self.max_threads, explanation)
+
+        throttle_threshold = max(
+            1, scan_limit // self.get_config_value("bytes_throttle_divider")
+        )
+        if granted_quota.granted < throttle_threshold:
+            self.metrics.increment(
+                "bytes_scanned_queries_throttled",
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+            return QuotaAllowance(
+                True,
+                max(
+                    1,
+                    self.max_threads
+                    // self.get_config_value("threads_throttle_divider"),
+                ),
+                {"reason": "within_limit but throttled"},
+            )
         return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"})
 
     def _get_bytes_scanned_in_query(
