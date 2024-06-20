@@ -158,6 +158,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=int,
     help="Unix timestamp after which to stop processing messages",
 )
+@click.option(
+    "--batch-write-timeout-ms",
+    type=int,
+    default=None,
+    help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
