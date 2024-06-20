@@ -28,7 +28,6 @@ clone this repo into your workspace::
 These commands set up the Python virtual environment::
 
     cd snuba
-    make pyenv-setup
     python -m venv .venv
     source .venv/bin/activate
     pip install --upgrade pip==22.2.2
