@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import typing
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -808,6 +809,27 @@ def db_query(
         )
 
 
+def _add_quota_summary(
+    quota_allowance_summary: dict[str, Any],
+    quota_allowance: QuotaAllowance,
+    policy_name: str,
+    action: str,
+) -> None:
+
+    summary: dict[str, Any] = {}
+    summary["threads_used"] = quota_allowance.max_threads
+
+    policy_specific_summary: dict[str, Any] = {}
+    policy_specific_summary["policy"] = policy_name
+    policy_specific_summary["rejection_threshold"] = quota_allowance.rejection_threshold
+    policy_specific_summary["quota_used"] = quota_allowance.quota_used
+    policy_specific_summary["quota_units"] = quota_allowance.quota_unit
+    policy_specific_summary["suggestion"] = quota_allowance.suggestion
+    summary[action] = policy_specific_summary
+
+    quota_allowance_summary["summary"] = summary
+
+
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -822,6 +844,8 @@ def _apply_allocation_policies_quota(
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
     can_run = True
+    throttle_quota_allowance, throttle_policy_name = None, None
+    rejection_quota_allowance, rejection_policy_name = None, None
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -839,7 +863,12 @@ def _apply_allocation_policies_quota(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
+                if allowance.is_throttled:
+                    throttle_quota_allowance = allowance
+                    throttle_policy_name = allocation_policy.config_key()
                 if not can_run:
+                    rejection_quota_allowance = allowance
+                    rejection_policy_name = allocation_policy.config_key()
                     break
 
         allowance_dicts = {
@@ -847,6 +876,22 @@ def _apply_allocation_policies_quota(
             for key, quota_allowance in quota_allowances.items()
         }
         stats["quota_allowance"] = allowance_dicts
+
+        if rejection_quota_allowance is not None:
+            _add_quota_summary(
+                stats["quota_allowance"],
+                rejection_quota_allowance,
+                typing.cast(str, rejection_policy_name),
+                "rejected_by",
+            )
+        elif throttle_quota_allowance is not None:
+            _add_quota_summary(
+                stats["quota_allowance"],
+                throttle_quota_allowance,
+                typing.cast(str, throttle_policy_name),
+                "throttled_by",
+            )
+
         if not can_run:
             raise AllocationPolicyViolations.from_args(quota_allowances)
         # Before allocation policies were a thing, the query pipeline would apply
