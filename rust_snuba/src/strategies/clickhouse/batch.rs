@@ -261,6 +261,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -295,6 +296,7 @@ mod tests {
             "default",
             "",
             true,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -328,6 +330,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -359,6 +362,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
         );
 
         let mut batch = factory.new_batch();
