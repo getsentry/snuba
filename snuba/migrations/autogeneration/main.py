@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from snuba.migrations.autogeneration.diff import generate_migration_ops
+from snuba.migrations.autogeneration.diff import generate_migration
 
 
 def generate(storage_path: str) -> None:
@@ -9,7 +9,7 @@ def generate(storage_path: str) -> None:
     new_storage, old_storage = get_working_and_head(storage_path)
 
     # generate the migration operations
-    generate_migration_ops(old_storage, new_storage)
+    generate_migration(old_storage, new_storage)
 
 
 def get_working_and_head(path: str) -> tuple[str, str]:
