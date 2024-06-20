@@ -400,6 +400,7 @@ class GroupAttributesLoader(DirectoryLoader):
             "0001_group_attributes",
             "0002_add_priority_to_group_attributes",
             "0003_add_first_release_id_to_group_attributes",
+            "0004_drop_first_release_id_from_group_attributes",
         ]
 
 
