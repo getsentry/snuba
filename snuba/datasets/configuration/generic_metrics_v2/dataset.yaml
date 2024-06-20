@@ -1,0 +1,9 @@
+version: v1
+kind: dataset
+name: generic_metrics_v2
+
+entities:
+  - generic_metrics_sets_v2
+  - generic_metrics_distributions_v2
+  - generic_metrics_counters_v2
+  - generic_metrics_gauges_v2

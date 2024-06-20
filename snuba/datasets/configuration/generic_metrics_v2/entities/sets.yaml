@@ -1,0 +1,85 @@
+version: v1
+kind: entity
+name: generic_metrics_sets_v2
+
+schema:
+  [
+    { name: org_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: metric_name, type: String },
+    { name: timestamp, type: DateTime },
+    { name: bucketed_time, type: DateTime },
+    { name: granularity, type: UInt, args: { size: 16 } },
+    { name: use_case_id, type: String },
+    {
+      name: tags,
+      type: Nested,
+      args:
+        {
+          subcolumns:
+            [
+              { name: key, type: String },
+              { name: value, type: String },
+            ],
+        },
+    },
+    {
+      name: value,
+      type: AggregateFunction,
+      args:
+        {
+          func: "uniqCombined64",
+          arg_types: [{ type: UInt, args: { size: 64 } }],
+        },
+    },
+  ]
+
+storages:
+  - storage: generic_metrics_sets_v2
+    translation_mappers:
+      functions:
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniq
+            to_name: uniqCombined64Merge
+        - mapper: FunctionNameMapper
+          args:
+            from_name: uniqIf
+            to_name: uniqCombined64MergeIf
+      subscriptables:
+        - mapper: SubscriptableMapper
+          args:
+            from_column_table:
+            from_column_name: tags
+            to_nested_col_table:
+            to_nested_col_name: tags
+            value_subcolumn_name: value
+
+storage_selector:
+  selector: SimpleQueryStorageSelector
+  args:
+    storage: generic_metrics_sets_v2
+
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        bucketed_time: timestamp
+      time_parse_columns: [timestamp]
+
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: ["org_id", "project_id"]
+required_time_column: timestamp
+subscription_processors:
+  - processor: AddColumnCondition
+    args:
+      extra_condition_data_key: organization
+      extra_condition_column: org_id
+subscription_validators:
+  - validator: AggregationValidator
+    args:
+      max_allowed_aggregations: 3
+      disallowed_aggregations: [having, orderby]
+      required_time_column: timestamp
