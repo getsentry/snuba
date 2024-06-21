@@ -58,7 +58,6 @@ class DirectoryLoader(GroupLoader, ABC):
                 glob(os.path.join(migration_folder, "[0-9][0-9][0-9][0-9]_*.py")),
             )
         )
-
         # validate no duplicate migration numbers
         last = None
         for fname in migration_filenames:
