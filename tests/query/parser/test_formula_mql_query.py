@@ -17,8 +17,6 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
-
-# from snuba.query.dsl import arrayElement, divide, literals_tuple, multiply, plus
 from snuba.query.dsl import divide, literals_tuple
 from snuba.query.expressions import (
     Column,
@@ -26,8 +24,6 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-
-# from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query
 
 # import pytest
@@ -256,138 +252,204 @@ def test_simple_formula() -> None:
     eq, reason = query.equals(expected)
     assert eq, reason
 
+    # @pytest.mark.xfail()
+    # def test_simple_formula_with_leading_literals() -> None:
+    #     query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    #     expected_selected = SelectedExpression(
+    #         "aggregate_value",
+    #         divide(
+    #             timeseries(
+    #                 "sumIf",
+    #                 123456,
+    #                 binary_condition(
+    #                     "equals", tag_column("status_code"), Literal(None, "200")
+    #                 ),
+    #             ),
+    #             timeseries("sumIf", 123456),
+    #             "_snuba_aggregate_value",
+    #         ),
+    #     )
+    #     filter_in_select_condition = or_cond(
+    #         and_cond(
+    #             equals(
+    #                 tag_column("status_code"),
+    #                 Literal(None, "200"),
+    #             ),
+    #             equals(
+    #                 Column("_snuba_metric_id", None, "metric_id"),
+    #                 Literal(None, 123456),
+    #             ),
+    #         ),
+    #         equals(
+    #             Column("_snuba_metric_id", None, "metric_id"),
+    #             Literal(None, 123456),
+    #         ),
+    #     )
+    #     expected = Query(
+    #         from_distributions,
+    #         selected_columns=[
+    #             expected_selected,
+    #             SelectedExpression(
+    #                 "time",
+    #                 time_expression,
+    #             ),
+    #         ],
+    #         groupby=[time_expression],
+    #         condition=binary_condition(
+    #             "and",
+    #             filter_in_select_condition,
+    #             formula_condition,
+    #         ),
+    #         order_by=[
+    #             OrderBy(
+    #                 direction=OrderByDirection.ASC,
+    #                 expression=time_expression,
+    #             )
+    #         ],
+    #         limit=1000,
+    #         offset=0,
+    #     )
 
-# @pytest.mark.xfail()
-# def test_simple_formula_with_leading_literals() -> None:
-#     query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
-#     expected_selected = SelectedExpression(
-#         "aggregate_value",
-#         divide(
-#             timeseries(
-#                 "sumIf",
-#                 123456,
-#                 binary_condition(
-#                     "equals", tag_column("status_code"), Literal(None, "200")
-#                 ),
-#             ),
-#             timeseries("sumIf", 123456),
-#             "_snuba_aggregate_value",
-#         ),
-#     )
-#     filter_in_select_condition = or_cond(
-#         and_cond(
-#             equals(
-#                 tag_column("status_code"),
-#                 Literal(None, "200"),
-#             ),
-#             equals(
-#                 Column("_snuba_metric_id", None, "metric_id"),
-#                 Literal(None, 123456),
-#             ),
-#         ),
-#         equals(
-#             Column("_snuba_metric_id", None, "metric_id"),
-#             Literal(None, 123456),
-#         ),
-#     )
-#     expected = Query(
-#         from_distributions,
-#         selected_columns=[
-#             expected_selected,
-#             SelectedExpression(
-#                 "time",
-#                 time_expression,
-#             ),
-#         ],
-#         groupby=[time_expression],
-#         condition=binary_condition(
-#             "and",
-#             filter_in_select_condition,
-#             formula_condition,
-#         ),
-#         order_by=[
-#             OrderBy(
-#                 direction=OrderByDirection.ASC,
-#                 expression=time_expression,
-#             )
-#         ],
-#         limit=1000,
-#         offset=0,
-#     )
+    #     generic_metrics = get_dataset(
+    #         "generic_metrics",
+    #     )
+    #     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    #     eq, reason = query.equals(expected)
+    #     assert eq, reason
 
-#     generic_metrics = get_dataset(
-#         "generic_metrics",
-#     )
-#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-#     eq, reason = query.equals(expected)
-#     assert eq, reason
+    # @pytest.mark.xfail()
+    # def test_groupby() -> None:
+    #     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
+    # expected_selected = SelectedExpression(
+    #     "aggregate_value",
+    #     divide(
+    #         timeseries(
+    #             "sumIf",
+    #             123456,
+    #             binary_condition(
+    #                 "equals", tag_column("status_code"), Literal(None, "200")
+    #             ),
+    #         ),
+    #         timeseries("sumIf", 123456),
+    #         "_snuba_aggregate_value",
+    #     ),
+    # )
+    # filter_in_select_condition = or_cond(
+    #     and_cond(
+    #         equals(
+    #             tag_column("status_code"),
+    #             Literal(None, "200"),
+    #         ),
+    #         equals(
+    #             Column("_snuba_metric_id", None, "metric_id"),
+    #             Literal(None, 123456),
+    #         ),
+    #     ),
+    #     equals(
+    #         Column("_snuba_metric_id", None, "metric_id"),
+    #         Literal(None, 123456),
+    #     ),
+    # )
+    # expected = Query(
+    #     from_distributions,
+    #     selected_columns=[
+    #         expected_selected,
+    #         SelectedExpression("transaction", tag_column("transaction")),
+    #         SelectedExpression(
+    #             "time",
+    #             time_expression,
+    #         ),
+    #     ],
+    #     groupby=[tag_column("transaction"), time_expression],
+    #     condition=binary_condition(
+    #         "and",
+    #         filter_in_select_condition,
+    #         formula_condition,
+    #     ),
+    #     order_by=[
+    #         OrderBy(
+    #             direction=OrderByDirection.ASC,
+    #             expression=time_expression,
+    #         )
+    #     ],
+    #     limit=1000,
+    #     offset=0,
+    # )
 
+    # generic_metrics = get_dataset(
+    #     "generic_metrics",
+    # )
+    # query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    # print(query)
+    # eq, reason = query.equals(expected)
+    # assert eq, reason
 
-# @pytest.mark.xfail()
-# def test_groupby() -> None:
-#     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
-#     expected_selected = SelectedExpression(
-#         "aggregate_value",
-#         divide(
-#             timeseries(
-#                 "sumIf",
-#                 123456,
-#                 binary_condition(
-#                     "equals", tag_column("status_code"), Literal(None, "200")
-#                 ),
-#             ),
-#             timeseries("sumIf", 123456),
-#             "_snuba_aggregate_value",
-#         ),
-#     )
-#     filter_in_select_condition = or_cond(
-#         and_cond(
-#             equals(
-#                 tag_column("status_code"),
-#                 Literal(None, "200"),
-#             ),
-#             equals(
-#                 Column("_snuba_metric_id", None, "metric_id"),
-#                 Literal(None, 123456),
-#             ),
-#         ),
-#         equals(
-#             Column("_snuba_metric_id", None, "metric_id"),
-#             Literal(None, 123456),
-#         ),
-#     )
-#     expected = Query(
-#         from_distributions,
-#         selected_columns=[
-#             expected_selected,
-#             SelectedExpression("transaction", tag_column("transaction")),
-#             SelectedExpression(
-#                 "time",
-#                 time_expression,
-#             ),
-#         ],
-#         groupby=[tag_column("transaction"), time_expression],
-#         condition=binary_condition(
-#             "and",
-#             filter_in_select_condition,
-#             formula_condition,
-#         ),
-#         order_by=[
-#             OrderBy(
-#                 direction=OrderByDirection.ASC,
-#                 expression=time_expression,
-#             )
-#         ],
-#         limit=1000,
-#         offset=0,
-#     )
+    # @pytest.mark.xfail()
+    # def test_different_groupbys() -> None:
+    #     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
+    # expected_selected = SelectedExpression(
+    #     "aggregate_value",
+    #     divide(
+    #         timeseries(
+    #             "sumIf",
+    #             123456,
+    #             binary_condition(
+    #                 "equals", tag_column("status_code"), Literal(None, "200")
+    #             ),
+    #         ),
+    #         timeseries("sumIf", 123456),
+    #         "_snuba_aggregate_value",
+    #     ),
+    # )
+    # filter_in_select_condition = or_cond(
+    #     and_cond(
+    #         equals(
+    #             tag_column("status_code"),
+    #             Literal(None, "200"),
+    #         ),
+    #         equals(
+    #             Column("_snuba_metric_id", None, "metric_id"),
+    #             Literal(None, 123456),
+    #         ),
+    #     ),
+    #     equals(
+    #         Column("_snuba_metric_id", None, "metric_id"),
+    #         Literal(None, 123456),
+    #     ),
+    # )
+    # expected = Query(
+    #     from_distributions,
+    #     selected_columns=[
+    #         expected_selected,
+    #         SelectedExpression("transaction", tag_column("transaction")),
+    #         SelectedExpression(
+    #             "time",
+    #             time_expression,
+    #         ),
+    #     ],
+    #     groupby=[tag_column("transaction"), time_expression],
+    #     condition=binary_condition(
+    #         "and",
+    #         filter_in_select_condition,
+    #         formula_condition,
+    #     ),
+    #     order_by=[
+    #         OrderBy(
+    #             direction=OrderByDirection.ASC,
+    #             expression=time_expression,
+    #         )
+    #     ],
+    #     limit=1000,
+    #     offset=0,
+    # )
 
-#     generic_metrics = get_dataset(
-#         "generic_metrics",
-#     )
-#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
-#     eq, reason = query.equals(expected)
-#     assert eq, reason
+    # generic_metrics = get_dataset(
+    #     "generic_metrics",
+    # )
+    # query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    # print(query)
+    # eq, reason = query.equals(expected)
+    # assert eq, reason
 
 
 # @pytest.mark.xfail()

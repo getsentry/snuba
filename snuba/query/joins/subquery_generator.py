@@ -73,13 +73,9 @@ class SubqueryDraft:
                     if self.__conditions
                     else None
                 ),
+                groupby=self.__groupby,
                 granularity=self.__granularity,
             ),
-            groupby=self.__groupby,
-            condition=(
-                combine_and_conditions(self.__conditions) if self.__conditions else None
-            ),
-            granularity=self.__granularity,
         )
 
     def __str__(self) -> str:
@@ -279,7 +275,7 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
     # This is working correctly for everything except the aggregate value function
     print("PROCESSED", query.get_selected_columns())
 
-    print("TIME?", subqueries["d0"].build_query().get_selected_columns())
+    # print("TIME?", subqueries["d0"].build_query().get_selected_columns())
 
     array_join = query.get_arrayjoin()
     if array_join is not None:
