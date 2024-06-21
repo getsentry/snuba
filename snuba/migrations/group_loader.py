@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 from abc import ABC, abstractmethod
 from glob import glob
 from importlib import import_module
@@ -53,33 +52,23 @@ class DirectoryLoader(GroupLoader, ABC):
         if not os.path.exists(migration_folder):
             return []
         # grab the migrations, ignore all other files
-        files = sorted(
-            filter(
-                lambda f: os.path.isfile(os.path.join(migration_folder, f)),
-                os.listdir(migration_folder),
-            )
-        )
-        migration_filenames = []
-        pattern = re.compile(r"[0-9][0-9][0-9][0-9]_.*\.py")
-        for f in files:
-            if re.fullmatch(pattern, f):
-                migration_filenames.append(f[:-3])
-        tmp = list(
+        migration_filenames = sorted(
             map(
                 lambda x: os.path.basename(x)[:-3],
-                sorted(
-                    glob(os.path.join(migration_folder, "[0-9][0-9][0-9][0-9]_*.py"))
-                ),
+                glob(os.path.join(migration_folder, "[0-9][0-9][0-9][0-9]_*.py")),
             )
         )
-        assert tmp == migration_filenames
 
-        # validate the migration numbers are strictly increasing starting at 0001
-        for i, fname in enumerate(migration_filenames):
-            if not (int(fname[:4]) == i + 1):
+        # validate no duplicate migration numbers
+        last = None
+        for fname in migration_filenames:
+            if last is not None and fname[:4] == last[:4]:
                 raise ValueError(
-                    f"Migrations in folder {migration_folder} were not formatted as expected. Expected migration number {str(i+1).zfill(4)} for migration {fname} but got {fname[:4]}"
+                    f"""Duplicate migration number for the following files:
+    {os.path.join(migration_folder,last)}.py
+    {os.path.join(migration_folder,fname)}.py"""
                 )
+            last = fname
 
         return migration_filenames
 
