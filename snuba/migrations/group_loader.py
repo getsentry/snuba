@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from abc import ABC, abstractmethod
 from importlib import import_module
 from typing import Sequence
@@ -33,11 +35,42 @@ class DirectoryLoader(GroupLoader, ABC):
     """
 
     def __init__(self, module_path: str) -> None:
-        self.__module = module_path
+        self.__module = module_path  # the one with dots not slashes
 
-    @abstractmethod
     def get_migrations(self) -> Sequence[str]:
-        raise NotImplementedError
+        """
+        Migrations must be in the folder specified by module_path
+
+        Migrations must follow the naming scheme: xxxx_migration_name.py,
+        as a regular expression: [0-9][0-9][0-9][0-9]_*\.py
+        where xxxx is the 4 digit migration number which must begin at 0001 and
+        strictly increase by 1
+        """
+        # the folder that the migrations should be in
+        migration_folder = self.__module.replace(".", "/")
+        if not os.path.exists(migration_folder):
+            return []
+        # grab the migrations, ignore all other files
+        files = sorted(
+            filter(
+                lambda f: os.path.isfile(os.path.join(migration_folder, f)),
+                os.listdir(migration_folder),
+            )
+        )
+        migration_filenames = []
+        pattern = re.compile(r"[0-9][0-9][0-9][0-9]_.*\.py")
+        for f in files:
+            if re.fullmatch(pattern, f):
+                migration_filenames.append(f[:-3])
+
+        # validate the migration numbers are strictly increasing starting at 0001
+        for i, fname in enumerate(migration_filenames):
+            if not (int(fname[:4]) == i + 1):
+                raise ValueError(
+                    f"Migrations in folder {migration_folder} were not formatted as expected. Expected migration number {str(i).zfill(4)} for migration {fname} but got {fname[:4]}"
+                )
+
+        return migration_filenames
 
     def load_migration(self, migration_id: str) -> Migration:
         try:
@@ -52,7 +85,9 @@ class SystemLoader(DirectoryLoader):
         super().__init__("snuba.migrations.system_migrations")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_migrations"]
+        migrations = ["0001_migrations"]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class EventsLoader(DirectoryLoader):
@@ -60,7 +95,7 @@ class EventsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.events")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_events_initial",
             "0002_events_onpremise_compatibility",
             "0003_errors",
@@ -86,6 +121,8 @@ class EventsLoader(DirectoryLoader):
             "0023_add_trace_sampled_num_processing_errors_columns",
             "0024_add_trace_sampled_num_processing_errors_columns_ro",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class TransactionsLoader(DirectoryLoader):
@@ -93,7 +130,7 @@ class TransactionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.transactions")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_transactions",
             "0002_transactions_onpremise_fix_orderby_and_partitionby",
             "0003_transactions_onpremise_fix_columns",
@@ -117,6 +154,8 @@ class TransactionsLoader(DirectoryLoader):
             "0021_transactions_add_replay_id",
             "0022_transactions_add_index_on_trace_id",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class DiscoverLoader(DirectoryLoader):
@@ -128,7 +167,7 @@ class DiscoverLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.discover")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_discover_merge_table",
             "0002_discover_add_deleted_tags_hash_map",
             "0003_discover_fix_user_column",
@@ -139,6 +178,8 @@ class DiscoverLoader(DirectoryLoader):
             "0008_discover_fix_add_local_table",
             "0009_discover_add_replay_id",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class OutcomesLoader(DirectoryLoader):
@@ -146,7 +187,7 @@ class OutcomesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.outcomes")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_outcomes",
             "0002_outcomes_remove_size_and_bytes",
             "0003_outcomes_add_category_and_quantity",
@@ -156,6 +197,8 @@ class OutcomesLoader(DirectoryLoader):
             "0007_outcomes_add_event_id_ttl_codec",
             "0008_outcomes_add_indexes",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class ReplaysLoader(DirectoryLoader):
@@ -163,7 +206,7 @@ class ReplaysLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.replays")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_replays",
             "0002_add_url",
             "0003_alter_url_allow_null",
@@ -185,6 +228,8 @@ class ReplaysLoader(DirectoryLoader):
             "0019_add_materialization",
             "0020_add_dist_migration_for_materialization",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class MetricsLoader(DirectoryLoader):
@@ -192,7 +237,7 @@ class MetricsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.metrics")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_metrics_buckets",
             "0002_metrics_sets",
             "0003_counters_to_buckets",
@@ -229,6 +274,8 @@ class MetricsLoader(DirectoryLoader):
             "0034_metrics_cleanup_old_tables",
             "0035_metrics_raw_timeseries_id",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class SessionsLoader(DirectoryLoader):
@@ -236,13 +283,15 @@ class SessionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.sessions")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_sessions",
             "0002_sessions_aggregates",
             "0003_sessions_matview",
             "0004_sessions_ttl",
             "0005_drop_sessions_tables",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class QuerylogLoader(DirectoryLoader):
@@ -250,7 +299,7 @@ class QuerylogLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.querylog")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_querylog",
             "0002_status_type_change",
             "0003_add_profile_fields",
@@ -259,6 +308,8 @@ class QuerylogLoader(DirectoryLoader):
             "0006_sorting_key_change",
             "0007_add_offset_column",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class TestMigrationLoader(DirectoryLoader):
@@ -266,7 +317,9 @@ class TestMigrationLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.test_migration")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_create_test_table", "0002_add_test_col"]
+        migrations = ["0001_create_test_table", "0002_add_test_col"]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class ProfilesLoader(DirectoryLoader):
@@ -274,12 +327,14 @@ class ProfilesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.profiles")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_profiles",
             "0002_disable_vertical_merge_algorithm",
             "0003_add_device_architecture",
             "0004_drop_profile_column",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class FunctionsLoader(DirectoryLoader):
@@ -287,7 +342,9 @@ class FunctionsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.functions")
 
     def get_migrations(self) -> Sequence[str]:
-        return ["0001_functions", "0002_add_new_columns_to_raw_functions"]
+        migrations = ["0001_functions", "0002_add_new_columns_to_raw_functions"]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class GenericMetricsLoader(DirectoryLoader):
@@ -295,7 +352,7 @@ class GenericMetricsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.generic_metrics")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_sets_aggregate_table",
             "0002_sets_raw_table",
             "0003_sets_mv",
@@ -348,6 +405,8 @@ class GenericMetricsLoader(DirectoryLoader):
             "0050_distributions_meta_tables_support_empty_tags",
             "0051_gauges_meta_tables_support_empty_tags",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class SearchIssuesLoader(DirectoryLoader):
@@ -355,7 +414,7 @@ class SearchIssuesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.search_issues")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_search_issues",
             "0002_search_issues_add_tags_hash_map",
             "0003_search_issues_modify_occurrence_type_id_size",
@@ -366,6 +425,8 @@ class SearchIssuesLoader(DirectoryLoader):
             "0008_add_profile_id_replay_id",
             "0009_add_message",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class SpansLoader(DirectoryLoader):
@@ -373,7 +434,7 @@ class SpansLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.spans")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_spans_v1",
             "0002_spans_add_tags_hashmap",
             "0003_spans_add_ms_columns",
@@ -389,6 +450,8 @@ class SpansLoader(DirectoryLoader):
             "0013_spans_add_indexes_for_tag_columns",
             "0014_spans_add_microsecond_precision_timestamps",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class GroupAttributesLoader(DirectoryLoader):
@@ -396,11 +459,13 @@ class GroupAttributesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.group_attributes")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_group_attributes",
             "0002_add_priority_to_group_attributes",
             "0003_add_first_release_id_to_group_attributes",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class MetricsSummariesLoader(DirectoryLoader):
@@ -408,11 +473,13 @@ class MetricsSummariesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.metrics_summaries")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_metrics_summaries_create_table",
             "0002_metrics_summaries_add_tags_hashmap",
             "0003_metrics_summaries_add_segment_id_duration_group_columns",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
 
 
 class ProfileChunksLoader(DirectoryLoader):
@@ -420,6 +487,8 @@ class ProfileChunksLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.profile_chunks")
 
     def get_migrations(self) -> Sequence[str]:
-        return [
+        migrations = [
             "0001_create_profile_chunks_table",
         ]
+        assert super().get_migrations() == migrations
+        return migrations
