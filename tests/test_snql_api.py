@@ -1310,8 +1310,20 @@ class TestSnQLApi(BaseApiTest):
                     "quota_used": 0,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
-                }
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "rejected_by": {
+                        "policy": "RejectAllocationPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "rejection_threshold": 1000000000000,
+                    },
+                    "throttled_by": {},
+                },
             }
+            print(json.dumps(json.loads(response.data), indent=4))
             assert (
                 response.json["error"]["message"]
                 == f"Query on could not be run due to allocation policies, details: {details}"

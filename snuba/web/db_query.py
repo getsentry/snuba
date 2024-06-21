@@ -853,7 +853,7 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
-    quota_allowances: dict[str, QuotaAllowance] = {}
+    quota_allowances: dict[str, Any] = {}
     can_run = True
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
@@ -900,7 +900,7 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
-            raise AllocationPolicyViolations.from_args(quota_allowances)
+            raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.
