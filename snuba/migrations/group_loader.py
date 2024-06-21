@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from abc import ABC, abstractmethod
+from glob import glob
 from importlib import import_module
 from typing import Sequence
 
@@ -63,6 +64,15 @@ class DirectoryLoader(GroupLoader, ABC):
         for f in files:
             if re.fullmatch(pattern, f):
                 migration_filenames.append(f[:-3])
+        tmp = list(
+            map(
+                lambda x: os.path.basename(x)[:-3],
+                sorted(
+                    glob(os.path.join(migration_folder, "[0-9][0-9][0-9][0-9]_*.py"))
+                ),
+            )
+        )
+        assert tmp == migration_filenames
 
         # validate the migration numbers are strictly increasing starting at 0001
         for i, fname in enumerate(migration_filenames):
