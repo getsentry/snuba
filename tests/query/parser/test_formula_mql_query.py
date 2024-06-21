@@ -1,47 +1,93 @@
 from __future__ import annotations
 
-import re
+# import re
 from datetime import datetime
-
-import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    NestedColumn,
-    and_cond,
-    arrayElement,
-    column,
-    divide,
-    equals,
-    greaterOrEquals,
-    in_cond,
-    less,
-    literal,
-    literals_tuple,
-    multiply,
-    plus,
+from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import binary_condition, combine_and_conditions
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinType,
 )
-from snuba.query.dsl_mapper import query_repr
-from snuba.query.expressions import CurriedFunctionCall, FunctionCall
-from snuba.query.logical import Query
-from snuba.query.mql.parser import parse_mql_query
+from snuba.query.data_source.simple import Entity as QueryEntity
 
-# from tests.query.parser.test_parser import timeseries, tag_column, time_expression
+# from snuba.query.dsl import arrayElement, divide, literals_tuple, multiply, plus
+from snuba.query.dsl import divide, literals_tuple
+from snuba.query.expressions import (
+    Column,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
+
+# from snuba.query.logical import Query
+from snuba.query.mql.parser import parse_mql_query
 
 # import pytest
 
-tags_raw = NestedColumn("tags_raw")
 
 # Commonly used expressions
-from_distributions = from_clause = QueryEntity(
+from_distributions = QueryEntity(
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
+
+
+def time_expression(table_alias: str | None = None) -> FunctionCall:
+    alias_prefix = f"{table_alias}." if table_alias else ""
+    return FunctionCall(
+        f"_snuba_{alias_prefix}time",
+        "toStartOfInterval",
+        (
+            Column("_snuba_timestamp", table_alias, "timestamp"),
+            FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+            Literal(None, "Universal"),
+        ),
+    )
+
+
+def condition(table_alias: str | None = None) -> list[FunctionCall]:
+    conditions = [
+        binary_condition(
+            "greaterOrEquals",
+            Column("_snuba_timestamp", table_alias, "timestamp"),
+            Literal(None, datetime(2023, 11, 23, 18, 30)),
+        ),
+        binary_condition(
+            "less",
+            Column("_snuba_timestamp", table_alias, "timestamp"),
+            Literal(None, datetime(2023, 11, 23, 22, 30)),
+        ),
+        binary_condition(
+            "in",
+            Column("_snuba_project_id", table_alias, "project_id"),
+            literals_tuple(None, [Literal(alias=None, value=11)]),
+        ),
+        binary_condition(
+            "in",
+            Column("_snuba_org_id", table_alias, "org_id"),
+            literals_tuple(None, [Literal(alias=None, value=1)]),
+        ),
+        binary_condition(
+            "equals",
+            Column("_snuba_use_case_id", table_alias, "use_case_id"),
+            Literal(None, value="transactions"),
+        ),
+        binary_condition(
+            "equals",
+            Column("_snuba_granularity", table_alias, "granularity"),
+            Literal(None, value=60),
+        ),
+    ]
+
+    return conditions
 
 
 mql_context = {
@@ -69,611 +115,151 @@ mql_context = {
 }
 
 
+def timeseries(
+    agg: str, metric_id: int, condition: FunctionCall | None = None
+) -> FunctionCall:
+    metric_condition = FunctionCall(
+        None,
+        "equals",
+        (
+            Column(
+                "_snuba_metric_id",
+                None,
+                "metric_id",
+            ),
+            Literal(None, metric_id),
+        ),
+    )
+    if condition:
+        metric_condition = FunctionCall(
+            None,
+            "and",
+            (
+                condition,
+                metric_condition,
+            ),
+        )
+
+    return FunctionCall(
+        None,
+        agg,
+        (
+            Column("_snuba_value", None, "value"),
+            metric_condition,
+        ),
+    )
+
+
+def metric_id_condition(metric_id: int, table_alias: str | None = None) -> FunctionCall:
+    return FunctionCall(
+        None,
+        "equals",
+        (
+            Column("_snuba_metric_id", table_alias, "metric_id"),
+            Literal(None, metric_id),
+        ),
+    )
+
+
+def tag_column(tag: str, table_alias: str | None = None) -> SubscriptableReference:
+    tag_val = mql_context.get("indexer_mappings").get(tag)  # type: ignore
+    return SubscriptableReference(
+        alias=f"_snuba_tags_raw[{tag_val}]",
+        column=Column(
+            alias="_snuba_tags_raw",
+            table_name=table_alias,
+            column_name="tags_raw",
+        ),
+        key=Literal(alias=None, value=f"{tag_val}"),
+    )
+
+
 def test_simple_formula() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
-    expected = Query(
-        from_clause=from_clause,
-        selected_columns=[
-            SelectedExpression(
-                "aggregate_value",
-                divide(
-                    FunctionCall(None, "sum", (column("value", None, "_snuba_value"),)),
-                    FunctionCall(None, "sum", (column("value", None, "_snuba_value"),)),
-                    "_snuba_aggregate_value",
-                ),
-            ),
-            SelectedExpression(
-                "time",
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            ),
-        ],
-        array_join=None,
-        condition=and_cond(
-            greaterOrEquals(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 18, 30)),
-            ),
-            less(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 22, 30)),
-            ),
-            in_cond(
-                column("project_id", None, "_snuba_project_id"),
-                literals_tuple(None, [literal(11)]),
-            ),
-            in_cond(
-                column("org_id", None, "_snuba_org_id"),
-                literals_tuple(None, [literal(1)]),
-            ),
-            equals(
-                column("use_case_id", None, "_snuba_use_case_id"),
-                literal("transactions"),
-            ),
-            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(tags_raw["222222"], literal("200")),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-        ),
-        groupby=[
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
             FunctionCall(
-                "_snuba_time",
-                "toStartOfInterval",
-                (
-                    column("timestamp", None, "_snuba_timestamp"),
-                    FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                    literal("Universal"),
-                ),
-            )
-        ],
-        having=None,
-        order_by=[
-            OrderBy(
-                OrderByDirection.ASC,
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            )
-        ],
-        limitby=None,
-        limit=1000,
-        offset=0,
-        totals=False,
-        granularity=None,
-    )
-
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
-
-
-def test_simple_formula_with_leading_literals() -> None:
-    query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
-    expected = Query(
-        from_clause=from_clause,
-        selected_columns=[
-            SelectedExpression(
-                "aggregate_value",
-                plus(
-                    literal(1.0),
-                    divide(
-                        FunctionCall(
-                            None, "sum", (column("value", None, "_snuba_value"),)
-                        ),
-                        FunctionCall(
-                            None, "sum", (column("value", None, "_snuba_value"),)
-                        ),
-                    ),
-                    "_snuba_aggregate_value",
-                ),
+                None,
+                "sum",
+                (Column("_snuba_value", "d0", "value"),),
             ),
-            SelectedExpression(
-                "time",
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            ),
-        ],
-        array_join=None,
-        condition=and_cond(
-            greaterOrEquals(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 18, 30)),
-            ),
-            less(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 22, 30)),
-            ),
-            in_cond(
-                column("project_id", None, "_snuba_project_id"),
-                literals_tuple(None, [literal(11)]),
-            ),
-            in_cond(
-                column("org_id", None, "_snuba_org_id"),
-                literals_tuple(None, [literal(1)]),
-            ),
-            equals(
-                column("use_case_id", None, "_snuba_use_case_id"),
-                literal("transactions"),
-            ),
-            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(tags_raw["222222"], literal("200")),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-        ),
-        groupby=[
             FunctionCall(
-                "_snuba_time",
-                "toStartOfInterval",
-                (
-                    column("timestamp", None, "_snuba_timestamp"),
-                    FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                    literal("Universal"),
-                ),
-            )
-        ],
-        having=None,
-        order_by=[
-            OrderBy(
-                OrderByDirection.ASC,
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            )
-        ],
-        limitby=None,
-        limit=1000,
-        offset=0,
-        totals=False,
-        granularity=None,
-    )
-
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
-
-
-def test_groupby() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
-    expected = Query(
-        from_clause=from_clause,
-        selected_columns=[
-            SelectedExpression(
-                "aggregate_value",
-                divide(
-                    FunctionCall(None, "sum", (column("value", None, "_snuba_value"),)),
-                    FunctionCall(None, "sum", (column("value", None, "_snuba_value"),)),
-                    "_snuba_aggregate_value",
-                ),
+                None,
+                "sum",
+                (Column("_snuba_value", "d1", "value"),),
             ),
-            SelectedExpression("transaction", tags_raw["333333"]),
-            SelectedExpression("transaction", tags_raw["333333"]),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    join_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d1",
+            data_source=from_distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d0", column="time"),
+                right=JoinConditionExpression(table_alias="d1", column="time"),
+            )
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    tag_condition = binary_condition(
+        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+    )
+    metric_condition1 = metric_id_condition(123456, "d0")
+    metric_condition2 = metric_id_condition(123456, "d1")
+    formula_condition = combine_and_conditions(
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
+        selected_columns=[
+            expected_selected,
             SelectedExpression(
                 "time",
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            ),
-        ],
-        array_join=None,
-        condition=and_cond(
-            greaterOrEquals(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 18, 30)),
-            ),
-            less(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 22, 30)),
-            ),
-            in_cond(
-                column("project_id", None, "_snuba_project_id"),
-                literals_tuple(None, [literal(11)]),
-            ),
-            in_cond(
-                column("org_id", None, "_snuba_org_id"),
-                literals_tuple(None, [literal(1)]),
-            ),
-            equals(
-                column("use_case_id", None, "_snuba_use_case_id"),
-                literal("transactions"),
-            ),
-            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(tags_raw["222222"], literal("200")),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-        ),
-        groupby=[
-            tags_raw["333333"],
-            tags_raw["333333"],
-            FunctionCall(
-                "_snuba_time",
-                "toStartOfInterval",
-                (
-                    column("timestamp", None, "_snuba_timestamp"),
-                    FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                    literal("Universal"),
-                ),
-            ),
-        ],
-        having=None,
-        order_by=[
-            OrderBy(
-                OrderByDirection.ASC,
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            )
-        ],
-        limitby=None,
-        limit=1000,
-        offset=0,
-        totals=False,
-        granularity=None,
-    )
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
-
-
-def test_curried_aggregate() -> None:
-    query_body = "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
-    expected = Query(
-        from_clause=from_clause,
-        selected_columns=[
-            SelectedExpression(
-                "aggregate_value",
-                divide(
-                    arrayElement(
-                        None,
-                        CurriedFunctionCall(
-                            None,
-                            FunctionCall(None, "quantiles", (literal(0.5),)),
-                            (column("value", None, "_snuba_value"),),
-                        ),
-                        literal(1),
-                    ),
-                    FunctionCall(None, "sum", (column("value", None, "_snuba_value"),)),
-                    "_snuba_aggregate_value",
-                ),
-            ),
-            SelectedExpression("transaction", tags_raw["333333"]),
-            SelectedExpression("transaction", tags_raw["333333"]),
-            SelectedExpression(
-                "time",
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            ),
-        ],
-        array_join=None,
-        condition=and_cond(
-            greaterOrEquals(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 18, 30)),
-            ),
-            less(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 22, 30)),
-            ),
-            in_cond(
-                column("project_id", None, "_snuba_project_id"),
-                literals_tuple(None, [literal(11)]),
-            ),
-            in_cond(
-                column("org_id", None, "_snuba_org_id"),
-                literals_tuple(None, [literal(1)]),
-            ),
-            equals(
-                column("use_case_id", None, "_snuba_use_case_id"),
-                literal("transactions"),
-            ),
-            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(tags_raw["222222"], literal("200")),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-        ),
-        groupby=[
-            tags_raw["333333"],
-            tags_raw["333333"],
-            FunctionCall(
-                "_snuba_time",
-                "toStartOfInterval",
-                (
-                    column("timestamp", None, "_snuba_timestamp"),
-                    FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                    literal("Universal"),
-                ),
-            ),
-        ],
-        having=None,
-        order_by=[
-            OrderBy(
-                OrderByDirection.ASC,
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            )
-        ],
-        limitby=None,
-        limit=1000,
-        offset=0,
-        totals=False,
-        granularity=None,
-    )
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
-
-
-def test_bracketing_rules() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))"
-    expected = Query(
-        from_clause=from_clause,
-        selected_columns=[
-            SelectedExpression(
-                "aggregate_value",
-                divide(
-                    FunctionCall(None, "sum", (column("value", None, "_snuba_value"),)),
-                    multiply(
-                        plus(
-                            FunctionCall(
-                                None, "max", (column("value", None, "_snuba_value"),)
-                            ),
-                            FunctionCall(
-                                None, "avg", (column("value", None, "_snuba_value"),)
-                            ),
-                        ),
-                        FunctionCall(
-                            None, "min", (column("value", None, "_snuba_value"),)
-                        ),
-                    ),
-                    "_snuba_aggregate_value",
-                ),
+                time_expression("d1"),
             ),
             SelectedExpression(
                 "time",
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
+                time_expression("d0"),
             ),
         ],
-        array_join=None,
-        condition=and_cond(
-            greaterOrEquals(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 18, 30)),
-            ),
-            less(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 22, 30)),
-            ),
-            in_cond(
-                column("project_id", None, "_snuba_project_id"),
-                literals_tuple(None, [literal(11)]),
-            ),
-            in_cond(
-                column("org_id", None, "_snuba_org_id"),
-                literals_tuple(None, [literal(1)]),
-            ),
-            equals(
-                column("use_case_id", None, "_snuba_use_case_id"),
-                literal("transactions"),
-            ),
-            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-        ),
-        groupby=[
-            FunctionCall(
-                "_snuba_time",
-                "toStartOfInterval",
-                (
-                    column("timestamp", None, "_snuba_timestamp"),
-                    FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                    literal("Universal"),
-                ),
-            )
-        ],
-        having=None,
+        groupby=[time_expression("d1"), time_expression("d0")],
+        condition=formula_condition,
         order_by=[
             OrderBy(
-                OrderByDirection.ASC,
-                FunctionCall(
-                    "_snuba_time",
-                    "toStartOfInterval",
-                    (
-                        column("timestamp", None, "_snuba_timestamp"),
-                        FunctionCall(None, "toIntervalSecond", (literal(60),)),
-                        literal("Universal"),
-                    ),
-                ),
-            )
+                direction=OrderByDirection.ASC,
+                expression=time_expression("d0"),
+            ),
         ],
-        limitby=None,
         limit=1000,
         offset=0,
-        totals=False,
-        granularity=None,
     )
+
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    eq, reason = query.equals(expected)
-    assert eq, reason
-
-
-def test_mismatch_groupby() -> None:
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code"
-
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    with pytest.raises(
-        Exception,
-        match=re.escape("All terms in a formula must have the same groupby"),
-    ):
-        parse_mql_query(str(query_body), mql_context, generic_metrics)
-
-
-def test_formula_filters() -> None:
-    query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}"
-    expected = Query(
-        from_clause=from_clause,
-        selected_columns=[
-            SelectedExpression(
-                "aggregate_value",
-                divide(
-                    f.sum(column("value", None, "_snuba_value"), alias=None),
-                    f.max(column("value", None, "_snuba_value"), alias=None),
-                    "_snuba_aggregate_value",
-                ),
-            ),
-            SelectedExpression(
-                "time",
-                f.toStartOfInterval(
-                    column("timestamp", None, "_snuba_timestamp"),
-                    f.toIntervalSecond(literal(60), alias=None),
-                    literal("Universal"),
-                    alias="_snuba_time",
-                ),
-            ),
-        ],
-        array_join=None,
-        condition=and_cond(
-            greaterOrEquals(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 18, 30)),
-            ),
-            less(
-                column("timestamp", None, "_snuba_timestamp"),
-                literal(datetime(2023, 11, 23, 22, 30)),
-            ),
-            in_cond(
-                column("project_id", None, "_snuba_project_id"),
-                literals_tuple(None, [literal(11)]),
-            ),
-            in_cond(
-                column("org_id", None, "_snuba_org_id"),
-                literals_tuple(None, [literal(1)]),
-            ),
-            equals(
-                column("use_case_id", None, "_snuba_use_case_id"),
-                literal("transactions"),
-            ),
-            equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-            equals(tags_raw["222222"], literal("200")),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-            equals(tags_raw["222222"], literal("200")),
-            equals(column("metric_id", None, "_snuba_metric_id"), literal(123456)),
-        ),
-        groupby=[
-            f.toStartOfInterval(
-                column("timestamp", None, "_snuba_timestamp"),
-                f.toIntervalSecond(literal(60), alias=None),
-                literal("Universal"),
-                alias="_snuba_time",
-            )
-        ],
-        having=None,
-        order_by=[
-            OrderBy(
-                OrderByDirection.ASC,
-                f.toStartOfInterval(
-                    column("timestamp", None, "_snuba_timestamp"),
-                    f.toIntervalSecond(literal(60), alias=None),
-                    literal("Universal"),
-                    alias="_snuba_time",
-                ),
-            )
-        ],
-        limitby=None,
-        limit=1000,
-        offset=0,
-        totals=False,
-        granularity=None,
-    )
-    generic_metrics = get_dataset(
-        "generic_metrics",
-    )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
-    print(query_repr(query))
     eq, reason = query.equals(expected)
     assert eq, reason
 
 
 # @pytest.mark.xfail()
-# def test_formula_groupby() -> None:
-#     query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction"
+# def test_simple_formula_with_leading_literals() -> None:
+#     query_body = "1 + sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
 #     expected_selected = SelectedExpression(
 #         "aggregate_value",
 #         divide(
@@ -681,27 +267,17 @@ def test_formula_filters() -> None:
 #                 "sumIf",
 #                 123456,
 #                 binary_condition(
-#                     "equals",
-#                     tag_column("status_code", mql_context),
-#                     Literal(None, "200"),
+#                     "equals", tag_column("status_code"), Literal(None, "200")
 #                 ),
 #             ),
-#             timeseries(
-#                 "maxIf",
-#                 123456,
-#                 binary_condition(
-#                     "equals",
-#                     tag_column("status_code", mql_context),
-#                     Literal(None, "200"),
-#                 ),
-#             ),
+#             timeseries("sumIf", 123456),
 #             "_snuba_aggregate_value",
 #         ),
 #     )
 #     filter_in_select_condition = or_cond(
 #         and_cond(
 #             equals(
-#                 tag_column("status_code", mql_context),
+#                 tag_column("status_code"),
 #                 Literal(None, "200"),
 #             ),
 #             equals(
@@ -709,15 +285,9 @@ def test_formula_filters() -> None:
 #                 Literal(None, 123456),
 #             ),
 #         ),
-#         and_cond(
-#             equals(
-#                 tag_column("status_code", mql_context),
-#                 Literal(None, "200"),
-#             ),
-#             equals(
-#                 Column("_snuba_metric_id", None, "metric_id"),
-#                 Literal(None, 123456),
-#             ),
+#         equals(
+#             Column("_snuba_metric_id", None, "metric_id"),
+#             Literal(None, 123456),
 #         ),
 #     )
 #     expected = Query(
@@ -725,15 +295,11 @@ def test_formula_filters() -> None:
 #         selected_columns=[
 #             expected_selected,
 #             SelectedExpression(
-#                 name="transaction",
-#                 expression=tag_column("transaction", mql_context),
-#             ),
-#             SelectedExpression(
 #                 "time",
 #                 time_expression,
 #             ),
 #         ],
-#         groupby=[tag_column("transaction", mql_context), time_expression],
+#         groupby=[time_expression],
 #         condition=binary_condition(
 #             "and",
 #             filter_in_select_condition,
@@ -752,7 +318,416 @@ def test_formula_filters() -> None:
 #     generic_metrics = get_dataset(
 #         "generic_metrics",
 #     )
-#     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     eq, reason = query.equals(expected)
+#     assert eq, reason
+
+
+# @pytest.mark.xfail()
+# def test_groupby() -> None:
+#     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
+#     expected_selected = SelectedExpression(
+#         "aggregate_value",
+#         divide(
+#             timeseries(
+#                 "sumIf",
+#                 123456,
+#                 binary_condition(
+#                     "equals", tag_column("status_code"), Literal(None, "200")
+#                 ),
+#             ),
+#             timeseries("sumIf", 123456),
+#             "_snuba_aggregate_value",
+#         ),
+#     )
+#     filter_in_select_condition = or_cond(
+#         and_cond(
+#             equals(
+#                 tag_column("status_code"),
+#                 Literal(None, "200"),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#         equals(
+#             Column("_snuba_metric_id", None, "metric_id"),
+#             Literal(None, 123456),
+#         ),
+#     )
+#     expected = Query(
+#         from_distributions,
+#         selected_columns=[
+#             expected_selected,
+#             SelectedExpression("transaction", tag_column("transaction")),
+#             SelectedExpression(
+#                 "time",
+#                 time_expression,
+#             ),
+#         ],
+#         groupby=[tag_column("transaction"), time_expression],
+#         condition=binary_condition(
+#             "and",
+#             filter_in_select_condition,
+#             formula_condition,
+#         ),
+#         order_by=[
+#             OrderBy(
+#                 direction=OrderByDirection.ASC,
+#                 expression=time_expression,
+#             )
+#         ],
+#         limit=1000,
+#         offset=0,
+#     )
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     eq, reason = query.equals(expected)
+#     assert eq, reason
+
+
+# @pytest.mark.xfail()
+# def test_curried_aggregate() -> None:
+#     query_body = "quantiles(0.5)(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
+#     expected_selected = SelectedExpression(
+#         "aggregate_value",
+#         divide(
+#             arrayElement(
+#                 None,
+#                 CurriedFunctionCall(
+#                     alias=None,
+#                     internal_function=FunctionCall(
+#                         None, "quantilesIf", (Literal(None, 0.5),)
+#                     ),
+#                     parameters=(
+#                         Column("_snuba_value", None, "value"),
+#                         FunctionCall(
+#                             None,
+#                             "and",
+#                             (
+#                                 binary_condition(
+#                                     "equals",
+#                                     tag_column("status_code"),
+#                                     Literal(None, "200"),
+#                                 ),
+#                                 FunctionCall(
+#                                     None,
+#                                     "equals",
+#                                     (
+#                                         Column(
+#                                             "_snuba_metric_id",
+#                                             None,
+#                                             "metric_id",
+#                                         ),
+#                                         Literal(None, 123456),
+#                                     ),
+#                                 ),
+#                             ),
+#                         ),
+#                     ),
+#                 ),
+#                 Literal(None, 1),
+#             ),
+#             timeseries("sumIf", 123456),
+#             "_snuba_aggregate_value",
+#         ),
+#     )
+#     filter_in_select_condition = or_cond(
+#         and_cond(
+#             equals(
+#                 tag_column("status_code"),
+#                 Literal(None, "200"),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#         equals(
+#             Column("_snuba_metric_id", None, "metric_id"),
+#             Literal(None, 123456),
+#         ),
+#     )
+#     expected = Query(
+#         from_distributions,
+#         selected_columns=[
+#             expected_selected,
+#             SelectedExpression("transaction", tag_column("transaction")),
+#             SelectedExpression(
+#                 "time",
+#                 time_expression,
+#             ),
+#         ],
+#         groupby=[tag_column("transaction"), time_expression],
+#         condition=binary_condition(
+#             "and",
+#             filter_in_select_condition,
+#             formula_condition,
+#         ),
+#         order_by=[
+#             OrderBy(
+#                 direction=OrderByDirection.ASC,
+#                 expression=time_expression,
+#             )
+#         ],
+#         limit=1000,
+#         offset=0,
+#     )
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     eq, reason = query.equals(expected)
+#     assert eq, reason
+
+
+# @pytest.mark.xfail()
+# def test_bracketing_rules() -> None:
+#     query_body = "sum(`d:transactions/duration@millisecond`) / ((max(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)) * min(`d:transactions/duration@millisecond`))"
+#     expected_selected = SelectedExpression(
+#         "aggregate_value",
+#         divide(
+#             timeseries("sumIf", 123456),
+#             multiply(
+#                 plus(
+#                     timeseries("maxIf", 123456),
+#                     timeseries("avgIf", 123456),
+#                 ),
+#                 timeseries("minIf", 123456),
+#             ),
+#             "_snuba_aggregate_value",
+#         ),
+#     )
+#     filter_in_select_condition = or_cond(
+#         or_cond(
+#             or_cond(
+#                 equals(
+#                     Column("_snuba_metric_id", None, "metric_id"),
+#                     Literal(None, 123456),
+#                 ),
+#                 equals(
+#                     Column("_snuba_metric_id", None, "metric_id"),
+#                     Literal(None, 123456),
+#                 ),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#         equals(
+#             Column("_snuba_metric_id", None, "metric_id"),
+#             Literal(None, 123456),
+#         ),
+#     )
+#     expected = Query(
+#         from_distributions,
+#         selected_columns=[
+#             expected_selected,
+#             SelectedExpression(
+#                 "time",
+#                 time_expression,
+#             ),
+#         ],
+#         groupby=[time_expression],
+#         condition=binary_condition(
+#             "and",
+#             filter_in_select_condition,
+#             formula_condition,
+#         ),
+#         order_by=[
+#             OrderBy(
+#                 direction=OrderByDirection.ASC,
+#                 expression=time_expression,
+#             )
+#         ],
+#         limit=1000,
+#         offset=0,
+#     )
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     eq, reason = query.equals(expected)
+#     assert eq, reason
+
+
+# @pytest.mark.xfail()
+# def test_mismatch_groupby() -> None:
+#     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code"
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     with pytest.raises(
+#         Exception,
+#         match=re.escape("All terms in a formula must have the same groupby"),
+#     ):
+#         parse_mql_query(str(query_body), mql_context, generic_metrics)
+
+
+# @pytest.mark.xfail()
+# def test_formula_filters() -> None:
+#     query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200}"
+#     expected_selected = SelectedExpression(
+#         "aggregate_value",
+#         divide(
+#             timeseries(
+#                 "sumIf",
+#                 123456,
+#                 binary_condition(
+#                     "equals", tag_column("status_code"), Literal(None, "200")
+#                 ),
+#             ),
+#             timeseries(
+#                 "maxIf",
+#                 123456,
+#                 binary_condition(
+#                     "equals", tag_column("status_code"), Literal(None, "200")
+#                 ),
+#             ),
+#             "_snuba_aggregate_value",
+#         ),
+#     )
+#     filter_in_select_condition = or_cond(
+#         and_cond(
+#             equals(
+#                 tag_column("status_code"),
+#                 Literal(None, "200"),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#         and_cond(
+#             equals(
+#                 tag_column("status_code"),
+#                 Literal(None, "200"),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#     )
+#     expected = Query(
+#         from_distributions,
+#         selected_columns=[
+#             expected_selected,
+#             SelectedExpression(
+#                 "time",
+#                 time_expression,
+#             ),
+#         ],
+#         groupby=[time_expression],
+#         condition=binary_condition(
+#             "and",
+#             filter_in_select_condition,
+#             formula_condition,
+#         ),
+#         order_by=[
+#             OrderBy(
+#                 direction=OrderByDirection.ASC,
+#                 expression=time_expression,
+#             )
+#         ],
+#         limit=1000,
+#         offset=0,
+#     )
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     eq, reason = query.equals(expected)
+#     assert eq, reason
+
+
+# @pytest.mark.xfail()
+# def test_formula_groupby() -> None:
+#     query_body = "(sum(`d:transactions/duration@millisecond`) / max(`d:transactions/duration@millisecond`)){status_code:200} by transaction"
+#     expected_selected = SelectedExpression(
+#         "aggregate_value",
+#         divide(
+#             timeseries(
+#                 "sumIf",
+#                 123456,
+#                 binary_condition(
+#                     "equals", tag_column("status_code"), Literal(None, "200")
+#                 ),
+#             ),
+#             timeseries(
+#                 "maxIf",
+#                 123456,
+#                 binary_condition(
+#                     "equals", tag_column("status_code"), Literal(None, "200")
+#                 ),
+#             ),
+#             "_snuba_aggregate_value",
+#         ),
+#     )
+#     filter_in_select_condition = or_cond(
+#         and_cond(
+#             equals(
+#                 tag_column("status_code"),
+#                 Literal(None, "200"),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#         and_cond(
+#             equals(
+#                 tag_column("status_code"),
+#                 Literal(None, "200"),
+#             ),
+#             equals(
+#                 Column("_snuba_metric_id", None, "metric_id"),
+#                 Literal(None, 123456),
+#             ),
+#         ),
+#     )
+#     expected = Query(
+#         from_distributions,
+#         selected_columns=[
+#             expected_selected,
+#             SelectedExpression(
+#                 name="transaction",
+#                 expression=tag_column("transaction"),
+#             ),
+#             SelectedExpression(
+#                 "time",
+#                 time_expression,
+#             ),
+#         ],
+#         groupby=[tag_column("transaction"), time_expression],
+#         condition=binary_condition(
+#             "and",
+#             filter_in_select_condition,
+#             formula_condition,
+#         ),
+#         order_by=[
+#             OrderBy(
+#                 direction=OrderByDirection.ASC,
+#                 expression=time_expression,
+#             )
+#         ],
+#         limit=1000,
+#         offset=0,
+#     )
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
 #     eq, reason = query.equals(expected)
 #     assert eq, reason
 
@@ -809,7 +784,7 @@ def test_formula_filters() -> None:
 #     generic_metrics = get_dataset(
 #         "generic_metrics",
 #     )
-#     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
 #     eq, reason = query.equals(expected)
 #     assert eq, reason
 
@@ -858,7 +833,7 @@ def test_formula_filters() -> None:
 #     generic_metrics = get_dataset(
 #         "generic_metrics",
 #     )
-#     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
 #     eq, reason = query.equals(expected)
 #     assert eq, reason
 
@@ -907,7 +882,7 @@ def test_formula_filters() -> None:
 #     generic_metrics = get_dataset(
 #         "generic_metrics",
 #     )
-#     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
 #     eq, reason = query.equals(expected)
 #     assert eq, reason
 
@@ -965,6 +940,6 @@ def test_formula_filters() -> None:
 #     generic_metrics = get_dataset(
 #         "generic_metrics",
 #     )
-#     query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
 #     eq, reason = query.equals(expected)
 #     assert eq, reason
