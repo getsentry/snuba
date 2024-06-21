@@ -265,9 +265,18 @@ def test_db_query_success() -> None:
         robust=False,
     )
 
-    print(stats["quota_allowance"])
-
     assert stats["quota_allowance"] == {
+        "summary": {
+            "threads_used": 5,
+            "rejected_by": {},
+            "throttled_by": {
+                "policy": "BytesScannedRejectingPolicy",
+                "quota_used": 1560000000000,
+                "quota_unit": "bytes",
+                "suggestion": "scan less bytes",
+                "throttle_threshold": 1280000000000,
+            },
+        },
         "ReferrerGuardRailPolicy": {
             "can_run": True,
             "max_threads": 10,
@@ -491,6 +500,23 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 robust=False,
             )
         assert stats["quota_allowance"] == {
+            "summary": {
+                "threads_used": 0,
+                "rejected_by": {
+                    "policy": "RejectAllocationPolicy",
+                    "rejection_threshold": MAX_THRESHOLD,
+                    "quota_used": 0,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
+                },
+                "throttled_by": {
+                    "policy": "RejectAllocationPolicy",
+                    "throttle_threshold": MAX_THRESHOLD,
+                    "quota_used": 0,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
+                },
+            },
             "RejectAllocationPolicy": {
                 "can_run": False,
                 "explanation": {
@@ -504,7 +530,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 "rejection_threshold": MAX_THRESHOLD,
                 "suggestion": NO_SUGGESTION,
                 "throttle_threshold": MAX_THRESHOLD,
-            }
+            },
         }
         # extra data contains policy failure information
         assert (
@@ -712,6 +738,17 @@ def test_allocation_policy_updates_quota() -> None:
         _run_query()
 
     assert e.value.extra["stats"]["quota_allowance"] == {
+        "summary": {
+            "threads_used": 0,
+            "rejected_by": {
+                "policy": "CountQueryPolicy",
+                "rejection_threshold": MAX_QUERIES_TO_RUN,
+                "quota_used": queries_run,
+                "quota_unit": "queries",
+                "suggestion": "scan less concurrent queries",
+            },
+            "throttled_by": {},
+        },
         "CountQueryPolicy": {
             "can_run": False,
             "max_threads": 0,

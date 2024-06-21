@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import random
-import typing
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import partial
 from hashlib import md5
 from threading import Lock
@@ -27,6 +27,7 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
     QueryResultOrError,
@@ -76,6 +77,9 @@ from snuba.web import QueryException, QueryResult, constants
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
+
+_REJECTED_BY = "rejected_by"
+_THROTTLED_BY = "throttled_by"
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -809,25 +813,32 @@ def db_query(
         )
 
 
-def _add_quota_summary(
-    quota_allowance_summary: dict[str, Any],
-    quota_allowance: QuotaAllowance,
-    policy_name: str,
+@dataclass
+class _QuotaAndPolicy:
+    quota_allowance: QuotaAllowance
+    policy_name: str
+
+
+def _add_quota_info(
+    summary: dict[str, Any],
     action: str,
+    quota_and_policy: _QuotaAndPolicy | None = None,
 ) -> None:
 
-    summary: dict[str, Any] = {}
-    summary["threads_used"] = quota_allowance.max_threads
+    quota_info: dict[str, Any] = {}
+    summary[action] = quota_info
 
-    policy_specific_summary: dict[str, Any] = {}
-    policy_specific_summary["policy"] = policy_name
-    policy_specific_summary["rejection_threshold"] = quota_allowance.rejection_threshold
-    policy_specific_summary["quota_used"] = quota_allowance.quota_used
-    policy_specific_summary["quota_units"] = quota_allowance.quota_unit
-    policy_specific_summary["suggestion"] = quota_allowance.suggestion
-    summary[action] = policy_specific_summary
+    if quota_and_policy is not None:
+        quota_info["policy"] = quota_and_policy.policy_name
+        quota_allowance = quota_and_policy.quota_allowance
+        quota_info["quota_used"] = quota_allowance.quota_used
+        quota_info["quota_unit"] = quota_allowance.quota_unit
+        quota_info["suggestion"] = quota_allowance.suggestion
 
-    quota_allowance_summary["summary"] = summary
+        if action == _REJECTED_BY:
+            quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
+        else:
+            quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
 
 
 def _apply_allocation_policies_quota(
@@ -844,8 +855,9 @@ def _apply_allocation_policies_quota(
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
     can_run = True
-    throttle_quota_allowance, throttle_policy_name = None, None
-    rejection_quota_allowance, rejection_policy_name = None, None
+    rejection_quota_and_policy = None
+    throttle_quota_and_policy = None
+    num_threads = MAX_THRESHOLD
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -857,6 +869,7 @@ def _apply_allocation_policies_quota(
                 allowance = allocation_policy.get_quota_allowance(
                     attribution_info.tenant_ids, query_id
                 )
+                num_threads = min(num_threads, allowance.max_threads)
                 can_run &= allowance.can_run
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
@@ -864,11 +877,15 @@ def _apply_allocation_policies_quota(
                     quota_allowances[allocation_policy.config_key()],
                 )
                 if allowance.is_throttled:
-                    throttle_quota_allowance = allowance
-                    throttle_policy_name = allocation_policy.config_key()
+                    throttle_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
                 if not can_run:
-                    rejection_quota_allowance = allowance
-                    rejection_policy_name = allocation_policy.config_key()
+                    rejection_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
                     break
 
         allowance_dicts = {
@@ -876,21 +893,11 @@ def _apply_allocation_policies_quota(
             for key, quota_allowance in quota_allowances.items()
         }
         stats["quota_allowance"] = allowance_dicts
-
-        if rejection_quota_allowance is not None:
-            _add_quota_summary(
-                stats["quota_allowance"],
-                rejection_quota_allowance,
-                typing.cast(str, rejection_policy_name),
-                "rejected_by",
-            )
-        elif throttle_quota_allowance is not None:
-            _add_quota_summary(
-                stats["quota_allowance"],
-                throttle_quota_allowance,
-                typing.cast(str, throttle_policy_name),
-                "throttled_by",
-            )
+        summary: dict[str, Any] = {}
+        summary["threads_used"] = num_threads
+        _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
+        _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
+        stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
             raise AllocationPolicyViolations.from_args(quota_allowances)
