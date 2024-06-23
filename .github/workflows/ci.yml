@@ -153,7 +153,7 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Build snuba docker image for CI
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         if: github.repository_owner == 'getsentry'
         with:
           context: .
