@@ -1310,7 +1310,18 @@ class TestSnQLApi(BaseApiTest):
                     "quota_used": 0,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
-                }
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "rejected_by": {
+                        "policy": "RejectAllocationPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "rejection_threshold": 1000000000000,
+                    },
+                    "throttled_by": {},
+                },
             }
             assert (
                 response.json["error"]["message"]
