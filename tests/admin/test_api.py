@@ -12,6 +12,9 @@ from snuba.admin.auth import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
@@ -427,7 +430,17 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
-            return QuotaAllowance(True, 1, {})
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=1,
+                explanation={},
+                is_throttled=False,
+                rejection_threshold=MAX_THRESHOLD,
+                throttle_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
 
         def _update_quota_balance(
             self,
