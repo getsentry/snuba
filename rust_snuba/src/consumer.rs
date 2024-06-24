@@ -86,12 +86,15 @@ pub fn consumer_impl(
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
 
-    let batch_write_timeout = if batch_write_timeout_ms.is_some()
-        && batch_write_timeout_ms.unwrap() >= consumer_config.max_batch_time_ms
-    {
-        Some(Duration::from_millis(batch_write_timeout_ms.unwrap()))
-    } else {
-        None
+    let batch_write_timeout = match batch_write_timeout_ms {
+        Some(timeout_ms) => {
+            if timeout_ms >= consumer_config.max_batch_time_ms {
+                Some(Duration::from_millis(timeout_ms))
+            } else {
+                None
+            }
+        }
+        None => None,
     };
 
     for storage in &consumer_config.storages {
