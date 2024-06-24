@@ -30,7 +30,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     UInt(64, Modifiers(nullable=True)),
                 ),
                 target=OperationTarget.DISTRIBUTED,
-                after="grougp_priority",
+                after="group_priority",
             ),
         ]
 
