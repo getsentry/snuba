@@ -384,9 +384,11 @@ def add_node(
 
 @migrations.command()
 @click.argument("storage_path", type=str)
-def generate(
-    storage_path: str,
-) -> None:
+@click.option(
+    "--name",
+    type=str,
+)
+def generate(storage_path: str, migration_name: Optional[str] = None) -> None:
     """
     Given a path to modified storage yaml definition (inside of snuba repo),
     creates a snuba migration for the given modifications.
@@ -399,5 +401,5 @@ def generate(
             f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
         )
 
-    autogeneration.generate(storage_path)
+    autogeneration.generate(storage_path, migration_name=migration_name)
     click.echo("This function is under construction.")

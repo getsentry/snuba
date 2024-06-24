@@ -16,12 +16,24 @@ This file is for autogenerating the migration for adding a column to your storag
 """
 
 
-def generate_migration(oldstorage: str, newstorage: str) -> None:
+def generate_migration(
+    oldstorage: str, newstorage: str, migration_name: str = "generated_migration"
+) -> str:
+    """
+    Given 2 storage.yaml files, representing the diff of a modified storage.yaml
+    i.e. original and modified, generates a python migration based on the changes
+    and writes it to the correct place in the repo. Returns the path where the file
+    was written.
+    """
     old_stor_dict = yaml.safe_load(oldstorage)
     new_stor_dict = yaml.safe_load(newstorage)
     forwards, backwards = storage_diff_to_migration_ops(old_stor_dict, new_stor_dict)
     migration = _migration_ops_to_migration(forwards, backwards)
-    _write_migration(migration, StorageSetKey(new_stor_dict["storage"]["set_key"]))
+    return _write_migration(
+        migration,
+        StorageSetKey(new_stor_dict["storage"]["set_key"]),
+        migration_name,
+    )
 
 
 def storage_diff_to_migration_ops(
@@ -107,7 +119,11 @@ class Migration(ClickhouseNodeMigration):
 """
 
 
-def _write_migration(migration: str, storage_set: StorageSetKey) -> None:
+def _write_migration(
+    migration: str,
+    storage_set: StorageSetKey,
+    migration_name: str,
+) -> str:
     """
     Input:
         migration - python migration file (see snuba/snuba_migrations/*/000x_*.py for examples)
@@ -137,7 +153,7 @@ def _write_migration(migration: str, storage_set: StorageSetKey) -> None:
     nextnum = int(existing_migrations[-1].split("_")[0]) + 1
 
     # write migration to file
-    newpath = f"{path}/{str(nextnum).zfill(4)}_generated_migration.py"
+    newpath = f"{path}/{str(nextnum).zfill(4)}_{migration_name}.py"
     if os.path.exists(newpath):
         # this should never happen, but just in case
         raise ValueError(
@@ -145,6 +161,7 @@ def _write_migration(migration: str, storage_set: StorageSetKey) -> None:
         )
     with open(newpath, "w") as f:
         f.write(format_str(migration, mode=Mode()))
+    return newpath
 
 
 def _is_valid_add_column(

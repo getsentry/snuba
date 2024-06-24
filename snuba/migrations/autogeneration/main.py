@@ -1,15 +1,21 @@
 import os
 import subprocess
+from typing import Optional
 
 from snuba.migrations.autogeneration.diff import generate_migration
 
 
-def generate(storage_path: str) -> None:
+def generate(storage_path: str, migration_name: Optional[str] = None) -> str:
     # load into memory the given storage and the version of it at HEAD
     new_storage, old_storage = get_working_and_head(storage_path)
 
     # generate the migration operations
-    generate_migration(old_storage, new_storage)
+    if migration_name:
+        return generate_migration(
+            old_storage, new_storage, migration_name=migration_name
+        )
+    else:
+        return generate_migration(old_storage, new_storage)
 
 
 def get_working_and_head(path: str) -> tuple[str, str]:

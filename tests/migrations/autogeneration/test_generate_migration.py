@@ -1,4 +1,7 @@
+import re
+
 import pytest
+from black import Mode, format_str  # type: ignore
 
 from snuba.migrations.autogeneration.diff import generate_migration
 
@@ -42,8 +45,7 @@ def test_add_column() -> None:
         "{ name: event_id, type: UUID }",
         "{ name: newcol2, type: UInt, args: { schema_modifiers: [nullable], size: 8 } }",
     ]
-    generate_migration(mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols))
-    """
+    expected_migration = """
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
@@ -144,9 +146,19 @@ class Migration(ClickhouseNodeMigration):
             ),
         ]
 """
-    # assert format_str(migration, mode=Mode()) == format_str(
-    #    expected_migration, mode=Mode()
-    # )
+    written_path = generate_migration(
+        mockstoragewithcolumns(cols),
+        mockstoragewithcolumns(new_cols),
+        migration_name="kyles_migration",
+    )
+    assert re.match(
+        r"snuba/snuba_migrations/events/[0-9][0-9][0-9][0-9]_kyles_migration.py",
+        written_path,
+    )
+    with open(written_path, mode="r") as f:
+        assert format_str(f.read(), mode=Mode()) == format_str(
+            expected_migration, mode=Mode()
+        )
 
 
 def test_modify_column() -> None:
