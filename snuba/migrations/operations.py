@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -81,6 +83,11 @@ class SqlOperation(ABC):
     @abstractmethod
     def format_sql(self) -> str:
         raise NotImplementedError
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, SqlOperation):
+            return False
+        return other.format_sql() == self.format_sql()
 
 
 class RunSql(SqlOperation):
@@ -271,6 +278,14 @@ class AddColumn(SqlOperation):
         column = self.column.for_schema()
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
+
+    def get_reverse(self) -> DropColumn:
+        return DropColumn(
+            storage_set=self.storage_set,
+            table_name=self.table_name,
+            column_name=self.column.name,
+            target=self.target,
+        )
 
 
 class DropColumn(SqlOperation):

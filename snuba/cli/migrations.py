@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Optional, Sequence
 
 import click
@@ -392,5 +393,11 @@ def generate(
     The migration will be written into the local directory. The user is responsible for making
     the commit, PR, and merging.
     """
+    expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
+    if not re.fullmatch(expected_pattern, storage_path):
+        raise click.ClickException(
+            f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
+        )
+
     autogeneration.generate(storage_path)
     click.echo("This function is under construction.")
