@@ -8,6 +8,7 @@ from snuba.migrations.group_loader import (
     EventsLoader,
     FunctionsLoader,
     GenericMetricsLoader,
+    GenericMetricsV2Loader,
     GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
@@ -179,14 +180,14 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.GENERIC_METRICS_V2: _MigrationGroup(
-        loader=GenericMetricsLoader(),
+        loader=GenericMetricsV2Loader(),
         storage_sets_keys={
             StorageSetKey.GENERIC_METRICS_SETS_V2,
             StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS_V2,
             StorageSetKey.GENERIC_METRICS_COUNTERS_V2,
             StorageSetKey.GENERIC_METRICS_GAUGES_V2,
         },
-        readiness_state=ReadinessState.COMPLETE,
+        readiness_state=ReadinessState.EXPERIMENTAL,
     ),
 }
 
