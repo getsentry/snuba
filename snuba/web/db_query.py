@@ -900,7 +900,7 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
-            raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
+            raise AllocationPolicyViolations.from_args(quota_allowances, summary)
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

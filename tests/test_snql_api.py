@@ -1323,6 +1323,7 @@ class TestSnQLApi(BaseApiTest):
                     "throttled_by": {},
                 },
             }
+
             assert (
                 response.json["error"]["message"]
                 == f"Query on could not be run due to allocation policies, details: {details}"

@@ -418,7 +418,8 @@ def dataset_query(
                 {
                     "error": details,
                     "timing": timer.for_json(),
-                    "quota_allowance": getattr(cause, "quota_allowance", {}),
+                    "quota_allowance": getattr(cause, "quota_allowance", {})
+                    | getattr(cause, "summary", {}),
                     **exception.extra,
                 }
             ),
