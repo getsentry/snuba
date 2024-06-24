@@ -45,6 +45,7 @@ class MigrationGroup(Enum):
     GROUP_ATTRIBUTES = "group_attributes"
     METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
+    GENERIC_METRICS_V2 = "generic_metrics_v2"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -176,6 +177,16 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
         readiness_state=ReadinessState.PARTIAL,
+    ),
+    MigrationGroup.GENERIC_METRICS_V2: _MigrationGroup(
+        loader=GenericMetricsLoader(),
+        storage_sets_keys={
+            StorageSetKey.GENERIC_METRICS_SETS_V2,
+            StorageSetKey.GENERIC_METRICS_DISTRIBUTIONS_V2,
+            StorageSetKey.GENERIC_METRICS_COUNTERS_V2,
+            StorageSetKey.GENERIC_METRICS_GAUGES_V2,
+        },
+        readiness_state=ReadinessState.COMPLETE,
     ),
 }
 
