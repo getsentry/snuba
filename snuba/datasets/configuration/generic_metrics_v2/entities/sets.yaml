@@ -6,7 +6,7 @@ schema:
   [
     { name: org_id, type: UInt, args: { size: 64 } },
     { name: project_id, type: UInt, args: { size: 64 } },
-    { name: metric_name, type: String },
+    { name: metric_mri, type: String },
     { name: timestamp, type: DateTime },
     { name: bucketed_time, type: DateTime },
     { name: granularity, type: UInt, args: { size: 16 } },

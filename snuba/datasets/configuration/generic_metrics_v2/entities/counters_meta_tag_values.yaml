@@ -7,7 +7,7 @@ name: generic_metrics_counters_meta_tag_values_v2
 schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
-    { name: metric_name, type: String },
+    { name: metric_mri, type: String },
     { name: tag_key, type: String },
     { name: tag_value, type: String},
     { name: timestamp, type: DateTime },
@@ -44,7 +44,7 @@ storage_selector:
 validators:
   - validator: EntityRequiredColumnValidator
     args:
-      required_filter_columns: ["project_id", "metric_name", "tag_key"]
+      required_filter_columns: ["project_id", "metric_mri", "tag_key"]
 required_time_column: timestamp
 
 query_processors: []
