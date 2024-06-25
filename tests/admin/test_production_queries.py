@@ -22,3 +22,10 @@ def test_disallowed_project_ids() -> None:
         prod_queries._validate_projects_in_query(
             body={"query": query, "dataset": "events"}, dataset=get_dataset("events")
         )
+
+
+def test_with_joins() -> None:
+    query = """MATCH (si: search_issues) -[attributes]-> (g: group_attributes) SELECT g.group_id, ifNull(multiply(toUInt64(max(si.timestamp)), 1000), 0) AS `score` BY g.group_id WHERE si.project_id IN array(1) AND g.project_id IN array(1) AND si.timestamp >= toDateTime('2024-06-17T22:43:14.617430') AND si.timestamp < toDateTime('2024-06-24T22:43:14.617430') AND g.group_id IN array(5001473500) AND si.project_id=1 AND g.project_id=1"""
+    prod_queries._validate_projects_in_query(
+        body={"query": query, "dataset": "events"}, dataset=get_dataset("events")
+    )

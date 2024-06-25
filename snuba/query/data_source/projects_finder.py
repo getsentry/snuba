@@ -1,4 +1,7 @@
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
+from snuba.clickhouse.query_dsl.accessors import (
+    get_object_ids_in_condition,
+    get_object_ids_in_query_ast,
+)
 from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
@@ -28,7 +31,12 @@ class ProjectsFinder(
     def _visit_composite_query(
         self, data_source: CompositeQuery[LogicalDataSource]
     ) -> set[int]:
-        return self.visit(data_source.get_from_clause())
+        from_clause_project_ids = self.visit(data_source.get_from_clause())
+        condition_project_ids = set()
+        condition = data_source.get_condition()
+        if condition is not None:
+            condition_project_ids = get_object_ids_in_condition(condition, "project_id")
+        return from_clause_project_ids | condition_project_ids
 
     def visit_individual_node(
         self, node: IndividualNode[LogicalDataSource]
