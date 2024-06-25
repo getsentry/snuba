@@ -892,7 +892,9 @@ def _apply_allocation_policies_quota(
             key: quota_allowance.to_dict()
             for key, quota_allowance in quota_allowances.items()
         }
-        stats["quota_allowance"] = allowance_dicts
+        stats["quota_allowance"] = {}
+        stats["quota_allowance"]["details"] = allowance_dicts
+
         summary: dict[str, Any] = {}
         summary["threads_used"] = num_threads
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
@@ -900,7 +902,7 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
-            raise AllocationPolicyViolations.from_args(quota_allowances, summary)
+            raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

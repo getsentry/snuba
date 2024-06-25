@@ -303,7 +303,7 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
-        allocation_policies = response.json["quota_allowance"]
+        allocation_policies = response.json["quota_allowance"]["details"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
@@ -320,7 +320,7 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        allocation_policies = response.json["quota_allowance"]
+        allocation_policies = response.json["quota_allowance"]["details"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
         assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
         assert response.status_code == 429
@@ -1296,20 +1296,22 @@ class TestSnQLApi(BaseApiTest):
                 ),
             )
             assert response.status_code == 429
-            details = {
-                "RejectAllocationPolicy123": {
-                    "can_run": False,
-                    "max_threads": 0,
-                    "explanation": {
-                        "reason": "policy rejects all queries",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+            info = {
+                "details": {
+                    "RejectAllocationPolicy123": {
+                        "can_run": False,
+                        "max_threads": 0,
+                        "explanation": {
+                            "reason": "policy rejects all queries",
+                            "storage_key": "StorageKey.DOESNTMATTER",
+                        },
+                        "is_throttled": False,
+                        "throttle_threshold": MAX_THRESHOLD,
+                        "rejection_threshold": MAX_THRESHOLD,
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
                     },
-                    "is_throttled": False,
-                    "throttle_threshold": MAX_THRESHOLD,
-                    "rejection_threshold": MAX_THRESHOLD,
-                    "quota_used": 0,
-                    "quota_unit": NO_UNITS,
-                    "suggestion": NO_SUGGESTION,
                 },
                 "summary": {
                     "threads_used": 0,
@@ -1326,7 +1328,7 @@ class TestSnQLApi(BaseApiTest):
 
             assert (
                 response.json["error"]["message"]
-                == f"Query on could not be run due to allocation policies, details: {details}"
+                == f"Query on could not be run due to allocation policies, info: {info}"
             )
 
     def test_tags_key_column(self) -> None:
