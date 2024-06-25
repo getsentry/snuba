@@ -264,7 +264,7 @@ allocation_policies:
         is_active: 1
       cross_org_referrer_limits:
         getsentry.tasks.backfill_grouping_records:
-          max_threads: 10
+          max_threads: 5
           concurrent_limit: 20
   - name: BytesScannedWindowAllocationPolicy
     args:
