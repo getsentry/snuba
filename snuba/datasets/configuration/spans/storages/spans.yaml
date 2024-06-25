@@ -167,7 +167,7 @@ query_processors:
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
-        [transaction_id, span_id, trace_id, segment_name]
+        [span_id, trace_id, segment_name]
   - processor: TableRateLimit
   - processor: TupleUnaliaser
 
