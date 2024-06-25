@@ -96,6 +96,8 @@ pub fn consumer_impl(
         );
     }
 
+    // random comment
+
     // TODO: Support multiple storages
     assert_eq!(consumer_config.storages.len(), 1);
 
