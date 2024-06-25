@@ -4,6 +4,7 @@ import logging
 import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import partial
 from hashlib import md5
 from threading import Lock
@@ -26,6 +27,7 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
     QueryResultOrError,
@@ -75,6 +77,9 @@ from snuba.web import QueryException, QueryResult, constants
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
+
+_REJECTED_BY = "rejected_by"
+_THROTTLED_BY = "throttled_by"
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -808,6 +813,34 @@ def db_query(
         )
 
 
+@dataclass
+class _QuotaAndPolicy:
+    quota_allowance: QuotaAllowance
+    policy_name: str
+
+
+def _add_quota_info(
+    summary: dict[str, Any],
+    action: str,
+    quota_and_policy: _QuotaAndPolicy | None = None,
+) -> None:
+
+    quota_info: dict[str, Any] = {}
+    summary[action] = quota_info
+
+    if quota_and_policy is not None:
+        quota_info["policy"] = quota_and_policy.policy_name
+        quota_allowance = quota_and_policy.quota_allowance
+        quota_info["quota_used"] = quota_allowance.quota_used
+        quota_info["quota_unit"] = quota_allowance.quota_unit
+        quota_info["suggestion"] = quota_allowance.suggestion
+
+        if action == _REJECTED_BY:
+            quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
+        else:
+            quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
+
+
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -822,6 +855,9 @@ def _apply_allocation_policies_quota(
     """
     quota_allowances: dict[str, QuotaAllowance] = {}
     can_run = True
+    rejection_quota_and_policy = None
+    throttle_quota_and_policy = None
+    num_threads = MAX_THRESHOLD
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -833,13 +869,23 @@ def _apply_allocation_policies_quota(
                 allowance = allocation_policy.get_quota_allowance(
                     attribution_info.tenant_ids, query_id
                 )
+                num_threads = min(num_threads, allowance.max_threads)
                 can_run &= allowance.can_run
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
+                if allowance.is_throttled:
+                    throttle_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
                 if not can_run:
+                    rejection_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
                     break
 
         allowance_dicts = {
@@ -847,6 +893,12 @@ def _apply_allocation_policies_quota(
             for key, quota_allowance in quota_allowances.items()
         }
         stats["quota_allowance"] = allowance_dicts
+        summary: dict[str, Any] = {}
+        summary["threads_used"] = num_threads
+        _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
+        _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
+        stats["quota_allowance"]["summary"] = summary
+
         if not can_run:
             raise AllocationPolicyViolations.from_args(quota_allowances)
         # Before allocation policies were a thing, the query pipeline would apply
