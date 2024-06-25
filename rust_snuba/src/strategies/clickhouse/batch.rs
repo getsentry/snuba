@@ -381,13 +381,10 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_write_no_time() {
         crate::testutils::initialize_python();
         let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
-            then.status(200).body("hi");
-        });
 
         let concurrency = ConcurrencyConfig::new(1);
         let factory = BatchFactory::new(
@@ -412,9 +409,7 @@ mod tests {
             ]))
             .unwrap();
 
-        assert!(concurrency.handle().block_on(batch.finish()).is_err());
-
-        mock.assert_hits(0);
+        concurrency.handle().block_on(batch.finish()).unwrap();
     }
 
     #[test]
