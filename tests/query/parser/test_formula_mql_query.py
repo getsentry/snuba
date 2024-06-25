@@ -633,6 +633,18 @@ def test_simple_formula() -> None:
 #     ):
 #         parse_mql_query(str(query_body), mql_context, generic_metrics)
 
+# @pytest.mark.xfail()
+# def test_onesided_groupby() -> None:
+#     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
+#     expected = ?
+
+#     generic_metrics = get_dataset(
+#         "generic_metrics",
+#     )
+#     query, _ = parse_mql_query(str(query_body), mql_context, generic_metrics)
+#     eq, reason = query.equals(expected)
+#     assert eq, reason
+
 
 # @pytest.mark.xfail()
 # def test_formula_filters() -> None:

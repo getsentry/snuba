@@ -1,22 +1,9 @@
 from __future__ import annotations
 
-
 from datetime import datetime
 
-
 from snuba.datasets.entities.entity_key import EntityKey
-from snuba.query.dsl import (
-    column,
-    literal,
-    and_cond,
-    in_cond,
-    NestedColumn,
-    Functions as f,
-)
-from snuba.datasets.entities.factory import (
-    get_entity,
-)
-
+from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.join import (
@@ -27,9 +14,10 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import NestedColumn, and_cond, column, in_cond, literal
 from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
 from snuba.query.logical import Query as LogicalQuery
-
 
 entity_key = EntityKey.GENERIC_METRICS_DISTRIBUTIONS
 distributions = Entity(entity_key, get_entity(entity_key).get_data_model())
@@ -191,6 +179,8 @@ def test_subquery_generator_metrics() -> None:
     assert selected_columns == expected_outer_query_selected
 
     # Test outer conditions
+    print("break")
+    print(original_query.get_condition())
     assert (
         original_query.get_condition() is None
     ), "all conditions should be pushed down"
