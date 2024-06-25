@@ -20,11 +20,11 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.joins.classifier import (
+    AggregateBranchCutter,
     AliasGenerator,
     BranchCutter,
     SubExpression,
     SubqueryExpression,
-    AggregateBranchCutter,
 )
 from snuba.query.joins.subquery_generator import (
     SubqueriesInitializer,
