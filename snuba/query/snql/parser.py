@@ -1017,6 +1017,9 @@ def _qualify_columns(
         if not isinstance(exp, Column):
             return exp
 
+        if exp.table_name is not None:
+            return exp  # Table name is already qualified
+
         parts = exp.column_name.split(".", 1)
         if len(parts) != 2 or parts[0] not in aliases:
             raise ParsingException(

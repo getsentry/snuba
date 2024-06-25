@@ -88,6 +88,7 @@ class InitialParseResult:
     groupby: list[SelectedExpression] | None = None
     conditions: list[Expression] | None = None
     mri: str | None = None
+    table_alias: str | None = None
 
 
 FormulaParameter = Union[InitialParseResult, int, float]
