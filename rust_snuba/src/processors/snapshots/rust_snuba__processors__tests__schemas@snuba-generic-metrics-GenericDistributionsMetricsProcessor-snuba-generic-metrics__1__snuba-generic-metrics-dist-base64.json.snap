@@ -15,7 +15,7 @@ expression: snapshot_payload
       2,
       3
     ],
-    "materialization_version": 3,
+    "materialization_version": 2,
     "metric_id": 65563,
     "metric_type": "distribution",
     "min_retention_days": 90,
