@@ -95,6 +95,7 @@ class InitialParseResult:
     groupby: list[SelectedExpression] | None = None
     conditions: list[Expression] | None = None
     mri: str | None = None
+    table_alias: str | None = None
 
 
 FormulaParameter = Union[InitialParseResult, int, float]
@@ -1278,7 +1279,7 @@ MQL_POST_PROCESSORS: CustomProcessors = POST_PROCESSORS + [
 ]
 
 
-def parse_mql_query(
+def parse_mql_query_new(
     body: str,
     mql_context_dict: dict[str, Any],
     dataset: Dataset,
