@@ -1,14 +1,15 @@
-import re
+from typing import Any
 
 import pytest
+import yaml
 from black import Mode, format_str  # type: ignore
 
-from snuba.migrations.autogeneration.diff import generate_migration
+from snuba.migrations.autogeneration.diff import generate_python_migration
 
 
-def mockstoragewithcolumns(cols: list[str]) -> str:
+def mockstoragewithcolumns(cols: list[str]) -> Any:
     colstr = ",\n            ".join([s for s in cols])
-    return f"""
+    storage = f"""
 version: v1
 kind: writable_storage
 name: errors
@@ -30,6 +31,7 @@ schema:
 local_table_name: errors_local
 dist_table_name: errors_dist
 """
+    return yaml.safe_load(storage)
 
 
 def test_add_column() -> None:
@@ -146,19 +148,12 @@ class Migration(ClickhouseNodeMigration):
             ),
         ]
 """
-    written_path = generate_migration(
-        mockstoragewithcolumns(cols),
-        mockstoragewithcolumns(new_cols),
-        migration_name="kyles_migration",
+    migration = generate_python_migration(
+        mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
     )
-    assert re.match(
-        r"snuba/snuba_migrations/events/[0-9][0-9][0-9][0-9]_kyles_migration.py",
-        written_path,
+    assert format_str(migration, mode=Mode()) == format_str(
+        expected_migration, mode=Mode()
     )
-    with open(written_path, mode="r") as f:
-        assert format_str(f.read(), mode=Mode()) == format_str(
-            expected_migration, mode=Mode()
-        )
 
 
 def test_modify_column() -> None:
@@ -172,7 +167,7 @@ def test_modify_column() -> None:
         ValueError,
         match="Modification to columns in unsupported, column 'timestamp' was modified or reordered",
     ):
-        generate_migration(
+        generate_python_migration(
             mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
         )
 
@@ -190,7 +185,7 @@ def test_reorder_columns() -> None:
         ValueError,
         match="Modification to columns in unsupported, column 'timestamp' was modified or reordered",
     ):
-        generate_migration(
+        generate_python_migration(
             mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
         )
 
@@ -207,6 +202,6 @@ def test_delete_column() -> None:
         "{ name: newcol1, type: DateTime }",
     ]
     with pytest.raises(ValueError, match="Column removal is not supported"):
-        generate_migration(
+        generate_python_migration(
             mockstoragewithcolumns(cols), mockstoragewithcolumns(new_cols)
         )

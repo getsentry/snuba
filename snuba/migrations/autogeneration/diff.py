@@ -1,12 +1,7 @@
-import os
 from typing import Any, Sequence, cast
-
-import yaml
-from black import Mode, format_str  # type: ignore
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.utils import parse_columns
-from snuba.migrations import group_loader
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget
 from snuba.utils.schemas import Column, ColumnType, SchemaModifiers
@@ -16,27 +11,21 @@ This file is for autogenerating the migration for adding a column to your storag
 """
 
 
-def generate_migration(
-    oldstorage: str, newstorage: str, migration_name: str = "generated_migration"
+def generate_python_migration(
+    oldstorage: dict[str, Any], newstorage: dict[str, Any]
 ) -> str:
     """
-    Given 2 storage.yaml files, representing the diff of a modified storage.yaml
-    i.e. original and modified, generates a python migration based on the changes
-    and writes it to the correct place in the repo. Returns the path where the file
-    was written.
+    Input:
+        2 storage.yaml files in yaml.safe_load format.
+        These representing the diff of a modified storage.yaml i.e. original and modified
+
+    Generates and returns a python migration based on the changes.
     """
-    old_stor_dict = yaml.safe_load(oldstorage)
-    new_stor_dict = yaml.safe_load(newstorage)
-    forwards, backwards = storage_diff_to_migration_ops(old_stor_dict, new_stor_dict)
-    migration = _migration_ops_to_migration(forwards, backwards)
-    return _write_migration(
-        migration,
-        StorageSetKey(new_stor_dict["storage"]["set_key"]),
-        migration_name,
-    )
+    forwards, backwards = _storage_diff_to_migration_ops(oldstorage, newstorage)
+    return _migration_ops_to_migration(forwards, backwards)
 
 
-def storage_diff_to_migration_ops(
+def _storage_diff_to_migration_ops(
     oldstorage: dict[str, Any], newstorage: dict[str, Any]
 ) -> tuple[list[AddColumn], list[DropColumn]]:
     """
@@ -117,51 +106,6 @@ class Migration(ClickhouseNodeMigration):
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return {backwards_str}
 """
-
-
-def _write_migration(
-    migration: str,
-    storage_set: StorageSetKey,
-    migration_name: str,
-) -> str:
-    """
-    Input:
-        migration - python migration file (see snuba/snuba_migrations/*/000x_*.py for examples)
-        storage_set - the key of the storage-set you are writing the migration for
-    Writes the given migration to a new file at the correct place in the repo
-    (which is determined by storage-set key), and adds a reference to the new migration
-    in the group loader (snuba/group_loader/migrations.py)
-    """
-    # make sure storage_set migration path exist
-    path = "snuba/snuba_migrations/" + storage_set.value
-    if not os.path.exists(path):
-        raise ValueError(
-            f"Migration path: '{path}' does not exist, perhaps '{storage_set.value}' is not a valid storage set key?"
-        )
-
-    # grab the group_loader for the storage set
-    group_loader_name = (
-        "".join([word.capitalize() for word in storage_set.value.split("_")]) + "Loader"
-    )
-    loader = getattr(group_loader, group_loader_name)()
-    assert isinstance(loader, group_loader.GroupLoader)
-
-    # get the next migration number
-    existing_migrations = loader.get_migrations()
-    if not existing_migrations:
-        nextnum = 0
-    nextnum = int(existing_migrations[-1].split("_")[0]) + 1
-
-    # write migration to file
-    newpath = f"{path}/{str(nextnum).zfill(4)}_{migration_name}.py"
-    if os.path.exists(newpath):
-        # this should never happen, but just in case
-        raise ValueError(
-            f"Error: The migration number {nextnum} was larger than the last migration in the group loader '{group_loader_name}', but the migration already exists"
-        )
-    with open(newpath, "w") as f:
-        f.write(format_str(migration, mode=Mode()))
-    return newpath
 
 
 def _is_valid_add_column(
