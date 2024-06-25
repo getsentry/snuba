@@ -158,11 +158,12 @@ class AllocationPolicyViolations(SerializableException):
     """
 
     def __str__(self) -> str:
-        return f"{self.message}, details: {self.violations}"
+        return f"{self.message}, info: {{'details': {self.violations}, 'summary': {self.summary}}}"
 
     @property
     def violations(self) -> dict[str, dict[str, Any]]:
-        return {k: v for k, v in self.quota_allowance.items() if v["can_run"] == False}
+        details = cast(dict[str, Any], self.quota_allowance.get("details"))
+        return {k: v for k, v in details.items() if v["can_run"] == False}
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
@@ -170,16 +171,18 @@ class AllocationPolicyViolations(SerializableException):
             dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
         )
 
+    @property
+    def summary(self) -> dict[str, Any]:
+        return self.quota_allowance.get("summary", {})
+
     @classmethod
     def from_args(
-        cls, quota_allowances: dict[str, QuotaAllowance]
+        cls,
+        quota_allowances: dict[str, Any],
     ) -> "AllocationPolicyViolations":
         return cls(
             "Query on could not be run due to allocation policies",
-            quota_allowances={
-                key: quota_allowance.to_dict()
-                for key, quota_allowance in quota_allowances.items()
-            },
+            quota_allowances=quota_allowances,
         )
 
 

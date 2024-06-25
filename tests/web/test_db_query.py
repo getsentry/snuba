@@ -277,75 +277,77 @@ def test_db_query_success() -> None:
                 "throttle_threshold": 1280000000000,
             },
         },
-        "ReferrerGuardRailPolicy": {
-            "can_run": True,
-            "max_threads": 10,
-            "explanation": {
-                "reason": "within limit",
-                "policy": "referrer_guard_rail_policy",
-                "referrer": "something",
-                "storage_key": "StorageKey.ERRORS_RO",
+        "details": {
+            "ReferrerGuardRailPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {
+                    "reason": "within limit",
+                    "policy": "referrer_guard_rail_policy",
+                    "referrer": "something",
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": False,
+                "throttle_threshold": 50,
+                "rejection_threshold": 100,
+                "quota_used": 1,
+                "quota_unit": "concurrent_queries",
+                "suggestion": NO_SUGGESTION,
             },
-            "is_throttled": False,
-            "throttle_threshold": 50,
-            "rejection_threshold": 100,
-            "quota_used": 1,
-            "quota_unit": "concurrent_queries",
-            "suggestion": NO_SUGGESTION,
-        },
-        "ConcurrentRateLimitAllocationPolicy": {
-            "can_run": True,
-            "max_threads": 10,
-            "explanation": {
-                "reason": "within limit",
-                "overrides": {},
-                "storage_key": "StorageKey.ERRORS_RO",
+            "ConcurrentRateLimitAllocationPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {
+                    "reason": "within limit",
+                    "overrides": {},
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": False,
+                "throttle_threshold": 22,
+                "rejection_threshold": 22,
+                "quota_used": 1,
+                "quota_unit": "concurrent_queries",
+                "suggestion": NO_SUGGESTION,
             },
-            "is_throttled": False,
-            "throttle_threshold": 22,
-            "rejection_threshold": 22,
-            "quota_used": 1,
-            "quota_unit": "concurrent_queries",
-            "suggestion": NO_SUGGESTION,
-        },
-        "BytesScannedRejectingPolicy": {
-            "can_run": True,
-            "max_threads": 5,
-            "explanation": {
-                "reason": "within_limit but throttled",
-                "storage_key": "StorageKey.ERRORS_RO",
+            "BytesScannedRejectingPolicy": {
+                "can_run": True,
+                "max_threads": 5,
+                "explanation": {
+                    "reason": "within_limit but throttled",
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": True,
+                "throttle_threshold": 1280000000000,
+                "rejection_threshold": 2560000000000,
+                "quota_used": 1560000000000,
+                "quota_unit": "bytes",
+                "suggestion": "scan less bytes",
             },
-            "is_throttled": True,
-            "throttle_threshold": 1280000000000,
-            "rejection_threshold": 2560000000000,
-            "quota_used": 1560000000000,
-            "quota_unit": "bytes",
-            "suggestion": "scan less bytes",
-        },
-        "CrossOrgQueryAllocationPolicy": {
-            "can_run": True,
-            "max_threads": 10,
-            "explanation": {
-                "reason": "pass_through",
-                "storage_key": "StorageKey.ERRORS_RO",
+            "CrossOrgQueryAllocationPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {
+                    "reason": "pass_through",
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": False,
+                "throttle_threshold": MAX_THRESHOLD,
+                "rejection_threshold": MAX_THRESHOLD,
+                "quota_used": 0,
+                "quota_unit": NO_UNITS,
+                "suggestion": NO_SUGGESTION,
             },
-            "is_throttled": False,
-            "throttle_threshold": MAX_THRESHOLD,
-            "rejection_threshold": MAX_THRESHOLD,
-            "quota_used": 0,
-            "quota_unit": NO_UNITS,
-            "suggestion": NO_SUGGESTION,
-        },
-        "BytesScannedWindowAllocationPolicy": {
-            "can_run": True,
-            "max_threads": 10,
-            "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
-            "is_throttled": False,
-            "throttle_threshold": 10000000,
-            "rejection_threshold": MAX_THRESHOLD,
-            "quota_used": 0,
-            "quota_unit": "bytes",
-            "suggestion": "scan less bytes",
+            "BytesScannedWindowAllocationPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
+                "is_throttled": False,
+                "throttle_threshold": 10000000,
+                "rejection_threshold": MAX_THRESHOLD,
+                "quota_used": 0,
+                "quota_unit": "bytes",
+                "suggestion": "scan less bytes",
+            },
         },
     }
 
@@ -517,26 +519,28 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                     "suggestion": NO_SUGGESTION,
                 },
             },
-            "RejectAllocationPolicy": {
-                "can_run": False,
-                "explanation": {
-                    "reason": "policy rejects all queries",
-                    "storage_key": "StorageKey.DOESNTMATTER",
+            "details": {
+                "RejectAllocationPolicy": {
+                    "can_run": False,
+                    "explanation": {
+                        "reason": "policy rejects all queries",
+                        "storage_key": "StorageKey.DOESNTMATTER",
+                    },
+                    "max_threads": 0,
+                    "is_throttled": True,
+                    "quota_unit": NO_UNITS,
+                    "quota_used": 0,
+                    "rejection_threshold": MAX_THRESHOLD,
+                    "suggestion": NO_SUGGESTION,
+                    "throttle_threshold": MAX_THRESHOLD,
                 },
-                "max_threads": 0,
-                "is_throttled": True,
-                "quota_unit": NO_UNITS,
-                "quota_used": 0,
-                "rejection_threshold": MAX_THRESHOLD,
-                "suggestion": NO_SUGGESTION,
-                "throttle_threshold": MAX_THRESHOLD,
             },
         }
         # extra data contains policy failure information
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["RejectAllocationPolicy"][
-                "explanation"
-            ]["reason"]
+            excinfo.value.extra["stats"]["quota_allowance"]["details"][
+                "RejectAllocationPolicy"
+            ]["explanation"]["reason"]
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
@@ -749,19 +753,21 @@ def test_allocation_policy_updates_quota() -> None:
             },
             "throttled_by": {},
         },
-        "CountQueryPolicy": {
-            "can_run": False,
-            "max_threads": 0,
-            "explanation": {
-                "reason": "can only run 2 queries!",
-                "storage_key": "StorageKey.DOESNTMATTER",
+        "details": {
+            "CountQueryPolicy": {
+                "can_run": False,
+                "max_threads": 0,
+                "explanation": {
+                    "reason": "can only run 2 queries!",
+                    "storage_key": "StorageKey.DOESNTMATTER",
+                },
+                "is_throttled": False,
+                "throttle_threshold": MAX_QUERIES_TO_RUN,
+                "rejection_threshold": MAX_QUERIES_TO_RUN,
+                "quota_used": queries_run,
+                "quota_unit": "queries",
+                "suggestion": "scan less concurrent queries",
             },
-            "is_throttled": False,
-            "throttle_threshold": MAX_QUERIES_TO_RUN,
-            "rejection_threshold": MAX_QUERIES_TO_RUN,
-            "quota_used": queries_run,
-            "quota_unit": "queries",
-            "suggestion": "scan less concurrent queries",
         },
     }
     cause = e.value.__cause__
