@@ -1,10 +1,10 @@
 import os
 import subprocess
 
-from snuba.migrations.autogeneration import generate
+from snuba.migrations.autogeneration.main import get_working_and_head
 
 
-def test_basic() -> None:
+def test_get_working_and_head() -> None:
     dir = "/tmp/kylesfakerepo987636"
     fname = "fakestorage.yaml"
 
@@ -41,6 +41,6 @@ def test_basic() -> None:
         f.write("goodbye world")
 
     # make sure HEAD and curr version looks right
-    old_storage, new_storage = generate(os.path.join(dir, fname))
-    assert old_storage == "hello world\n"
+    new_storage, old_storage = get_working_and_head(os.path.join(dir, fname))
     assert new_storage == "hello world\ngoodbye world"
+    assert old_storage == "hello world\n"

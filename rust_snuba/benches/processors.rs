@@ -97,6 +97,7 @@ fn create_factory(
             broker_config: BrokerConfig::default(),
         },
         stop_at_timestamp: None,
+        batch_write_timeout: None,
     };
     Box::new(factory)
 }

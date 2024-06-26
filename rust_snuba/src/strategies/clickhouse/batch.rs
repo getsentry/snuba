@@ -42,6 +42,7 @@ impl BatchFactory {
         clickhouse_user: &str,
         clickhouse_password: &str,
         async_inserts: bool,
+        batch_write_timeout: Option<Duration>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -72,10 +73,18 @@ impl BatchFactory {
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
-        let client = ClientBuilder::new()
-            .default_headers(headers)
-            .build()
-            .unwrap();
+        let client = if let Some(timeout_duration) = batch_write_timeout {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .timeout(timeout_duration)
+                .build()
+                .unwrap()
+        } else {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap()
+        };
 
         BatchFactory {
             client,
@@ -252,6 +261,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -286,6 +296,7 @@ mod tests {
             "default",
             "",
             true,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -319,6 +330,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -350,6 +362,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -365,5 +378,73 @@ mod tests {
 
         // ensure there has not been any HTTP request
         mock.assert_hits(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_write_no_time() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            // pass in an unreasonably short timeout
+            // which prevents the client request from reaching Clickhouse
+            Some(Duration::from_millis(0)),
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+    }
+
+    #[test]
+    fn test_write_enough_time() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            // pass in a reasonable timeout
+            Some(Duration::from_millis(1000)),
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
     }
 }

@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import UUID, Column, UInt
+from snuba.clickhouse.columns import Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -12,36 +12,40 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.ModifyColumn(
+            operations.AddColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_local",
                 column=Column(
-                    "group_first_release_id", UInt(64, Modifiers(nullable=True))
+                    "group_first_release",
+                    UInt(64, Modifiers(nullable=True)),
                 ),
                 target=OperationTarget.LOCAL,
+                after="group_priority",
             ),
-            operations.ModifyColumn(
+            operations.AddColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_dist",
                 column=Column(
-                    "group_first_release_id", UInt(64, Modifiers(nullable=True))
+                    "group_first_release",
+                    UInt(64, Modifiers(nullable=True)),
                 ),
                 target=OperationTarget.DISTRIBUTED,
+                after="group_priority",
             ),
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.ModifyColumn(
+            operations.DropColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_dist",
-                column=Column("group_first_release_id", UUID(Modifiers(nullable=True))),
+                column_name="group_first_release",
                 target=OperationTarget.DISTRIBUTED,
             ),
-            operations.ModifyColumn(
+            operations.DropColumn(
                 storage_set=StorageSetKey.GROUP_ATTRIBUTES,
                 table_name="group_attributes_local",
-                column=Column("group_first_release_id", UUID(Modifiers(nullable=True))),
+                column_name="group_first_release",
                 target=OperationTarget.LOCAL,
             ),
         ]

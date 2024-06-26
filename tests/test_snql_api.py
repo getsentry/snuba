@@ -15,6 +15,9 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
@@ -40,6 +43,12 @@ class RejectAllocationPolicy123(AllocationPolicy):
             can_run=False,
             max_threads=0,
             explanation={"reason": "policy rejects all queries"},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
         )
 
     def _update_quota_balance(
@@ -294,7 +303,7 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
-        allocation_policies = response.json["quota_allowance"]
+        allocation_policies = response.json["quota_allowance"]["details"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
@@ -311,7 +320,7 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        allocation_policies = response.json["quota_allowance"]
+        allocation_policies = response.json["quota_allowance"]["details"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
         assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
         assert response.status_code == 429
@@ -1287,9 +1296,39 @@ class TestSnQLApi(BaseApiTest):
                 ),
             )
             assert response.status_code == 429
+            info = {
+                "details": {
+                    "RejectAllocationPolicy123": {
+                        "can_run": False,
+                        "max_threads": 0,
+                        "explanation": {
+                            "reason": "policy rejects all queries",
+                            "storage_key": "StorageKey.DOESNTMATTER",
+                        },
+                        "is_throttled": False,
+                        "throttle_threshold": MAX_THRESHOLD,
+                        "rejection_threshold": MAX_THRESHOLD,
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
+                    },
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "rejected_by": {
+                        "policy": "RejectAllocationPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "rejection_threshold": 1000000000000,
+                    },
+                    "throttled_by": {},
+                },
+            }
+
             assert (
                 response.json["error"]["message"]
-                == "Query on could not be run due to allocation policies, details: {'RejectAllocationPolicy123': {'can_run': False, 'max_threads': 0, 'explanation': {'reason': 'policy rejects all queries', 'storage_key': 'StorageKey.DOESNTMATTER'}}}"
+                == f"Query on could not be run due to allocation policies, info: {info}"
             )
 
     def test_tags_key_column(self) -> None:

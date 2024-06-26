@@ -158,6 +158,12 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     type=int,
     help="Unix timestamp after which to stop processing messages",
 )
+@click.option(
+    "--batch-write-timeout-ms",
+    type=int,
+    default=None,
+    help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -186,6 +192,7 @@ def rust_consumer(
     health_check_file: Optional[str],
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
+    batch_write_timeout_ms: Optional[int]
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -235,6 +242,7 @@ def rust_consumer(
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
+        batch_write_timeout_ms,
     )
 
     sys.exit(exitcode)

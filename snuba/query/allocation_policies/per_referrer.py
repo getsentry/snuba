@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from snuba.query.allocation_policies import (
+    NO_SUGGESTION,
     AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
@@ -24,6 +25,9 @@ _REFERRER_CONCURRENT_OVERRIDE = -1
 _REFERRER_MAX_THREADS_OVERRIDE = -1
 _REQUESTS_THROTTLE_DIVIDER = 2
 _THREADS_THROTTLE_DIVIDER = 2
+
+QUOTA_UNIT = "concurrent_queries"
+SUGGESTION = "scan less concurrent queries"
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -128,6 +132,8 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             self.get_config_value("default_concurrent_request_per_referrer")
             // self.get_config_value("requests_throttle_divider"),
         )
+
+        is_throttled = False
         if rate_limit_stats.concurrent > requests_throttle_threshold:
             num_threads = max(
                 1, num_threads // self.get_config_value("threads_throttle_divider")
@@ -135,6 +141,8 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             self.metrics.increment(
                 "concurrent_queries_throttled", tags={"referrer": referrer}
             )
+            is_throttled = True
+
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
@@ -145,10 +153,21 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             "policy": self.rate_limit_name,
             "referrer": referrer,
         }
+
+        if can_run:
+            suggestion = NO_SUGGESTION
+        else:
+            suggestion = SUGGESTION
         return QuotaAllowance(
             can_run=can_run,
             max_threads=num_threads,
             explanation=decision_explanation,
+            is_throttled=is_throttled,
+            throttle_threshold=requests_throttle_threshold,
+            rejection_threshold=rate_limit_params.concurrent_limit,
+            quota_used=rate_limit_stats.concurrent,
+            quota_unit=QUOTA_UNIT,
+            suggestion=suggestion,
         )
 
     def _update_quota_balance(
