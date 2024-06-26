@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABCMeta
-from typing import Any, Callable, Iterable, Optional, Sequence, Type, cast
+from typing import Any, Callable, Iterable, Optional, Sequence, Type, Union, cast
 
 from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
@@ -145,11 +145,20 @@ class EntityQuery(Query, metaclass=_FlexibleQueryType):
 
     @classmethod
     def check_data_source(
-        cls, data_source: Query | CompositeQuery | JoinClause | IndividualNode
+        cls,
+        data_source: Union[
+            Query,
+            ProcessableQuery[Entity],
+            CompositeQuery[Entity],
+            JoinClause[Entity],
+            IndividualNode[Entity],
+        ],
     ) -> None:
         if isinstance(data_source, JoinClause):
-            cls.check_data_source(data_source.left_node)
-            cls.check_data_source(data_source.right_node)
+            if isinstance(data_source.left_node, IndividualNode):
+                cls.check_data_source(data_source.left_node)
+            if isinstance(data_source.right_node, IndividualNode):
+                cls.check_data_source(data_source.right_node)
         elif isinstance(data_source, IndividualNode):
             assert isinstance(data_source.data_source, cls.data_source())
         elif isinstance(data_source, CompositeQuery):
@@ -158,7 +167,7 @@ class EntityQuery(Query, metaclass=_FlexibleQueryType):
             assert isinstance(data_source.get_from_clause(), cls.data_source())
 
     @classmethod
-    def from_query(cls, query: Query) -> "EntityQuery":
+    def from_query(cls, query: Union[Query, CompositeQuery[Entity]]) -> "EntityQuery":
         cls.check_data_source(query)
         return cast("EntityQuery", query)
 
