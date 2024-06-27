@@ -35,6 +35,8 @@ pub fn process_message(
 struct FromSpanMessage {
     description: Option<String>,
     duration_ms: u32,
+    #[serde(alias = "end_timestamp_micro")]
+    end_timestamp_precise: Option<f64>,
     event_id: Option<Uuid>,
     exclusive_time_ms: f64,
     is_segment: bool,
@@ -47,6 +49,8 @@ struct FromSpanMessage {
     segment_id: Option<String>,
     sentry_tags: Option<BTreeMap<String, String>>,
     span_id: String,
+    #[serde(alias = "start_timestamp_micro")]
+    start_timestamp_precise: Option<f64>,
     start_timestamp_ms: u64,
     tags: Option<BTreeMap<String, String>>,
     trace_id: Uuid,
@@ -63,11 +67,11 @@ struct Span {
     action: String,
     deleted: u8,
     description: String,
-    #[serde(default)]
-    domain: String,
+    domain: Option<String>,
     duration: u32,
     end_ms: u16,
     end_timestamp: u64,
+    end_timestamp_precise: u64,
     exclusive_time: f64,
     group: u64,
     #[serde(default)]
@@ -98,6 +102,7 @@ struct Span {
     span_status: u8,
     start_ms: u16,
     start_timestamp: u64,
+    start_timestamp_precise: u64,
     status: u32,
     #[serde(rename(serialize = "tags.key"))]
     tag_keys: Vec<String>,
@@ -144,10 +149,11 @@ impl TryFrom<FromSpanMessage> for Span {
         Ok(Self {
             action: sentry_tags.get("action").cloned().unwrap_or_default(),
             description: from.description.unwrap_or_default(),
-            domain: sentry_tags.get("domain").cloned().unwrap_or_default(),
+            domain: sentry_tags.get("domain").cloned(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
+            end_timestamp_precise: (from.end_timestamp_precise.unwrap_or_default() * 1e6) as u64,
             exclusive_time: from.exclusive_time_ms,
             group,
             is_segment: if from.is_segment { 1 } else { 0 },
@@ -172,6 +178,8 @@ impl TryFrom<FromSpanMessage> for Span {
             span_status: status as u8,
             start_ms: (from.start_timestamp_ms % 1000) as u16,
             start_timestamp: from.start_timestamp_ms / 1000,
+            start_timestamp_precise: (from.start_timestamp_precise.unwrap_or_default() * 1e6)
+                as u64,
             status: status as u32,
             tag_keys,
             tag_values,
@@ -308,6 +316,7 @@ mod tests {
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
         action: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         domain: Option<String>,
         group: Option<String>,
         #[serde(rename = "http.method")]
@@ -330,6 +339,7 @@ mod tests {
         duration_ms: Option<u32>,
         event_id: Option<Uuid>,
         exclusive_time_ms: Option<f64>,
+        end_timestamp_precise: Option<f64>,
         is_segment: Option<bool>,
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
@@ -340,6 +350,7 @@ mod tests {
         sentry_tags: TestSentryTags,
         span_id: Option<String>,
         start_timestamp_ms: Option<u64>,
+        start_timestamp_precise: Option<f64>,
         tags: Option<BTreeMap<String, String>>,
         trace_id: Option<Uuid>,
     }
@@ -350,6 +361,7 @@ mod tests {
             duration_ms: Some(1000),
             event_id: Some(Uuid::new_v4()),
             exclusive_time_ms: Some(1000.0),
+            end_timestamp_precise: Some(1715866674.111787),
             is_segment: Some(false),
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
@@ -373,6 +385,7 @@ mod tests {
             },
             span_id: Some("deadbeefdeadbeef".into()),
             start_timestamp_ms: Some(1691105878720),
+            start_timestamp_precise: Some(1715866673.111787),
             tags: Some(BTreeMap::from([
                 ("tag1".into(), "value1".into()),
                 ("tag2".into(), "123".into()),
@@ -446,5 +459,20 @@ mod tests {
     #[test]
     fn schema() {
         run_schema_type_test::<FromSpanMessage>("snuba-spans", None);
+    }
+
+    #[test]
+    fn test_null_domain() {
+        let mut span = valid_span();
+        span.sentry_tags.domain = Option::None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

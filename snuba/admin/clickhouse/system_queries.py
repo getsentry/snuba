@@ -79,6 +79,7 @@ def is_query_select(sql_query: str) -> bool:
     """
     Simple validation to ensure query is a select command
     """
+    sql_query = " ".join(sql_query.split())
     match = SYSTEM_QUERY_RE.match(sql_query)
     return True if match else False
 
@@ -87,6 +88,7 @@ def is_query_show(sql_query: str) -> bool:
     """
     Simple validation to ensure query is a show command
     """
+    sql_query = " ".join(sql_query.split())
     match = SHOW_QUERY_RE.match(sql_query)
     return True if match else False
 
@@ -95,6 +97,7 @@ def is_query_describe(sql_query: str) -> bool:
     """
     Simple validation to ensure query is a describe command
     """
+    sql_query = " ".join(sql_query.split())
     match = DESCRIBE_QUERY_RE.match(sql_query)
     return True if match else False
 

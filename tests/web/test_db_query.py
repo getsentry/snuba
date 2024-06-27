@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Dict, Mapping, MutableMapping, Optional
 from unittest import mock
 
 import pytest
@@ -15,6 +15,9 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     AllocationPolicyViolations,
@@ -28,7 +31,12 @@ from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import _get_query_settings_from_config, db_query
+from snuba.web.db_query import (
+    _get_cache_partition,
+    _get_query_settings_from_config,
+    db_query,
+    execute_query_with_readthrough_caching,
+)
 
 test_data = [
     pytest.param(
@@ -256,39 +264,93 @@ def test_db_query_success() -> None:
         trace_id="trace_id",
         robust=False,
     )
+
     assert stats["quota_allowance"] == {
-        "BytesScannedWindowAllocationPolicy": {
-            "can_run": True,
-            "explanation": {
-                "storage_key": "StorageKey.ERRORS_RO",
-            },
-            "max_threads": 10,
-        },
-        "ConcurrentRateLimitAllocationPolicy": {
-            "can_run": True,
-            "explanation": {
-                "overrides": {},
-                "reason": "within limit",
-                "storage_key": "StorageKey.ERRORS_RO",
-            },
-            "max_threads": 10,
-        },
-        "ReferrerGuardRailPolicy": {
-            "can_run": True,
-            "max_threads": 10,
-            "explanation": {
-                "reason": "within limit",
-                "policy": "referrer_guard_rail_policy",
-                "referrer": "something",
-                "storage_key": "StorageKey.ERRORS_RO",
+        "summary": {
+            "threads_used": 5,
+            "rejected_by": {},
+            "throttled_by": {
+                "policy": "BytesScannedRejectingPolicy",
+                "quota_used": 1560000000000,
+                "quota_unit": "bytes",
+                "suggestion": "scan less bytes",
+                "throttle_threshold": 1280000000000,
             },
         },
-        "BytesScannedRejectingPolicy": {
-            "can_run": True,
-            "explanation": {},
-            "max_threads": 10,
+        "details": {
+            "ReferrerGuardRailPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {
+                    "reason": "within limit",
+                    "policy": "referrer_guard_rail_policy",
+                    "referrer": "something",
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": False,
+                "throttle_threshold": 50,
+                "rejection_threshold": 100,
+                "quota_used": 1,
+                "quota_unit": "concurrent_queries",
+                "suggestion": NO_SUGGESTION,
+            },
+            "ConcurrentRateLimitAllocationPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {
+                    "reason": "within limit",
+                    "overrides": {},
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": False,
+                "throttle_threshold": 22,
+                "rejection_threshold": 22,
+                "quota_used": 1,
+                "quota_unit": "concurrent_queries",
+                "suggestion": NO_SUGGESTION,
+            },
+            "BytesScannedRejectingPolicy": {
+                "can_run": True,
+                "max_threads": 5,
+                "explanation": {
+                    "reason": "within_limit but throttled",
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": True,
+                "throttle_threshold": 1280000000000,
+                "rejection_threshold": 2560000000000,
+                "quota_used": 1560000000000,
+                "quota_unit": "bytes",
+                "suggestion": "scan less bytes",
+            },
+            "CrossOrgQueryAllocationPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {
+                    "reason": "pass_through",
+                    "storage_key": "StorageKey.ERRORS_RO",
+                },
+                "is_throttled": False,
+                "throttle_threshold": MAX_THRESHOLD,
+                "rejection_threshold": MAX_THRESHOLD,
+                "quota_used": 0,
+                "quota_unit": NO_UNITS,
+                "suggestion": NO_SUGGESTION,
+            },
+            "BytesScannedWindowAllocationPolicy": {
+                "can_run": True,
+                "max_threads": 10,
+                "explanation": {"storage_key": "StorageKey.ERRORS_RO"},
+                "is_throttled": False,
+                "throttle_threshold": 10000000,
+                "rejection_threshold": MAX_THRESHOLD,
+                "quota_used": 0,
+                "quota_unit": "bytes",
+                "suggestion": "scan less bytes",
+            },
         },
     }
+
     assert len(query_metadata_list) == 1
     assert result.extra["stats"] == stats
     assert result.extra["sql"] is not None
@@ -399,6 +461,12 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 can_run=False,
                 max_threads=0,
                 explanation={"reason": "policy rejects all queries"},
+                is_throttled=True,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
             )
 
         def _update_quota_balance(
@@ -434,20 +502,45 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 robust=False,
             )
         assert stats["quota_allowance"] == {
-            "RejectAllocationPolicy": {
-                "can_run": False,
-                "explanation": {
-                    "reason": "policy rejects all queries",
-                    "storage_key": "StorageKey.DOESNTMATTER",
+            "summary": {
+                "threads_used": 0,
+                "rejected_by": {
+                    "policy": "RejectAllocationPolicy",
+                    "rejection_threshold": MAX_THRESHOLD,
+                    "quota_used": 0,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
                 },
-                "max_threads": 0,
-            }
+                "throttled_by": {
+                    "policy": "RejectAllocationPolicy",
+                    "throttle_threshold": MAX_THRESHOLD,
+                    "quota_used": 0,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
+                },
+            },
+            "details": {
+                "RejectAllocationPolicy": {
+                    "can_run": False,
+                    "explanation": {
+                        "reason": "policy rejects all queries",
+                        "storage_key": "StorageKey.DOESNTMATTER",
+                    },
+                    "max_threads": 0,
+                    "is_throttled": True,
+                    "quota_unit": NO_UNITS,
+                    "quota_used": 0,
+                    "rejection_threshold": MAX_THRESHOLD,
+                    "suggestion": NO_SUGGESTION,
+                    "throttle_threshold": MAX_THRESHOLD,
+                },
+            },
         }
         # extra data contains policy failure information
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["RejectAllocationPolicy"][
-                "explanation"
-            ]["reason"]
+            excinfo.value.extra["stats"]["quota_allowance"]["details"][
+                "RejectAllocationPolicy"
+            ]["explanation"]["reason"]
             == "policy rejects all queries"
         )
         assert query_metadata_list[0].request_status.status.value == "rate-limited"
@@ -475,6 +568,12 @@ def test_allocation_policy_threads_applied_to_query() -> None:
                 can_run=True,
                 max_threads=POLICY_THREADS,
                 explanation={"reason": "Throttle everything!"},
+                is_throttled=True,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
             )
 
         def _update_quota_balance(
@@ -493,6 +592,12 @@ def test_allocation_policy_threads_applied_to_query() -> None:
                 can_run=True,
                 max_threads=POLICY_THREADS + 1,
                 explanation={"reason": "Throttle everything!"},
+                is_throttled=True,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
             )
 
     # Should limit to minimal threads across policies
@@ -541,12 +646,20 @@ def test_allocation_policy_updates_quota() -> None:
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             can_run = True
+            suggestion = NO_SUGGESTION
             if queries_run + 1 > MAX_QUERIES_TO_RUN:
                 can_run = False
+                suggestion = "scan less concurrent queries"
             return QuotaAllowance(
                 can_run=can_run,
                 max_threads=0,
                 explanation={"reason": f"can only run {queries_run} queries!"},
+                is_throttled=False,
+                throttle_threshold=MAX_QUERIES_TO_RUN,
+                rejection_threshold=MAX_QUERIES_TO_RUN,
+                quota_used=queries_run + 1,
+                quota_unit="queries",
+                suggestion=suggestion,
             )
 
         def _update_quota_balance(
@@ -568,14 +681,23 @@ def test_allocation_policy_updates_quota() -> None:
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
             can_run = True
+            suggestion = NO_SUGGESTION
             if queries_run_duplicate + 1 > MAX_QUERIES_TO_RUN:
                 can_run = False
+                suggestion = "scan less concurrent queries"
+
             return QuotaAllowance(
                 can_run=can_run,
                 max_threads=0,
                 explanation={
                     "reason": f"can only run {queries_run_duplicate} queries!"
                 },
+                is_throttled=False,
+                throttle_threshold=MAX_QUERIES_TO_RUN,
+                rejection_threshold=MAX_QUERIES_TO_RUN,
+                quota_used=queries_run + 1,
+                quota_unit="queries",
+                suggestion=suggestion,
             )
 
         def _update_quota_balance(
@@ -587,7 +709,7 @@ def test_allocation_policy_updates_quota() -> None:
             nonlocal queries_run_duplicate
             queries_run_duplicate += 1
 
-    # both policies should error
+    # the first policy will error and short circuit the rest
     query, storage, attribution_info = _build_test_query(
         "count(distinct(project_id))",
         [
@@ -620,27 +742,38 @@ def test_allocation_policy_updates_quota() -> None:
         _run_query()
 
     assert e.value.extra["stats"]["quota_allowance"] == {
-        "CountQueryPolicy": {
-            "can_run": False,
-            "max_threads": 0,
-            "explanation": {
-                "reason": "can only run 2 queries!",
-                "storage_key": "StorageKey.DOESNTMATTER",
+        "summary": {
+            "threads_used": 0,
+            "rejected_by": {
+                "policy": "CountQueryPolicy",
+                "rejection_threshold": MAX_QUERIES_TO_RUN,
+                "quota_used": queries_run,
+                "quota_unit": "queries",
+                "suggestion": "scan less concurrent queries",
             },
+            "throttled_by": {},
         },
-        "CountQueryPolicyDuplicate": {
-            "can_run": False,
-            "max_threads": 0,
-            "explanation": {
-                "reason": "can only run 2 queries!",
-                "storage_key": "StorageKey.DOESNTMATTER",
+        "details": {
+            "CountQueryPolicy": {
+                "can_run": False,
+                "max_threads": 0,
+                "explanation": {
+                    "reason": "can only run 2 queries!",
+                    "storage_key": "StorageKey.DOESNTMATTER",
+                },
+                "is_throttled": False,
+                "throttle_threshold": MAX_QUERIES_TO_RUN,
+                "rejection_threshold": MAX_QUERIES_TO_RUN,
+                "quota_used": queries_run,
+                "quota_unit": "queries",
+                "suggestion": "scan less concurrent queries",
             },
         },
     }
     cause = e.value.__cause__
     assert isinstance(cause, AllocationPolicyViolations)
     assert "CountQueryPolicy" in cause.violations
-    assert "CountQueryPolicyDuplicate" in cause.violations
+    assert "CountQueryPolicyDuplicate" not in cause.violations
 
 
 @pytest.mark.redis_db
@@ -710,4 +843,107 @@ def test_db_query_ignore_consistent() -> None:
         robust=False,
     )
     assert result.extra["stats"]["consistent"] is False
-    assert result.extra["stats"]["max_threads"] == 10
+    assert result.extra["stats"]["max_threads"] == 5
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+@pytest.mark.parametrize(
+    "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith, test_cache_hit_simple",
+    [
+        (0, 0, "test_query_id", False),
+        (1, 1, "randomized-", True),
+    ],
+)
+def test_clickhouse_settings_applied_to_query_id(
+    disable_lua_randomize_query_id: int,
+    disable_lua_scripts_sample_rate: int,
+    expected_startswith: str,
+    test_cache_hit_simple: bool,
+) -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("disable_lua_randomize_query_id", disable_lua_randomize_query_id)
+    state.set_config(
+        "read_through_cache.disable_lua_scripts_sample_rate",
+        disable_lua_scripts_sample_rate,
+    )
+
+    formatted_query = format_query(query)
+    reader = storage.get_cluster().get_reader()
+    clickhouse_query_settings: Dict[str, Any] = {}
+    query_id = "test_query_id"
+    stats: dict[str, Any] = {}
+
+    execute_query_with_readthrough_caching(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        formatted_query=formatted_query,
+        reader=reader,
+        timer=Timer("foo"),
+        stats=stats,
+        clickhouse_query_settings=clickhouse_query_settings,
+        robust=False,
+        query_id=query_id,
+        referrer="test",
+    )
+
+    assert ("cache_hit_simple" in stats) == test_cache_hit_simple
+    assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
+    assert _get_cache_partition(reader).get("test_query_id") is not None
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
+def test_cache_metrics_with_simple_readthrough() -> None:
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
+    state.set_config("disable_lua_randomize_query_id", 1)
+    state.set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
+
+    formatted_query = format_query(query)
+    reader = storage.get_cluster().get_reader()
+
+    with mock.patch("snuba.web.db_query.metrics", new=mock.Mock()) as metrics_mock:
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert "cache_hit_simple" in result.extra["stats"]
+        # Assert on first call cache_miss is incremented
+        metrics_mock.assert_has_calls(
+            [
+                mock.call.increment("cache_miss", tags={"dataset": "events"}),
+                mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
+            ]
+        )
+
+        metrics_mock.reset_mock()
+        result = db_query(
+            clickhouse_query=query,
+            query_settings=HTTPQuerySettings(),
+            attribution_info=attribution_info,
+            dataset_name="events",
+            query_metadata_list=[],
+            formatted_query=formatted_query,
+            reader=reader,
+            timer=Timer("foo"),
+            stats={},
+            trace_id="trace_id",
+            robust=False,
+        )
+        assert "cache_hit_simple" in result.extra["stats"]
+        # Assert on second call cache_hit is incremented
+        metrics_mock.assert_has_calls(
+            [
+                mock.call.increment("cache_hit", tags={"dataset": "events"}),
+                mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
+            ]
+        )

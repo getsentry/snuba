@@ -6,6 +6,8 @@ use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::DefaultOnError;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
@@ -223,6 +225,7 @@ struct StackTrace {
     frames: Option<Vec<Option<StackFrame>>>,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, JsonSchema)]
 struct StackFrame {
     #[serde(default)]
@@ -239,6 +242,7 @@ struct StackFrame {
     in_app: Option<bool>,
     #[serde(default)]
     colno: Option<u32>,
+    #[serde_as(deserialize_as = "DefaultOnError")]
     #[serde(default)]
     lineno: Option<u32>,
 }
@@ -840,5 +844,40 @@ mod tests {
         // run schema validation only for a subset of the payload, json-schema-diff gets too
         // confused by our untagged enum/anyOf wrapper
         run_schema_type_test::<Message>("events", None);
+    }
+
+    #[test]
+    fn deserialize_invalid_lineno() {
+        const SERIALIZED: &str = r#"
+        {
+            "function": "foo",
+            "module": "app.hello",
+            "filename": "hello",
+            "abs_path": "hello",
+            "lineno": 90052021220,
+            "colno": 86472,
+            "in_app": true,
+            "context_line": null,
+            "data": null,
+            "errors": null,
+            "raw_function": null,
+            "image_addr": null,
+            "instruction_addr": null,
+            "addr_mode": null,
+            "package": null,
+            "platform": null,
+            "post_context": null,
+            "pre_context": null,
+            "source_link": null,
+            "symbol": null,
+            "symbol_addr": null,
+            "trust": null,
+            "vars": null,
+            "snapshot": null,
+            "lock": null
+        }
+        "#;
+        let deserialized: StackFrame = serde_json::from_str(SERIALIZED).unwrap();
+        assert_eq!(deserialized.lineno, None);
     }
 }

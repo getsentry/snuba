@@ -27,6 +27,7 @@ use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
+use crate::strategies::join_timeout::SetJoinTimeout;
 use crate::strategies::processor::{
     get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
 };
@@ -35,72 +36,27 @@ use crate::strategies::replacements::ProduceReplacements;
 use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct ConsumerStrategyFactory {
-    storage_config: config::StorageConfig,
-    env_config: config::EnvConfig,
-    logical_topic_name: String,
-    max_batch_size: usize,
-    max_batch_time: Duration,
-    skip_write: bool,
-    processing_concurrency: ConcurrencyConfig,
-    clickhouse_concurrency: ConcurrencyConfig,
-    commitlog_concurrency: ConcurrencyConfig,
-    replacements_concurrency: ConcurrencyConfig,
-    python_max_queue_depth: Option<usize>,
-    use_rust_processor: bool,
-    health_check_file: Option<String>,
-    enforce_schema: bool,
-    commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
-    replacements_config: Option<(KafkaConfig, Topic)>,
-    physical_consumer_group: String,
-    physical_topic_name: Topic,
-    accountant_topic_config: config::TopicConfig,
-}
-
-impl ConsumerStrategyFactory {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        storage_config: config::StorageConfig,
-        env_config: config::EnvConfig,
-        logical_topic_name: String,
-        max_batch_size: usize,
-        max_batch_time: Duration,
-        skip_write: bool,
-        processing_concurrency: ConcurrencyConfig,
-        clickhouse_concurrency: ConcurrencyConfig,
-        commitlog_concurrency: ConcurrencyConfig,
-        replacements_concurrency: ConcurrencyConfig,
-        python_max_queue_depth: Option<usize>,
-        use_rust_processor: bool,
-        health_check_file: Option<String>,
-        enforce_schema: bool,
-        commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
-        replacements_config: Option<(KafkaConfig, Topic)>,
-        physical_consumer_group: String,
-        physical_topic_name: Topic,
-        accountant_topic_config: config::TopicConfig,
-    ) -> Self {
-        Self {
-            storage_config,
-            env_config,
-            logical_topic_name,
-            max_batch_size,
-            max_batch_time,
-            skip_write,
-            processing_concurrency,
-            clickhouse_concurrency,
-            commitlog_concurrency,
-            replacements_concurrency,
-            python_max_queue_depth,
-            use_rust_processor,
-            health_check_file,
-            enforce_schema,
-            commit_log_producer,
-            replacements_config,
-            physical_consumer_group,
-            physical_topic_name,
-            accountant_topic_config,
-        }
-    }
+    pub storage_config: config::StorageConfig,
+    pub env_config: config::EnvConfig,
+    pub logical_topic_name: String,
+    pub max_batch_size: usize,
+    pub max_batch_time: Duration,
+    pub processing_concurrency: ConcurrencyConfig,
+    pub clickhouse_concurrency: ConcurrencyConfig,
+    pub commitlog_concurrency: ConcurrencyConfig,
+    pub replacements_concurrency: ConcurrencyConfig,
+    pub async_inserts: bool,
+    pub python_max_queue_depth: Option<usize>,
+    pub use_rust_processor: bool,
+    pub health_check_file: Option<String>,
+    pub enforce_schema: bool,
+    pub commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
+    pub replacements_config: Option<(KafkaConfig, Topic)>,
+    pub physical_consumer_group: String,
+    pub physical_topic_name: Topic,
+    pub accountant_topic_config: config::TopicConfig,
+    pub stop_at_timestamp: Option<i64>,
+    pub batch_write_timeout: Option<Duration>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -113,7 +69,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         // Commit offsets
-        let next_step = CommitOffsets::new(chrono::Duration::seconds(1));
+        let next_step = CommitOffsets::new(Duration::from_secs(1));
 
         // Produce commit log if there is one
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
@@ -125,7 +81,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     self.physical_topic_name,
                     self.physical_consumer_group.clone(),
                     &self.commitlog_concurrency,
-                    self.skip_write,
+                    false,
                 ))
             } else {
                 Box::new(next_step)
@@ -135,8 +91,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
 
         // Produce cogs if generic metrics AND we are not skipping writes AND record_cogs is true
         let next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<()>>> =
-            match (self.skip_write, self.env_config.record_cogs, cogs_label) {
-                (false, true, Some(resource_id)) => Box::new(RecordCogs::new(
+            match (self.env_config.record_cogs, cogs_label) {
+                (true, Some(resource_id)) => Box::new(RecordCogs::new(
                     next_step,
                     resource_id,
                     self.accountant_topic_config.broker_config.clone(),
@@ -151,6 +107,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.clickhouse_concurrency,
         ));
 
+        let next_step = SetJoinTimeout::new(next_step, None);
+
         // Batch insert rows
         let batch_factory = BatchFactory::new(
             &self.storage_config.clickhouse_cluster.host,
@@ -158,12 +116,16 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.storage_config.clickhouse_table_name,
             &self.storage_config.clickhouse_cluster.database,
             &self.clickhouse_concurrency,
-            self.skip_write,
+            &self.storage_config.clickhouse_cluster.user,
+            &self.storage_config.clickhouse_cluster.password,
+            self.async_inserts,
+            self.batch_write_timeout,
         );
 
         let accumulator = Arc::new(
-            |batch: BytesInsertBatch<HttpBatch>, small_batch: BytesInsertBatch<RowData>| {
-                batch.merge(small_batch)
+            |batch: BytesInsertBatch<HttpBatch>,
+             small_batch: Message<BytesInsertBatch<RowData>>| {
+                Ok(batch.merge(small_batch.into_payload()))
             },
         );
 
@@ -189,7 +151,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
         .flush_empty_batches(true);
 
         // Transform messages
-        let processor = match (
+        let next_step = match (
             self.use_rust_processor,
             processors::get_processing_function(
                 &self.storage_config.message_processor.python_class_name,
@@ -208,7 +170,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     producer,
                     replacements_destination,
                     &self.replacements_concurrency,
-                    self.skip_write,
+                    false,
                 );
 
                 return make_rust_processor_with_replacements(
@@ -220,6 +182,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                     },
+                    self.stop_at_timestamp,
                 );
             }
             (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
@@ -232,6 +195,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     config::ProcessorConfig {
                         env_config: self.env_config.clone(),
                     },
+                    self.stop_at_timestamp,
                 )
             }
             (
@@ -263,10 +227,15 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             }
         };
 
+        // force message processor to drop all in-flight messages, as it is not worth the time
+        // spent in rebalancing to wait for them and it is idempotent anyway. later, we overwrite
+        // the timeout again for the clickhouse writer step
+        let next_step = SetJoinTimeout::new(next_step, Some(Duration::from_secs(0)));
+
         if let Some(path) = &self.health_check_file {
-            Box::new(HealthCheck::new(processor, path))
+            Box::new(HealthCheck::new(next_step, path))
         } else {
-            processor
+            Box::new(next_step)
         }
     }
 }

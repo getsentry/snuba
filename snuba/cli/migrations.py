@@ -1,8 +1,10 @@
 import os
+import re
 from typing import Optional, Sequence
 
 import click
 
+import snuba.migrations.autogeneration as autogeneration
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -378,3 +380,24 @@ def add_node(
         password=password,
         database=database,
     )
+
+
+@migrations.command()
+@click.argument("storage_path", type=str)
+def generate(
+    storage_path: str,
+) -> None:
+    """
+    Given a path to modified storage yaml definition (inside of snuba repo),
+    creates a snuba migration for the given modifications.
+    The migration will be written into the local directory. The user is responsible for making
+    the commit, PR, and merging.
+    """
+    expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
+    if not re.fullmatch(expected_pattern, storage_path):
+        raise click.ClickException(
+            f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
+        )
+
+    autogeneration.generate(storage_path)
+    click.echo("This function is under construction.")

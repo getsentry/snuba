@@ -34,6 +34,7 @@ CLUSTERS = [
             "group_attributes",
             "generic_metrics_gauges",
             "metrics_summaries",
+            "profile_chunks",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",

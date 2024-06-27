@@ -185,10 +185,6 @@ impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
         self.inner.submit(message)
     }
 
-    fn close(&mut self) {
-        self.inner.close();
-    }
-
     fn terminate(&mut self) {
         self.inner.terminate();
     }
@@ -204,7 +200,6 @@ mod tests {
 
     use super::*;
     use crate::testutils::TestStrategy;
-    use chrono::NaiveDateTime;
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
@@ -230,10 +225,8 @@ mod tests {
 
             let time_millis = (d.orig_message_ts * 1000.0) as i64;
 
-            let orig_message_ts = DateTime::from_naive_utc_and_offset(
-                NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
-                Utc,
-            );
+            let orig_message_ts =
+                DateTime::<Utc>::from_timestamp_millis(time_millis).unwrap_or_default();
 
             Ok(Commit {
                 topic,
@@ -356,7 +349,6 @@ mod tests {
             strategy.poll().unwrap();
         }
 
-        strategy.close();
         strategy.join(None).unwrap();
 
         let produced = produced_payloads.lock().unwrap();

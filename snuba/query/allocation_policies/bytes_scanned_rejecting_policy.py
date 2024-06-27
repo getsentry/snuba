@@ -14,6 +14,10 @@ from sentry_redis_tools.sliding_windows_rate_limiter import (
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.query.allocation_policies import (
+    CROSS_ORG_SUGGESTION,
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    PASS_THROUGH_REFERRERS_SUGGESTION,
     AllocationPolicy,
     AllocationPolicyConfig,
     InvalidTenantsForAllocationPolicy,
@@ -38,8 +42,13 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(
     get_redis_client(RedisClientKey.RATE_LIMITER)
 )
 DEFAULT_OVERRIDE_LIMIT = -1
-DEFAULT_BYTES_SCANNED_LIMIT = 10000000
-DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 20
+PETABYTE = 10**12
+DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * PETABYTE)
+DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
+DEFAULT_BYTES_THROTTLE_DIVIDER = 2
+DEFAULT_THREADS_THROTTLE_DIVIDER = 2
+QUOTA_UNIT = "bytes"
+SUGGESTION = "scan less bytes"
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
@@ -89,6 +98,18 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 "If a clickhouse query times out, how many bytes does the policy assume the query scanned? Increasing the number increases the penalty for queries that time out",
                 int,
                 DEFAULT_TIMEOUT_PENALIZATION,
+            ),
+            AllocationPolicyConfig(
+                "bytes_throttle_divider",
+                "Divide the scan limit by this number gives the throttling threshold",
+                int,
+                DEFAULT_BYTES_THROTTLE_DIVIDER,
+            ),
+            AllocationPolicyConfig(
+                "threads_throttle_divider",
+                "max threads divided by this number is the number of threads we use to execute queries for a throttled (project_id|organization_id, referrer)",
+                int,
+                DEFAULT_BYTES_THROTTLE_DIVIDER,
             ),
         ]
 
@@ -154,6 +175,12 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "cross_org_query"},
+                is_throttled=False,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=QUOTA_UNIT,
+                suggestion=CROSS_ORG_SUGGESTION,
             )
         (
             customer_tenant_key,
@@ -161,11 +188,24 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         ) = self._get_customer_tenant_key_and_value(tenant_ids)
         referrer = tenant_ids.get("referrer", "no_referrer")
         if referrer in _PASS_THROUGH_REFERRERS:
-            return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={},
+                is_throttled=False,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=QUOTA_UNIT,
+                suggestion=PASS_THROUGH_REFERRERS_SUGGESTION,
+            )
+
         scan_limit = self.__get_scan_limit(
             customer_tenant_key, customer_tenant_value, referrer
         )
-
+        throttle_threshold = max(
+            1, scan_limit // self.get_config_value("bytes_throttle_divider")
+        )
         timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
             [
                 RequestedQuota(
@@ -188,10 +228,13 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
         )
         explanation: dict[str, Any] = {}
         granted_quota = granted_quotas[0]
+        used_quota = scan_limit - granted_quota.granted
         if granted_quota.granted <= 0:
             explanation[
                 "reason"
-            ] = f"{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}"
+            ] = f"""{customer_tenant_key} {customer_tenant_value} is over the bytes scanned limit of {scan_limit} for referrer {referrer}.
+            This policy is exceeded when a customer is abusing a specific feature in a way that puts load on clickhouse. If this is happening to
+            "many customers, that may mean the feature is written in an inefficient way"""
             explanation["granted_quota"] = granted_quota.granted
             explanation["limit"] = scan_limit
             # This is technically a high cardinality tag value however these rejections
@@ -202,8 +245,50 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                     "tenant": f"{customer_tenant_key}__{customer_tenant_value}__{referrer}"
                 },
             )
-            return QuotaAllowance(False, self.max_threads, explanation)
-        return QuotaAllowance(True, self.max_threads, {"reason": "within_limit"})
+            return QuotaAllowance(
+                can_run=False,
+                max_threads=self.max_threads,
+                explanation=explanation,
+                is_throttled=True,
+                throttle_threshold=throttle_threshold,
+                rejection_threshold=scan_limit,
+                quota_used=used_quota,
+                quota_unit=QUOTA_UNIT,
+                suggestion=SUGGESTION,
+            )
+
+        if granted_quota.granted < throttle_threshold:
+            self.metrics.increment(
+                "bytes_scanned_queries_throttled",
+                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+            )
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=max(
+                    1,
+                    self.max_threads
+                    // self.get_config_value("threads_throttle_divider"),
+                ),
+                explanation={"reason": "within_limit but throttled"},
+                is_throttled=True,
+                throttle_threshold=throttle_threshold,
+                rejection_threshold=scan_limit,
+                quota_used=used_quota,
+                quota_unit=QUOTA_UNIT,
+                suggestion=SUGGESTION,
+            )
+
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={"reason": "within_limit"},
+            is_throttled=False,
+            throttle_threshold=throttle_threshold,
+            rejection_threshold=scan_limit,
+            quota_used=used_quota,
+            quota_unit=QUOTA_UNIT,
+            suggestion=NO_SUGGESTION,
+        )
 
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError

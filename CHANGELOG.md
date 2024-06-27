@@ -1,5 +1,176 @@
 # Changelog
 
+## 24.6.0
+
+### Various fixes & improvements
+
+- chore(on-call): Properly handling query validation errors (#6019) by @enochtangg
+- update CH version used in CI (#6027) by @volokluev
+- code (#6026) by @xurui-c
+- code (#6024) by @xurui-c
+- doc(rs): some docs for the ClickHouse batch module (#6020) by @onewland
+- chore(gocd): Bumping gocd-jsonnet version (#6021) by @IanWoodard
+- [CapMan] change default throttle values (#6022) by @xurui-c
+- [CapMan] Add throttling to ReferrerGuardRail policy (#6014) by @xurui-c
+- feat(issue-search): Add group_first_release_id to GroupAttributes processor (#5987) by @snigdhas
+- Fixing the metric increment for cache hit/miss and (#6018) by @nachivrn
+- ref(ci): update clickhouse versions (#6016) by @MeredithAnya
+- update docs for snuba storage queries (#6013) by @enochtangg
+- In the Snuba Admin Production queries UI (#6015) by @nachivrn
+- SNS-2737: Making changes for a simple readthrough cache without queuing (#5992) by @nachivrn
+- chore(profiles-chunks): Add missing consumer to deployment list (#6001) by @rgibert
+- fix(gocd): Updating canary checks to happen after the deploy goes out (#6004) by @IanWoodard
+- ref(admin): Add a system query for data skipping indexes (#6008) by @evanh
+- feat(issue-search): Add group_first_release_id to the GroupAttributes table (#5986) by @snigdhas
+- ref: sentry-kafka-schemas 0.1.90 (#6007) by @lynnagara
+- ref(async-inserts): add clickhouse-concurrency cli arg (#5999) by @MeredithAnya
+- fix: snuba admin queries check (#6005) by @MeredithAnya
+- add tags[environment] to discover low cardinality processor (#5997) by @enochtangg
+- meta: Bump new development version (9dac11b7)
+
+## 24.5.1
+
+### Various fixes & improvements
+
+- chore(gocd): Bumping gocd-jsonnet version (#6000) by @IanWoodard
+- ref(async-inserts): Add system queries (#5998) by @MeredithAnya
+- Include metrics for the number of queries resulting in cache hits, misses, and waits associated with datasets. (#5991) by @nachivrn
+- fix(meta) Change the view to use LEFT ARRAY JOIN (#5975) by @evanh
+- Revert "add option to print full payload on invalid message (#5979)" (#5981) by @john-z-yang
+- fix(error): Skip lineno deserialization on failure (#5983) by @john-z-yang
+- feat(generic-metrics): Add gauges subscriptions consumers to Snuba deployment (#5980) by @ayirr7
+- add option to print full payload on invalid message (#5979) by @john-z-yang
+- chore: retire use_new_combine_conditions feature flag (#5977) by @kylemumma
+- ref(subscriptions): Add query-based exception handling in scheduler  (#5976) by @ayirr7
+- SNS 2645 - Surface allocation policy decisions in production queries tool (#5970) by @nachivrn
+- remove logging (#5978) by @xurui-c
+- fix(admin): Allow LEFT ARRAY JOIN in the admin tool (#5974) by @evanh
+- feat(replays): Add migration for distributed materialization (#5951) by @cmanallen
+- ref(async-inserts): allow async inserts as an option (#5955) by @MeredithAnya
+- allow one replacement project to be skipped (#5965) by @xurui-c
+- Debugging bucket timer (#5963) by @xurui-c
+- feat(generic-metrics): Add logic in distributions processor to drop percentiles (#5911) by @ayirr7
+- feat(generic-metrics): Add migrations for opt-in disabled percentiles (#5910) by @ayirr7
+- fix(clickhouse): Remove unecessary logging (#5958) by @nikhars
+- logging (#5959) by @xurui-c
+- feat(metrics): add metric_stats use case to generic metrics meta tables (#5954) by @shellmayr
+- number of projects skipped (#5952) by @xurui-c
+- fix(snuba-admin): Add quotes around ColumnSizeOnDisk's table value (#5953) by @phacops
+
+_Plus 28 more_
+
+## 24.5.0
+
+### Various fixes & improvements
+
+- ref(rust-consumer): join-timeout per-step (#5918) by @untitaker
+- ref: Bump arroyo (#5917) by @untitaker
+- ref(api): parse pipeline tests, mql after treeify #5894 (#5894) by @kylemumma
+- one more auto-offset-reset earliest (#5909) by @lynnagara
+- fix: Temporarily remove check for coupled migrations and code changes (#5903) by @ayirr7
+- ref: bump sentry-kafka-schemas to 0.1.82 (#5906) by @getsentry-bot
+- fix(CI): Make timestamp relative for metrics summaries test  (#5904) by @ayirr7
+- feat(generic-metrics): Retry adding gauges subscriptions topics + configs (#5892) by @ayirr7
+- ref(api): parse pipeline tests, snql pipeline before treeify (#5886) by @kylemumma
+- sessions: drop the clickhouse tables (#5882) by @lynnagara
+- feat: Add support for DateTime64 column type (#5896) by @phacops
+- fix: dlq-consumer should default to auto-offset-reset earliest (#5893) by @lynnagara
+- fix(capman): make allocation policies work with joins (#5887) by @volokluev
+- ref(devexp): Make entities optional in dataset config (#5879) by @enochtangg
+- ref(api): parse pipeline tests, mql pipeline before treeify (#5885) by @kylemumma
+- bump snuba-sdk to 2.0.34 (#5884) by @enochtangg
+- chore(self-hosted): Remove dependency on snuba-image build step during e2e action (#5891) by @hubertdeng123
+- remove skip-write flag (#5846) by @john-z-yang
+- feat(devexp): Add required_time_column to storage (#5889) by @volokluev
+- feat(spans): Add indexes for tag columns (#5871) by @phacops
+- feat(generic-metrics): Add zstd decompression to generic metrics processor (#5845) by @ayirr7
+- snuba devserver fix? (#5873) by @MeredithAnya
+- update CLICKHOUSE_SERVER_MIN_VERSION and CLICKHOUSE_SERVER_MAX_VERSION (#5853) by @MeredithAnya
+- fix: Handle tag columns in low cardinality processor (#5875) by @evanh
+
+_Plus 35 more_
+
+## 24.4.2
+
+### Various fixes & improvements
+
+- feat(generic-metrics): Add success metric around Base64 message processing (#5830) by @ayirr7
+- chore(deps): bump python and node (#5829) by @mdtro
+- ref: remove pushing to legacy gcr (#5819) by @asottile-sentry
+- Enables Clickhouse Authorization (#5818) by @xurui-c
+- remove ConditionSimplifierProcessor (#5820) by @volokluev
+- chore(dev-exp): Remove old pipeline code (#5821) by @enochtangg
+- Revert "feat(generic-metrics): Add support for subscriptions to gauges (#5736)" (d0c50931) by @getsentry-bot
+- feat(generic-metrics): Add Base64 decoding to Snuba processors (#5761) by @ayirr7
+- feat(generic-metrics): Add support for subscriptions to gauges (#5736) by @ayirr7
+- add a metric for how many queries are waiting for readthrough cache (#5817) by @volokluev
+- ref: use artifact registry (#5816) by @asottile-sentry
+- feat(meta): Create distributions meta tables (#5748) by @evanh
+- chore: Bump Kafka schema version to 0.1.71 (#5814) by @ayirr7
+- Remove unnecessary test (#5812) by @ayirr7
+- feat(meta): Create gauges meta tables (#5749) by @evanh
+- Revert "Revert "ref: dual-write docker image to artifact registry (#5798)"" (#5813) by @volokluev
+- fix: Don't log this every time, it clogs the logs up (#5799) by @evanh
+- feat(devexp): Split entity and storage processing for composite queries (#5785) by @enochtangg
+- feat(meta) Create sets meta tables (#5747) by @evanh
+- Emit a metric when replacements are skipped (#5809) by @xurui-c
+- Revert "ref: dual-write docker image to artifact registry (#5798)" (b69f85f5) by @getsentry-bot
+- ref: dual-write docker image to artifact registry (#5798) by @asottile-sentry
+- fix(meta) Rename counter tables for consistency (#5797) by @evanh
+- fix(22.8) don't use ifnull for cardinality casting (#5807) by @volokluev
+
+_Plus 14 more_
+
+## 24.4.1
+
+### Various fixes & improvements
+
+- feat(replays): add migration for replay_id in discover (#5790) by @JoshFerge
+- feat: replacer defaults to auto.offset.reset=earliest (#5772) by @lynnagara
+- feat(migrations): add discover local (#5788) by @dbanda
+- fix(spans): Let null domain be null (#5780) by @phacops
+- feat(meta): Adjust partitioning/settings of counters meta tables (#5784) by @evanh
+- Revert "feat(replays): add replay_id column to merged discover table (#5777)" (2f1509fc) by @getsentry-bot
+- fix: fix mypy --strict vscode (#5781) by @kylemumma
+- feat(replays): add replay_id column to merged discover table (#5777) by @JoshFerge
+- ref: Rust consumer should not skip writes by default (#5778) by @lynnagara
+- chore(on-call): Add CrossOrgQueryAllocationPolicy to errors (#5774) by @enochtangg
+- inc-715: rust consumer can stop processing messages at specific timestamp (#5779) by @lynnagara
+- meta: Bump new development version (2248bb55)
+- fix(meta): Remove experimental meta tables (#5733) by @evanh
+- ref(card-an): Allow the new meta tables in the cardinality analyzer (#5769) by @evanh
+
+## 24.4.0
+
+### Various fixes & improvements
+
+- chore(on-call): Add metric for concurrent queries by referrer that violate policy (#5767) by @enochtangg
+- ref: make auto.offset.reset=earliest everywhere (#5765) by @lynnagara
+- feat(trace): Add trace id to transactions (#5768) by @wmak
+- fix(spans): Move span id above trace id in the prewhere (#5766) by @wmak
+- feat(meta): Add record meta column to gauges (#5760) by @evanh
+- feat(meta): Add record meta column to distributions (#5759) by @evanh
+- feat(meta): Add record_meta column to sets (#5735) by @evanh
+- ref: bump sentry-kafka-schemas to 0.1.68 (#5764) by @getsentry-bot
+- chore(capman): set default bytes scanned limit for rejecting policy (#5755) by @volokluev
+- ref(ch-upgrades): create dist tables functionality (#5737) by @MeredithAnya
+- perf(metrics): Use kafka header optimization (#5756) by @nikhars
+- feat(meta): Add updated versions of meta tables for counters (#5734) by @evanh
+- chore(rust): Update dependencies (#5751) by @nikhars
+- chore: update sdk version (#5754) by @kylemumma
+- fix: Fix default auto-offset-reset value (#5753) by @lynnagara
+- lower max query size to 128KiB (#5750) by @enochtangg
+- clean up old simple pipeline (#5732) by @enochtangg
+- feat(capman): Long term rejection allocation policy (#5718) by @volokluev
+- ref(fetcher): --tables optional now (#5730) by @MeredithAnya
+- fix: parser, bug in pushdown filter (#5731) by @kylemumma
+- feat(generic-metrics): Add a killswitch to processor (#5617) by @ayirr7
+- feat(replays): Replace python processor with a rust-based processor (#5380) by @cmanallen
+- feat(replay): add ReplayViewedEvent to replay processor (#5712) by @aliu3ntry
+- chore(deps): bump h2 from 0.3.22 to 0.3.26 in /rust_snuba (#5727) by @dependabot
+
+_Plus 52 more_
+
 ## 24.3.0
 
 ### Various fixes & improvements

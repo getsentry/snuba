@@ -4,9 +4,9 @@ from flask import Response
 
 from snuba import settings
 from snuba.admin.audit_log.query import audit_log
-from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
+from snuba.query.data_source.projects_finder import ProjectsFinder
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.query.snql.parser import parse_snql_query
@@ -44,8 +44,8 @@ def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
         return
 
     request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
-    query = parse_snql_query(request_parts.query["query"], dataset)[0]
-    project_ids = get_object_ids_in_query_ast(query, "project_id")
+    query = parse_snql_query(request_parts.query["query"], dataset)
+    project_ids = ProjectsFinder().visit(query)
     if project_ids == set():
         raise InvalidQueryException("Missing project ID")
 

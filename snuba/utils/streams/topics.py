@@ -15,12 +15,9 @@ class Topic(Enum):
     METRICS = "snuba-metrics"
     OUTCOMES = "outcomes"
     OUTCOMES_BILLING = "outcomes-billing"
-    SESSIONS = "ingest-sessions"
-    SESSIONS_COMMIT_LOG = "snuba-sessions-commit-log"
     METRICS_COMMIT_LOG = "snuba-metrics-commit-log"
     SUBSCRIPTION_SCHEDULED_EVENTS = "scheduled-subscriptions-events"
     SUBSCRIPTION_SCHEDULED_TRANSACTIONS = "scheduled-subscriptions-transactions"
-    SUBSCRIPTION_SCHEDULED_SESSIONS = "scheduled-subscriptions-sessions"
     SUBSCRIPTION_SCHEDULED_METRICS = "scheduled-subscriptions-metrics"
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_SETS = (
         "scheduled-subscriptions-generic-metrics-sets"
@@ -31,17 +28,22 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_COUNTERS = (
         "scheduled-subscriptions-generic-metrics-counters"
     )
+    SUBSCRIPTION_SCHEDULED_GENERIC_METRICS_GAUGES = (
+        "scheduled-subscriptions-generic-metrics-gauges"
+    )
 
     SUBSCRIPTION_RESULTS_EVENTS = "events-subscription-results"
     SUBSCRIPTION_RESULTS_TRANSACTIONS = "transactions-subscription-results"
-    SUBSCRIPTION_RESULTS_SESSIONS = "sessions-subscription-results"
     SUBSCRIPTION_RESULTS_METRICS = "metrics-subscription-results"
 
     SUBSCRIPTION_RESULTS_GENERIC_METRICS = "generic-metrics-subscription-results"
 
     QUERYLOG = "snuba-queries"
+
     PROFILES = "processed-profiles"
     PROFILES_FUNCTIONS = "profiles-call-tree"
+    PROFILE_CHUNKS = "snuba-profile-chunks"
+
     REPLAYEVENTS = "ingest-replay-events"
     GENERIC_METRICS = "snuba-generic-metrics"
     GENERIC_METRICS_SETS_COMMIT_LOG = "snuba-generic-metrics-sets-commit-log"
@@ -49,13 +51,12 @@ class Topic(Enum):
         "snuba-generic-metrics-distributions-commit-log"
     )
     GENERIC_METRICS_COUNTERS_COMMIT_LOG = "snuba-generic-metrics-counters-commit-log"
+    GENERIC_METRICS_GAUGES_COMMIT_LOG = "snuba-generic-metrics-gauges-commit-log"
     GENERIC_EVENTS = "generic-events"
     GENERIC_EVENTS_COMMIT_LOG = "snuba-generic-events-commit-log"
     GROUP_ATTRIBUTES = "group-attributes"
 
-    ATTRIBUTION = "snuba-attribution"
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
-    DEAD_LETTER_SESSIONS = "snuba-dead-letter-sessions"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"

@@ -12,19 +12,7 @@ def test_valid_topics() -> None:
             )  # Throws an exception if topic not defined
         except sentry_kafka_schemas.SchemaNotFound:
             # These topics are not in use but have not yet been removed from snuba's codebase
-            deprecated_topics = (
-                Topic.CDC,
-                Topic.SESSIONS,
-                Topic.SESSIONS_COMMIT_LOG,
-                Topic.SUBSCRIPTION_SCHEDULED_SESSIONS,
-                Topic.DEAD_LETTER_SESSIONS,
-            )
+            deprecated_topics = (Topic.CDC,)
 
-            # TODO: Remove this once these missing topics are added to sentry-kafka-schemas
-            not_yet_defined = (
-                Topic.EVENT_REPLACEMENTS,
-                Topic.ATTRIBUTION,
-            )
-
-            if topic not in deprecated_topics and topic not in not_yet_defined:
+            if topic not in deprecated_topics:
                 raise

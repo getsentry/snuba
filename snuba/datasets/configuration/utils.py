@@ -6,6 +6,7 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     DateTime,
+    DateTime64,
     Enum,
     Float,
     Nested,
@@ -115,6 +116,12 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = FixedString(col["args"]["length"], modifiers)
     elif col["type"] == "Enum":
         column_type = Enum(col["args"]["values"], modifiers)
+    elif col["type"] == "DateTime64":
+        column_type = DateTime64(
+            precision=col["args"].get("precision", 3),
+            timezone=col["args"].get("timezone"),
+            modifiers=modifiers,
+        )
     assert column_type is not None
     return column_type
 

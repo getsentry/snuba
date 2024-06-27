@@ -4,6 +4,7 @@ import logging
 import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import partial
 from hashlib import md5
 from threading import Lock
@@ -26,15 +27,16 @@ from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
-    DEFAULT_PASSTHROUGH_POLICY,
+    MAX_THRESHOLD,
     AllocationPolicy,
     AllocationPolicyViolations,
     QueryResultOrError,
     QuotaAllowance,
 )
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import JoinClause
+from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Table
+from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.query_settings import QuerySettings
 from snuba.querylog.query_metadata import (
     SLO,
@@ -48,7 +50,12 @@ from snuba.querylog.query_metadata import (
 from snuba.reader import Reader, Result
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state.cache.abstract import Cache, ExecutionTimeoutError
-from snuba.state.cache.redis.backend import RESULT_VALUE, RESULT_WAIT, RedisCache
+from snuba.state.cache.redis.backend import (
+    RESULT_VALUE,
+    RESULT_WAIT,
+    SIMPLE_READTHROUGH,
+    RedisCache,
+)
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import (
     TABLE_RATE_LIMIT_NAME,
@@ -70,6 +77,9 @@ from snuba.web import QueryException, QueryResult, constants
 metrics = MetricsWrapper(environment.metrics, "db_query")
 
 redis_cache_client = get_redis_client(RedisClientKey.CACHE)
+
+_REJECTED_BY = "rejected_by"
+_THROTTLED_BY = "throttled_by"
 
 
 class ResultCacheCodec(ExceptionAwareCodec[bytes, Result]):
@@ -384,7 +394,10 @@ def execute_query_with_readthrough_caching(
             robust,
         )
 
-    clickhouse_query_settings["query_id"] = query_id
+    if state.get_config("disable_lua_randomize_query_id", 0):
+        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
+    else:
+        clickhouse_query_settings["query_id"] = query_id
 
     if span:
         span.set_data("query_id", query_id)
@@ -397,6 +410,8 @@ def execute_query_with_readthrough_caching(
         elif hit_type == RESULT_WAIT:
             stats["is_duplicate"] = 1
             span_tag = "cache_wait"
+        elif hit_type == SIMPLE_READTHROUGH:
+            stats["cache_hit_simple"] = 1
         sentry_sdk.set_tag("cache_status", span_tag)
         if span:
             span.set_data("cache_status", span_tag)
@@ -629,33 +644,41 @@ def _raw_query(
 
 
 def _get_allocation_policies(
-    clickhouse_query: Union[Query, CompositeQuery[Table]]
+    query: Query | CompositeQuery[Table],
 ) -> list[AllocationPolicy]:
-    """given a query, find the allocation policies in its from clause, in the case
-    of CompositeQuery, follow the from clause until something is querying from a table
-    and use that table's allocation policies.
+    collector = _PolicyCollector()
+    collector.visit(query)
+    return collector.policies
 
-    **GOTCHAS**
-        - Does not handle joins, will return [PassthroughPolicy]
-        - In case of error, returns [PassthroughPolicy], fails quietly (but logs to sentry)
+
+class _PolicyCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table]):
     """
-    from_clause = clickhouse_query.get_from_clause()
-    if isinstance(from_clause, Table):
-        return from_clause.allocation_policies
-    elif isinstance(from_clause, ProcessableQuery):
-        return _get_allocation_policies(cast(Query, from_clause))
-    elif isinstance(from_clause, CompositeQuery):
-        return _get_allocation_policies(from_clause)
-    elif isinstance(from_clause, JoinClause):
-        # HACK (Volo): Joins are a weird case for allocation policies and we don't
-        # actually use them anywhere so I'm purposefully just kicking this can down the
-        # road
-        return [DEFAULT_PASSTHROUGH_POLICY]
-    else:
-        logger.exception(
-            f"Could not determine allocation policies for {clickhouse_query}"
-        )
-        return [DEFAULT_PASSTHROUGH_POLICY]
+    Find all the allocation_policies for a query by traversing all the data sources
+    recursively, collect them into a list
+
+    """
+
+    def __init__(self) -> None:
+        self.policies: list[AllocationPolicy] = []
+
+    def _visit_simple_source(self, data_source: Table) -> None:
+        self.policies.extend(data_source.allocation_policies)
+
+    def _visit_join(self, data_source: JoinClause[Table]) -> None:
+        return self.visit_join_clause(data_source)
+
+    def _visit_simple_query(self, data_source: ProcessableQuery[Table]) -> None:
+        return self.visit(data_source.get_from_clause())
+
+    def _visit_composite_query(self, data_source: CompositeQuery[Table]) -> None:
+        return self.visit(data_source.get_from_clause())
+
+    def visit_individual_node(self, node: IndividualNode[Table]) -> None:
+        self.visit(node.data_source)
+
+    def visit_join_clause(self, node: JoinClause[Table]) -> None:
+        node.left_node.accept(self)
+        node.right_node.accept(self)
 
 
 def db_query(
@@ -775,11 +798,47 @@ def db_query(
                 query_id=query_id,
                 result_or_error=QueryResultOrError(query_result=result, error=error),
             )
+        if stats.get("cache_hit"):
+            metrics.increment("cache_hit", tags={"dataset": dataset_name})
+        elif stats.get("is_duplicate"):
+            metrics.increment("cache_stampede", tags={"dataset": dataset_name})
+        else:
+            metrics.increment("cache_miss", tags={"dataset": dataset_name})
+        if stats.get("cache_hit_simple"):
+            metrics.increment("cache_hit_simple", tags={"dataset": dataset_name})
         if result:
             return result
         raise error or Exception(
             "No error or result when running query, this should never happen"
         )
+
+
+@dataclass
+class _QuotaAndPolicy:
+    quota_allowance: QuotaAllowance
+    policy_name: str
+
+
+def _add_quota_info(
+    summary: dict[str, Any],
+    action: str,
+    quota_and_policy: _QuotaAndPolicy | None = None,
+) -> None:
+
+    quota_info: dict[str, Any] = {}
+    summary[action] = quota_info
+
+    if quota_and_policy is not None:
+        quota_info["policy"] = quota_and_policy.policy_name
+        quota_allowance = quota_and_policy.quota_allowance
+        quota_info["quota_used"] = quota_allowance.quota_used
+        quota_info["quota_unit"] = quota_allowance.quota_unit
+        quota_info["suggestion"] = quota_allowance.suggestion
+
+        if action == _REJECTED_BY:
+            quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
+        else:
+            quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
 
 
 def _apply_allocation_policies_quota(
@@ -794,8 +853,11 @@ def _apply_allocation_policies_quota(
     Sets the resource quota in the query_settings object to the minimum of all available
     quota allowances from the given allocation policies.
     """
-    quota_allowances: dict[str, QuotaAllowance] = {}
+    quota_allowances: dict[str, Any] = {}
     can_run = True
+    rejection_quota_and_policy = None
+    throttle_quota_and_policy = None
+    num_threads = MAX_THRESHOLD
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -807,19 +869,40 @@ def _apply_allocation_policies_quota(
                 allowance = allocation_policy.get_quota_allowance(
                     attribution_info.tenant_ids, query_id
                 )
+                num_threads = min(num_threads, allowance.max_threads)
                 can_run &= allowance.can_run
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
+                if allowance.is_throttled:
+                    throttle_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
+                if not can_run:
+                    rejection_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
+                    break
+
         allowance_dicts = {
             key: quota_allowance.to_dict()
             for key, quota_allowance in quota_allowances.items()
         }
-        stats["quota_allowance"] = allowance_dicts
+        stats["quota_allowance"] = {}
+        stats["quota_allowance"]["details"] = allowance_dicts
+
+        summary: dict[str, Any] = {}
+        summary["threads_used"] = num_threads
+        _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
+        _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
+        stats["quota_allowance"]["summary"] = summary
+
         if not can_run:
-            raise AllocationPolicyViolations.from_args(quota_allowances)
+            raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

@@ -1,5 +1,5 @@
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.logical import Query
 
@@ -24,10 +24,8 @@ class PostProcessingError(Exception):
 
     def __init__(
         self,
-        query: Query | CompositeQuery[Entity],
-        snql_anonymized: str,
+        query: Query | CompositeQuery[LogicalDataSource],
         message: str | None = None,
     ):
         super().__init__(message)
         self.query = query
-        self.snql_anonymized = snql_anonymized

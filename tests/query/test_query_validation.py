@@ -10,6 +10,17 @@ from snuba.query.snql.parser import parse_snql_query
 test_cases = [
     pytest.param(
         """
+        MATCH STORAGE(generic_metrics_counters_meta_tag_values)
+        SELECT event_id
+        WHERE timestamp LIKE 'carbonara'
+        """,
+        ParsingException(
+            "Missing >= condition with a datetime literal on column timestamp for storage generic_metrics_counters_meta_tag_values. Example: timestamp >= toDateTime('2023-05-16 00:00')"
+        ),
+        id="No time condition for storage",
+    ),
+    pytest.param(
+        """
         MATCH (events)
         SELECT event_id
         WHERE timestamp LIKE 'carbonara'
@@ -17,7 +28,7 @@ test_cases = [
         ParsingException(
             "Missing >= condition with a datetime literal on column timestamp for entity events. Example: timestamp >= toDateTime('2023-05-16 00:00')"
         ),
-        id="Invalid LIKE param",
+        id="No time condition",
     ),
     pytest.param(
         "MATCH (discover_events) SELECT arrayMap((`x`) -> identity(`y`), sdk_integrations) AS sdks WHERE project_id = 1 AND timestamp >= toDateTime('2021-01-01') AND timestamp < toDateTime('2021-01-02')",

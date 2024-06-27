@@ -55,7 +55,7 @@ from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )

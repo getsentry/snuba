@@ -26,6 +26,6 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="${SNUBA_COMPONENT_NAME}" \
   --try-deployments-and-statefulsets \
   "snuba-query-${SNUBA_CMD_TYPE}" \
-  "us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+  "us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
   -- \
   snuba $SNUBA_CMD

@@ -26,7 +26,10 @@ pub fn deserialize_message(
     offset: u64,
 ) -> anyhow::Result<(Vec<ReplayRow>, f64)> {
     let replay_message: ReplayMessage = serde_json::from_slice(payload)?;
-    let replay_payload = serde_json::from_slice(&replay_message.payload)?;
+    let replay_payload = match replay_message.payload {
+        RawReplayPayload::Sliced(s) => serde_json::from_slice(&s)?,
+        RawReplayPayload::Serialized(p) => p,
+    };
 
     let rows = match replay_payload {
         ReplayPayload::ClickEvent(event) => event
@@ -210,8 +213,15 @@ pub fn deserialize_message(
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawReplayPayload {
+    Sliced(Vec<u8>),
+    Serialized(ReplayPayload),
+}
+
+#[derive(Debug, Deserialize)]
 struct ReplayMessage {
-    payload: Vec<u8>,
+    payload: RawReplayPayload,
     start_time: f64,
     project_id: u64,
     replay_id: Uuid,

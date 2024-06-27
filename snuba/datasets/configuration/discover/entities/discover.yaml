@@ -448,6 +448,23 @@ query_processors:
       time_parse_columns:
         - timestamp
   - processor: BasicFunctionsProcessor
+  - processor: LowCardinalityProcessor
+    args:
+      columns:
+        - transaction_name
+        - transaction_op
+        - platform
+        - environment
+        - release
+        - dist
+        - sdk_name
+        - http_method
+        - type
+        - app_start_type
+        - transaction_source
+        - version
+        - tags[environment]
+
 
 validate_data_model: error
 validators:
