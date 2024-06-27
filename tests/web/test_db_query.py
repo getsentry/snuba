@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Mapping, MutableMapping, Optional
-from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
-from snuba.query.allocation_policies import PassthroughPolicy
 from unittest import mock
 
 import pytest
@@ -23,6 +21,7 @@ from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
     AllocationPolicyViolations,
+    PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -31,6 +30,7 @@ from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.db_query import (
@@ -250,12 +250,15 @@ def _build_test_query(
 def test_db_record_bytes_scanned() -> None:
     dataset_name = "events"
     storage_key = StorageKey("errors_ro")
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))", allocation_policies=[PassthroughPolicy(storage_key, [], {})])
+    query, storage, attribution_info = _build_test_query(
+        "count(distinct(project_id))",
+        allocation_policies=[PassthroughPolicy(storage_key, [], {})],
+    )
 
     query_metadata_list: list[ClickhouseQueryMetadata] = []
     stats: dict[str, Any] = {}
 
-    result = db_query(
+    db_query(
         clickhouse_query=query,
         query_settings=HTTPQuerySettings(),
         attribution_info=attribution_info,
@@ -272,8 +275,11 @@ def test_db_record_bytes_scanned() -> None:
     metrics = get_recorded_metric_calls("increment", "allocation_policy.bytes_scanned")
     assert metrics
     assert len(metrics) == 1
-    assert metrics[0].tags == {"referrer": attribution_info.referrer, "dataset_name": dataset_name, "storage_key": storage_key.value}
-
+    assert metrics[0].tags == {
+        "referrer": attribution_info.referrer,
+        "dataset_name": dataset_name,
+        "storage_key": storage_key.value,
+    }
 
 
 @pytest.mark.clickhouse_db
@@ -394,11 +400,6 @@ def test_db_query_success() -> None:
         "blocks",
         "rows",
     }
-    import pdb
-    pdb.set_trace()
-    metrics = get_recorded_metric_calls("increment", "allocation_policy.bytes_scanned")
-    print(metrics)
-
 
 
 @pytest.mark.clickhouse_db
@@ -985,4 +986,3 @@ def test_cache_metrics_with_simple_readthrough() -> None:
                 mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
             ]
         )
-
