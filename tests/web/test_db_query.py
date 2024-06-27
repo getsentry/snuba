@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Mapping, MutableMapping, Optional
+from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
+from snuba.query.allocation_policies import PassthroughPolicy
 from unittest import mock
 
 import pytest
@@ -245,6 +247,37 @@ def _build_test_query(
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+def test_db_record_bytes_scanned() -> None:
+    dataset_name = "events"
+    storage_key = StorageKey("errors_ro")
+    query, storage, attribution_info = _build_test_query("count(distinct(project_id))", allocation_policies=[PassthroughPolicy(storage_key, [], {})])
+
+    query_metadata_list: list[ClickhouseQueryMetadata] = []
+    stats: dict[str, Any] = {}
+
+    result = db_query(
+        clickhouse_query=query,
+        query_settings=HTTPQuerySettings(),
+        attribution_info=attribution_info,
+        dataset_name=dataset_name,
+        query_metadata_list=query_metadata_list,
+        formatted_query=format_query(query),
+        reader=storage.get_cluster().get_reader(),
+        timer=Timer("foo"),
+        stats=stats,
+        trace_id="trace_id",
+        robust=False,
+    )
+
+    metrics = get_recorded_metric_calls("increment", "allocation_policy.bytes_scanned")
+    assert metrics
+    assert len(metrics) == 1
+    assert metrics[0].tags == {"referrer": attribution_info.referrer, "dataset_name": dataset_name, "storage_key": storage_key.value}
+
+
+
+@pytest.mark.clickhouse_db
+@pytest.mark.redis_db
 def test_db_query_success() -> None:
     query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
 
@@ -361,6 +394,11 @@ def test_db_query_success() -> None:
         "blocks",
         "rows",
     }
+    import pdb
+    pdb.set_trace()
+    metrics = get_recorded_metric_calls("increment", "allocation_policy.bytes_scanned")
+    print(metrics)
+
 
 
 @pytest.mark.clickhouse_db
@@ -947,3 +985,4 @@ def test_cache_metrics_with_simple_readthrough() -> None:
                 mock.call.increment("cache_hit_simple", tags={"dataset": "events"}),
             ]
         )
+

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+from snuba.datasets.storages.storage_key import StorageKey
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -681,6 +682,18 @@ class _PolicyCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table])
         node.right_node.accept(self)
 
 
+def _record_bytes_scanned(result_or_error: QueryResultOrError, attribution_info: AttributionInfo, dataset_name: str, storage_key: StorageKey):
+    custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
+
+    if result_or_error.query_result:
+        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
+        custom_metrics.increment(
+            "bytes_scanned",
+            progress_bytes_scanned,
+            tags={"referrer": attribution_info.referrer, "dataset": dataset_name, "storage_key": storage_key.value},
+        )
+
+
 def db_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -792,11 +805,13 @@ def db_query(
         # if it didn't do that, something is very wrong so we just panic out here
         raise e
     finally:
+        result_or_error = QueryResultOrError(query_result=result, error=error)
+        _record_bytes_scanned(result_or_error, attribution_info, dataset_name, allocation_policies[0].storage_key)
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
                 query_id=query_id,
-                result_or_error=QueryResultOrError(query_result=result, error=error),
+                result_or_error=result_or_error
             )
         if stats.get("cache_hit"):
             metrics.increment("cache_hit", tags={"dataset": dataset_name})
