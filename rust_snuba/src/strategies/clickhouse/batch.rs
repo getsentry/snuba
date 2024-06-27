@@ -99,7 +99,7 @@ impl BatchFactory {
     /// on the connection paraemters supplied in `BatchFactory::new()`.
     ///
     pub fn new_batch(&self) -> HttpBatch {
-        let (sender, receiver) = channel(CHANNEL_CAPACITY);
+        let (sender, mut receiver) = channel(CHANNEL_CAPACITY);
 
         let url = self.url.clone();
         let query = self.query.clone();
@@ -113,17 +113,25 @@ impl BatchFactory {
             }
 
             if !receiver.is_empty() {
-                // only make the request to clickhouse if there is data
-                // being added to the receiver stream from the sender
-                let res = client
-                    .post(&url)
-                    .query(&[("query", &query)])
-                    .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
-                    .send()
-                    .await?;
+                let val = receiver.recv().await;
 
-                if res.status() != reqwest::StatusCode::OK {
-                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                match val {
+                    Some(Ok(v)) => {
+                        // only make the request to clickhouse if there is data
+                        // being added to the receiver stream from the sender
+                        let res = client
+                            .post(&url)
+                            .query(&[("query", &query)])
+                            .body(v)
+                            .send()
+                            .await?;
+
+                        if res.status() != reqwest::StatusCode::OK {
+                            anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                        }
+                    }
+                    Some(Err(_)) => todo!(),
+                    None => todo!(),
                 }
             }
 
