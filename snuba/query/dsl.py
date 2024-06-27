@@ -46,7 +46,7 @@ class _FunctionCall:
         return Literal(None, arg)
 
     def __call__(
-        self, *args: Expression | OptionalScalarType, **kwargs: str
+        self, *args: Expression | OptionalScalarType, **kwargs: str | None
     ) -> FunctionCall:
         alias = kwargs.pop("alias", None)
         if kwargs:
@@ -149,6 +149,14 @@ def equals(
     left = lhs if isinstance(lhs, Expression) else Literal(None, lhs)
     right = rhs if isinstance(rhs, Expression) else Literal(None, rhs)
     return binary_condition("equals", left, right)
+
+
+def greaterOrEquals(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("greaterOrEquals", lhs, rhs)
+
+
+def less(lhs: Expression, rhs: Expression) -> FunctionCall:
+    return binary_condition("less", lhs, rhs)
 
 
 def and_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall:

@@ -96,7 +96,8 @@ def _format_query_content(
     method into smaller ones.
     """
     parsing_context = ParsingContext()
-    formatter = expression_formatter_type(parsing_context)
+    is_composite = isinstance(query, CompositeQuery)
+    formatter = expression_formatter_type(parsing_context, is_composite)
 
     return [
         v
@@ -109,9 +110,13 @@ def _format_query_content(
                 ),
             ),
             _format_arrayjoin(query, formatter),
-            _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
-            if isinstance(query, Query)
-            else None,
+            (
+                _build_optional_string_node(
+                    "PREWHERE", query.get_prewhere_ast(), formatter
+                )
+                if isinstance(query, Query)
+                else None
+            ),
             _build_optional_string_node("WHERE", query.get_condition(), formatter),
             _format_groupby(query, formatter),
             _build_optional_string_node("HAVING", query.get_having(), formatter),

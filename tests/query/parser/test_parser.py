@@ -8,6 +8,7 @@ by creating unit tests in ./unit_tests
 """
 
 from datetime import datetime
+from typing import Any
 
 import pytest
 
@@ -52,6 +53,54 @@ time_expression = FunctionCall(
         Literal(None, "Universal"),
     ),
 )
+
+
+def timeseries(
+    agg: str, metric_id: int, condition: FunctionCall | None = None
+) -> FunctionCall:
+    metric_condition = FunctionCall(
+        None,
+        "equals",
+        (
+            Column(
+                "_snuba_metric_id",
+                None,
+                "metric_id",
+            ),
+            Literal(None, metric_id),
+        ),
+    )
+    if condition:
+        metric_condition = FunctionCall(
+            None,
+            "and",
+            (
+                condition,
+                metric_condition,
+            ),
+        )
+
+    return FunctionCall(
+        None,
+        agg,
+        (
+            Column("_snuba_value", None, "value"),
+            metric_condition,
+        ),
+    )
+
+
+def tag_column(tag: str, mql_context: dict[str, Any]) -> SubscriptableReference:
+    tag_val = mql_context.get("indexer_mappings").get(tag)  # type: ignore
+    return SubscriptableReference(
+        alias=f"_snuba_tags_raw[{tag_val}]",
+        column=Column(
+            alias="_snuba_tags_raw",
+            table_name=None,
+            column_name="tags_raw",
+        ),
+        key=Literal(alias=None, value=f"{tag_val}"),
+    )
 
 
 def test_mql() -> None:
@@ -185,52 +234,6 @@ def test_formula_mql() -> None:
         "offset": None,
     }
 
-    def timeseries(
-        agg: str, metric_id: int, condition: FunctionCall | None = None
-    ) -> FunctionCall:
-        metric_condition = FunctionCall(
-            None,
-            "equals",
-            (
-                Column(
-                    "_snuba_metric_id",
-                    None,
-                    "metric_id",
-                ),
-                Literal(None, metric_id),
-            ),
-        )
-        if condition:
-            metric_condition = FunctionCall(
-                None,
-                "and",
-                (
-                    condition,
-                    metric_condition,
-                ),
-            )
-
-        return FunctionCall(
-            None,
-            agg,
-            (
-                Column("_snuba_value", None, "value"),
-                metric_condition,
-            ),
-        )
-
-    def tag_column(tag: str) -> SubscriptableReference:
-        tag_val = mql_context.get("indexer_mappings").get(tag)  # type: ignore
-        return SubscriptableReference(
-            alias=f"_snuba_tags_raw[{tag_val}]",
-            column=Column(
-                alias="_snuba_tags_raw",
-                table_name=None,
-                column_name="tags_raw",
-            ),
-            key=Literal(alias=None, value=f"{tag_val}"),
-        )
-
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -239,7 +242,9 @@ def test_formula_mql() -> None:
                 "sumIf",
                 123456,
                 binary_condition(
-                    "equals", tag_column("status_code"), Literal(None, "200")
+                    "equals",
+                    tag_column("status_code", mql_context),
+                    Literal(None, "200"),
                 ),
             ),
             timeseries("sumIf", 123456),

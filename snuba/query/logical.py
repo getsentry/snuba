@@ -4,6 +4,8 @@ from abc import ABCMeta
 from typing import Any, Callable, Iterable, Optional, Sequence, Type, cast
 
 from snuba.query import LimitBy, OrderBy, ProcessableQuery, SelectedExpression
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import IndividualNode, JoinClause
 from snuba.query.data_source.simple import Entity, LogicalDataSource, Storage
 from snuba.query.expressions import Expression, ExpressionVisitor
 
@@ -142,8 +144,22 @@ class EntityQuery(Query, metaclass=_FlexibleQueryType):
         return cast(Entity, super().get_from_clause())
 
     @classmethod
+    def check_data_source(
+        cls, data_source: Query | CompositeQuery | JoinClause | IndividualNode
+    ) -> None:
+        if isinstance(data_source, JoinClause):
+            cls.check_data_source(data_source.left_node)
+            cls.check_data_source(data_source.right_node)
+        elif isinstance(data_source, IndividualNode):
+            assert isinstance(data_source.data_source, cls.data_source())
+        elif isinstance(data_source, CompositeQuery):
+            cls.check_data_source(data_source.get_from_clause())
+        else:
+            assert isinstance(data_source.get_from_clause(), cls.data_source())
+
+    @classmethod
     def from_query(cls, query: Query) -> "EntityQuery":
-        assert isinstance(query.get_from_clause(), cls.data_source())
+        cls.check_data_source(query)
         return cast("EntityQuery", query)
 
 

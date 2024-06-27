@@ -37,10 +37,15 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     the visited expression, the return value is the formatted string.
     """
 
-    def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
+    def __init__(
+        self,
+        parsing_context: Optional[ParsingContext] = None,
+        is_composite: bool = False,
+    ) -> None:
         self._parsing_context = (
             parsing_context if parsing_context is not None else ParsingContext()
         )
+        self.is_composite = is_composite
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
@@ -95,7 +100,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     def visit_column(self, exp: Column) -> str:
         ret = []
         ret_unescaped = []
-        if exp.table_name:
+        if exp.table_name and self.is_composite:
             ret.append(escape_identifier(exp.table_name) or "")
             ret_unescaped.append(exp.table_name or "")
             ret.append(".")

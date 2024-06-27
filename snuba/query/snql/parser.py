@@ -1017,6 +1017,9 @@ def _qualify_columns(
         if not isinstance(exp, Column):
             return exp
 
+        if exp.table_name is not None:
+            return exp  # Table name is already qualified
+
         parts = exp.column_name.split(".", 1)
         if len(parts) != 2 or parts[0] not in aliases:
             raise ParsingException(
@@ -1267,7 +1270,6 @@ def _mangle_query_aliases(
     def mangle_column_value(exp: Expression) -> Expression:
         if not isinstance(exp, Column):
             return exp
-
         return replace(exp, column_name=f"{alias_prefix}{exp.column_name}")
 
     query.transform_expressions(mangle_aliases, skip_array_join=True)
