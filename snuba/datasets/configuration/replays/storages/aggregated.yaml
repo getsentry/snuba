@@ -9,300 +9,334 @@ schema:
   columns:
     [
       { name: project_id, type: UInt, args: { size: 64 } },
-    { name: to_hour_timestamp, type: DateTime },
-    { name: replay_id, type: UUID },
-    {
-      name: browser_name,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      { name: to_hour_timestamp, type: DateTime },
+      { name: replay_id, type: UUID },
+      {
+        name: browser_name,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: browser_version,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: browser_version,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: count_dead_clicks,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
+      {
+        name: count_dead_clicks,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
-    },
-    {
-      name: count_errors,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
+      {
+        name: count_errors,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
-    },
-    {
-      name: count_infos,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
+      {
+        name: count_infos,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
-    },
-    {
-      name: count_rage_clicks,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
+      {
+        name: count_rage_clicks,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
-    },
-    {
-      name: count_segments,
-      type: AggregateFunction,
-      args: {
-        func: count,
-        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
+      {
+        name: count_segments,
+        type: AggregateFunction,
+        args:
+          {
+            func: count,
+            arg_types:
+              [
+                {
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 64 },
+                },
+              ],
+          },
       },
-    },
-    {
-      name: count_urls,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
+      {
+        name: count_urls,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
-    },
-    {
-      name: count_warnings,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { size: 64 } }]
+      {
+        name: count_warnings,
+        type: AggregateFunction,
+        args: { func: sum, arg_types: [{ type: UInt, args: { size: 64 } }] },
       },
-    },
-    {
-      name: device_brand,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: device_brand,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: device_family,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: device_family,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: device_model,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: device_model,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: device_name,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: device_name,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: dist,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: dist,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: environment,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: environment,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: finished_at,
-      type: AggregateFunction,
-      args: {
-        func: max,
-        arg_types: [{ type: DateTime }]
+      {
+        name: finished_at,
+        type: AggregateFunction,
+        args: { func: max, arg_types: [{ type: DateTime }] },
       },
-    },
-    {
-      name: ip_address_v4,
-      type: AggregateFunction,
-      args: {
-        func: any,
-        arg_types: [{ type: IPv4, args: { schema_modifiers: [nullable] } }]
+      {
+        name: ip_address_v4,
+        type: AggregateFunction,
+        args:
+          {
+            func: any,
+            arg_types: [{ type: IPv4, args: { schema_modifiers: [nullable] } }],
+          },
       },
-    },
-    {
-      name: ip_address_v6,
-      type: AggregateFunction,
-      args: {
-        func: any,
-        arg_types: [{ type: IPv6, args: { schema_modifiers: [nullable] } }]
+      {
+        name: ip_address_v6,
+        type: AggregateFunction,
+        args:
+          {
+            func: any,
+            arg_types: [{ type: IPv6, args: { schema_modifiers: [nullable] } }],
+          },
       },
-    },
-    {
-      name: is_archived,
-      type: AggregateFunction,
-      args: {
-        func: sum,
-        arg_types: [{ type: UInt, args: { schema_modifiers: [nullable], size: 64 } }]
+      {
+        name: is_archived,
+        type: AggregateFunction,
+        args:
+          {
+            func: sum,
+            arg_types:
+              [
+                {
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 64 },
+                },
+              ],
+          },
       },
-    },
-    {
-      name: min_segment_id,
-      type: AggregateFunction,
-      args: {
-        func: min,
-        arg_types: [{ type: UInt, args: { size: 16, schema_modifiers: [nullable] } }]
+      {
+        name: min_segment_id,
+        type: AggregateFunction,
+        args:
+          {
+            func: min,
+            arg_types:
+              [
+                {
+                  type: UInt,
+                  args: { size: 16, schema_modifiers: [nullable] },
+                },
+              ],
+          },
       },
-    },
-    {
-      name: os_name,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: os_name,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: os_version,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: os_version,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: platform,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String },
-          { type: UInt, args: { size: 8 } }
-        ]
+      {
+        name: platform,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types: [{ type: String }, { type: UInt, args: { size: 8 } }],
+          },
       },
-    },
-    { name: retention_days, type: UInt, args: { size: 16 } },
-    {
-      name: sdk_name,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: sdk_name,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: sdk_version,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: sdk_version,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: started_at,
-      type: AggregateFunction,
-      args: {
-        func: min,
-        arg_types: [{ type: DateTime, args: { schema_modifiers: [nullable] } }]
+      {
+        name: started_at,
+        type: AggregateFunction,
+        args:
+          {
+            func: min,
+            arg_types:
+              [{ type: DateTime, args: { schema_modifiers: [nullable] } }],
+          },
       },
-    },
-    {
-      name: user,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: user,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: user_id,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: user_id,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: user_name,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: user_name,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    },
-    {
-      name: user_email,
-      type: AggregateFunction,
-      args: {
-        func: anyIf,
-        arg_types: [
-          { type: String, args: { schema_modifiers: [nullable] } },
-          { type: UInt, args: { schema_modifiers: [nullable], size: 8 } }
-        ]
+      {
+        name: user_email,
+        type: AggregateFunction,
+        args:
+          {
+            func: anyIf,
+            arg_types:
+              [
+                { type: String, args: { schema_modifiers: [nullable] } },
+                { type: UInt, args: { schema_modifiers: [nullable], size: 8 } },
+              ],
+          },
       },
-    }
     ]
   local_table_name: replays_aggregated_local
   dist_table_name: replays_aggregated_dist
