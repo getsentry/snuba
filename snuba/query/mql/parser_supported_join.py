@@ -896,6 +896,7 @@ def convert_formula_to_query(
         if leaf_node.groupby:
             for group_exp in leaf_node.groupby:
                 if isinstance(group_exp.expression, Column):
+                    alias: Optional[str]
                     if alias_wrap(leaf_node.table_alias):
                         alias = f"{alias_wrap(leaf_node.table_alias)}.{group_exp.expression.alias}"
                     else:
