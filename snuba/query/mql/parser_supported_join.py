@@ -890,10 +890,15 @@ def convert_formula_to_query(
         if leaf_node.groupby:
             for group_exp in leaf_node.groupby:
                 if isinstance(group_exp.expression, Column):
+                    if alias_wrap(leaf_node.table_alias):
+                        alias = f"{alias_wrap(leaf_node.table_alias)}.{group_exp.expression.alias}"
+                    else:
+                        alias = group_exp.expression.alias
                     aliased_groupby = replace(
                         group_exp,
                         expression=replace(
                             group_exp.expression,
+                            alias=alias,
                             table_name=alias_wrap(leaf_node.table_alias),
                         ),
                     )
@@ -902,7 +907,6 @@ def convert_formula_to_query(
 
     if groupby:
         query.set_ast_groupby(groupby)
-
     query.set_ast_selected_columns(selected_columns)
 
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions

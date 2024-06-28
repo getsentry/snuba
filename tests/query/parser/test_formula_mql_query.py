@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
+
+import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -245,5 +248,55 @@ def test_simple_formula() -> None:
         "generic_metrics",
     )
     query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_groupby() -> None:
+    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by transaction"
+    expected = ""
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    print(query)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_different_groupbys() -> None:
+    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
+    expected = ""
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_mismatch_groupby() -> None:
+    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code"
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    with pytest.raises(
+        Exception,
+        match=re.escape("All terms in a formula must have the same groupby"),
+    ):
+        parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+
+
+def test_onesided_groupby() -> None:
+    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
+    expected = ""
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query, _ = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
