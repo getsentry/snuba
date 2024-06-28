@@ -746,10 +746,16 @@ def build_formula_query_from_clause(
     if join_nodes is None:
         raise InvalidQueryException("Could not parse formula")
 
-    # We use the group by for the ON conditions, so make sure they are all the same
+    # Since the groupby is used in the ON conditions, they should all the same.
+    # However, we do support onesided groupbys in a formula. This is the time spent percentage use-case.
+    # Example: sum(`transactions.duration`) by transaction / sum(`transactions.duration`)
     groupbys = join_nodes[0].groupby
-    if not all(node.groupby == groupbys for node in join_nodes):
-        raise InvalidQueryException("All terms in a formula must have the same groupby")
+    for node in join_nodes:
+        if node.groupby is not None:
+            if node.groupby != groupbys:
+                raise InvalidQueryException(
+                    "All terms in a formula must have the same groupby"
+                )
 
     entity_keys = [select_entity(node.mri or "", dataset) for node in join_nodes]
     if len(entity_keys) == 1:
@@ -1222,7 +1228,7 @@ def populate_query_from_mql_context(
                 query.set_ast_groupby(list(groupby) + [selected_time.expression])
             else:
                 query.set_ast_groupby([selected_time.expression])
-    print(selected_time_found)
+
     if isinstance(query, CompositeQuery) and selected_time_found:
         # If the query is grouping by time, that needs to be added to the JoinClause keys to
         # ensure we correctly join the subqueries. The column names will be the same for all the
