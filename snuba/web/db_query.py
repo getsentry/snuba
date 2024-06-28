@@ -687,7 +687,7 @@ def _record_bytes_scanned(
     attribution_info: AttributionInfo,
     dataset_name: str,
     storage_key: StorageKey,
-):
+) -> None:
     custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
 
     if result_or_error.query_result:
