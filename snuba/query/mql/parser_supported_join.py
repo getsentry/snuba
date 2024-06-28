@@ -1222,7 +1222,7 @@ def populate_query_from_mql_context(
                 query.set_ast_groupby(list(groupby) + [selected_time.expression])
             else:
                 query.set_ast_groupby([selected_time.expression])
-
+    print(selected_time_found)
     if isinstance(query, CompositeQuery) and selected_time_found:
         # If the query is grouping by time, that needs to be added to the JoinClause keys to
         # ensure we correctly join the subqueries. The column names will be the same for all the
