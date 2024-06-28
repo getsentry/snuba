@@ -78,33 +78,24 @@ def _migration_ops_to_migration(
     Given a lists of forward and backwards ops, returns a python class
     definition for the migration as a str. The migration must be non-blocking.
     """
-
-    forwards_str = (
-        "[" + ", ".join([f"operations.{repr(op)}" for op in forwards_ops]) + "]"
-    )
-    backwards_str = (
-        "[" + ", ".join([f"operations.{repr(op)}" for op in backwards_ops]) + "]"
-    )
-
     return f"""
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import operations
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.migration import ClickhouseNodeMigration
-from snuba.migrations.operations import OperationTarget
+from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget, SqlOperation
 from snuba.utils import schemas
 from snuba.utils.schemas import Column
 
 class Migration(ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return {forwards_str}
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        return {repr(forwards_ops)}
 
-    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
-        return {backwards_str}
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        return {repr(backwards_ops)}
 """
 
 

@@ -51,10 +51,9 @@ def test_add_column() -> None:
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import operations
 from snuba.migrations.columns import MigrationModifiers
 from snuba.migrations.migration import ClickhouseNodeMigration
-from snuba.migrations.operations import OperationTarget
+from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget, SqlOperation
 from snuba.utils import schemas
 from snuba.utils.schemas import Column
 
@@ -62,23 +61,23 @@ from snuba.utils.schemas import Column
 class Migration(ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_ops(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.AddColumn(
+            AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
                 column=Column("newcol1", schemas.DateTime(modifiers=None)),
                 after="timestamp",
                 target=OperationTarget.LOCAL,
             ),
-            operations.AddColumn(
+            AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
                 column=Column("newcol1", schemas.DateTime(modifiers=None)),
                 after="timestamp",
                 target=OperationTarget.DISTRIBUTED,
             ),
-            operations.AddColumn(
+            AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
                 column=Column(
@@ -98,7 +97,7 @@ class Migration(ClickhouseNodeMigration):
                 after="event_id",
                 target=OperationTarget.LOCAL,
             ),
-            operations.AddColumn(
+            AddColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
                 column=Column(
@@ -120,27 +119,27 @@ class Migration(ClickhouseNodeMigration):
             ),
         ]
 
-    def backwards_ops(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.DropColumn(
+            DropColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
                 column_name="newcol2",
                 target=OperationTarget.DISTRIBUTED,
             ),
-            operations.DropColumn(
+            DropColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
                 column_name="newcol2",
                 target=OperationTarget.LOCAL,
             ),
-            operations.DropColumn(
+            DropColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_dist",
                 column_name="newcol1",
                 target=OperationTarget.DISTRIBUTED,
             ),
-            operations.DropColumn(
+            DropColumn(
                 storage_set=StorageSetKey.EVENTS,
                 table_name="errors_local",
                 column_name="newcol1",
