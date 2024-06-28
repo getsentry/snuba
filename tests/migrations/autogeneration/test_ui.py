@@ -1,7 +1,9 @@
 import os
 import subprocess
+from glob import glob
 
-from snuba.migrations.autogeneration.main import get_working_and_head
+from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.autogeneration.main import get_working_and_head, write_migration
 
 
 def test_get_working_and_head() -> None:
@@ -44,3 +46,17 @@ def test_get_working_and_head() -> None:
     new_storage, old_storage = get_working_and_head(os.path.join(dir, fname))
     assert new_storage == "hello world\ngoodbye world"
     assert old_storage == "hello world\n"
+
+
+def test_write_migration() -> None:
+    content = "bllop"
+    name = "kyles_migration"
+    write_migration(content, StorageSetKey.EVENTS, name)
+    written_migration = sorted(
+        glob(f"snuba/snuba_migrations/events/[0-9][0-9][0-9][0-9]_{name}.py")
+    )[0]
+    try:
+        with open(written_migration) as f:
+            assert f.read().strip() == content
+    finally:
+        os.remove(written_migration)
