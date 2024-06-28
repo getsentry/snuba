@@ -163,7 +163,11 @@ schema:
       {
         name: finished_at,
         type: AggregateFunction,
-        args: { func: max, arg_types: [{ type: DateTime }] },
+        args:
+          {
+            func: maxIf,
+            arg_types: [{ type: DateTime }, { type: UInt, args: { size: 8 } }],
+          },
       },
       {
         name: ip_address_v4,
