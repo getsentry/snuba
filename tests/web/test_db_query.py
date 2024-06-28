@@ -277,7 +277,7 @@ def test_db_record_bytes_scanned() -> None:
     assert len(metrics) == 1
     assert metrics[0].tags == {
         "referrer": attribution_info.referrer,
-        "dataset_name": dataset_name,
+        "dataset": dataset_name,
         "storage_key": storage_key.value,
     }
 
