@@ -325,7 +325,6 @@ schema:
 required_time_column: to_hour_timestamp
 storages:
   - storage: replays_aggregated
-    is_writable: true
 storage_selector:
   selector: DefaultQueryStorageSelector
 query_processors:
