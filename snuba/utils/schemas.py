@@ -86,7 +86,16 @@ class ColumnType(Generic[TModifiers]):
         self.__modifiers = modifiers
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+        # return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+        repr_content = self._repr_content()
+        if repr_content:
+            return "schemas.{}({}, modifiers={})".format(
+                self.__class__.__name__, repr_content, repr(self.__modifiers)
+            )
+        else:
+            return "schemas.{}(modifiers={})".format(
+                self.__class__.__name__, repr(self.__modifiers)
+            )
 
     def _repr_content(self) -> str:
         """

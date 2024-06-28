@@ -384,13 +384,19 @@ def add_node(
 
 @migrations.command()
 @click.argument("storage_path", type=str)
-def generate(
-    storage_path: str,
-) -> None:
+@click.option("--name", type=str, help="optional name for the migration")
+def generate(storage_path: str, name: Optional[str] = None) -> None:
     """
-    Given a path to modified storage yaml definition (inside of snuba repo),
-    creates a snuba migration for the given modifications.
-    The migration will be written into the local directory. The user is responsible for making
+    Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.py),
+    and an optional name for the migration,
+    generates a snuba migration based on the schema modifications to the storage.yaml.
+
+    Currently only column addition is supported.
+
+    The migration is generated based on the diff between HEAD and working dir. Therefore modifications to the
+    storage should be uncommitted in the working dir.
+
+    The generated migration will be written into the local directory. The user is responsible for making
     the commit, PR, and merging.
     """
     expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
@@ -399,5 +405,5 @@ def generate(
             f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
         )
 
-    autogeneration.generate(storage_path)
-    click.echo("This function is under construction.")
+    path = autogeneration.generate(storage_path, migration_name=name)
+    click.echo(f"Migration successfully generated at {path}")
