@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
-
-import pytest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -19,7 +16,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
-from snuba.query.dsl import divide, literals_tuple
+from snuba.query.dsl import divide, literals_tuple, minus, plus
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -200,8 +197,8 @@ def test_simple_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d0", column="time"),
-                right=JoinConditionExpression(table_alias="d1", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="time"),
+                right=JoinConditionExpression(table_alias="d0", column="time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -217,6 +214,381 @@ def test_simple_formula() -> None:
         condition("d0")
         + condition("d1")
         + [tag_condition, metric_condition1, metric_condition2]
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0"),
+            ),
+        ],
+        groupby=[time_expression("d1"), time_expression("d0")],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression("d0"),
+            ),
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_bracket_on_formula() -> None:
+    query_body = "(min(`d:transactions/duration@millisecond`){status_code:400} - max(`d:transactions/duration@millisecond`){status_code:404}) / (sum(`d:transactions/duration@millisecond`){status_code:200} + avg(`d:transactions/duration@millisecond`){status_code:418})"
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            minus(
+                FunctionCall(
+                    None,
+                    "min",
+                    (Column("_snuba_value", "d0", "value"),),
+                ),
+                FunctionCall(
+                    None,
+                    "max",
+                    (Column("_snuba_value", "d1", "value"),),
+                ),
+            ),
+            plus(
+                FunctionCall(
+                    None,
+                    "sum",
+                    (Column("_snuba_value", "d2", "value"),),
+                ),
+                FunctionCall(
+                    None,
+                    "avg",
+                    (Column("_snuba_value", "d3", "value"),),
+                ),
+            ),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    join_clause = JoinClause(
+        left_node=JoinClause(
+            left_node=JoinClause(
+                left_node=IndividualNode(
+                    alias="d3",
+                    data_source=from_distributions,
+                ),
+                right_node=IndividualNode(
+                    alias="d2",
+                    data_source=from_distributions,
+                ),
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression(table_alias="d3", column="time"),
+                        right=JoinConditionExpression(table_alias="d2", column="time"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=None,
+            ),
+            right_node=IndividualNode(
+                alias="d1",
+                data_source=from_distributions,
+            ),
+            keys=[
+                JoinCondition(
+                    left=JoinConditionExpression(table_alias="d2", column="time"),
+                    right=JoinConditionExpression(table_alias="d1", column="time"),
+                )
+            ],
+            join_type=JoinType.INNER,
+            join_modifier=None,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="time"),
+                right=JoinConditionExpression(table_alias="d0", column="time"),
+            ),
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    tag_condition1 = binary_condition(
+        "equals", tag_column("status_code", "d0"), Literal(None, "400")
+    )
+    tag_condition2 = binary_condition(
+        "equals", tag_column("status_code", "d1"), Literal(None, "404")
+    )
+    tag_condition3 = binary_condition(
+        "equals", tag_column("status_code", "d2"), Literal(None, "200")
+    )
+    tag_condition4 = binary_condition(
+        "equals", tag_column("status_code", "d3"), Literal(None, "418")
+    )
+    metric_condition1 = metric_id_condition(123456, "d0")
+    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition3 = metric_id_condition(123456, "d2")
+    metric_condition4 = metric_id_condition(123456, "d3")
+    formula_condition = combine_and_conditions(
+        condition("d0")
+        + condition("d1")
+        + condition("d2")
+        + condition("d3")
+        + [
+            tag_condition1,
+            metric_condition1,
+            tag_condition2,
+            metric_condition2,
+            tag_condition3,
+            metric_condition3,
+            tag_condition4,
+            metric_condition4,
+        ]
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression("d3"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d2"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0"),
+            ),
+        ],
+        groupby=[
+            time_expression("d3"),
+            time_expression("d2"),
+            time_expression("d1"),
+            time_expression("d0"),
+        ],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression("d0"),
+            ),
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_distribute_tags() -> None:
+    query_body = "max(`d:transactions/duration@millisecond`){status_code:404} / (sum(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)){status_code:418}"
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            FunctionCall(
+                None,
+                "max",
+                (Column("_snuba_value", "d0", "value"),),
+            ),
+            plus(
+                FunctionCall(
+                    None,
+                    "sum",
+                    (Column("_snuba_value", "d1", "value"),),
+                ),
+                FunctionCall(
+                    None,
+                    "avg",
+                    (Column("_snuba_value", "d2", "value"),),
+                ),
+            ),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    join_clause = JoinClause(
+        left_node=JoinClause(
+            left_node=IndividualNode(
+                alias="d2",
+                data_source=from_distributions,
+            ),
+            right_node=IndividualNode(
+                alias="d1",
+                data_source=from_distributions,
+            ),
+            keys=[
+                JoinCondition(
+                    left=JoinConditionExpression(table_alias="d2", column="time"),
+                    right=JoinConditionExpression(table_alias="d1", column="time"),
+                )
+            ],
+            join_type=JoinType.INNER,
+            join_modifier=None,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="time"),
+                right=JoinConditionExpression(table_alias="d0", column="time"),
+            ),
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    tag_condition1 = binary_condition(
+        "equals", tag_column("status_code", "d0"), Literal(None, "404")
+    )
+    tag_condition2 = binary_condition(
+        "equals", tag_column("status_code", "d1"), Literal(None, "418")
+    )
+    tag_condition3 = binary_condition(
+        "equals", tag_column("status_code", "d2"), Literal(None, "418")
+    )
+    metric_condition1 = metric_id_condition(123456, "d0")
+    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition3 = metric_id_condition(123456, "d2")
+    formula_condition = combine_and_conditions(
+        condition("d0")
+        + condition("d1")
+        + condition("d2")
+        + [
+            tag_condition1,
+            metric_condition1,
+            tag_condition2,
+            metric_condition2,
+            tag_condition3,
+            metric_condition3,
+        ]
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression("d2"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0"),
+            ),
+        ],
+        groupby=[time_expression("d2"), time_expression("d1"), time_expression("d0")],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression("d0"),
+            ),
+        ],
+        limit=1000,
+        offset=0,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_formula_with_scalar() -> None:
+    query_body = "(-1 - avg(`d:transactions/duration@millisecond`){status_code:418}) / sum(`d:transactions/duration@millisecond`){status_code:418} + 1"
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        plus(
+            divide(
+                minus(
+                    Literal(None, -1.0),
+                    FunctionCall(
+                        None,
+                        "avg",
+                        (Column("_snuba_value", "d0", "value"),),
+                    ),
+                ),
+                FunctionCall(
+                    None,
+                    "sum",
+                    (Column("_snuba_value", "d1", "value"),),
+                ),
+            ),
+            Literal(None, 1.0),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    join_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d1",
+            data_source=from_distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="time"),
+                right=JoinConditionExpression(table_alias="d0", column="time"),
+            )
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    tag_condition1 = binary_condition(
+        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+    )
+    tag_condition2 = binary_condition(
+        "equals", tag_column("status_code", "d1"), Literal(None, "418")
+    )
+    metric_condition1 = metric_id_condition(123456, "d0")
+    metric_condition2 = metric_id_condition(123456, "d1")
+    formula_condition = combine_and_conditions(
+        condition("d0")
+        + condition("d1")
+        + [tag_condition1, metric_condition1, tag_condition2, metric_condition2]
     )
 
     expected = CompositeQuery(
@@ -273,21 +645,22 @@ def test_different_groupbys() -> None:
         "generic_metrics",
     )
     query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    print(query)
     eq, reason = query.equals(expected)
     assert eq, reason
 
 
 def test_mismatch_groupby() -> None:
     query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`) by status_code"
+    expected = ""
 
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    with pytest.raises(
-        Exception,
-        match=re.escape("All terms in a formula must have the same groupby"),
-    ):
-        parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    print(query)
+    eq, reason = query.equals(expected)
+    assert eq, reason
 
 
 def test_onesided_groupby() -> None:
@@ -298,5 +671,6 @@ def test_onesided_groupby() -> None:
         "generic_metrics",
     )
     query, _ = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason

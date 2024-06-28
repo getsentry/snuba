@@ -24,6 +24,7 @@ def group_created() -> GroupAttributesSnapshot:
         "status": 0,
         "substatus": 7,
         "priority": 25,
+        "first_release": 1,
         "first_seen": "2023-02-27T15:40:12.223000Z",
         "num_comments": 0,
         "assignee_user_id": None,
@@ -61,6 +62,7 @@ class TestGroupAttributesMessageProcessor:
                 "group_status": 0,
                 "group_substatus": 7,
                 "group_priority": 25,
+                "group_first_release": 1,
                 "group_first_seen": datetime.strptime(
                     group_created["first_seen"], settings.PAYLOAD_DATETIME_FORMAT
                 ),

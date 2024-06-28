@@ -1228,21 +1228,41 @@ def populate_query_from_mql_context(
         # ensure we correctly join the subqueries. The column names will be the same for all the
         # subqueries, so we just need to map all the table aliases.
 
-        join_clause = query.get_from_clause()
-        assert isinstance(join_clause, JoinClause)
-        base_node_alias = join_clause.right_node.alias
-        other_aliases = [d[1] for d in entity_data if d[1] != base_node_alias]
-        new_conditions = []
-        for other in other_aliases:
-            assert other is not None  # mypy, this should never be None for joins
-            condition = JoinCondition(
-                left=JoinConditionExpression(base_node_alias, "time"),
-                right=JoinConditionExpression(other, "time"),
-            )
-            new_conditions.append(condition)
+        def add_join_keys(join_clause: JoinClause[Any]) -> str:
+            match (join_clause.left_node, join_clause.right_node):
+                case (
+                    IndividualNode(alias=left),
+                    IndividualNode(alias=right),
+                ):
+                    join_clause.keys.append(
+                        JoinCondition(
+                            left=JoinConditionExpression(
+                                table_alias=left, column="time"
+                            ),
+                            right=JoinConditionExpression(
+                                table_alias=right, column="time"
+                            ),
+                        )
+                    )
+                    return right
+                case (
+                    JoinClause() as inner_join_clause,
+                    IndividualNode(alias=right),
+                ):
+                    join_clause.keys.append(
+                        JoinCondition(
+                            left=JoinConditionExpression(
+                                table_alias=add_join_keys(inner_join_clause),
+                                column="time",
+                            ),
+                            right=JoinConditionExpression(
+                                table_alias=right, column="time"
+                            ),
+                        )
+                    )
+                    return right
 
-        conditions = list(join_clause.keys)
-        query.set_from_clause(replace(join_clause, keys=conditions + new_conditions))
+        add_join_keys(join_clause)
 
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)
