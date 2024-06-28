@@ -1,6 +1,4 @@
-from typing import cast
-
-import yaml
+from typing import Any, Sequence, cast
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.configuration.utils import parse_columns
@@ -13,13 +11,27 @@ This file is for autogenerating the migration for adding a column to your storag
 """
 
 
-def generate_migration_ops(
-    oldstorage: str, newstorage: str
+def generate_python_migration(
+    oldstorage: dict[str, Any], newstorage: dict[str, Any]
+) -> str:
+    """
+    Input:
+        2 storage.yaml files in yaml.safe_load format.
+        These representing the diff of a modified storage.yaml i.e. original and modified
+
+    Generates and returns a python migration based on the changes.
+    """
+    forwards, backwards = _storage_diff_to_migration_ops(oldstorage, newstorage)
+    return _migration_ops_to_migration(forwards, backwards)
+
+
+def _storage_diff_to_migration_ops(
+    oldstorage: dict[str, Any], newstorage: dict[str, Any]
 ) -> tuple[list[AddColumn], list[DropColumn]]:
     """
     Input:
-        old_storage, the original storage yaml in str format
-        new_storage, the modified storage yaml in str format
+        old_storage, the original storage yaml in yaml.safe_load format
+        new_storage, the modified storage yaml in yaml.safe_load format
 
     Returns a tuple (forwardops, backwardsops) this are the forward and backward migration
     operations required to migrate the storage as described in the given yaml files.
@@ -30,29 +42,26 @@ def generate_migration_ops(
     if not valid:
         raise ValueError(reason)
 
-    oldcol_names = set(
-        col["name"] for col in yaml.safe_load(oldstorage)["schema"]["columns"]
-    )
-    newstorage_dict = yaml.safe_load(newstorage)
-    newcols = newstorage_dict["schema"]["columns"]
+    oldcol_names = set(col["name"] for col in oldstorage["schema"]["columns"])
+    newcols = newstorage["schema"]["columns"]
 
     forwardops: list[AddColumn] = []
     for i, col in enumerate(newcols):
         if col["name"] not in oldcol_names:
             column = _schema_column_to_migration_column(parse_columns([col])[0])
             after = newcols[i - 1]["name"]
-            storage_set = StorageSetKey(newstorage_dict["storage"]["set_key"])
+            storage_set = StorageSetKey(newstorage["storage"]["set_key"])
             forwardops += [
                 AddColumn(
                     storage_set=storage_set,
-                    table_name=newstorage_dict["schema"]["local_table_name"],
+                    table_name=newstorage["schema"]["local_table_name"],
                     column=column,
                     after=after,
                     target=OperationTarget.LOCAL,
                 ),
                 AddColumn(
                     storage_set=storage_set,
-                    table_name=newstorage_dict["schema"]["dist_table_name"],
+                    table_name=newstorage["schema"]["dist_table_name"],
                     column=column,
                     after=after,
                     target=OperationTarget.DISTRIBUTED,
@@ -61,34 +70,63 @@ def generate_migration_ops(
     return (forwardops, [op.get_reverse() for op in reversed(forwardops)])
 
 
-def _is_valid_add_column(oldstorage: str, newstorage: str) -> tuple[bool, str]:
+def _migration_ops_to_migration(
+    forwards_ops: Sequence[AddColumn],
+    backwards_ops: Sequence[DropColumn],
+) -> str:
+    """
+    Given a lists of forward and backwards ops, returns a python class
+    definition for the migration as a str. The migration must be non-blocking.
+    """
+    return f"""
+from typing import Sequence
+
+from snuba.clusters.storage_sets import StorageSetKey
+from snuba.migrations.columns import MigrationModifiers
+from snuba.migrations.migration import ClickhouseNodeMigration
+from snuba.migrations.operations import AddColumn, DropColumn, OperationTarget, SqlOperation
+from snuba.utils import schemas
+from snuba.utils.schemas import Column
+
+class Migration(ClickhouseNodeMigration):
+    blocking = False
+
+    def forwards_ops(self) -> Sequence[SqlOperation]:
+        return {repr(forwards_ops)}
+
+    def backwards_ops(self) -> Sequence[SqlOperation]:
+        return {repr(backwards_ops)}
+"""
+
+
+def _is_valid_add_column(
+    oldstorage: dict[str, Any], newstorage: dict[str, Any]
+) -> tuple[bool, str]:
     """
     Input:
-        old_storage, the old storage yaml in str format
-        new_storage, the modified storage yaml in str format
+        old_storage, the old storage yaml in yaml.safe_load format
+        new_storage, the new (modified) storage yaml in yaml.safe_load format
 
     Returns true if the changes to the storage is valid column addition, false otherwise,
     along with a reasoning.
     """
-    oldstorage_dict = yaml.safe_load(oldstorage)
-    newstorage_dict = yaml.safe_load(newstorage)
-    if oldstorage_dict == newstorage_dict:
+    if oldstorage == newstorage:
         return True, "storages are the same"
 
-    # nothing changed but the columns
-    t1 = oldstorage_dict["schema"].pop("columns")
-    t2 = newstorage_dict["schema"].pop("columns")
-    if not (oldstorage_dict == newstorage_dict):
+    # verify nothing changed but the columns
+    t1 = oldstorage["schema"].pop("columns")
+    t2 = newstorage["schema"].pop("columns")
+    if not (oldstorage == newstorage):
         return (
             False,
             "Expected the only change to the storage to be the columns, but that is not true",
         )
-    oldstorage_dict["schema"]["columns"] = t1
-    newstorage_dict["schema"]["columns"] = t2
+    oldstorage["schema"]["columns"] = t1
+    newstorage["schema"]["columns"] = t2
 
-    # only changes to columns is additions
-    oldstorage_cols = oldstorage_dict["schema"]["columns"]
-    newstorage_cols = newstorage_dict["schema"]["columns"]
+    # verify only changes to columns is additions
+    oldstorage_cols = oldstorage["schema"]["columns"]
+    newstorage_cols = newstorage["schema"]["columns"]
 
     colnames_old = set(e["name"] for e in oldstorage_cols)
     colnames_new = set(e["name"] for e in newstorage_cols)
