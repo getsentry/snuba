@@ -388,10 +388,12 @@ def generate(
     storage_path: str,
 ) -> None:
     """
-    Given a path to modified storage yaml definition (inside of snuba repo),
+    Given a path to modified storage yaml definition (snuba/datasets/configuration/*/storages/*.yaml),
     creates a snuba migration for the given modifications.
     The migration will be written into the local directory. The user is responsible for making
     the commit, PR, and merging.
+
+    see MIGRATIONS.md in the root folder for more info
     """
     expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
     if not re.fullmatch(expected_pattern, storage_path):
