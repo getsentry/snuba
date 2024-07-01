@@ -148,6 +148,14 @@ class GenericMetricsLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.generic_metrics")
 
 
+class GenericMetricsV2Loader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.generic_metrics_v2")
+
+    def get_migrations(self) -> Sequence[str]:
+        return []
+
+
 class SearchIssuesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.search_issues")
