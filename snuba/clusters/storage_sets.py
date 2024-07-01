@@ -20,6 +20,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "GROUP_ATTRIBUTES": "group_attributes",
     "METRICS_SUMMARIES": "metrics_summaries",
     "PROFILE_CHUNKS": "profile_chunks",
+    "SEARCH_ISSUES_TMP": "search_issues_tmp",
 }
 
 
