@@ -897,6 +897,9 @@ def _apply_allocation_policies_quota(
 
         summary: dict[str, Any] = {}
         summary["threads_used"] = num_threads
+        summary["referrer"] = str(
+            attribution_info.tenant_ids.get("referrer", "no_referrer")
+        )
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary

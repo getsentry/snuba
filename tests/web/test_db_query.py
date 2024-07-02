@@ -276,6 +276,7 @@ def test_db_query_success() -> None:
                 "suggestion": "scan less bytes",
                 "throttle_threshold": 1280000000000,
             },
+            "referrer": "something",
         },
         "details": {
             "ReferrerGuardRailPolicy": {
@@ -485,13 +486,18 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
             RejectAllocationPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})
         ],
     ):
+        # Create a mock AttributionInfo object
+        attribution_info = mock.Mock()
+        # Mock the tenant_ids attribute
+        attribution_info.tenant_ids = {"referrer": "something"}
+
         query_metadata_list: list[ClickhouseQueryMetadata] = []
         stats: dict[str, Any] = {}
         with pytest.raises(QueryException) as excinfo:
             db_query(
                 clickhouse_query=query,
                 query_settings=HTTPQuerySettings(),
-                attribution_info=mock.Mock(),
+                attribution_info=attribution_info,
                 dataset_name="events",
                 query_metadata_list=query_metadata_list,
                 formatted_query=format_query(query),
@@ -518,6 +524,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
                 },
+                "referrer": "something",
             },
             "details": {
                 "RejectAllocationPolicy": {
@@ -752,6 +759,7 @@ def test_allocation_policy_updates_quota() -> None:
                 "suggestion": "scan less concurrent queries",
             },
             "throttled_by": {},
+            "referrer": "something",
         },
         "details": {
             "CountQueryPolicy": {
