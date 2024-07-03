@@ -216,10 +216,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             granted_quota = granted_quotas[0]
             is_throttled = False
             if granted_quota.granted <= 0:
-                self.metrics.increment(
-                    "bytes_scanned_window_policy_throttle",
-                    tags={"referrer": str(referrer)},
-                )
                 is_throttled = True
                 explanation[
                     "reason"

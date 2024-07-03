@@ -901,9 +901,6 @@ def _apply_allocation_policies_quota(
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary
 
-        if throttle_quota_and_policy is not None:
-            metrics.increment("db_query_throttled_query")
-
         if not can_run:
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
         # Before allocation policies were a thing, the query pipeline would apply
