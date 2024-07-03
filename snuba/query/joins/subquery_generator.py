@@ -37,13 +37,21 @@ class SubqueryDraft:
         self.__data_source = data_source
         self.__selected_expressions: set[SelectedExpression] = set()
         self.__conditions: list[Expression] = []
+        self.__groupby: list[Expression] = []
         self.__granularity: int | None = None
+
+    # temp
+    def get_selected_expressions(self) -> set[SelectedExpression]:
+        return self.__selected_expressions
 
     def add_select_expression(self, expression: SelectedExpression) -> None:
         self.__selected_expressions.add(expression)
 
     def add_condition(self, condition: Expression) -> None:
         self.__conditions.append(condition)
+
+    def add_groupby_expression(self, expression: Expression) -> None:
+        self.__groupby.append(expression)
 
     def set_granularity(self, granularity: int | None) -> None:
         self.__granularity = granularity
@@ -59,12 +67,18 @@ class SubqueryDraft:
                         key=lambda selected: selected.name or "",
                     )
                 ),
-                condition=combine_and_conditions(self.__conditions)
-                if self.__conditions
-                else None,
+                condition=(
+                    combine_and_conditions(self.__conditions)
+                    if self.__conditions
+                    else None
+                ),
+                groupby=self.__groupby,
                 granularity=self.__granularity,
             ),
         )
+
+    def __str__(self) -> str:
+        return str(self.__dict__)
 
 
 def aliasify_column(col_name: str) -> str:
