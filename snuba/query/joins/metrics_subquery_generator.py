@@ -85,7 +85,10 @@ def _push_down_conditions(
     alias_generator: AliasGenerator,
 ) -> Expression:
     """ """
+    print("subexpressions")
+    print(subexpressions)
     cut_subexpression = subexpressions.cut_branch(alias_generator)
+    print("pushing down conditions")
     print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
@@ -232,17 +235,11 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
                 )
             )
 
-    print("SELECTED COLUMNS")
-    print(selected_columns)
-
     query.set_ast_selected_columns(selected_columns)
-
     ast_condition = query.get_condition()
     if ast_condition is not None:
         for c in get_first_level_and_conditions(ast_condition):
             subexpression = c.accept(BranchCutter(alias_generator))
-            print("subexpression")
-            print(subexpression)
             if isinstance(subexpression, SubqueryExpression):
                 # The expression is entirely contained in a single subquery
                 # after we tried to cut subquery branches with the
@@ -263,27 +260,13 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
 
         query.set_ast_condition(None)
 
-    print("HERE")
-    print(query)
-    print(subqueries)
-
-    # # TODO: do we need the groupby in outer query?
-    print("starting groupby processing")
-    print(query.get_groupby())
-    print(
-        [
-            _process_root_groupby(e, subqueries, alias_generator)
-            for e in query.get_groupby()
-        ]
-    )
+    # TODO: do we need the groupby in outer query?
     query.set_ast_groupby(
         [
             _process_root_groupby(e, subqueries, alias_generator)
             for e in query.get_groupby()
         ]
     )
-    print("GROUP", query.get_groupby())
-
     query.set_ast_orderby(
         [
             replace(

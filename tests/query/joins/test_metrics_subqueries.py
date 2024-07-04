@@ -6,6 +6,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
+from snuba.query.conditions import get_first_level_and_conditions
 from snuba.query.data_source.join import (
     IndividualNode,
     JoinClause,
@@ -16,6 +17,7 @@ from snuba.query.data_source.join import (
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import NestedColumn, and_cond, column, in_cond, literal
+from snuba.query.expressions import Expression
 from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
 from snuba.query.logical import Query as LogicalQuery
 
@@ -232,88 +234,47 @@ def test_subquery_generator_metrics() -> None:
     selected_columns = lhs.get_selected_columns()
     assert selected_columns == expected_lhs_selected
 
-    # Test lhs conditions
-    print("conds")
-    print(lhs.get_condition())
-    from snuba.query.conditions import ConditionFunctions, build_match
-
-    print("try to find gran")
-    match = build_match(
-        col="granularity",
-        ops=[ConditionFunctions.EQ],
-        param_type=int,
-    )
-    found = match.match(lhs.get_condition())
-    print(found)
-
-    assert lhs.get_condition() == and_cond(
-        and_cond(
-            and_cond(
-                f.equals(
-                    column("granularity", None, "_snuba_granularity"),
-                    literal(60),
-                ),
-                f.greaterOrEquals(
-                    column("timestamp", None, "_snuba_timestamp"),
-                    literal(datetime(2024, 4, 2, 9, 15)),
-                ),
-            ),
-            and_cond(
-                and_cond(
-                    in_cond(column("org_id"), f.tuple(literal(101))),
-                    in_cond(column("org_id"), f.tuple(literal(101))),
-                ),
-                and_cond(
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1), literal(2)),
-                    ),
-                    f.equals(column("use_case_id"), literal("performance")),
-                ),
-            ),
+    # The ordering of conditions is not guaranteed so we sort them by alias before asserting
+    flattened_conditions: list[Expression] = get_first_level_and_conditions(
+        lhs.get_condition()
+    ).sort(key=lambda x: x.alias)
+    assert flattened_conditions == [
+        f.greaterOrEquals(
+            column("timestamp", None, "_snuba_timestamp"),
+            literal(datetime(2024, 4, 2, 9, 15)),
+            alias="_snuba_gen_10",
         ),
-        and_cond(
-            and_cond(
-                and_cond(
-                    f.equals(column("use_case_id"), literal("performance")),
-                    f.less(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2024, 4, 2, 15, 15)),
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"),
-                        literal(60),
-                    ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(1068)
-                    ),
-                ),
-            ),
-            and_cond(
-                and_cond(
-                    f.less(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2024, 4, 2, 15, 15)),
-                    ),
-                    f.greaterOrEquals(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2024, 4, 2, 9, 15)),
-                    ),
-                ),
-                and_cond(
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(1068)
-                    ),
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1), literal(2)),
-                    ),
-                ),
-            ),
+        f.less(
+            column("timestamp", None, "_snuba_timestamp"),
+            literal(datetime(2024, 4, 2, 15, 15)),
+            alias="_snuba_gen_11",
         ),
-    )
+        in_cond(
+            column("project_id", None, "_snuba_project_id"),
+            f.tuple(literal(1), literal(2)),
+            "_snuba_gen_12",
+        ),
+        in_cond(
+            column("org_id", None, "_snuba_org_id"),
+            f.tuple(literal(101)),
+            "_snuba_gen_13",
+        ),
+        f.equals(
+            column("use_case_id", None, "_snuba_use_case_id"),
+            literal("performance"),
+            alias="_snuba_gen_14",
+        ),
+        f.equals(
+            column("granularity", None, "_snuba_granularity"),
+            literal(60),
+            alias="_snuba_gen_15",
+        ),
+        f.equals(
+            column("metric_id", None, "_snuba_metric_id"),
+            literal(1068),
+            alias="_snuba_gen_16",
+        ),
+    ]
 
     # expected_lhs_query_groupby = [
     #     f.toStartOfInterval(

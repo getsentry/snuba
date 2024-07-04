@@ -139,9 +139,9 @@ def if_in(
 
 # boolean functions
 def binary_condition(
-    function_name: str, lhs: Expression, rhs: Expression
+    function_name: str, lhs: Expression, rhs: Expression, alias: Optional[str] = None
 ) -> FunctionCall:
-    return FunctionCall(None, function_name, (lhs, rhs))
+    return FunctionCall(alias, function_name, (lhs, rhs))
 
 
 def equals(
@@ -160,8 +160,10 @@ def or_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall
     return FunctionCall(None, "or", (lhs, rhs, *args))
 
 
-def in_cond(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("in", lhs, rhs)
+def in_cond(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return binary_condition("in", lhs, rhs, alias)
 
 
 # aggregate functions
