@@ -1,13 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Generator, Mapping
 
 from snuba.query import ProcessableQuery, SelectedExpression
 from snuba.query.composite import CompositeQuery
-from snuba.query.conditions import (
-    combine_and_conditions,
-    get_first_level_and_conditions,
-)
+from snuba.query.conditions import get_first_level_and_conditions
 from snuba.query.data_source.join import JoinClause
 from snuba.query.data_source.simple import Entity
 from snuba.query.expressions import Expression
@@ -20,6 +18,7 @@ from snuba.query.joins.classifier import (
 )
 from snuba.query.joins.subquery_generator import (
     SubqueriesInitializer,
+    SubqueriesReplacer,
     SubqueryDraft,
     generate_subqueries,
 )
@@ -80,6 +79,20 @@ def _push_down_branches(
     return cut_subexpression.main_expression
 
 
+def _push_down_conditions(
+    subexpressions: SubExpression,
+    subqueries: Mapping[str, SubqueryDraft],
+    alias_generator: AliasGenerator,
+) -> Expression:
+    """ """
+    cut_subexpression = subexpressions.cut_branch(alias_generator)
+    print("CUT", cut_subexpression)
+    for entity_alias, branches in cut_subexpression.cut_branches.items():
+        for branch in branches:
+            print("adding condition", branch)
+            subqueries[entity_alias].add_condition(branch)
+
+
 def _process_root_groupby(
     expression: Expression,
     subqueries: Mapping[str, SubqueryDraft],
@@ -107,7 +120,6 @@ def _push_down_groupby_branches(
     print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
-            # print("ADDING", entity_alias, branch)
             subqueries[entity_alias].add_groupby_expression(branch)
 
     return cut_subexpression.main_expression
@@ -200,6 +212,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
     subqueries = from_clause.accept(MetricsSubqueriesInitializer())
     alias_generator = _alias_generator()
 
+    # TODO: support groupby
     selected_columns = []
     for s in query.get_selected_columns():
         if s.name == "aggregate_value":
@@ -219,11 +232,13 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
                 )
             )
 
+    print("SELECTED COLUMNS")
+    print(selected_columns)
+
     query.set_ast_selected_columns(selected_columns)
 
     ast_condition = query.get_condition()
     if ast_condition is not None:
-        main_conditions = []
         for c in get_first_level_and_conditions(ast_condition):
             subexpression = c.accept(BranchCutter(alias_generator))
             print("subexpression")
@@ -244,42 +259,45 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
                 # branches into the select clauses and we reference them
                 # from the main query condition.
                 print("222")
-                _push_down_branches(subexpression, subqueries, alias_generator)
-                # main_conditions.append(
+                _push_down_conditions(subexpression, subqueries, alias_generator)
 
-                # )
-
-        if main_conditions:
-            query.set_ast_condition(combine_and_conditions(main_conditions))
-        else:
-            query.set_ast_condition(None)
+        query.set_ast_condition(None)
 
     print("HERE")
     print(query)
     print(subqueries)
-    # t = [v.__dict__ for v in subqueries.values()]
-    # print(t)
-    # print(main_conditions)
 
-    # # TODO: push down the group by when it is the same as the join key.
-    # query.set_ast_groupby(
-    #     [
-    #         _process_root_groupby(e, subqueries, alias_generator)
-    #         for e in query.get_groupby()
-    #     ]
-    # )
-    # print("GROUP", query.get_groupby())
+    # # TODO: do we need the groupby in outer query?
+    print("starting groupby processing")
+    print(query.get_groupby())
+    print(
+        [
+            _process_root_groupby(e, subqueries, alias_generator)
+            for e in query.get_groupby()
+        ]
+    )
+    query.set_ast_groupby(
+        [
+            _process_root_groupby(e, subqueries, alias_generator)
+            for e in query.get_groupby()
+        ]
+    )
+    print("GROUP", query.get_groupby())
 
-    # query.set_ast_orderby(
-    #     [
-    #         replace(
-    #             orderby,
-    #             expression=_process_root(
-    #                 orderby.expression, subqueries, alias_generator
-    #             ),
-    #         )
-    #         for orderby in query.get_orderby()
-    #     ]
-    # )
+    query.set_ast_orderby(
+        [
+            replace(
+                orderby,
+                expression=_process_root(
+                    orderby.expression, subqueries, alias_generator
+                ),
+            )
+            for orderby in query.get_orderby()
+        ]
+    )
 
-    # query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
+    query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
+    print("final query")
+    print(query.__dict__)
+    print("subqueries")
+    print([v.__dict__ for v in subqueries.values()])

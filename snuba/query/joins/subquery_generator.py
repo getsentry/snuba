@@ -349,3 +349,5 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
+    print("YA")
+    print(query)

@@ -25,13 +25,14 @@ class NestedColumn:
     )
     """
 
-    def __init__(self, column_name: str) -> None:
+    def __init__(self, column_name: str, table_name: str | None = None) -> None:
         self.column_name = column_name
+        self.table_name = table_name
 
     def __getitem__(self, key: str) -> SubscriptableReference:
         return SubscriptableReference(
             f"_snuba_{self.column_name}[{key}]",
-            Column(f"_snuba_{self.column_name}", None, self.column_name),
+            Column(f"_snuba_{self.column_name}", self.table_name, self.column_name),
             Literal(None, key),
         )
 
