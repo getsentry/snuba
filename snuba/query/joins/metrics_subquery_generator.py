@@ -85,14 +85,10 @@ def _push_down_conditions(
     alias_generator: AliasGenerator,
 ) -> Expression:
     """ """
-    print("subexpressions")
-    print(subexpressions)
     cut_subexpression = subexpressions.cut_branch(alias_generator)
-    print("pushing down conditions")
     print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
-            print("adding condition", branch)
             subqueries[entity_alias].add_condition(branch)
 
 
@@ -246,7 +242,6 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
                 # BranchCutter visitor.
                 # so push down the entire condition and remove it from
                 # the main query.
-                print("111")
                 subqueries[subexpression.subquery_alias].add_condition(
                     subexpression.main_expression
                 )
@@ -255,7 +250,6 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
                 # We cannot push down the condition. We push down the
                 # branches into the select clauses and we reference them
                 # from the main query condition.
-                print("222")
                 _push_down_conditions(subexpression, subqueries, alias_generator)
 
         query.set_ast_condition(None)
@@ -280,7 +274,3 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
     )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
-    print("final query")
-    print(query.__dict__)
-    print("subqueries")
-    print([v.__dict__ for v in subqueries.values()])

@@ -237,7 +237,8 @@ def test_subquery_generator_metrics() -> None:
     # The ordering of conditions is not guaranteed so we sort them by alias before asserting
     flattened_conditions: list[Expression] = get_first_level_and_conditions(
         lhs.get_condition()
-    ).sort(key=lambda x: x.alias)
+    )
+    flattened_conditions.sort(key=lambda x: x.alias)
     assert flattened_conditions == [
         f.greaterOrEquals(
             column("timestamp", None, "_snuba_timestamp"),
@@ -276,76 +277,94 @@ def test_subquery_generator_metrics() -> None:
         ),
     ]
 
-    # expected_lhs_query_groupby = [
-    #     f.toStartOfInterval(
-    #         column("timestamp", None, "_snuba_timestamp"),
-    #         f.toIntervalSecond(literal(60)),
-    #         literal("Universal"),
-    #         alias="_snuba_d1.time",
-    #     ),
-    # ]
-    # assert lhs.get_groupby() == expected_lhs_query_groupby
+    expected_lhs_query_groupby = [
+        NestedColumn("tags")["333333"],
+        f.toStartOfInterval(
+            column("timestamp", None, "_snuba_timestamp"),
+            f.toIntervalSecond(literal(60)),
+            literal("Universal"),
+            alias="_snuba_d1.time",
+        ),
+    ]
+    assert lhs.get_groupby() == expected_lhs_query_groupby
 
-    # rhs = from_clause.right_node.data_source
-    # assert isinstance(rhs, LogicalQuery)
+    rhs = from_clause.right_node.data_source
+    assert isinstance(rhs, LogicalQuery)
 
-    # expected_rhs_selected = [
-    #     SelectedExpression(
-    #         "_snuba_d0.time",
-    #         f.toStartOfInterval(
-    #             column("timestamp", None, "_snuba_timestamp"),
-    #             f.toIntervalSecond(literal(60)),
-    #             literal("Universal"),
-    #             alias="_snuba_d0.time",
-    #         ),
-    #     ),
-    #     SelectedExpression(
-    #         "_snuba_gen_1",
-    #         f.avg(column("value", None, "_snuba_value"), alias="_snuba_gen_1"),
-    #     ),
-    # ]
+    expected_rhs_selected = [
+        SelectedExpression(
+            "_snuba_d0.time",
+            f.toStartOfInterval(
+                column("timestamp", None, "_snuba_timestamp"),
+                f.toIntervalSecond(literal(60)),
+                literal("Universal"),
+                alias="_snuba_d0.time",
+            ),
+        ),
+        SelectedExpression(
+            "_snuba_gen_1",
+            f.avg(column("value", None, "_snuba_value"), alias="_snuba_gen_1"),
+        ),
+        SelectedExpression(
+            "_snuba_tags[333333]",
+            NestedColumn("tags")["333333"],
+        ),
+    ]
 
-    # selected_columns = rhs.get_selected_columns()
-    # assert selected_columns == expected_rhs_selected
+    selected_columns = rhs.get_selected_columns()
+    assert selected_columns == expected_rhs_selected
 
-    # # Test rhs conditions
-    # assert rhs.get_condition() == and_cond(
-    #     f.greaterOrEquals(
-    #         column("timestamp", None, "_snuba_timestamp"),
-    #         literal(datetime(2024, 4, 2, 9, 15)),
-    #     ),
-    #     f.less(
-    #         column("timestamp", None, "_snuba_timestamp"),
-    #         literal(datetime(2024, 4, 2, 15, 15)),
-    #     ),
-    #     in_cond(
-    #         column("project_id", None, "_snuba_project_id"),
-    #         f.tuple(literal(1), literal(2)),
-    #     ),
-    #     in_cond(column("org_id", None, "_snuba_org_id"), f.tuple(literal(101))),
-    #     f.equals(
-    #         column("use_case_id", None, "_snuba_use_case_id"), literal("performance")
-    #     ),
-    #     f.equals(column("granularity", None, "_snuba_granularity"), literal(60)),
-    #     f.equals(column("metric_id", None, "_snuba_metric_id"), literal(1068)),
-    #     f.greaterOrEquals(column("timestamp"), literal(datetime(2024, 4, 2, 9, 15))),
-    #     f.less(column("timestamp"), literal(datetime(2024, 4, 2, 15, 15))),
-    #     in_cond(column("project_id"), f.tuple(literal(1), literal(2))),
-    #     in_cond(column("org_id"), f.tuple(literal(101))),
-    #     f.equals(column("use_case_id"), literal("performance")),
-    #     f.equals(column("granularity"), literal(60)),
-    #     f.equals(column("metric_id"), literal(1068)),
-    # )
+    # Test rhs conditions
+    flattened_conditions: list[Expression] = get_first_level_and_conditions(
+        rhs.get_condition()
+    )
+    flattened_conditions.sort(key=lambda x: x.alias)
+    assert flattened_conditions == [
+        f.greaterOrEquals(
+            column("timestamp", None, "_snuba_timestamp"),
+            literal(datetime(2024, 4, 2, 9, 15)),
+            alias="_snuba_gen_3",
+        ),
+        f.less(
+            column("timestamp", None, "_snuba_timestamp"),
+            literal(datetime(2024, 4, 2, 15, 15)),
+            alias="_snuba_gen_4",
+        ),
+        in_cond(
+            column("project_id", None, "_snuba_project_id"),
+            f.tuple(literal(1), literal(2)),
+            "_snuba_gen_5",
+        ),
+        in_cond(
+            column("org_id", None, "_snuba_org_id"),
+            f.tuple(literal(101)),
+            "_snuba_gen_6",
+        ),
+        f.equals(
+            column("use_case_id", None, "_snuba_use_case_id"),
+            literal("performance"),
+            alias="_snuba_gen_7",
+        ),
+        f.equals(
+            column("granularity", None, "_snuba_granularity"),
+            literal(60),
+            alias="_snuba_gen_8",
+        ),
+        f.equals(
+            column("metric_id", None, "_snuba_metric_id"),
+            literal(1068),
+            alias="_snuba_gen_9",
+        ),
+    ]
 
-    # expected_rhs_query_groupby = [
-    #     f.toStartOfInterval(
-    #         column("timestamp", None, "_snuba_timestamp"),
-    #         f.toIntervalSecond(literal(60)),
-    #         literal("Universal"),
-    #         alias="_snuba_d0.time",
-    #     ),
-    # ]
-    # assert rhs.get_groupby() == expected_rhs_query_groupby
-
-    # print("SUCCESS")
-    # assert False
+    expected_rhs_query_groupby = [
+        NestedColumn("tags")["333333"],
+        f.toStartOfInterval(
+            column("timestamp", None, "_snuba_timestamp"),
+            f.toIntervalSecond(literal(60)),
+            literal("Universal"),
+            alias="_snuba_d0.time",
+        ),
+    ]
+    assert rhs.get_groupby() == expected_rhs_query_groupby
+    print("SUCCESS")
