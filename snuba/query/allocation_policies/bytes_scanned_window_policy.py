@@ -285,13 +285,6 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             return
         if bytes_scanned == 0:
             return
-        # we emitted both kinds of bytes scanned in _get_bytes_scanned_in_query however
-        # this metric shows what is actually being used to enforce the policy
-        self.metrics.increment(
-            "bytes_scanned",
-            bytes_scanned,
-            tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
-        )
         if "organization_id" in tenant_ids:
             org_limit_bytes_scanned = self.__get_org_limit_bytes_scanned(
                 tenant_ids.get("organization_id")
