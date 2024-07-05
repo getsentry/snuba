@@ -1,3 +1,4 @@
+import re
 from typing import Any, MutableMapping
 
 import pytest
@@ -17,6 +18,7 @@ from snuba.pipeline.stages.query_processing import (
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.conditions import ConditionFunctions, binary_condition
 from snuba.query.data_source.simple import Table
+from snuba.query.exceptions import InvalidExpressionException
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -255,7 +257,7 @@ def test_alias_regex_allows_parentheses() -> None:
     query = parse_snql_query_initial(body)
     expressions = query.get_selected_columns()
     assert len(expressions) == 4
-    assert sorted([expr.name for expr in expressions]) == [
+    assert sorted([expr.name or "" for expr in expressions]) == [
         "good_lcp_stuff",
         "metric.id",
         "session.status",
@@ -271,7 +273,7 @@ def test_alias_regex_allows_for_mri_format() -> None:
     query = parse_snql_query_initial(body)
     expressions = query.get_selected_columns()
     assert len(expressions) == 2
-    assert sorted([expr.name for expr in expressions]) == [
+    assert sorted([expr.name or "" for expr in expressions]) == [
         "c:sessions/session@none",
         "session.status",
     ]
@@ -285,7 +287,7 @@ def test_quoted_column_regex_allows_for_mri_format() -> None:
     query = parse_snql_query_initial(body)
     expressions = query.get_selected_columns()
     assert len(expressions) == 2
-    assert sorted([expr.name for expr in expressions]) == [
+    assert sorted([expr.name or "" for expr in expressions]) == [
         "session.status",
         "sumIf(value, equals(c:sessions/session@none, 0))",
     ]
@@ -351,9 +353,9 @@ def test_alias_validation(
         feature=None,
         parent_api=None,
     )
-    request = Request(
+    sRequest = Request(
         id="123",
-        original_body=query_body,
+        original_body=dict(query_body),
         query=query,
         query_settings=settings,
         attribution_info=attribution_info,
@@ -361,7 +363,7 @@ def test_alias_validation(
 
     pipeline_result = EntityProcessingStage().execute(
         QueryPipelineResult(
-            data=request,
+            data=sRequest,
             query_settings=settings,
             timer=Timer(name="bloop"),
             error=None,
@@ -369,4 +371,24 @@ def test_alias_validation(
     )
     clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
 
-    assert clickhouse_query.validate_aliases() == expected_result
+    assert (
+        clickhouse_query is not None
+        and clickhouse_query.validate_aliases() == expected_result
+    )
+
+
+def test_alias_validation_error() -> None:
+    query_body = """ MATCH {
+        MATCH (metrics_summaries)
+        SELECT trace_id, duration_ms AS duration, plus(duration_ms, 1) AS duration_plus_one
+        WHERE project_id=1
+        AND end_timestamp>=toDateTime('2021-01-01')
+        AND end_timestamp<toDateTime('2021-01-02')
+        LIMIT 100
+    } SELECT max(duration) AS max_duration, max(duration_plus_one) AS max_duration_plus_one"""
+    dataset = get_dataset("spans")
+    exception = InvalidExpressionException(
+        "aliasing a column in a subquery is not permitted"
+    )
+    with pytest.raises(type(exception), match=re.escape(str(exception))):
+        parse_snql_query(str(query_body), dataset)
