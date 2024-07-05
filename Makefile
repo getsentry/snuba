@@ -91,7 +91,7 @@ generate-config-docs:
 watch-rust-snuba:
 	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
-		cd rust_snuba/ && cargo watch -s 'maturin develop'
+		cd rust_snuba/ && cargo watch -s 'maturin develop --release'
 .PHONY: watch-rust-snuba
 
 test-rust:
