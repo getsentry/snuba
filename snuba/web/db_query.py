@@ -869,7 +869,6 @@ def _apply_allocation_policies_quota(
                 allowance = allocation_policy.get_quota_allowance(
                     attribution_info.tenant_ids, query_id
                 )
-                num_threads = min(num_threads, allowance.max_threads)
                 can_run &= allowance.can_run
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
@@ -877,10 +876,12 @@ def _apply_allocation_policies_quota(
                     quota_allowances[allocation_policy.config_key()],
                 )
                 if allowance.is_throttled:
-                    throttle_quota_and_policy = _QuotaAndPolicy(
-                        quota_allowance=allowance,
-                        policy_name=allocation_policy.config_key(),
-                    )
+                    if allowance.max_threads < num_threads:
+                        throttle_quota_and_policy = _QuotaAndPolicy(
+                            quota_allowance=allowance,
+                            policy_name=allocation_policy.config_key(),
+                        )
+                num_threads = min(num_threads, allowance.max_threads)
                 if not can_run:
                     rejection_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
