@@ -35,6 +35,7 @@ CLUSTERS = [
             "generic_metrics_gauges",
             "metrics_summaries",
             "profile_chunks",
+            "search_issues_tmp",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",

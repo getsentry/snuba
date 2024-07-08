@@ -746,10 +746,16 @@ def build_formula_query_from_clause(
     if join_nodes is None:
         raise InvalidQueryException("Could not parse formula")
 
-    # We use the group by for the ON conditions, so make sure they are all the same
+    # Since the groupby is used in the ON conditions, they should all the same.
+    # However, we do support onesided groupbys in a formula. This is the time spent percentage use-case.
+    # Example: sum(`transactions.duration`) by transaction / sum(`transactions.duration`)
     groupbys = join_nodes[0].groupby
-    if not all(node.groupby == groupbys for node in join_nodes):
-        raise InvalidQueryException("All terms in a formula must have the same groupby")
+    for node in join_nodes:
+        if node.groupby is not None:
+            if node.groupby != groupbys:
+                raise InvalidQueryException(
+                    "All terms in a formula must have the same groupby"
+                )
 
     entity_keys = [select_entity(node.mri or "", dataset) for node in join_nodes]
     if len(entity_keys) == 1:
@@ -890,10 +896,16 @@ def convert_formula_to_query(
         if leaf_node.groupby:
             for group_exp in leaf_node.groupby:
                 if isinstance(group_exp.expression, Column):
+                    alias: Optional[str]
+                    if alias_wrap(leaf_node.table_alias):
+                        alias = f"{alias_wrap(leaf_node.table_alias)}.{group_exp.expression.alias}"
+                    else:
+                        alias = group_exp.expression.alias
                     aliased_groupby = replace(
                         group_exp,
                         expression=replace(
                             group_exp.expression,
+                            alias=alias,
                             table_name=alias_wrap(leaf_node.table_alias),
                         ),
                     )
@@ -902,7 +914,6 @@ def convert_formula_to_query(
 
     if groupby:
         query.set_ast_groupby(groupby)
-
     query.set_ast_selected_columns(selected_columns)
 
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
@@ -1224,21 +1235,41 @@ def populate_query_from_mql_context(
         # ensure we correctly join the subqueries. The column names will be the same for all the
         # subqueries, so we just need to map all the table aliases.
 
-        join_clause = query.get_from_clause()
-        assert isinstance(join_clause, JoinClause)
-        base_node_alias = join_clause.right_node.alias
-        other_aliases = [d[1] for d in entity_data if d[1] != base_node_alias]
-        new_conditions = []
-        for other in other_aliases:
-            assert other is not None  # mypy, this should never be None for joins
-            condition = JoinCondition(
-                left=JoinConditionExpression(base_node_alias, "time"),
-                right=JoinConditionExpression(other, "time"),
-            )
-            new_conditions.append(condition)
+        def add_join_keys(join_clause: JoinClause[Any]) -> str:
+            match (join_clause.left_node, join_clause.right_node):
+                case (
+                    IndividualNode(alias=left),
+                    IndividualNode(alias=right),
+                ):
+                    join_clause.keys.append(
+                        JoinCondition(
+                            left=JoinConditionExpression(
+                                table_alias=left, column="time"
+                            ),
+                            right=JoinConditionExpression(
+                                table_alias=right, column="time"
+                            ),
+                        )
+                    )
+                    return right
+                case (
+                    JoinClause() as inner_join_clause,
+                    IndividualNode(alias=right),
+                ):
+                    join_clause.keys.append(
+                        JoinCondition(
+                            left=JoinConditionExpression(
+                                table_alias=add_join_keys(inner_join_clause),
+                                column="time",
+                            ),
+                            right=JoinConditionExpression(
+                                table_alias=right, column="time"
+                            ),
+                        )
+                    )
+                    return right
 
-        conditions = list(join_clause.keys)
-        query.set_from_clause(replace(join_clause, keys=conditions + new_conditions))
+        add_join_keys(join_clause)
 
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)
