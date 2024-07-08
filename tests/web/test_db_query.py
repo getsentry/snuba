@@ -21,7 +21,6 @@ from snuba.query.allocation_policies import (
     AllocationPolicy,
     AllocationPolicyConfig,
     AllocationPolicyViolations,
-    PassthroughPolicy,
     QueryResultOrError,
     QuotaAllowance,
 )
@@ -30,7 +29,6 @@ from snuba.query.parser.expressions import parse_clickhouse_function
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog.query_metadata import ClickhouseQueryMetadata
 from snuba.state.quota import ResourceQuota
-from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from snuba.web.db_query import (
@@ -243,43 +241,6 @@ def _build_test_query(
             parent_api=None,
         ),
     )
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_db_record_bytes_scanned() -> None:
-    dataset_name = "events"
-    storage_key = StorageKey("errors_ro")
-    query, storage, attribution_info = _build_test_query(
-        "count(distinct(project_id))",
-        allocation_policies=[PassthroughPolicy(storage_key, [], {})],
-    )
-
-    query_metadata_list: list[ClickhouseQueryMetadata] = []
-    stats: dict[str, Any] = {}
-
-    db_query(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        attribution_info=attribution_info,
-        dataset_name=dataset_name,
-        query_metadata_list=query_metadata_list,
-        formatted_query=format_query(query),
-        reader=storage.get_cluster().get_reader(),
-        timer=Timer("foo"),
-        stats=stats,
-        trace_id="trace_id",
-        robust=False,
-    )
-
-    metrics = get_recorded_metric_calls("increment", "allocation_policy.bytes_scanned")
-    assert metrics
-    assert len(metrics) == 1
-    assert metrics[0].tags == {
-        "referrer": attribution_info.referrer,
-        "dataset": dataset_name,
-        "storage_key": storage_key.value,
-    }
 
 
 @pytest.mark.clickhouse_db

@@ -851,10 +851,6 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         pass
 
-    @property
-    def storage_key(self) -> StorageKey:
-        return self._storage_key
-
 
 class PassthroughPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
