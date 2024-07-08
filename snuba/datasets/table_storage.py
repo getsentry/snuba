@@ -13,6 +13,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc.row_processors import CdcRowProcessor
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
+from snuba.datasets.storage import DeletionSettings
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.settings import SLICED_KAFKA_TOPIC_MAP
@@ -236,6 +237,7 @@ class TableWriter:
         storage_set: StorageSetKey,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
+        deletion_settings: DeletionSettings,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
@@ -246,6 +248,7 @@ class TableWriter:
         self.__replacer_processor = replacer_processor
         self.__writer_options = writer_options
         self.__write_format = write_format
+        self.__deletion_settings = deletion_settings
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema

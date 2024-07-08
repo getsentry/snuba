@@ -158,6 +158,13 @@ class ReadableTableStorage(ReadableStorage):
         return self.__allocation_policies or super().get_allocation_policies()
 
 
+@dataclass(frozen=True)
+class DeletionSettings:
+    is_enabled: bool
+    max_rows_to_delete: int
+    tables: list
+
+
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
         self,
@@ -167,6 +174,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         schema: Schema,
         query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
+        deletion_settings: DeletionSettings,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
@@ -191,6 +199,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             storage_set=storage_set_key,
             write_schema=schema,
             stream_loader=stream_loader,
+            deletion_settings=deletion_settings,
             replacer_processor=replacer_processor,
             writer_options=writer_options,
             write_format=write_format,

@@ -87,6 +87,24 @@ STREAM_LOADER_SCHEMA = {
     "description": "The stream loader for a writing to ClickHouse. This provides what is needed to start a Kafka consumer and fill in the ClickHouse table.",
 }
 
+DELETION_SETTINGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_enabled": {
+            "type": "integer",
+            "description": "1 if the storage allows for deletions, 0 otherwise",
+        },
+        "max_rows_to_delete": {
+            "type": "integer",
+            "description": "maximum amount of rows (per table) that is allowed to delete in one request",
+        },
+        "tables": {
+            "type": "array",
+            "description": "for storages that have materialized views, we might want to delete from both the raw table and the aggregated table since the delete functionality doesn’t do that for us. If there is only one table - we can have this be singular",
+        },
+    },
+}
+
 
 ######
 # Column specific json schemas
@@ -580,6 +598,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,

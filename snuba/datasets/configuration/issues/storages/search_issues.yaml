@@ -122,3 +122,9 @@ stream_loader:
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
   dlq_topic: snuba-dead-letter-generic-events
+
+deletion_settings:
+  is_enabled: 1
+  max_rows_to_delete: 1000
+  tables:
+    - search_issues_local_v2
