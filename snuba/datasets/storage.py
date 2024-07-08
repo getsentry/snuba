@@ -12,6 +12,10 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.deletion_settings import DeletionSettings
+from snuba.datasets.deletion_processors import (
+    DEFAULT_DELETION_PROCESSOR,
+    DeletionProcessor,
+)
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
@@ -132,6 +136,7 @@ class ReadableTableStorage(ReadableStorage):
         readiness_state: ReadinessState,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         deletion_settings: Optional[DeletionSettings] = None,
+        deletion_processors: Optional[list[DeletionProcessor]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
         required_time_column: Optional[str] = None,
@@ -139,6 +144,7 @@ class ReadableTableStorage(ReadableStorage):
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
         self.__deletion_settings = deletion_settings or DeletionSettings(0, [], 0)
+        self.__deletion_processors = deletion_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
         super().__init__(
@@ -163,6 +169,9 @@ class ReadableTableStorage(ReadableStorage):
     def get_deletion_settings(self) -> DeletionSettings:
         return self.__deletion_settings
 
+    def get_deletion_processors(self) -> list[DeletionProcessor]:
+        return self.__deletion_processors or [DEFAULT_DELETION_PROCESSOR]
+
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
@@ -177,6 +186,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         deletion_settings: Optional[DeletionSettings] = None,
+        deletion_processors: Optional[list[DeletionProcessor]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
@@ -190,6 +200,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             readiness_state,
             query_processors,
             deletion_settings,
+            deletion_processors,
             mandatory_condition_checkers,
             allocation_policies,
             required_time_column=required_time_column,

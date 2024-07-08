@@ -14,6 +14,7 @@ from snuba.datasets.configuration.utils import (
     parse_columns,
 )
 from snuba.datasets.deletion_settings import DeletionSettings
+from snuba.datasets.deletion_processors import DeletionProcessor
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.readiness_state import ReadinessState
@@ -44,6 +45,7 @@ STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
 DELETION_SETTINGS = "deletion_settings"
+DELETION_PROCESSORS = "deletion_processors"
 MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
@@ -85,6 +87,18 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             if DELETION_SETTINGS in config
             else {}
         ),
+        DELETION_PROCESSORS: [
+            DeletionProcessor.get_from_name(
+                deletion_processor["processor"]
+            ).from_kwargs(
+                **{
+                    **deletion_processor.get("args", {}),
+                }
+            )
+            for deletion_processor in config[DELETION_PROCESSORS]
+        ]
+        if DELETION_PROCESSORS in config
+        else [],
         MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
             config[MANDATORY_CONDITION_CHECKERS]
             if MANDATORY_CONDITION_CHECKERS in config

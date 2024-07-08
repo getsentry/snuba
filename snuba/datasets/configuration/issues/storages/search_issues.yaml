@@ -128,3 +128,10 @@ stream_loader:
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
   dlq_topic: snuba-dead-letter-generic-events
+
+deletion_processors:
+  - processor: ColumnFilterProcessor
+    args:
+      column_filters:
+        - project_id
+        - replay_id
