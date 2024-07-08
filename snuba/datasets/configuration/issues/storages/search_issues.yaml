@@ -114,6 +114,12 @@ query_processors:
         contexts:
           trace.trace_id: trace_id
 
+deletion_settings:
+  is_enabled: 0
+  max_rows_to_delete: 1000
+  tables:
+    - search_issues_local_v2
+
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
