@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Sequence, Type, Union
 
+from snuba.clickhouse.escaping import escape_alias
 from snuba.clickhouse.formatter.expression import (
     ClickhouseExpressionFormatter,
     ExpressionFormatterAnonymized,
@@ -109,9 +110,13 @@ def _format_query_content(
                 ),
             ),
             _format_arrayjoin(query, formatter),
-            _build_optional_string_node("PREWHERE", query.get_prewhere_ast(), formatter)
-            if isinstance(query, Query)
-            else None,
+            (
+                _build_optional_string_node(
+                    "PREWHERE", query.get_prewhere_ast(), formatter
+                )
+                if isinstance(query, Query)
+                else None
+            ),
             _build_optional_string_node("WHERE", query.get_condition(), formatter),
             _format_groupby(query, formatter),
             _build_optional_string_node("HAVING", query.get_having(), formatter),
@@ -238,7 +243,7 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
                 SequenceNode(
                     [
                         StringNode(
-                            f"{k.left.table_alias}.{k.left.column}={k.right.table_alias}.{k.right.column}"
+                            f"{k.left.table_alias}.{escape_alias(k.left.column)}={k.right.table_alias}.{escape_alias(k.right.column)}"
                         )
                         for k in node.keys
                     ],

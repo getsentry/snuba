@@ -272,5 +272,10 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             for orderby in query.get_orderby()
         ]
     )
-
+    print("before changing from clause")
+    print(query.get_from_clause())
+    print("subqueries")
+    print(subqueries)
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
+    print("after subquery generator")
+    print(query.__dict__)

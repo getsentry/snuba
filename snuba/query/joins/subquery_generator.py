@@ -171,6 +171,8 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
             )
             for k in node.keys
         ]
+        print("keysss")
+        print(keys)
         return JoinClause(left, right, keys, node.join_type, node.join_modifier)
 
 
