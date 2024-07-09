@@ -12,10 +12,6 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.deletion_settings import DeletionSettings
-from snuba.datasets.deletion_processors import (
-    DEFAULT_DELETION_PROCESSOR,
-    DeletionProcessor,
-)
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
@@ -136,7 +132,7 @@ class ReadableTableStorage(ReadableStorage):
         readiness_state: ReadinessState,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         deletion_settings: Optional[DeletionSettings] = None,
-        deletion_processors: Optional[list[DeletionProcessor]] = None,
+        deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
         required_time_column: Optional[str] = None,
@@ -169,8 +165,8 @@ class ReadableTableStorage(ReadableStorage):
     def get_deletion_settings(self) -> DeletionSettings:
         return self.__deletion_settings
 
-    def get_deletion_processors(self) -> list[DeletionProcessor]:
-        return self.__deletion_processors or [DEFAULT_DELETION_PROCESSOR]
+    def get_deletion_processors(self) -> Sequence[ClickhouseQueryProcessor]:
+        return self.__deletion_processors
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -186,7 +182,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         deletion_settings: Optional[DeletionSettings] = None,
-        deletion_processors: Optional[list[DeletionProcessor]] = None,
+        deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,

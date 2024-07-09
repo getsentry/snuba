@@ -134,4 +134,4 @@ deletion_processors:
     args:
       column_filters:
         - project_id
-        - replay_id
+        - occurrence_id
