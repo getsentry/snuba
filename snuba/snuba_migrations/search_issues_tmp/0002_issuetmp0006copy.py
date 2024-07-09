@@ -62,6 +62,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
+        return []
         table_name = "search_issues_dist_v2"
         return [
             operations.DropColumn(

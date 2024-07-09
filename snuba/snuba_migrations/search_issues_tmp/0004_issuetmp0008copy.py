@@ -29,6 +29,7 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
+        return []
         return [
             operations.DropColumn(
                 storage_set=StorageSetKey.SEARCH_ISSUES_TMP,
