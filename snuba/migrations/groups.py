@@ -18,6 +18,7 @@ from snuba.migrations.group_loader import (
     QuerylogLoader,
     ReplaysLoader,
     SearchIssuesLoader,
+    SearchIssuesTmpLoader,
     SessionsLoader,
     SpansLoader,
     SystemLoader,
@@ -45,6 +46,7 @@ class MigrationGroup(Enum):
     GROUP_ATTRIBUTES = "group_attributes"
     METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
+    SEARCH_ISSUES_TMP = "search_issues_tmp"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -62,6 +64,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
     MigrationGroup.PROFILE_CHUNKS,
+    MigrationGroup.SEARCH_ISSUES_TMP,
 }
 
 
@@ -156,7 +159,6 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=SearchIssuesLoader(),
         storage_sets_keys={
             StorageSetKey.SEARCH_ISSUES,
-            StorageSetKey.SEARCH_ISSUES_TMP,
         },
         readiness_state=ReadinessState.COMPLETE,
     ),
@@ -178,6 +180,13 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
+        readiness_state=ReadinessState.PARTIAL,
+    ),
+    MigrationGroup.SEARCH_ISSUES_TMP: _MigrationGroup(
+        loader=SearchIssuesTmpLoader(),
+        storage_sets_keys={
+            StorageSetKey.SEARCH_ISSUES_TMP,
+        },
         readiness_state=ReadinessState.PARTIAL,
     ),
 }
