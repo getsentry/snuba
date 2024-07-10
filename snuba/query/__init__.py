@@ -106,7 +106,6 @@ class Query(DataSource, ABC):
         totals: bool = False,
         granularity: Optional[int] = None,
         experiments: Optional[MutableMapping[str, AnyType]] = None,
-        is_delete: bool = False,
     ):
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
@@ -120,10 +119,6 @@ class Query(DataSource, ABC):
         self.__totals = totals
         self.__granularity = granularity
         self.__experiments = experiments or {}
-        self.__is_delete = is_delete
-
-    def get_is_delete(self) -> bool:
-        return self.__is_delete
 
     def get_columns(self) -> ColumnSet:
         """
@@ -518,7 +513,6 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
-        is_delete: bool = False,
     ):
         super().__init__(
             selected_columns=selected_columns,
@@ -532,7 +526,6 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
             offset=offset,
             totals=totals,
             granularity=granularity,
-            is_delete=is_delete,
         )
         self.__from_clause = from_clause
 

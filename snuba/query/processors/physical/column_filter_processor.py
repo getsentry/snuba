@@ -1,6 +1,8 @@
 from typing import Sequence
 
 from snuba.clickhouse.query import Query
+from snuba.query.exceptions import InvalidQueryException
+from snuba.query.expressions import ColumnVisitor
 from snuba.query.processors.physical import ClickhouseQueryProcessor
 from snuba.query.query_settings import QuerySettings
 
@@ -15,8 +17,16 @@ class ColumnFilterProcessor(ClickhouseQueryProcessor):
         self.__column_filters = set(column_filters)
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        assert query.get_is_delete(), f"{query} is not a valid DELETE query"
-        column_names = [column.name for column in query.get_columns()]
-        assert (
-            set(column_names) == self.__column_filters
-        ), f"Columns in the query should be exactly the same as the columns listed in the storage definition. Query has column names: {column_names}"
+        visitor = ColumnVisitor()
+        condition = query.get_condition()
+
+        if condition is None:
+            raise InvalidQueryException(
+                "Not a valid DELETE query. Delete queries should be in the form of DELETE FROM [db.]table WHERE expr"
+            )
+
+        column_names = condition.accept(visitor)
+        if column_names != self.__column_filters:
+            raise InvalidQueryException(
+                f"Query columns {column_names} must match columns {self.__column_filters}"
+            )

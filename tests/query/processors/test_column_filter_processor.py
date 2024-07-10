@@ -5,6 +5,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import BooleanFunctions, binary_condition
 from snuba.query.data_source.simple import Table
+from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Literal
 from snuba.query.processors.physical.column_filter_processor import (
     ColumnFilterProcessor,
@@ -29,7 +30,7 @@ test_data = [
                 ),
             ),
         ),
-        False,
+        True,
         id=f"Valid query, since it contains exactly {VALID_COLUMNS}",
     ),
     pytest.param(
@@ -54,12 +55,11 @@ test_data = [
 
 @pytest.mark.parametrize("query, valid", test_data)
 @pytest.mark.redis_db
-def test_condition_enforcer(query: Query, valid: bool) -> None:
-    valid_columns = ["project_id", "occurrence_id"]
+def test_column_filter_processor(query: Query, valid: bool) -> None:
     query_settings = HTTPQuerySettings(consistent=True)
-    processor = ColumnFilterProcessor(valid_columns)
+    processor = ColumnFilterProcessor(VALID_COLUMNS)
     if valid:
         processor.process_query(query, query_settings)
     else:
-        with pytest.raises(AssertionError):
+        with pytest.raises(InvalidQueryException):
             processor.process_query(query, query_settings)
