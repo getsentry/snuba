@@ -55,7 +55,6 @@ def _process_root(
     and pushes down the subexpressions.
     """
     subexpressions = expression.accept(BranchCutter(alias_generator))
-    print("ROOT", subexpressions)
     return _push_down_branches(subexpressions, subqueries, alias_generator)
 
 
@@ -69,7 +68,6 @@ def _push_down_branches(
     returns the main expression for the main query.
     """
     cut_subexpression = subexpressions.cut_branch(alias_generator)
-    print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
             subqueries[entity_alias].add_select_expression(
@@ -86,7 +84,6 @@ def _push_down_conditions(
 ) -> Expression:
     """ """
     cut_subexpression = subexpressions.cut_branch(alias_generator)
-    print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
             subqueries[entity_alias].add_condition(branch)
@@ -102,7 +99,6 @@ def _process_root_groupby(
     and pushes down the subexpressions.
     """
     subexpressions = expression.accept(BranchCutter(alias_generator))
-    print("ROOT", subexpressions)
     return _push_down_groupby_branches(subexpressions, subqueries, alias_generator)
 
 
@@ -116,7 +112,6 @@ def _push_down_groupby_branches(
     returns the main expression for the main query.
     """
     cut_subexpression = subexpressions.cut_branch(alias_generator)
-    print("CUT", cut_subexpression)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
             subqueries[entity_alias].add_groupby_expression(branch)
@@ -174,7 +169,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
     subqueries, so the join is happening on grouped results instead of the full result set.
 
     ```
-    SELECT g(f(d0.a), g(d1.b)), t() as d0.time, t() as d1.time, d0.gb, d1.gb
+    SELECT g(f(d0.a), f(d1.b)), t() as d0.time, t() as d1.time, d0.gb, d1.gb
     FROM d0 INNER JOIN d1 ON ...
     WHERE d0.m = 1 AND d1.m = 2
     GROUP BY d0.time, d1.time, d0.gb, d1.gb
@@ -189,12 +184,13 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
         SELECT f(a) as _snuba_a, t() as _snuba_time, gb as _snuba_gb
         FROM ...
         WHERE m = 1
+        GROUP BY _snuba_time, _snuba_gb
     ) d0 INNER JOIN (
         SELECT g(b) as _snuba_b, t() as _snuba_time, gb as _snuba_gb
         FROM ...
         WHERE m = 2
+        GROUP BY _snuba_time, _snuba_gb
     ) d1 ON ...
-    GROUP BY d0._snuba_time, d1._snuba_time, d0._snuba_gb, d1._snuba_gb
     ORDER BY ...
     ```
 
@@ -211,7 +207,6 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
     subqueries = from_clause.accept(MetricsSubqueriesInitializer())
     alias_generator = _alias_generator()
 
-    # TODO: support groupby
     selected_columns = []
     for s in query.get_selected_columns():
         if s.name == "aggregate_value":
@@ -254,13 +249,10 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
 
         query.set_ast_condition(None)
 
-    # TODO: do we need the groupby in outer query?
-    query.set_ast_groupby(
-        [
-            _process_root_groupby(e, subqueries, alias_generator)
-            for e in query.get_groupby()
-        ]
-    )
+    for e in query.get_groupby():
+        _process_root_groupby(e, subqueries, alias_generator)
+    query.set_ast_groupby([])
+
     query.set_ast_orderby(
         [
             replace(
@@ -272,10 +264,4 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
             for orderby in query.get_orderby()
         ]
     )
-    print("before changing from clause")
-    print(query.get_from_clause())
-    print("subqueries")
-    print(subqueries)
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
-    print("after subquery generator")
-    print(query.__dict__)

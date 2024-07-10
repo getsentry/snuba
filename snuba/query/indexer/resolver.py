@@ -170,5 +170,3 @@ def resolve_mappings(
     resolve_metric_id_mapping(query, mappings)
     if get_dataset_name(dataset) == "metrics":
         resolve_tag_value_mappings(query, mappings)
-    print("after all resolver")
-    print(query)
