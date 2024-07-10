@@ -1255,14 +1255,15 @@ def populate_query_from_mql_context(
                     JoinClause() as inner_join_clause,
                     IndividualNode(alias=right),
                 ):
+                    left_alias = add_join_keys(inner_join_clause)
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
-                                table_alias=add_join_keys(inner_join_clause),
-                                column="time",
+                                table_alias=left_alias,
+                                column=f"{left_alias}.time",
                             ),
                             right=JoinConditionExpression(
-                                table_alias=right, column="time"
+                                table_alias=right, column=f"{right}.time"
                             ),
                         )
                     )

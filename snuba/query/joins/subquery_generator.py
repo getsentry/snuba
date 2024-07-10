@@ -171,8 +171,6 @@ class SubqueriesReplacer(JoinVisitor[JoinNode[Entity], Entity]):
             )
             for k in node.keys
         ]
-        print("keysss")
-        print(keys)
         return JoinClause(left, right, keys, node.join_type, node.join_modifier)
 
 
@@ -351,5 +349,3 @@ def generate_subqueries(query: CompositeQuery[Entity]) -> None:
         )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))
-    print("YA")
-    print(query)
