@@ -387,7 +387,7 @@ class TestReplaysProcessor:
         assert received["error_sample_rate"] == -1.0
         assert received["session_sample_rate"] == -1.0
 
-        assert received["platform"] == "javascript"
+        assert received["platform"] == ""
         assert received["replay_type"] == ""
         assert received["dist"] == ""
         assert received["user_name"] == ""
@@ -529,7 +529,7 @@ class TestReplaysActionProcessor:
         assert row["trace_ids"] == []
         assert row["error_ids"] == []
         assert row["urls"] == []
-        assert row["platform"] == "javascript"
+        assert row["platform"] == ""
         assert row["user"] == ""
         assert row["sdk_name"] == ""
         assert row["sdk_version"] == ""
