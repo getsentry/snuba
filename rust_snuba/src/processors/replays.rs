@@ -53,7 +53,7 @@ pub fn deserialize_message(
                 event_hash: click.event_hash,
                 offset,
                 partition,
-                platform: "javascript".to_string(),
+                platform: "".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
@@ -134,7 +134,7 @@ pub fn deserialize_message(
                 os_name: event.contexts.os.name.unwrap_or_default(),
                 os_version: event.contexts.os.version.unwrap_or_default(),
                 partition,
-                platform: event.platform.unwrap_or("javascript".to_string()),
+                platform: event.platform.unwrap_or("".to_string()),
                 project_id: replay_message.project_id,
                 release: event.release.unwrap_or_default(),
                 replay_id: event.replay_id,
@@ -181,7 +181,7 @@ pub fn deserialize_message(
                 info_id: event.info_id.unwrap_or_default(),
                 offset,
                 partition,
-                platform: "javascript".to_string(),
+                platform: "".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
@@ -197,7 +197,7 @@ pub fn deserialize_message(
                 event_hash: Uuid::from_u64_pair(0, event.viewed_by_id),
                 offset,
                 partition,
-                platform: "javascript".to_string(),
+                platform: "".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
@@ -699,7 +699,7 @@ mod tests {
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
         assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.project_id, 1);
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.retention_days, 30);
@@ -825,7 +825,7 @@ mod tests {
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
         assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
@@ -920,7 +920,7 @@ mod tests {
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
         assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
@@ -1003,7 +1003,7 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
@@ -1079,7 +1079,7 @@ mod tests {
         assert_eq!(&replay_row.os_name, "");
         assert_eq!(&replay_row.os_version, "");
         assert_eq!(replay_row.partition, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string()); // ?
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(&replay_row.release, "");
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(&replay_row.replay_type, "");
