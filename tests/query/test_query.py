@@ -58,11 +58,6 @@ def test_query_data_source() -> None:
     assert query.get_columns() == ColumnSet(
         [("col1", Any()), ("some_func", Any()), ("_invalid_alias_2", Any())]
     )
-    print(query)
-    print(query.get_columns())
-    print(1)
-    print([column.base_name for column in query.get_columns()])
-    assert False
 
 
 def test_query_experiments() -> None:

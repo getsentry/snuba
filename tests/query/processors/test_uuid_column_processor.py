@@ -279,9 +279,6 @@ def test_uuid_column_processor(
     ret = condition.accept(ClickhouseExpressionFormatter())
     assert ret == formatted_value
 
-    print(unprocessed_query)
-    assert False
-
 
 tests_invalid_uuid = [
     pytest.param(
