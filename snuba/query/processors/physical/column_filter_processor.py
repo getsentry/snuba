@@ -12,7 +12,11 @@ class ColumnFilterProcessor(ClickhouseQueryProcessor):
     """
 
     def __init__(self, column_filters: Sequence[str]) -> None:
-        self.__column_filters = column_filters
+        self.__column_filters = set(column_filters)
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        pass
+        assert query.get_is_delete(), f"{query} is not a valid DELETE query"
+        column_names = [column.name for column in query.get_columns()]
+        assert (
+            set(column_names) == self.__column_filters
+        ), f"Columns in the query should be exactly the same as the columns listed in the storage definition. Query has column names: {column_names}"

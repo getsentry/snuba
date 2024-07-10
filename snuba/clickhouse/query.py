@@ -29,6 +29,7 @@ class Query(AbstractQuery[Table]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        is_delete: bool = False,
     ) -> None:
         self.__prewhere = prewhere
 
@@ -45,6 +46,7 @@ class Query(AbstractQuery[Table]):
             offset=offset,
             totals=totals,
             granularity=granularity,
+            is_delete=is_delete,
         )
 
     def _get_expressions_impl(self) -> Iterable[Expression]:
