@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import random
 from typing import Mapping, Union
 
-from snuba import settings as snuba_settings
-from snuba import state
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.plans.entity_processing import run_entity_processing_executor
 from snuba.pipeline.composite_storage_processing import check_sub_query_storage_sets
@@ -44,17 +41,7 @@ def _generate_subqueries(query: CompositeQuery[Entity]):
     else:
         is_gen_metrics_join_query = False
 
-    run_new_metrics_subqueries_generator_rollout = state.get_float_config(
-        "run_new_metrics_subqueries_generator",
-        snuba_settings.RUN_NEW_METRICS_SUBQUERIES_GENERATOR_SAMPLE_RATE,
-    )
-    run_new_metrics_subqueries_generator = (
-        random.random() <= run_new_metrics_subqueries_generator_rollout
-        if run_new_metrics_subqueries_generator_rollout is not None
-        else False
-    )
-
-    if is_gen_metrics_join_query and run_new_metrics_subqueries_generator:
+    if is_gen_metrics_join_query:
         generate_metrics_subqueries(query)
     else:
         generate_subqueries(query)
