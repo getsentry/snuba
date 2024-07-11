@@ -214,9 +214,11 @@ def _record_rate_limit_metrics(
             value=table_rate_limit_stats.concurrent,
             tags={
                 "table": stats.get("clickhouse_table", ""),
-                "cache_partition": reader.cache_partition_id
-                if reader.cache_partition_id
-                else "default",
+                "cache_partition": (
+                    reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                ),
             },
         )
         metrics.gauge(
@@ -224,9 +226,11 @@ def _record_rate_limit_metrics(
             value=table_rate_limit_stats.rate,
             tags={
                 "table": stats.get("clickhouse_table", ""),
-                "cache_partition": reader.cache_partition_id
-                if reader.cache_partition_id
-                else "default",
+                "cache_partition": (
+                    reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                ),
             },
         )
         metrics.timing(
@@ -234,9 +238,11 @@ def _record_rate_limit_metrics(
             value=table_rate_limit_stats.concurrent,
             tags={
                 "table": stats.get("clickhouse_table", ""),
-                "cache_partition": reader.cache_partition_id
-                if reader.cache_partition_id
-                else "default",
+                "cache_partition": (
+                    reader.cache_partition_id
+                    if reader.cache_partition_id
+                    else "default"
+                ),
             },
         )
 

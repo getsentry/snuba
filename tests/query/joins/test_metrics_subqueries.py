@@ -28,133 +28,133 @@ tags_d0 = NestedColumn("tags", "d0")
 tags_raw_d1 = NestedColumn("tags_raw", "d1")
 tags_d1 = NestedColumn("tags", "d1")
 
-from_clause = JoinClause(
-    left_node=IndividualNode(
-        alias="d1",
-        data_source=distributions,
-    ),
-    right_node=IndividualNode(
-        alias="d0",
-        data_source=distributions,
-    ),
-    keys=[
-        JoinCondition(
-            left=JoinConditionExpression(table_alias="d0", column="d0.time"),
-            right=JoinConditionExpression(table_alias="d1", column="d1.time"),
-        )
-    ],
-    join_type=JoinType.INNER,
-    join_modifier=None,
-)
 
-original_query = CompositeQuery(
-    from_clause=from_clause,
-    selected_columns=[
-        SelectedExpression(
-            "aggregate_value",
-            f.plus(
-                f.avg(column("value", "d0", "_snuba_value")),
-                f.avg(column("value", "d1", "_snuba_value")),
-                alias="_snuba_aggregate_value",
+def test_subquery_generator_metrics() -> None:
+    from_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d1",
+            data_source=distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d0", column="d0.time"),
+                right=JoinConditionExpression(table_alias="d1", column="d1.time"),
+            )
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+    original_query = CompositeQuery(
+        from_clause=from_clause,
+        selected_columns=[
+            SelectedExpression(
+                "aggregate_value",
+                f.plus(
+                    f.avg(column("value", "d0", "_snuba_value")),
+                    f.avg(column("value", "d1", "_snuba_value")),
+                    alias="_snuba_aggregate_value",
+                ),
             ),
+            SelectedExpression(
+                "transaction",
+                tags_d0["333333"],
+            ),
+            SelectedExpression(
+                "transaction",
+                tags_d1["333333"],
+            ),
+            SelectedExpression(
+                "time",
+                f.toStartOfInterval(
+                    column("timestamp", "d1", "_snuba_timestamp"),
+                    f.toIntervalSecond(literal(60)),
+                    literal("Universal"),
+                    alias="_snuba_d1.time",
+                ),
+            ),
+            SelectedExpression(
+                "time",
+                f.toStartOfInterval(
+                    column("timestamp", "d0", "_snuba_timestamp"),
+                    f.toIntervalSecond(literal(60)),
+                    literal("Universal"),
+                    alias="_snuba_d0.time",
+                ),
+            ),
+        ],
+        array_join=None,
+        condition=and_cond(
+            f.greaterOrEquals(
+                column("timestamp", "d0", "_snuba_timestamp"),
+                literal(datetime(2024, 4, 2, 9, 15)),
+            ),
+            f.less(
+                column("timestamp", "d0", "_snuba_timestamp"),
+                literal(datetime(2024, 4, 2, 15, 15)),
+            ),
+            in_cond(
+                column("project_id", "d0", "_snuba_project_id"),
+                f.tuple(literal(1), literal(2)),
+            ),
+            in_cond(column("org_id", "d0", "_snuba_org_id"), f.tuple(literal(101))),
+            f.equals(
+                column("use_case_id", "d0", "_snuba_use_case_id"),
+                literal("performance"),
+            ),
+            f.equals(column("granularity", "d0", "_snuba_granularity"), literal(60)),
+            f.equals(column("metric_id", "d0", "_snuba_metric_id"), literal(1068)),
+            f.greaterOrEquals(
+                column("timestamp", "d1", "_snuba_timestamp"),
+                literal(datetime(2024, 4, 2, 9, 15)),
+            ),
+            f.less(
+                column("timestamp", "d1", "_snuba_timestamp"),
+                literal(datetime(2024, 4, 2, 15, 15)),
+            ),
+            in_cond(
+                column("project_id", "d1", "_snuba_project_id"),
+                f.tuple(literal(1), literal(2)),
+            ),
+            in_cond(column("org_id", "d1", "_snuba_org_id"), f.tuple(literal(101))),
+            f.equals(
+                column("use_case_id", "d1", "_snuba_use_case_id"),
+                literal("performance"),
+            ),
+            f.equals(column("granularity", "d1", "_snuba_granularity"), literal(60)),
+            f.equals(column("metric_id", "d1", "_snuba_metric_id"), literal(1068)),
         ),
-        SelectedExpression(
-            "transaction",
+        groupby=[
             tags_d0["333333"],
-        ),
-        SelectedExpression(
-            "transaction",
             tags_d1["333333"],
-        ),
-        SelectedExpression(
-            "time",
             f.toStartOfInterval(
                 column("timestamp", "d1", "_snuba_timestamp"),
                 f.toIntervalSecond(literal(60)),
                 literal("Universal"),
                 alias="_snuba_d1.time",
             ),
-        ),
-        SelectedExpression(
-            "time",
             f.toStartOfInterval(
                 column("timestamp", "d0", "_snuba_timestamp"),
                 f.toIntervalSecond(literal(60)),
                 literal("Universal"),
                 alias="_snuba_d0.time",
             ),
-        ),
-    ],
-    array_join=None,
-    condition=and_cond(
-        f.greaterOrEquals(
-            column("timestamp", "d0", "_snuba_timestamp"),
-            literal(datetime(2024, 4, 2, 9, 15)),
-        ),
-        f.less(
-            column("timestamp", "d0", "_snuba_timestamp"),
-            literal(datetime(2024, 4, 2, 15, 15)),
-        ),
-        in_cond(
-            column("project_id", "d0", "_snuba_project_id"),
-            f.tuple(literal(1), literal(2)),
-        ),
-        in_cond(column("org_id", "d0", "_snuba_org_id"), f.tuple(literal(101))),
-        f.equals(
-            column("use_case_id", "d0", "_snuba_use_case_id"), literal("performance")
-        ),
-        f.equals(column("granularity", "d0", "_snuba_granularity"), literal(60)),
-        f.equals(column("metric_id", "d0", "_snuba_metric_id"), literal(1068)),
-        f.greaterOrEquals(
-            column("timestamp", "d1", "_snuba_timestamp"),
-            literal(datetime(2024, 4, 2, 9, 15)),
-        ),
-        f.less(
-            column("timestamp", "d1", "_snuba_timestamp"),
-            literal(datetime(2024, 4, 2, 15, 15)),
-        ),
-        in_cond(
-            column("project_id", "d1", "_snuba_project_id"),
-            f.tuple(literal(1), literal(2)),
-        ),
-        in_cond(column("org_id", "d1", "_snuba_org_id"), f.tuple(literal(101))),
-        f.equals(
-            column("use_case_id", "d1", "_snuba_use_case_id"), literal("performance")
-        ),
-        f.equals(column("granularity", "d1", "_snuba_granularity"), literal(60)),
-        f.equals(column("metric_id", "d1", "_snuba_metric_id"), literal(1068)),
-    ),
-    groupby=[
-        tags_d0["333333"],
-        tags_d1["333333"],
-        f.toStartOfInterval(
-            column("timestamp", "d1", "_snuba_timestamp"),
-            f.toIntervalSecond(literal(60)),
-            literal("Universal"),
-            alias="_snuba_d1.time",
-        ),
-        f.toStartOfInterval(
-            column("timestamp", "d0", "_snuba_timestamp"),
-            f.toIntervalSecond(literal(60)),
-            literal("Universal"),
-            alias="_snuba_d0.time",
-        ),
-    ],
-    order_by=[
-        OrderBy(
-            OrderByDirection.ASC,
-            f.toStartOfInterval(
-                column("timestamp", "d0", "_snuba_timestamp"),
-                f.toIntervalSecond(literal(60)),
-                literal("Universal"),
-                alias="_snuba_d0.time",
-            ),
-        )
-    ],
-)
-
-
-def test_subquery_generator_metrics() -> None:
+        ],
+        order_by=[
+            OrderBy(
+                OrderByDirection.ASC,
+                f.toStartOfInterval(
+                    column("timestamp", "d0", "_snuba_timestamp"),
+                    f.toIntervalSecond(literal(60)),
+                    literal("Universal"),
+                    alias="_snuba_d0.time",
+                ),
+            )
+        ],
+    )
     generate_metrics_subqueries(original_query)
 
     # Test outer selected columns
@@ -367,4 +367,3 @@ def test_subquery_generator_metrics() -> None:
         ),
     ]
     assert rhs.get_groupby() == expected_rhs_query_groupby
-    print("SUCCESS")
