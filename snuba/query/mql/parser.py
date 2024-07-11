@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union, cast
 
 import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
@@ -336,14 +336,20 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[Sequence[Union[str, Sequence[str]]] | FunctionCall, Any],
+        children: Tuple[
+            Sequence[Union[str, Sequence[str], FilterFactorValue]] | FunctionCall, Any
+        ],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
             # If we have a parenthesized expression, we just return it.
             return factor
 
-        condition_op, lhs, _, _, _, filter_factor_value = factor
+        condition_op: str = str(factor[0])
+        lhs: str = str(factor[1])
+        filter_factor_value: FilterFactorValue = cast(FilterFactorValue, factor[4])
+
+        # condition_op, _, _, _, filter_factor_value = factor
         condition_op_value = (
             "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
         )
@@ -352,6 +358,7 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         rhs = filter_factor_value.value
 
         if contains_wildcard:
+            rhs = cast(str, rhs)
             rhs = rhs[:-1] + "%"
             if not condition_op_value:
                 op = ConditionFunctions.LIKE
