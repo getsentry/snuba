@@ -171,8 +171,3 @@ class MetricsSummariesLoader(DirectoryLoader):
 class ProfileChunksLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.profile_chunks")
-
-
-class SearchIssuesTmpLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.search_issues_tmp")
