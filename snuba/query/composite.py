@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Callable, Generic, Iterable, Optional, Sequence, Union, cast
 
 from snuba.query import (
@@ -123,82 +122,6 @@ class CompositeQuery(Query, Generic[TSimpleDataSource]):
 
     def _transform_impl(self, visitor: ExpressionVisitor[Expression]) -> None:
         pass
-
-    def transform_expressions(
-        self,
-        func: Callable[[Expression], Expression],
-        skip_transform_condition: bool = False,
-        skip_array_join: bool = False,
-    ) -> None:
-        """
-        Transforms in place the current query object by applying a transformation
-        function to all expressions contained in this query.
-
-        Contrary to Expression.transform, this happens in place since Query has
-        to be mutable as of now. This is because there are still parts of the query
-        processing that depends on the Query instance not to be replaced during the
-        query.
-        """
-
-        def transform_expression_list(
-            expressions: Sequence[Expression],
-        ) -> Sequence[Expression]:
-            return list(
-                map(lambda exp: exp.transform(func), expressions),
-            )
-
-        selected_columns = list(
-            map(
-                lambda selected: replace(
-                    selected, expression=selected.expression.transform(func)
-                ),
-                self.get_selected_columns(),
-            )
-        )
-        array_join = self.get_arrayjoin()
-        if not skip_array_join:
-            if array_join:
-                array_join = [
-                    join_element.transform(func)
-                    for join_element in self.get_arrayjoin()
-                ]
-
-        if not skip_transform_condition:
-            condition = (
-                self.get_condition().transform(func) if self.get_condition() else None
-            )
-        groupby = transform_expression_list(self.get_groupby())
-        having = self.get_having().transform(func) if self.get_having() else None
-        order_by = list(
-            map(
-                lambda clause: replace(
-                    clause, expression=clause.expression.transform(func)
-                ),
-                self.get_orderby(),
-            )
-        )
-
-        limitby = self.get_limitby()
-        if limitby is not None:
-            limitby = LimitBy(
-                self.get_limitby().limit,
-                [column.transform(func) for column in self.get_limitby().columns],
-            )
-
-        self._transform_expressions_impl(func)
-        super().__init__(
-            selected_columns=selected_columns,
-            array_join=array_join,
-            condition=condition,
-            groupby=groupby,
-            having=having,
-            order_by=order_by,
-            limitby=limitby,
-            limit=self.get_limit(),
-            offset=self.get_offset(),
-            totals=self.has_totals(),
-            granularity=self.get_granularity(),
-        )
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_from_clause",)

@@ -39,8 +39,8 @@ class SubqueryDraft:
         self.__conditions: list[Expression] = []
         self.__groupby: list[Expression] = []
         self.__granularity: int | None = None
+        self.__totals: bool = False
 
-    # temp
     def get_selected_expressions(self) -> set[SelectedExpression]:
         return self.__selected_expressions
 
@@ -55,6 +55,9 @@ class SubqueryDraft:
 
     def set_granularity(self, granularity: int | None) -> None:
         self.__granularity = granularity
+
+    def set_totals(self, totals: bool) -> None:
+        self.__totals = totals
 
     def build_query(self) -> ProcessableQuery[Entity]:
         return cast(
@@ -74,6 +77,7 @@ class SubqueryDraft:
                 ),
                 groupby=self.__groupby,
                 granularity=self.__granularity,
+                totals=self.__totals,
             ),
         )
 

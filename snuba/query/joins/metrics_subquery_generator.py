@@ -90,6 +90,7 @@ def _push_down_conditions(
 
 
 def _process_root_groupby(
+    query: CompositeQuery[Entity],
     expression: Expression,
     subqueries: Mapping[str, SubqueryDraft],
     alias_generator: AliasGenerator,
@@ -99,10 +100,13 @@ def _process_root_groupby(
     and pushes down the subexpressions.
     """
     subexpressions = expression.accept(BranchCutter(alias_generator))
-    return _push_down_groupby_branches(subexpressions, subqueries, alias_generator)
+    return _push_down_groupby_branches(
+        query, subexpressions, subqueries, alias_generator
+    )
 
 
 def _push_down_groupby_branches(
+    query: CompositeQuery[Entity],
     subexpressions: SubExpression,
     subqueries: Mapping[str, SubqueryDraft],
     alias_generator: AliasGenerator,
@@ -114,6 +118,8 @@ def _push_down_groupby_branches(
     cut_subexpression = subexpressions.cut_branch(alias_generator)
     for entity_alias, branches in cut_subexpression.cut_branches.items():
         for branch in branches:
+            if query.has_totals():
+                subqueries[entity_alias].set_totals(query.has_totals())
             subqueries[entity_alias].add_groupby_expression(branch)
 
     return cut_subexpression.main_expression
@@ -250,7 +256,7 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
         query.set_ast_condition(None)
 
     for e in query.get_groupby():
-        _process_root_groupby(e, subqueries, alias_generator)
+        _process_root_groupby(query, e, subqueries, alias_generator)
     query.set_ast_groupby([])
 
     query.set_ast_orderby(

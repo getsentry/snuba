@@ -895,13 +895,10 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
         assert data["data"][0]["aggregate_value"] == 42.0
-        # assert len(data["data"]) == 180, data
-        print("here")
-        print(data)
-        print(data["totals"]["aggregate_value"])
-        # assert (
-        #     data["totals"]["aggregate_value"] > 180
-        # )  # Should be more than the number of data points
+        assert len(data["data"]) == 180, data
+        assert (
+            data["totals"]["aggregate_value"] > 180
+        )  # Should be more than the number of data points
 
     def test_complex_formula_with_quantiles(self) -> None:
         query = MetricsQuery(

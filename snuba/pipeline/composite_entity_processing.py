@@ -34,15 +34,15 @@ def translate_composite_query(
 
 def _generate_subqueries(query: CompositeQuery[Entity]):
     from_clause = query.get_from_clause()
-    is_metrics_query = True
+    is_gen_metrics_join_query = True
     if isinstance(from_clause, JoinClause):
         nodes = from_clause.get_alias_node_map()
         for node in nodes.values():
             if isinstance(node.data_source, Entity):
                 if not node.data_source.key.value.startswith("generic_metrics"):
-                    is_metrics_query = False
+                    is_gen_metrics_join_query = False
     else:
-        is_metrics_query = False
+        is_gen_metrics_join_query = False
 
     run_new_metrics_subqueries_generator_rollout = state.get_float_config(
         "run_new_metrics_subqueries_generator",
@@ -54,7 +54,7 @@ def _generate_subqueries(query: CompositeQuery[Entity]):
         else False
     )
 
-    if is_metrics_query and run_new_metrics_subqueries_generator:
+    if is_gen_metrics_join_query and run_new_metrics_subqueries_generator:
         generate_metrics_subqueries(query)
     else:
         generate_subqueries(query)
