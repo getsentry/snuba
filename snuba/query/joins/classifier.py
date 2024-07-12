@@ -317,6 +317,7 @@ class AggregateBranchCutter(BranchCutter):
 
     def __init__(self, alias_generator: AliasGenerator) -> None:
         self.__alias_generator = alias_generator
+        super().__init__(alias_generator)
 
     def visit_function_call(self, exp: FunctionCall) -> SubExpression:
         def builder(
