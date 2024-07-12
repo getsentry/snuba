@@ -29,7 +29,7 @@ def translate_composite_query(
     return physical_query
 
 
-def _generate_subqueries(query: CompositeQuery[Entity]):
+def _generate_subqueries(query: CompositeQuery[Entity]) -> None:
     from_clause = query.get_from_clause()
     is_gen_metrics_join_query = True
     if isinstance(from_clause, JoinClause):

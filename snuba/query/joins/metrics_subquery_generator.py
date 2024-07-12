@@ -81,7 +81,7 @@ def _push_down_conditions(
     subexpressions: SubExpression,
     subqueries: Mapping[str, SubqueryDraft],
     alias_generator: AliasGenerator,
-) -> Expression:
+) -> None:
     """ """
     cut_subexpression = subexpressions.cut_branch(alias_generator)
     for entity_alias, branches in cut_subexpression.cut_branches.items():

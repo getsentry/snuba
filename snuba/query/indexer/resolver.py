@@ -50,7 +50,9 @@ def resolve_tag_key_mappings(
             return replace(exp, column_name=column_name)
         return exp
 
-    def resolve_join_conditions(join_clause: JoinClause) -> None:
+    def resolve_join_conditions(
+        join_clause: JoinClause[QueryEntity],
+    ) -> JoinClause[QueryEntity]:
         # If MQL query is a formula query contain group bys, then the groupby columns will be
         # pushed into the join conditions. Therefore, they must be resolved.
         if isinstance(join_clause.left_node, JoinClause):
@@ -77,8 +79,9 @@ def resolve_tag_key_mappings(
 
     query.transform_expressions(resolve_tag_column)
     if isinstance(query, CompositeQuery):
-        if isinstance(query.get_from_clause(), JoinClause):
-            join_clause = resolve_join_conditions(query.get_from_clause())
+        from_clause = query.get_from_clause()
+        if isinstance(from_clause, JoinClause):
+            join_clause = resolve_join_conditions(from_clause)
             query.set_from_clause(join_clause)
 
 
