@@ -852,30 +852,63 @@ def convert_formula_to_query(
     # Build SelectedExpression from root tree
     # When going through the selected expressions, populate the table aliases
     def extract_expression(param: InitialParseResult | Any) -> Expression:
-        if not isinstance(param, InitialParseResult):
-            return Literal(None, param)
-        elif param.expression is not None:
-            aggregate_function = param.expression.expression
-            assert isinstance(aggregate_function, (FunctionCall, CurriedFunctionCall))
-            # Metrics aggregates operate on a column
-            column = aggregate_function.parameters[0]
-            assert isinstance(column, Column)
-            return replace(
-                aggregate_function,
-                parameters=(replace(column, table_name=alias_wrap(param.table_alias)),),
-                alias=None,
-            )
-        elif param.formula:
-            parameters = param.parameters or []
-            return FunctionCall(
-                None,
-                param.formula,
-                tuple(extract_expression(p) for p in parameters),
-            )
-        else:
-            raise InvalidQueryException(
-                "Could not build selected expression for formula"
-            )
+        match param:
+            case InitialParseResult(
+                expression=SelectedExpression(
+                    expression=FunctionCall(parameters=(Column() as col,))
+                    | CurriedFunctionCall(
+                        parameters=(Column() as col,)
+                    ) as aggregate_function
+                )
+            ):
+                return replace(
+                    aggregate_function,
+                    parameters=(
+                        replace(col, table_name=alias_wrap(param.table_alias)),
+                    ),
+                    alias=None,
+                )
+            case InitialParseResult(
+                expression=SelectedExpression(
+                    expression=FunctionCall(
+                        function_name=function_name, parameters=parameters
+                    ),
+                ) as selected_expression
+            ):
+                return FunctionCall(
+                    None,
+                    function_name,
+                    tuple(
+                        (
+                            extract_expression(
+                                replace(
+                                    param,
+                                    expression=replace(
+                                        selected_expression, expression=parameter
+                                    ),
+                                )
+                            )
+                            if isinstance(parameter, FunctionCall)
+                            else parameter
+                        )
+                        for parameter in parameters
+                    ),
+                )
+            case InitialParseResult(
+                formula=str() as formula,
+                parameters=parameters,
+            ):
+                return FunctionCall(
+                    None,
+                    formula,
+                    tuple(extract_expression(p) for p in parameters or []),
+                )
+            case InitialParseResult():
+                raise InvalidQueryException(
+                    "Could not build selected expression for formula"
+                )
+            case _:
+                return Literal(None, param)
 
     parameters = parsed.parameters or []
     selected_columns = [

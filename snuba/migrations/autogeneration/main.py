@@ -2,7 +2,6 @@ import os
 import subprocess
 from typing import Optional
 
-from black import Mode, format_str  # type: ignore
 from yaml import safe_load
 
 from snuba.clusters.storage_sets import StorageSetKey
@@ -109,6 +108,9 @@ def write_migration(
         raise ValueError(
             f"Error: The migration number {nextnum} was larger than the last migration in the group loader '{group_loader_name}', but the migration already exists"
         )
+
+    from black import Mode, format_str  # type: ignore
+
     with open(newpath, "w") as f:
         f.write(format_str(migration, mode=Mode()))
     return newpath

@@ -25,6 +25,7 @@ from snuba.clickhouse.formatter.query import format_query_anonymized
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_time_range_estimate
 from snuba.clickhouse.query_profiler import generate_profile
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import ProcessableQuery
 from snuba.query.allocation_policies import (
     MAX_THRESHOLD,
@@ -687,6 +688,27 @@ class _PolicyCollector(DataSourceVisitor[None, Table], JoinVisitor[None, Table])
         node.right_node.accept(self)
 
 
+def _record_bytes_scanned(
+    result_or_error: QueryResultOrError,
+    attribution_info: AttributionInfo,
+    dataset_name: str,
+    storage_key: StorageKey,
+) -> None:
+    custom_metrics = MetricsWrapper(environment.metrics, "allocation_policy")
+
+    if result_or_error.query_result:
+        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", 0))  # type: ignore
+        custom_metrics.increment(
+            "bytes_scanned",
+            progress_bytes_scanned,
+            tags={
+                "referrer": attribution_info.referrer,
+                "dataset": dataset_name,
+                "storage_key": storage_key.value,
+            },
+        )
+
+
 def db_query(
     clickhouse_query: Union[Query, CompositeQuery[Table]],
     query_settings: QuerySettings,
@@ -798,11 +820,18 @@ def db_query(
         # if it didn't do that, something is very wrong so we just panic out here
         raise e
     finally:
+        result_or_error = QueryResultOrError(query_result=result, error=error)
+        _record_bytes_scanned(
+            result_or_error,
+            attribution_info,
+            dataset_name,
+            allocation_policies[0].storage_key,
+        )
         for allocation_policy in allocation_policies:
             allocation_policy.update_quota_balance(
                 tenant_ids=attribution_info.tenant_ids,
                 query_id=query_id,
-                result_or_error=QueryResultOrError(query_result=result, error=error),
+                result_or_error=result_or_error,
             )
         if stats.get("cache_hit"):
             metrics.increment("cache_hit", tags={"dataset": dataset_name})
@@ -875,6 +904,7 @@ def _apply_allocation_policies_quota(
                 allowance = allocation_policy.get_quota_allowance(
                     attribution_info.tenant_ids, query_id
                 )
+                num_threads = min(num_threads, allowance.max_threads)
                 can_run &= allowance.can_run
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
@@ -882,12 +912,10 @@ def _apply_allocation_policies_quota(
                     quota_allowances[allocation_policy.config_key()],
                 )
                 if allowance.is_throttled:
-                    if allowance.max_threads < num_threads:
-                        throttle_quota_and_policy = _QuotaAndPolicy(
-                            quota_allowance=allowance,
-                            policy_name=allocation_policy.config_key(),
-                        )
-                num_threads = min(num_threads, allowance.max_threads)
+                    throttle_quota_and_policy = _QuotaAndPolicy(
+                        quota_allowance=allowance,
+                        policy_name=allocation_policy.config_key(),
+                    )
                 if not can_run:
                     rejection_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
