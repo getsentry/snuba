@@ -36,7 +36,9 @@ def _generate_subqueries(query: CompositeQuery[Entity]) -> None:
         nodes = from_clause.get_alias_node_map()
         for node in nodes.values():
             if isinstance(node.data_source, Entity):
-                if not node.data_source.key.value.startswith("generic_metrics"):
+                if not node.data_source.key.value.startswith(
+                    "generic_metrics"
+                ) and not node.data_source.key.value.startswith("metrics"):
                     is_gen_metrics_join_query = False
     else:
         is_gen_metrics_join_query = False
