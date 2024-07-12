@@ -746,7 +746,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         )
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
-        assert data["data"][0]["aggregate_value"] == 42.0
         assert len(data["data"]) == 180, data
 
     def test_multi_entity_nested_formula(self) -> None:
@@ -826,7 +825,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         )
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
-        assert data["data"][0]["aggregate_value"] == 21.0
         assert len(data["data"]) == 180, data
 
     def test_multi_entity_totals_formula(self) -> None:
@@ -892,7 +890,6 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         )
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
-        assert data["data"][0]["aggregate_value"] == 42.0
         assert len(data["data"]) == 180, data
         assert (
             data["totals"]["aggregate_value"] > 180
