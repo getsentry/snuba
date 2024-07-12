@@ -212,8 +212,8 @@ def test_simple_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -311,8 +311,12 @@ def test_bracket_on_formula() -> None:
                 ),
                 keys=[
                     JoinCondition(
-                        left=JoinConditionExpression(table_alias="d3", column="time"),
-                        right=JoinConditionExpression(table_alias="d2", column="time"),
+                        left=JoinConditionExpression(
+                            table_alias="d3", column="d3.time"
+                        ),
+                        right=JoinConditionExpression(
+                            table_alias="d2", column="d2.time"
+                        ),
                     )
                 ],
                 join_type=JoinType.INNER,
@@ -324,8 +328,8 @@ def test_bracket_on_formula() -> None:
             ),
             keys=[
                 JoinCondition(
-                    left=JoinConditionExpression(table_alias="d2", column="time"),
-                    right=JoinConditionExpression(table_alias="d1", column="time"),
+                    left=JoinConditionExpression(table_alias="d2", column="d2.time"),
+                    right=JoinConditionExpression(table_alias="d1", column="d1.time"),
                 )
             ],
             join_type=JoinType.INNER,
@@ -337,8 +341,8 @@ def test_bracket_on_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -463,8 +467,8 @@ def test_distribute_tags() -> None:
             ),
             keys=[
                 JoinCondition(
-                    left=JoinConditionExpression(table_alias="d2", column="time"),
-                    right=JoinConditionExpression(table_alias="d1", column="time"),
+                    left=JoinConditionExpression(table_alias="d2", column="d2.time"),
+                    right=JoinConditionExpression(table_alias="d1", column="d1.time"),
                 )
             ],
             join_type=JoinType.INNER,
@@ -476,8 +480,8 @@ def test_distribute_tags() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -584,8 +588,8 @@ def test_formula_with_scalar() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -670,12 +674,16 @@ def test_groupby() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="transaction"),
-                right=JoinConditionExpression(table_alias="d0", column="transaction"),
+                left=JoinConditionExpression(
+                    table_alias="d1", column="tags_raw[333333]"
+                ),
+                right=JoinConditionExpression(
+                    table_alias="d0", column="tags_raw[333333]"
+                ),
             ),
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             ),
         ],
         join_type=JoinType.INNER,
@@ -781,8 +789,8 @@ def test_onesided_groupby() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             ),
         ],
         join_type=JoinType.INNER,

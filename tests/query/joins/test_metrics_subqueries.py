@@ -186,12 +186,7 @@ def test_subquery_generator_metrics() -> None:
     ), "all conditions should be pushed down"
 
     # Test outer groupby
-    expected_outer_query_groupby = [
-        column("_snuba_tags[333333]", "d0", "_snuba_tags[333333]"),
-        column("_snuba_tags[333333]", "d1", "_snuba_tags[333333]"),
-        column("_snuba_d1.time", "d1", "_snuba_d1.time"),
-        column("_snuba_d0.time", "d0", "_snuba_d0.time"),
-    ]
+    expected_outer_query_groupby = []
     assert original_query.get_groupby() == expected_outer_query_groupby
 
     # Test orderby
