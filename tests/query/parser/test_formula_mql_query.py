@@ -891,8 +891,8 @@ def test_formula_with_nested_functions() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -980,8 +980,8 @@ def test_formula_with_nested_functions_with_filter_outside() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             )
         ],
         join_type=JoinType.INNER,
@@ -1074,8 +1074,8 @@ def test_curried_aggregate_formula() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="time"),
-                right=JoinConditionExpression(table_alias="d0", column="time"),
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             )
         ],
         join_type=JoinType.INNER,
