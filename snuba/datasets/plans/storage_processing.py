@@ -5,6 +5,7 @@ from typing import Optional, Sequence, TypeVar, Union
 import sentry_sdk
 
 from snuba import settings as snuba_settings
+from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
 from snuba.clickhouse.translators.snuba.mapping import (
@@ -119,6 +120,15 @@ def transform_subscriptables(expression: Expression) -> Expression:
     return expression
 
 
+def _enforce_max_rows(query: Query, storage: ReadableTableStorage) -> None:
+    deletion_settings = storage.get_deletion_settings()
+    reader = storage.get_cluster().get_reader()
+    row_to_delete = 0
+    for table in deletion_settings.tables:
+        ret = reader.execute(format_query(query))
+        row_to_delete += ret["data"][0]["count()"]
+
+
 @with_span()
 def apply_storage_processors(
     query_plan: ClickhouseQueryPlan,
@@ -157,5 +167,8 @@ def apply_storage_processors(
                     processor.process_query(query_plan.query, settings)
             else:
                 processor.process_query(query_plan.query, settings)
+
+    if query_plan.query.get_is_delete():
+        _enforce_max_rows(query_plan.query, storage)
 
     return query_plan.query
