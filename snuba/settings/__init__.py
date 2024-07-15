@@ -435,8 +435,6 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
-RUN_NEW_MQL_PARSER_SAMPLE_RATE = 0.0
-
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
