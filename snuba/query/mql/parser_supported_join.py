@@ -870,7 +870,6 @@ def build_formula_query_from_clause(
                     right=JoinConditionExpression(prev_node.alias, column.column_name),
                 )
             )
-
         left_side = build_join_clause(lhs, nodes[1:]) if len(nodes) > 1 else lhs
         return JoinClause(
             left_node=left_side,
@@ -1336,10 +1335,10 @@ def populate_query_from_mql_context(
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
-                                table_alias=left, column="time"
+                                table_alias=left, column=f"{left}.time"
                             ),
                             right=JoinConditionExpression(
-                                table_alias=right, column="time"
+                                table_alias=right, column=f"{right}.time"
                             ),
                         )
                     )
@@ -1348,14 +1347,15 @@ def populate_query_from_mql_context(
                     JoinClause() as inner_join_clause,
                     IndividualNode(alias=right),
                 ):
+                    left_alias = add_join_keys(inner_join_clause)
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
-                                table_alias=add_join_keys(inner_join_clause),
-                                column="time",
+                                table_alias=left_alias,
+                                column=f"{left_alias}.time",
                             ),
                             right=JoinConditionExpression(
-                                table_alias=right, column="time"
+                                table_alias=right, column=f"{right}.time"
                             ),
                         )
                     )

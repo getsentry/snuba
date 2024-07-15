@@ -11,6 +11,7 @@ from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
 from snuba.query.data_source.simple import Entity, Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.joins.equivalence_adder import add_equivalent_conditions
+from snuba.query.joins.metrics_subquery_generator import generate_metrics_subqueries
 from snuba.query.joins.subquery_generator import generate_subqueries
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.query_settings import QuerySettings
@@ -23,9 +24,29 @@ def translate_composite_query(
     Converts a logical composite query to a physical composite query.
     """
     add_equivalent_conditions(query)
-    generate_subqueries(query)
+    _generate_subqueries(query)
     physical_query = _translate_logical_composite_query(query, query_settings)
     return physical_query
+
+
+def _generate_subqueries(query: CompositeQuery[Entity]) -> None:
+    from_clause = query.get_from_clause()
+    is_gen_metrics_join_query = True
+    if isinstance(from_clause, JoinClause):
+        nodes = from_clause.get_alias_node_map()
+        for node in nodes.values():
+            if isinstance(node.data_source, Entity):
+                if not node.data_source.key.value.startswith(
+                    "generic_metrics"
+                ) and not node.data_source.key.value.startswith("metrics"):
+                    is_gen_metrics_join_query = False
+    else:
+        is_gen_metrics_join_query = False
+
+    if is_gen_metrics_join_query:
+        generate_metrics_subqueries(query)
+    else:
+        generate_subqueries(query)
 
 
 def _translate_logical_composite_query(

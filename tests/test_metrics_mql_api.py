@@ -683,6 +683,218 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 180, data
 
+    def test_multi_entity_formula(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.PLUS.value,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            DISTRIBUTIONS_MRI,
+                            DISTRIBUTIONS.metric_id,
+                        ),
+                        aggregate="sum",
+                        filters=[
+                            Condition(
+                                Column("status_code"),
+                                Op.IN,
+                                ["200"],
+                            )
+                        ],
+                        groupby=[Column("transaction")],
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.count_per_root_project",
+                            COUNTERS_MRI,
+                            COUNTERS.metric_id,
+                        ),
+                        aggregate="sum",
+                        groupby=[Column("transaction")],
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, totals=None, orderby=None, granularity=60),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.count_per_root_project": COUNTERS_MRI,
+                COUNTERS_MRI: COUNTERS.metric_id,
+                "status_code": resolve_str("status_code"),
+                "transaction": resolve_str("transaction"),
+                "200": resolve_str("200"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        assert len(data["data"]) == 180, data
+
+    def test_multi_entity_nested_formula(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.DIVIDE.value,
+                [
+                    Formula(
+                        ArithmeticOperator.PLUS.value,
+                        [
+                            Timeseries(
+                                metric=Metric(
+                                    "transaction.duration",
+                                    DISTRIBUTIONS_MRI,
+                                    DISTRIBUTIONS.metric_id,
+                                ),
+                                aggregate="sum",
+                                filters=[
+                                    Condition(
+                                        Column("status_code"),
+                                        Op.IN,
+                                        ["200"],
+                                    )
+                                ],
+                                groupby=[Column("transaction")],
+                            ),
+                            Timeseries(
+                                metric=Metric(
+                                    "transaction.count_per_root_project",
+                                    COUNTERS_MRI,
+                                    COUNTERS.metric_id,
+                                ),
+                                aggregate="sum",
+                                groupby=[Column("transaction")],
+                            ),
+                        ],
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.count_per_root_project",
+                            COUNTERS_MRI,
+                            COUNTERS.metric_id,
+                        ),
+                        aggregate="sum",
+                        groupby=[Column("transaction")],
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, totals=None, orderby=None, granularity=60),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.count_per_root_project": COUNTERS_MRI,
+                COUNTERS_MRI: COUNTERS.metric_id,
+                "status_code": resolve_str("status_code"),
+                "transaction": resolve_str("transaction"),
+                "200": resolve_str("200"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        assert len(data["data"]) == 180, data
+
+    def test_multi_entity_totals_formula(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.PLUS.value,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            DISTRIBUTIONS_MRI,
+                            DISTRIBUTIONS.metric_id,
+                        ),
+                        aggregate="sum",
+                        filters=[
+                            Condition(
+                                Column("status_code"),
+                                Op.IN,
+                                ["200"],
+                            )
+                        ],
+                        groupby=[Column("transaction")],
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.count_per_root_project",
+                            COUNTERS_MRI,
+                            COUNTERS.metric_id,
+                        ),
+                        aggregate="sum",
+                        groupby=[Column("transaction")],
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, totals=True, orderby=None, granularity=60),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "transaction.count_per_root_project": COUNTERS_MRI,
+                COUNTERS_MRI: COUNTERS.metric_id,
+                "status_code": resolve_str("status_code"),
+                "transaction": resolve_str("transaction"),
+                "200": resolve_str("200"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        assert len(data["data"]) == 180, data
+        assert (
+            data["totals"]["aggregate_value"] > 180
+        )  # Should be more than the number of data points
+
     def test_complex_formula_with_quantiles(self) -> None:
         query = MetricsQuery(
             query=Formula(
