@@ -97,11 +97,13 @@ def _format_query_content(
     """
     parsing_context = ParsingContext()
     formatter = expression_formatter_type(parsing_context)
+    # Skip the alias cache for select clause
+    select_formatter = expression_formatter_type(None, include_parsing_context=False)
 
     return [
         v
         for v in [
-            _format_select(query, formatter),
+            _format_select(query, select_formatter),
             PaddingNode(
                 "FROM",
                 DataSourceFormatter(expression_formatter_type).visit(

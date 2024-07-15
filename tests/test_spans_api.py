@@ -186,6 +186,27 @@ class TestSpansApi(BaseApiTest):
         assert response.status_code == 200, response.data
         assert data["data"][0]["aggregate"] > 10, data
 
+    def test_alias(self) -> None:
+        """
+        Test aliasing
+        """
+        from_date = (self.base_time - self.skew).isoformat()
+        to_date = (self.base_time + self.skew).isoformat()
+        response = self._post_query(
+            f"""MATCH (spans)
+                SELECT countIf(or(equals(op, 'browser'), equals(op, 'resource.link'))) AS matching_count
+                WHERE project_id = 1
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert (
+            "countIf((equals((op AS _snuba_op), 'browser') OR equals((op AS _snuba_op), 'resource.link'))"
+            in data["sql"]
+        )
+
     def test_get_group_sorted_by_exclusive_time(self) -> None:
         """
         Gets details about spans for a given group sorted by exclusive time

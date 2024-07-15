@@ -37,10 +37,15 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
     the visited expression, the return value is the formatted string.
     """
 
-    def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
+    def __init__(
+        self,
+        parsing_context: Optional[ParsingContext] = None,
+        include_parsing_context: bool = True,
+    ) -> None:
         self._parsing_context = (
             parsing_context if parsing_context is not None else ParsingContext()
         )
+        self._include_parsing_context = include_parsing_context
 
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
@@ -53,7 +58,8 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             assert ret is not None
             return ret
         else:
-            self._parsing_context.add_alias(alias)
+            if self._include_parsing_context:
+                self._parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
     @abstractmethod
