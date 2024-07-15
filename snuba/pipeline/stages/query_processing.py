@@ -76,3 +76,16 @@ class StorageProcessingStage(
             return apply_composite_storage_processors(
                 composite_query_plan, pipe_input.query_settings
             )
+
+
+class MaxRowsEnforcerStage(
+    QueryPipelineStage[
+        ClickhouseQuery,
+        ClickhouseQuery,
+    ]
+):
+    def _process_data(
+        self, pipe_input: QueryPipelineData[ClickhouseQuery | ClickhouseQuery]
+    ) -> ClickhouseQuery:
+
+        return pipe_input.data
