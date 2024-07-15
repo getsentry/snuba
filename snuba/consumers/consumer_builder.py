@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import MutableMapping, Optional
 
+import sentry_sdk
 from arroyo.backends.kafka import (
     KafkaConsumer,
     KafkaPayload,
@@ -17,7 +18,6 @@ from arroyo.processing.strategies import ProcessingStrategyFactory
 from arroyo.types import Topic
 from arroyo.utils.profiler import ProcessingStrategyProfilerWrapperFactory
 from confluent_kafka import KafkaError, Producer
-from sentry_sdk.api import configure_scope
 
 from snuba.consumers.consumer import (
     CommitLogConfig,
@@ -181,14 +181,14 @@ class ConsumerBuilder:
             configuration["group.instance.id"] = self.group_instance_id
 
         def log_general_error(e: KafkaError) -> None:
-            with configure_scope() as scope:
-                scope.fingerprint = [e.code(), e.name()]
-                logger.warning(
-                    "Error callback from librdKafka %s, %s, %s",
-                    e.code(),
-                    e.name(),
-                    e.str(),
-                )
+            scope = sentry_sdk.Scope.get_current_scope()
+            scope.fingerprint = [e.code(), e.name()]
+            logger.warning(
+                "Error callback from librdKafka %s, %s, %s",
+                e.code(),
+                e.name(),
+                e.str(),
+            )
 
         configuration["error_cb"] = log_general_error
 

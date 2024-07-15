@@ -4,7 +4,6 @@ from random import random
 from typing import Any, Mapping, Optional, Union
 
 import sentry_sdk
-from sentry_sdk import Hub
 from usageaccountant import UsageUnit
 
 from snuba import environment, settings, state
@@ -185,7 +184,7 @@ def _add_tags(
     experiments: Optional[Mapping[str, Any]] = None,
     metadata: Optional[SnubaQueryMetadata] = None,
 ) -> None:
-    if Hub.current.scope.span:
+    if sentry_sdk.get_current_span():
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
         if duration_group == ">30s":
