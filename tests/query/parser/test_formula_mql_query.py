@@ -27,7 +27,7 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
-from snuba.query.mql.parser_supported_join import parse_mql_query_new
+from snuba.query.mql.parser import parse_mql_query_new
 
 # Commonly used expressions
 from_distributions = QueryEntity(
