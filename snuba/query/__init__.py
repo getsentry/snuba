@@ -120,6 +120,9 @@ class Query(DataSource, ABC):
         self.__granularity = granularity
         self.__experiments = experiments or {}
 
+    def get_is_delete(self) -> bool:
+        return self.__selected_columns is None and self.__condition is not None
+
     def get_columns(self) -> ColumnSet:
         """
         From the DataSource class. It returns the schema exposed by this
