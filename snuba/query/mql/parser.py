@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.nodes import Node, NodeVisitor
+from snuba_sdk import BooleanCondition, Condition
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
@@ -335,21 +336,49 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[Sequence[Union[str, Sequence[str]]] | FunctionCall, Any],
+        children: Tuple[
+            Sequence[str | Sequence[str] | FilterFactorValue] | FunctionCall, Any
+        ],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
             # If we have a parenthesized expression, we just return it.
             return factor
-        condition_op, lhs, _, _, _, rhs = factor
+
+        condition_op: str
+        lhs: str
+        filter_factor_value: FilterFactorValue
+
+        condition_op, lhs, _, _, _, filter_factor_value = factor  # type: ignore
         condition_op_value = (
             "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
         )
+
+        contains_wildcard = filter_factor_value.contains_wildcard
+        rhs = filter_factor_value.value
+
+        if contains_wildcard and isinstance(rhs, str):
+            rhs = rhs[:-1] + "%"
+            if not condition_op_value:
+                op = ConditionFunctions.LIKE
+            elif condition_op_value == "!":
+                op = ConditionFunctions.NOT_LIKE
+
+            return FunctionCall(
+                None,
+                op,
+                (
+                    Column(None, None, lhs[0]),
+                    Literal(None, rhs),
+                ),
+            )
+
         if isinstance(rhs, list):
             if not condition_op_value:
                 op = ConditionFunctions.IN
             elif condition_op_value == "!":
                 op = ConditionFunctions.NOT_IN
+
             return FunctionCall(
                 None,
                 op,
@@ -430,10 +459,36 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return node.text
 
     def visit_tag_value(
-        self, node: Node, children: Sequence[Sequence[str]]
-    ) -> Union[str, Sequence[str]]:
-        tag_value = children[0]
-        return tag_value
+        self, node: Node, children: Sequence[FilterFactorValue]
+    ) -> FilterFactorValue:
+        filter_factor_value = children[0]
+        return filter_factor_value
+
+    def visit_quoted_suffix_wildcard_tag_value(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        _, text_before_wildcard, _, _ = children
+        rhs = f"{text_before_wildcard}%"
+        return FilterFactorValue(rhs, True)
+
+    def visit_suffix_wildcard_tag_value(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        text_before_wildcard, _ = children
+        rhs = f"{text_before_wildcard}%"
+        return FilterFactorValue(rhs, True)
+
+    def visit_quoted_string_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        text = str(node.text[1:-1])
+        match = text.replace('\\"', '"')
+        return FilterFactorValue(match, False)
+
+    def visit_unquoted_string_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        return FilterFactorValue(str(node.text), False)
 
     def visit_unquoted_string(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -444,9 +499,13 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         match = str(node.text[1:-1]).replace('\\"', '"')
         return match
 
-    def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
+    def visit_string_tuple(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
         _, _, first, zero_or_more_others, _, _ = children
-        return [first[0], *(v[0] for _, _, _, v in zero_or_more_others)]
+        return FilterFactorValue(
+            [first[0], *(v[0] for _, _, _, v in zero_or_more_others)], False
+        )
 
     def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -1047,7 +1106,7 @@ def populate_query_from_mql_context(
 
 
 def quantiles_to_quantile(
-    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery]
+    query: Union[CompositeQuery[LogicalDataSource], LogicalQuery],
 ) -> None:
     """
     Changes quantiles(0.5)(...) to arrayElement(quantiles(0.5)(...), 1). This is to simplify
@@ -1209,3 +1268,9 @@ class PostProcessAndValidateMQLQuery(
             _post_process(query, VALIDATORS)
 
         return query
+
+
+@dataclass
+class FilterFactorValue(object):
+    value: str | Sequence[str] | Condition | BooleanCondition
+    contains_wildcard: bool
