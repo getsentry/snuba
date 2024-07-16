@@ -479,6 +479,19 @@ def create_subscription(*, dataset: Dataset, timer: Timer, entity: Entity) -> Re
         {"Content-Type": "application/json"},
     )
 
+@application.route("/<storage:storage", methods=["POST"])
+def delete(*, storage: str):
+    data = request.get_json()
+    where_clause = data["where_clause"]
+    # this code should be in the max row enforcer
+    request_body = {
+        "dataset": f"storage.{storage}",
+        "query": f"MATCH STORAGE({storage}) SELECT count() WHERE {where_clause}"
+        "tenant_ids": data["tenant_ids"]
+    }
+    query_result = dataset_query(None, body, Timer())
+    row_count = query_result[rows][0]
+    delete_query = "DELETE FROM {storage.table} WHERE {where_clause}"
 
 @application.route(
     "/<dataset:dataset>/<entity:entity>/subscriptions/<int:partition>/<key>",
