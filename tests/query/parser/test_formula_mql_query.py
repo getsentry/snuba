@@ -430,15 +430,126 @@ def test_bracket_on_formula() -> None:
 
 
 def test_multiple_filter_same_groupby_formula() -> None:
-    query_body = '(avg(d:transactions/duration@millisecond){((status_code:400 AND transaction:"production") OR status_code:300)} by (status_code) * 1000000.0)'
+    query_body = 'avg(`d:transactions/duration@millisecond`){transaction:"test" and status_code:418} by (status_code) / min(`d:transactions/duration@millisecond`){transaction:"prod" or status_code:400} by (status_code)'
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            FunctionCall(
+                None,
+                "avg",
+                (Column("_snuba_value", "d0", "value"),),
+            ),
+            FunctionCall(
+                None,
+                "min",
+                (Column("_snuba_value", "d1", "value"),),
+            ),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    join_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d1",
+            data_source=from_distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(
+                    table_alias="d1", column="tags_raw[222222]"
+                ),
+                right=JoinConditionExpression(
+                    table_alias="d0", column="tags_raw[222222]"
+                ),
+            ),
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+            ),
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    tag_condition1 = binary_condition(
+        "equals", tag_column("transaction", "d0"), Literal(None, "test")
+    )
+    tag_condition2 = binary_condition(
+        "equals", tag_column("status_code", "d0"), Literal(None, "418")
+    )
+    tag_condition3 = binary_condition(
+        "or",
+        binary_condition(
+            "equals", tag_column("transaction", "d1"), Literal(None, "prod")
+        ),
+        binary_condition(
+            "equals", tag_column("status_code", "d1"), Literal(None, "400")
+        ),
+    )
+    metric_condition1 = metric_id_condition(123456, "d0")
+    metric_condition2 = metric_id_condition(123456, "d1")
+    formula_condition = combine_and_conditions(
+        condition("d0")
+        + condition("d1")
+        + [
+            tag_condition1,
+            tag_condition2,
+            metric_condition1,
+            tag_condition3,
+            metric_condition2,
+        ]
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "status_code",
+                subscriptable_expression("222222", "d0"),
+            ),
+            SelectedExpression(
+                "status_code",
+                subscriptable_expression("222222", "d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0"),
+            ),
+        ],
+        groupby=[
+            subscriptable_expression("222222", "d0"),
+            subscriptable_expression("222222", "d1"),
+            time_expression("d1"),
+            time_expression("d0"),
+        ],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression("d0"),
+            ),
+        ],
+        limit=1000,
+        offset=0,
+    )
 
     generic_metrics = get_dataset(
         "generic_metrics",
     )
     query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
-    print(query)
-    # eq, reason = query.equals(expected)
-    # assert eq, reason
+    eq, reason = query.equals(expected)
+
+    assert eq, reason
 
 
 def test_distribute_tags() -> None:
