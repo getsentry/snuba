@@ -1010,13 +1010,12 @@ def convert_formula_to_query(
     # also needs the metric ID conditions added
     def extract_filters(param: InitialParseResult | Any) -> list[FunctionCall]:
         def wrap_condition_column(c: FunctionCall) -> FunctionCall:
-            new_param = []
+            new_param: list[Expression] = []
             for fn_param in c.parameters:
                 if isinstance(fn_param, Column):
-                    new_column = (
-                        replace(fn_param, table_name=alias_wrap(param.table_alias)),
+                    new_param.append(
+                        replace(fn_param, table_name=alias_wrap(param.table_alias))
                     )
-                    new_param.append(new_column)
                 elif isinstance(param, FunctionCall):
                     new_param.append(wrap_condition_column(c))
                 else:
@@ -1028,6 +1027,7 @@ def convert_formula_to_query(
         elif param.expression is not None:
             conditions = []
             for c in param.conditions or []:
+                assert isinstance(c, FunctionCall)
                 conditions.append(wrap_condition_column(c))
             conditions.append(
                 binary_condition(
@@ -1461,8 +1461,6 @@ class ParsePopulateResolveMQL(
 
         with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
             query = parse_mql_query_body(mql_str, dataset)
-            print("after parser")
-            print(query)
 
         with sentry_sdk.start_span(
             op="parser", description="populate_query_from_mql_context"
