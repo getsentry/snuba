@@ -17,7 +17,7 @@ from snuba.clickhouse.query_inspector import TablesCollector
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.slicing import is_storage_set_sliced
 from snuba.datasets.storages.factory import get_storage
-from snuba.pipeline.query_pipeline import QueryPipelineData, QueryPipelineStage
+from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
 from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
@@ -72,12 +72,13 @@ class ExecutionStage(
         return storage.get_cluster()
 
     def _process_data(
-        self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
+        self, pipe_input: QueryPipelineResult[ClickhouseQuery | CompositeQuery[Table]]
     ) -> QueryResult:
-        cluster = self.get_cluster(pipe_input.data, pipe_input.query_settings)
+        pipe_input_data = pipe_input.as_data().data
+        cluster = self.get_cluster(pipe_input_data, pipe_input.query_settings)
         if pipe_input.query_settings.get_dry_run():
             return _dry_run_query_runner(
-                clickhouse_query=pipe_input.data,
+                clickhouse_query=pipe_input_data,
                 cluster_name=getattr(
                     cluster, "get_clickhouse_cluster_name", lambda: "no_cluster_name"
                 )(),
@@ -89,7 +90,7 @@ class ExecutionStage(
                 attribution_info=self._attribution_info,
                 robust=self._robust,
                 concurrent_queries_gauge=None,
-                clickhouse_query=pipe_input.data,
+                clickhouse_query=pipe_input_data,
                 query_settings=pipe_input.query_settings,
                 reader=cluster.get_reader(),
                 cluster_name=cluster.get_clickhouse_cluster_name() or "",

@@ -82,9 +82,4 @@ def test_gzip_load() -> None:
     reader = cluster.get_reader()
 
     ret = reader.execute(FakeQuery([]))
-    print(ret)
-    print(ret["data"])
-    print(ret["data"][0])
-    print(ret["data"][0]["count()"])
     assert ret["data"][0] == {"count()": 2}
-    assert False

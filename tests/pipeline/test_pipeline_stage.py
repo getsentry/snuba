@@ -4,7 +4,6 @@ import pytest
 
 from snuba.pipeline.query_pipeline import (
     InvalidQueryPipelineResult,
-    QueryPipelineData,
     QueryPipelineError,
     QueryPipelineResult,
     QueryPipelineStage,
@@ -57,7 +56,7 @@ def test_handle_error() -> None:
             error_processed = 1
             return super()._process_error(pipe_input)
 
-        def _process_data(self, pipe_input: QueryPipelineData[int]) -> int:
+        def _process_data(self, pipe_input: QueryPipelineResult[int]) -> int:
             raise Exception("Should not get here")
 
     input: QueryPipelineResult[int] = QueryPipelineResult(
@@ -82,7 +81,7 @@ def test_recover_from_error() -> None:
                 return ERROR_PROCESSED_RETURN
             return super()._process_error(pipe_input)
 
-        def _process_data(self, pipe_input: QueryPipelineData[int]) -> int:
+        def _process_data(self, pipe_input: QueryPipelineResult[int]) -> int:
             raise Exception("Should not get here")
 
     input: QueryPipelineResult[int] = QueryPipelineResult(
