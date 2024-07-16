@@ -1016,8 +1016,8 @@ def convert_formula_to_query(
                     new_param.append(
                         replace(fn_param, table_name=alias_wrap(param.table_alias))
                     )
-                elif isinstance(param, FunctionCall):
-                    new_param.append(wrap_condition_column(c))
+                elif isinstance(fn_param, FunctionCall):
+                    new_param.append(wrap_condition_column(fn_param))
                 else:
                     new_param.append(fn_param)
             return replace(c, parameters=tuple(new_param))
