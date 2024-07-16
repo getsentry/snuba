@@ -45,6 +45,7 @@ class TransactionEvent:
     app_start_type: str = "warm"
     has_app_ctx: bool = True
     profile_id: Optional[str] = None
+    profiler_id: Optional[str] = None
     replay_id: Optional[str] = None
     received: Optional[float] = None
 
@@ -55,9 +56,18 @@ class TransactionEvent:
             return None
 
     def get_profile_context(self) -> Optional[Mapping[str, str]]:
-        if self.profile_id is None:
-            return None
-        return {"profile_id": self.profile_id}
+        context = {}
+
+        if self.profile_id is not None:
+            context["profile_id"] = self.profile_id
+
+        if self.profiler_id is not None:
+            context["profiler_id"] = self.profiler_id
+
+        if context:
+            return context
+
+        return None
 
     def get_replay_context(self) -> Optional[Mapping[str, str]]:
         if self.replay_id is None:
@@ -280,6 +290,8 @@ class TransactionEvent:
 
         if self.profile_id is not None:
             ret["profile_id"] = str(uuid.UUID(self.profile_id))
+        if self.profiler_id is not None:
+            ret["profiler_id"] = str(uuid.UUID(self.profiler_id))
         if self.replay_id is not None:
             ret["replay_id"] = str(uuid.UUID(self.replay_id))
             ret["tags.key"].append("replayId")
@@ -332,6 +344,7 @@ class TestTransactionsProcessor:
             },
             transaction_source="url",
             profile_id="046852d24483455c8c44f0c8fbf496f9",
+            profiler_id="822301ff8bdb4daca920ddf2f993b1ff",
             replay_id="d2731f8ed8934c6fa5253e450915aa12",
         )
 
