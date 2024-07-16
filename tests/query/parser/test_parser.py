@@ -15,18 +15,18 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import binary_condition
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinType,
+)
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    NestedColumn,
-    and_cond,
-    column,
-    divide,
-    in_cond,
-    literal,
-    or_cond,
-)
+from snuba.query.dsl import NestedColumn, and_cond, column, divide, in_cond, literal
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -43,15 +43,19 @@ from_distributions = QueryEntity(
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
-time_expression = FunctionCall(
-    "_snuba_time",
-    "toStartOfInterval",
-    (
-        Column("_snuba_timestamp", None, "timestamp"),
-        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
-        Literal(None, "Universal"),
-    ),
-)
+
+
+def time_expression(table_name: str = None) -> FunctionCall:
+    name = f"_snuba_{table_name}.time" if table_name else "_snuba_time"
+    return FunctionCall(
+        name,
+        "toStartOfInterval",
+        (
+            Column("_snuba_timestamp", table_name, "timestamp"),
+            FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+            Literal(None, "Universal"),
+        ),
+    )
 
 
 def test_mql() -> None:
@@ -96,26 +100,6 @@ def test_mql() -> None:
         condition=and_cond(
             and_cond(
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
-                    ),
-                ),
-                and_cond(
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
-                    f.equals(
-                        column("use_case_id", None, "_snuba_use_case_id"),
-                        literal("transactions"),
-                    ),
-                ),
-            ),
-            and_cond(
-                and_cond(
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
@@ -123,6 +107,26 @@ def test_mql() -> None:
                     f.less(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    in_cond(
+                        column("project_id", None, "_snuba_project_id"),
+                        f.tuple(literal(1)),
+                    ),
+                    in_cond(
+                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                    ),
+                ),
+            ),
+            and_cond(
+                and_cond(
+                    f.equals(
+                        column("use_case_id", None, "_snuba_use_case_id"),
+                        literal("transactions"),
+                    ),
+                    f.equals(
+                        column("granularity", None, "_snuba_granularity"), literal(60)
                     ),
                 ),
                 and_cond(
@@ -202,26 +206,6 @@ def test_mql_wildcards() -> None:
         condition=and_cond(
             and_cond(
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
-                    ),
-                ),
-                and_cond(
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
-                    f.equals(
-                        column("use_case_id", None, "_snuba_use_case_id"),
-                        literal("transactions"),
-                    ),
-                ),
-            ),
-            and_cond(
-                and_cond(
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
@@ -229,6 +213,26 @@ def test_mql_wildcards() -> None:
                     f.less(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    in_cond(
+                        column("project_id", None, "_snuba_project_id"),
+                        f.tuple(literal(1)),
+                    ),
+                    in_cond(
+                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                    ),
+                ),
+            ),
+            and_cond(
+                and_cond(
+                    f.equals(
+                        column("use_case_id", None, "_snuba_use_case_id"),
+                        literal("transactions"),
+                    ),
+                    f.equals(
+                        column("granularity", None, "_snuba_granularity"), literal(60)
                     ),
                 ),
                 and_cond(
@@ -306,26 +310,6 @@ def test_mql_negated_wildcards() -> None:
         condition=and_cond(
             and_cond(
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
-                    ),
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(1)),
-                    ),
-                ),
-                and_cond(
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
-                    ),
-                    f.equals(
-                        column("use_case_id", None, "_snuba_use_case_id"),
-                        literal("transactions"),
-                    ),
-                ),
-            ),
-            and_cond(
-                and_cond(
                     f.greaterOrEquals(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 1, 0, 0)),
@@ -333,6 +317,26 @@ def test_mql_negated_wildcards() -> None:
                     f.less(
                         column("timestamp", None, "_snuba_timestamp"),
                         literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    in_cond(
+                        column("project_id", None, "_snuba_project_id"),
+                        f.tuple(literal(1)),
+                    ),
+                    in_cond(
+                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                    ),
+                ),
+            ),
+            and_cond(
+                and_cond(
+                    f.equals(
+                        column("use_case_id", None, "_snuba_use_case_id"),
+                        literal("transactions"),
+                    ),
+                    f.equals(
+                        column("granularity", None, "_snuba_granularity"), literal(60)
                     ),
                 ),
                 and_cond(
@@ -454,58 +458,139 @@ def test_formula_mql() -> None:
             "_snuba_aggregate_value",
         ),
     )
-    expected = Query(
-        from_distributions,
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            FunctionCall(
+                None,
+                "sum",
+                (Column("_snuba_value", "d0", "value"),),
+            ),
+            FunctionCall(
+                None,
+                "sum",
+                (Column("_snuba_value", "d1", "value"),),
+            ),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    expected_join_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d1",
+            data_source=from_distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+            )
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    expected = CompositeQuery(
+        expected_join_clause,
         selected_columns=[
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression,
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0"),
             ),
         ],
-        groupby=[time_expression],
+        groupby=[time_expression("d1"), time_expression("d0")],
         condition=and_cond(
             and_cond(
-                or_cond(
-                    and_cond(
-                        f.equals(tags_raw["222222"], literal("200")),
-                        f.equals(
-                            column("metric_id", None, "_snuba_metric_id"),
-                            literal(123456),
-                        ),
+                and_cond(
+                    f.greaterOrEquals(
+                        column("timestamp", "d0", "_snuba_timestamp"),
+                        literal(datetime(2023, 11, 23, 18, 30)),
                     ),
-                    f.equals(
-                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                    and_cond(
+                        f.less(
+                            column("timestamp", "d0", "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
+                        ),
+                        in_cond(
+                            column("project_id", "d0", "_snuba_project_id"),
+                            f.tuple(literal(11)),
+                        ),
                     ),
                 ),
                 and_cond(
-                    f.equals(
-                        column("granularity", None, "_snuba_granularity"), literal(60)
+                    and_cond(
+                        in_cond(
+                            column("org_id", "d0", "_snuba_org_id"), f.tuple(literal(1))
+                        ),
+                        f.equals(
+                            column("use_case_id", "d0", "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
                     ),
-                    in_cond(
-                        column("project_id", None, "_snuba_project_id"),
-                        f.tuple(literal(11)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", "d0", "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        f.greaterOrEquals(
+                            column("timestamp", "d1", "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
                     ),
                 ),
             ),
             and_cond(
                 and_cond(
-                    in_cond(
-                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                    and_cond(
+                        f.less(
+                            column("timestamp", "d1", "_snuba_timestamp"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
+                        ),
+                        in_cond(
+                            column("project_id", "d1", "_snuba_project_id"),
+                            f.tuple(literal(11)),
+                        ),
                     ),
-                    f.equals(
-                        column("use_case_id", None, "_snuba_use_case_id"),
-                        literal("transactions"),
+                    and_cond(
+                        in_cond(
+                            column("org_id", "d1", "_snuba_org_id"),
+                            f.tuple(literal(1)),
+                        ),
+                        f.equals(
+                            column("use_case_id", "d1", "_snuba_use_case_id"),
+                            literal("transactions"),
+                        ),
                     ),
                 ),
                 and_cond(
-                    f.greaterOrEquals(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2023, 11, 23, 18, 30)),
+                    and_cond(
+                        f.equals(
+                            column("granularity", "d1", "_snuba_granularity"),
+                            literal(60),
+                        ),
+                        f.equals(
+                            NestedColumn("tags_raw", "d0")["222222"], literal("200")
+                        ),
                     ),
-                    f.less(
-                        column("timestamp", None, "_snuba_timestamp"),
-                        literal(datetime(2023, 11, 23, 22, 30)),
+                    and_cond(
+                        f.equals(
+                            column("metric_id", "d0", "_snuba_metric_id"),
+                            literal(123456),
+                        ),
+                        f.equals(
+                            column("metric_id", "d1", "_snuba_metric_id"),
+                            literal(123456),
+                        ),
                     ),
                 ),
             ),
@@ -513,7 +598,7 @@ def test_formula_mql() -> None:
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC,
-                expression=time_expression,
+                expression=time_expression("d0"),
             )
         ],
         limit=1000,
