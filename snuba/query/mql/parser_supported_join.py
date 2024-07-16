@@ -260,7 +260,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                     target.groupby = (
                         target.groupby + groupby if target.groupby else groupby
                     )
-
         return target
 
     def _filter(self, children: Sequence[Any], operator: str) -> FunctionCall:
@@ -1010,28 +1009,26 @@ def convert_formula_to_query(
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
     # also needs the metric ID conditions added
     def extract_filters(param: InitialParseResult | Any) -> list[FunctionCall]:
+        def wrap_condition_column(c: FunctionCall) -> FunctionCall:
+            new_param = []
+            for fn_param in c.parameters:
+                if isinstance(fn_param, Column):
+                    new_column = (
+                        replace(fn_param, table_name=alias_wrap(param.table_alias)),
+                    )
+                    new_param.append(new_column)
+                elif isinstance(param, FunctionCall):
+                    new_param.append(wrap_condition_column(c))
+                else:
+                    new_param.append(fn_param)
+            return replace(c, parameters=tuple(new_param))
+
         if not isinstance(param, InitialParseResult):
             return []
         elif param.expression is not None:
             conditions = []
             for c in param.conditions or []:
-                assert isinstance(c, FunctionCall)
-                lhs = c.parameters[0]
-                if isinstance(lhs, Column):
-                    conditions.append(
-                        replace(
-                            c,
-                            parameters=tuple(
-                                [
-                                    replace(
-                                        lhs, table_name=alias_wrap(param.table_alias)
-                                    ),
-                                    *c.parameters[1:],
-                                ]
-                            ),
-                        )
-                    )
-
+                conditions.append(wrap_condition_column(c))
             conditions.append(
                 binary_condition(
                     "equals",
@@ -1464,6 +1461,8 @@ class ParsePopulateResolveMQL(
 
         with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
             query = parse_mql_query_body(mql_str, dataset)
+            print("after parser")
+            print(query)
 
         with sentry_sdk.start_span(
             op="parser", description="populate_query_from_mql_context"

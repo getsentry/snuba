@@ -429,6 +429,18 @@ def test_bracket_on_formula() -> None:
     assert eq, reason
 
 
+def test_multiple_filter_same_groupby_formula() -> None:
+    query_body = '(avg(d:transactions/duration@millisecond){((status_code:400 AND transaction:"production") OR status_code:300)} by (status_code) * 1000000.0)'
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
+    print(query)
+    # eq, reason = query.equals(expected)
+    # assert eq, reason
+
+
 def test_distribute_tags() -> None:
     query_body = "max(`d:transactions/duration@millisecond`){status_code:404} / (sum(`d:transactions/duration@millisecond`) + avg(`d:transactions/duration@millisecond`)){status_code:418}"
 
