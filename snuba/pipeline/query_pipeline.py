@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Generic, Optional, TypeVar, Union, cast
 
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.query.query_settings import QuerySettings
 from snuba.utils.metrics.timer import Timer
 
@@ -55,7 +56,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
         return pipe_input.error
 
     @abstractmethod
-    def _process_data(self, pipe_input: QueryPipelineData[Tin]) -> Tout:
+    def _process_data(self, pipe_input: QueryPipelineResult[Tin]) -> Tout:
         raise NotImplementedError
 
     def execute(
@@ -79,7 +80,7 @@ class QueryPipelineStage(Generic[Tin, Tout]):
                 )
         try:
             return QueryPipelineResult(
-                data=self._process_data(pipe_input.as_data()),
+                data=self._process_data(pipe_input),
                 query_settings=pipe_input.query_settings,
                 timer=pipe_input.timer,
                 error=None,
@@ -107,6 +108,8 @@ class QueryPipelineResult(ABC, Generic[T]):
     error: Optional[Exception]
     query_settings: QuerySettings
     timer: Timer
+    request_query: Optional[str] = None
+    storage: Optional[ReadableTableStorage] = None
 
     def __post_init__(self) -> None:
         if not (self.data is None) ^ (self.error is None):

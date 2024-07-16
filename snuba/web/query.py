@@ -44,13 +44,15 @@ def _run_query_pipeline(
             query_settings=request.query_settings,
             timer=timer,
             error=None,
+            request_query=request.original_body.get("query", None),
         )
     )
     clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
 
-    data = typing.cast(Query, clickhouse_query.data)
-    if data.get_is_delete():
-        clickhouse_query = MaxRowsEnforcerStage().execute(clickhouse_query)
+    if clickhouse_query.data is not None:
+        data = typing.cast(Query, clickhouse_query.data)
+        if data.get_is_delete():
+            clickhouse_query = MaxRowsEnforcerStage().execute(clickhouse_query)
 
     res = ExecutionStage(
         request.attribution_info,

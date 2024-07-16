@@ -35,11 +35,7 @@ from snuba.datasets.factory import get_dataset_name
 from snuba.datasets.storage import Storage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.pipeline.query_pipeline import (
-    QueryPipelineData,
-    QueryPipelineResult,
-    QueryPipelineStage,
-)
+from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
 from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -1580,7 +1576,7 @@ class PostProcessAndValidateQuery(
 ):
     def _process_data(
         self,
-        pipe_input: QueryPipelineData[
+        pipe_input: QueryPipelineResult[
             tuple[
                 LogicalQuery | CompositeQuery[LogicalDataSource],
                 Dataset,
@@ -1588,7 +1584,7 @@ class PostProcessAndValidateQuery(
             ]
         ],
     ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
-        query, dataset, custom_processing = pipe_input.data
+        query, dataset, custom_processing = pipe_input.as_data().data
         settings = pipe_input.query_settings
 
         with sentry_sdk.start_span(op="processor", description="post_processors"):
