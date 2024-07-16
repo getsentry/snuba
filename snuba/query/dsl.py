@@ -25,13 +25,14 @@ class NestedColumn:
     )
     """
 
-    def __init__(self, column_name: str) -> None:
+    def __init__(self, column_name: str, table_name: str | None = None) -> None:
         self.column_name = column_name
+        self.table_name = table_name
 
     def __getitem__(self, key: str) -> SubscriptableReference:
         return SubscriptableReference(
             f"_snuba_{self.column_name}[{key}]",
-            Column(f"_snuba_{self.column_name}", None, self.column_name),
+            Column(f"_snuba_{self.column_name}", self.table_name, self.column_name),
             Literal(None, key),
         )
 
@@ -138,9 +139,9 @@ def if_in(
 
 # boolean functions
 def binary_condition(
-    function_name: str, lhs: Expression, rhs: Expression
+    function_name: str, lhs: Expression, rhs: Expression, alias: Optional[str] = None
 ) -> FunctionCall:
-    return FunctionCall(None, function_name, (lhs, rhs))
+    return FunctionCall(alias, function_name, (lhs, rhs))
 
 
 def equals(
@@ -159,8 +160,10 @@ def or_cond(lhs: Expression, rhs: Expression, *args: Expression) -> FunctionCall
     return FunctionCall(None, "or", (lhs, rhs, *args))
 
 
-def in_cond(lhs: Expression, rhs: Expression) -> FunctionCall:
-    return binary_condition("in", lhs, rhs)
+def in_cond(
+    lhs: Expression, rhs: Expression, alias: Optional[str] = None
+) -> FunctionCall:
+    return binary_condition("in", lhs, rhs, alias)
 
 
 # aggregate functions

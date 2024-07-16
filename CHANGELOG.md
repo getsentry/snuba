@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.7.0
+
+### Various fixes & improvements
+
+- feat(mql): MQL JOIN subquery generator (#6101) by @enochtangg
+- feat(metrics): add wildcard support to MQL parser (#5972) by @shellmayr
+- Revert "feat(profiling): Add profiler id column to transactions (#6099)" (f941b5e7) by @getsentry-bot
+- feat(profiling): Add profiler id column to transactions (#6099) by @Zylphrex
+- feat: create search_issues_dist_v2 on same query node as group_attributes (#6087) by @kylemumma
+- feat(replays): Set platform as empty string if platform is not provided (#6098) by @cmanallen
+- feat(mql): Add test for formula queries with curried aggregate (#6080) by @john-z-yang
+- feat(mql): Arbitrary nested column aggregates (#6096) by @john-z-yang
+- dev(rate-limits): bump backfill query allocation to 30 per s (#6074) by @JoshFerge
+- ref(snuba-deletes): Skeleton for DeletionProcessor (#6095) by @xurui-c
+- ref(snuba-deletes): add DeletionSettings (#6092) by @MeredithAnya
+- fix: move an import that may be causing issue with sentry devservice (#6090) by @kylemumma
+- Revert "code (#6088)" (#6089) by @kneeyo1
+- fix(capman): emit the bytes scanned metric from db_query (#6075) by @volokluev
+- code (#6088) by @xurui-c
+- feat(mql): Support groupby parsing for formula join queries (#6077) by @enochtangg
+- Revert "code (#6081)" (ba3e5ed3) by @getsentry-bot
+- code (#6081) by @xurui-c
+- Add clickhouse override settings (#6085) by @cmanallen
+- chore: new temporary storage set (#6079) by @kylemumma
+- feat(replays): Add materialization YAML definitions (#6071) by @cmanallen
+- fix(devenv): Auto-install cargo watch (#6078) by @untitaker
+- feat: autogenerate addcolumn migrations (#6053) by @kylemumma
+- test(mql): Add tests for formula queries with scalar values (#6073) by @john-z-yang
+
+_Plus 29 more_
+
 ## 24.6.0
 
 ### Various fixes & improvements

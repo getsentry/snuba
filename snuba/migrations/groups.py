@@ -154,7 +154,10 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     ),
     MigrationGroup.SEARCH_ISSUES: _MigrationGroup(
         loader=SearchIssuesLoader(),
-        storage_sets_keys={StorageSetKey.SEARCH_ISSUES},
+        storage_sets_keys={
+            StorageSetKey.SEARCH_ISSUES,
+            StorageSetKey.SEARCH_ISSUES_TMP,
+        },
         readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.SPANS: _MigrationGroup(

@@ -6,6 +6,11 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import build_match
+from snuba.query.data_source.join import (
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+)
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -23,6 +28,15 @@ def resolve(value: str, mapping: dict[str, str | int]) -> str | int:
     raise InvalidQueryException(f"Could not resolve {value}")
 
 
+def resolve_tag_column_name(
+    value: str, mapping: dict[str, str | int], dataset: Dataset
+) -> str:
+    if get_dataset_name(dataset) == "metrics":
+        return f"tags[{resolve(value, mapping)}]"
+    else:
+        return f"tags_raw[{resolve(value, mapping)}]"
+
+
 def resolve_tag_key_mappings(
     query: CompositeQuery[QueryEntity] | LogicalQuery,
     indexer_mapping: dict[str, str | int],
@@ -30,14 +44,45 @@ def resolve_tag_key_mappings(
 ) -> None:
     def resolve_tag_column(exp: Expression) -> Expression:
         if isinstance(exp, Column) and exp.column_name in indexer_mapping:
-            if get_dataset_name(dataset) == "metrics":
-                column_name = f"tags[{resolve(exp.column_name, indexer_mapping)}]"
-            else:
-                column_name = f"tags_raw[{resolve(exp.column_name, indexer_mapping)}]"
+            column_name = resolve_tag_column_name(
+                exp.column_name, indexer_mapping, dataset
+            )
             return replace(exp, column_name=column_name)
         return exp
 
+    def resolve_join_conditions(
+        join_clause: JoinClause[QueryEntity],
+    ) -> JoinClause[QueryEntity]:
+        # If MQL query is a formula query contain group bys, then the groupby columns will be
+        # pushed into the join conditions. Therefore, they must be resolved.
+        if isinstance(join_clause.left_node, JoinClause):
+            join_clause = replace(
+                join_clause, left_node=resolve_join_conditions(join_clause.left_node)
+            )
+        keys = []
+        for join_cond in join_clause.keys:
+            left = join_cond.left
+            right = join_cond.right
+            if left.column in indexer_mapping:
+                resolved_name = resolve_tag_column_name(
+                    left.column, indexer_mapping, dataset
+                )
+                left = JoinConditionExpression(left.table_alias, resolved_name)
+            if right.column in indexer_mapping:
+                resolved_name = resolve_tag_column_name(
+                    right.column, indexer_mapping, dataset
+                )
+                right = JoinConditionExpression(right.table_alias, resolved_name)
+            new_join_cond = JoinCondition(left, right)
+            keys.append(new_join_cond)
+        return replace(join_clause, keys=keys)
+
     query.transform_expressions(resolve_tag_column)
+    if isinstance(query, CompositeQuery):
+        from_clause = query.get_from_clause()
+        if isinstance(from_clause, JoinClause):
+            join_clause = resolve_join_conditions(from_clause)
+            query.set_from_clause(join_clause)
 
 
 METRIC_ID_MATCH = build_match(col="metric_id", param_type=str)

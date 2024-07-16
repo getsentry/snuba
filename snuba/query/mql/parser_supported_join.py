@@ -59,6 +59,7 @@ from snuba.query.mql.context_population import (
     start_end_time_condition,
 )
 from snuba.query.mql.mql_context import MQLContext
+from snuba.query.mql.parser import FilterFactorValue
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
@@ -279,21 +280,49 @@ class MQLVisitor(NodeVisitor):  # type: ignore
     def visit_filter_factor(
         self,
         node: Node,
-        children: Tuple[Sequence[Union[str, Sequence[str]]] | FunctionCall, Any],
+        children: Tuple[
+            Sequence[str | Sequence[str] | FilterFactorValue] | FunctionCall, Any
+        ],
     ) -> FunctionCall:
         factor, *_ = children
         if isinstance(factor, FunctionCall):
             # If we have a parenthesized expression, we just return it.
             return factor
-        condition_op, lhs, _, _, _, rhs = factor
+
+        condition_op: str
+        lhs: str
+        filter_factor_value: FilterFactorValue
+
+        condition_op, lhs, _, _, _, filter_factor_value = factor  # type: ignore
         condition_op_value = (
             "!" if len(condition_op) == 1 and condition_op[0] == "!" else ""
         )
+
+        contains_wildcard = filter_factor_value.contains_wildcard
+        rhs = filter_factor_value.value
+
+        if contains_wildcard and isinstance(rhs, str):
+            rhs = rhs[:-1] + "%"
+            if not condition_op_value:
+                op = ConditionFunctions.LIKE
+            elif condition_op_value == "!":
+                op = ConditionFunctions.NOT_LIKE
+
+            return FunctionCall(
+                None,
+                op,
+                (
+                    Column(None, None, lhs[0]),
+                    Literal(None, rhs),
+                ),
+            )
+
         if isinstance(rhs, list):
             if not condition_op_value:
                 op = ConditionFunctions.IN
             elif condition_op_value == "!":
                 op = ConditionFunctions.NOT_IN
+
             return FunctionCall(
                 None,
                 op,
@@ -374,10 +403,36 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         return node.text
 
     def visit_tag_value(
-        self, node: Node, children: Sequence[Sequence[str]]
-    ) -> Union[str, Sequence[str]]:
-        tag_value = children[0]
-        return tag_value
+        self, node: Node, children: Sequence[FilterFactorValue]
+    ) -> FilterFactorValue:
+        filter_factor_value = children[0]
+        return filter_factor_value
+
+    def visit_quoted_suffix_wildcard_tag_value(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        _, text_before_wildcard, _, _ = children
+        rhs = f"{text_before_wildcard}%"
+        return FilterFactorValue(rhs, True)
+
+    def visit_suffix_wildcard_tag_value(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        text_before_wildcard, _ = children
+        rhs = f"{text_before_wildcard}%"
+        return FilterFactorValue(rhs, True)
+
+    def visit_quoted_string_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        text = str(node.text[1:-1])
+        match = text.replace('\\"', '"')
+        return FilterFactorValue(match, False)
+
+    def visit_unquoted_string_filter(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
+        return FilterFactorValue(str(node.text), False)
 
     def visit_unquoted_string(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -388,9 +443,13 @@ class MQLVisitor(NodeVisitor):  # type: ignore
         match = str(node.text[1:-1]).replace('\\"', '"')
         return match
 
-    def visit_string_tuple(self, node: Node, children: Sequence[Any]) -> Sequence[str]:
+    def visit_string_tuple(
+        self, node: Node, children: Sequence[Any]
+    ) -> FilterFactorValue:
         _, _, first, zero_or_more_others, _, _ = children
-        return [first[0], *(v[0] for _, _, _, v in zero_or_more_others)]
+        return FilterFactorValue(
+            [first[0], *(v[0] for _, _, _, v in zero_or_more_others)], False
+        )
 
     def visit_group_by_name(self, node: Node, children: Sequence[Any]) -> str:
         assert isinstance(node.text, str)
@@ -807,7 +866,6 @@ def build_formula_query_from_clause(
                     right=JoinConditionExpression(prev_node.alias, column.column_name),
                 )
             )
-
         left_side = build_join_clause(lhs, nodes[1:]) if len(nodes) > 1 else lhs
         return JoinClause(
             left_node=left_side,
@@ -849,30 +907,63 @@ def convert_formula_to_query(
     # Build SelectedExpression from root tree
     # When going through the selected expressions, populate the table aliases
     def extract_expression(param: InitialParseResult | Any) -> Expression:
-        if not isinstance(param, InitialParseResult):
-            return Literal(None, param)
-        elif param.expression is not None:
-            aggregate_function = param.expression.expression
-            assert isinstance(aggregate_function, (FunctionCall, CurriedFunctionCall))
-            # Metrics aggregates operate on a column
-            column = aggregate_function.parameters[0]
-            assert isinstance(column, Column)
-            return replace(
-                aggregate_function,
-                parameters=(replace(column, table_name=alias_wrap(param.table_alias)),),
-                alias=None,
-            )
-        elif param.formula:
-            parameters = param.parameters or []
-            return FunctionCall(
-                None,
-                param.formula,
-                tuple(extract_expression(p) for p in parameters),
-            )
-        else:
-            raise InvalidQueryException(
-                "Could not build selected expression for formula"
-            )
+        match param:
+            case InitialParseResult(
+                expression=SelectedExpression(
+                    expression=FunctionCall(parameters=(Column() as col,))
+                    | CurriedFunctionCall(
+                        parameters=(Column() as col,)
+                    ) as aggregate_function
+                )
+            ):
+                return replace(
+                    aggregate_function,
+                    parameters=(
+                        replace(col, table_name=alias_wrap(param.table_alias)),
+                    ),
+                    alias=None,
+                )
+            case InitialParseResult(
+                expression=SelectedExpression(
+                    expression=FunctionCall(
+                        function_name=function_name, parameters=parameters
+                    ),
+                ) as selected_expression
+            ):
+                return FunctionCall(
+                    None,
+                    function_name,
+                    tuple(
+                        (
+                            extract_expression(
+                                replace(
+                                    param,
+                                    expression=replace(
+                                        selected_expression, expression=parameter
+                                    ),
+                                )
+                            )
+                            if isinstance(parameter, FunctionCall)
+                            else parameter
+                        )
+                        for parameter in parameters
+                    ),
+                )
+            case InitialParseResult(
+                formula=str() as formula,
+                parameters=parameters,
+            ):
+                return FunctionCall(
+                    None,
+                    formula,
+                    tuple(extract_expression(p) for p in parameters or []),
+                )
+            case InitialParseResult():
+                raise InvalidQueryException(
+                    "Could not build selected expression for formula"
+                )
+            case _:
+                return Literal(None, param)
 
     parameters = parsed.parameters or []
     selected_columns = [
@@ -1240,10 +1331,10 @@ def populate_query_from_mql_context(
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
-                                table_alias=left, column="time"
+                                table_alias=left, column=f"{left}.time"
                             ),
                             right=JoinConditionExpression(
-                                table_alias=right, column="time"
+                                table_alias=right, column=f"{right}.time"
                             ),
                         )
                     )
@@ -1252,14 +1343,15 @@ def populate_query_from_mql_context(
                     JoinClause() as inner_join_clause,
                     IndividualNode(alias=right),
                 ):
+                    left_alias = add_join_keys(inner_join_clause)
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
-                                table_alias=add_join_keys(inner_join_clause),
-                                column="time",
+                                table_alias=left_alias,
+                                column=f"{left_alias}.time",
                             ),
                             right=JoinConditionExpression(
-                                table_alias=right, column="time"
+                                table_alias=right, column=f"{right}.time"
                             ),
                         )
                     )
