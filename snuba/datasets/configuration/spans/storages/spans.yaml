@@ -171,10 +171,6 @@ query_processors:
         [span_id, trace_id, segment_name]
   - processor: TableRateLimit
   - processor: TupleUnaliaser
-  - processor: LowCardinalityProcessor
-    args:
-      columns:
-        - op
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
