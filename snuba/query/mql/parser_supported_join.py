@@ -1009,18 +1009,18 @@ def convert_formula_to_query(
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
     # also needs the metric ID conditions added
     def extract_filters(param: InitialParseResult | Any) -> list[FunctionCall]:
-        def wrap_condition_column(c: FunctionCall) -> FunctionCall:
-            new_param: list[Expression] = []
-            for fn_param in c.parameters:
+        def wrap_condition_columns(fn_call: FunctionCall) -> FunctionCall:
+            wrapped_params: list[Expression] = []
+            for fn_param in fn_call.parameters:
                 if isinstance(fn_param, Column):
-                    new_param.append(
+                    wrapped_params.append(
                         replace(fn_param, table_name=alias_wrap(param.table_alias))
                     )
                 elif isinstance(fn_param, FunctionCall):
-                    new_param.append(wrap_condition_column(fn_param))
+                    wrapped_params.append(wrap_condition_columns(fn_param))
                 else:
-                    new_param.append(fn_param)
-            return replace(c, parameters=tuple(new_param))
+                    wrapped_params.append(fn_param)
+            return replace(fn_call, parameters=tuple(wrapped_params))
 
         if not isinstance(param, InitialParseResult):
             return []
@@ -1028,7 +1028,7 @@ def convert_formula_to_query(
             conditions = []
             for c in param.conditions or []:
                 assert isinstance(c, FunctionCall)
-                conditions.append(wrap_condition_column(c))
+                conditions.append(wrap_condition_columns(c))
             conditions.append(
                 binary_condition(
                     "equals",
