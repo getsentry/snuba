@@ -43,6 +43,7 @@ impl BatchFactory {
         clickhouse_password: &str,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
+        max_bytes_before_external_group_by: Option<usize>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -68,6 +69,12 @@ impl BatchFactory {
             if async_inserts_allowed == Some("1".to_string()) {
                 query_params.push_str("&async_insert=1&wait_for_async_insert=1");
             }
+        }
+
+        if max_bytes_before_external_group_by.is_some() {
+            let mut query_segment: String = "&max_bytes_before_external_group_by=".to_owned();
+            query_segment.push_str(&max_bytes_before_external_group_by.unwrap().to_string());
+            query_params.push_str(&query_segment)
         }
 
         let url = format!("http://{hostname}:{http_port}?{query_params}");
@@ -262,6 +269,7 @@ mod tests {
             "",
             false,
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -297,6 +305,7 @@ mod tests {
             "",
             true,
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -331,6 +340,7 @@ mod tests {
             "",
             false,
             None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -362,6 +372,7 @@ mod tests {
             "default",
             "",
             false,
+            None,
             None,
         );
 
@@ -399,6 +410,7 @@ mod tests {
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
             Some(Duration::from_millis(0)),
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -433,6 +445,7 @@ mod tests {
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
+            None,
         );
 
         let mut batch = factory.new_batch();
