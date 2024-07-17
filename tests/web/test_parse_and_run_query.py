@@ -6,7 +6,7 @@ from snuba.web.query import parse_and_run_query
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_basic():
+def test_basic() -> None:
     request, result = parse_and_run_query(
         body={
             "query": "MATCH (events) SELECT event_id, group_id, project_id, timestamp WHERE timestamp >= toDateTime('2024-07-17T21:04:34') AND timestamp < toDateTime('2024-07-17T21:10:34') AND project_id = 1",

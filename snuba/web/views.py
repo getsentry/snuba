@@ -285,7 +285,7 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
         dataset_name = get_dataset_name(dataset)
         body = parse_request_body(http_request)
         _trace_transaction(dataset_name)
-        return dataset_query(dataset, body, timer, is_mql=True)
+        return dataset_query(dataset_name, body, timer, is_mql=True)
     else:
         assert False, "unexpected fallthrough"
 
