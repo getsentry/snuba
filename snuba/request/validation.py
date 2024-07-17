@@ -59,7 +59,6 @@ def parse_snql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Union[Query, CompositeQuery[LogicalDataSource]]:
-    print("parsed snql")
     return _parse_snql_query(
         request_parts.query["query"], dataset, custom_processing, settings
     )
