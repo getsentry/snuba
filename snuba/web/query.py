@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
-from snuba import environment
+import sentry_sdk
+
+from snuba import environment, settings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
+from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
 from snuba.pipeline.stages.query_processing import (
@@ -13,9 +16,12 @@ from snuba.pipeline.stages.query_processing import (
     StorageProcessingStage,
 )
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.querylog import record_invalid_request, record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata, get_request_status
 from snuba.request import Request
+from snuba.request.schema import RequestSchema
+from snuba.request.validation import build_request, parse_mql_query, parse_snql_query
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
@@ -97,6 +103,42 @@ def run_query(
         raise error
 
     return result
+
+
+def _get_dataset(dataset_name: Optional[str]) -> Dataset:
+    if dataset_name:
+        try:
+            return get_dataset(dataset_name)
+        except InvalidDatasetError:
+            return PluggableDataset(name=dataset_name, all_entities=[])
+    return PluggableDataset(name=settings.DEFAULT_DATASET_NAME, all_entities=[])
+
+
+@with_span()
+def parse_and_run_query(
+    body: dict[str, Any],
+    timer: Timer,
+    is_mql: bool = False,
+    dataset_name: Optional[str] = None,
+    referrer: Optional[str] = None,
+) -> tuple[Request, QueryResult]:
+    with sentry_sdk.start_span(description="build_schema", op="validate"):
+        schema = RequestSchema.build(HTTPQuerySettings, is_mql)
+
+    # NOTE(Volo): dataset is not necessary for queries because storages can be queried directly
+    # certain parts of the code still use it though, many metrics used by snuba are still tagged by
+    # "dataset" even though datasets don't define very much. The user is able to provide a dataset_name
+    # for that reason. Otherwise they are not useful.
+    # EXCEPT FOR DISCOVER which is a whole can of worms, but that's the one place where the dataset is useful for something
+    assert isinstance(dataset_name, str)
+    dataset = _get_dataset(dataset_name)
+    referrer = referrer or "<unknown>"
+    parse_function = parse_snql_query if not is_mql else parse_mql_query
+    request = build_request(
+        body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
+    )
+
+    return request, run_query(dataset, request, timer)
 
 
 def _set_query_final(request: Request, extra: QueryExtraData) -> None:
