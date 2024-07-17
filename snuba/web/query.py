@@ -147,7 +147,6 @@ def parse_and_run_query(
     # "dataset" even though datasets don't define very much. The user is able to provide a dataset_name
     # for that reason. Otherwise they are not useful.
     # EXCEPT FOR DISCOVER which is a whole can of worms, but that's the one place where the dataset is useful for something
-    assert isinstance(dataset_name, str)
     dataset = _get_dataset(dataset_name)
     referrer = referrer or "<unknown>"
     parse_function = parse_snql_query if not is_mql else parse_mql_query
