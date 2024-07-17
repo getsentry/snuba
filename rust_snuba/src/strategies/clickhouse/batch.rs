@@ -71,9 +71,9 @@ impl BatchFactory {
             }
         }
 
-        if max_bytes_before_external_group_by.is_some() {
+        if let Some(max_bytes_before_external_group_by) = max_bytes_before_external_group_by {
             let mut query_segment: String = "&max_bytes_before_external_group_by=".to_owned();
-            query_segment.push_str(&max_bytes_before_external_group_by.unwrap().to_string());
+            query_segment.push_str(&max_bytes_before_external_group_by.to_string());
             query_params.push_str(&query_segment)
         }
 
