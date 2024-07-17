@@ -166,8 +166,8 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--max-bytes-before-external-group-by",
-    is_flag=True,
-    default=False,
+    type=int,
+    default=None,
     help="""
     Allow batching on disk for GROUP BY queries. This is a test mitigation for whether a
     materialized view is causing OOM on inserts. If successful, this should be set in storage config.
