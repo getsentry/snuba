@@ -6,6 +6,7 @@ import sentry_sdk
 
 from snuba import settings as snuba_settings
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.translators.snuba.mappers import SubscriptableMapper
 from snuba.clickhouse.translators.snuba.mapping import (
     SnubaClickhouseMappingTranslator,
@@ -22,10 +23,12 @@ from snuba.datasets.storage import (
 )
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.utils.storage_finder import StorageKeyFinder
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.allocation_policies import AllocationPolicy
+from snuba.query.composite import CompositeQuery
 from snuba.query.data_source.simple import Table
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.processors.physical import ClickhouseQueryProcessor
@@ -121,6 +124,7 @@ def transform_subscriptables(expression: Expression) -> Expression:
 
 @with_span()
 def apply_storage_processors(
+    pipe_input: QueryPipelineResult[ClickhouseQuery | CompositeQuery[Table]],
     query_plan: ClickhouseQueryPlan,
     settings: QuerySettings,
     post_processors: Sequence[ClickhouseQueryProcessor] = [],
@@ -157,5 +161,7 @@ def apply_storage_processors(
                     processor.process_query(query_plan.query, settings)
             else:
                 processor.process_query(query_plan.query, settings)
+
+    pipe_input.storage = storage
 
     return query_plan.query

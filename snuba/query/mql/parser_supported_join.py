@@ -21,11 +21,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset_name
-from snuba.pipeline.query_pipeline import (
-    QueryPipelineData,
-    QueryPipelineResult,
-    QueryPipelineStage,
-)
+from snuba.pipeline.query_pipeline import QueryPipelineResult, QueryPipelineStage
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -1456,11 +1452,11 @@ class ParsePopulateResolveMQL(
 ):
     def _process_data(
         self,
-        pipe_input: QueryPipelineData[
+        pipe_input: QueryPipelineResult[
             tuple[str, Dataset, dict[str, Any], QuerySettings | None]
         ],
     ) -> LogicalQuery:
-        mql_str, dataset, mql_context_dict, settings = pipe_input.data
+        mql_str, dataset, mql_context_dict, settings = pipe_input.as_data().data
 
         with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
             query = parse_mql_query_body(mql_str, dataset)
@@ -1495,7 +1491,7 @@ class PostProcessAndValidateMQLQuery(
 ):
     def _process_data(
         self,
-        pipe_input: QueryPipelineData[
+        pipe_input: QueryPipelineResult[
             tuple[
                 LogicalQuery,
                 QuerySettings | None,
@@ -1503,7 +1499,7 @@ class PostProcessAndValidateMQLQuery(
             ]
         ],
     ) -> LogicalQuery:
-        query, settings, custom_processing = pipe_input.data
+        query, settings, custom_processing = pipe_input.as_data().data
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(
                 query,

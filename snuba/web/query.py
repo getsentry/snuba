@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import typing
 from typing import Optional
 
 from snuba import environment
@@ -10,8 +11,10 @@ from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
 from snuba.pipeline.stages.query_processing import (
     EntityProcessingStage,
+    MaxRowsEnforcerStage,
     StorageProcessingStage,
 )
+from snuba.query import Query
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.querylog import record_invalid_request, record_query
 from snuba.querylog.query_metadata import SnubaQueryMetadata, get_request_status
@@ -41,9 +44,15 @@ def _run_query_pipeline(
             query_settings=request.query_settings,
             timer=timer,
             error=None,
+            request_query=request.original_body.get("query", None),
         )
     )
     clickhouse_query = StorageProcessingStage().execute(clickhouse_query)
+
+    if clickhouse_query.data is not None:
+        data = typing.cast(Query, clickhouse_query.data)
+        if data.get_is_delete():
+            clickhouse_query = MaxRowsEnforcerStage().execute(clickhouse_query)
 
     res = ExecutionStage(
         request.attribution_info,
