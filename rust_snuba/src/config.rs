@@ -20,7 +20,6 @@ pub struct ConsumerConfig {
     pub max_batch_size: usize,
     pub max_batch_time_ms: u64,
     pub env: EnvConfig,
-    pub max_bytes_before_external_group_by: Option<usize>,
 }
 
 pub fn deserialize_broker_config<'de, D>(
