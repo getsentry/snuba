@@ -21,3 +21,9 @@ class Request:
     @property
     def referrer(self) -> str:
         return self.attribution_info.referrer
+
+
+@dataclass(frozen=True)
+class DeleteRequest:
+    storage: str
+    where_clause: str
