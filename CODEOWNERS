@@ -2,16 +2,16 @@
 * @getsentry/owners-snuba
 
 # datasets
-/snuba/datasets/configuration/issues                @getsentry/issues
-/snuba/datasets/configuration/group_attributes      @getsentry/issues
-/snuba/datasets/configuration/groupedmessage        @getsentry/issues
-/snuba/datasets/configuration/groupassignee         @getsentry/issues
-/snuba/datasets/configuration/spans                 @getsentry/performance
-/snuba/datasets/configuration/transactions          @getsentry/performance
-/snuba/datasets/configuration/functions             @getsentry/profiling
-/snuba/datasets/configuration/profiles              @getsentry/profiling
-/snuba/datasets/configuration/replays               @getsentry/replay-backend
-/snuba/datasets/configuration/metrics               @getsentry/telemetry-experience
+/snuba/datasets/configuration/issues                @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/group_attributes      @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/groupedmessage        @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/groupassignee         @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/spans                 @getsentry/performance @getsentry/owners-snuba
+/snuba/datasets/configuration/transactions          @getsentry/performance @getsentry/owners-snuba
+/snuba/datasets/configuration/functions             @getsentry/profiling @getsentry/owners-snuba
+/snuba/datasets/configuration/profiles              @getsentry/profiling @getsentry/owners-snuba
+/snuba/datasets/configuration/replays               @getsentry/replay-backend @getsentry/owners-snuba
+/snuba/datasets/configuration/metrics               @getsentry/telemetry-experience @getsentry/owners-snuba
 
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
