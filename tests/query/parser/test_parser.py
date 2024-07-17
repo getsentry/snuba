@@ -34,7 +34,7 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import Query
-from snuba.query.mql.parser import parse_mql_query
+from snuba.query.mql.parser_supported_join import parse_mql_query_new
 from snuba.query.snql.parser import parse_snql_query
 
 tags = NestedColumn("tags")
@@ -159,7 +159,7 @@ def test_mql() -> None:
         ],
         limit=1000,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
@@ -263,7 +263,7 @@ def test_mql_wildcards() -> None:
         ],
         limit=1000,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
@@ -367,7 +367,7 @@ def test_mql_negated_wildcards() -> None:
         ],
         limit=1000,
     )
-    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
     assert eq, reason
 
@@ -608,7 +608,7 @@ def test_formula_mql() -> None:
     generic_metrics = get_dataset(
         "generic_metrics",
     )
-    query = parse_mql_query(str(query_body), mql_context, generic_metrics)
+    query = parse_mql_query_new(str(query_body), mql_context, generic_metrics)
     eq, reason = query.equals(expected)
     assert eq, reason
 
@@ -756,7 +756,7 @@ def test_recursion_error() -> None:
             "dist": 888,
         },
     }
-    parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
 
     def snql_conditions_with_default(*conditions: str) -> str:
         DEFAULT_TEST_QUERY_CONDITIONS = [
