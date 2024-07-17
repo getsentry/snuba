@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Union
 
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.query import ProcessableQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import LogicalDataSource
+from snuba.query.data_source.simple import LogicalDataSource, Table
 from snuba.query.logical import Query
 from snuba.query.query_settings import QuerySettings
 
@@ -25,5 +26,7 @@ class Request:
 
 @dataclass(frozen=True)
 class DeleteRequest:
+    id: str
+    query: ProcessableQuery[Table]
     storage: str
     where_clause: str
