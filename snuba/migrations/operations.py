@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
@@ -77,11 +78,35 @@ class SqlOperation(ABC):
             logger.info(f"Executing on {self.target.value} node: {node}")
             try:
                 connection.execute(self.format_sql(), settings=self._settings)
+                self._block_on_mutations(connection)
             except Exception:
                 logger.exception(
                     f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
                 )
                 raise
+
+    def _block_on_mutations(
+        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
+    ) -> None:
+        """
+        This function blocks until all entries of system.mutations
+        have is_done=1. Polls system.mutations every poll_seconds.
+        Raises error if not unblocked after timeout_seconds.
+        """
+        slept_so_far = 0
+        while True:
+            is_mutating = conn.execute(
+                "select count(*) from system.mutations where is_done=0"
+            ).results != [(0,)]
+            if not is_mutating:
+                return
+            elif slept_so_far >= timeout_seconds:
+                raise RuntimeError(
+                    f"{conn.host}:{conn.port} not finished mutating after {timeout_seconds} seconds"
+                )
+            else:
+                time.sleep(poll_seconds)
+                slept_so_far += poll_seconds
 
     @abstractmethod
     def format_sql(self) -> str:
