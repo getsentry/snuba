@@ -260,7 +260,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                     target.groupby = (
                         target.groupby + groupby if target.groupby else groupby
                     )
-
         return target
 
     def _filter(self, children: Sequence[Any], operator: str) -> FunctionCall:
@@ -1010,28 +1009,26 @@ def convert_formula_to_query(
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
     # also needs the metric ID conditions added
     def extract_filters(param: InitialParseResult | Any) -> list[FunctionCall]:
+        def wrap_condition_columns(fn_call: FunctionCall) -> FunctionCall:
+            wrapped_params: list[Expression] = []
+            for fn_param in fn_call.parameters:
+                if isinstance(fn_param, Column):
+                    wrapped_params.append(
+                        replace(fn_param, table_name=alias_wrap(param.table_alias))
+                    )
+                elif isinstance(fn_param, FunctionCall):
+                    wrapped_params.append(wrap_condition_columns(fn_param))
+                else:
+                    wrapped_params.append(fn_param)
+            return replace(fn_call, parameters=tuple(wrapped_params))
+
         if not isinstance(param, InitialParseResult):
             return []
         elif param.expression is not None:
             conditions = []
             for c in param.conditions or []:
                 assert isinstance(c, FunctionCall)
-                lhs = c.parameters[0]
-                if isinstance(lhs, Column):
-                    conditions.append(
-                        replace(
-                            c,
-                            parameters=tuple(
-                                [
-                                    replace(
-                                        lhs, table_name=alias_wrap(param.table_alias)
-                                    ),
-                                    *c.parameters[1:],
-                                ]
-                            ),
-                        )
-                    )
-
+                conditions.append(wrap_condition_columns(c))
             conditions.append(
                 binary_condition(
                     "equals",
