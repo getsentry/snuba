@@ -57,6 +57,7 @@ pub struct ConsumerStrategyFactory {
     pub accountant_topic_config: config::TopicConfig,
     pub stop_at_timestamp: Option<i64>,
     pub batch_write_timeout: Option<Duration>,
+    pub max_bytes_before_external_group_by: Option<usize>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
@@ -120,6 +121,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             &self.storage_config.clickhouse_cluster.password,
             self.async_inserts,
             self.batch_write_timeout,
+            self.max_bytes_before_external_group_by,
         );
 
         let accumulator = Arc::new(
