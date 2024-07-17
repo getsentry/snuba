@@ -122,6 +122,23 @@ def parse_and_run_query(
     dataset_name: Optional[str] = None,
     referrer: Optional[str] = None,
 ) -> tuple[Request, QueryResult]:
+    """Top level entrypoint from a raw query body to a query result
+
+    Example:
+    request, result = parse_and_run_query(
+        body={
+            "query":"MATCH (events) SELECT event_id, group_id, project_id, timestamp WHERE timestamp >= toDateTime('2024-07-17T21:04:34') AND timestamp < toDateTime('2024-07-17T21:10:34')",
+            "tenant_ids":{"organization_id":319976,"referrer":"Group.get_helpful"}
+        },
+        timer=Timer("parse_and_run_query"),
+        is_mql=False,
+    )
+
+    Optional args:
+        dataset_name (str): used mainly for observability purposes
+        referrer (str): legacy param, you probably don't need to provide this. It should be in the tenant_ids of the body
+    """
+
     with sentry_sdk.start_span(description="build_schema", op="validate"):
         schema = RequestSchema.build(HTTPQuerySettings, is_mql)
 
