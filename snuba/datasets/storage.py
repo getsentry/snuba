@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence
+from typing import Any, Generic, Optional, Sequence
 
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import (
@@ -17,7 +17,9 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
+from snuba.query import TSimpleDataSource
 from snuba.query.allocation_policies import DEFAULT_PASSTHROUGH_POLICY, AllocationPolicy
+from snuba.query.data_source.simple import SimpleDataSource
 from snuba.query.exceptions import QueryPlanException
 from snuba.query.processors.condition_checkers import ConditionChecker
 from snuba.query.processors.physical import ClickhouseQueryProcessor
