@@ -322,6 +322,42 @@ mod tests {
     }
 
     #[test]
+    fn test_write_with_external_groupby() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            None,
+            Some(500_000),
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
+    }
+
+    #[test]
     fn test_empty_batch() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
