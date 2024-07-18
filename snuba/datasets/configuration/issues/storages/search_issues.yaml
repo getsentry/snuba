@@ -135,3 +135,4 @@ deletion_processors:
       column_filters:
         - project_id
         - occurrence_id
+        - client_timestamp

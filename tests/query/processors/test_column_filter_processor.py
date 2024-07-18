@@ -13,7 +13,7 @@ from snuba.query.processors.physical.column_filter_processor import (
 from snuba.query.query_settings import HTTPQuerySettings
 
 TABLE = Table("issues", ColumnSet([]), storage_key=StorageKey("issues"))
-VALID_COLUMNS = ["project_id", "occurrence_id"]
+VALID_COLUMNS = ["project_id", "occurrence_id", "client_timestamp"]
 
 test_data = [
     pytest.param(
@@ -22,11 +22,17 @@ test_data = [
             selected_columns=[],
             condition=binary_condition(
                 BooleanFunctions.AND,
-                binary_condition(
-                    "equals", Column(None, None, VALID_COLUMNS[0]), Literal(None, 1)
+                lhs=binary_condition(
+                    "equals", Column(None, None, VALID_COLUMNS[2]), Literal(None, 1)
                 ),
-                binary_condition(
-                    "equals", Column(None, None, VALID_COLUMNS[1]), Literal(None, 1)
+                rhs=binary_condition(
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        "equals", Column(None, None, VALID_COLUMNS[0]), Literal(None, 1)
+                    ),
+                    binary_condition(
+                        "equals", Column(None, None, VALID_COLUMNS[1]), Literal(None, 1)
+                    ),
                 ),
             ),
         ),
