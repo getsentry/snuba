@@ -1,6 +1,5 @@
 use anyhow::Context;
 use chrono::DateTime;
-use md5;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
