@@ -87,6 +87,7 @@ index_create_ops: List[SqlOperation] = (
             index_expression="trace_id",
             index_type="bloom_filter",
             granularity=1,
+            target=OperationTarget.LOCAL,
         ),
     ]
     + [
@@ -97,6 +98,7 @@ index_create_ops: List[SqlOperation] = (
             index_expression=f"mapKeys(attr_str_${i})",
             index_type="bloom_filter",
             granularity=1,
+            target=OperationTarget.LOCAL,
         )
         for i in range(50)
     ]
@@ -108,6 +110,7 @@ index_create_ops: List[SqlOperation] = (
             index_expression=f"mapValues(attr_str_${i})",
             index_type="ngrambf_v1(4, 1024, 10, 1)",
             granularity=1,
+            target=OperationTarget.LOCAL,
         )
         for i in range(50)
     ]
@@ -119,6 +122,7 @@ index_create_ops: List[SqlOperation] = (
             index_expression=f"mapKeys(attr_num_${i})",
             index_type="bloom_filter",
             granularity=1,
+            target=OperationTarget.LOCAL,
         )
         for i in range(50)
     ]
@@ -130,6 +134,7 @@ index_create_ops: List[SqlOperation] = (
             index_expression=f"mapKeys(attr_bool_${i})",
             index_type="bloom_filter",
             granularity=1,
+            target=OperationTarget.LOCAL,
         )
         for i in range(10)
     ]
