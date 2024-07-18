@@ -17,6 +17,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "FUNCTIONS": "functions",
     "SEARCH_ISSUES": "search_issues",
     "SPANS": "spans",
+    "SPANS_V2": "spans_v2",
     "GROUP_ATTRIBUTES": "group_attributes",
     "METRICS_SUMMARIES": "metrics_summaries",
     "PROFILE_CHUNKS": "profile_chunks",
