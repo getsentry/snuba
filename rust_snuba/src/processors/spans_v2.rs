@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::DateTime;
-use cityhash::cityhash_1::city_hash_64;
+use md5;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -275,6 +275,11 @@ struct SpanV2 {
     attr_bool_9: HashMap<String, bool>,
 }
 
+fn half_md5(input: &[u8]) -> u64 {
+    let full_hash = md5::compute(input).0;
+    u64::from_be_bytes(full_hash[0..8].try_into().expect("should not happen"))
+}
+
 impl TryFrom<FromSpanMessage> for SpanV2 {
     type Error = anyhow::Error;
 
@@ -366,7 +371,7 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
             ];
 
             sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
-                attr_str_buckets[(city_hash_64(k.as_bytes()) as usize) % attr_str_buckets.len()]
+                attr_str_buckets[(half_md5(k.as_bytes()) as usize) % attr_str_buckets.len()]
                     .insert(k.clone(), v.clone());
             });
         }
@@ -426,7 +431,7 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
             ];
 
             measurements.iter().for_each(|(k, v)| {
-                attr_num_buckets[(city_hash_64(k.as_bytes()) as usize) % attr_num_buckets.len()]
+                attr_num_buckets[(half_md5(k.as_bytes()) as usize) % attr_num_buckets.len()]
                     .insert(k.clone(), v.value);
             });
         }
