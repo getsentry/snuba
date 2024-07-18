@@ -101,7 +101,7 @@ class SqlOperation(ABC):
             if not is_mutating:
                 return
             elif slept_so_far >= timeout_seconds:
-                raise RuntimeError(
+                raise TimeoutError(
                     f"{conn.host}:{conn.port} not finished mutating after {timeout_seconds} seconds"
                 )
             else:
