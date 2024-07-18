@@ -511,6 +511,12 @@ mod tests {
     "#;
 
     #[test]
+    fn test_half_md5() {
+        //select halfMD5('test') == 688887797400064883
+        assert_eq!(half_md5("test".as_bytes()), 688887797400064883)
+    }
+
+    #[test]
     fn test_valid_span() {
         let payload = KafkaPayload::new(None, None, Some(SPAN_KAFKA_MESSAGE.as_bytes().to_vec()));
         let meta = KafkaMessageMetadata {
