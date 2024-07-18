@@ -1,8 +1,8 @@
 use anyhow::Context;
 use chrono::DateTime;
 use cityhash::cityhash_1::city_hash_64;
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use serde::Serialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -51,37 +51,227 @@ struct SpanV2 {
     sampling_weight: f64,
     sign: u8, //1 for additions, -1 for deletions - for this worker it should be 1
 
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_0: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_1: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_2: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_3: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_4: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_5: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_6: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_7: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_8: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_str_9: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_10: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_11: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_12: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_13: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_14: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_15: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_16: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_17: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_18: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_19: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_20: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_21: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_22: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_23: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_24: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_25: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_26: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_27: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_28: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_29: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_30: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_31: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_32: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_33: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_34: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_35: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_36: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_37: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_38: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_39: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_40: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_41: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_42: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_43: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_44: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_45: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_46: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_47: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_48: HashMap<String, String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_49: HashMap<String, String>,
 
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_0: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_1: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_2: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_3: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_4: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_5: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_6: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_7: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_8: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_9: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_10: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_11: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_12: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_13: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_14: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_15: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_16: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_17: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_18: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_19: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_20: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_21: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_22: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_23: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_24: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_25: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_26: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_27: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_28: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_29: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_30: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_31: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_32: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_33: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_34: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_35: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_36: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_37: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_38: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_39: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_40: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_41: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_42: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_43: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_44: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_45: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_46: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_47: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_48: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_49: HashMap<String, f64>,
 
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_0: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_1: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_2: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_3: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_4: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_5: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_6: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_7: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_8: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_9: HashMap<String, bool>,
 }
 
@@ -133,6 +323,46 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
                 &mut res.attr_str_7,
                 &mut res.attr_str_8,
                 &mut res.attr_str_9,
+                &mut res.attr_str_10,
+                &mut res.attr_str_11,
+                &mut res.attr_str_12,
+                &mut res.attr_str_13,
+                &mut res.attr_str_14,
+                &mut res.attr_str_15,
+                &mut res.attr_str_16,
+                &mut res.attr_str_17,
+                &mut res.attr_str_18,
+                &mut res.attr_str_19,
+                &mut res.attr_str_20,
+                &mut res.attr_str_21,
+                &mut res.attr_str_22,
+                &mut res.attr_str_23,
+                &mut res.attr_str_24,
+                &mut res.attr_str_25,
+                &mut res.attr_str_26,
+                &mut res.attr_str_27,
+                &mut res.attr_str_28,
+                &mut res.attr_str_29,
+                &mut res.attr_str_30,
+                &mut res.attr_str_31,
+                &mut res.attr_str_32,
+                &mut res.attr_str_33,
+                &mut res.attr_str_34,
+                &mut res.attr_str_35,
+                &mut res.attr_str_36,
+                &mut res.attr_str_37,
+                &mut res.attr_str_38,
+                &mut res.attr_str_39,
+                &mut res.attr_str_40,
+                &mut res.attr_str_41,
+                &mut res.attr_str_42,
+                &mut res.attr_str_43,
+                &mut res.attr_str_44,
+                &mut res.attr_str_45,
+                &mut res.attr_str_46,
+                &mut res.attr_str_47,
+                &mut res.attr_str_48,
+                &mut res.attr_str_49,
             ];
 
             sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
@@ -154,6 +384,46 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
                 &mut res.attr_num_7,
                 &mut res.attr_num_8,
                 &mut res.attr_num_9,
+                &mut res.attr_num_10,
+                &mut res.attr_num_11,
+                &mut res.attr_num_12,
+                &mut res.attr_num_13,
+                &mut res.attr_num_14,
+                &mut res.attr_num_15,
+                &mut res.attr_num_16,
+                &mut res.attr_num_17,
+                &mut res.attr_num_18,
+                &mut res.attr_num_19,
+                &mut res.attr_num_20,
+                &mut res.attr_num_21,
+                &mut res.attr_num_22,
+                &mut res.attr_num_23,
+                &mut res.attr_num_24,
+                &mut res.attr_num_25,
+                &mut res.attr_num_26,
+                &mut res.attr_num_27,
+                &mut res.attr_num_28,
+                &mut res.attr_num_29,
+                &mut res.attr_num_30,
+                &mut res.attr_num_31,
+                &mut res.attr_num_32,
+                &mut res.attr_num_33,
+                &mut res.attr_num_34,
+                &mut res.attr_num_35,
+                &mut res.attr_num_36,
+                &mut res.attr_num_37,
+                &mut res.attr_num_38,
+                &mut res.attr_num_39,
+                &mut res.attr_num_40,
+                &mut res.attr_num_41,
+                &mut res.attr_num_42,
+                &mut res.attr_num_43,
+                &mut res.attr_num_44,
+                &mut res.attr_num_45,
+                &mut res.attr_num_46,
+                &mut res.attr_num_47,
+                &mut res.attr_num_48,
+                &mut res.attr_num_49,
             ];
 
             measurements.iter().for_each(|(k, v)| {
@@ -253,6 +523,8 @@ mod tests {
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
         let span: SpanV2 = msg.try_into().unwrap();
-        insta::assert_json_snapshot!(span);
+        insta::with_settings!({sort_maps => true}, {
+            insta::assert_json_snapshot!(span)
+        });
     }
 }
