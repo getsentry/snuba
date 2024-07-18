@@ -368,7 +368,6 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
             sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
                 attr_str_buckets[(city_hash_64(k.as_bytes()) as usize) % attr_str_buckets.len()]
                     .insert(k.clone(), v.clone());
-                ()
             });
         }
 
@@ -429,7 +428,6 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
             measurements.iter().for_each(|(k, v)| {
                 attr_num_buckets[(city_hash_64(k.as_bytes()) as usize) % attr_num_buckets.len()]
                     .insert(k.clone(), v.value);
-                ()
             });
         }
 
