@@ -1,0 +1,91 @@
+---
+source: src/processors/spans_v2.rs
+expression: span
+---
+{
+  "organization_id": 1,
+  "project_id": 1,
+  "trace_id": "d099bf9a-d5a1-43cf-8f83-a98081d0ed3b",
+  "span_id": 9832388815107059821,
+  "parent_span_id": 0,
+  "segment_id": 9832388815107059821,
+  "segment_name": "/api/0/relays/projectconfigs/",
+  "is_segment": true,
+  "_sort_timestamp": 1721319572,
+  "start_timestamp": 1721319572616,
+  "end_timestamp": 1721319572768,
+  "duration_ms": 152,
+  "exclusive_time_ms": 0.228,
+  "retention_days": 90,
+  "name": "/api/0/relays/projectconfigs/",
+  "sampling_factor": 1.0,
+  "sampling_weight": 1.0,
+  "sign": 1,
+  "attr_str_0": {
+    "relay_id": "88888888-4444-4444-8444-cccccccccccc",
+    "op": "http.server",
+    "spans_over_limit": "False"
+  },
+  "attr_str_1": {
+    "server_name": "D23CXQ4GK2.local"
+  },
+  "attr_str_2": {
+    "status": "ok",
+    "environment": "development"
+  },
+  "attr_str_3": {
+    "relay_no_cache": "False"
+  },
+  "attr_str_4": {
+    "relay_protocol_version": "3",
+    "platform": "python",
+    "thread.id": "8522009600",
+    "sdk.version": "2.7.0"
+  },
+  "attr_str_5": {
+    "status_code": "200",
+    "thread.name": "uWSGIWorker1Core0"
+  },
+  "attr_str_6": {
+    "relay_endpoint_version": "3",
+    "release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
+  },
+  "attr_str_7": {
+    "user": "ip:127.0.0.1"
+  },
+  "attr_str_8": {
+    "transaction.method": "POST",
+    "trace.status": "ok",
+    "category": "http",
+    "transaction": "/api/0/relays/projectconfigs/",
+    "transaction.op": "http.server"
+  },
+  "attr_str_9": {
+    "http.status_code": "200",
+    "sdk.name": "sentry.python.django",
+    "relay_use_post_or_schedule_rejected": "version",
+    "relay_use_post_or_schedule": "True"
+  },
+  "attr_num_0": {},
+  "attr_num_1": {},
+  "attr_num_2": {
+    "num_of_spans": 50.0
+  },
+  "attr_num_3": {},
+  "attr_num_4": {},
+  "attr_num_5": {},
+  "attr_num_6": {},
+  "attr_num_7": {},
+  "attr_num_8": {},
+  "attr_num_9": {},
+  "attr_bool_0": {},
+  "attr_bool_1": {},
+  "attr_bool_2": {},
+  "attr_bool_3": {},
+  "attr_bool_4": {},
+  "attr_bool_5": {},
+  "attr_bool_6": {},
+  "attr_bool_7": {},
+  "attr_bool_8": {},
+  "attr_bool_9": {}
+}
