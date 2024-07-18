@@ -1304,17 +1304,15 @@ def populate_query_from_mql_context(
         query.set_totals(with_totals)
         if orderby:
             query.set_ast_orderby([orderby])
+        query.set_ast_selected_columns(
+            list(query.get_selected_columns()) + [selected_time]
+        )
 
-        if selected_time:
-            query.set_ast_selected_columns(
-                list(query.get_selected_columns()) + [selected_time]
-            )
-
-            groupby = query.get_groupby()
-            if groupby:
-                query.set_ast_groupby(list(groupby) + [selected_time.expression])
-            else:
-                query.set_ast_groupby([selected_time.expression])
+        groupby = query.get_groupby()
+        if groupby:
+            query.set_ast_groupby(list(groupby) + [selected_time.expression])
+        else:
+            query.set_ast_groupby([selected_time.expression])
 
     if isinstance(query, CompositeQuery):
         # If the query is grouping by time, that needs to be added to the JoinClause keys to

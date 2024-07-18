@@ -37,14 +37,18 @@ from_distributions = QueryEntity(
 )
 
 
-def time_expression(table_alias: str | None = None) -> FunctionCall:
+def time_expression(
+    table_alias: str | None = None, to_interval_seconds: int | None = 60
+) -> FunctionCall:
     alias_prefix = f"{table_alias}." if table_alias else ""
     return FunctionCall(
         f"_snuba_{alias_prefix}time",
         "toStartOfInterval",
         (
             Column("_snuba_timestamp", table_alias, "timestamp"),
-            FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
+            FunctionCall(
+                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
+            ),
             Literal(None, "Universal"),
         ),
     )
@@ -1250,7 +1254,7 @@ def test_curried_aggregate_formula() -> None:
     assert eq, reason
 
 
-def test_formula_totals() -> None:
+def test_formula_with_totals() -> None:
     mql_context_new = deepcopy(mql_context)
     mql_context_new["rollup"]["with_totals"] = "True"
     mql_context_new["rollup"]["interval"] = None
@@ -1307,10 +1311,104 @@ def test_formula_totals() -> None:
         from_clause=join_clause,
         selected_columns=[
             expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression("d1", None),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0", None),
+            ),
         ],
-        groupby=[],
+        groupby=[time_expression("d1", None), time_expression("d0", None)],
         condition=formula_condition,
         order_by=[],
+        limit=1000,
+        offset=0,
+        totals=True,
+    )
+
+    generic_metrics = get_dataset(
+        "generic_metrics",
+    )
+    query = parse_mql_query_new(str(query_body), mql_context_new, generic_metrics)
+    eq, reason = query.equals(expected)
+    assert eq, reason
+
+
+def test_formula_with_totals_and_interval() -> None:
+    mql_context_new = deepcopy(mql_context)
+    mql_context_new["rollup"]["with_totals"] = "True"
+    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+
+    expected_selected = SelectedExpression(
+        "aggregate_value",
+        divide(
+            FunctionCall(
+                None,
+                "sum",
+                (Column("_snuba_value", "d0", "value"),),
+            ),
+            FunctionCall(
+                None,
+                "sum",
+                (Column("_snuba_value", "d1", "value"),),
+            ),
+            "_snuba_aggregate_value",
+        ),
+    )
+
+    join_clause = JoinClause(
+        left_node=IndividualNode(
+            alias="d1",
+            data_source=from_distributions,
+        ),
+        right_node=IndividualNode(
+            alias="d0",
+            data_source=from_distributions,
+        ),
+        keys=[
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+            )
+        ],
+        join_type=JoinType.INNER,
+        join_modifier=None,
+    )
+
+    tag_condition = binary_condition(
+        "equals", tag_column("status_code", "d0"), Literal(None, "200")
+    )
+    metric_condition1 = metric_id_condition(123456, "d0")
+    metric_condition2 = metric_id_condition(123456, "d1")
+    formula_condition = combine_and_conditions(
+        condition("d0")
+        + condition("d1")
+        + [tag_condition, metric_condition1, metric_condition2]
+    )
+
+    expected = CompositeQuery(
+        from_clause=join_clause,
+        selected_columns=[
+            expected_selected,
+            SelectedExpression(
+                "time",
+                time_expression("d1"),
+            ),
+            SelectedExpression(
+                "time",
+                time_expression("d0"),
+            ),
+        ],
+        groupby=[time_expression("d1"), time_expression("d0")],
+        condition=formula_condition,
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.ASC,
+                expression=time_expression("d0"),
+            ),
+        ],
         limit=1000,
         offset=0,
         totals=True,
