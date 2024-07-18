@@ -1289,7 +1289,6 @@ def populate_query_from_mql_context(
             assert isinstance(data_source, QueryEntity)
             entity_data.append((data_source.key, alias))
 
-    selected_time_found = False
     for entity_key, table_alias in entity_data:
         time_condition = start_end_time_condition(mql_context, entity_key, table_alias)
         scope_condition = scope_conditions(mql_context, table_alias)
@@ -1307,7 +1306,6 @@ def populate_query_from_mql_context(
             query.set_ast_orderby([orderby])
 
         if selected_time:
-            selected_time_found = True
             query.set_ast_selected_columns(
                 list(query.get_selected_columns()) + [selected_time]
             )
@@ -1318,7 +1316,7 @@ def populate_query_from_mql_context(
             else:
                 query.set_ast_groupby([selected_time.expression])
 
-    if isinstance(query, CompositeQuery) and selected_time_found:
+    if isinstance(query, CompositeQuery):
         # If the query is grouping by time, that needs to be added to the JoinClause keys to
         # ensure we correctly join the subqueries. The column names will be the same for all the
         # subqueries, so we just need to map all the table aliases.
