@@ -1,8 +1,8 @@
 use anyhow::Context;
 use chrono::DateTime;
 use cityhash::cityhash_1::city_hash_64;
-use serde::Serialize;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -164,5 +164,95 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
         }
 
         Ok(res)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use super::*;
+
+    const SPAN_KAFKA_MESSAGE: &str = r#"
+{
+    "description": "/api/0/relays/projectconfigs/",
+    "duration_ms": 152,
+    "event_id": "d826225de75d42d6b2f01b957d51f18f",
+    "exclusive_time_ms": 0.228,
+    "is_segment": true,
+    "data": {
+        "sentry.environment": "development",
+        "sentry.release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
+        "thread.name": "uWSGIWorker1Core0",
+        "thread.id": "8522009600",
+        "sentry.segment.name": "/api/0/relays/projectconfigs/",
+        "sentry.sdk.name": "sentry.python.django",
+        "sentry.sdk.version": "2.7.0"
+    },
+    "measurements": {
+        "num_of_spans": {
+            "value": 50.0
+        }
+    },
+    "organization_id": 1,
+    "origin": "auto.http.django",
+    "project_id": 1,
+    "received": 1721319572.877828,
+    "retention_days": 90,
+    "segment_id": "8873a98879faf06d",
+    "sentry_tags": {
+        "category": "http",
+        "environment": "development",
+        "op": "http.server",
+        "platform": "python",
+        "release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
+        "sdk.name": "sentry.python.django",
+        "sdk.version": "2.7.0",
+        "status": "ok",
+        "status_code": "200",
+        "thread.id": "8522009600",
+        "thread.name": "uWSGIWorker1Core0",
+        "trace.status": "ok",
+        "transaction": "/api/0/relays/projectconfigs/",
+        "transaction.method": "POST",
+        "transaction.op": "http.server",
+        "user": "ip:127.0.0.1"
+    },
+    "span_id": "8873a98879faf06d",
+    "tags": {
+        "http.status_code": "200",
+        "relay_endpoint_version": "3",
+        "relay_id": "88888888-4444-4444-8444-cccccccccccc",
+        "relay_no_cache": "False",
+        "relay_protocol_version": "3",
+        "relay_use_post_or_schedule": "True",
+        "relay_use_post_or_schedule_rejected": "version",
+        "server_name": "D23CXQ4GK2.local",
+        "spans_over_limit": "False"
+    },
+    "trace_id": "d099bf9ad5a143cf8f83a98081d0ed3b",
+    "start_timestamp_ms": 1721319572616,
+    "start_timestamp_precise": 1721319572.616648,
+    "end_timestamp_precise": 1721319572.768806
+}
+    "#;
+
+    #[test]
+    fn test_valid_span() {
+        let payload = KafkaPayload::new(None, None, Some(SPAN_KAFKA_MESSAGE.as_bytes().to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_serialization() {
+        let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
+        let span: SpanV2 = msg.try_into().unwrap();
+        insta::assert_json_snapshot!(span);
     }
 }
