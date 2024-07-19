@@ -1,4 +1,4 @@
-from typing import List, Sequence
+from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
@@ -21,7 +21,7 @@ storage_set_name = StorageSetKey.SPANS_V2
 local_table_name = "spans_v2_local"
 dist_table_name = "spans_v2_dist"
 
-columns: List[Column[Modifiers]] = (
+columns: Sequence[Column[Modifiers]] = (
     [
         Column("organization_id", UInt(64)),
         Column("project_id", UInt(64)),
@@ -79,7 +79,7 @@ columns: List[Column[Modifiers]] = (
     ]
 )
 
-index_create_ops: List[SqlOperation] = (
+index_create_ops: Sequence[SqlOperation] = (
     [
         operations.AddIndex(
             storage_set=storage_set_name,
@@ -156,7 +156,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(organization_id, _sort_timestamp, trace_id, span_id)",
                     sign_column="sign",
                     partition_by="(toMonday(_sort_timestamp))",
-                    sample_by="_sort_timestamp",
+                    sample_by="toUnixTimestamp(_sort_timestamp)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="_sort_timestamp + toIntervalDay(retention_days)",
