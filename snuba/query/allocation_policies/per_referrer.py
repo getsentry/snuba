@@ -27,7 +27,7 @@ _REQUESTS_THROTTLE_DIVIDER = 2
 _THREADS_THROTTLE_DIVIDER = 2
 
 QUOTA_UNIT = "concurrent_queries"
-SUGGESTION = "scan less concurrent queries"
+SUGGESTION = "This feature is doing too many concurrent queries. Customers are being affected arbitrarily. Either means the feature is not being appropriately rate limited on the sentry side or that the queries are inefficient"
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):

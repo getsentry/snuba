@@ -38,7 +38,7 @@ _PASS_THROUGH_REFERRERS = set(
 from snuba.query.allocation_policies import MAX_THRESHOLD, NO_SUGGESTION
 
 QUOTA_UNIT = "concurrent_queries"
-SUGGESTION = "scan less concurrent queries"
+SUGGESTION = "A customer is sending too many queries to snuba. The customer may be abusing an API or the queries may be innefficient"
 import typing
 
 
