@@ -155,7 +155,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     primary_key="(organization_id, _sort_timestamp, trace_id)",
                     order_by="(organization_id, _sort_timestamp, trace_id, span_id)",
                     sign_column="sign",
-                    partition_by="(toMonday(end_timestamp))",
+                    partition_by="(toMonday(_sort_timestamp))",
                     sample_by="_sort_timestamp",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
