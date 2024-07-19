@@ -58,11 +58,7 @@ from snuba.consumers.dlq import (
     load_instruction,
     store_instruction,
 )
-from snuba.datasets.factory import (
-    InvalidDatasetError,
-    get_dataset,
-    get_enabled_dataset_names,
-)
+from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
@@ -780,9 +776,9 @@ def snuba_debug() -> Response:
     body = json.loads(request.data)
     body["debug"] = True
     body["dry_run"] = True
+    dataset_name = body.pop("dataset")
     try:
-        dataset = get_dataset(body.pop("dataset"))
-        response = dataset_query(dataset, body, Timer("admin"))
+        response = dataset_query(dataset_name, body, Timer("admin"))
         data = response.get_json()
         assert isinstance(data, dict)
 
@@ -1026,8 +1022,7 @@ def production_snql_query() -> Response:
     body = json.loads(request.data)
     body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
-        ret = run_snql_query(body, g.user.email)
-        return ret
+        return run_snql_query(body, g.user.email)
     except InvalidQueryException as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),

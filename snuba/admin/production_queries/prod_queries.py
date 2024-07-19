@@ -22,15 +22,16 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
 
     @audit_log
     def run_query_with_audit(query: str, user: str) -> Response:
-        dataset = get_dataset(body.pop("dataset"))
+        dataset_name = body.pop("dataset")
+        dataset = get_dataset(dataset_name)
         body["dry_run"] = True
-        response = dataset_query(dataset, body, Timer("admin"))
+        response = dataset_query(dataset_name, body, Timer("admin"))
         if response.status_code != 200:
             return response
 
         body["dry_run"] = False
         _validate_projects_in_query(body, dataset)
-        return dataset_query(dataset, body, Timer("admin"))
+        return dataset_query(dataset_name, body, Timer("admin"))
 
     return run_query_with_audit(body["query"], user)
 

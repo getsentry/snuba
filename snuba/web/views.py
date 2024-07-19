@@ -40,18 +40,15 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_dataset_name
+from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
-from snuba.request import Request as SnubaRequest
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.request.validation import build_request, parse_mql_query, parse_snql_query
-from snuba.state import get_float_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -68,7 +65,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter
-from snuba.web.query import run_query
+from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -237,14 +234,16 @@ def parse_request_body(http_request: Request) -> Dict[str, Any]:
             raise JsonDecodeException(str(error)) from error
 
 
-def _trace_transaction(dataset: Dataset) -> None:
+def _trace_transaction(dataset_name: str) -> None:
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
-            scope.span.set_tag("dataset", get_dataset_name(dataset))
+            scope.span.set_tag("dataset", dataset_name)
             scope.span.set_tag("referrer", http_request.referrer)
 
         if scope.transaction:
-            scope.transaction = f"{scope.transaction.name}__{get_dataset_name(dataset)}__{http_request.referrer}"
+            scope.transaction = (
+                f"{scope.transaction.name}__{dataset_name}__{http_request.referrer}"
+            )
 
 
 @application.route("/query", methods=["GET", "POST"])
@@ -254,9 +253,9 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
-        dataset = get_dataset(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
-        _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer)
+        dataset_name = str(body.pop("dataset", settings.DEFAULT_DATASET_NAME))
+        _trace_transaction(dataset_name)
+        return dataset_query(dataset_name, body, timer)
     else:
         assert False, "unexpected fallthrough"
 
@@ -272,8 +271,9 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
         )
     elif http_request.method == "POST":
         body = parse_request_body(http_request)
-        _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer)
+        dataset_name = get_dataset_name(dataset)
+        _trace_transaction(dataset_name)
+        return dataset_query(dataset_name, body, timer)
     else:
         assert False, "unexpected fallthrough"
 
@@ -282,9 +282,10 @@ def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response
 @util.time_request("query", {"mql": "true"})
 def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
     if http_request.method == "POST":
+        dataset_name = get_dataset_name(dataset)
         body = parse_request_body(http_request)
-        _trace_transaction(dataset)
-        return dataset_query(dataset, body, timer, is_mql=True)
+        _trace_transaction(dataset_name)
+        return dataset_query(dataset_name, body, timer, is_mql=True)
     else:
         assert False, "unexpected fallthrough"
 
@@ -332,19 +333,9 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
-def _get_and_log_referrer(request: SnubaRequest, body: Dict[str, Any]) -> None:
-    metrics.increment(
-        "just_referrer_count", tags={"referrer": request.attribution_info.referrer}
-    )
-    if random.random() < get_float_config("log-referrer-sample-rate", 0.001):  # type: ignore
-        logger.info(f"Received referrer: {request.attribution_info.referrer}")
-        if request.attribution_info.referrer == "<unknown>":
-            logger.info(f"Received unknown referrer from request: {request}, {body}")
-
-
 @with_span()
 def dataset_query(
-    dataset: Dataset, body: Dict[str, Any], timer: Timer, is_mql: bool = False
+    dataset_name: str, body: Dict[str, Any], timer: Timer, is_mql: bool = False
 ) -> Response:
     assert http_request.method == "POST"
     referrer = http_request.referrer or "<unknown>"  # mypy
@@ -356,22 +347,14 @@ def dataset_query(
     # is detected, and then log everything
     if get_shutdown() or random.random() < 0.05:
         if get_shutdown() or check_down_file_exists():
-            tags = {"dataset": get_dataset_name(dataset)}
+            tags = {"dataset": dataset_name}
             metrics.increment("post.shutdown.query", tags=tags)
             diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
             metrics.timing("post.shutdown.query.delay", diff, tags=tags)
-
-    with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build(HTTPQuerySettings, is_mql)
-
-    parse_function = parse_snql_query if not is_mql else parse_mql_query
-    request = build_request(
-        body, parse_function, HTTPQuerySettings, schema, dataset, timer, referrer
-    )
-    _get_and_log_referrer(request, body)
-
     try:
-        result = run_query(dataset, request, timer)
+        request, result = parse_and_run_query(
+            body, timer, is_mql, dataset_name, referrer
+        )
         assert result.extra["stats"]
     except InvalidQueryException as exception:
         details: Mapping[str, Any]

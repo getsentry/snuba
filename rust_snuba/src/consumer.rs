@@ -42,6 +42,7 @@ pub fn consumer(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
+    max_bytes_before_external_group_by: Option<usize>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -59,6 +60,7 @@ pub fn consumer(
             health_check_file,
             stop_at_timestamp,
             batch_write_timeout_ms,
+            max_bytes_before_external_group_by,
         )
     });
 }
@@ -79,6 +81,7 @@ pub fn consumer_impl(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
+    max_bytes_before_external_group_by: Option<usize>,
 ) -> usize {
     setup_logging();
 
@@ -247,6 +250,7 @@ pub fn consumer_impl(
         accountant_topic_config: consumer_config.accountant_topic,
         stop_at_timestamp,
         batch_write_timeout,
+        max_bytes_before_external_group_by,
     };
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
