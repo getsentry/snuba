@@ -11,6 +11,7 @@ from snuba.utils.schemas import (
     DateTime,
     DateTime64,
     Float,
+    Int,
     Map,
     String,
     UInt,
@@ -53,7 +54,7 @@ columns: List[Column[Modifiers]] = (
         Column("name", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("sampling_weight", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
-        Column("sign", UInt(8, modifiers=Modifiers(codecs=["DoubleDelta(1)"]))),
+        Column("sign", Int(8, modifiers=Modifiers(codecs=["DoubleDelta(1)"]))),
     ]
     + [
         Column(

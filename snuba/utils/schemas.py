@@ -566,6 +566,32 @@ class UInt(ColumnType[TModifiers]):
         return UInt(self.size)
 
 
+class Int(ColumnType[TModifiers]):
+    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+        super().__init__(modifiers)
+        assert size in (8, 16, 32, 64)
+        self.size = size
+
+    def _repr_content(self) -> str:
+        return str(self.size)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Int[TModifiers], other).get_modifiers()
+            and self.size == cast(Int[TModifiers], other).size
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Int{}".format(self.size)
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Int[TModifiers]:
+        return Int(size=self.size, modifiers=modifiers)
+
+    def get_raw(self) -> Int[TModifiers]:
+        return Int(self.size)
+
+
 class Float(ColumnType[TModifiers]):
     def __init__(
         self,
