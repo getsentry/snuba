@@ -14,7 +14,6 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
 
 
-
 def max_rows_enforcer(delete_request: DeleteRequest) -> None:
     query = delete_request.query
     where_clause = delete_request.where_clause
