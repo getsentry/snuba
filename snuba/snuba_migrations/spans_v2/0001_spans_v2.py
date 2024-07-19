@@ -29,7 +29,7 @@ columns: Sequence[Column[Modifiers]] = (
         Column("span_id", UInt(64)),
         Column("parent_span_id", UInt(64, Modifiers(codecs=["ZSTD(1)"]))),
         Column("segment_id", UInt(64, Modifiers(codecs=["ZSTD(1)"]))),
-        Column("segment_name", String(Modifiers(default="''", codecs=["ZSTD(1)"]))),
+        Column("segment_name", String(Modifiers(codecs=["ZSTD(1)"]))),
         Column("is_segment", Bool()),
         Column(
             "_sort_timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))
@@ -156,7 +156,6 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(organization_id, _sort_timestamp, trace_id, span_id)",
                     sign_column="sign",
                     partition_by="(toMonday(_sort_timestamp))",
-                    sample_by="toUnixTimestamp(_sort_timestamp)",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="_sort_timestamp + toIntervalDay(retention_days)",
