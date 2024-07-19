@@ -29,15 +29,20 @@ from_distributions = QueryEntity(
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
-time_expression = FunctionCall(
-    "_snuba_time",
-    "toStartOfInterval",
-    (
-        Column("_snuba_timestamp", None, "timestamp"),
-        FunctionCall(None, "toIntervalSecond", (Literal(None, 60),)),
-        Literal(None, "Universal"),
-    ),
-)
+
+
+def time_expression(to_interval_seconds: int | None = 60) -> FunctionCall:
+    return FunctionCall(
+        "_snuba_time",
+        "toStartOfInterval",
+        (
+            Column("_snuba_timestamp", None, "timestamp"),
+            FunctionCall(
+                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
+            ),
+            Literal(None, "Universal"),
+        ),
+    )
 
 
 def test_mql() -> None:
@@ -77,8 +82,12 @@ def test_mql() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
+            SelectedExpression(
+                "time",
+                time_expression(None),
+            ),
         ],
-        groupby=[],
+        groupby=[time_expression(None)],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -183,8 +192,12 @@ def test_mql_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
+            SelectedExpression(
+                "time",
+                time_expression(None),
+            ),
         ],
-        groupby=[],
+        groupby=[time_expression(None)],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -287,8 +300,12 @@ def test_mql_negated_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
+            SelectedExpression(
+                "time",
+                time_expression(None),
+            ),
         ],
-        groupby=[],
+        groupby=[time_expression(None)],
         condition=and_cond(
             and_cond(
                 and_cond(
