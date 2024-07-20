@@ -168,7 +168,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.Distributed(
                     local_table_name=local_table_name,
-                    sharding_key="trace_id",
+                    sharding_key="reinterpretAsUInt128(trace_id)",
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),
