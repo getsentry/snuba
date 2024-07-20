@@ -1,10 +1,3 @@
-"""
-This module is the next iteration of the MQL parser (snuba/query/mql/parser.py) that supports JOIN queries.
-In order to enable iteration on the MQL parser without affecting the current flow of formula queries, this separate file was created.
-Eventually, when the MQL parser fully supports all JOINs and the metrics subquery generator is implemented,
-we can start to cut (gradually roll out) formula queries over to this parser.
-"""
-
 from __future__ import annotations
 
 import logging
