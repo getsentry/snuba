@@ -78,7 +78,7 @@ columns.extend(
             f"attr_bool_{i}",
             Map(String(), Bool(), modifiers=Modifiers(codecs=["ZSTD(1)"])),
         )
-        for i in range(10)
+        for i in range(50)
     ]
 )
 
@@ -140,7 +140,7 @@ index_create_ops: Sequence[SqlOperation] = (
             granularity=1,
             target=OperationTarget.LOCAL,
         )
-        for i in range(10)
+        for i in range(50)
     ]
 )
 
