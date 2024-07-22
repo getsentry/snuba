@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from threading import Thread
 from typing import Any, Callable
 from unittest import mock
@@ -79,9 +79,7 @@ class PassthroughCodec(ExceptionAwareCodec[bytes, bytes]):
 @pytest.fixture
 def backend() -> Cache[bytes]:
     codec = PassthroughCodec()
-    backend: Cache[bytes] = RedisCache(
-        redis_client, "test", codec, ThreadPoolExecutor()
-    )
+    backend: Cache[bytes] = RedisCache(redis_client, "test", codec)
     return backend
 
 
@@ -99,9 +97,7 @@ def bad_backend() -> Cache[bytes]:
         def __getattr__(self, attr: str) -> Any:
             return getattr(self._client, attr)
 
-    backend: Cache[bytes] = RedisCache(
-        BadClient(redis_client), "test", codec, ThreadPoolExecutor()
-    )
+    backend: Cache[bytes] = RedisCache(BadClient(redis_client), "test", codec)
     return backend
 
 
@@ -119,12 +115,12 @@ def test_short_circuit(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 1, 2):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -133,25 +129,7 @@ def test_fail_open(bad_backend: Cache[bytes]) -> None:
     value = b"value"
     function = mock.MagicMock(return_value=value)
     with mock.patch("snuba.settings.RAISE_ON_READTHROUGH_CACHE_REDIS_FAILURES", False):
-        assert bad_backend.get_readthrough(key, function, noop, 5) == value
-
-
-@pytest.mark.redis_db
-def test_get_readthrough_with_disable_lua_scripts(backend: Cache[bytes]) -> None:
-    set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
-    key = "key"
-    value = b"value"
-    function = mock.MagicMock(return_value=value)
-
-    assert backend.get(key) is None
-
-    with assert_changes(lambda: function.call_count, 0, 1):
-        assert backend.get_readthrough(key, function, noop, 5) == value
-
-    assert backend.get(key) == value
-
-    with assert_does_not_change(lambda: function.call_count, 1):
-        assert backend.get_readthrough(key, function, noop, 5) == value
+        assert bad_backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -163,12 +141,12 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
     assert backend.get(key) is None
 
     with assert_changes(lambda: function.call_count, 0, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
     assert backend.get(key) == value
 
     with assert_does_not_change(lambda: function.call_count, 1):
-        backend.get_readthrough(key, function, noop, 5) == value
+        backend.get_readthrough(key, function, noop) == value
 
 
 @pytest.mark.redis_db
@@ -182,7 +160,7 @@ def test_get_readthrough_exception(backend: Cache[bytes]) -> None:
         raise CustomException("error")
 
     with pytest.raises(CustomException):
-        backend.get_readthrough(key, SingleCallFunction(function), noop, 1)
+        backend.get_readthrough(key, SingleCallFunction(function), noop)
 
 
 @pytest.mark.redis_db
@@ -194,7 +172,7 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
         return f"{random.random()}".encode("utf-8")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, function, noop, 10)
+        return backend.get_readthrough(key, function, noop)
 
     setter = worker()
     waiter = worker()
@@ -213,7 +191,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
         raise ReadThroughCustomException("error")
 
     def worker() -> bytes:
-        return backend.get_readthrough(key, SingleCallFunction(function), noop, 10)
+        return backend.get_readthrough(key, SingleCallFunction(function), noop)
 
     setter = execute(worker)
     time.sleep(0.5)
@@ -234,7 +212,7 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     "backend",
     [
         pytest.param(
-            RedisCache(redis_client, "test", PassthroughCodec(), ThreadPoolExecutor()),
+            RedisCache(redis_client, "test", PassthroughCodec()),
             id="regular cluster",
         ),
     ],
@@ -253,14 +231,10 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         return b"hello"
 
     def transient_error() -> bytes:
-        return backend.get_readthrough(
-            key, SingleCallFunction(error_function), noop, 10
-        )
+        return backend.get_readthrough(key, SingleCallFunction(error_function), noop)
 
     def functioning_query() -> bytes:
-        return backend.get_readthrough(
-            key, SingleCallFunction(normal_function), noop, 10
-        )
+        return backend.get_readthrough(key, SingleCallFunction(normal_function), noop)
 
     setter = execute(transient_error)
     # if this sleep were removed, the waiter would also raise
