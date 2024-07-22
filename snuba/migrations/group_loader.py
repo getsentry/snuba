@@ -163,11 +163,6 @@ class SpansLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.spans")
 
 
-class EventsAnalyticsPlatformLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.events_analytics_platform")
-
-
 class GroupAttributesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.group_attributes")
