@@ -30,7 +30,6 @@ required_fields = {
     "exclusive_time_ms": 1234567890123,
     "is_segment": True,
     "project_id": project_id,
-    "organization_id": 1,
     "received": received,
     "retention_days": 90,
     "segment_id": "1234567890123456",

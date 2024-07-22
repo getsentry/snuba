@@ -32,33 +32,33 @@ pub fn process_message(
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
-pub(crate) struct FromSpanMessage {
-    pub(crate) description: Option<String>,
-    pub(crate) duration_ms: u32,
-    pub(crate) end_timestamp_precise: f64,
-    pub(crate) event_id: Option<Uuid>,
-    pub(crate) exclusive_time_ms: f64,
-    pub(crate) is_segment: bool,
-    pub(crate) measurements: Option<BTreeMap<String, FromMeasurementValue>>,
-    pub(crate) parent_span_id: Option<String>,
-    pub(crate) profile_id: Option<Uuid>,
-    pub(crate) organization_id: u64,
-    pub(crate) project_id: u64,
-    pub(crate) received: f64,
-    pub(crate) retention_days: Option<u16>,
-    pub(crate) segment_id: Option<String>,
-    pub(crate) sentry_tags: Option<BTreeMap<String, String>>,
-    pub(crate) span_id: String,
+struct FromSpanMessage {
+    description: Option<String>,
+    duration_ms: u32,
+    #[serde(alias = "end_timestamp_micro")]
+    end_timestamp_precise: Option<f64>,
+    event_id: Option<Uuid>,
+    exclusive_time_ms: f64,
+    is_segment: bool,
+    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
+    parent_span_id: Option<String>,
+    profile_id: Option<Uuid>,
+    project_id: u64,
+    received: f64,
+    retention_days: Option<u16>,
+    segment_id: Option<String>,
+    sentry_tags: Option<BTreeMap<String, String>>,
+    span_id: String,
     #[serde(alias = "start_timestamp_micro")]
-    pub(crate) start_timestamp_precise: Option<f64>,
-    pub(crate) start_timestamp_ms: u64,
-    pub(crate) tags: Option<BTreeMap<String, String>>,
-    pub(crate) trace_id: Uuid,
+    start_timestamp_precise: Option<f64>,
+    start_timestamp_ms: u64,
+    tags: Option<BTreeMap<String, String>>,
+    trace_id: Uuid,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
-pub(crate) struct FromMeasurementValue {
-    pub(crate) value: f64,
+struct FromMeasurementValue {
+    value: f64,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -153,7 +153,7 @@ impl TryFrom<FromSpanMessage> for Span {
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
-            end_timestamp_precise: (from.end_timestamp_precise * 1e6) as u64,
+            end_timestamp_precise: (from.end_timestamp_precise.unwrap_or_default() * 1e6) as u64,
             exclusive_time: from.exclusive_time_ms,
             group,
             is_segment: if from.is_segment { 1 } else { 0 },
@@ -344,7 +344,6 @@ mod tests {
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
-        organization_id: Option<u64>,
         received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
@@ -367,7 +366,6 @@ mod tests {
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
-            organization_id: Some(1),
             retention_days: Some(90),
             received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
