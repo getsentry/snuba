@@ -67,7 +67,6 @@ expected_for_required_fields = {
     "partition": 2,
     "platform": "",
     "profile_id": None,
-    "organization_id": 1,
     "project_id": project_id,
     "retention_days": 90,
     "segment_id": 1311768467284833366,
