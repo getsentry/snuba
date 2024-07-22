@@ -387,7 +387,7 @@ def add_node(
 @click.option("--name", type=str, help="optional name for the migration")
 def generate(storage_path: str, name: Optional[str] = None) -> None:
     """
-    Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.py),
+    Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.yaml),
     and an optional name for the migration,
     generates a snuba migration based on the schema modifications to the storage.yaml.
 
@@ -398,6 +398,8 @@ def generate(storage_path: str, name: Optional[str] = None) -> None:
 
     The generated migration will be written into the local directory. The user is responsible for making
     the commit, PR, and merging.
+
+    see MIGRATIONS.md in the root folder for more info
     """
     expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
     if not re.fullmatch(expected_pattern, storage_path):

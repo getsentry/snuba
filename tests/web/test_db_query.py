@@ -312,7 +312,7 @@ def test_db_query_success() -> None:
                 "policy": "BytesScannedRejectingPolicy",
                 "quota_used": 1560000000000,
                 "quota_unit": "bytes",
-                "suggestion": "scan less bytes",
+                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
                 "throttle_threshold": 1280000000000,
             },
         },
@@ -360,7 +360,7 @@ def test_db_query_success() -> None:
                 "rejection_threshold": 2560000000000,
                 "quota_used": 1560000000000,
                 "quota_unit": "bytes",
-                "suggestion": "scan less bytes",
+                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
             },
             "CrossOrgQueryAllocationPolicy": {
                 "can_run": True,
@@ -385,7 +385,7 @@ def test_db_query_success() -> None:
                 "rejection_threshold": MAX_THRESHOLD,
                 "quota_used": 0,
                 "quota_unit": "bytes",
-                "suggestion": "scan less bytes",
+                "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
             },
         },
     }

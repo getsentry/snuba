@@ -62,6 +62,11 @@ class DirectoryLoader(GroupLoader, ABC):
         last = None
         for fname in migration_filenames:
             if last is not None and fname[:4] == last[:4]:
+                """
+                if this is failing in CI when u think the files dont exist
+                i think its a github cache or something u might have to
+                remake the PR or branch or something
+                """
                 raise ValueError(
                     f"""Duplicate migration number for the following files:
     {os.path.join(migration_folder,last)}.py

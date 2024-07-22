@@ -272,6 +272,10 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             if profile_id is not None:
                 processed["profile_id"] = str(uuid.UUID(profile_id))
 
+            profiler_id = profile_context.get("profiler_id")
+            if profiler_id is not None:
+                processed["profiler_id"] = str(uuid.UUID(profiler_id))
+
         replay_context = contexts.get("replay")
         if replay_context is not None:
             replay_id = replay_context.get("replay_id")
@@ -432,6 +436,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         # again in the context array
         profile_ctx = sanitized_context.get("profile", {})
         profile_ctx.pop("profile_id", None)
+        profile_ctx.pop("profiler_id", None)
         replay_ctx = sanitized_context.get("replay", {})
         replay_ctx.pop("replay_id", None)
 
