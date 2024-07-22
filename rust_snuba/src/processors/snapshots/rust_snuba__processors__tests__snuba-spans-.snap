@@ -1,0 +1,18 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: "",
+        change: RequiredAdd {
+            property: "end_timestamp_precise",
+        },
+    },
+    Change {
+        path: "",
+        change: RequiredAdd {
+            property: "organization_id",
+        },
+    },
+]
