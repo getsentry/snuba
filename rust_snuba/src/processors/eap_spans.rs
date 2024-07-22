@@ -281,8 +281,6 @@ fn half_md5(input: &[u8]) -> u64 {
 }
 
 impl From<FromSpanMessage> for EAPSpan {
-    type Error = anyhow::Error;
-
     fn from(from: FromSpanMessage) -> EAPSpan {
         let sentry_tags = from.sentry_tags.unwrap_or_default();
         let tags = from.tags.unwrap_or_default();
