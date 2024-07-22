@@ -293,10 +293,10 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         )
 
     def get_deleter(self) -> Reader:
-        print("\n\nDATABSE", self.__database)
         if not self.__deleter:
+            # we need the connection to the storage nodes, not
+            # the distributed nodes
             local_node = self.get_local_nodes()[0]
-            print("local_node", local_node)
             self.__deleter = NativeDriverReader(
                 cache_partition_id=f"{self.__cache_partition_id}_deletes",
                 client=self.get_node_connection(
