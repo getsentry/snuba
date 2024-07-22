@@ -48,7 +48,7 @@ DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
 DEFAULT_BYTES_THROTTLE_DIVIDER = 2
 DEFAULT_THREADS_THROTTLE_DIVIDER = 2
 QUOTA_UNIT = "bytes"
-SUGGESTION = "scan less bytes"
+SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
