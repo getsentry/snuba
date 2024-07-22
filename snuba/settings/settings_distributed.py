@@ -31,7 +31,7 @@ CLUSTERS = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
-            "spans_v2",
+            "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
             "metrics_summaries",

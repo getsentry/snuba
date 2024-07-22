@@ -158,9 +158,9 @@ class SpansLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.spans")
 
 
-class SpansV2Loader(DirectoryLoader):
+class EventsAnalyticsPlatformLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.spans_v2")
+        super().__init__("snuba.snuba_migrations.events_analytics_platform")
 
 
 class GroupAttributesLoader(DirectoryLoader):

@@ -17,9 +17,9 @@ from snuba.utils.schemas import (
     UInt,
 )
 
-storage_set_name = StorageSetKey.SPANS_V2
-local_table_name = "spans_v2_local"
-dist_table_name = "spans_v2_dist"
+storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
+local_table_name = "eap_spans_local"
+dist_table_name = "eap_spans_dist"
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),

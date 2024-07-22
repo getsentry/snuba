@@ -5,6 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.group_loader import (
     DiscoverLoader,
+    EventsAnalyticsPlatformLoader,
     EventsLoader,
     FunctionsLoader,
     GenericMetricsLoader,
@@ -20,7 +21,6 @@ from snuba.migrations.group_loader import (
     SearchIssuesLoader,
     SessionsLoader,
     SpansLoader,
-    SpansV2Loader,
     SystemLoader,
     TestMigrationLoader,
     TransactionsLoader,
@@ -43,7 +43,7 @@ class MigrationGroup(Enum):
     TEST_MIGRATION = "test_migration"
     SEARCH_ISSUES = "search_issues"
     SPANS = "spans"
-    SPANS_V2 = "spans_v2"
+    EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
@@ -166,9 +166,9 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={StorageSetKey.SPANS},
         readiness_state=ReadinessState.COMPLETE,
     ),
-    MigrationGroup.SPANS_V2: _MigrationGroup(
-        loader=SpansV2Loader(),
-        storage_sets_keys={StorageSetKey.SPANS_V2},
+    MigrationGroup.EVENTS_ANALYTICS_PLATFORM: _MigrationGroup(
+        loader=EventsAnalyticsPlatformLoader(),
+        storage_sets_keys={StorageSetKey.EVENTS_ANALYTICS_PLATFORM},
         readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.GROUP_ATTRIBUTES: _MigrationGroup(
