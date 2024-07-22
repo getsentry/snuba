@@ -273,11 +273,91 @@ struct EAPSpan {
     attr_bool_8: HashMap<String, bool>,
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_bool_9: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_10: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_11: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_12: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_13: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_14: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_15: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_16: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_17: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_18: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_19: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_20: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_21: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_22: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_23: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_24: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_25: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_26: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_27: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_28: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_29: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_30: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_31: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_32: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_33: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_34: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_35: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_36: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_37: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_38: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_39: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_40: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_41: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_42: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_43: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_44: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_45: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_46: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_47: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_48: HashMap<String, bool>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_bool_49: HashMap<String, bool>,
 }
 
 fn half_md5(input: &[u8]) -> u64 {
     let full_hash = md5::compute(input).0;
-    u64::from_be_bytes(full_hash[0..8].try_into().expect("should not happen"))
+    u64::from_be_bytes(full_hash[0..8].try_into().unwrap())
 }
 
 impl From<FromSpanMessage> for EAPSpan {
