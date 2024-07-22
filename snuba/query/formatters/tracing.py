@@ -140,15 +140,6 @@ class TracingQueryFormatter(
         return [f"{self.visit(node.data_source)} AS `{node.alias}`"]
 
     def visit_join_clause(self, node: JoinClause[SimpleDataSource]) -> List[str]:
-        # There is only one of these in the on clause (I think)
-        on_list = []
-        for c in node.keys:
-            on_list.append(
-                [
-                    f"{c.left.table_alias}.{c.left.column}",
-                    f"{c.right.table_alias}.{c.right.column}",
-                ]
-            )
         if node.join_type == JoinType.CROSS:
             return [
                 *_indent_str_list(node.left_node.accept(self), 1),
