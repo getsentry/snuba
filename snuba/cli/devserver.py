@@ -108,7 +108,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ],
         ),
         (
-            "spans-v2-consumer",
+            "eap-spans-consumer",
             [
                 "snuba",
                 "rust-consumer",
