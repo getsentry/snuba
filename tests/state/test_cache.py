@@ -3,9 +3,8 @@ from __future__ import annotations
 import random
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from functools import partial
 from threading import Thread
-from typing import Any, Callable, cast
+from typing import Any, Callable
 from unittest import mock
 
 import pytest
@@ -13,9 +12,9 @@ import rapidjson
 from sentry_redis_tools.failover_redis import FailoverRedis
 
 from redis.exceptions import ReadOnlyError
-from snuba.redis import RedisClientKey, RedisClientType, get_redis_client
+from snuba.redis import RedisClientKey, get_redis_client
 from snuba.state import set_config
-from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
+from snuba.state.cache.abstract import Cache
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.serializable_exception import (
@@ -156,23 +155,6 @@ def test_get_readthrough_with_disable_lua_scripts(backend: Cache[bytes]) -> None
 
 
 @pytest.mark.redis_db
-def test_get_readthrough_exception_with_disable_lua_scripts(
-    backend: Cache[bytes],
-) -> None:
-    set_config("read_through_cache.disable_lua_scripts_sample_rate", 1)
-    key = "key"
-
-    class CustomException(SerializableException):
-        pass
-
-    def function() -> bytes:
-        raise CustomException("error")
-
-    with pytest.raises(CustomException):
-        backend.get_readthrough(key, SingleCallFunction(function), noop, 1)
-
-
-@pytest.mark.redis_db
 def test_get_readthrough(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
@@ -187,21 +169,6 @@ def test_get_readthrough(backend: Cache[bytes]) -> None:
 
     with assert_does_not_change(lambda: function.call_count, 1):
         backend.get_readthrough(key, function, noop, 5) == value
-
-
-@pytest.mark.redis_db
-def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
-    key = "key"
-    value = b"value"
-
-    def function() -> bytes:
-        time.sleep(1.5)
-        return value
-
-    with pytest.raises(TimeoutError):
-        backend.get_readthrough(key, function, noop, 1)
-
-    assert backend.get(key) is None
 
 
 @pytest.mark.redis_db
@@ -229,10 +196,10 @@ def test_get_readthrough_set_wait(backend: Cache[bytes]) -> None:
     def worker() -> bytes:
         return backend.get_readthrough(key, function, noop, 10)
 
-    setter = execute(worker)
-    waiter = execute(worker)
+    setter = worker()
+    waiter = worker()
 
-    assert setter.result() == waiter.result()
+    assert setter == waiter
 
 
 @pytest.mark.redis_db
@@ -273,34 +240,6 @@ def test_get_readthrough_set_wait_error(backend: Cache[bytes]) -> None:
     ],
 )
 @pytest.mark.redis_db
-def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
-    key = "key"
-    value = b"value"
-
-    def function(id: int) -> bytes:
-        time.sleep(2.5)
-        return value + f"{id}".encode()
-
-    def worker(timeout: int) -> bytes:
-        return backend.get_readthrough(key, partial(function, timeout), noop, timeout)
-
-    setter = execute(partial(worker, 2))
-    time.sleep(0.1)
-    waiter_fast = execute(partial(worker, 1))
-    time.sleep(0.1)
-    waiter_slow = execute(partial(worker, 3))
-
-    with pytest.raises(TimeoutError):
-        assert setter.result()
-
-    with pytest.raises(TimeoutError):
-        waiter_fast.result()
-
-    with pytest.raises((ExecutionError, ExecutionTimeoutError)):
-        waiter_slow.result()
-
-
-@pytest.mark.redis_db
 def test_transient_error(backend: Cache[bytes]) -> None:
     key = "key"
 
@@ -334,67 +273,3 @@ def test_transient_error(backend: Cache[bytes]) -> None:
         setter.result()
 
     assert waiter.result() == b"hello"
-
-
-@pytest.mark.redis_db
-def test_notify_queue_ttl() -> None:
-    # Tests that waiting clients can be notified of the cache status
-    # even with network delays. This test will break if the notify queue
-    # TTL is set below 200ms
-
-    pop_calls = 0
-    num_waiters = 9
-
-    class DelayedRedisClient:
-        def __init__(self, redis_client: RedisClientType) -> None:
-            self._client = redis_client
-
-        def __getattr__(self, attr: str) -> Any:
-            # simulate the queue pop taking longer than expected.
-            # the notification queue TTL is 60 seconds so running into a timeout
-            # shouldn't happen (unless something has drastically changed in the TTL
-            # time or use)
-            if attr == "blpop":
-                nonlocal pop_calls
-                pop_calls += 1
-                time.sleep(0.5)
-            return getattr(self._client, attr)
-
-    codec = PassthroughCodec()
-
-    delayed_backend: Cache[bytes] = RedisCache(
-        cast(RedisClientType, DelayedRedisClient(redis_client)),
-        "test",
-        codec,
-        ThreadPoolExecutor(),
-    )
-    key = "key"
-
-    def normal_function() -> bytes:
-        # this sleep makes sure that all waiting clients
-        # are put into the waiting queue
-        time.sleep(0.5)
-        return b"hello-cached"
-
-    def normal_function_uncached() -> bytes:
-        return b"hello-not-cached"
-
-    def cached_query() -> bytes:
-        return delayed_backend.get_readthrough(key, normal_function, noop, 10)
-
-    def uncached_query() -> bytes:
-        return delayed_backend.get_readthrough(key, normal_function_uncached, noop, 10)
-
-    setter = execute(cached_query)
-    waiters = []
-    time.sleep(0.1)
-    for _ in range(num_waiters):
-        waiters.append(execute(uncached_query))
-
-    # make sure that all clients actually did hit the cache
-    assert setter.result() == b"hello-cached"
-    for w in waiters:
-        assert w.result() == b"hello-cached"
-    # make sure that all the waiters actually did hit the notification queue
-    # and didn't just get a direct cache hit
-    assert pop_calls == num_waiters

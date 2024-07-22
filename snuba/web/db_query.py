@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import random
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from hashlib import md5
@@ -109,7 +108,6 @@ cache_partitions: MutableMapping[str, Cache[Result]] = {
         redis_cache_client,
         "snuba-query-cache:",
         ResultCacheCodec(),
-        ThreadPoolExecutor(),
     )
 }
 # This lock prevents us from initializing the cache twice. The cache is initialized
@@ -301,7 +299,6 @@ def _get_cache_partition(reader: Reader) -> Cache[Result]:
                     redis_cache_client,
                     f"snuba-query-cache:{partition_id}:",
                     ResultCacheCodec(),
-                    ThreadPoolExecutor(),
                 )
 
     return cache_partitions[
@@ -442,31 +439,8 @@ def execute_query_with_readthrough_caching(
             robust,
         ),
         record_cache_hit_type=record_cache_hit_type,
-        timeout=_get_cache_wait_timeout(clickhouse_query_settings, reader),
         timer=timer,
     )
-
-
-def _get_cache_wait_timeout(
-    query_settings: MutableMapping[str, Any], reader: Reader
-) -> int:
-    """
-    Helper function to determine how long a query should wait when doing
-    a readthrough caching.
-
-    The overrides are primarily used for debugging the ExecutionTimeoutError
-    raised by the readthrough caching system on the tigers cluster. When we
-    have root caused the problem we can remove the overrides.
-    """
-    cache_wait_timeout: int = int(query_settings.get("max_execution_time", 30))
-    if reader.cache_partition_id and reader.cache_partition_id in {
-        "tiger_errors",
-        "tiger_transactions",
-    }:
-        tiger_wait_timeout_config = state.get_config("tiger-cache-wait-time")
-        if tiger_wait_timeout_config:
-            cache_wait_timeout = tiger_wait_timeout_config
-    return cache_wait_timeout
 
 
 def _get_query_settings_from_config(

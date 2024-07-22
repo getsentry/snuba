@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, Optional
 from unittest import mock
 
 import pytest
@@ -33,12 +33,7 @@ from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import (
-    _get_cache_partition,
-    _get_query_settings_from_config,
-    db_query,
-    execute_query_with_readthrough_caching,
-)
+from snuba.web.db_query import _get_query_settings_from_config, db_query
 
 test_data = [
     pytest.param(
@@ -883,52 +878,6 @@ def test_db_query_ignore_consistent() -> None:
     )
     assert result.extra["stats"]["consistent"] is False
     assert result.extra["stats"]["max_threads"] == 5
-
-
-@pytest.mark.redis_db
-@pytest.mark.clickhouse_db
-@pytest.mark.parametrize(
-    "disable_lua_randomize_query_id, disable_lua_scripts_sample_rate, expected_startswith, test_cache_hit_simple",
-    [
-        (0, 0, "test_query_id", False),
-        (1, 1, "randomized-", True),
-    ],
-)
-def test_clickhouse_settings_applied_to_query_id(
-    disable_lua_randomize_query_id: int,
-    disable_lua_scripts_sample_rate: int,
-    expected_startswith: str,
-    test_cache_hit_simple: bool,
-) -> None:
-    query, storage, attribution_info = _build_test_query("count(distinct(project_id))")
-    state.set_config("disable_lua_randomize_query_id", disable_lua_randomize_query_id)
-    state.set_config(
-        "read_through_cache.disable_lua_scripts_sample_rate",
-        disable_lua_scripts_sample_rate,
-    )
-
-    formatted_query = format_query(query)
-    reader = storage.get_cluster().get_reader()
-    clickhouse_query_settings: Dict[str, Any] = {}
-    query_id = "test_query_id"
-    stats: dict[str, Any] = {}
-
-    execute_query_with_readthrough_caching(
-        clickhouse_query=query,
-        query_settings=HTTPQuerySettings(),
-        formatted_query=formatted_query,
-        reader=reader,
-        timer=Timer("foo"),
-        stats=stats,
-        clickhouse_query_settings=clickhouse_query_settings,
-        robust=False,
-        query_id=query_id,
-        referrer="test",
-    )
-
-    assert ("cache_hit_simple" in stats) == test_cache_hit_simple
-    assert clickhouse_query_settings["query_id"].startswith(expected_startswith)
-    assert _get_cache_partition(reader).get("test_query_id") is not None
 
 
 @pytest.mark.clickhouse_db
