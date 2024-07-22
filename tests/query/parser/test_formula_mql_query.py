@@ -1254,7 +1254,7 @@ def test_curried_aggregate_formula() -> None:
     assert eq, reason
 
 
-def test_formula_with_totals() -> None:
+def test_formula_no_groupby_no_interval_with_totals() -> None:
     mql_context_new = deepcopy(mql_context)
     mql_context_new["rollup"]["with_totals"] = "True"
     mql_context_new["rollup"]["interval"] = None
@@ -1286,13 +1286,8 @@ def test_formula_with_totals() -> None:
             alias="d0",
             data_source=from_distributions,
         ),
-        keys=[
-            JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
-            )
-        ],
-        join_type=JoinType.INNER,
+        keys=[],
+        join_type=JoinType.CROSS,
         join_modifier=None,
     )
 
@@ -1309,18 +1304,8 @@ def test_formula_with_totals() -> None:
 
     expected = CompositeQuery(
         from_clause=join_clause,
-        selected_columns=[
-            expected_selected,
-            SelectedExpression(
-                "time",
-                time_expression("d1", None),
-            ),
-            SelectedExpression(
-                "time",
-                time_expression("d0", None),
-            ),
-        ],
-        groupby=[time_expression("d1", None), time_expression("d0", None)],
+        selected_columns=[expected_selected],
+        groupby=[],
         condition=formula_condition,
         order_by=[],
         limit=1000,
@@ -1336,10 +1321,11 @@ def test_formula_with_totals() -> None:
     assert eq, reason
 
 
-def test_formula_with_totals_and_interval() -> None:
+def test_formula_onesided_groupby_no_interval_with_totals() -> None:
     mql_context_new = deepcopy(mql_context)
     mql_context_new["rollup"]["with_totals"] = "True"
-    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context_new["rollup"]["interval"] = None
+    query_body = "sum(`d:transactions/duration@millisecond`){status_code:200} by transaction / sum(`d:transactions/duration@millisecond`)"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1367,13 +1353,8 @@ def test_formula_with_totals_and_interval() -> None:
             alias="d0",
             data_source=from_distributions,
         ),
-        keys=[
-            JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
-                right=JoinConditionExpression(table_alias="d0", column="d0.time"),
-            )
-        ],
-        join_type=JoinType.INNER,
+        keys=[],
+        join_type=JoinType.CROSS,
         join_modifier=None,
     )
 
@@ -1393,22 +1374,15 @@ def test_formula_with_totals_and_interval() -> None:
         selected_columns=[
             expected_selected,
             SelectedExpression(
-                "time",
-                time_expression("d1"),
-            ),
-            SelectedExpression(
-                "time",
-                time_expression("d0"),
+                "transaction",
+                subscriptable_expression("333333", "d0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[
+            subscriptable_expression("333333", "d0"),
+        ],
         condition=formula_condition,
-        order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC,
-                expression=time_expression("d0"),
-            ),
-        ],
+        order_by=[],
         limit=1000,
         offset=0,
         totals=True,

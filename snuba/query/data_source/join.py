@@ -25,6 +25,7 @@ from snuba.utils.schemas import Column, ColumnSet, SchemaModifiers, WildcardColu
 class JoinType(Enum):
     INNER = "INNER"
     LEFT = "LEFT"
+    CROSS = "CROSS"
 
 
 class JoinModifier(Enum):

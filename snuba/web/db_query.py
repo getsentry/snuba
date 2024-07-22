@@ -760,7 +760,6 @@ def db_query(
         evolves it can be changed. The inconsistency was consciously chosen for expediency and to have
         allocation policy be applied at the top level of the db_query process
     """
-
     allocation_policies = _get_allocation_policies(clickhouse_query)
     query_id = uuid.uuid4().hex
     result = None
