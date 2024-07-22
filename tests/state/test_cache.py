@@ -91,7 +91,7 @@ def bad_backend() -> Cache[bytes]:
         def __init__(self, client: Any) -> None:
             self._client = client
 
-        def evalsha(self, *args: str, **kwargs: str) -> None:
+        def get(self, *args: str, **kwargs: str) -> None:
             raise ReadOnlyError("Failed")
 
         def __getattr__(self, attr: str) -> Any:
