@@ -1,5 +1,5 @@
 ---
-source: src/processors/spans_v2.rs
+source: src/processors/eap_spans.rs
 expression: span
 ---
 {

@@ -52,6 +52,7 @@ class SpanEventExample:
                 "is_segment": False,
                 "parent_span_id": self.parent_span_id,
                 "project_id": self.project_id,
+                "organization_id": 1,
                 "received": self.received,
                 "retention_days": self.retention_days,
                 "segment_id": self.segment_id,

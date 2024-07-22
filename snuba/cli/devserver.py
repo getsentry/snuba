@@ -112,8 +112,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             [
                 "snuba",
                 "rust-consumer",
-                "--storage=spans_v2",
-                "--consumer-group=spans_v2_group",
+                "--storage=eap_spans",
+                "--consumer-group=eap_spans_group",
                 "--use-rust-processor",
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
