@@ -398,10 +398,7 @@ def execute_query_with_readthrough_caching(
             robust,
         )
 
-    if state.get_config("disable_lua_randomize_query_id", 0):
-        clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
-    else:
-        clickhouse_query_settings["query_id"] = query_id
+    clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
 
     if span:
         span.set_data("query_id", query_id)
