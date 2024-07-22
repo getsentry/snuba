@@ -18,7 +18,7 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import NestedColumn, and_cond, column, in_cond, literal
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.mql.parser_supported_join import parse_mql_query_new
 from snuba.query.snql.parser import parse_snql_query
@@ -29,20 +29,6 @@ from_distributions = QueryEntity(
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
 )
-
-
-def time_expression(to_interval_seconds: int | None = 60) -> FunctionCall:
-    return FunctionCall(
-        "_snuba_time",
-        "toStartOfInterval",
-        (
-            Column("_snuba_timestamp", None, "timestamp"),
-            FunctionCall(
-                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
-            ),
-            Literal(None, "Universal"),
-        ),
-    )
 
 
 def test_mql() -> None:
@@ -82,12 +68,8 @@ def test_mql() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -192,12 +174,8 @@ def test_mql_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -300,12 +278,8 @@ def test_mql_negated_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
