@@ -29,10 +29,12 @@ class Query(AbstractQuery[Table]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        on_cluster: Optional[Expression] = None,
         is_delete: bool = False,
     ) -> None:
         self.__prewhere = prewhere
         self.__is_delete = is_delete
+        self.__on_cluster = on_cluster
 
         super().__init__(
             from_clause=from_clause,
@@ -75,3 +77,6 @@ class Query(AbstractQuery[Table]):
 
     def is_delete(self) -> bool:
         return self.__is_delete
+
+    def get_on_cluster(self) -> Optional[Expression]:
+        return self.__on_cluster

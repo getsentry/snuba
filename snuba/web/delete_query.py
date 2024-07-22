@@ -21,6 +21,8 @@ def construct_condition(body):
 
 
 def delete_query(storage: StorageKey, table: str, body):
+    cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
+    on_cluster = literal(cluster_name) if cluster_name else None
     query = Query(
         from_clause=Table(
             table,
@@ -29,6 +31,7 @@ def delete_query(storage: StorageKey, table: str, body):
             allocation_policies=[],
         ),
         condition=construct_condition(body),
+        on_cluster=on_cluster,
         is_delete=True,
     )
     formatted_query = format_query(query)

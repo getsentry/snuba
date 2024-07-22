@@ -38,7 +38,7 @@ def format_query(query: FormattableQuery) -> FormattedQuery:
     This is the entry point for any type of query, whether simple or
     composite.
     """
-    if query.is_delete():
+    if isinstance(query, Query) and query.is_delete():
         return FormattedQuery(
             _format_delete_query_content(query, ClickhouseExpressionFormatter)
         )
@@ -156,10 +156,20 @@ def _format_delete_query_content(
                     query.get_from_clause()
                 ),
             ),
+            _format_on_cluster(query, formatter),
             _build_optional_string_node("WHERE", query.get_condition(), formatter),
         ]
         if v is not None
     ]
+
+
+def _format_on_cluster(
+    query: AbstractQuery, formatter: ExpressionVisitor[str]
+) -> StringNode:
+    on_cluster = query.get_on_cluster()
+    if on_cluster:
+        return StringNode(f"ON CLUSTER {on_cluster.accept(formatter)}")
+    return None
 
 
 def _format_select(

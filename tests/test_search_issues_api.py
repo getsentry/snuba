@@ -8,6 +8,7 @@ import simplejson as json
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events
@@ -110,6 +111,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         )
 
     def test_simple_delete(self) -> None:
+        set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
         occurrence_id = str(uuid.uuid4())
 
@@ -159,6 +161,21 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         ]
 
         response = self.delete_query(occurrence_id)
+
+        # make sure the data got deleted, aka no query results
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                SELECT count() AS count BY project_id
+                WHERE project_id = {evt["project_id"]}
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                LIMIT 1000
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        assert data["data"] == []
+
         client = get_client()
         # Mutation command should look like the following:
         # UPDATE _row_exists = 0 WHERE (occurrence_id = 'ebe2b2a0-0cbd-4fe7-806f-6de220656645') AND (project_id = 3)

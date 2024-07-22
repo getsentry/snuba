@@ -638,6 +638,33 @@ def test_format_clickhouse_specific_query() -> None:
     assert clickhouse_query.get_sql() == expected
 
 
+def test_delete_query():
+    query = Query(
+        Table(
+            "my_table",
+            ColumnSet([]),
+            storage_key=StorageKey("dontmatter"),
+        ),
+        condition=binary_condition(
+            "eq",
+            lhs=Column(None, None, "project_id"),
+            rhs=Literal(None, 1),
+        ),
+        on_cluster=Literal(None, "cluster_name"),
+        is_delete=True,
+    )
+
+    clickhouse_query = format_query(query)
+    expected = (
+        "DELETE "
+        "FROM my_table "
+        "ON CLUSTER 'cluster_name' "
+        "WHERE eq(project_id, 1)"
+    )
+
+    assert clickhouse_query.get_sql() == expected
+
+
 TEST_JOIN = [
     pytest.param(
         JoinClause(
