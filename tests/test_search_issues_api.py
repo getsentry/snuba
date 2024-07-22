@@ -45,6 +45,13 @@ def base_insert_event(
     )
 
 
+from clickhouse_driver import Client
+
+
+def get_client() -> Client:
+    return Client(host="127.0.0.1", port=9000, database="snuba_test")
+
+
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -84,6 +91,82 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             ),
             headers={"referer": "test"},
         )
+
+    def delete_query(
+        self,
+        occurrence_id: str,
+        debug: bool = True,
+    ) -> Any:
+        return self.app.delete(
+            "/search_issues/",
+            data=json.dumps(
+                {
+                    "columns": {"occurrence_id": [occurrence_id], "project_id": [3]},
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+
+    def test_simple_delete(self) -> None:
+        now = datetime.now().replace(minute=0, second=0, microsecond=0)
+        occurrence_id = str(uuid.uuid4())
+
+        evt: MutableMapping[str, Any] = dict(
+            organization_id=1,
+            project_id=3,
+            event_id=str(uuid.uuid4().hex),
+            group_id=3,
+            primary_hash=str(uuid.uuid4().hex),
+            datetime=datetime.utcnow().isoformat() + "Z",
+            platform="other",
+            message="message",
+            data={"received": now.timestamp()},
+            occurrence_data=dict(
+                id=occurrence_id,
+                type=1,
+                issue_title="search me",
+                fingerprint=["one", "two"],
+                detection_time=now.timestamp(),
+            ),
+            retention_days=90,
+        )
+
+        assert self.events_storage
+        write_unprocessed_events(self.events_storage, [evt])
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                SELECT count() AS count BY project_id
+                WHERE project_id = {evt["project_id"]}
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                LIMIT 1000
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [
+            {
+                "project_id": 3,
+                "count": 1,
+            }
+        ]
+
+        response = self.delete_query(occurrence_id)
+        client = get_client()
+        # Mutation command should look like the following:
+        # UPDATE _row_exists = 0 WHERE (occurrence_id = 'ebe2b2a0-0cbd-4fe7-806f-6de220656645') AND (project_id = 3)
+        [(cmd,)] = client.execute(
+            "SELECT command FROM system.mutations WHERE database = 'snuba_test' AND table = 'search_issues_local_v2'"
+        )
+
+        assert str(occurrence_id) in cmd
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)

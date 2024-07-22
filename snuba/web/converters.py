@@ -5,6 +5,8 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset, get_dataset_name
+from snuba.datasets.storage import Storage, StorageKey
+from snuba.datasets.storages.factory import get_storage
 
 
 class DatasetConverter(BaseConverter):
@@ -21,3 +23,11 @@ class EntityConverter(BaseConverter):
 
     def to_url(self, value: Entity) -> str:
         return get_entity_name(value).value
+
+
+class StorageConverter(BaseConverter):
+    def to_python(self, value: str) -> Storage:
+        return get_storage(StorageKey(value))
+
+    def to_url(self, value: Storage) -> str:
+        return value.get_storage_key().value

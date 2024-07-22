@@ -29,8 +29,10 @@ class Query(AbstractQuery[Table]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        is_delete: bool = False,
     ) -> None:
         self.__prewhere = prewhere
+        self.__is_delete = is_delete
 
         super().__init__(
             from_clause=from_clause,
@@ -70,3 +72,6 @@ class Query(AbstractQuery[Table]):
 
     def _eq_functions(self) -> Sequence[str]:
         return tuple(super()._eq_functions()) + ("get_prewhere_ast",)
+
+    def is_delete(self) -> bool:
+        return self.__is_delete

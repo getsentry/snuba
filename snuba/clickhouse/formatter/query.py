@@ -38,7 +38,14 @@ def format_query(query: FormattableQuery) -> FormattedQuery:
     This is the entry point for any type of query, whether simple or
     composite.
     """
-    return FormattedQuery(_format_query_content(query, ClickhouseExpressionFormatter))
+    if query.is_delete():
+        return FormattedQuery(
+            _format_delete_query_content(query, ClickhouseExpressionFormatter)
+        )
+    else:
+        return FormattedQuery(
+            _format_query_content(query, ClickhouseExpressionFormatter)
+        )
 
 
 def format_query_anonymized(query: FormattableQuery) -> FormattedQuery:
@@ -73,6 +80,13 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
         self, data_source: ProcessableQuery[Table]
     ) -> FormattedSubQuery:
         assert isinstance(data_source, Query)
+        if data_source.is_delete():
+            return FormattedSubQuery(
+                _format_delete_query_content(
+                    data_source, self.__expression_formatter_type
+                ),
+            )
+
         return FormattedSubQuery(
             _format_query_content(data_source, self.__expression_formatter_type),
         )
@@ -123,6 +137,26 @@ def _format_query_content(
             _format_orderby(query, formatter),
             _format_limitby(query, formatter),
             _format_limit(query, formatter),
+        ]
+        if v is not None
+    ]
+
+
+def _format_delete_query_content(
+    query: FormattableQuery, expression_formatter_type: Type[ExpressionFormatterBase]
+) -> Sequence[FormattedNode]:
+    formatter = expression_formatter_type()
+    return [
+        v
+        for v in [
+            StringNode("DELETE"),
+            PaddingNode(
+                "FROM",
+                DataSourceFormatter(expression_formatter_type).visit(
+                    query.get_from_clause()
+                ),
+            ),
+            _build_optional_string_node("WHERE", query.get_condition(), formatter),
         ]
         if v is not None
     ]

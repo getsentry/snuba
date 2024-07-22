@@ -42,13 +42,14 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import StorageNotAvailable
+from snuba.datasets.storage import Storage, StorageNotAvailable
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
+from snuba.state import get_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -64,7 +65,8 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
-from snuba.web.converters import DatasetConverter, EntityConverter
+from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
+from snuba.web.delete_query import delete_query
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -101,6 +103,7 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 application.url_map.converters["entity"] = EntityConverter
+application.url_map.converters["storage"] = StorageConverter
 atexit.register(close_cogs_recorder)
 
 
@@ -286,6 +289,35 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
         body = parse_request_body(http_request)
         _trace_transaction(dataset_name)
         return dataset_query(dataset_name, body, timer, is_mql=True)
+    else:
+        assert False, "unexpected fallthrough"
+
+
+@application.route("/<storage:storage>/", methods=["DELETE"])
+@util.time_request("delete_query")
+def storage_delete(*, storage: Storage, timer: Timer) -> Union[Response, str]:
+    if http_request.method == "DELETE":
+        if get_config("storage_deletes_enabled", 0):
+            raise Exception("Deletes not enabled")
+
+        # schema = RequestSchema.build(HTTPQuerySettings)
+        body = parse_request_body(http_request)
+
+        delete_settings = storage.get_deletion_settings()
+        if not delete_settings.is_enabled:
+            raise Exception(
+                f"Deletes not enabled for {storage.get_storage_set_key().value}"
+            )
+
+        payload = {}
+
+        for table in delete_settings.tables:
+            delete_query(storage, table, body)
+
+        return Response(
+            dump_payload(payload), 200, {"Content-Type": "application/json"}
+        )
+
     else:
         assert False, "unexpected fallthrough"
 
