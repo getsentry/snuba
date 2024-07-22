@@ -20,7 +20,7 @@ pub fn process_message(
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-    let mut span: SpanV2 = msg.try_into()?;
+    let mut span: EAPSpan = msg.try_into()?;
 
     span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
@@ -28,7 +28,8 @@ pub fn process_message(
 }
 
 #[derive(Debug, Default, Serialize)]
-struct SpanV2 {
+struct EAPSpan {
+    // the span object for the new "events analytics platform"
     organization_id: u64,
     project_id: u64,
     trace_id: Uuid,
@@ -279,10 +280,10 @@ fn half_md5(input: &[u8]) -> u64 {
     u64::from_be_bytes(full_hash[0..8].try_into().expect("should not happen"))
 }
 
-impl TryFrom<FromSpanMessage> for SpanV2 {
+impl From<FromSpanMessage> for EAPSpan {
     type Error = anyhow::Error;
 
-    fn try_from(from: FromSpanMessage) -> anyhow::Result<SpanV2> {
+    fn from(from: FromSpanMessage) -> EAPSpan {
         let sentry_tags = from.sentry_tags.unwrap_or_default();
         let tags = from.tags.unwrap_or_default();
         let measurements = from.measurements.unwrap_or_default();
@@ -435,7 +436,7 @@ impl TryFrom<FromSpanMessage> for SpanV2 {
             });
         }
 
-        Ok(res)
+        res
     }
 }
 
@@ -530,7 +531,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let span: SpanV2 = msg.try_into().unwrap();
+        let span: EAPSpan = msg.try_into().unwrap();
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(span)
         });
