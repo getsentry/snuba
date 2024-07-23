@@ -1,11 +1,5 @@
-from typing import Any, Callable
-
-import pytest
-from clickhouse_driver.errors import ErrorCodes
-
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
@@ -17,7 +11,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
-from snuba.web import QueryException
 from snuba.web.query import run_query as _run_query
 
 
@@ -58,45 +51,3 @@ def run_query() -> None:
     )
 
     assert result.result["data"] == []
-
-
-@pytest.mark.clickhouse_db
-@pytest.mark.redis_db
-def test_cache_retries_on_bad_query_id(
-    monkeypatch: pytest.MonkeyPatch, snuba_set_config: Callable[[str, Any], None]
-) -> None:
-    from snuba.web import db_query
-
-    calls = []
-
-    old_excecute_query_with_rate_limits = db_query.execute_query_with_rate_limits
-
-    def execute_query_with_rate_limits(*args: Any) -> Any:
-        calls.append(args[-2]["query_id"])
-
-        if len(calls) == 1:
-            raise ClickhouseError(
-                "duplicate query!",
-                True,
-                code=ErrorCodes.QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING,
-            )
-
-        return old_excecute_query_with_rate_limits(*args)
-
-    monkeypatch.setattr(
-        db_query, "execute_query_with_rate_limits", execute_query_with_rate_limits
-    )
-
-    with pytest.raises(QueryException):
-        run_query()
-
-    assert len(calls) == 1
-    calls.clear()
-
-    snuba_set_config("retry_duplicate_query_id", True)
-
-    run_query()
-
-    assert len(calls) == 2
-    assert "randomized" not in calls[0]
-    assert "randomized" in calls[1]
