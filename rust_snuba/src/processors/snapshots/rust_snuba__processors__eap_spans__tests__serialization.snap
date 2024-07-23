@@ -5,6 +5,7 @@ expression: span
 {
   "organization_id": 1,
   "project_id": 1,
+  "service": "1",
   "trace_id": "d099bf9a-d5a1-43cf-8f83-a98081d0ed3b",
   "span_id": 9832388815107059821,
   "parent_span_id": 0,

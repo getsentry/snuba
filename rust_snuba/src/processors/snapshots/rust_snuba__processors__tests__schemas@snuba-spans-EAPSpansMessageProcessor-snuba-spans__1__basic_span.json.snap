@@ -67,6 +67,7 @@ expression: snapshot_payload
     "sampling_weight": 1.0,
     "segment_id": 16045690984833335023,
     "segment_name": "/organizations/:orgId/issues/",
+    "service": "1",
     "sign": 1,
     "span_id": 16045690984833335023,
     "start_timestamp": 1715868485371,

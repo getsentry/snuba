@@ -34,6 +34,7 @@ struct EAPSpan {
     // the span object for the new "events analytics platform"
     organization_id: u64,
     project_id: u64,
+    service: String, //currently just project ID as a string
     trace_id: Uuid,
     span_id: u64,
     #[serde(default)]
@@ -81,6 +82,7 @@ impl From<FromSpanMessage> for EAPSpan {
             organization_id: from.organization_id,
             project_id: from.project_id,
             trace_id: from.trace_id,
+            service: format!("{:x}", from.project_id),
             span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
             parent_span_id: from
                 .parent_span_id
