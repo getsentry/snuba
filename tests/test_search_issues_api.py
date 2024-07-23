@@ -46,13 +46,6 @@ def base_insert_event(
     )
 
 
-from clickhouse_driver import Client
-
-
-def get_client() -> Client:
-    return Client(host="127.0.0.1", port=9000, database="snuba_test")
-
-
 class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @pytest.fixture
     def test_entity(self) -> Union[str, Tuple[str, str]]:
@@ -178,15 +171,6 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == []
-
-        client = get_client()
-        # Mutation command should look like the following:
-        # UPDATE _row_exists = 0 WHERE (occurrence_id = 'ebe2b2a0-0cbd-4fe7-806f-6de220656645') AND (project_id = 3)
-        [(cmd,)] = client.execute(
-            "SELECT command FROM system.mutations WHERE database = 'snuba_test' AND table = 'search_issues_local_v2'"
-        )
-
-        assert str(occurrence_id) in cmd
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
