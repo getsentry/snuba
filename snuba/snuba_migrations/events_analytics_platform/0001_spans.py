@@ -25,6 +25,7 @@ num_attr_buckets = 200
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
+    Column("service", String(Modifiers(codecs=["ZSTD(1)"]))),
     Column("trace_id", UUID()),
     Column("span_id", UInt(64)),
     Column("parent_span_id", UInt(64, Modifiers(codecs=["ZSTD(1)"]))),

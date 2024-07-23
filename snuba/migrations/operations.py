@@ -499,7 +499,7 @@ class AddIndices(SqlOperation):
 
     def format_sql(self) -> str:
         statements = [
-            f"ADD INDEX IF NOT EXISTS {idx['name']} {idx['expression']} TYPE {idx['type']} GRANULARITY {idx['granularity']}"
+            f"ADD INDEX IF NOT EXISTS {idx.name} {idx.expression} TYPE {idx.type} GRANULARITY {idx.granularity}"
             for idx in self.__indices
         ]
 
