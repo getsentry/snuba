@@ -20,6 +20,7 @@ from snuba.utils.schemas import (
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_spans_local"
 dist_table_name = "eap_spans_dist"
+num_attr_buckets = 200
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
@@ -59,7 +60,7 @@ columns.extend(
             f"attr_str_{i}",
             Map(String(), String(), modifiers=Modifiers(codecs=["ZSTD(1)"])),
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
 )
 
@@ -69,7 +70,7 @@ columns.extend(
             f"attr_num_{i}",
             Map(String(), Float(64), modifiers=Modifiers(codecs=["ZSTD(1)"])),
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
 )
 columns.extend(
@@ -78,7 +79,7 @@ columns.extend(
             f"attr_bool_{i}",
             Map(String(), Bool(), modifiers=Modifiers(codecs=["ZSTD(1)"])),
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
 )
 
@@ -104,7 +105,7 @@ index_create_ops: Sequence[SqlOperation] = (
             granularity=1,
             target=OperationTarget.LOCAL,
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
     + [
         operations.AddIndex(
@@ -116,7 +117,7 @@ index_create_ops: Sequence[SqlOperation] = (
             granularity=1,
             target=OperationTarget.LOCAL,
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
     + [
         operations.AddIndex(
@@ -128,7 +129,7 @@ index_create_ops: Sequence[SqlOperation] = (
             granularity=1,
             target=OperationTarget.LOCAL,
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
     + [
         operations.AddIndex(
@@ -140,7 +141,7 @@ index_create_ops: Sequence[SqlOperation] = (
             granularity=1,
             target=OperationTarget.LOCAL,
         )
-        for i in range(50)
+        for i in range(num_attr_buckets)
     ]
 )
 
