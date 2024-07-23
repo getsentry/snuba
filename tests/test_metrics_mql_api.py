@@ -1272,3 +1272,61 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ).serialize_mql(),
         )
         assert response.status_code == 200
+
+    def test_formula_with_totals_and_orderby(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.PLUS.value,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            DISTRIBUTIONS_MRI,
+                            DISTRIBUTIONS.metric_id,
+                        ),
+                        aggregate="avg",
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            DISTRIBUTIONS_MRI,
+                            DISTRIBUTIONS.metric_id,
+                        ),
+                        aggregate="avg",
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(
+                interval=None, totals=True, orderby=Direction.DESC, granularity=60
+            ),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "status_code": resolve_str("status_code"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        print(data)
+        assert (
+            data["totals"]["aggregate_value"] == 4.0
+        )  # Should be more than the number of data points
