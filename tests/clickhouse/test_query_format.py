@@ -638,7 +638,7 @@ def test_format_clickhouse_specific_query() -> None:
     assert clickhouse_query.get_sql() == expected
 
 
-def test_delete_query():
+def test_delete_query() -> None:
     query = Query(
         Table(
             "my_table",

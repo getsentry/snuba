@@ -42,7 +42,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import Storage, StorageNotAvailable
+from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -295,24 +295,33 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
 
 @application.route("/<storage:storage>/", methods=["DELETE"])
 @util.time_request("delete_query")
-def storage_delete(*, storage: Storage, timer: Timer) -> Union[Response, str]:
+def storage_delete(
+    *, storage: WritableTableStorage, timer: Timer
+) -> Union[Response, str]:
+
     if http_request.method == "DELETE":
+
+        check_shutdown({"storage": storage.get_storage_key()})
+
         if get_config("storage_deletes_enabled", 0):
             raise Exception("Deletes not enabled")
 
-        # schema = RequestSchema.build(HTTPQuerySettings)
         body = parse_request_body(http_request)
-
         delete_settings = storage.get_deletion_settings()
+
         if not delete_settings.is_enabled:
             raise Exception(
-                f"Deletes not enabled for {storage.get_storage_set_key().value}"
+                f"Deletes not enabled for {storage.get_storage_key().value}"
             )
 
-        payload = {}
-
-        for table in delete_settings.tables:
-            delete_query(storage, table, body)
+        payload: MutableMapping[str, Any] = {}
+        try:
+            for table in delete_settings.tables:
+                result = delete_query(storage, table, body)
+                payload[table] = {**result}
+        except Exception as error:
+            # TODO: better error handling
+            logger.warning("Failed query", exc_info=error)
 
         return Response(
             dump_payload(payload), 200, {"Content-Type": "application/json"}
@@ -365,13 +374,7 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
-@with_span()
-def dataset_query(
-    dataset_name: str, body: Dict[str, Any], timer: Timer, is_mql: bool = False
-) -> Response:
-    assert http_request.method == "POST"
-    referrer = http_request.referrer or "<unknown>"  # mypy
-
+def check_shutdown(tags: Dict[str, Any]) -> None:
     # Try to detect if new requests are being sent to the api
     # after the shutdown command has been issued, and if so
     # how long after. I don't want to do a disk check for
@@ -379,10 +382,20 @@ def dataset_query(
     # is detected, and then log everything
     if get_shutdown() or random.random() < 0.05:
         if get_shutdown() or check_down_file_exists():
-            tags = {"dataset": dataset_name}
             metrics.increment("post.shutdown.query", tags=tags)
             diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
             metrics.timing("post.shutdown.query.delay", diff, tags=tags)
+
+
+@with_span()
+def dataset_query(
+    dataset_name: str, body: Dict[str, Any], timer: Timer, is_mql: bool = False
+) -> Response:
+    assert http_request.method == "POST"
+    referrer = http_request.referrer or "<unknown>"  # mypy
+
+    check_shutdown({"dataset": dataset_name})
+
     try:
         request, result = parse_and_run_query(
             body, timer, is_mql, dataset_name, referrer

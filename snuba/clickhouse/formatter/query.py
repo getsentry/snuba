@@ -165,7 +165,7 @@ def _format_delete_query_content(
 
 def _format_on_cluster(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
-) -> StringNode:
+) -> Optional[StringNode]:
     on_cluster = query.get_on_cluster()
     if on_cluster:
         return StringNode(f"ON CLUSTER {on_cluster.accept(formatter)}")
