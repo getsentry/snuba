@@ -80,13 +80,6 @@ class DataSourceFormatter(DataSourceVisitor[FormattedNode, Table]):
         self, data_source: ProcessableQuery[Table]
     ) -> FormattedSubQuery:
         assert isinstance(data_source, Query)
-        if data_source.is_delete():
-            return FormattedSubQuery(
-                _format_delete_query_content(
-                    data_source, self.__expression_formatter_type
-                ),
-            )
-
         return FormattedSubQuery(
             _format_query_content(data_source, self.__expression_formatter_type),
         )
