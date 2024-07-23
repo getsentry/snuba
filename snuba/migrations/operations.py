@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
@@ -465,6 +466,44 @@ class AddIndex(SqlOperation):
     def format_sql(self) -> str:
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.__table_name} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
+
+
+@dataclass
+class AddIndicesData:
+    name: str  # e.g.: bf_index
+    expression: str  # e.g.: mapKeys(my_map)
+    type: str  # e.g.: bloom_filter(0.1)
+    granularity: int  # e.g.: 4
+
+
+class AddIndices(SqlOperation):
+    """
+    Adds an index.
+
+    Only works with the MergeTree family of tables.
+
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        indices: Sequence[AddIndicesData],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__indices = indices
+
+    def format_sql(self) -> str:
+        statements = [
+            f"ADD INDEX IF NOT EXISTS {idx['name']} {idx['expression']} TYPE {idx['type']} GRANULARITY {idx['granularity']}"
+            for idx in self.__indices
+        ]
+
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
 
 
 class DropIndex(SqlOperation):

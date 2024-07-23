@@ -3,7 +3,7 @@ from typing import List, Sequence
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
-from snuba.migrations.operations import OperationTarget, SqlOperation
+from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
 from snuba.utils.schemas import (
     UUID,
     Bool,
@@ -83,63 +83,48 @@ columns.extend(
     ]
 )
 
-index_create_ops: Sequence[SqlOperation] = (
+indices: Sequence[AddIndicesData] = (
     [
-        operations.AddIndex(
-            storage_set=storage_set_name,
-            table_name=local_table_name,
-            index_name="bf_trace_id",
-            index_expression="trace_id",
-            index_type="bloom_filter",
+        AddIndicesData(
+            name="bf_trace_id",
+            expression="trace_id",
+            type="bloom_filter",
             granularity=1,
-            target=OperationTarget.LOCAL,
-        ),
+        )
     ]
     + [
-        operations.AddIndex(
-            storage_set=storage_set_name,
-            table_name=local_table_name,
-            index_name=f"bf_attr_str_{i}",
-            index_expression=f"mapKeys(attr_str_{i})",
-            index_type="bloom_filter",
+        AddIndicesData(
+            name=f"bf_attr_str_{i}",
+            expression=f"mapKeys(attr_str_{i})",
+            type="bloom_filter",
             granularity=1,
-            target=OperationTarget.LOCAL,
         )
         for i in range(num_attr_buckets)
     ]
     + [
-        operations.AddIndex(
-            storage_set=storage_set_name,
-            table_name=local_table_name,
-            index_name=f"bf_attr_str_val_{i}",
-            index_expression=f"mapValues(attr_str_{i})",
-            index_type="ngrambf_v1(4, 1024, 10, 1)",
+        AddIndicesData(
+            name=f"bf_attr_str_val_{i}",
+            expression=f"mapValues(attr_str_{i})",
+            type="ngrambf_v1(4, 1024, 10, 1)",
             granularity=1,
-            target=OperationTarget.LOCAL,
         )
         for i in range(num_attr_buckets)
     ]
     + [
-        operations.AddIndex(
-            storage_set=storage_set_name,
-            table_name=local_table_name,
-            index_name=f"bf_attr_num_{i}",
-            index_expression=f"mapKeys(attr_num_{i})",
-            index_type="bloom_filter",
+        AddIndicesData(
+            name=f"bf_attr_num_{i}",
+            expression=f"mapKeys(attr_num_{i})",
+            type="bloom_filter",
             granularity=1,
-            target=OperationTarget.LOCAL,
         )
         for i in range(num_attr_buckets)
     ]
     + [
-        operations.AddIndex(
-            storage_set=storage_set_name,
-            table_name=local_table_name,
-            index_name=f"bf_attr_bool_{i}",
-            index_expression=f"mapKeys(attr_bool_{i})",
-            index_type="bloom_filter",
+        AddIndicesData(
+            name=f"bf_attr_bool_{i}",
+            expression=f"mapKeys(attr_bool_{i})",
+            type="bloom_filter",
             granularity=1,
-            target=OperationTarget.LOCAL,
         )
         for i in range(num_attr_buckets)
     ]
@@ -176,8 +161,13 @@ class Migration(migration.ClickhouseNodeMigration):
                 ),
                 target=OperationTarget.DISTRIBUTED,
             ),
+            operations.AddIndices(
+                storage_set=storage_set_name,
+                table_name=local_table_name,
+                indices=indices,
+                target=OperationTarget.LOCAL,
+            ),
         ]
-        res.extend(index_create_ops)
         return res
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
