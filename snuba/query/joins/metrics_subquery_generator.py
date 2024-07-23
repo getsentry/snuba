@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Generator, Mapping
 
 from snuba.query import ProcessableQuery, SelectedExpression
@@ -260,17 +259,5 @@ def generate_metrics_subqueries(query: CompositeQuery[Entity]) -> None:
 
     # Since groupbys are pushed down, we don't need them in the outer query.
     query.set_ast_groupby([])
-
-    query.set_ast_orderby(
-        [
-            replace(
-                orderby,
-                expression=_process_root(
-                    orderby.expression, subqueries, alias_generator
-                ),
-            )
-            for orderby in query.get_orderby()
-        ]
-    )
 
     query.set_from_clause(SubqueriesReplacer(subqueries).visit_join_clause(from_clause))

@@ -152,7 +152,7 @@ def rollup_expressions(
         )
         selected_time = SelectedExpression("time", time_expression)
         orderby = OrderBy(OrderByDirection.ASC, time_expression)
-    elif rollup.orderby and not with_totals:
+    elif rollup.orderby is not None:
         direction = (
             OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
         )

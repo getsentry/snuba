@@ -43,9 +43,13 @@ def utc_yesterday_12_15() -> datetime:
     )
 
 
-SHARED_TAGS = {
+SHARED_TAGS_1 = {
     "status_code": "200",
     "transaction": "t1",
+}
+
+SHARED_TAGS_2 = {
+    "transaction": "t2",
 }
 
 # This is stored this way since that's how it's encoded in the message
@@ -144,8 +148,8 @@ class TestGenericMetricsMQLApi(BaseApiTest):
 
         # Create tag values for the test data
         self.mapping_meta = SHARED_MAPPING_META
-
-        self.tags = {str(resolve_str(k)): v for k, v in SHARED_TAGS.items()}
+        self.tags1 = {str(resolve_str(k)): v for k, v in SHARED_TAGS_1.items()}
+        self.tags2 = {str(resolve_str(k)): v for k, v in SHARED_TAGS_2.items()}
         self.skew = timedelta(seconds=self.seconds)
         self.base_time = utc_yesterday_12_15()
         self.start_time = self.base_time - self.skew
@@ -163,33 +167,34 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         )
         for n in range(self.seconds)[::60]:
             for p in self.project_ids:
-                processed = (
-                    storage.get_table_writer()
-                    .get_stream_loader()
-                    .get_processor()
-                    .process_message(
-                        (
-                            {
-                                "org_id": self.org_id,
-                                "project_id": p,
-                                "use_case_id": USE_CASE_ID,
-                                "unit": "ms",
-                                "type": fixture.type.value,
-                                "value": fixture.value(),
-                                "timestamp": self.base_time.timestamp() + n,
-                                "tags": self.tags,
-                                "metric_id": fixture.metric_id,
-                                "retention_days": RETENTION_DAYS,
-                                "mapping_meta": self.mapping_meta,
-                                "sentry_received_timestamp": self.sentry_received_time.timestamp()
-                                + n,
-                            }
-                        ),
-                        KafkaMessageMetadata(0, 0, self.base_time),
+                for tags in [self.tags1, self.tags2]:
+                    processed = (
+                        storage.get_table_writer()
+                        .get_stream_loader()
+                        .get_processor()
+                        .process_message(
+                            (
+                                {
+                                    "org_id": self.org_id,
+                                    "project_id": p,
+                                    "use_case_id": USE_CASE_ID,
+                                    "unit": "ms",
+                                    "type": fixture.type.value,
+                                    "value": fixture.value(),
+                                    "timestamp": self.base_time.timestamp() + n,
+                                    "tags": tags,
+                                    "metric_id": fixture.metric_id,
+                                    "retention_days": RETENTION_DAYS,
+                                    "mapping_meta": self.mapping_meta,
+                                    "sentry_received_timestamp": self.sentry_received_time.timestamp()
+                                    + n,
+                                }
+                            ),
+                            KafkaMessageMetadata(0, 0, self.base_time),
+                        )
                     )
-                )
-                if processed:
-                    events.append(processed)
+                    if processed:
+                        events.append(processed)
         write_processed_messages(storage, events)
 
     def test_retrieval_basic(self) -> None:
@@ -378,7 +383,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         rows = data["data"]
-        assert len(rows) == 180, rows
+        assert len(rows) == 360, rows
 
         assert rows[0]["aggregate_value"] > 0
         assert rows[0]["status_code"] == "200"
@@ -683,7 +688,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         data = json.loads(response.data)
         assert len(data["data"]) == 180, data
 
-    def test_formula_with_totals(self) -> None:
+    def test_formula_no_groupby_no_interval_no_totals(self) -> None:
         query = MetricsQuery(
             query=Formula(
                 ArithmeticOperator.PLUS.value,
@@ -708,7 +713,9 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ),
             start=self.start_time,
             end=self.end_time,
-            rollup=Rollup(interval=None, totals=True, orderby=None, granularity=60),
+            rollup=Rollup(
+                interval=None, totals=False, orderby=Direction.DESC, granularity=60
+            ),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
@@ -738,7 +745,64 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             data["totals"]["aggregate_value"] == 4.0
         )  # Should be more than the number of data points
 
-    def test_formula_with_totals_and_interval(self) -> None:
+    def test_formula_no_groupby_no_interval_with_totals(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                ArithmeticOperator.PLUS.value,
+                [
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            DISTRIBUTIONS_MRI,
+                            DISTRIBUTIONS.metric_id,
+                        ),
+                        aggregate="avg",
+                    ),
+                    Timeseries(
+                        metric=Metric(
+                            "transaction.duration",
+                            DISTRIBUTIONS_MRI,
+                            DISTRIBUTIONS.metric_id,
+                        ),
+                        aggregate="avg",
+                    ),
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(
+                interval=None, totals=True, orderby=Direction.DESC, granularity=60
+            ),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "status_code": resolve_str("status_code"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+
+        assert response.status_code == 200, response.data
+        data = json.loads(response.data)
+        assert (
+            data["totals"]["aggregate_value"] == 4.0
+        )  # Should be more than the number of data points
+
+    def test_formula_no_groupby_with_totals_and_interval(self) -> None:
         query = MetricsQuery(
             query=Formula(
                 ArithmeticOperator.PLUS.value,
@@ -1112,7 +1176,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
 
         assert response.status_code == 200
         rows = data["data"]
-        assert len(rows) == 180, rows
+        assert len(rows) == 360, rows
 
     def test_only_keys_resolved(self) -> None:
         query = MetricsQuery(
@@ -1284,6 +1348,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                             DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
                         ),
+                        groupby=[Column("transaction")],
                         aggregate="avg",
                     ),
                     Timeseries(
@@ -1292,6 +1357,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                             DISTRIBUTIONS_MRI,
                             DISTRIBUTIONS.metric_id,
                         ),
+                        groupby=[Column("transaction")],
                         aggregate="avg",
                     ),
                 ],
@@ -1310,6 +1376,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 "transaction.duration": DISTRIBUTIONS_MRI,
                 DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
                 "status_code": resolve_str("status_code"),
+                "transaction": resolve_str("transaction"),
             },
         )
 
