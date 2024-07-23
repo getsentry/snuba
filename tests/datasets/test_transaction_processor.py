@@ -46,8 +46,27 @@ class TransactionEvent:
     has_app_ctx: bool = True
     profile_id: Optional[str] = None
     profiler_id: Optional[str] = None
+    thread_id: Optional[int | str] = None
     replay_id: Optional[str] = None
     received: Optional[float] = None
+
+    def get_trace_context(self) -> Optional[Mapping[str, Any]]:
+        context = {
+            "sampled": True,
+            "trace_id": self.trace_id,
+            "op": self.op,
+            "type": "trace",
+            "span_id": self.span_id,
+            "status": self.status,
+            "hash": "a" * 16,
+            "exclusive_time": 1.2345,
+        }
+
+        if self.thread_id is not None:
+            data = context.setdefault("data", {})
+            data["thread.id"] = self.thread_id
+
+        return context
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
@@ -161,16 +180,7 @@ class TransactionEvent:
                         }
                     },
                     "contexts": {
-                        "trace": {
-                            "sampled": True,
-                            "trace_id": self.trace_id,
-                            "op": self.op,
-                            "type": "trace",
-                            "span_id": self.span_id,
-                            "status": self.status,
-                            "hash": "a" * 16,
-                            "exclusive_time": 1.2345,
-                        },
+                        "trace": self.get_trace_context(),
                         "app": self.get_app_context(),
                         "experiments": {"test1": 1, "test2": 2},
                         "profile": self.get_profile_context(),
@@ -249,6 +259,7 @@ class TransactionEvent:
                 "trace.sampled",
                 "trace.op",
                 "trace.status",
+                "trace.thread_id",
                 "geo.country_code",
                 "geo.region",
                 "geo.city",
@@ -258,6 +269,7 @@ class TransactionEvent:
                 "True",
                 self.op,
                 self.status,
+                str(self.thread_id),
                 self.geo["country_code"],
                 self.geo["region"],
                 self.geo["city"],
@@ -345,6 +357,7 @@ class TestTransactionsProcessor:
             transaction_source="url",
             profile_id="046852d24483455c8c44f0c8fbf496f9",
             profiler_id="822301ff8bdb4daca920ddf2f993b1ff",
+            thread_id=123,
             replay_id="d2731f8ed8934c6fa5253e450915aa12",
         )
 

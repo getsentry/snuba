@@ -421,6 +421,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         transaction_ctx.pop("trace_id", None)
         transaction_ctx.pop("span_id", None)
 
+        transaction_data = transaction_ctx.pop("data", {})
+        if "thread.id" in transaction_data:
+            # The thread.id can be either a str/int. Make sure to always convert to a str.
+            transaction_ctx["thread_id"] = str(transaction_data["thread.id"])
+
         # The hash and exclusive_time is being stored in the spans columns
         # so there is no need to store it again in the context array.
         transaction_ctx.pop("hash", None)
@@ -432,7 +437,7 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         if app_ctx is not None:
             app_ctx.pop("start_type", None)
 
-        # The profile_id and replay_id are promoted as columns, so no need to store them
+        # The profile_id, profiler_id and replay_id are promoted as columns, so no need to store them
         # again in the context array
         profile_ctx = sanitized_context.get("profile", {})
         profile_ctx.pop("profile_id", None)
