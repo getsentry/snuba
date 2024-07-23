@@ -36,7 +36,7 @@ typing-extensions==4.8.0
 urllib3==1.26.12
 pyuwsgi==2.0.23
 Werkzeug==2.2.3
-PyYAML==6.0
+PyYAML==6.0.1
 sqlparse==0.4.2
 google-api-python-client==2.88.0
 sentry-usage-accountant==0.0.10
