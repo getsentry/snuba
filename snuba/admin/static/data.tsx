@@ -13,6 +13,7 @@ import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
+import DeleteTool from "SnubaAdmin/delete_tool";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -81,6 +82,11 @@ const NAV_ITEMS = [
     id: "production-queries",
     display: "🔦 Production Queries",
     component: ProductionQueries,
+  },
+  {
+    id: "delete-tool",
+    display: "🗑️ Delete Tool",
+    component: DeleteTool,
   },
 ];
 

@@ -100,6 +100,7 @@ interface Client {
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
+  runLightweightDelete: () => Promise<string>
 }
 
 function Client() {
