@@ -18,6 +18,7 @@ def test_get_dataset() -> None:
     for ds_name in [
         "discover",
         "events",
+        "events_analytics_platform",
         "groupassignee",
         "groupedmessage",
         "metrics",

@@ -15,4 +15,10 @@ expression: diff
             property: "organization_id",
         },
     },
+    Change {
+        path: "",
+        change: RequiredAdd {
+            property: "start_timestamp_precise",
+        },
+    },
 ]
