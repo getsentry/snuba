@@ -25,7 +25,15 @@ import sentry_sdk
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from flask import Flask, Request, Response, redirect, render_template
+from flask import (
+    Flask,
+    Request,
+    Response,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+)
 from flask import request as http_request
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
@@ -49,7 +57,6 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.state import get_config
 from snuba.state.rate_limit import RateLimitExceeded, RateLimitParameters, rate_limit
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -66,7 +73,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import delete_query
+from snuba.web.delete_query import delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -302,26 +309,36 @@ def storage_delete(
     if http_request.method == "DELETE":
 
         check_shutdown({"storage": storage.get_storage_key()})
-
-        if get_config("storage_deletes_enabled", 0):
-            raise Exception("Deletes not enabled")
-
         body = parse_request_body(http_request)
-        delete_settings = storage.get_deletion_settings()
-
-        if not delete_settings.is_enabled:
-            raise Exception(
-                f"Deletes not enabled for {storage.get_storage_key().value}"
+        try:
+            """
+            conditions is a key value mapping
+            of storage-column-name to a list of values
+            ex:
+            {
+                "id": [1, 2, 3]
+                "status": ["failed"]
+            }
+            which represents
+            WHERE id in (1,2,3) AND status='failed'
+            """
+            conditions = body["conditions"]
+        except Exception:
+            return make_response(
+                jsonify(
+                    {
+                        "error": "required input 'conditions' not present in body of request"
+                    }
+                ),
+                400,
             )
 
-        payload: MutableMapping[str, Any] = {}
         try:
-            for table in delete_settings.tables:
-                result = delete_query(storage, table, body)
-                payload[table] = {**result}
+            payload = delete_from_storage(storage, conditions)
         except Exception as error:
             # TODO: better error handling
             logger.warning("Failed query", exc_info=error)
+            return make_response(jsonify({"error": error}), 500)
 
         return Response(
             dump_payload(payload), 200, {"Content-Type": "application/json"}

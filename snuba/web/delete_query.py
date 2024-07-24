@@ -14,11 +14,12 @@ from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.reader import Result
+from snuba.state import get_config
 
 
-def construct_condition(body: Dict[str, Any]) -> Expression:
+def construct_condition(columns: Dict[str, Any]) -> Expression:
     and_conditions = []
-    for col, values in body["columns"].items():
+    for col, values in columns.items():
         if len(values) == 1:
             exp = equals(column(col), literal(values[0]))
         else:
@@ -74,8 +75,25 @@ def _enforce_max_rows(delete_query: Query) -> None:
         )
 
 
-def delete_query(
-    storage: WritableTableStorage, table: str, body: Dict[str, Any]
+def delete_from_storage(
+    storage: WritableTableStorage, conditions: Dict[str, Any]
+) -> dict[str, Any]:
+    if get_config("storage_deletes_enabled", 0):
+        raise Exception("Deletes not enabled")
+
+    delete_settings = storage.get_deletion_settings()
+    if not delete_settings.is_enabled:
+        raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
+
+    payload: dict[str, Any] = {}
+    for table in delete_settings.tables:
+        result = delete_from_table(storage, table, conditions)
+        payload[table] = {**result}
+    return payload
+
+
+def delete_from_table(
+    storage: WritableTableStorage, table: str, conditions: Dict[str, Any]
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
@@ -87,7 +105,7 @@ def delete_query(
             # TODO: add allocation policies
             allocation_policies=[],
         ),
-        condition=construct_condition(body),
+        condition=construct_condition(conditions),
         on_cluster=on_cluster,
         is_delete=True,
     )
