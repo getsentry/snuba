@@ -1,13 +1,18 @@
+import typing
 from typing import Any, Dict
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query import SelectedExpression
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
-from snuba.query.expressions import Expression
+from snuba.query.exceptions import TooManyDeleteRowsException
+from snuba.query.expressions import Expression, FunctionCall
 from snuba.reader import Result
 
 
@@ -27,6 +32,48 @@ def construct_condition(body: Dict[str, Any]) -> Expression:
     return combine_and_conditions(and_conditions)
 
 
+def _get_rows_to_delete(
+    storage_key: StorageKey, select_query_to_count_rows: Query
+) -> int:
+    formatted_select_query_to_count_rows = format_query(select_query_to_count_rows)
+    select_query_results = (
+        get_storage(storage_key)
+        .get_cluster()
+        .get_reader()
+        .execute(formatted_select_query_to_count_rows)
+    )
+    return typing.cast(int, select_query_results["data"][0]["count"])
+
+
+def _enforce_max_rows(delete_query: Query) -> None:
+    """
+    The cost of a lightweight delete operation depends on the number of matching rows in the WHERE clause and the current number of data parts.
+    This operation will be most efficient when matching a small number of rows, **and on wide parts** (where the `_row_exists` column is stored
+    in its own file)
+
+    Because of the above, we want to limit the number of rows one deletes at a time. The `MaxRowsEnforcer` will query clickhouse to see how many
+      rows we plan on deleting and if it crosses the `max_rows_to_delete` set for that storage we will reject the query.
+    """
+    select_query_to_count_rows = Query(
+        selected_columns=[
+            SelectedExpression("count", FunctionCall("count", "count", ())),
+        ],
+        from_clause=delete_query.get_from_clause(),
+        condition=delete_query.get_condition(),
+    )
+    storage_key = delete_query.get_from_clause().storage_key
+    rows_to_delete = _get_rows_to_delete(
+        storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
+    )
+    max_rows_allowed = (
+        get_storage(storage_key).get_deletion_settings().max_rows_to_delete
+    )
+    if rows_to_delete > max_rows_allowed:
+        raise TooManyDeleteRowsException(
+            f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
+        )
+
+
 def delete_query(
     storage: WritableTableStorage, table: str, body: Dict[str, Any]
 ) -> Result:
@@ -44,6 +91,8 @@ def delete_query(
         on_cluster=on_cluster,
         is_delete=True,
     )
+    _enforce_max_rows(query)
+
     formatted_query = format_query(query)
     # TODO error handling and the lot
     return storage.get_cluster().get_deleter().execute(formatted_query)
