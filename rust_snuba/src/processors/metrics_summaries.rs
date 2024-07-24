@@ -65,7 +65,6 @@ pub fn process_message(
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FromMetricsSummariesMessage<'a> {
-    #[serde(default)]
     count: u64,
     duration_ms: u32,
     end_timestamp: f64,
@@ -159,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn test_summary_with_only_min() {
+    fn test_summary_with_only_count() {
         let summary = br#"{
           "duration_ms": 1000,
           "end_timestamp": 1691105878.72,
@@ -173,8 +172,6 @@ mod tests {
           "span_id": "deadbeefdeadbeef",
           "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
           "count": 1,
-          "min": 1.0,
-          "max": null,
           "tags": {
             "category": "error",
             "environment": "unknown",
