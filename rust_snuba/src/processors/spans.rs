@@ -50,7 +50,7 @@ pub(crate) struct FromSpanMessage {
     pub(crate) sentry_tags: Option<BTreeMap<String, String>>,
     pub(crate) span_id: String,
     #[serde(alias = "start_timestamp_micro")]
-    pub(crate) start_timestamp_precise: Option<f64>,
+    pub(crate) start_timestamp_precise: f64,
     pub(crate) start_timestamp_ms: u64,
     pub(crate) tags: Option<BTreeMap<String, String>>,
     pub(crate) trace_id: Uuid,
@@ -178,8 +178,7 @@ impl TryFrom<FromSpanMessage> for Span {
             span_status: status as u8,
             start_ms: (from.start_timestamp_ms % 1000) as u16,
             start_timestamp: from.start_timestamp_ms / 1000,
-            start_timestamp_precise: (from.start_timestamp_precise.unwrap_or_default() * 1e6)
-                as u64,
+            start_timestamp_precise: (from.start_timestamp_precise * 1e6) as u64,
             status: status as u32,
             tag_keys,
             tag_values,

@@ -67,9 +67,17 @@ struct EAPSpan {
 }
 });
 
-fn half_md5(input: &[u8]) -> u64 {
-    let full_hash = md5::compute(input).0;
-    u64::from_be_bytes(full_hash[0..8].try_into().unwrap())
+fn fnv_1a(input: &[u8]) -> u32 {
+    const FNV_1A_PRIME: u32 = 16777619;
+    const FNV_1A_OFFSET_BASIS: u32 = 2166136261;
+
+    let mut res = FNV_1A_OFFSET_BASIS;
+    for byt in input {
+        res ^= *byt as u32;
+        res = res.wrapping_mul(FNV_1A_PRIME);
+    }
+
+    res
 }
 
 impl From<FromSpanMessage> for EAPSpan {
@@ -93,8 +101,8 @@ impl From<FromSpanMessage> for EAPSpan {
             segment_name: sentry_tags.get("transaction").cloned().unwrap_or_default(),
             is_segment: from.is_segment,
             _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
-            start_timestamp: from.start_timestamp_ms,
-            end_timestamp: from.start_timestamp_ms + from.duration_ms as u64,
+            start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
+            end_timestamp: (from.end_timestamp_precise * 1e6) as u64,
             duration_ms: from.duration_ms,
             exclusive_time_ms: from.exclusive_time_ms,
             retention_days: from.retention_days,
@@ -117,7 +125,7 @@ impl From<FromSpanMessage> for EAPSpan {
             });
 
             sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
-                attr_str_buckets[(half_md5(k.as_bytes()) as usize) % attr_str_buckets.len()]
+                attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
                     .insert(k.clone(), v.clone());
             });
         }
@@ -132,7 +140,7 @@ impl From<FromSpanMessage> for EAPSpan {
                 });
 
             measurements.iter().for_each(|(k, v)| {
-                attr_num_buckets[(half_md5(k.as_bytes()) as usize) % attr_num_buckets.len()]
+                attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
                     .insert(k.clone(), v.value);
             });
         }
@@ -214,7 +222,7 @@ mod tests {
     #[test]
     fn test_half_md5() {
         //select halfMD5('test') == 688887797400064883
-        assert_eq!(half_md5("test".as_bytes()), 688887797400064883)
+        assert_eq!(fnv_1a("test".as_bytes()), 2949673445)
     }
 
     #[test]

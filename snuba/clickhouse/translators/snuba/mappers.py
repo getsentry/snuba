@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
@@ -225,6 +225,60 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
             )
         else:
             return None
+
+
+@dataclass(frozen=True)
+class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
+    """
+    Basic implementation of a tag mapper that transforms a subscriptable
+    into a Clickhouse array access.
+    """
+
+    from_column_table: Optional[str]
+    from_column_name: str
+    to_col_table: Optional[str]
+    to_col_name: str
+    to_num_cols: int
+
+    @staticmethod
+    def fnv_1a(b: bytes):
+        # TODO: test that fnv_1a("test") == 2949673445
+        fnv_1a_32_prime = 16777619
+        fnv_1a_32_offset_basis = 2166136261
+
+        res = fnv_1a_32_offset_basis
+        for byt in b:
+            res = res ^ byt
+            res = (res * fnv_1a_32_prime) & 0xFFFFFFFF  # force 32 bit
+        return res
+
+    def attempt_map(
+        self,
+        expression: SubscriptableReference,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[SubscriptableReference]:
+        if (
+            expression.column.table_name != self.from_column_table
+            or expression.column.column_name != self.from_column_name
+        ):
+            return None
+        key = expression.key.accept(children_translator)
+        if not isinstance(key, LiteralExpr):
+            return None
+        if not isinstance(key.value, str):
+            return None
+
+        bucket_idx = self.fnv_1a(key.value.encode("utf-8")) % self.to_num_cols
+        return SubscriptableReference(
+            column=ColumnExpr(
+                None,
+                table_name=self.to_col_table,
+                column_name=f"{self.to_col_name}_{bucket_idx}",
+            ),
+            key=key,
+            alias=expression.alias,
+            emit_as_subscript=True,
+        )
 
 
 @dataclass(frozen=True)

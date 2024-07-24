@@ -6,56 +6,54 @@ expression: snapshot_payload
 [
   {
     "_sort_timestamp": 1715868485,
-    "attr_num_12": {
+    "attr_num_117": {
       "http.response_content_length": 100.0
     },
-    "attr_str_112": {
-      "system": "python"
-    },
-    "attr_str_121": {
-      "http.method": "GET"
-    },
-    "attr_str_134": {
-      "status": "ok"
-    },
-    "attr_str_151": {
-      "tag3": "True"
-    },
-    "attr_str_157": {
-      "action": "GET"
-    },
-    "attr_str_166": {
-      "domain": "targetdomain.tld:targetport"
-    },
-    "attr_str_167": {
-      "tag2": "123"
-    },
-    "attr_str_173": {
-      "status_code": "200"
-    },
-    "attr_str_32": {
-      "module": "http"
-    },
-    "attr_str_40": {
-      "op": "http.client"
-    },
-    "attr_str_51": {
-      "tag1": "value1"
-    },
-    "attr_str_60": {
-      "transaction": "/organizations/:orgId/issues/"
-    },
-    "attr_str_80": {
-      "group": "deadbeefdeadbeef"
-    },
-    "attr_str_83": {
-      "transaction.method": "GET"
-    },
-    "attr_str_98": {
+    "attr_str_0": {
+      "tag3": "True",
       "transaction.op": "navigation"
     },
+    "attr_str_100": {
+      "group": "deadbeefdeadbeef"
+    },
+    "attr_str_124": {
+      "http.method": "GET"
+    },
+    "attr_str_164": {
+      "system": "python"
+    },
+    "attr_str_167": {
+      "action": "GET"
+    },
+    "attr_str_185": {
+      "domain": "targetdomain.tld:targetport"
+    },
+    "attr_str_19": {
+      "tag2": "123"
+    },
+    "attr_str_22": {
+      "transaction.method": "GET"
+    },
+    "attr_str_26": {
+      "op": "http.client"
+    },
+    "attr_str_3": {
+      "transaction": "/organizations/:orgId/issues/"
+    },
+    "attr_str_38": {
+      "tag1": "value1"
+    },
+    "attr_str_69": {
+      "status_code": "200"
+    },
+    "attr_str_79": {
+      "status": "ok"
+    },
+    "attr_str_85": {
+      "module": "http"
+    },
     "duration_ms": 1000,
-    "end_timestamp": 1715868486371,
+    "end_timestamp": 1715868486370551,
     "exclusive_time_ms": 1000.0,
     "is_segment": false,
     "name": "",
@@ -70,7 +68,7 @@ expression: snapshot_payload
     "service": "1",
     "sign": 1,
     "span_id": 16045690984833335023,
-    "start_timestamp": 1715868485371,
+    "start_timestamp": 1715868485370551,
     "trace_id": "deadbeef-dead-beef-dead-beefdeadbeef"
   }
 ]
