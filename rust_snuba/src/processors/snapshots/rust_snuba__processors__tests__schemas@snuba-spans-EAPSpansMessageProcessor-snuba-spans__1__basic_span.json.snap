@@ -5,7 +5,6 @@ expression: snapshot_payload
 ---
 [
   {
-    "_sort_timestamp": 1715868485,
     "attr_num_117": {
       "http.response_content_length": 100.0
     },

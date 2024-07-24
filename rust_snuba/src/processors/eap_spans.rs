@@ -42,7 +42,6 @@ struct EAPSpan {
     segment_id: u64,      //aka transaction ID
     segment_name: String, //aka transaction name
     is_segment: bool,     //aka "is transaction"
-    _sort_timestamp: u32,
     start_timestamp: u64,
     end_timestamp: u64,
     duration_ms: u32,
@@ -60,9 +59,6 @@ struct EAPSpan {
 
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     attr_num_~N: HashMap<String, f64>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attr_bool_~N: HashMap<String, bool>,
     )*
 }
 });
@@ -100,7 +96,6 @@ impl From<FromSpanMessage> for EAPSpan {
                 .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
             segment_name: sentry_tags.get("transaction").cloned().unwrap_or_default(),
             is_segment: from.is_segment,
-            _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
             start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
             end_timestamp: (from.end_timestamp_precise * 1e6) as u64,
             duration_ms: from.duration_ms,
