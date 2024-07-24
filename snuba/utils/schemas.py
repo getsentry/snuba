@@ -385,38 +385,6 @@ class Array(ColumnType[TModifiers]):
         return Array(inner_type=self.inner_type.get_raw())
 
 
-class Map(ColumnType[TModifiers]):
-    def __init__(
-        self,
-        key: ColumnType[TModifiers],
-        value: ColumnType[TModifiers],
-        modifiers: Optional[TModifiers] = None,
-    ) -> None:
-        super().__init__(modifiers)
-        self.key = key
-        self.value = value
-
-    def _repr_content(self) -> str:
-        return repr(self.key) + ", " + repr(self.value)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.key == cast(Map[TModifiers], other).key
-            and self.value == cast(Map[TModifiers], other).value
-            and self.get_modifiers() == cast(Map[TModifiers], other).get_modifiers()
-        )
-
-    def _for_schema_impl(self) -> str:
-        return f"Map({self.key.for_schema()}, {self.value.for_schema()})"
-
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Map[TModifiers]:
-        return Map(key=self.key, value=self.value, modifiers=modifiers)
-
-    def get_raw(self) -> Map[TModifiers]:
-        return Map(key=self.key.get_raw(), value=self.value.get_raw())
-
-
 class Nested(ColumnType[TModifiers]):
     def __init__(
         self,
@@ -498,10 +466,6 @@ class String(ColumnType[TModifiers]):
     pass
 
 
-class Bool(ColumnType[TModifiers]):
-    pass
-
-
 class UUID(ColumnType[TModifiers]):
     pass
 
@@ -564,32 +528,6 @@ class UInt(ColumnType[TModifiers]):
 
     def get_raw(self) -> UInt[TModifiers]:
         return UInt(self.size)
-
-
-class Int(ColumnType[TModifiers]):
-    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
-        super().__init__(modifiers)
-        assert size in (8, 16, 32, 64)
-        self.size = size
-
-    def _repr_content(self) -> str:
-        return str(self.size)
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.__class__ == other.__class__
-            and self.get_modifiers() == cast(Int[TModifiers], other).get_modifiers()
-            and self.size == cast(Int[TModifiers], other).size
-        )
-
-    def _for_schema_impl(self) -> str:
-        return "Int{}".format(self.size)
-
-    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Int[TModifiers]:
-        return Int(size=self.size, modifiers=modifiers)
-
-    def get_raw(self) -> Int[TModifiers]:
-        return Int(self.size)
 
 
 class Float(ColumnType[TModifiers]):
