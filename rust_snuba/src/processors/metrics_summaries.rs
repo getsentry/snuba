@@ -174,6 +174,7 @@ mod tests {
           "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
           "count": 1,
           "min": 1.0,
+          "max": null,
           "tags": {
             "category": "error",
             "environment": "unknown",
