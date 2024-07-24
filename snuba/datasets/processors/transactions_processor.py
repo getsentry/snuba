@@ -421,6 +421,8 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         transaction_ctx.pop("trace_id", None)
         transaction_ctx.pop("span_id", None)
 
+        # Only top level scalar values within a context are written to the table. `data` is
+        # always a dict, so pop it from the context and move some values into the top level.
         transaction_data = transaction_ctx.pop("data", {})
         if "thread.id" in transaction_data:
             # The thread.id can be either a str/int. Make sure to always convert to a str.
