@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
