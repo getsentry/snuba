@@ -63,6 +63,7 @@ def test_all_names() -> None:
     assert set(get_enabled_dataset_names()) == {
         "discover",
         "events",
+        "events_analytics_platform",
         "groupassignee",
         "groupedmessage",
         "metrics",
