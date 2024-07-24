@@ -92,7 +92,7 @@ def scope_conditions(
 
 def rollup_expressions(
     mql_context: MQLContext, table_name: str | None = None
-) -> tuple[Expression, bool, OrderBy | None, SelectedExpression]:
+) -> tuple[Expression, bool, OrderBy | None, SelectedExpression | None]:
     """
     This function returns four values based on the rollup field in the MQL context:
     - granularity_condition: an expression that filters the granularity column based on the granularity in the MQL context
@@ -114,6 +114,12 @@ def rollup_expressions(
         Literal(None, rollup.granularity),
     )
 
+    # Validate totals/interval
+    if rollup.interval is None and rollup.with_totals in (None, "False"):
+        raise ParsingException(
+            "either interval or with_totals must be specified in rollup"
+        )
+
     # Validate totals/orderby
     if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
         raise ParsingException("with_totals must be a string, either 'True' or 'False'")
@@ -130,27 +136,27 @@ def rollup_expressions(
         )
 
     with_totals = rollup.with_totals == "True"
+    selected_time = None
     orderby = None
-
-    prefix = "" if not table_name else f"{table_name}."
-    time_expression = FunctionCall(
-        f"{prefix}time",
-        "toStartOfInterval",
-        parameters=(
-            Column(None, table_name, "timestamp"),
-            FunctionCall(
-                None,
-                "toIntervalSecond",
-                (Literal(None, rollup.interval),),
-            ),
-            Literal(None, "Universal"),
-        ),
-    )
-    selected_time = SelectedExpression("time", time_expression)
 
     if rollup.interval:
         # If an interval is specified, then we need to group the time by that interval,
         # return the time in the select, and order the results by that time.
+        prefix = "" if not table_name else f"{table_name}."
+        time_expression = FunctionCall(
+            f"{prefix}time",
+            "toStartOfInterval",
+            parameters=(
+                Column(None, table_name, "timestamp"),
+                FunctionCall(
+                    None,
+                    "toIntervalSecond",
+                    (Literal(None, rollup.interval),),
+                ),
+                Literal(None, "Universal"),
+            ),
+        )
+        selected_time = SelectedExpression("time", time_expression)
         orderby = OrderBy(OrderByDirection.ASC, time_expression)
     elif rollup.orderby is not None:
         direction = (
