@@ -1046,3 +1046,26 @@ def get_allowed_projects() -> Response:
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
     return make_response(jsonify(settings.ADMIN_REGIONS), 200)
+
+
+@application.route(
+    "/delete",
+    methods=["DELETE"],
+)
+@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
+def delete() -> Response:
+    body = request.get_json()
+    try:
+        storage = body["storage"]
+        conditions = body["conditions"]
+    except Exception:
+        return make_response(
+            jsonify(
+                {
+                    "error",
+                    "all required inputs ('storage', 'conditions') were not present in the request body",
+                }
+            ),
+            400,
+        )
+    return make_response(200)
