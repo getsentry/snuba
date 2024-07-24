@@ -1304,22 +1304,20 @@ def populate_query_from_mql_context(
         query.set_totals(with_totals)
         if orderby:
             query.set_ast_orderby([orderby])
-        query.set_ast_selected_columns(
-            list(query.get_selected_columns()) + [selected_time]
-        )
 
-        groupby = query.get_groupby()
-        if groupby:
-            query.set_ast_groupby(list(groupby) + [selected_time.expression])
-        else:
-            query.set_ast_groupby([selected_time.expression])
+        if selected_time:
+            query.set_ast_selected_columns(
+                list(query.get_selected_columns()) + [selected_time]
+            )
+            groupby = query.get_groupby()
+            if groupby:
+                query.set_ast_groupby(list(groupby) + [selected_time.expression])
+            else:
+                query.set_ast_groupby([selected_time.expression])
 
     if isinstance(query, CompositeQuery):
-        # If the query is grouping by time, that needs to be added to the JoinClause keys to
-        # ensure we correctly join the subqueries. The column names will be the same for all the
-        # subqueries, so we just need to map all the table aliases.
 
-        def add_join_keys(join_clause: JoinClause[Any]) -> str:
+        def add_time_join_keys(join_clause: JoinClause[Any]) -> str:
             match (join_clause.left_node, join_clause.right_node):
                 case (
                     IndividualNode(alias=left),
@@ -1340,7 +1338,7 @@ def populate_query_from_mql_context(
                     JoinClause() as inner_join_clause,
                     IndividualNode(alias=right),
                 ):
-                    left_alias = add_join_keys(inner_join_clause)
+                    left_alias = add_time_join_keys(inner_join_clause)
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
@@ -1354,7 +1352,44 @@ def populate_query_from_mql_context(
                     )
                     return right
 
-        add_join_keys(join_clause)
+        def convert_to_cross_join(join_clause: JoinClause[Any]) -> JoinClause[Any]:
+            match (join_clause.left_node, join_clause.right_node):
+                case (
+                    IndividualNode(),
+                    IndividualNode(),
+                ):
+                    join_clause = replace(join_clause, join_type=JoinType.CROSS)
+                case (
+                    JoinClause() as inner_join_clause,
+                    IndividualNode(),
+                ):
+                    new_inner_join_clause = add_time_join_keys(inner_join_clause)
+                    join_clause = replace(join_clause, left_node=new_inner_join_clause)
+            return join_clause
+
+        # Check if groupby is empty or has a one-sided groupby on the formula
+        number_of_joins = len(alias_node_map.keys())
+        number_of_groupbys = len(query.get_groupby())
+
+        no_groupby_or_one_sided_groupby = False
+        if number_of_groupbys == 0:
+            no_groupby_or_one_sided_groupby = True
+        elif number_of_groupbys % number_of_joins != 0:
+            no_groupby_or_one_sided_groupby = True
+
+        if selected_time:
+            # If the query is grouping by time, that needs to be added to the JoinClause keys to
+            # ensure we correctly join the subqueries. The column names will be the same for all the
+            # subqueries, so we just need to map all the table aliases.
+            add_time_join_keys(join_clause)
+        elif query.has_totals() and no_groupby_or_one_sided_groupby:
+            # If formula query has no interval and no group by or a onesided groupby, but has totals, we need to convert
+            # join type to a CROSS join. This is because without a group by, each sub-query will return
+            # a single row with single value column. In order to combine the results in the outer query,
+            # we need to perform a cross join on each of these single values since there are no conditions
+            # to join by.
+            join_clause = convert_to_cross_join(join_clause)
+            query.set_from_clause(join_clause)
 
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)

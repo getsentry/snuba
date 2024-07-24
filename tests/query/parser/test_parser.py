@@ -18,7 +18,7 @@ from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import NestedColumn, and_cond, column, in_cond, literal
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.mql.parser_supported_join import parse_mql_query_new
 from snuba.query.snql.parser import parse_snql_query
@@ -31,20 +31,6 @@ from_distributions = QueryEntity(
 )
 
 
-def time_expression(to_interval_seconds: int | None = 60) -> FunctionCall:
-    return FunctionCall(
-        "_snuba_time",
-        "toStartOfInterval",
-        (
-            Column("_snuba_timestamp", None, "timestamp"),
-            FunctionCall(
-                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
-            ),
-            Literal(None, "Universal"),
-        ),
-    )
-
-
 def test_mql() -> None:
     mql = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}'
     context = {
@@ -54,7 +40,7 @@ def test_mql() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],
@@ -82,12 +68,8 @@ def test_mql() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -148,6 +130,7 @@ def test_mql() -> None:
                 ),
             ),
         ],
+        totals=True,
         limit=1000,
     )
     actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
@@ -164,7 +147,7 @@ def test_mql_wildcards() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],
@@ -192,12 +175,8 @@ def test_mql_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -257,6 +236,7 @@ def test_mql_wildcards() -> None:
             ),
         ],
         limit=1000,
+        totals=True,
     )
     actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
@@ -272,7 +252,7 @@ def test_mql_negated_wildcards() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],
@@ -300,12 +280,8 @@ def test_mql_negated_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -365,6 +341,7 @@ def test_mql_negated_wildcards() -> None:
             ),
         ],
         limit=1000,
+        totals=True,
     )
     actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
@@ -500,7 +477,7 @@ def test_recursion_error() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],

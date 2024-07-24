@@ -20,7 +20,12 @@ from snuba.clickhouse.query import Query
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinType,
+    JoinVisitor,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Expression, ExpressionVisitor
@@ -271,6 +276,14 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
     def visit_join_clause(self, node: JoinClause[Table]) -> FormattedNode:
         join_type = f"{node.join_type.value} " if node.join_type else ""
         modifier = f"{node.join_modifier.value} " if node.join_modifier else ""
+        if node.join_type == JoinType.CROSS:
+            return SequenceNode(
+                [
+                    node.left_node.accept(self),
+                    StringNode(f"{modifier}{join_type}JOIN"),
+                    node.right_node.accept(self),
+                ]
+            )
         return SequenceNode(
             [
                 node.left_node.accept(self),
