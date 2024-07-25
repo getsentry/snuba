@@ -15,7 +15,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.state import set_config
-from snuba.web.delete_query import _enforce_max_rows, construct_condition
+from snuba.web.delete_query import _construct_condition, _enforce_max_rows
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events
@@ -45,7 +45,7 @@ class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
             "debug": True,
             "tenant_ids": {"referrer": "test", "organization_id": 1},
         }
-        condition = construct_condition(body)
+        condition = _construct_condition(body)
         self.query = Query(
             from_clause=from_clause,
             condition=condition,
