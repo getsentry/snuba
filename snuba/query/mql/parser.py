@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.nodes import Node, NodeVisitor
+from snuba_sdk import BooleanCondition, Condition
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
@@ -63,7 +64,6 @@ from snuba.query.mql.context_population import (
     start_end_time_condition,
 )
 from snuba.query.mql.mql_context import MQLContext
-from snuba.query.mql.parser import FilterFactorValue
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
@@ -1562,3 +1562,9 @@ class PostProcessAndValidateMQLQuery(
             _post_process(query, VALIDATORS)
 
         return query
+
+
+@dataclass
+class FilterFactorValue(object):
+    value: str | Sequence[str] | Condition | BooleanCondition
+    contains_wildcard: bool
