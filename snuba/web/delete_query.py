@@ -4,6 +4,7 @@ from typing import Any, Dict
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
+from snuba.datasets.deletion_settings import DeletionQuerySettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -114,6 +115,12 @@ def _delete_from_table(
         is_delete=True,
     )
     _enforce_max_rows(query)
+
+    deletion_processors = storage.get_deletion_processors()
+    for deletion_procesor in deletion_processors:
+        deletion_procesor.process_query(
+            query, DeletionQuerySettings(storage.get_deletion_settings())
+        )
 
     formatted_query = format_query(query)
     # TODO error handling and the lot
