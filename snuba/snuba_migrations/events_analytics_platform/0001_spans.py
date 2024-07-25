@@ -6,7 +6,6 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
 from snuba.utils.schemas import (
     UUID,
-    Bool,
     Column,
     DateTime,
     DateTime64,
@@ -31,7 +30,7 @@ columns: List[Column[Modifiers]] = [
     Column("parent_span_id", UInt(64, Modifiers(codecs=["ZSTD(1)"]))),
     Column("segment_id", UInt(64, Modifiers(codecs=["ZSTD(1)"]))),
     Column("segment_name", String(Modifiers(codecs=["ZSTD(1)"]))),
-    Column("is_segment", Bool()),
+    Column("is_segment", UInt(8, Modifiers(codecs=["T64", "ZSTD(1)"]))),
     Column("_sort_timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
     Column(
         "start_timestamp",
@@ -74,15 +73,6 @@ columns.extend(
         for i in range(num_attr_buckets)
     ]
 )
-columns.extend(
-    [
-        Column(
-            f"attr_bool_{i}",
-            Map(String(), Bool(), modifiers=Modifiers(codecs=["ZSTD(1)"])),
-        )
-        for i in range(num_attr_buckets)
-    ]
-)
 
 indices: Sequence[AddIndicesData] = (
     [
@@ -115,15 +105,6 @@ indices: Sequence[AddIndicesData] = (
         AddIndicesData(
             name=f"bf_attr_num_{i}",
             expression=f"mapKeys(attr_num_{i})",
-            type="bloom_filter",
-            granularity=1,
-        )
-        for i in range(num_attr_buckets)
-    ]
-    + [
-        AddIndicesData(
-            name=f"bf_attr_bool_{i}",
-            expression=f"mapKeys(attr_bool_{i})",
             type="bloom_filter",
             granularity=1,
         )

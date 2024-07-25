@@ -498,10 +498,6 @@ class String(ColumnType[TModifiers]):
     pass
 
 
-class Bool(ColumnType[TModifiers]):
-    pass
-
-
 class UUID(ColumnType[TModifiers]):
     pass
 
