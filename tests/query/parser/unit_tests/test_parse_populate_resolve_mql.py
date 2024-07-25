@@ -97,7 +97,7 @@ join_clause_with_groupby = JoinClause(
 
 
 def time_expression(
-    table_alias: str | None = None, to_interval_seconds: int | None = 60
+    table_alias: str | None = None, to_interval_seconds: int = 60
 ) -> FunctionCall:
     alias_prefix = f"{table_alias}." if table_alias else ""
     return FunctionCall(
@@ -1638,9 +1638,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1668,7 +1668,7 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "time",
-                    time_expression(None, None),
+                    time_expression(None),
                 ),
             ],
             array_join=None,
@@ -1705,9 +1705,9 @@ test_cases = [
                     ),
                 ),
             ),
-            groupby=[time_expression(None, None)],
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1723,9 +1723,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1750,7 +1750,7 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "time",
-                    time_expression(None, None),
+                    time_expression(None),
                 ),
             ],
             array_join=None,
@@ -1781,9 +1781,9 @@ test_cases = [
                 ),
                 f.equals(column("metric_id", None), literal(123456)),
             ),
-            groupby=[time_expression(None, None)],
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1800,8 +1800,8 @@ test_cases = [
                 "end": "2021-01-05T04:15:00",
                 "rollup": {
                     "orderby": None,
-                    "granularity": 3600,
-                    "interval": None,
+                    "granularity": 60,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1840,7 +1840,7 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "time",
-                    time_expression(None, None),
+                    time_expression(None),
                 ),
             ],
             array_join=None,
@@ -1866,7 +1866,7 @@ test_cases = [
                                 ),
                             ),
                         ),
-                        f.equals(column("granularity", None), literal(3600)),
+                        f.equals(column("granularity", None), literal(60)),
                     ),
                 ),
                 and_cond(
@@ -1882,10 +1882,10 @@ test_cases = [
             ),
             groupby=[
                 column("tags_raw[111111]", None, "transaction"),
-                time_expression(None, None),
+                time_expression(None),
             ],
             having=None,
-            order_by=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=100,
             offset=3,
@@ -2011,9 +2011,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -2042,7 +2042,7 @@ test_cases = [
                     "aggregate_value", f.sum(column("value"), alias="aggregate_value")
                 ),
                 SelectedExpression("release", column("tags[111]", None, "release")),
-                SelectedExpression("time", time_expression(None, None)),
+                SelectedExpression("time", time_expression(None)),
             ],
             array_join=None,
             condition=and_cond(
@@ -2078,9 +2078,9 @@ test_cases = [
                     ),
                 ),
             ),
-            groupby=[column("tags[111]", None, "release"), time_expression(None, None)],
+            groupby=[column("tags[111]", None, "release"), time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -2201,9 +2201,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -2234,7 +2234,7 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "time",
-                    time_expression(None, None),
+                    time_expression(None),
                 ),
             ],
             array_join=None,
@@ -2271,9 +2271,9 @@ test_cases = [
                     ),
                 ),
             ),
-            groupby=[time_expression(None, None)],
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -2291,7 +2291,7 @@ test_cases = [
                 "rollup": {
                     "orderby": None,
                     "granularity": 3600,
-                    "interval": None,
+                    "interval": 3600,
                     "with_totals": None,
                 },
                 "scope": {
@@ -2328,7 +2328,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                SelectedExpression("time", time_expression(None, None)),
+                SelectedExpression("time", time_expression(None, 3600)),
             ],
             array_join=None,
             condition=and_cond(
@@ -2358,9 +2358,9 @@ test_cases = [
                 ),
                 f.equals(column("metric_id", None), literal(567890)),
             ),
-            groupby=[time_expression(None, None)],
+            groupby=[time_expression(None, 3600)],
             having=None,
-            order_by=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None, 3600))],
             limitby=None,
             limit=100,
             offset=3,
@@ -2378,7 +2378,7 @@ test_cases = [
                 "rollup": {
                     "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {"org_ids": [1], "project_ids": [1], "use_case_id": "custom"},
@@ -2401,7 +2401,7 @@ test_cases = [
                 SelectedExpression(
                     "aggregate_value", f.avg(column("value"), alias="aggregate_value")
                 ),
-                SelectedExpression("time", time_expression(None, None)),
+                SelectedExpression("time", time_expression(None)),
             ],
             array_join=None,
             condition=and_cond(
@@ -2440,9 +2440,9 @@ test_cases = [
                     ),
                 ),
             ),
-            groupby=[time_expression(None, None)],
+            groupby=[time_expression(None)],
             having=None,
-            order_by=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -2535,26 +2535,9 @@ test_cases = [
                     f.equals(column("metric_id"), literal(9223372036854775909)),
                 ),
             ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=10000,
             offset=0,
