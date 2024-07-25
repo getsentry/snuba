@@ -326,9 +326,7 @@ def storage_delete(
         except Exception:
             return make_response(
                 jsonify(
-                    {
-                        "error": "required input 'conditions' not present in body of request"
-                    }
+                    {"error": "required input 'columns' not present in body of request"}
                 ),
                 400,
             )

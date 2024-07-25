@@ -17,20 +17,36 @@ from snuba.reader import Result
 from snuba.state import get_config
 
 
-def construct_condition(columns: Dict[str, Any]) -> Expression:
-    and_conditions = []
-    for col, values in columns.items():
-        if len(values) == 1:
-            exp = equals(column(col), literal(values[0]))
-        else:
-            literal_values = [literal(v) for v in values]
-            exp = in_cond(
-                column(col), literals_tuple(alias=None, literals=literal_values)
-            )
+def delete_from_storage(
+    storage: WritableTableStorage, columns: Dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Inputs:
+        storage - storage to delete from
+        columns - a mapping from column-name to a list of column values
+            that defines the delete conditions. ex:
+            {
+                "id": [1, 2, 3]
+                "status": ["failed"]
+            }
+            represents
+            DELETE FROM ... WHERE id in (1,2,3) AND status='failed'
 
-        and_conditions.append(exp)
+    Deletes all rows in the given storage, that satisfy the conditions
+    defined in 'columns' input.
+    """
+    if get_config("storage_deletes_enabled", 0):
+        raise Exception("Deletes not enabled")
 
-    return combine_and_conditions(and_conditions)
+    delete_settings = storage.get_deletion_settings()
+    if not delete_settings.is_enabled:
+        raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
+
+    payload: dict[str, Any] = {}
+    for table in delete_settings.tables:
+        result = _delete_from_table(storage, table, columns)
+        payload[table] = {**result}
+    return payload
 
 
 def _get_rows_to_delete(
@@ -75,24 +91,7 @@ def _enforce_max_rows(delete_query: Query) -> None:
         )
 
 
-def delete_from_storage(
-    storage: WritableTableStorage, conditions: Dict[str, Any]
-) -> dict[str, Any]:
-    if get_config("storage_deletes_enabled", 0):
-        raise Exception("Deletes not enabled")
-
-    delete_settings = storage.get_deletion_settings()
-    if not delete_settings.is_enabled:
-        raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
-
-    payload: dict[str, Any] = {}
-    for table in delete_settings.tables:
-        result = delete_from_table(storage, table, conditions)
-        payload[table] = {**result}
-    return payload
-
-
-def delete_from_table(
+def _delete_from_table(
     storage: WritableTableStorage, table: str, conditions: Dict[str, Any]
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
@@ -105,7 +104,7 @@ def delete_from_table(
             # TODO: add allocation policies
             allocation_policies=[],
         ),
-        condition=construct_condition(conditions),
+        condition=_construct_condition(conditions),
         on_cluster=on_cluster,
         is_delete=True,
     )
@@ -114,3 +113,19 @@ def delete_from_table(
     formatted_query = format_query(query)
     # TODO error handling and the lot
     return storage.get_cluster().get_deleter().execute(formatted_query)
+
+
+def _construct_condition(columns: Dict[str, Any]) -> Expression:
+    and_conditions = []
+    for col, values in columns.items():
+        if len(values) == 1:
+            exp = equals(column(col), literal(values[0]))
+        else:
+            literal_values = [literal(v) for v in values]
+            exp = in_cond(
+                column(col), literals_tuple(alias=None, literals=literal_values)
+            )
+
+        and_conditions.append(exp)
+
+    return combine_and_conditions(and_conditions)
