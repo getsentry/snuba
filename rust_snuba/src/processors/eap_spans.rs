@@ -87,7 +87,7 @@ impl From<FromSpanMessage> for EAPSpan {
             organization_id: from.organization_id,
             project_id: from.project_id,
             trace_id: from.trace_id,
-            service: format!("{:x}", from.project_id),
+            service: from.project_id.to_string(),
             span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
             parent_span_id: from
                 .parent_span_id
