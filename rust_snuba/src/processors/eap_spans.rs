@@ -217,8 +217,7 @@ mod tests {
     "#;
 
     #[test]
-    fn test_half_md5() {
-        //select halfMD5('test') == 688887797400064883
+    fn test_fnv_1a() {
         assert_eq!(fnv_1a("test".as_bytes()), 2949673445)
     }
 
