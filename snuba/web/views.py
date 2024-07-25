@@ -336,7 +336,6 @@ def storage_delete(
         try:
             payload = delete_from_storage(storage, columns)
         except Exception as error:
-            # TODO: better error handling
             logger.warning("Failed query", exc_info=error)
             return make_response(jsonify({"error": error}), 500)
 
