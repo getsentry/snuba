@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
     Enum,
     FixedString,
     Float,
+    Int,
     IPv4,
     IPv6,
     String,
@@ -33,6 +34,7 @@ grammar = Grammar(
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
     uint             = "UInt" uint_size
+    int              = "Int" uint_size
     uint_size        = "8" / "16" / "32" / "64"
     float            = "Float" float_size
     float_size       = "32" / "64"
@@ -94,6 +96,12 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         size = int(node.children[1].text)
         return UInt(size)
+
+    def visit_int(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        size = int(node.children[1].text)
+        return Int(size)
 
     def visit_float(
         self, node: Node, visited_children: Iterable[Any]
