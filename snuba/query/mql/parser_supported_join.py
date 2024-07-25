@@ -1363,8 +1363,12 @@ def populate_query_from_mql_context(
                     JoinClause() as inner_join_clause,
                     IndividualNode(),
                 ):
-                    new_inner_join_clause = add_time_join_keys(inner_join_clause)
-                    join_clause = replace(join_clause, left_node=new_inner_join_clause)
+                    new_inner_join_clause = convert_to_cross_join(inner_join_clause)
+                    join_clause = replace(
+                        join_clause,
+                        left_node=new_inner_join_clause,
+                        join_type=JoinType.CROSS,
+                    )
             return join_clause
 
         # Check if groupby is empty or has a one-sided groupby on the formula
