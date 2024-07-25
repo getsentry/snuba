@@ -423,8 +423,8 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
 
         # Only top level scalar values within a context are written to the table. `data` is
         # always a dict, so pop it from the context and move some values into the top level.
-        transaction_data = transaction_ctx.pop("data", {})
-        if "thread.id" in transaction_data:
+        transaction_data = transaction_ctx.pop("data", None) or {}
+        if isinstance(transaction_data, dict) and "thread.id" in transaction_data:
             # The thread.id can be either a str/int. Make sure to always convert to a str.
             transaction_ctx["thread_id"] = str(transaction_data["thread.id"])
 

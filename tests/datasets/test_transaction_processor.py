@@ -259,7 +259,6 @@ class TransactionEvent:
                 "trace.sampled",
                 "trace.op",
                 "trace.status",
-                "trace.thread_id",
                 "geo.country_code",
                 "geo.region",
                 "geo.city",
@@ -269,7 +268,6 @@ class TransactionEvent:
                 "True",
                 self.op,
                 self.status,
-                str(self.thread_id),
                 self.geo["country_code"],
                 self.geo["region"],
                 self.geo["city"],
@@ -300,6 +298,10 @@ class TransactionEvent:
         else:
             ret["ip_address_v6"] = self.ipv6
 
+        if self.thread_id is not None:
+            i = ret["contexts.key"].index("geo.country_code")
+            ret["contexts.key"].insert(i, "trace.thread_id")
+            ret["contexts.value"].insert(i, str(self.thread_id))
         if self.profile_id is not None:
             ret["profile_id"] = str(uuid.UUID(self.profile_id))
         if self.profiler_id is not None:
@@ -553,3 +555,22 @@ class TestTransactionsProcessor:
         assert TransactionsMessageProcessor().process_message(
             payload, meta
         ) == InsertBatch([result], ANY)
+
+    def test_trace_data_is_none(self) -> None:
+        """
+        If the trace data key is present but is None, we should handle it gracefully.
+        """
+        message = self.__get_transaction_event()
+        message.thread_id = None
+        payload = message.serialize()
+        # Force an invalid event
+        payload[2]["data"]["contexts"]["trace"]["data"] = None
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+
+        result = message.build_result(meta)
+
+        processor = TransactionsMessageProcessor()
+        assert processor.process_message(payload, meta) == InsertBatch([result], ANY)
