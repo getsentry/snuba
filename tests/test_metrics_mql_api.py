@@ -1494,6 +1494,76 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
+    def test_nested_formula_no_group_with_totals(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                function_name="multiply",
+                parameters=[
+                    Formula(
+                        function_name="plus",
+                        parameters=[
+                            Timeseries(
+                                metric=Metric(
+                                    mri=DISTRIBUTIONS_MRI,
+                                ),
+                                aggregate="sum",
+                            ),
+                            Formula(
+                                function_name="plus",
+                                parameters=[
+                                    Timeseries(
+                                        metric=Metric(
+                                            mri=DISTRIBUTIONS_MRI,
+                                        ),
+                                        aggregate="sum",
+                                    ),
+                                    Timeseries(
+                                        metric=Metric(
+                                            mri=DISTRIBUTIONS_MRI,
+                                        ),
+                                        aggregate="sum",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    100.0,
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(
+                interval=None, granularity=60, totals=True, orderby=Direction.DESC
+            ),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "platform": resolve_str("platform"),
+                "ios": resolve_str("ios"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        data = json.loads(response.data)
+        assert (
+            data["totals"]["aggregate_value"] > 180
+        )  # Should be more than the number of data points
+        assert response.status_code == 200
+
     def test_formula_filters_with_scalar(self) -> None:
         query = MetricsQuery(
             query=Formula(
