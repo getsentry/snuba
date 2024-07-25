@@ -1,3 +1,10 @@
+"""
+This module is the next iteration of the MQL parser (snuba/query/mql/parser.py) that supports JOIN queries.
+In order to enable iteration on the MQL parser without affecting the current flow of formula queries, this separate file was created.
+Eventually, when the MQL parser fully supports all JOINs and the metrics subquery generator is implemented,
+we can start to cut (gradually roll out) formula queries over to this parser.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -7,7 +14,6 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 import sentry_sdk
 from parsimonious.exceptions import IncompleteParseError
 from parsimonious.nodes import Node, NodeVisitor
-from snuba_sdk import BooleanCondition, Condition
 from snuba_sdk.metrics_visitors import AGGREGATE_ALIAS
 from snuba_sdk.mql.mql import MQL_GRAMMAR
 
@@ -57,6 +63,7 @@ from snuba.query.mql.context_population import (
     start_end_time_condition,
 )
 from snuba.query.mql.mql_context import MQLContext
+from snuba.query.mql.parser import FilterFactorValue
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.processors.logical.filter_in_select_optimizer import (
     FilterInSelectOptimizer,
@@ -253,7 +260,6 @@ class MQLVisitor(NodeVisitor):  # type: ignore
                     target.groupby = (
                         target.groupby + groupby if target.groupby else groupby
                     )
-
         return target
 
     def _filter(self, children: Sequence[Any], operator: str) -> FunctionCall:
@@ -1003,28 +1009,26 @@ def convert_formula_to_query(
     # Go through all the conditions, populate the conditions with the table alias, add them to the query conditions
     # also needs the metric ID conditions added
     def extract_filters(param: InitialParseResult | Any) -> list[FunctionCall]:
+        def wrap_condition_columns(fn_call: FunctionCall) -> FunctionCall:
+            wrapped_params: list[Expression] = []
+            for fn_param in fn_call.parameters:
+                if isinstance(fn_param, Column):
+                    wrapped_params.append(
+                        replace(fn_param, table_name=alias_wrap(param.table_alias))
+                    )
+                elif isinstance(fn_param, FunctionCall):
+                    wrapped_params.append(wrap_condition_columns(fn_param))
+                else:
+                    wrapped_params.append(fn_param)
+            return replace(fn_call, parameters=tuple(wrapped_params))
+
         if not isinstance(param, InitialParseResult):
             return []
         elif param.expression is not None:
             conditions = []
             for c in param.conditions or []:
                 assert isinstance(c, FunctionCall)
-                lhs = c.parameters[0]
-                if isinstance(lhs, Column):
-                    conditions.append(
-                        replace(
-                            c,
-                            parameters=tuple(
-                                [
-                                    replace(
-                                        lhs, table_name=alias_wrap(param.table_alias)
-                                    ),
-                                    *c.parameters[1:],
-                                ]
-                            ),
-                        )
-                    )
-
+                conditions.append(wrap_condition_columns(c))
             conditions.append(
                 binary_condition(
                     "equals",
@@ -1285,7 +1289,6 @@ def populate_query_from_mql_context(
             assert isinstance(data_source, QueryEntity)
             entity_data.append((data_source.key, alias))
 
-    selected_time_found = False
     for entity_key, table_alias in entity_data:
         time_condition = start_end_time_condition(mql_context, entity_key, table_alias)
         scope_condition = scope_conditions(mql_context, table_alias)
@@ -1303,23 +1306,18 @@ def populate_query_from_mql_context(
             query.set_ast_orderby([orderby])
 
         if selected_time:
-            selected_time_found = True
             query.set_ast_selected_columns(
                 list(query.get_selected_columns()) + [selected_time]
             )
-
             groupby = query.get_groupby()
             if groupby:
                 query.set_ast_groupby(list(groupby) + [selected_time.expression])
             else:
                 query.set_ast_groupby([selected_time.expression])
 
-    if isinstance(query, CompositeQuery) and selected_time_found:
-        # If the query is grouping by time, that needs to be added to the JoinClause keys to
-        # ensure we correctly join the subqueries. The column names will be the same for all the
-        # subqueries, so we just need to map all the table aliases.
+    if isinstance(query, CompositeQuery):
 
-        def add_join_keys(join_clause: JoinClause[Any]) -> str:
+        def add_time_join_keys(join_clause: JoinClause[Any]) -> str:
             match (join_clause.left_node, join_clause.right_node):
                 case (
                     IndividualNode(alias=left),
@@ -1340,7 +1338,7 @@ def populate_query_from_mql_context(
                     JoinClause() as inner_join_clause,
                     IndividualNode(alias=right),
                 ):
-                    left_alias = add_join_keys(inner_join_clause)
+                    left_alias = add_time_join_keys(inner_join_clause)
                     join_clause.keys.append(
                         JoinCondition(
                             left=JoinConditionExpression(
@@ -1354,7 +1352,44 @@ def populate_query_from_mql_context(
                     )
                     return right
 
-        add_join_keys(join_clause)
+        def convert_to_cross_join(join_clause: JoinClause[Any]) -> JoinClause[Any]:
+            match (join_clause.left_node, join_clause.right_node):
+                case (
+                    IndividualNode(),
+                    IndividualNode(),
+                ):
+                    join_clause = replace(join_clause, join_type=JoinType.CROSS)
+                case (
+                    JoinClause() as inner_join_clause,
+                    IndividualNode(),
+                ):
+                    new_inner_join_clause = add_time_join_keys(inner_join_clause)
+                    join_clause = replace(join_clause, left_node=new_inner_join_clause)
+            return join_clause
+
+        # Check if groupby is empty or has a one-sided groupby on the formula
+        number_of_joins = len(alias_node_map.keys())
+        number_of_groupbys = len(query.get_groupby())
+
+        no_groupby_or_one_sided_groupby = False
+        if number_of_groupbys == 0:
+            no_groupby_or_one_sided_groupby = True
+        elif number_of_groupbys % number_of_joins != 0:
+            no_groupby_or_one_sided_groupby = True
+
+        if selected_time:
+            # If the query is grouping by time, that needs to be added to the JoinClause keys to
+            # ensure we correctly join the subqueries. The column names will be the same for all the
+            # subqueries, so we just need to map all the table aliases.
+            add_time_join_keys(join_clause)
+        elif query.has_totals() and no_groupby_or_one_sided_groupby:
+            # If formula query has no interval and no group by or a onesided groupby, but has totals, we need to convert
+            # join type to a CROSS join. This is because without a group by, each sub-query will return
+            # a single row with single value column. In order to combine the results in the outer query,
+            # we need to perform a cross join on each of these single values since there are no conditions
+            # to join by.
+            join_clause = convert_to_cross_join(join_clause)
+            query.set_from_clause(join_clause)
 
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)
@@ -1527,9 +1562,3 @@ class PostProcessAndValidateMQLQuery(
             _post_process(query, VALIDATORS)
 
         return query
-
-
-@dataclass
-class FilterFactorValue(object):
-    value: str | Sequence[str] | Condition | BooleanCondition
-    contains_wildcard: bool
