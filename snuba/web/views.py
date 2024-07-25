@@ -312,7 +312,7 @@ def storage_delete(
         body = parse_request_body(http_request)
         try:
             """
-            conditions is a key value mapping
+            columns is a key value mapping
             of storage-column-name to a list of values
             ex:
             {
@@ -322,7 +322,7 @@ def storage_delete(
             which represents
             WHERE id in (1,2,3) AND status='failed'
             """
-            conditions = body["conditions"]
+            columns = body["columns"]
         except Exception:
             return make_response(
                 jsonify(
@@ -334,7 +334,7 @@ def storage_delete(
             )
 
         try:
-            payload = delete_from_storage(storage, conditions)
+            payload = delete_from_storage(storage, columns)
         except Exception as error:
             # TODO: better error handling
             logger.warning("Failed query", exc_info=error)
