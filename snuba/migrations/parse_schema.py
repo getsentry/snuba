@@ -30,7 +30,7 @@ grammar = Grammar(
     r"""
     type             = primitive / lowcardinality / agg / nullable / array
     # datetime64 needs to be before basic_type to not be parsed as DateTime
-    primitive        = datetime64 / basic_type / uint / float / fixedstring / enum
+    primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
     uint             = "UInt" uint_size
