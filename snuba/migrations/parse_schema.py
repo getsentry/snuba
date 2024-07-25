@@ -18,8 +18,10 @@ from snuba.clickhouse.columns import (
     Enum,
     FixedString,
     Float,
+    Int,
     IPv4,
     IPv6,
+    Map,
     String,
     UInt,
 )
@@ -27,12 +29,13 @@ from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(
     r"""
-    type             = primitive / lowcardinality / agg / nullable / array
+    type             = primitive / lowcardinality / agg / nullable / array / map
     # datetime64 needs to be before basic_type to not be parsed as DateTime
-    primitive        = datetime64 / basic_type / uint / float / fixedstring / enum
+    primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
     uint             = "UInt" uint_size
+    int              = "Int" uint_size
     uint_size        = "8" / "16" / "32" / "64"
     float            = "Float" float_size
     float_size       = "32" / "64"
@@ -48,6 +51,7 @@ grammar = Grammar(
     agg_func         = ~r"[a-zA-Z0-9]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z0-9]+"
     agg_types        = (type (space* comma space*)?)*
     array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
+    map              = "Map" open_paren space* (map / primitive / lowcardinality) space* comma space* (map / primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren
     nullable         = "Nullable" open_paren space* (primitive / basic_type) space* close_paren
     open_paren       = "("
@@ -94,6 +98,12 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         size = int(node.children[1].text)
         return UInt(size)
+
+    def visit_int(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        size = int(node.children[1].text)
+        return Int(size)
 
     def visit_float(
         self, node: Node, visited_children: Iterable[Any]
@@ -181,6 +191,23 @@ class Visitor(NodeVisitor):  # type: ignore
     ) -> ColumnType[MigrationModifiers]:
         (_arr, _paren, _sp, inner_type, _sp, _paren) = visited_children
         return Array(inner_type)
+
+    def visit_map(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> ColumnType[MigrationModifiers]:
+        (
+            _map,
+            _paren,
+            _sp,
+            key_type,
+            _sp,
+            _comma,
+            _sp,
+            value_type,
+            _sp,
+            _paren,
+        ) = visited_children
+        return Map(key_type, value_type)
 
     def visit_datetime64(
         self, node: None, visited_children: Iterable[Any]
