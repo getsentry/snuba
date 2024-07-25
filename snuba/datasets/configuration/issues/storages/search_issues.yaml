@@ -115,7 +115,7 @@ query_processors:
           trace.trace_id: trace_id
 
 deletion_settings:
-  is_enabled: 0
+  is_enabled: 1
   max_rows_to_delete: 1000
   tables:
     - search_issues_local_v2

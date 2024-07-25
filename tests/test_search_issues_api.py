@@ -8,6 +8,7 @@ import simplejson as json
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
+from snuba.state import set_config
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events
@@ -84,6 +85,94 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             ),
             headers={"referer": "test"},
         )
+
+    def delete_query(
+        self,
+        occurrence_id: str,
+        debug: bool = True,
+    ) -> Any:
+        return self.app.delete(
+            "/search_issues/",
+            data=json.dumps(
+                {
+                    "columns": {"occurrence_id": [occurrence_id], "project_id": [3]},
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+
+    def test_simple_delete(self) -> None:
+        set_config("read_through_cache.short_circuit", 1)
+        now = datetime.now().replace(minute=0, second=0, microsecond=0)
+        occurrence_id = str(uuid.uuid4())
+
+        evt: MutableMapping[str, Any] = dict(
+            organization_id=1,
+            project_id=3,
+            event_id=str(uuid.uuid4().hex),
+            group_id=3,
+            primary_hash=str(uuid.uuid4().hex),
+            datetime=datetime.utcnow().isoformat() + "Z",
+            platform="other",
+            message="message",
+            data={"received": now.timestamp()},
+            occurrence_data=dict(
+                id=occurrence_id,
+                type=1,
+                issue_title="search me",
+                fingerprint=["one", "two"],
+                detection_time=now.timestamp(),
+            ),
+            retention_days=90,
+        )
+
+        assert self.events_storage
+        write_unprocessed_events(self.events_storage, [evt])
+
+        from_date = (now - timedelta(days=1)).isoformat()
+        to_date = (now + timedelta(days=1)).isoformat()
+
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                SELECT count() AS count BY project_id
+                WHERE project_id = {evt["project_id"]}
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                LIMIT 1000
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        assert data["stats"]["consistent"]
+        assert data["data"] == [
+            {
+                "project_id": 3,
+                "count": 1,
+            }
+        ]
+
+        response = self.delete_query(occurrence_id)
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        # TODO: response is different b/n single node and
+        # distributed node, so need to make those consistent
+        # assert data["search_issues_local_v2"]["data"]
+
+        # make sure the data got deleted, aka no query results
+        response = self.post_query(
+            f"""MATCH (search_issues)
+                SELECT count() AS count BY project_id
+                WHERE project_id = {evt["project_id"]}
+                AND timestamp >= toDateTime('{from_date}')
+                AND timestamp < toDateTime('{to_date}')
+                LIMIT 1000
+            """
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, data
+        assert data["data"] == []
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)

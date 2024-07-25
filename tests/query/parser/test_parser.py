@@ -67,7 +67,7 @@ def test_mql() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],
@@ -95,12 +95,8 @@ def test_mql() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -161,6 +157,7 @@ def test_mql() -> None:
                 ),
             ),
         ],
+        totals=True,
         limit=1000,
     )
     actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
@@ -177,7 +174,7 @@ def test_mql_wildcards() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],
@@ -205,12 +202,8 @@ def test_mql_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -270,6 +263,7 @@ def test_mql_wildcards() -> None:
             ),
         ],
         limit=1000,
+        totals=True,
     )
     actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
@@ -285,7 +279,7 @@ def test_mql_negated_wildcards() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],
@@ -313,12 +307,8 @@ def test_mql_negated_wildcards() -> None:
                     (Column("_snuba_value", None, "value"),),
                 ),
             ),
-            SelectedExpression(
-                "time",
-                time_expression(None),
-            ),
         ],
-        groupby=[time_expression(None)],
+        groupby=[],
         condition=and_cond(
             and_cond(
                 and_cond(
@@ -378,6 +368,7 @@ def test_mql_negated_wildcards() -> None:
             ),
         ],
         limit=1000,
+        totals=True,
     )
     actual = parse_mql_query_new(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
@@ -754,7 +745,7 @@ def test_recursion_error() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": None,
+            "with_totals": "True",
         },
         "scope": {
             "org_ids": [1],

@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.7.1
+
+### Various fixes & improvements
+
+- feat(cleanup): remove complicated readthrough cache (#6130) by @volokluev
+- fix(transactions): Select transactions entity when using profiler id (#6133) by @Zylphrex
+- Revert "Add processor for new spans schema (#6123)" (d60b3e6f) by @getsentry-bot
+- Revert "Define the models for the new Events Analytics Platform (#6126)" (b1376d69) by @getsentry-bot
+- Add processor for new spans schema (#6123) by @colin-sentry
+- Define the models for the new Events Analytics Platform (#6126) by @colin-sentry
+- code (#6129) by @xurui-c
+- fix: wait on system.mutations between hosts during migration execution (#6121) by @kylemumma
+- feat(transactions): Make profiler queryable (#6122) by @Zylphrex
+- bug(mql): Fix MQL totals queries (#6125) by @enochtangg
+- chore: update some readmes related to migrations and autogen (#6076) by @kylemumma
+- ref(lwdeletes): create parse_and_run_query function (#6120) by @volokluev
+- feat(profiling): Write profiler_id to transactions table (#6111) by @Zylphrex
+- Give telemetry experience team access to cardinality analyzer (#6115) by @vgrozdanic
+- Add an inner join relationship for search_issues and group_attributes (#6119) by @snigdhas
+- support max_bytes_before_external_group_by ClickHouse insert flag (#6118) by @onewland
+- fix(mql): Nested filter conditions (#6117) by @john-z-yang
+- code (#6114) by @xurui-c
+- code (#6113) by @xurui-c
+- chore: cleanup SEARCH_ISSUES_TMP storage set (#6110) by @kylemumma
+- code (#6105) by @xurui-c
+- chore: make snuba co-owners of datasets again (#6104) by @kylemumma
+- fix: LowCardinality column bug w/ aliases (#6108) by @MeredithAnya
+- meta: Bump new development version (5dc9763c)
+
+_Plus 2 more_
+
 ## 24.7.0
 
 ### Various fixes & improvements

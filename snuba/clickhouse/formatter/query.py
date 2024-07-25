@@ -20,7 +20,12 @@ from snuba.clickhouse.query import Query
 from snuba.query import ProcessableQuery
 from snuba.query import Query as AbstractQuery
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.join import IndividualNode, JoinClause, JoinVisitor
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinType,
+    JoinVisitor,
+)
 from snuba.query.data_source.simple import Table
 from snuba.query.data_source.visitor import DataSourceVisitor
 from snuba.query.expressions import Expression, ExpressionVisitor
@@ -38,7 +43,14 @@ def format_query(query: FormattableQuery) -> FormattedQuery:
     This is the entry point for any type of query, whether simple or
     composite.
     """
-    return FormattedQuery(_format_query_content(query, ClickhouseExpressionFormatter))
+    if isinstance(query, Query) and query.is_delete():
+        return FormattedQuery(
+            _format_delete_query_content(query, ClickhouseExpressionFormatter)
+        )
+    else:
+        return FormattedQuery(
+            _format_query_content(query, ClickhouseExpressionFormatter)
+        )
 
 
 def format_query_anonymized(query: FormattableQuery) -> FormattedQuery:
@@ -126,6 +138,36 @@ def _format_query_content(
         ]
         if v is not None
     ]
+
+
+def _format_delete_query_content(
+    query: FormattableQuery, expression_formatter_type: Type[ExpressionFormatterBase]
+) -> Sequence[FormattedNode]:
+    formatter = expression_formatter_type()
+    return [
+        v
+        for v in [
+            StringNode("DELETE"),
+            PaddingNode(
+                "FROM",
+                DataSourceFormatter(expression_formatter_type).visit(
+                    query.get_from_clause()
+                ),
+            ),
+            _format_on_cluster(query, formatter),
+            _build_optional_string_node("WHERE", query.get_condition(), formatter),
+        ]
+        if v is not None
+    ]
+
+
+def _format_on_cluster(
+    query: AbstractQuery, formatter: ExpressionVisitor[str]
+) -> Optional[StringNode]:
+    on_cluster = query.get_on_cluster()
+    if on_cluster:
+        return StringNode(f"ON CLUSTER {on_cluster.accept(formatter)}")
+    return None
 
 
 def _format_select(
@@ -234,6 +276,14 @@ class JoinFormatter(JoinVisitor[FormattedNode, Table]):
     def visit_join_clause(self, node: JoinClause[Table]) -> FormattedNode:
         join_type = f"{node.join_type.value} " if node.join_type else ""
         modifier = f"{node.join_modifier.value} " if node.join_modifier else ""
+        if node.join_type == JoinType.CROSS:
+            return SequenceNode(
+                [
+                    node.left_node.accept(self),
+                    StringNode(f"{modifier}{join_type}JOIN"),
+                    node.right_node.accept(self),
+                ]
+            )
         return SequenceNode(
             [
                 node.left_node.accept(self),
