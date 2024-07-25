@@ -20,6 +20,7 @@ schema:
       { name: segment_id, type: UInt, args: { size: 64 } },
       { name: segment_name, type: String },
       { name: is_segment, type: UInt, args: { size: 8 } },
+      { name: _sort_timestamp, type: DateTime },
       { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
       { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
       { name: duration_ms, type: UInt, args: { size: 32 } },

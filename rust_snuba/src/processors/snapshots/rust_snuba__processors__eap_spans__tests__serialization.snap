@@ -12,6 +12,7 @@ expression: span
   "segment_id": 9832388815107059821,
   "segment_name": "/api/0/relays/projectconfigs/",
   "is_segment": true,
+  "_sort_timestamp": 1721319572,
   "start_timestamp": 1721319572616648,
   "end_timestamp": 1721319572768806,
   "duration_ms": 152,

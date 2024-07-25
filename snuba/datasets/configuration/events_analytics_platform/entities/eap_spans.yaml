@@ -30,6 +30,13 @@ storages:
   - storage: eap_spans
     is_writable: true
     translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: start_timestamp
+            to_table_name: null
+            to_col_name: _sort_timestamp
       subscriptables:
         - mapper: SubscriptableHashBucketMapper
           args:
@@ -57,4 +64,4 @@ validators:
     args:
       required_filter_columns: [organization_id]
 
-required_time_column: end_timestamp
+required_time_column: start_timestamp
