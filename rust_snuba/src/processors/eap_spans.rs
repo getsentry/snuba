@@ -28,7 +28,7 @@ pub fn process_message(
     InsertBatch::from_rows([span], origin_timestamp)
 }
 
-seq!(N in 0..200 {
+seq!(N in 0..20 {
 #[derive(Debug, Default, Serialize)]
 struct EAPSpan {
     // the span object for the new "events analytics platform"
@@ -113,7 +113,7 @@ impl From<FromSpanMessage> for EAPSpan {
         };
 
         {
-            seq!(N in 0..200 {
+            seq!(N in 0..20 {
             let mut attr_str_buckets = [
                 #(
                 &mut res.attr_str_~N,
@@ -128,7 +128,7 @@ impl From<FromSpanMessage> for EAPSpan {
         }
 
         {
-            seq!(N in 0..200 {
+            seq!(N in 0..20 {
             let mut attr_num_buckets = [
                 #(
                 &mut res.attr_num_~N,
