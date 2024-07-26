@@ -22,7 +22,7 @@ from snuba.utils.metrics.util import with_span
 def delete_from_storage(
     storage: WritableTableStorage,
     columns: Dict[str, Any],
-) -> dict[str, Any]:
+) -> dict[str, Result]:
     """
     Inputs:
         storage - storage to delete from
@@ -37,6 +37,9 @@ def delete_from_storage(
 
     Deletes all rows in the given storage, that satisfy the conditions
     defined in 'columns' input.
+
+    Returns a mapping from clickhouse table name to deletion results, there
+    will be an entry for every local clickhouse table that makes up the storage.
     """
     if get_config("storage_deletes_enabled", 0):
         raise Exception("Deletes not enabled")
@@ -45,11 +48,11 @@ def delete_from_storage(
     if not delete_settings.is_enabled:
         raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
 
-    payload: dict[str, Any] = {}
+    results: dict[str, Result] = {}
     for table in delete_settings.tables:
         result = _delete_from_table(storage, table, columns)
-        payload[table] = {**result}
-    return payload
+        results[table] = result
+    return results
 
 
 def _get_rows_to_delete(

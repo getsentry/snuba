@@ -59,7 +59,11 @@ from snuba.consumers.dlq import (
     store_instruction,
 )
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.factory import (
+    get_all_storage_keys,
+    get_storage,
+    get_writable_storage,
+)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
@@ -71,6 +75,7 @@ from snuba.replacers.replacements_and_expiry import (
 )
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.web.delete_query import delete_from_storage
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1068,4 +1073,5 @@ def delete() -> Response:
             ),
             400,
         )
-    return make_response(200)
+    results = delete_from_storage(get_writable_storage(StorageKey(storage)), conditions)
+    return Response(json.dumps(results), 200, {"Content-Type": "application/json"})
