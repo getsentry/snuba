@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Sequence
 
 from snuba.clickhouse.columns import AggregateFunction, Column, DateTime, String, UInt
@@ -57,7 +59,7 @@ class Migration(migration.ClickhouseNodeMigration):
     ]
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
-        create_table_ops = [
+        create_table_ops: list[SqlOperation] = [
             operations.CreateTable(
                 storage_set=self.storage_set_key,
                 table_name=self.meta_local_table_name,
@@ -88,7 +90,7 @@ class Migration(migration.ClickhouseNodeMigration):
             ),
         ]
 
-        materialized_view_ops = []
+        materialized_view_ops: list[SqlOperation] = []
         for value_type in self.value_types:
             str_value = "attribute_value" if value_type == "str" else "NULL"
             num_value = "attribute_value" if value_type == "num" else "NULL"
@@ -119,7 +121,7 @@ class Migration(migration.ClickhouseNodeMigration):
         return create_table_ops + materialized_view_ops
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        return [
+        ops: Sequence[SqlOperation] = [
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.meta_view_name.format(attribute_type=value_type),
@@ -138,3 +140,4 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=OperationTarget.DISTRIBUTED,
             ),
         ]
+        return ops
