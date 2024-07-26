@@ -19,7 +19,7 @@ from snuba.utils.schemas import (
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_spans_local"
 dist_table_name = "eap_spans_dist"
-num_attr_buckets = 200
+num_attr_buckets = 20
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),

@@ -449,6 +449,9 @@ def test_no_schema_differences() -> None:
         if not isinstance(schema, TableSchema):
             continue
 
+        if storage_key == "events_analytics_platform":
+            print(schema)
+
         table_name = schema.get_local_table_name()
         local_schema = get_local_schema(conn, table_name)
 
