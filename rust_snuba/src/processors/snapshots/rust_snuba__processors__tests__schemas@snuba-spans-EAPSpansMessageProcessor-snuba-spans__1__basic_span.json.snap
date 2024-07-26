@@ -6,51 +6,43 @@ expression: snapshot_payload
 [
   {
     "_sort_timestamp": 1715868485,
-    "attr_num_117": {
+    "attr_num_17": {
       "http.response_content_length": 100.0
     },
     "attr_str_0": {
+      "group": "deadbeefdeadbeef",
       "tag3": "True",
       "transaction.op": "navigation"
     },
-    "attr_str_100": {
-      "group": "deadbeefdeadbeef"
-    },
-    "attr_str_124": {
-      "http.method": "GET"
-    },
-    "attr_str_164": {
-      "system": "python"
-    },
-    "attr_str_167": {
-      "action": "GET"
-    },
-    "attr_str_185": {
-      "domain": "targetdomain.tld:targetport"
+    "attr_str_18": {
+      "tag1": "value1"
     },
     "attr_str_19": {
+      "status": "ok",
       "tag2": "123"
     },
-    "attr_str_22": {
+    "attr_str_2": {
       "transaction.method": "GET"
-    },
-    "attr_str_26": {
-      "op": "http.client"
     },
     "attr_str_3": {
       "transaction": "/organizations/:orgId/issues/"
     },
-    "attr_str_38": {
-      "tag1": "value1"
+    "attr_str_4": {
+      "http.method": "GET",
+      "system": "python"
     },
-    "attr_str_69": {
-      "status_code": "200"
-    },
-    "attr_str_79": {
-      "status": "ok"
-    },
-    "attr_str_85": {
+    "attr_str_5": {
+      "domain": "targetdomain.tld:targetport",
       "module": "http"
+    },
+    "attr_str_6": {
+      "op": "http.client"
+    },
+    "attr_str_7": {
+      "action": "GET"
+    },
+    "attr_str_9": {
+      "status_code": "200"
     },
     "duration_ms": 1000,
     "end_timestamp": 1715868486370551,
