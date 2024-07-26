@@ -323,7 +323,7 @@ def storage_delete(
             return make_response(jsonify({"error": error}), 500)
 
         return Response(
-            dump_payload(payload), 200, {"Content-Type": "application/json"}
+            dump_payload(results), 200, {"Content-Type": "application/json"}
         )
 
     else:
