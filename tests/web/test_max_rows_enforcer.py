@@ -13,9 +13,10 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.data_source.simple import Table
+from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.state import set_config
-from snuba.web.delete_query import _construct_condition, _enforce_max_rows
+from snuba.web.delete_query import _enforce_max_rows
 from tests.base import BaseApiTest
 from tests.datasets.configuration.utils import ConfigurationTest
 from tests.helpers import write_unprocessed_events
@@ -37,18 +38,12 @@ class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
             allocation_policies=[],
         )
         self.occurrence_id = str(uuid.uuid4())
-        body = {
-            "columns": {
-                "occurrence_id": [self.occurrence_id],
-                "project_id": [3],
-            },
-            "debug": True,
-            "tenant_ids": {"referrer": "test", "organization_id": 1},
-        }
-        condition = _construct_condition(body)
         self.query = Query(
             from_clause=from_clause,
-            condition=condition,
+            condition=and_cond(
+                equals(column("occurrence_id"), literal(self.occurrence_id)),
+                equals(column("project_id"), literal(3)),
+            ),
             on_cluster=None,
             is_delete=True,
         )
