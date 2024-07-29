@@ -100,7 +100,7 @@ interface Client {
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
-  runLightweightDelete: (storage_name: string, column_conditions: object) => Promise<any>
+  runLightweightDelete: (storage_name: string, column_conditions: object) => Promise<Response>
 }
 
 function Client() {
@@ -486,11 +486,6 @@ function Client() {
           columns: column_conditions
         })
       })
-        .then(res => res.json())
-        .catch(error => {
-          alert("unexpected error: see console")
-          throw error
-        })
     },
   };
 }
