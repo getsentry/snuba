@@ -15,8 +15,10 @@ from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.reader import Result
 from snuba.state import get_config
+from snuba.utils.metrics.util import with_span
 
 
+@with_span()
 def delete_from_storage(
     storage: WritableTableStorage, columns: Dict[str, Any]
 ) -> dict[str, Any]:
