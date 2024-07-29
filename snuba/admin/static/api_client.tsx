@@ -476,7 +476,6 @@ function Client() {
     },
     runLightweightDelete: (storage_name: string, column_conditions: object) => {
       const url = baseUrl + "delete"
-      debugger;
       return fetch(url, {
         method: 'DELETE',
         headers: {
@@ -487,10 +486,10 @@ function Client() {
           columns: column_conditions
         })
       })
-        .then(response => response.json())
+        .then(res => res.json())
         .catch(error => {
           alert("unexpected error: see console")
-          console.error('Error: ', error)
+          throw error
         })
     },
   };
