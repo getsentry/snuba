@@ -50,6 +50,7 @@ SHARED_TAGS_1 = {
 
 SHARED_TAGS_2 = {
     "transaction": "t2",
+    "status_code": "400",
 }
 
 # This is stored this way since that's how it's encoded in the message
@@ -284,7 +285,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 180, rows
 
         assert rows[0]["aggregate_value"] > 0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
 
     def test_interval_with_totals(self) -> None:
         query = MetricsQuery(
@@ -337,7 +338,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 180, rows
 
         assert rows[0]["aggregate_value"] > 0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
         assert (
             data["totals"]["aggregate_value"] > 180
         )  # Should be more than the number of data points
@@ -386,7 +387,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 360, rows
 
         assert rows[0]["aggregate_value"] > 0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
         assert data["totals"]["aggregate_value"] == 2.0
 
     def test_total_orderby_functions(self) -> None:
@@ -434,7 +435,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 1, rows
 
         assert rows[0]["aggregate_value"] == 4.0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
 
     def test_dots_in_mri_names(self) -> None:
         query = MetricsQuery(
