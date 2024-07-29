@@ -100,7 +100,7 @@ interface Client {
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
-  runLightweightDelete: () => Promise<string>
+  runLightweightDelete: (storage_name: string, column_conditions: object) => void
 }
 
 function Client() {
@@ -473,6 +473,9 @@ function Client() {
         headers: { "Content-Type": "application/json" },
         method: "DELETE",
       }).then((resp) => resp.json());
+    },
+    runLightweightDelete: (storage_name: string, column_conditions: object) => {
+      alert('successfully about to go to the backend')
     },
   };
 }

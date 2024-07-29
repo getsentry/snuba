@@ -1060,18 +1060,39 @@ def get_admin_regions() -> Response:
 @check_tool_perms(tools=[AdminTools.DELETE_TOOL])
 def delete() -> Response:
     body = request.get_json()
-    try:
-        storage = body["storage"]
-        conditions = body["conditions"]
-    except Exception:
+    if "storage" not in body:
         return make_response(
             jsonify(
                 {
                     "error",
-                    "all required inputs ('storage', 'conditions') were not present in the request body",
+                    "all required input 'storage' is not present in the request body",
                 }
             ),
             400,
         )
-    results = delete_from_storage(get_writable_storage(StorageKey(storage)), conditions)
+    storage = body["storage"]
+    if "conditions" not in body:
+        return make_response(
+            jsonify(
+                {
+                    "error",
+                    "all required input 'storage' is not present in the request body",
+                }
+            ),
+            400,
+        )
+    conditions = body["conditions"]
+    try:
+        storage = get_writable_storage(StorageKey(storage))
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "error",
+                    e,
+                }
+            ),
+            400,
+        )
+    results = delete_from_storage(storage, conditions)
     return Response(json.dumps(results), 200, {"Content-Type": "application/json"})
