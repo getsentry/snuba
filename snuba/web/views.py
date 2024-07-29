@@ -318,6 +318,8 @@ def storage_delete(
                 jsonify({"error": str(schema_error)}),
                 400,
             )
+        except ValueError as error:
+            return make_response(jsonify({"error": str(error)}), 400)
         except Exception as error:
             logger.warning("Failed query", exc_info=error)
             return make_response(jsonify({"error": error}), 500)

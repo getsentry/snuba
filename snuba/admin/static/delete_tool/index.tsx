@@ -19,10 +19,19 @@ function DeleteTool(props: { api: Client }) {
                         alert("expect columnConditions to be valid json but its not");
                         return;
                     }
-                    props.api.runLightweightDelete(storageName, conds).then(data => setResult(JSON.stringify(data)))
+                    let resp_status = ""
+                    props.api.runLightweightDelete(storageName, conds).then(res => {
+                        resp_status = `${res.status} ${res.statusText}\n`
+                        if (res.headers.get("Content-Type") == "application/json") {
+                            return res.json().then(json => JSON.stringify(json))
+                        } else {
+                            return res.text()
+                        }
+                    }).then(data_str => setResult(resp_status + data_str))
                 }
             }>Submit</button>
-            <p>latest result: {result}</p>
+            <p>latest result:</p><br/>
+            {result}
         </div>
       );
 }
