@@ -100,7 +100,7 @@ interface Client {
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
-  runLightweightDelete: (storage_name: string, column_conditions: object) => void
+  runLightweightDelete: (storage_name: string, column_conditions: object) => Promise<any>
 }
 
 function Client() {
@@ -475,7 +475,23 @@ function Client() {
       }).then((resp) => resp.json());
     },
     runLightweightDelete: (storage_name: string, column_conditions: object) => {
-      alert('successfully about to go to the backend')
+      const url = baseUrl + "delete"
+      debugger;
+      return fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          storage: storage_name,
+          columns: column_conditions
+        })
+      })
+        .then(response => response.json())
+        .catch(error => {
+          alert("unexpected error: see console")
+          console.error('Error: ', error)
+        })
     },
   };
 }

@@ -1059,6 +1059,7 @@ def get_admin_regions() -> Response:
 )
 @check_tool_perms(tools=[AdminTools.DELETE_TOOL])
 def delete() -> Response:
+    return make_response(jsonify("hi", "there"), 200)
     body = request.get_json()
     if "storage" not in body:
         return make_response(
