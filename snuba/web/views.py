@@ -307,7 +307,6 @@ def storage_delete(
     *, storage: WritableTableStorage, timer: Timer
 ) -> Union[Response, str]:
     if http_request.method == "DELETE":
-
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
         try:
