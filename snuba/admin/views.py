@@ -1059,6 +1059,14 @@ def get_admin_regions() -> Response:
 )
 @check_tool_perms(tools=[AdminTools.DELETE_TOOL])
 def delete() -> Response:
+    """
+    Given a storage name and columns object, parses the input and calls
+    delete_from_storage with them.
+
+    Input:
+        an http DELETE request with a json body containing elements "storage" and "columns"
+        see delete_from_storage for definition of these inputs.
+    """
     body = request.get_json()
     if "storage" not in body:
         return make_response(
