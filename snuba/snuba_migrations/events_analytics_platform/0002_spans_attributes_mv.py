@@ -62,8 +62,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.meta_local_table_name,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
-                    primary_key="(org_id, attribute_key)",
-                    order_by="(org_id, attribute_key, attribute_value, timestamp)",
+                    primary_key="(organization_id, attribute_key)",
+                    order_by="(organization_id, attribute_key, attribute_value, timestamp)",
                     partition_by="toMonday(timestamp)",
                     settings={
                         "index_granularity": self.granularity,

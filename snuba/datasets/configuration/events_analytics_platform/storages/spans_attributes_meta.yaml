@@ -1,0 +1,56 @@
+version: v1
+kind: readable_storage
+name: spans_attributes_meta
+
+storage:
+  key: spans_attributes_meta
+  set_key: events_analytics_platform
+
+readiness_state: partial
+
+schema:
+  columns:
+    [
+      { name: organization_id, type: UInt, args: { size: 64 } },
+      { name: attribute_type, type: String },
+      { name: attribute_key, type: String },
+      { name: attribute_value, type: String },
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      { name: count, type: AggregateFunction, args: { func: sum, arg_types: [{ type: Float, args: { size: 64 } }] } }
+    ]
+  local_table_name: spans_attributes_meta_local
+  dist_table_name: spans_attributes_meta_dist
+  partition_format: [date]
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 0
+        is_active: 0
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - referrer
+      default_config_overrides:
+        is_active: 0
+        is_enforced: 0
+
+query_processors:
+  - processor: TableRateLimit
+  - processor: TupleUnaliaser
+
+mandatory_condition_checkers:
+  - condition: OrgIdEnforcer
+    args:
+      field_name: organization_id

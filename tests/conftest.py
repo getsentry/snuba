@@ -180,22 +180,21 @@ def _build_migrations_cache() -> None:
 
 
 def _clear_db() -> None:
-    pass
-    # for storage_key in get_all_storage_keys():
-    #     storage = get_storage(storage_key)
-    #     cluster = storage.get_cluster()
-    #     database = cluster.get_database()
+    for storage_key in get_all_storage_keys():
+        storage = get_storage(storage_key)
+        cluster = storage.get_cluster()
+        database = cluster.get_database()
 
-    #     schema = storage.get_schema()
-    #     if isinstance(schema, WritableTableSchema):
-    #         table_name = schema.get_local_table_name()
+        schema = storage.get_schema()
+        if isinstance(schema, WritableTableSchema):
+            table_name = schema.get_local_table_name()
 
-    #         nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
-    #         for node in nodes:
-    #             connection = cluster.get_node_connection(
-    #                 ClickhouseClientSettings.MIGRATE, node
-    #             )
-    #             connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
+            nodes = [*cluster.get_local_nodes(), *cluster.get_distributed_nodes()]
+            for node in nodes:
+                connection = cluster.get_node_connection(
+                    ClickhouseClientSettings.MIGRATE, node
+                )
+                connection.execute(f"TRUNCATE TABLE IF EXISTS {database}.{table_name}")
 
 
 @pytest.fixture
