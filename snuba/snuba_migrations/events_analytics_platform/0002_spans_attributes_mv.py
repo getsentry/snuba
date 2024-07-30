@@ -46,10 +46,10 @@ class Migration(migration.ClickhouseNodeMigration):
     meta_local_table_name = "spans_attributes_meta_local"
     meta_dist_table_name = "spans_attributes_meta_dist"
     meta_table_columns: Sequence[Column[Modifiers]] = [
-        Column("org_id", UInt(64)),
+        Column("organization_id", UInt(64)),
         Column("attribute_type", String()),
         Column("attribute_key", String()),
-        Column("attribute_value", String(modifiers=Modifiers(nullable=True))),
+        Column("attribute_value", String()),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
         Column("count", AggregateFunction("sum", [UInt(64)])),
@@ -62,8 +62,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.meta_local_table_name,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
-                    primary_key="(org_id, attribute_key)",
-                    order_by="(org_id, attribute_key, attribute_value, timestamp)",
+                    primary_key="(organization_id, attribute_key)",
+                    order_by="(organization_id, attribute_key, attribute_value, timestamp)",
                     partition_by="toMonday(timestamp)",
                     settings={
                         "index_granularity": self.granularity,
@@ -89,7 +89,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
         materialized_view_ops: list[SqlOperation] = []
         for value_type in self.value_types:
-            attribute_value = "attr_value" if value_type == "str" else "NULL"
+            attribute_value = "attr_value" if value_type == "str" else "''"
 
             key_columns = ",".join(
                 [f"mapKeys(attr_{value_type}_{i})" for i in range(ATTRIBUTE_BUCKETS)]
