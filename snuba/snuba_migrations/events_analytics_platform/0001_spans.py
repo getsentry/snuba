@@ -129,7 +129,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     partition_by="(toMonday(_sort_timestamp))",
                     settings={
                         "index_granularity": "8192",
-                        "storage_policy": "multidisk",
+                        "storage_policy": "'multidisk'",
                     },
                     storage_set=storage_set_name,
                     ttl="_sort_timestamp + toIntervalDay(retention_days)",
