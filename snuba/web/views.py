@@ -310,28 +310,12 @@ def storage_delete(
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
         try:
-            """
-            columns is a key value mapping
-            of storage-column-name to a list of values
-            ex:
-            {
-                "id": [1, 2, 3]
-                "status": ["failed"]
-            }
-            which represents
-            WHERE id in (1,2,3) AND status='failed'
-            """
-            columns = body["columns"]
-        except Exception:
+            payload = delete_from_storage(storage, body)
+        except InvalidJsonRequestException as schema_error:
             return make_response(
-                jsonify(
-                    {"error": "required input 'columns' not present in body of request"}
-                ),
+                jsonify({"error": str(schema_error)}),
                 400,
             )
-
-        try:
-            payload = delete_from_storage(storage, columns)
         except Exception as error:
             logger.warning("Failed query", exc_info=error)
             return make_response(jsonify({"error": error}), 500)
