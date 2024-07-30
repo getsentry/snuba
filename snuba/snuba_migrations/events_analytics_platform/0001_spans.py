@@ -1,3 +1,4 @@
+from os import environ
 from typing import List, Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
@@ -117,6 +118,10 @@ class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
+        settings = {"index_granularity": "8192"}
+        if environ.get("SENTRY_REGION") in ["de", "us"]:
+            settings["storage_policy"] = "multidisk"
+
         res: List[SqlOperation] = [
             operations.CreateTable(
                 storage_set=storage_set_name,
@@ -127,7 +132,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(organization_id, _sort_timestamp, trace_id, span_id)",
                     sign_column="sign",
                     partition_by="(toMonday(_sort_timestamp))",
-                    settings={"index_granularity": "8192"},
+                    settings=settings,
                     storage_set=storage_set_name,
                     ttl="_sort_timestamp + toIntervalDay(retention_days)",
                 ),
