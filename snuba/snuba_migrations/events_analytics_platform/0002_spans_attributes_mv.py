@@ -8,21 +8,19 @@ from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.constants import ATTRIBUTE_BUCKETS
-from snuba.utils.schemas import Float
 
 META_KEY_QUERY_TEMPLATE = """
 SELECT
     organization_id,
     attribute_key,
-    {str_value} AS str_value,
-    {num_value} AS number_value,
+    {attribute_value} AS attribute_value,
     toMonday(start_timestamp) AS timestamp,
     retention_days,
     sumState(cast(1, 'UInt64')) AS count
 FROM eap_spans_local
 LEFT ARRAY JOIN
     arrayConcat({key_columns}) AS attribute_key,
-    arrayConcat({value_columns}) AS attribute_value
+    arrayConcat({value_columns}) AS attr_value
 GROUP BY
     organization_id,
     attribute_key,
@@ -51,8 +49,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("org_id", UInt(64)),
         Column("attribute_type", String()),
         Column("attribute_key", String()),
-        Column("str_value", String(modifiers=Modifiers(nullable=True))),
-        Column("num_value", Float(64, modifiers=Modifiers(nullable=True))),
+        Column("attribute_value", String(modifiers=Modifiers(nullable=True))),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["DoubleDelta"]))),
         Column("retention_days", UInt(16)),
         Column("count", AggregateFunction("sum", [UInt(64)])),
@@ -66,7 +63,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     primary_key="(org_id, attribute_key)",
-                    order_by="(org_id, attribute_key, timestamp)",
+                    order_by="(org_id, attribute_key, attribute_value, timestamp)",
                     partition_by="toMonday(timestamp)",
                     settings={
                         "index_granularity": self.granularity,
@@ -92,8 +89,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
         materialized_view_ops: list[SqlOperation] = []
         for value_type in self.value_types:
-            str_value = "attribute_value" if value_type == "str" else "NULL"
-            num_value = "attribute_value" if value_type == "num" else "NULL"
+            attribute_value = "attr_value" if value_type == "str" else "NULL"
 
             key_columns = ",".join(
                 [f"mapKeys(attr_{value_type}_{i})" for i in range(ATTRIBUTE_BUCKETS)]
@@ -110,8 +106,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     destination_table_name=self.meta_local_table_name,
                     target=OperationTarget.LOCAL,
                     query=META_KEY_QUERY_TEMPLATE.format(
-                        str_value=str_value,
-                        num_value=num_value,
+                        attribute_value=attribute_value,
                         key_columns=key_columns,
                         value_columns=value_columns,
                     ),
