@@ -14,6 +14,7 @@ initialize_entity_factory()
 ENTITY_KEYS = [
     EntityKey.DISCOVER,
     EntityKey.EVENTS,
+    EntityKey.EAP_SPANS,
     EntityKey.GROUPASSIGNEE,
     EntityKey.GROUPEDMESSAGE,
     EntityKey.OUTCOMES,

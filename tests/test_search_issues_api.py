@@ -174,6 +174,23 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert response.status_code == 200, data
         assert data["data"] == []
 
+    def test_bad_delete(self) -> None:
+        res = self.app.delete(
+            "/search_issues/",
+            data=json.dumps(
+                {
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+        assert int(res.status_code / 100) == 4  # 400 status code
+        assert (
+            res.get_json()["error"]
+            == "required input 'columns' not present in body of request"
+        )
+
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
 

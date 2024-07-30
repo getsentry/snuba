@@ -50,6 +50,7 @@ SHARED_TAGS_1 = {
 
 SHARED_TAGS_2 = {
     "transaction": "t2",
+    "status_code": "400",
 }
 
 # This is stored this way since that's how it's encoded in the message
@@ -284,7 +285,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 180, rows
 
         assert rows[0]["aggregate_value"] > 0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
 
     def test_interval_with_totals(self) -> None:
         query = MetricsQuery(
@@ -337,7 +338,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 180, rows
 
         assert rows[0]["aggregate_value"] > 0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
         assert (
             data["totals"]["aggregate_value"] > 180
         )  # Should be more than the number of data points
@@ -386,7 +387,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 360, rows
 
         assert rows[0]["aggregate_value"] > 0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
         assert data["totals"]["aggregate_value"] == 2.0
 
     def test_total_orderby_functions(self) -> None:
@@ -434,7 +435,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         assert len(rows) == 1, rows
 
         assert rows[0]["aggregate_value"] == 4.0
-        assert rows[0]["status_code"] == "200"
+        assert rows[0]["status_code"] == "200" or rows[0]["status_code"] == "400"
 
     def test_dots_in_mri_names(self) -> None:
         query = MetricsQuery(
@@ -1494,30 +1495,47 @@ class TestGenericMetricsMQLApi(BaseApiTest):
         )
         assert response.status_code == 200
 
-    def test_formula_filters_with_scalar(self) -> None:
+    def test_nested_formula_no_group_with_totals(self) -> None:
         query = MetricsQuery(
             query=Formula(
-                function_name="divide",
+                function_name="multiply",
                 parameters=[
-                    Timeseries(
-                        metric=Metric(
-                            mri=DISTRIBUTIONS_MRI,
-                        ),
-                        aggregate="sum",
+                    Formula(
+                        function_name="plus",
+                        parameters=[
+                            Timeseries(
+                                metric=Metric(
+                                    mri=DISTRIBUTIONS_MRI,
+                                ),
+                                aggregate="sum",
+                            ),
+                            Formula(
+                                function_name="plus",
+                                parameters=[
+                                    Timeseries(
+                                        metric=Metric(
+                                            mri=DISTRIBUTIONS_MRI,
+                                        ),
+                                        aggregate="sum",
+                                    ),
+                                    Timeseries(
+                                        metric=Metric(
+                                            mri=DISTRIBUTIONS_MRI,
+                                        ),
+                                        aggregate="sum",
+                                    ),
+                                ],
+                            ),
+                        ],
                     ),
-                    3600.0,
-                ],
-                filters=[
-                    Condition(
-                        lhs=Column(name="platform"),
-                        op=Op.EQ,
-                        rhs="ios",
-                    )
+                    100.0,
                 ],
             ),
             start=self.start_time,
             end=self.end_time,
-            rollup=Rollup(interval=60, granularity=60, totals=True),
+            rollup=Rollup(
+                interval=None, granularity=60, totals=True, orderby=Direction.DESC
+            ),
             scope=MetricsScope(
                 org_ids=[self.org_id],
                 project_ids=self.project_ids,
@@ -1541,6 +1559,122 @@ class TestGenericMetricsMQLApi(BaseApiTest):
                 tenant_ids={"referrer": "tests", "organization_id": self.org_id},
             ).serialize_mql(),
         )
+        data = json.loads(response.data)
+        assert (
+            data["totals"]["aggregate_value"] > 180
+        )  # Should be more than the number of data points
+        assert response.status_code == 200
+
+    def test_simple_formula_filters_with_scalar(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                function_name="divide",
+                parameters=[
+                    Timeseries(
+                        metric=Metric(
+                            mri=DISTRIBUTIONS_MRI,
+                        ),
+                        aggregate="sum",
+                    ),
+                    3600.0,
+                ],
+                filters=[
+                    Condition(
+                        lhs=Column(name="transaction"),
+                        op=Op.EQ,
+                        rhs="t1",
+                    )
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60, totals=True),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "transaction": resolve_str("transaction"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        assert response.status_code == 200
+
+    def test_complex_formula_filters_with_scalar(self) -> None:
+        query = MetricsQuery(
+            query=Formula(
+                function_name="multiply",
+                parameters=[
+                    Formula(
+                        function_name="divide",
+                        parameters=[
+                            Timeseries(
+                                metric=Metric(
+                                    mri=DISTRIBUTIONS_MRI,
+                                ),
+                                aggregate="sum",
+                                filters=[Condition(Column("transaction"), Op.EQ, "t2")],
+                            ),
+                            Timeseries(
+                                metric=Metric(
+                                    mri=DISTRIBUTIONS_MRI,
+                                ),
+                                aggregate="sum",
+                                filters=[
+                                    Condition(
+                                        Column("transaction"),
+                                        Op.EQ,
+                                        "t1",
+                                    )
+                                ],
+                            ),
+                        ],
+                    ),
+                    100.0,
+                ],
+            ),
+            start=self.start_time,
+            end=self.end_time,
+            rollup=Rollup(interval=60, granularity=60, totals=None),
+            scope=MetricsScope(
+                org_ids=[self.org_id],
+                project_ids=self.project_ids,
+                use_case_id=USE_CASE_ID,
+            ),
+            indexer_mappings={
+                "transaction.duration": DISTRIBUTIONS_MRI,
+                DISTRIBUTIONS_MRI: DISTRIBUTIONS.metric_id,
+                "transaction": resolve_str("transaction"),
+                "status_code": resolve_str("status_code"),
+            },
+        )
+
+        response = self.app.post(
+            self.mql_route,
+            data=Request(
+                dataset=DATASET,
+                app_id="test",
+                query=query,
+                flags=Flags(debug=True),
+                tenant_ids={"referrer": "tests", "organization_id": self.org_id},
+            ).serialize_mql(),
+        )
+        data = json.loads(response.data)
+        assert len(data["data"]) == 180
+
         assert response.status_code == 200
 
     def test_formula_filters_with_scalar_formula(self) -> None:

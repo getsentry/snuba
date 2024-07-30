@@ -118,7 +118,7 @@ def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
 
 
 NUMBER_SCHEMA = make_column_schema(
-    column_type={"enum": ["UInt", "Float"]},
+    column_type={"enum": ["UInt", "Float", "Int"]},
     args={
         "type": "object",
         "properties": {
@@ -236,9 +236,23 @@ ARRAY_SCHEMA = make_column_schema(
     },
 )
 
+MAP_SCHEMA = make_column_schema(
+    column_type={"const": "Map"},
+    args={
+        "type": "object",
+        "properties": {
+            "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+            "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+        },
+        "additionalProperties": False,
+    },
+)
+
+
 COLUMN_SCHEMAS = [
     *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
+    MAP_SCHEMA,
 ]
 
 

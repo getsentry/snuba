@@ -120,6 +120,7 @@ mql_context = {
     },
     "indexer_mappings": {
         "d:transactions/duration@millisecond": 123456,
+        "d:transactions/measurements.fp@millisecond": 789012,
         "status_code": 222222,
         "transaction": 333333,
     },

@@ -107,6 +107,17 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
+        (
+            "eap-spans-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=eap_spans",
+                "--consumer-group=eap_spans_group",
+                "--use-rust-processor",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+            ],
+        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:

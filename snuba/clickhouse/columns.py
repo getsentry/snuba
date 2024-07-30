@@ -13,8 +13,10 @@ from snuba.utils.schemas import (
     FixedString,
     FlattenedColumn,
     Float,
+    Int,
     IPv4,
     IPv6,
+    Map,
     Nested,
     Nullable,
     ReadOnly,
@@ -43,6 +45,7 @@ __all__ = (
     "Float",
     "IPv4",
     "IPv6",
+    "Map",
     "Nested",
     "Nullable",
     "ReadOnly",
@@ -52,6 +55,7 @@ __all__ = (
     "TypeModifier",
     "TypeModifiers",
     "UInt",
+    "Int",
     "UUID",
 )
 
