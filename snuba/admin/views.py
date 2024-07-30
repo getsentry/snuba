@@ -1099,6 +1099,10 @@ def delete() -> Response:
     except ValueError as e:
         return make_response(jsonify({"error": str(e)}), 400)
     except Exception as e:
-        import traceback
+        if application.debug:
+            from traceback import format_exception
 
-        return make_response(jsonify({"error": traceback.format_exception(e)}), 500)
+            return make_response(jsonify({"error": format_exception(e)}), 500)
+        else:
+            sentry_sdk.capture_exception(e)
+            return make_response(jsonify({"error": "unexpected internal error"}), 500)
