@@ -13,16 +13,15 @@ from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import RequestParts
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
 
 
 @with_span()
 def delete_from_storage(
-    storage: WritableTableStorage, body: Dict[str, Any]
+    storage: WritableTableStorage, request_parts: RequestParts
 ) -> dict[str, Any]:
     """
     Inputs:
@@ -46,14 +45,9 @@ def delete_from_storage(
     if not delete_settings.is_enabled:
         raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
 
-    def _get_columns() -> dict[str, Any]:
-        schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-        request_parts = schema.validate(body)
-        return request_parts.query["columns"]
-
     payload: dict[str, Any] = {}
     for table in delete_settings.tables:
-        result = _delete_from_table(storage, table, _get_columns())
+        result = _delete_from_table(storage, table, request_parts.query["columns"])
         payload[table] = {**result}
     return payload
 

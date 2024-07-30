@@ -310,7 +310,9 @@ def storage_delete(
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
         try:
-            payload = delete_from_storage(storage, body)
+            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+            request_parts = schema.validate(body)
+            payload = delete_from_storage(storage, request_parts)
         except InvalidJsonRequestException as schema_error:
             return make_response(
                 jsonify({"error": str(schema_error)}),
