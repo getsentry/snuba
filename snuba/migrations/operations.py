@@ -206,7 +206,7 @@ class DropTable(SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         target: OperationTarget = OperationTarget.UNSET,
-        sync=False,
+        sync: bool = False,
     ) -> None:
         super().__init__(storage_set, target=target)
         self.table_name = table_name
