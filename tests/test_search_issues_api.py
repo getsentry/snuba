@@ -186,10 +186,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             headers={"referer": "test"},
         )
         assert int(res.status_code / 100) == 4  # 400 status code
-        assert (
-            res.get_json()["error"]
-            == "required input 'columns' not present in body of request"
-        )
+        assert "'columns' is a required property" in res.get_json()["error"]
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)

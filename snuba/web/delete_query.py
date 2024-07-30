@@ -20,7 +20,8 @@ from snuba.utils.metrics.util import with_span
 
 @with_span()
 def delete_from_storage(
-    storage: WritableTableStorage, columns: Dict[str, Any]
+    storage: WritableTableStorage,
+    columns: Dict[str, Any],
 ) -> dict[str, Any]:
     """
     Inputs:
