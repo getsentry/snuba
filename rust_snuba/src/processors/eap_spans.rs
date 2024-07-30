@@ -137,9 +137,9 @@ impl From<FromSpanMessage> for EAPSpan {
                 });
 
             measurements.iter().for_each(|(k, v)| {
-                if k == "client_sample_rate" && v.value != 0 {
+                if k == "client_sample_rate" && v.value != 0.0 {
                     res.sampling_factor = v.value;
-                    res.sampling_weight = 1 / v.value;
+                    res.sampling_weight = 1.0 / v.value;
                 } else {
                     attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
                         .insert(k.clone(), v.value);
