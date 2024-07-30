@@ -14,14 +14,14 @@ from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.reader import Result
-from snuba.request.schema import RequestParts
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
 
 
 @with_span()
 def delete_from_storage(
-    storage: WritableTableStorage, request_parts: RequestParts
+    storage: WritableTableStorage,
+    columns: Dict[str, Any],
 ) -> dict[str, Any]:
     """
     Inputs:
@@ -47,7 +47,7 @@ def delete_from_storage(
 
     payload: dict[str, Any] = {}
     for table in delete_settings.tables:
-        result = _delete_from_table(storage, table, request_parts.query["columns"])
+        result = _delete_from_table(storage, table, columns)
         payload[table] = {**result}
     return payload
 
