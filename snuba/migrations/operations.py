@@ -206,12 +206,17 @@ class DropTable(SqlOperation):
         storage_set: StorageSetKey,
         table_name: str,
         target: OperationTarget = OperationTarget.UNSET,
+        sync=False,
     ) -> None:
         super().__init__(storage_set, target=target)
         self.table_name = table_name
+        self.sync = sync
 
     def format_sql(self) -> str:
-        return f"DROP TABLE IF EXISTS {self.table_name};"
+        sql = f"DROP TABLE IF EXISTS {self.table_name}"
+        if self.sync:
+            sql = f"{sql} SYNC"
+        return f"{sql};"
 
 
 class TruncateTable(SqlOperation):

@@ -114,6 +114,13 @@ def test_drop_table() -> None:
     )
 
 
+def test_drop_table_with_sync() -> None:
+    assert (
+        DropTable(StorageSetKey.EVENTS, "test_table", sync=True).format_sql()
+        == "DROP TABLE IF EXISTS test_table SYNC;"
+    )
+
+
 def test_truncate_table() -> None:
     assert (
         TruncateTable(StorageSetKey.EVENTS, "test_table").format_sql()

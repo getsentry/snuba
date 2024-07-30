@@ -161,10 +161,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=storage_set_name,
                 table_name=local_table_name,
                 target=OperationTarget.LOCAL,
+                sync=True,
             ),
             operations.DropTable(
                 storage_set=storage_set_name,
                 table_name=dist_table_name,
                 target=OperationTarget.DISTRIBUTED,
+                sync=True,
             ),
         ]
