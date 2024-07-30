@@ -88,7 +88,7 @@ class CodeMigration(Migration, ABC):
             return
 
         migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
+        # logger.info(f"Running migration: {migration_id}")
         update_status(Status.IN_PROGRESS)
 
         for op in self.forwards_global():
@@ -159,7 +159,7 @@ class ClickhouseNodeMigration(Migration, ABC):
             return
 
         migration_id, logger, update_status = context
-        logger.info(f"Running migration: {migration_id}")
+        # logger.info(f"Running migration: {migration_id}")
 
         # The table does not exist before the first migration is run
         # so do not update status yet
