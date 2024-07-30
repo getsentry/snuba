@@ -23,13 +23,16 @@ def translate_composite_query(
     """
     Converts a logical composite query to a physical composite query.
     """
-    add_equivalent_conditions(query)
-    _generate_subqueries(query)
+    _pre_entity_query_processing(query)
     physical_query = _translate_logical_composite_query(query, query_settings)
     return physical_query
 
 
-def _generate_subqueries(query: CompositeQuery[Entity]) -> None:
+def _pre_entity_query_processing(query: CompositeQuery[Entity]) -> None:
+    """
+    Depending on the type of query, this function will execute the necessary
+    entity query processings functions to prepare the query for translation.
+    """
     from_clause = query.get_from_clause()
     is_gen_metrics_join_query = True
     if isinstance(from_clause, JoinClause):
@@ -46,6 +49,7 @@ def _generate_subqueries(query: CompositeQuery[Entity]) -> None:
     if is_gen_metrics_join_query:
         generate_metrics_subqueries(query)
     else:
+        add_equivalent_conditions(query)
         generate_subqueries(query)
 
 
