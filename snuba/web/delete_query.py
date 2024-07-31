@@ -4,16 +4,16 @@ from typing import Any, Dict
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.datasets.deletion_settings import DeletionQuerySettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import SelectedExpression
+from snuba.query import SelectedExpression, query_settings
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.query_settings import QuerySettings
 from snuba.reader import Result
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
@@ -21,7 +21,9 @@ from snuba.utils.metrics.util import with_span
 
 @with_span()
 def delete_from_storage(
-    storage: WritableTableStorage, columns: Dict[str, list[Any]]
+    storage: WritableTableStorage,
+    columns: Dict[str, list[Any]],
+    query_Settings: QuerySettings,
 ) -> dict[str, Result]:
     """
     Inputs:
@@ -50,7 +52,7 @@ def delete_from_storage(
 
     results: dict[str, Result] = {}
     for table in delete_settings.tables:
-        result = _delete_from_table(storage, table, columns)
+        result = _delete_from_table(storage, table, columns, query_settings)
         results[table] = result
     return results
 
@@ -98,7 +100,10 @@ def _enforce_max_rows(delete_query: Query) -> None:
 
 
 def _delete_from_table(
-    storage: WritableTableStorage, table: str, conditions: Dict[str, Any]
+    storage: WritableTableStorage,
+    table: str,
+    conditions: Dict[str, Any],
+    query_Settings: QuerySettings,
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
@@ -118,9 +123,7 @@ def _delete_from_table(
 
     deletion_processors = storage.get_deletion_processors()
     for deletion_procesor in deletion_processors:
-        deletion_procesor.process_query(
-            query, DeletionQuerySettings(storage.get_deletion_settings())
-        )
+        deletion_procesor.process_query(query, query_Settings)
 
     formatted_query = format_query(query)
     # TODO error handling and the lot
