@@ -27,7 +27,8 @@ expression: span
     "transaction.op": "http.server"
   },
   "attr_num_1": {
-    "my.neg.float.field": -101.2
+    "my.neg.float.field": -101.2,
+    "my.true.bool.field": 1.0
   },
   "attr_str_2": {
     "trace.status": "ok",
@@ -46,13 +47,15 @@ expression: span
     "sentry.sdk.name": "sentry.python.django"
   },
   "attr_num_5": {
-    "my.bool.field": 1.0,
     "my.neg.field": -100.0
   },
   "attr_str_6": {
     "op": "http.server",
     "relay_id": "88888888-4444-4444-8444-cccccccccccc",
     "thread.name": "uWSGIWorker1Core0"
+  },
+  "attr_num_6": {
+    "my.false.bool.field": 0.0
   },
   "attr_str_8": {
     "sdk.name": "sentry.python.django"

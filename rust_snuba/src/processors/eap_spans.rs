@@ -199,7 +199,8 @@ mod tests {
         "my.int.field": 2000,
         "my.neg.field": -100,
         "my.neg.float.field": -101.2,
-        "my.bool.field": true
+        "my.true.bool.field": true,
+        "my.false.bool.field": false
     },
     "measurements": {
         "num_of_spans": {
