@@ -153,6 +153,13 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             }
         ]
 
+        # delete fails when feature flag is off
+        set_config("storage_deletes_enabled", 0)
+        response = self.delete_query(occurrence_id)
+        assert int(int(response.status_code) / 100) != 2
+
+        # delete succeeds when feature flag is on
+        set_config("storage_deletes_enabled", 1)
         response = self.delete_query(occurrence_id)
         data = json.loads(response.data)
         assert response.status_code == 200, data

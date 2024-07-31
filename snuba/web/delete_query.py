@@ -38,7 +38,7 @@ def delete_from_storage(
     Deletes all rows in the given storage, that satisfy the conditions
     defined in 'columns' input.
     """
-    if get_config("storage_deletes_enabled", 0):
+    if not get_config("storage_deletes_enabled", 0):
         raise Exception("Deletes not enabled")
 
     delete_settings = storage.get_deletion_settings()
