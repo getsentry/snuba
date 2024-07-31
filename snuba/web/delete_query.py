@@ -47,15 +47,6 @@ def delete_from_storage(
     if not delete_settings.is_enabled:
         raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
 
-    # assert isinstance(columns, dict[str, list[Any]])
-    columns_is_expected_type = isinstance(columns, dict) and all(
-        [isinstance(k, str) and isinstance(v, list) for k, v in columns.items()]
-    )
-    if not columns_is_expected_type:
-        raise ValueError(
-            "expected input 'columns' to be of type dict[str, list[Any]] but it was not"
-        )
-
     results: dict[str, Result] = {}
     for table in delete_settings.tables:
         result = _delete_from_table(storage, table, columns)
