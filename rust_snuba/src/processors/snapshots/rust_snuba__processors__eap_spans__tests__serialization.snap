@@ -26,6 +26,9 @@ expression: span
     "relay_protocol_version": "3",
     "transaction.op": "http.server"
   },
+  "attr_num_1": {
+    "my.neg.float.field": -101.2
+  },
   "attr_str_2": {
     "trace.status": "ok",
     "transaction.method": "POST",
@@ -38,7 +41,12 @@ expression: span
     "thread.id": "8522009600"
   },
   "attr_str_5": {
-    "http.status_code": "200"
+    "http.status_code": "200",
+    "sentry.release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
+    "sentry.sdk.name": "sentry.python.django"
+  },
+  "attr_num_5": {
+    "my.neg.field": -100.0
   },
   "attr_str_6": {
     "op": "http.server",
@@ -49,10 +57,12 @@ expression: span
     "sdk.name": "sentry.python.django"
   },
   "attr_str_9": {
+    "sentry.environment": "development",
     "status_code": "200"
   },
   "attr_str_10": {
-    "release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
+    "release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
+    "sentry.sdk.version": "2.7.0"
   },
   "attr_num_11": {
     "num_of_spans": 50.0
@@ -68,12 +78,21 @@ expression: span
     "environment": "development",
     "platform": "python"
   },
+  "attr_num_14": {
+    "my.int.field": 2000.0
+  },
   "attr_str_17": {
     "relay_endpoint_version": "3",
     "relay_no_cache": "False",
     "relay_use_post_or_schedule": "True",
     "sdk.version": "2.7.0",
     "spans_over_limit": "False"
+  },
+  "attr_num_17": {
+    "my.float.field": 101.2
+  },
+  "attr_str_18": {
+    "sentry.segment.name": "/api/0/relays/projectconfigs/"
   },
   "attr_str_19": {
     "status": "ok"

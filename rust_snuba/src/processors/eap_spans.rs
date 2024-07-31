@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use serde_json::Value;
 
 use crate::config::ProcessorConfig;
 use crate::processors::spans::FromSpanMessage;
@@ -82,6 +83,7 @@ impl From<FromSpanMessage> for EAPSpan {
         let sentry_tags = from.sentry_tags.unwrap_or_default();
         let tags = from.tags.unwrap_or_default();
         let measurements = from.measurements.unwrap_or_default();
+        let data = from.data.unwrap_or_default();
 
         let mut res = Self {
             organization_id: from.organization_id,
@@ -119,22 +121,17 @@ impl From<FromSpanMessage> for EAPSpan {
                 &mut res.attr_str_~N,
                 )*
             ];
+            let mut attr_num_buckets = [
+                #(
+                &mut res.attr_num_~N,
+                )*
+            ];
             });
 
             sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
                 attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
                     .insert(k.clone(), v.clone());
             });
-        }
-
-        {
-            seq!(N in 0..20 {
-            let mut attr_num_buckets = [
-                #(
-                &mut res.attr_num_~N,
-                )*
-            ];
-                });
 
             measurements.iter().for_each(|(k, v)| {
                 if k == "client_sample_rate" && v.value != 0.0 {
@@ -145,6 +142,26 @@ impl From<FromSpanMessage> for EAPSpan {
                         .insert(k.clone(), v.value);
                 }
             });
+
+            data.iter().for_each(|(k, v)| {
+                let str_val: String = match v {
+                    Value::Bool(true) => "true".into(),
+                    Value::Bool(false) => "false".into(),
+                    Value::String(string) => string.clone(),
+                    Value::Array(array) => serde_json::to_string(array).unwrap_or_default(),
+                    Value::Object(object) => serde_json::to_string(object).unwrap_or_default(),
+                    _ => Default::default(),
+                };
+
+                if str_val != "" {
+                    attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
+                        .insert(k.clone(), str_val.into());
+                } else if let Value::Number(number) = v {
+                    let num_val = number.as_f64().unwrap_or_default();
+                    attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
+                        .insert(k.clone(), num_val);
+                }
+            })
         }
 
         res
@@ -171,7 +188,11 @@ mod tests {
         "thread.id": "8522009600",
         "sentry.segment.name": "/api/0/relays/projectconfigs/",
         "sentry.sdk.name": "sentry.python.django",
-        "sentry.sdk.version": "2.7.0"
+        "sentry.sdk.version": "2.7.0",
+        "my.float.field": 101.2,
+        "my.int.field": 2000,
+        "my.neg.field": -100,
+        "my.neg.float.field": -101.2
     },
     "measurements": {
         "num_of_spans": {
