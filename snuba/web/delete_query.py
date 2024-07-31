@@ -92,9 +92,13 @@ def _enforce_max_rows(delete_query: Query) -> None:
             .get_schema()
             .get_table_name()
         )
-        from_clause_dict = delete_query.get_from_clause().__dict__
-        from_clause_dict["table_name"] = dist_table_name
-        return Table(**from_clause_dict)
+        from_clause = delete_query.get_from_clause()
+        return Table(
+            table_name=dist_table_name,
+            schema=from_clause.schema,
+            storage_key=from_clause.storage_key,
+            allocation_policies=from_clause.allocation_policies,
+        )
 
     select_query_to_count_rows = Query(
         selected_columns=[
