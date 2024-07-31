@@ -46,6 +46,7 @@ expression: span
     "sentry.sdk.name": "sentry.python.django"
   },
   "attr_num_5": {
+    "my.bool.field": 1.0,
     "my.neg.field": -100.0
   },
   "attr_str_6": {

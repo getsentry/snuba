@@ -128,9 +128,18 @@ impl From<FromSpanMessage> for EAPSpan {
             ];
             });
 
-            sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
+            let mut insert_string = |k: String, v: String| {
                 attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
                     .insert(k.clone(), v.clone());
+            };
+
+            let mut insert_num = |k: String, v: f64| {
+                attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
+                    .insert(k.clone(), v);
+            };
+
+            sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
+                insert_string(k.clone(), v.clone());
             });
 
             measurements.iter().for_each(|(k, v)| {
@@ -138,29 +147,26 @@ impl From<FromSpanMessage> for EAPSpan {
                     res.sampling_factor = v.value;
                     res.sampling_weight = 1.0 / v.value;
                 } else {
-                    attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
-                        .insert(k.clone(), v.value);
+                    insert_num(k.clone(), v.value);
                 }
             });
 
             data.iter().for_each(|(k, v)| {
-                let str_val: String = match v {
-                    Value::Bool(true) => "true".into(),
-                    Value::Bool(false) => "false".into(),
-                    Value::String(string) => string.clone(),
-                    Value::Array(array) => serde_json::to_string(array).unwrap_or_default(),
-                    Value::Object(object) => serde_json::to_string(object).unwrap_or_default(),
+                match v {
+                    Value::String(string) => insert_string(k.clone(), string.clone()),
+                    Value::Array(array) => {
+                        insert_string(k.clone(), serde_json::to_string(array).unwrap_or_default())
+                    }
+                    Value::Object(object) => {
+                        insert_string(k.clone(), serde_json::to_string(object).unwrap_or_default())
+                    }
+                    Value::Number(number) => {
+                        insert_num(k.clone(), number.as_f64().unwrap_or_default())
+                    }
+                    Value::Bool(true) => insert_num(k.clone(), 1.0),
+                    Value::Bool(false) => insert_num(k.clone(), 0.0),
                     _ => Default::default(),
                 };
-
-                if str_val != "" {
-                    attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
-                        .insert(k.clone(), str_val.into());
-                } else if let Value::Number(number) = v {
-                    let num_val = number.as_f64().unwrap_or_default();
-                    attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
-                        .insert(k.clone(), num_val);
-                }
             })
         }
 
@@ -192,7 +198,8 @@ mod tests {
         "my.float.field": 101.2,
         "my.int.field": 2000,
         "my.neg.field": -100,
-        "my.neg.float.field": -101.2
+        "my.neg.float.field": -101.2,
+        "my.bool.field": true
     },
     "measurements": {
         "num_of_spans": {
