@@ -312,9 +312,7 @@ def storage_delete(
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            delete_results = delete_from_storage(
-                storage, request_parts.query["columns"]
-            )
+            payload = delete_from_storage(storage, request_parts.query["columns"])
         except InvalidJsonRequestException as schema_error:
             return make_response(
                 jsonify({"error": str(schema_error)}),
@@ -325,7 +323,7 @@ def storage_delete(
             return make_response(jsonify({"error": error}), 500)
 
         return Response(
-            dump_payload(delete_results), 200, {"Content-Type": "application/json"}
+            dump_payload(payload), 200, {"Content-Type": "application/json"}
         )
 
     else:
