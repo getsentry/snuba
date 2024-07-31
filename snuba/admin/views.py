@@ -70,9 +70,12 @@ from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
+from snuba.request.exceptions import InvalidJsonRequestException
+from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
 from snuba.web.delete_query import delete_from_storage
@@ -1068,7 +1071,9 @@ def delete() -> Response:
         see delete_from_storage for definition of these inputs.
     """
     body = request.get_json()
-    if "storage" not in body:
+    assert isinstance(body, dict)
+    storage = body.pop("storage", None)
+    if storage is None:
         return make_response(
             jsonify(
                 {
@@ -1078,18 +1083,6 @@ def delete() -> Response:
             ),
             400,
         )
-    storage = body["storage"]
-    if "columns" not in body:
-        return make_response(
-            jsonify(
-                {
-                    "error",
-                    "all required input 'columns' is not present in the request body",
-                }
-            ),
-            400,
-        )
-    columns = body["columns"]
     try:
         storage = get_writable_storage(StorageKey(storage))
     except Exception as e:
@@ -1102,10 +1095,14 @@ def delete() -> Response:
             400,
         )
     try:
-        results = delete_from_storage(storage, columns)
-        return Response(json.dumps(results), 200, {"Content-Type": "application/json"})
-    except ValueError as e:
-        return make_response(jsonify({"error": str(e)}), 400)
+        schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+        request_parts = schema.validate(body)
+        delete_results = delete_from_storage(storage, request_parts.query["columns"])
+    except InvalidJsonRequestException as schema_error:
+        return make_response(
+            jsonify({"error": str(schema_error)}),
+            400,
+        )
     except Exception as e:
         if application.debug:
             from traceback import format_exception
@@ -1114,3 +1111,7 @@ def delete() -> Response:
         else:
             sentry_sdk.capture_exception(e)
             return make_response(jsonify({"error": "unexpected internal error"}), 500)
+
+    return Response(
+        json.dumps(delete_results), 200, {"Content-Type": "application/json"}
+    )
