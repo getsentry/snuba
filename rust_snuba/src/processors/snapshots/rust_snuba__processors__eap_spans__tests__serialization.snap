@@ -35,9 +35,6 @@ expression: span
     "transaction.method": "POST",
     "user": "ip:127.0.0.1"
   },
-  "attr_str_3": {
-    "transaction": "/api/0/relays/projectconfigs/"
-  },
   "attr_str_4": {
     "thread.id": "8522009600"
   },

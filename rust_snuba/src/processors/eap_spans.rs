@@ -80,11 +80,6 @@ fn fnv_1a(input: &[u8]) -> u32 {
 
 impl From<FromSpanMessage> for EAPSpan {
     fn from(from: FromSpanMessage) -> EAPSpan {
-        let sentry_tags = from.sentry_tags.unwrap_or_default();
-        let tags = from.tags.unwrap_or_default();
-        let measurements = from.measurements.unwrap_or_default();
-        let data = from.data.unwrap_or_default();
-
         let mut res = Self {
             organization_id: from.organization_id,
             project_id: from.project_id,
@@ -97,7 +92,6 @@ impl From<FromSpanMessage> for EAPSpan {
             segment_id: from
                 .segment_id
                 .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
-            segment_name: sentry_tags.get("transaction").cloned().unwrap_or_default(),
             is_segment: from.is_segment,
             _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
             start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
@@ -138,36 +132,54 @@ impl From<FromSpanMessage> for EAPSpan {
                     .insert(k.clone(), v);
             };
 
-            sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
-                insert_string(k.clone(), v.clone());
-            });
+            if let Some(sentry_tags) = from.sentry_tags {
+                sentry_tags.iter().for_each(|(k, v)| {
+                    if k == "transaction" {
+                        res.segment_name = v.clone();
+                    } else {
+                        insert_string(k.clone(), v.clone());
+                    }
+                })
+            }
 
-            measurements.iter().for_each(|(k, v)| {
-                if k == "client_sample_rate" && v.value != 0.0 {
-                    res.sampling_factor = v.value;
-                    res.sampling_weight = 1.0 / v.value;
-                } else {
-                    insert_num(k.clone(), v.value);
-                }
-            });
+            if let Some(tags) = from.tags {
+                tags.iter().for_each(|(k, v)| {
+                    insert_string(k.clone(), v.clone());
+                })
+            }
 
-            data.iter().for_each(|(k, v)| {
-                match v {
-                    Value::String(string) => insert_string(k.clone(), string.clone()),
-                    Value::Array(array) => {
-                        insert_string(k.clone(), serde_json::to_string(array).unwrap_or_default())
+            if let Some(measurements) = from.measurements {
+                measurements.iter().for_each(|(k, v)| {
+                    if k == "client_sample_rate" && v.value != 0.0 {
+                        res.sampling_factor = v.value;
+                        res.sampling_weight = 1.0 / v.value;
+                    } else {
+                        insert_num(k.clone(), v.value);
                     }
-                    Value::Object(object) => {
-                        insert_string(k.clone(), serde_json::to_string(object).unwrap_or_default())
-                    }
-                    Value::Number(number) => {
-                        insert_num(k.clone(), number.as_f64().unwrap_or_default())
-                    }
-                    Value::Bool(true) => insert_num(k.clone(), 1.0),
-                    Value::Bool(false) => insert_num(k.clone(), 0.0),
-                    _ => Default::default(),
-                };
-            })
+                });
+            }
+
+            if let Some(data) = from.data {
+                data.iter().for_each(|(k, v)| {
+                    match v {
+                        Value::String(string) => insert_string(k.clone(), string.clone()),
+                        Value::Array(array) => insert_string(
+                            k.clone(),
+                            serde_json::to_string(array).unwrap_or_default(),
+                        ),
+                        Value::Object(object) => insert_string(
+                            k.clone(),
+                            serde_json::to_string(object).unwrap_or_default(),
+                        ),
+                        Value::Number(number) => {
+                            insert_num(k.clone(), number.as_f64().unwrap_or_default())
+                        }
+                        Value::Bool(true) => insert_num(k.clone(), 1.0),
+                        Value::Bool(false) => insert_num(k.clone(), 0.0),
+                        _ => Default::default(),
+                    };
+                })
+            }
         }
 
         res
