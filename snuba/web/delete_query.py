@@ -40,7 +40,7 @@ def delete_from_storage(
     Returns a mapping from clickhouse table name to deletion results, there
     will be an entry for every local clickhouse table that makes up the storage.
     """
-    if get_config("storage_deletes_enabled", 0):
+    if not get_config("storage_deletes_enabled", 0):
         raise Exception("Deletes not enabled")
 
     delete_settings = storage.get_deletion_settings()
