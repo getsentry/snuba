@@ -20,7 +20,11 @@ class Migration(migration.ClickhouseNodeMigration):
         (
             Column(
                 "value_weighted",
-                AggregateFunction("sum", [Float(64)]),
+                AggregateFunction(
+                    "sum",
+                    [Float(64)],
+                    MigrationModifiers(codecs=["ZSTD(1)"]),
+                ),
             ),
             "value",
         ),

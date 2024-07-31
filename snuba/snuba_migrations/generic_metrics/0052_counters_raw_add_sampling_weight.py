@@ -19,7 +19,7 @@ class Migration(migration.ClickhouseNodeMigration):
         (
             Column(
                 "sampling_weight",
-                UInt(64, MigrationModifiers(default=str("1"))),
+                UInt(64, MigrationModifiers(codecs=["ZSTD(1)"], default=str("1"))),
             ),
             None,
         ),
