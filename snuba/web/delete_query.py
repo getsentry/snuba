@@ -7,13 +7,13 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.query import SelectedExpression, query_settings
+from snuba.query import SelectedExpression
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
 from snuba.query.exceptions import TooManyDeleteRowsException
 from snuba.query.expressions import Expression, FunctionCall
-from snuba.query.query_settings import QuerySettings
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
@@ -23,7 +23,6 @@ from snuba.utils.metrics.util import with_span
 def delete_from_storage(
     storage: WritableTableStorage,
     columns: Dict[str, list[Any]],
-    query_Settings: QuerySettings,
 ) -> dict[str, Result]:
     """
     Inputs:
@@ -52,7 +51,7 @@ def delete_from_storage(
 
     results: dict[str, Result] = {}
     for table in delete_settings.tables:
-        result = _delete_from_table(storage, table, columns, query_settings)
+        result = _delete_from_table(storage, table, columns)
         results[table] = result
     return results
 
@@ -103,7 +102,6 @@ def _delete_from_table(
     storage: WritableTableStorage,
     table: str,
     conditions: Dict[str, Any],
-    query_Settings: QuerySettings,
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
     on_cluster = literal(cluster_name) if cluster_name else None
@@ -122,8 +120,10 @@ def _delete_from_table(
     _enforce_max_rows(query)
 
     deletion_processors = storage.get_deletion_processors()
+    # These settings aren't needed at the moment
+    dummy_query_settings = HTTPQuerySettings()
     for deletion_procesor in deletion_processors:
-        deletion_procesor.process_query(query, query_Settings)
+        deletion_procesor.process_query(query, dummy_query_settings)
 
     formatted_query = format_query(query)
     # TODO error handling and the lot
