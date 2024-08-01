@@ -78,7 +78,7 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
-from snuba.web.delete_query import delete_from_storage
+from snuba.web.delete_query import delete_from_storage, deletes_are_enabled
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1115,3 +1115,12 @@ def delete() -> Response:
     return Response(
         json.dumps(delete_results), 200, {"Content-Type": "application/json"}
     )
+
+
+@application.route(
+    "/deletes-enabled",
+    methods=["GET"],
+)
+@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
+def deletes_enabled() -> Response:
+    return make_response(jsonify(deletes_are_enabled()), 200)
