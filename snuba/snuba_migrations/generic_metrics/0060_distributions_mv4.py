@@ -66,7 +66,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     sumState(values_rows) AS sum,
                     sumState(values_rows * sampling_weight) AS sum_weighted,
                     countState(values_rows) AS count,
-                    sumState(count(values_rows) * sampling_weight) AS count_weighted,
+                    sumState(sampling_weight) AS count_weighted,
                     histogramStateIf(250)(values_rows, (disable_percentiles = 0) AND enable_histogram) AS histogram_buckets
                 FROM generic_metric_distributions_raw_local
                 WHERE (materialization_version = 4) AND (metric_type = 'distribution')

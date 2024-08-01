@@ -52,8 +52,8 @@ class Migration(migration.ClickhouseNodeMigration):
             Column(
                 "count_weighted",
                 AggregateFunction(
-                    "count",
-                    [Float(64)],
+                    "sum",
+                    [UInt(64)],
                     MigrationModifiers(codecs=["ZSTD(1)"]),
                 ),
             ),
