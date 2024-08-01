@@ -1103,6 +1103,17 @@ def delete() -> Response:
             jsonify({"error": str(schema_error)}),
             400,
         )
+    except ValueError as e:
+        import traceback
+
+        # if the ValueError came from delete_from_storage
+        # (as opposed to some deeper level of the stack)
+        tb = traceback.extract_tb(e.__traceback__)
+        if tb[-1].name == delete_from_storage.__name__:
+            return make_response(
+                jsonify({"error": str(e)}),
+                400,
+            )
     except Exception as e:
         if application.debug:
             from traceback import format_exception
