@@ -133,7 +133,9 @@ class OptimizeScheduler:
                 )
             elif current_time < self.__parallel_end_time:
                 return OptimizationSchedule(
-                    partitions_groups=self.subdivide_partitions(partitions, self.__parallel),
+                    partitions_groups=self.subdivide_partitions(
+                        partitions, self.__parallel
+                    ),
                     cutoff_time=self.__parallel_end_time,
                     start_time_jitter_minutes=self.start_time_jitter(),
                 )
