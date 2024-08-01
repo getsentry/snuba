@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use serde_json::Value;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
@@ -40,6 +41,7 @@ pub(crate) struct FromSpanMessage {
     pub(crate) exclusive_time_ms: f64,
     pub(crate) is_segment: bool,
     pub(crate) measurements: Option<BTreeMap<String, FromMeasurementValue>>,
+    pub(crate) data: Option<BTreeMap<String, Value>>,
     pub(crate) parent_span_id: Option<String>,
     pub(crate) profile_id: Option<Uuid>,
     pub(crate) organization_id: u64,

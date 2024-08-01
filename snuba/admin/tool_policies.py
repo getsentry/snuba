@@ -31,6 +31,7 @@ class AdminTools(Enum):
     PRODUCTION_QUERIES = "production-queries"
     CARDINALITY_ANALYZER = "cardinality-analyzer"
     SNUBA_EXPLAIN = "snuba-explain"
+    DELETE_TOOL = "delete_tool"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}

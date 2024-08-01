@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use serde_json::Value;
 
 use crate::config::ProcessorConfig;
 use crate::processors::spans::FromSpanMessage;
@@ -79,10 +80,6 @@ fn fnv_1a(input: &[u8]) -> u32 {
 
 impl From<FromSpanMessage> for EAPSpan {
     fn from(from: FromSpanMessage) -> EAPSpan {
-        let sentry_tags = from.sentry_tags.unwrap_or_default();
-        let tags = from.tags.unwrap_or_default();
-        let measurements = from.measurements.unwrap_or_default();
-
         let mut res = Self {
             organization_id: from.organization_id,
             project_id: from.project_id,
@@ -95,7 +92,6 @@ impl From<FromSpanMessage> for EAPSpan {
             segment_id: from
                 .segment_id
                 .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
-            segment_name: sentry_tags.get("transaction").cloned().unwrap_or_default(),
             is_segment: from.is_segment,
             _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
             start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
@@ -119,27 +115,71 @@ impl From<FromSpanMessage> for EAPSpan {
                 &mut res.attr_str_~N,
                 )*
             ];
-            });
-
-            sentry_tags.iter().chain(tags.iter()).for_each(|(k, v)| {
-                attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
-                    .insert(k.clone(), v.clone());
-            });
-        }
-
-        {
-            seq!(N in 0..20 {
             let mut attr_num_buckets = [
                 #(
                 &mut res.attr_num_~N,
                 )*
             ];
-                });
-
-            measurements.iter().for_each(|(k, v)| {
-                attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
-                    .insert(k.clone(), v.value);
             });
+
+            let mut insert_string = |k: String, v: String| {
+                attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
+                    .insert(k.clone(), v.clone());
+            };
+
+            let mut insert_num = |k: String, v: f64| {
+                attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
+                    .insert(k.clone(), v);
+            };
+
+            if let Some(sentry_tags) = from.sentry_tags {
+                sentry_tags.iter().for_each(|(k, v)| {
+                    if k == "transaction" {
+                        res.segment_name = v.clone();
+                    } else {
+                        insert_string(k.clone(), v.clone());
+                    }
+                })
+            }
+
+            if let Some(tags) = from.tags {
+                tags.iter().for_each(|(k, v)| {
+                    insert_string(k.clone(), v.clone());
+                })
+            }
+
+            if let Some(measurements) = from.measurements {
+                measurements.iter().for_each(|(k, v)| {
+                    if k == "client_sample_rate" && v.value != 0.0 {
+                        res.sampling_factor = v.value;
+                        res.sampling_weight = 1.0 / v.value;
+                    } else {
+                        insert_num(k.clone(), v.value);
+                    }
+                });
+            }
+
+            if let Some(data) = from.data {
+                data.iter().for_each(|(k, v)| {
+                    match v {
+                        Value::String(string) => insert_string(k.clone(), string.clone()),
+                        Value::Array(array) => insert_string(
+                            k.clone(),
+                            serde_json::to_string(array).unwrap_or_default(),
+                        ),
+                        Value::Object(object) => insert_string(
+                            k.clone(),
+                            serde_json::to_string(object).unwrap_or_default(),
+                        ),
+                        Value::Number(number) => {
+                            insert_num(k.clone(), number.as_f64().unwrap_or_default())
+                        }
+                        Value::Bool(true) => insert_num(k.clone(), 1.0),
+                        Value::Bool(false) => insert_num(k.clone(), 0.0),
+                        _ => Default::default(),
+                    };
+                })
+            }
         }
 
         res
@@ -166,7 +206,13 @@ mod tests {
         "thread.id": "8522009600",
         "sentry.segment.name": "/api/0/relays/projectconfigs/",
         "sentry.sdk.name": "sentry.python.django",
-        "sentry.sdk.version": "2.7.0"
+        "sentry.sdk.version": "2.7.0",
+        "my.float.field": 101.2,
+        "my.int.field": 2000,
+        "my.neg.field": -100,
+        "my.neg.float.field": -101.2,
+        "my.true.bool.field": true,
+        "my.false.bool.field": false
     },
     "measurements": {
         "num_of_spans": {

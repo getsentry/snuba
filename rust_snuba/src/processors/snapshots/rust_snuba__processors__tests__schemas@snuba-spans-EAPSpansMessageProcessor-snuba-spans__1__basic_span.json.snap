@@ -24,9 +24,6 @@ expression: snapshot_payload
     "attr_str_2": {
       "transaction.method": "GET"
     },
-    "attr_str_3": {
-      "transaction": "/organizations/:orgId/issues/"
-    },
     "attr_str_4": {
       "http.method": "GET",
       "system": "python"

@@ -59,18 +59,26 @@ from snuba.consumers.dlq import (
     store_instruction,
 )
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.factory import (
+    get_all_storage_keys,
+    get_storage,
+    get_writable_storage,
+)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
+from snuba.request.exceptions import InvalidJsonRequestException
+from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.web.delete_query import delete_from_storage
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1046,3 +1054,64 @@ def get_allowed_projects() -> Response:
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
     return make_response(jsonify(settings.ADMIN_REGIONS), 200)
+
+
+@application.route(
+    "/delete",
+    methods=["DELETE"],
+)
+@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
+def delete() -> Response:
+    """
+    Given a storage name and columns object, parses the input and calls
+    delete_from_storage with them.
+
+    Input:
+        an http DELETE request with a json body containing elements "storage" and "columns"
+        see delete_from_storage for definition of these inputs.
+    """
+    body = request.get_json()
+    assert isinstance(body, dict)
+    storage = body.pop("storage", None)
+    if storage is None:
+        return make_response(
+            jsonify(
+                {
+                    "error",
+                    "all required input 'storage' is not present in the request body",
+                }
+            ),
+            400,
+        )
+    try:
+        storage = get_writable_storage(StorageKey(storage))
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": str(e),
+                }
+            ),
+            400,
+        )
+    try:
+        schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+        request_parts = schema.validate(body)
+        delete_results = delete_from_storage(storage, request_parts.query["columns"])
+    except InvalidJsonRequestException as schema_error:
+        return make_response(
+            jsonify({"error": str(schema_error)}),
+            400,
+        )
+    except Exception as e:
+        if application.debug:
+            from traceback import format_exception
+
+            return make_response(jsonify({"error": format_exception(e)}), 500)
+        else:
+            sentry_sdk.capture_exception(e)
+            return make_response(jsonify({"error": "unexpected internal error"}), 500)
+
+    return Response(
+        json.dumps(delete_results), 200, {"Content-Type": "application/json"}
+    )
