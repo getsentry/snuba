@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+message FindTraceRequest {
+  message SpanWithAttrKeyExists {
+    string attr_key = 1;
+  }
+  message SpanWithAttrKeyEqualsValue {
+    string attr_key = 1;
+    string attr_value = 2;
+  }
+  message Filter {
+    oneof value {
+      SpanWithAttrKeyExists span_with_attr_key_exists = 1;
+      SpanWithAttrKeyEqualsValue span_with_attr_key_equals_value = 2;
+    }
+  }
+  repeated Filter filters = 1;
+}
+
+message FindTraceResponse {
+  repeated string trace_uuids = 1;
+}

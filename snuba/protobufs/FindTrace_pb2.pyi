@@ -52,7 +52,7 @@ class FindTraceRequest(_message.Message):
     ) -> None: ...
 
 class FindTraceResponse(_message.Message):
-    __slots__ = ("trace_uuid",)
-    TRACE_UUID_FIELD_NUMBER: _ClassVar[int]
-    trace_uuid: str
-    def __init__(self, trace_uuid: _Optional[str] = ...) -> None: ...
+    __slots__ = ("trace_uuids",)
+    TRACE_UUIDS_FIELD_NUMBER: _ClassVar[int]
+    trace_uuids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, trace_uuids: _Optional[_Iterable[str]] = ...) -> None: ...

@@ -25,6 +25,8 @@ from snuba.query.matchers import (
     Param,
     String,
 )
+from snuba.utils import constants
+from snuba.utils.hashes import fnv_1a
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -238,19 +240,6 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
-    to_num_cols: int
-
-    @staticmethod
-    def fnv_1a(b: bytes) -> int:
-        # TODO: test that fnv_1a("test") == 2949673445
-        fnv_1a_32_prime = 16777619
-        fnv_1a_32_offset_basis = 2166136261
-
-        res = fnv_1a_32_offset_basis
-        for byt in b:
-            res = res ^ byt
-            res = (res * fnv_1a_32_prime) & 0xFFFFFFFF  # force 32 bit
-        return res
 
     def attempt_map(
         self,
@@ -268,7 +257,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        bucket_idx = self.fnv_1a(key.value.encode("utf-8")) % self.to_num_cols
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % constants.NUM_ATTR_BUCKETS
         return SubscriptableReference(
             column=ColumnExpr(
                 None,
