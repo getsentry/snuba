@@ -26,6 +26,7 @@ from snuba.query.matchers import (
     String,
 )
 from snuba.utils.constants import ATTRIBUTE_BUCKETS
+from snuba.utils.hashes import fnv_1a
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -231,27 +232,13 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
 @dataclass(frozen=True)
 class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     """
-    Basic implementation of a tag mapper that transforms a subscriptable
-    into a Clickhouse array access.
+    Maps a key into the appropriate bucket by hashing the key. For example, hello[test] might go to attr_str_22['test']
     """
 
     from_column_table: Optional[str]
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
-    to_num_cols: int | None = None
-
-    @staticmethod
-    def fnv_1a(b: bytes) -> int:
-        # TODO: test that fnv_1a("test") == 2949673445
-        fnv_1a_32_prime = 16777619
-        fnv_1a_32_offset_basis = 2166136261
-
-        res = fnv_1a_32_offset_basis
-        for byt in b:
-            res = res ^ byt
-            res = (res * fnv_1a_32_prime) & 0xFFFFFFFF  # force 32 bit
-        return res
 
     def attempt_map(
         self,
@@ -269,8 +256,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        modulo = self.to_num_cols or ATTRIBUTE_BUCKETS
-        bucket_idx = self.fnv_1a(key.value.encode("utf-8")) % modulo
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
         return SubscriptableReference(
             column=ColumnExpr(
                 None,
