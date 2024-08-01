@@ -19,7 +19,7 @@ class OptimizedSchedulerTimeout(Exception):
 
 @dataclass(frozen=True)
 class OptimizationSchedule:
-    partitions: Sequence[Sequence[str]]
+    partitions_groups: Sequence[Sequence[str]]
     cutoff_time: datetime
     start_time_jitter_minutes: Optional[Sequence[int]] = None
 
@@ -121,24 +121,27 @@ class OptimizeScheduler:
 
         if self.__parallel == 1:
             return OptimizationSchedule(
-                partitions=[self.sort_partitions(partitions)],
+                partitions_groups=[self.sort_partitions(partitions)],
                 cutoff_time=self.__last_midnight
                 + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME),
             )
         else:
             if current_time < self.__parallel_start_time:
                 return OptimizationSchedule(
-                    partitions=[self.sort_partitions(partitions)],
+                    partitions_groups=[self.sort_partitions(partitions)],
                     cutoff_time=self.__parallel_start_time,
                 )
             elif current_time < self.__parallel_end_time:
                 return OptimizationSchedule(
-                    partitions=self.subdivide_partitions(partitions, self.__parallel),
+                    partitions_groups=self.subdivide_partitions(partitions, self.__parallel),
                     cutoff_time=self.__parallel_end_time,
                     start_time_jitter_minutes=self.start_time_jitter(),
                 )
             else:
                 return OptimizationSchedule(
-                    partitions=[self.sort_partitions(partitions)],
+                    partitions_groups=[self.sort_partitions(partitions)],
                     cutoff_time=self.__full_job_end_time,
                 )
+
+    def get_is_running_parallel(self) -> bool:
+        return self.__parallel != 1

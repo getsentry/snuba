@@ -1,16 +1,18 @@
+from collections import deque
 import multiprocessing
 import os
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Mapping, MutableSequence, Optional, Sequence
+import typing
 
 import structlog
 from structlog.types import EventDict, WrappedLogger
 
 from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.optimize.optimize_scheduler import OptimizeScheduler
+from snuba.clickhouse.optimize.optimize_scheduler import OptimizationSchedule, OptimizeScheduler
 from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
@@ -24,6 +26,7 @@ from snuba.settings import (
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
     OPTIMIZE_MERGE_SIZE_CUTOFF,
 )
+from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
@@ -266,6 +269,16 @@ def get_current_large_merges(
 
     return merge_info
 
+def _flatten(partition_groups: Sequence[Sequence[str]]) -> deque[str]:
+    scheduled_partitions: deque[str] = deque()
+    max_partition_group_size = max(len(partition_group) for partition_group in partition_groups)
+
+    for i in range(max_partition_group_size):
+        for partition_group in partition_groups:
+            if i < len(partition_group):
+                scheduled_partitions.append(partition_group[i])
+    return scheduled_partitions
+
 
 def optimize_partition_runner(
     clickhouse: ClickhousePool,
@@ -290,21 +303,26 @@ def optimize_partition_runner(
     remaining_partitions = partitions
     while remaining_partitions:
         schedule = scheduler.get_next_schedule(remaining_partitions)
-        num_threads = len(schedule.partitions)
-        logger.info(
-            f"Running schedule with cutoff time: "
-            f"{schedule.cutoff_time} with {num_threads} threads"
-        )
-        threads: MutableSequence[threading.Thread] = []
-        for i in range(0, num_threads):
-            threads.append(
-                threading.Thread(
+        scheduled_partitions = _flatten(schedule.partitions_groups)
+
+
+        while scheduled_partitions:
+            num_threads = len(schedule.partitions_groups)
+            if scheduler.get_is_running_parallel():
+                num_threads = typing.cast(int, get_config("optimize_parallel_threads", num_threads))
+            logger.info(
+                f"Running schedule with cutoff time: "
+                f"{schedule.cutoff_time} with {num_threads} threads"
+            )
+
+            for i in range(0, num_threads):
+                thread = threading.Thread(
                     target=optimize_partitions,
                     args=(
                         clickhouse,
                         database,
                         table,
-                        schedule.partitions[i],
+                        [scheduled_partitions.popleft()],
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
@@ -313,9 +331,9 @@ def optimize_partition_runner(
                         else None,
                     ),
                 )
-            )
 
-            threads[i].start()
+                thread.start()
+
 
         # Wait for all threads to finish. They would finish either because all
         # work is done or because a cutoff time was reached. We won't know the
