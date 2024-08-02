@@ -14,6 +14,9 @@
 /snuba/datasets/configuration/replays                   @getsentry/replay-backend @getsentry/owners-snuba
 /snuba/datasets/configuration/metrics                   @getsentry/telemetry-experience @getsentry/owners-snuba
 
+# migrations
+/snuba/snuba_migrations/events-analytics-platform @getsentry/events-analytics-platform @getsentry/owners-snuba
+
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
 /rust_snuba/src/processors/replays.rs @getsentry/replay-backend
