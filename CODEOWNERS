@@ -20,6 +20,7 @@
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
 /rust_snuba/src/processors/replays.rs @getsentry/replay-backend
+/rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform
 
 # Legal
 /LICENSE.md  @getsentry/owners-legal
