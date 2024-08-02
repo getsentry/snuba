@@ -1,5 +1,4 @@
 def fnv_1a(b: bytes) -> int:
-    # TODO: test that fnv_1a("test") == 2949673445
     fnv_1a_32_prime = 16777619
     fnv_1a_32_offset_basis = 2166136261
 
