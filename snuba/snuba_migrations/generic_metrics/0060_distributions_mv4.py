@@ -62,6 +62,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     quantilesTDigestWeightedStateIf(0.5, 0.75, 0.9, 0.95, 0.99)(values_rows, sampling_weight, disable_percentiles = 0) AS percentiles_weighted,
                     minState(values_rows) AS min,
                     maxState(values_rows) AS max,
+                    avgState(values_rows) as avg,
                     avgWeightedState(values_rows, sampling_weight) AS avg_weighted,
                     sumState(values_rows) AS sum,
                     sumState(values_rows * sampling_weight) AS sum_weighted,
