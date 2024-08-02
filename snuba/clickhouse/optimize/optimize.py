@@ -4,6 +4,7 @@ import threading
 import time
 import typing
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Mapping, Optional, Sequence
 
@@ -324,64 +325,45 @@ def optimize_partition_runner(
     2. The final cutoff time is reached. In this case, the scheduler will
     raise an exception which would be propagated to the caller.
     """
-    lock = threading.Lock()
-    active_threads: list[threading.Thread] = list()
 
     remaining_partitions = partitions
     while remaining_partitions:
         schedule = scheduler.get_next_schedule(remaining_partitions)
-        scheduled_partitions_and_jitter_pairs = _get_partition_and_jitter_pairs(
-            schedule
+        scheduled_partition_and_jitter_pairs = _get_partition_and_jitter_pairs(schedule)
+
+        num_threads = len(schedule.partitions_groups)
+        configured_num_threads = get_config("optimize_parallel_threads")
+        if scheduler.get_is_running_parallel() and configured_num_threads:
+            num_threads = typing.cast(int, configured_num_threads)
+        logger.info(
+            f"Running schedule with cutoff time: "
+            f"{schedule.cutoff_time} with {num_threads} threads"
         )
 
-        def _optimize_one_partition_with_one_thread() -> None:
-            with lock:
-                if not scheduled_partitions_and_jitter_pairs:
-                    return
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = []
+
+            while scheduled_partition_and_jitter_pairs:
                 scheduled_partition_and_jitter = (
-                    scheduled_partitions_and_jitter_pairs.popleft()
+                    scheduled_partition_and_jitter_pairs.popleft()
+                )
+                futures.append(
+                    executor.submit(
+                        optimize_partitions,
+                        clickhouse,
+                        database,
+                        table,
+                        [scheduled_partition_and_jitter.partition],
+                        schedule.cutoff_time,
+                        tracker,
+                        clickhouse_host,
+                        scheduled_partition_and_jitter.start_time_jitter_minutes,
+                    )
                 )
 
-            optimize_partitions(
-                clickhouse,
-                database,
-                table,
-                [scheduled_partition_and_jitter.partition],
-                schedule.cutoff_time,
-                tracker,
-                clickhouse_host,
-                scheduled_partition_and_jitter.start_time_jitter_minutes,
-            )
-
-        while scheduled_partitions_and_jitter_pairs:
-            num_threads = len(schedule.partitions_groups)
-            configured_num_threads = get_config("optimize_parallel_threads")
-            if scheduler.get_is_running_parallel() and configured_num_threads:
-                num_threads = typing.cast(int, configured_num_threads)
-            logger.info(
-                f"Running schedule with cutoff time: "
-                f"{schedule.cutoff_time} with {num_threads} threads"
-            )
-
-            with lock:
-                while (
-                    scheduled_partitions_and_jitter_pairs
-                    and len(active_threads) < num_threads
-                ):
-                    thread = threading.Thread(
-                        target=_optimize_one_partition_with_one_thread
-                    )
-                    thread.start()
-                    active_threads.append(thread)
-
-            for thread in active_threads:
-                if not thread.is_alive():
-                    thread.join()
-                    active_threads.remove(thread)
-                    break
-
-            if not scheduled_partitions_and_jitter_pairs and not active_threads:
-                break
+                if len(futures) >= num_threads:
+                    for future in as_completed(futures):
+                        futures.remove(future)
 
         # If there are still partitions needing optimization then move on to the
         # next bucket with the partitions which still need optimization.
