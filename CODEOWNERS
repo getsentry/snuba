@@ -7,7 +7,7 @@
 /snuba/datasets/configuration/groupedmessage            @getsentry/issues @getsentry/owners-snuba
 /snuba/datasets/configuration/groupassignee             @getsentry/issues @getsentry/owners-snuba
 /snuba/datasets/configuration/spans                     @getsentry/performance @getsentry/owners-snuba
-/snuba/datasets/configuration/events_analytics_platform @getsentry/performance @getsentry/owners-snuba
+/snuba/datasets/configuration/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
 /snuba/datasets/configuration/transactions              @getsentry/performance @getsentry/owners-snuba
 /snuba/datasets/configuration/functions                 @getsentry/profiling @getsentry/owners-snuba
 /snuba/datasets/configuration/profiles                  @getsentry/profiling @getsentry/owners-snuba
