@@ -1,10 +1,12 @@
+import concurrent
+import concurrent.futures
 import multiprocessing
 import os
 import threading
 import time
 import typing
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Mapping, Optional, Sequence
 
@@ -50,6 +52,8 @@ logger = structlog.get_logger().bind(module=__name__)
 logger = structlog.wrap_logger(logger, processors=[thread_info_processor])
 
 metrics = MetricsWrapper(environment.metrics, "optimize")
+
+_OPTIMIZE_PARALLEL_THREADS_KEY = "optimize_parallel_threads"
 
 
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
@@ -281,11 +285,10 @@ class _ScheduledPartitionAndJiter:
     start_time_jitter_minutes: int | None
 
 
-def _get_partition_and_jitter_pairs(
+def _get_partitions_to_optimize(
     schedule: OptimizationSchedule,
 ) -> deque[_ScheduledPartitionAndJiter]:
-    scheduled_partitions_and_jitter_pairs: deque[_ScheduledPartitionAndJiter] = deque()
-    # eque[List[Union[str, Union[int, None]]]]
+    partitions_to_optimize: deque[_ScheduledPartitionAndJiter] = deque()
 
     max_partition_group_size = max(
         len(partition_group) for partition_group in schedule.partitions_groups
@@ -294,7 +297,7 @@ def _get_partition_and_jitter_pairs(
     for i in range(max_partition_group_size):
         for partition_group in schedule.partitions_groups:
             if i < len(partition_group):
-                scheduled_partitions_and_jitter_pairs.append(
+                partitions_to_optimize.append(
                     _ScheduledPartitionAndJiter(
                         partition_group[i],
                         schedule.start_time_jitter_minutes[i]
@@ -302,7 +305,7 @@ def _get_partition_and_jitter_pairs(
                         else None,
                     )
                 )
-    return scheduled_partitions_and_jitter_pairs
+    return partitions_to_optimize
 
 
 def optimize_partition_runner(
@@ -324,46 +327,71 @@ def optimize_partition_runner(
     1. There are no more partitions which need optimization.
     2. The final cutoff time is reached. In this case, the scheduler will
     raise an exception which would be propagated to the caller.
+
+    Details of execution flow:
+    1. start by reading configured_num_threads from the Snuba Admin runtime config
+    2. dispatches configured_num_threads threads to optimize configured_num_threads partitions (1 partition per thread)
+    3. as soon as one thread finishes, check configured_num_threads from runtime config again
+    4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
 
     remaining_partitions = partitions
-    while remaining_partitions:
-        schedule = scheduler.get_next_schedule(remaining_partitions)
-        scheduled_partition_and_jitter_pairs = _get_partition_and_jitter_pairs(schedule)
+    with ThreadPoolExecutor(max_workers=32) as executor:
+        while remaining_partitions:
+            schedule = scheduler.get_next_schedule(remaining_partitions)
+            partitions_to_optimize = _get_partitions_to_optimize(schedule)
 
-        num_threads = len(schedule.partitions_groups)
-        configured_num_threads = get_config("optimize_parallel_threads")
-        if scheduler.get_is_running_parallel() and configured_num_threads:
-            num_threads = typing.cast(int, configured_num_threads)
-        logger.info(
-            f"Running schedule with cutoff time: "
-            f"{schedule.cutoff_time} with {num_threads} threads"
-        )
+            default_num_threads = len(schedule.partitions_groups)
+            configured_num_threads = typing.cast(
+                int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_num_threads)
+            )
+            logger.info(
+                f"Running schedule with cutoff time: "
+                f"{schedule.cutoff_time} with {configured_num_threads} threads"
+            )
 
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = []
-
-            while scheduled_partition_and_jitter_pairs:
-                scheduled_partition_and_jitter = (
-                    scheduled_partition_and_jitter_pairs.popleft()
-                )
+            for _ in range(min(len(partitions_to_optimize), configured_num_threads)):
+                partition_to_optimize = partitions_to_optimize.popleft()
                 futures.append(
                     executor.submit(
                         optimize_partitions,
                         clickhouse,
                         database,
                         table,
-                        [scheduled_partition_and_jitter.partition],
+                        [partition_to_optimize.partition],
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
-                        scheduled_partition_and_jitter.start_time_jitter_minutes,
+                        partition_to_optimize.start_time_jitter_minutes,
                     )
                 )
 
-                if len(futures) >= num_threads:
-                    for future in as_completed(futures):
-                        futures.remove(future)
+            _, active_futures = concurrent.futures.wait(
+                futures, return_when=concurrent.futures.FIRST_COMPLETED
+            )
+
+            configured_num_threads = typing.cast(
+                int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_num_threads)
+            )
+            for _ in range(configured_num_threads - len(active_futures)):
+                if not partitions_to_optimize:
+                    break
+
+                partition_to_optimize = partitions_to_optimize.popleft()
+                futures.append(
+                    executor.submit(
+                        optimize_partitions,
+                        clickhouse,
+                        database,
+                        table,
+                        [partition_to_optimize.partition],
+                        schedule.cutoff_time,
+                        tracker,
+                        clickhouse_host,
+                        None,
+                    )
+                )
 
         # If there are still partitions needing optimization then move on to the
         # next bucket with the partitions which still need optimization.

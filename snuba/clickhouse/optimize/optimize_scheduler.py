@@ -144,6 +144,3 @@ class OptimizeScheduler:
                     partitions_groups=[self.sort_partitions(partitions)],
                     cutoff_time=self.__full_job_end_time,
                 )
-
-    def get_is_running_parallel(self) -> bool:
-        return self.__parallel != 1
