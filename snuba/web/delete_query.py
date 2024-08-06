@@ -19,6 +19,10 @@ from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
 
 
+class DeletesNotEnabledError(Exception):
+    pass
+
+
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
@@ -43,11 +47,13 @@ def delete_from_storage(
     will be an entry for every local clickhouse table that makes up the storage.
     """
     if not deletes_are_enabled():
-        raise ValueError("Deletes not enabled in this region")
+        raise DeletesNotEnabledError("Deletes not enabled in this region")
 
     delete_settings = storage.get_deletion_settings()
     if not delete_settings.is_enabled:
-        raise ValueError(f"Deletes not enabled for {storage.get_storage_key().value}")
+        raise DeletesNotEnabledError(
+            f"Deletes not enabled for {storage.get_storage_key().value}"
+        )
 
     results: dict[str, Result] = {}
     for table in delete_settings.tables:
