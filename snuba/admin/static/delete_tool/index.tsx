@@ -6,6 +6,7 @@ function DeleteTool(props: { api: Client }) {
     const [columnConditions, setColumnConditions] = useState('')
     const [result, setResult] = useState('')
     const [showHelpMessage, setShowHelpMessage] = useState(false)
+    const [isDeletesEnabled, setIsDeletesEnabled] = useState(false)
 
     function getHelpMessage() {
         if (showHelpMessage) {
@@ -43,6 +44,19 @@ function DeleteTool(props: { api: Client }) {
                 return res.text()
             }
         }).then(data_str => setResult(resp_status + data_str))
+    }
+
+    useEffect(() => {
+        fetch("/deletes-enabled").then(res => res.json()).then(data => {
+            if (!(data === true || data === false)) {
+                throw Error("Expected deletes-enabled to return true/false value but it didnt")
+            }
+            setIsDeletesEnabled(data)
+        })
+    }, [])
+
+    if (!isDeletesEnabled) {
+        return <p>Deletion is not enabled for this region</p>
     }
 
     return (
