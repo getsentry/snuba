@@ -8,7 +8,7 @@ confluent-kafka==2.3.0
 datadog==0.21.0
 flake8==5.0.4
 Flask==2.2.5
-google-cloud-storage==2.18.0
+google-cloud-storage==2.14.0
 honcho==1.1.0
 python-jose[cryptography]==3.3.0
 jsonschema==4.16.0
@@ -39,6 +39,6 @@ pyuwsgi==2.0.23
 Werkzeug==2.2.3
 PyYAML==6.0
 sqlparse==0.4.2
-google-api-python-client==2.139.0
+google-api-python-client==2.88.0
 sentry-usage-accountant==0.0.10
 freezegun==1.2.2

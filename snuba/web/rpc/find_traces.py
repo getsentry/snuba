@@ -42,6 +42,7 @@ WHERE ({cond})
 
 
 async def find_traces(req: FindTraceRequest, timer: Timer) -> FindTraceResponse:
+    return FindTraceResponse()
     if len(req.filters) == 0:
         return FindTraceResponse()
 
