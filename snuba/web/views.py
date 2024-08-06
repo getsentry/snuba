@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import atexit
 import functools
 import logging
@@ -77,7 +76,6 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc.find_traces import find_traces
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -278,9 +276,7 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 def find_trace_endpoint(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
     req = FindTrace_pb2.FindTraceRequest()
     req.ParseFromString(http_request.data)
-    resp = asyncio.run(find_traces(req, timer))
-
-    return resp.SerializeToString()
+    return ""  # TODO this endpoint is not ready for primetime
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
