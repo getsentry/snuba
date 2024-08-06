@@ -87,7 +87,7 @@ class OptimizeScheduler:
 
         return output
 
-    def start_time_jitter(self) -> Sequence[int]:
+    def get_start_time_jitter_for_each_partition(self) -> Sequence[int]:
         """
         Get the start time jitter for each partition. The start time jitter
         is the amount of time to wait before starting each thread. This is
@@ -95,7 +95,7 @@ class OptimizeScheduler:
         optimizations ending at the same time.
         """
         if self.__parallel == 1:
-            return [0]
+            return []
 
         interval = int(
             settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES / (self.__parallel - 1)
@@ -137,7 +137,7 @@ class OptimizeScheduler:
                         partitions, self.__parallel
                     ),
                     cutoff_time=self.__parallel_end_time,
-                    start_time_jitter_minutes=self.start_time_jitter(),
+                    start_time_jitter_minutes=self.get_start_time_jitter_for_each_partition(),
                 )
             else:
                 return OptimizationSchedule(

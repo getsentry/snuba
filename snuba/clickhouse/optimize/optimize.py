@@ -6,20 +6,16 @@ import threading
 import time
 import typing
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import structlog
-from attr import dataclass
 from structlog.types import EventDict, WrappedLogger
 
 from snuba import environment, util
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.optimize.optimize_scheduler import (
-    OptimizationSchedule,
-    OptimizeScheduler,
-)
+from snuba.clickhouse.optimize.optimize_scheduler import OptimizeScheduler
 from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
@@ -279,35 +275,6 @@ def get_current_large_merges(
     return merge_info
 
 
-@dataclass
-class _ScheduledPartitionAndJiter:
-    partition: str
-    start_time_jitter_minutes: int | None
-
-
-def _get_partitions_to_optimize(
-    schedule: OptimizationSchedule,
-) -> deque[_ScheduledPartitionAndJiter]:
-    partitions_to_optimize: deque[_ScheduledPartitionAndJiter] = deque()
-
-    max_partition_group_size = max(
-        len(partition_group) for partition_group in schedule.partitions_groups
-    )
-
-    for i in range(max_partition_group_size):
-        for partition_group in schedule.partitions_groups:
-            if i < len(partition_group):
-                partitions_to_optimize.append(
-                    _ScheduledPartitionAndJiter(
-                        partition_group[i],
-                        schedule.start_time_jitter_minutes[i]
-                        if schedule.start_time_jitter_minutes
-                        else None,
-                    )
-                )
-    return partitions_to_optimize
-
-
 def optimize_partition_runner(
     clickhouse: ClickhousePool,
     database: str,
@@ -335,12 +302,15 @@ def optimize_partition_runner(
     4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
 
-    remaining_partitions = partitions
     with ThreadPoolExecutor(max_workers=32) as executor:
-        while remaining_partitions:
-            schedule = scheduler.get_next_schedule(remaining_partitions)
-            partitions_to_optimize = _get_partitions_to_optimize(schedule)
+        futures: set[Future[Any]] = set()
+        # jitter start time
+        for jitter in scheduler.get_start_time_jitter_for_each_partition():
+            futures.add(executor.submit(_jitter_start_time, jitter))
 
+        partitions_to_optimize = deque(partitions)
+        while partitions_to_optimize:
+            schedule = scheduler.get_next_schedule(partitions_to_optimize)
             default_num_threads = len(schedule.partitions_groups)
             configured_num_threads = typing.cast(
                 int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_num_threads)
@@ -350,54 +320,32 @@ def optimize_partition_runner(
                 f"{schedule.cutoff_time} with {configured_num_threads} threads"
             )
 
-            futures = []
-            for _ in range(min(len(partitions_to_optimize), configured_num_threads)):
-                partition_to_optimize = partitions_to_optimize.popleft()
-                futures.append(
+            while partitions_to_optimize and len(futures) < configured_num_threads:
+                futures.add(
                     executor.submit(
                         optimize_partitions,
                         clickhouse,
                         database,
                         table,
-                        [partition_to_optimize.partition],
+                        [partitions_to_optimize.popleft()],
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
-                        partition_to_optimize.start_time_jitter_minutes,
                     )
                 )
 
-            _, active_futures = concurrent.futures.wait(
+            _, futures = concurrent.futures.wait(
                 futures, return_when=concurrent.futures.FIRST_COMPLETED
             )
 
-            configured_num_threads = typing.cast(
-                int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_num_threads)
-            )
-            for _ in range(configured_num_threads - len(active_futures)):
-                if not partitions_to_optimize:
-                    break
 
-                partition_to_optimize = partitions_to_optimize.popleft()
-                futures.append(
-                    executor.submit(
-                        optimize_partitions,
-                        clickhouse,
-                        database,
-                        table,
-                        [partition_to_optimize.partition],
-                        schedule.cutoff_time,
-                        tracker,
-                        clickhouse_host,
-                        None,
-                    )
-                )
-
-        # If there are still partitions needing optimization then move on to the
-        # next bucket with the partitions which still need optimization.
-        remaining_partitions = list(tracker.get_partitions_to_optimize())
-        if len(remaining_partitions) == 0:
-            return
+def _jitter_start_time(start_jitter: Optional[int] = None) -> None:
+    if start_jitter is not None:
+        logger.info(
+            f"{threading.current_thread().name}: Jittering start time by"
+            f" {start_jitter} minutes"
+        )
+        time.sleep(start_jitter * 60)
 
 
 def optimize_partitions(
@@ -408,19 +356,11 @@ def optimize_partitions(
     cutoff_time: Optional[datetime] = None,
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
-    start_jitter: Optional[int] = None,
 ) -> None:
     query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION %(partition)s FINAL
     """
-
-    if start_jitter is not None:
-        logger.info(
-            f"{threading.current_thread().name}: Jittering start time by"
-            f" {start_jitter} minutes"
-        )
-        time.sleep(start_jitter * 60)
 
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
