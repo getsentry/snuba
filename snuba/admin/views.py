@@ -78,7 +78,11 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
-from snuba.web.delete_query import delete_from_storage, deletes_are_enabled
+from snuba.web.delete_query import (
+    DeletesNotEnabledError,
+    delete_from_storage,
+    deletes_are_enabled,
+)
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1098,7 +1102,7 @@ def delete() -> Response:
         schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
         request_parts = schema.validate(body)
         delete_results = delete_from_storage(storage, request_parts.query["columns"])
-    except InvalidJsonRequestException as schema_error:
+    except (InvalidJsonRequestException, DeletesNotEnabledError) as schema_error:
         return make_response(
             jsonify({"error": str(schema_error)}),
             400,

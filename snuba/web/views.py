@@ -73,7 +73,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import delete_from_storage
+from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -313,9 +313,9 @@ def storage_delete(
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
             payload = delete_from_storage(storage, request_parts.query["columns"])
-        except InvalidJsonRequestException as schema_error:
+        except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
             return make_response(
-                jsonify({"error": str(schema_error)}),
+                jsonify({"error": str(error)}),
                 400,
             )
         except Exception as error:
