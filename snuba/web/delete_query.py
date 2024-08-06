@@ -131,8 +131,7 @@ def _delete_from_table(
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            # TODO: add allocation policies
-            allocation_policies=[],
+            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=_construct_condition(conditions),
         on_cluster=on_cluster,
