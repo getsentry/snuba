@@ -51,6 +51,7 @@ SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
 ALLOCATION_POLICIES = "allocation_policies"
+DELETE_ALLOCATION_POLICIES = "delete_allocation_policies"
 REQUIRED_TIME_COLUMN = "required_time_column"
 
 
@@ -95,6 +96,19 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
             else []
         ),
         ALLOCATION_POLICIES: (
+            [
+                AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
+                    **{
+                        **policy.get("args", {}),
+                        "storage_key": storage_key.value,
+                    }
+                )
+                for policy in config[ALLOCATION_POLICIES]
+            ]
+            if ALLOCATION_POLICIES in config
+            else []
+        ),
+        DELETE_ALLOCATION_POLICIES: (
             [
                 AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
                     **{
