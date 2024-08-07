@@ -8,7 +8,7 @@ confluent-kafka==2.3.0
 datadog==0.21.0
 flake8==5.0.4
 Flask==2.2.5
-google-cloud-storage==2.14.0
+google-cloud-storage==2.18.0
 honcho==1.1.0
 python-jose[cryptography]==3.3.0
 jsonschema==4.16.0
