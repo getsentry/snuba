@@ -153,6 +153,13 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             }
         ]
 
+        # delete fails when feature flag is off
+        set_config("storage_deletes_enabled", 0)
+        response = self.delete_query(occurrence_id)
+        assert int(int(response.status_code) / 100) != 2
+
+        # delete succeeds when feature flag is on
+        set_config("storage_deletes_enabled", 1)
         response = self.delete_query(occurrence_id)
         data = json.loads(response.data)
         assert response.status_code == 200, data
@@ -186,10 +193,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             headers={"referer": "test"},
         )
         assert int(res.status_code / 100) == 4  # 400 status code
-        assert (
-            res.get_json()["error"]
-            == "required input 'columns' not present in body of request"
-        )
+        assert "'columns' is a required property" in res.get_json()["error"]
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)

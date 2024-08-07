@@ -44,14 +44,12 @@ storages:
             from_column_name: attr_str
             to_col_table: null
             to_col_name: attr_str
-            to_num_cols: 20
         - mapper: SubscriptableHashBucketMapper
           args:
             from_column_table: null
             from_column_name: attr_num
             to_col_table: null
             to_col_name: attr_num
-            to_num_cols: 20
 
 storage_selector:
   selector: DefaultQueryStorageSelector

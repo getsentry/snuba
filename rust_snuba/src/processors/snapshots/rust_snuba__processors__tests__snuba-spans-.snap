@@ -5,6 +5,13 @@ expression: diff
 [
     Change {
         path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "data",
+        },
+    },
+    Change {
+        path: "",
         change: RequiredAdd {
             property: "end_timestamp_precise",
         },

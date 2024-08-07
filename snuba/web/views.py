@@ -73,7 +73,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import delete_from_storage
+from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -310,28 +310,14 @@ def storage_delete(
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
         try:
-            """
-            columns is a key value mapping
-            of storage-column-name to a list of values
-            ex:
-            {
-                "id": [1, 2, 3]
-                "status": ["failed"]
-            }
-            which represents
-            WHERE id in (1,2,3) AND status='failed'
-            """
-            columns = body["columns"]
-        except Exception:
+            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+            request_parts = schema.validate(body)
+            payload = delete_from_storage(storage, request_parts.query["columns"])
+        except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
             return make_response(
-                jsonify(
-                    {"error": "required input 'columns' not present in body of request"}
-                ),
+                jsonify({"error": str(error)}),
                 400,
             )
-
-        try:
-            payload = delete_from_storage(storage, columns)
         except Exception as error:
             logger.warning("Failed query", exc_info=error)
             return make_response(jsonify({"error": error}), 500)
