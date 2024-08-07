@@ -593,6 +593,7 @@ V1_READABLE_STORAGE_SCHEMA = {
         "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "required_time_column": {
             "type": ["string", "null"],
             "description": "The name of the required time column specifed in schema",
@@ -625,6 +626,7 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",
