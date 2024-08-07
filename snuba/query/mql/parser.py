@@ -27,7 +27,7 @@ from snuba.pipeline.query_pipeline import (
     QueryPipelineResult,
     QueryPipelineStage,
 )
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -70,7 +70,6 @@ from snuba.query.processors.logical.filter_in_select_optimizer import (
 )
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.query.snql.parser import (
-    MAX_LIMIT,
     POST_PROCESSORS,
     VALIDATORS,
     _post_process,
@@ -78,8 +77,6 @@ from snuba.query.snql.parser import (
     _treeify_or_and_conditions,
 )
 from snuba.state import explain_meta
-from snuba.util import parse_datetime
-from snuba.utils.constants import GRANULARITIES_AVAILABLE
 from snuba.utils.metrics.timer import Timer
 
 # The parser returns a bunch of different types, so create a single aggregate type to
@@ -1106,168 +1103,6 @@ def select_entity(mri: str, dataset: Dataset) -> EntityKey:
             return entity
 
     raise ParsingException(f"invalid metric type {mri[0]}")
-
-
-def populate_start_end_time(
-    query: EntityQuery, mql_context: MQLContext, entity_key: EntityKey
-) -> None:
-    try:
-        start = parse_datetime(mql_context.start)
-        end = parse_datetime(mql_context.end)
-    except Exception as e:
-        raise ParsingException("Invalid start or end time") from e
-
-    entity = get_entity(entity_key)
-    required_timestamp_column = (
-        entity.required_time_column if entity.required_time_column else "timestamp"
-    )
-    filters = []
-    filters.append(
-        binary_condition(
-            ConditionFunctions.GTE,
-            Column(None, None, column_name=required_timestamp_column),
-            Literal(None, value=start),
-        ),
-    )
-    filters.append(
-        binary_condition(
-            ConditionFunctions.LT,
-            Column(None, None, column_name=required_timestamp_column),
-            Literal(None, value=end),
-        ),
-    )
-    query.add_condition_to_ast(combine_and_conditions(filters))
-
-
-def populate_scope(query: LogicalQuery, mql_context: MQLContext) -> None:
-    filters = []
-    filters.append(
-        binary_condition(
-            ConditionFunctions.IN,
-            Column(alias=None, table_name=None, column_name="project_id"),
-            FunctionCall(
-                alias=None,
-                function_name="tuple",
-                parameters=tuple(
-                    Literal(alias=None, value=project_id)
-                    for project_id in mql_context.scope.project_ids
-                ),
-            ),
-        )
-    )
-    filters.append(
-        binary_condition(
-            ConditionFunctions.IN,
-            Column(alias=None, table_name=None, column_name="org_id"),
-            FunctionCall(
-                alias=None,
-                function_name="tuple",
-                parameters=tuple(
-                    Literal(alias=None, value=int(org_id))
-                    for org_id in mql_context.scope.org_ids
-                ),
-            ),
-        )
-    )
-    filters.append(
-        binary_condition(
-            ConditionFunctions.EQ,
-            Column(alias=None, table_name=None, column_name="use_case_id"),
-            Literal(alias=None, value=mql_context.scope.use_case_id),
-        )
-    )
-    query.add_condition_to_ast(combine_and_conditions(filters))
-
-
-def populate_rollup(query: LogicalQuery, mql_context: MQLContext) -> None:
-    rollup = mql_context.rollup
-
-    # Validate/populate granularity
-    if rollup.granularity not in GRANULARITIES_AVAILABLE:
-        raise ParsingException(
-            f"granularity '{rollup.granularity}' is not valid, must be one of {GRANULARITIES_AVAILABLE}"
-        )
-
-    query.add_condition_to_ast(
-        binary_condition(
-            ConditionFunctions.EQ,
-            Column(None, None, "granularity"),
-            Literal(None, rollup.granularity),
-        )
-    )
-
-    # Validate totals/orderby
-    if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
-        raise ParsingException("with_totals must be a string, either 'True' or 'False'")
-    if rollup.orderby is not None and rollup.orderby not in ("ASC", "DESC"):
-        raise ParsingException("orderby must be either 'ASC' or 'DESC'")
-    if rollup.interval is not None and rollup.orderby is not None:
-        raise ParsingException("orderby is not supported when interval is specified")
-    if rollup.interval and (
-        rollup.interval < GRANULARITIES_AVAILABLE[0]
-        or rollup.interval < rollup.granularity
-    ):
-        raise ParsingException(
-            f"interval {rollup.interval} must be greater than or equal to granularity {rollup.granularity}"
-        )
-
-    with_totals = rollup.with_totals == "True"
-    if rollup.interval:
-        # If an interval is specified, then we need to group the time by that interval,
-        # return the time in the select, and order the results by that time.
-        time_expression = FunctionCall(
-            "time",
-            "toStartOfInterval",
-            parameters=(
-                Column(None, None, "timestamp"),
-                FunctionCall(
-                    None,
-                    "toIntervalSecond",
-                    (Literal(None, rollup.interval),),
-                ),
-                Literal(None, "Universal"),
-            ),
-        )
-        selected = list(query.get_selected_columns())
-        selected.append(SelectedExpression("time", time_expression))
-        query.set_ast_selected_columns(selected)
-
-        groupby = query.get_groupby()
-        if groupby:
-            query.set_ast_groupby(list(groupby) + [time_expression])
-        else:
-            query.set_ast_groupby([time_expression])
-
-        orderby = OrderBy(OrderByDirection.ASC, time_expression)
-        query.set_ast_orderby([orderby])
-
-        if with_totals:
-            query.set_totals(True)
-    elif rollup.orderby is not None:
-        direction = (
-            OrderByDirection.ASC if rollup.orderby == "ASC" else OrderByDirection.DESC
-        )
-        orderby = OrderBy(direction, Column(None, None, AGGREGATE_ALIAS))
-        query.set_ast_orderby([orderby])
-
-
-def populate_limit(query: LogicalQuery, mql_context: MQLContext) -> None:
-    limit = 1000
-    if mql_context.limit:
-        if mql_context.limit > MAX_LIMIT:
-            raise ParsingException(
-                "queries cannot have a limit higher than 10000", should_report=False
-            )
-        limit = mql_context.limit
-
-    query.set_limit(limit)
-
-
-def populate_offset(query: LogicalQuery, mql_context: MQLContext) -> None:
-    if mql_context.offset:
-        if mql_context.offset < 0:
-            raise ParsingException("offset must be greater than or equal to 0")
-        query.set_offset(mql_context.offset)
 
 
 def populate_query_from_mql_context(
