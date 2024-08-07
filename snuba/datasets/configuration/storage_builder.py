@@ -116,9 +116,9 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
                         "storage_key": storage_key.value,
                     }
                 )
-                for policy in config[ALLOCATION_POLICIES]
+                for policy in config[DELETE_ALLOCATION_POLICIES]
             ]
-            if ALLOCATION_POLICIES in config
+            if DELETE_ALLOCATION_POLICIES in config
             else []
         ),
         REQUIRED_TIME_COLUMN: config.get(REQUIRED_TIME_COLUMN, None),
