@@ -25,6 +25,7 @@ from snuba.query.matchers import (
     Param,
     String,
 )
+from snuba.utils.constants import ATTRIBUTE_BUCKETS
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -238,7 +239,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
-    to_num_cols: int
+    to_num_cols: int | None = None
 
     @staticmethod
     def fnv_1a(b: bytes) -> int:
@@ -268,7 +269,8 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        bucket_idx = self.fnv_1a(key.value.encode("utf-8")) % self.to_num_cols
+        modulo = self.to_num_cols or ATTRIBUTE_BUCKETS
+        bucket_idx = self.fnv_1a(key.value.encode("utf-8")) % modulo
         return SubscriptableReference(
             column=ColumnExpr(
                 None,
