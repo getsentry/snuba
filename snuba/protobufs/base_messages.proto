@@ -1,17 +1,6 @@
 syntax = "proto3";
 
-
-// hack to have the google timestamp definition in here
-// taken from https://github.com/protocolbuffers/protobuf/blob/main/src/google/protobuf/timestamp.proto
-message google {
-  message protobuf {
-      message Timestamp {
-        int64 seconds = 1;
-        int32 nanos = 2;
-      }
-  }
-}
-
+import "google/protobuf/timestamp.proto";
 
 message RequestInfo {
   repeated uint64 project_ids = 1;

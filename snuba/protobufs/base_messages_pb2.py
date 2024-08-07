@@ -17,8 +17,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
+
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x13\x62\x61se_messages.proto"A\n\x06google\x1a\x37\n\x08protobuf\x1a+\n\tTimestamp\x12\x0f\n\x07seconds\x18\x01 \x01(\x03\x12\r\n\x05nanos\x18\x02 \x01(\x05"\xcd\x01\n\x0bRequestInfo\x12\x13\n\x0bproject_ids\x18\x01 \x03(\x04\x12\x18\n\x10organization_ids\x18\x02 \x03(\x04\x12\x15\n\rcogs_category\x18\x03 \x01(\t\x12\x10\n\x08referrer\x18\x04 \x01(\t\x12\x33\n\x0fstart_timestamp\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x31\n\rend_timestamp\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp"\x8e\x01\n\rPentityFilter\x12\x16\n\x0e\x61ttribute_name\x18\x01 \x01(\t\x12\x12\n\ncomparison\x18\x02 \x01(\t\x12\x18\n\x0estring_literal\x18\x03 \x01(\tH\x00\x12\x15\n\x0bint_literal\x18\x04 \x01(\x03H\x00\x12\x17\n\rfloat_literal\x18\x05 \x01(\x02H\x00\x42\x07\n\x05value"G\n\x0ePentityFilters\x12\x14\n\x0cpentity_name\x18\x01 \x01(\t\x12\x1f\n\x07\x66ilters\x18\x02 \x03(\x0b\x32\x0e.PentityFilter"\\\n\x12PentityAggregation\x12\x18\n\x10\x61ggregation_type\x18\x01 \x01(\t\x12\x14\n\x0cpentity_name\x18\x02 \x01(\t\x12\x16\n\x0e\x61ttribute_name\x18\x03 \x01(\tb\x06proto3'
+    b'\n\x13\x62\x61se_messages.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xcd\x01\n\x0bRequestInfo\x12\x13\n\x0bproject_ids\x18\x01 \x03(\x04\x12\x18\n\x10organization_ids\x18\x02 \x03(\x04\x12\x15\n\rcogs_category\x18\x03 \x01(\t\x12\x10\n\x08referrer\x18\x04 \x01(\t\x12\x33\n\x0fstart_timestamp\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x31\n\rend_timestamp\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp"\x8e\x01\n\rPentityFilter\x12\x16\n\x0e\x61ttribute_name\x18\x01 \x01(\t\x12\x12\n\ncomparison\x18\x02 \x01(\t\x12\x18\n\x0estring_literal\x18\x03 \x01(\tH\x00\x12\x15\n\x0bint_literal\x18\x04 \x01(\x03H\x00\x12\x17\n\rfloat_literal\x18\x05 \x01(\x02H\x00\x42\x07\n\x05value"G\n\x0ePentityFilters\x12\x14\n\x0cpentity_name\x18\x01 \x01(\t\x12\x1f\n\x07\x66ilters\x18\x02 \x03(\x0b\x32\x0e.PentityFilter"\\\n\x12PentityAggregation\x12\x18\n\x10\x61ggregation_type\x18\x01 \x01(\t\x12\x14\n\x0cpentity_name\x18\x02 \x01(\t\x12\x16\n\x0e\x61ttribute_name\x18\x03 \x01(\tb\x06proto3'
 )
 
 _globals = globals()
@@ -26,18 +28,12 @@ _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "base_messages_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
-    _globals["_GOOGLE"]._serialized_start = 23
-    _globals["_GOOGLE"]._serialized_end = 88
-    _globals["_GOOGLE_PROTOBUF"]._serialized_start = 33
-    _globals["_GOOGLE_PROTOBUF"]._serialized_end = 88
-    _globals["_GOOGLE_PROTOBUF_TIMESTAMP"]._serialized_start = 45
-    _globals["_GOOGLE_PROTOBUF_TIMESTAMP"]._serialized_end = 88
-    _globals["_REQUESTINFO"]._serialized_start = 91
-    _globals["_REQUESTINFO"]._serialized_end = 296
-    _globals["_PENTITYFILTER"]._serialized_start = 299
-    _globals["_PENTITYFILTER"]._serialized_end = 441
-    _globals["_PENTITYFILTERS"]._serialized_start = 443
-    _globals["_PENTITYFILTERS"]._serialized_end = 514
-    _globals["_PENTITYAGGREGATION"]._serialized_start = 516
-    _globals["_PENTITYAGGREGATION"]._serialized_end = 608
+    _globals["_REQUESTINFO"]._serialized_start = 57
+    _globals["_REQUESTINFO"]._serialized_end = 262
+    _globals["_PENTITYFILTER"]._serialized_start = 265
+    _globals["_PENTITYFILTER"]._serialized_end = 407
+    _globals["_PENTITYFILTERS"]._serialized_start = 409
+    _globals["_PENTITYFILTERS"]._serialized_end = 480
+    _globals["_PENTITYAGGREGATION"]._serialized_start = 482
+    _globals["_PENTITYAGGREGATION"]._serialized_end = 574
 # @@protoc_insertion_point(module_scope)

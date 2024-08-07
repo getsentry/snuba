@@ -11,6 +11,7 @@ Flask==2.2.5
 google-cloud-storage==2.18.0
 googleapis-common-protos==1.63.2
 google-api-core==2.19.1
+proto-plus==1.24.0
 honcho==1.1.0
 python-jose[cryptography]==3.3.0
 jsonschema==4.16.0
