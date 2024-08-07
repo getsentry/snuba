@@ -51,6 +51,7 @@ from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionEr
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
+from snuba.protobufs import FindTrace_pb2
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -268,6 +269,14 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         return dataset_query(dataset_name, body, timer)
     else:
         assert False, "unexpected fallthrough"
+
+
+@application.route("/find_trace", methods=["POST"])
+@util.time_request("query")
+def find_trace_endpoint(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
+    req = FindTrace_pb2.FindTraceRequest()
+    req.ParseFromString(http_request.data)
+    return ""  # TODO this endpoint is not ready for primetime
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
