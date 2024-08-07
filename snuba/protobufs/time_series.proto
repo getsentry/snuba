@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "base_messages.proto";
+
+
+
+
+message TimeSeriesRequest {
+  base_messages.RequestInfo request_info = 1;
+  base_messages.PentityFilters pentity_filters = 2;
+  base_messages.PentityAggregation pentity_aggregation = 3;
+}
