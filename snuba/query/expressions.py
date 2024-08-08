@@ -355,9 +355,6 @@ class SubscriptableReference(Expression):
 
     column: Column
     key: Literal
-    emit_as_subscript: bool = (
-        False  # do not mangle the column, forward it to clickhouse as a subscript
-    )
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visit_subscriptable_reference(self)

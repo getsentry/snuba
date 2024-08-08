@@ -244,7 +244,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         self,
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[SubscriptableReference]:
+    ) -> Optional[FunctionCallExpr]:
         if (
             expression.column.table_name != self.from_column_table
             or expression.column.column_name != self.from_column_name
@@ -257,15 +257,10 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
             return None
 
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-        return SubscriptableReference(
-            column=ColumnExpr(
-                None,
-                table_name=self.to_col_table,
-                column_name=f"{self.to_col_name}_{bucket_idx}",
-            ),
-            key=key,
-            alias=expression.alias,
-            emit_as_subscript=True,
+        return arrayElement(
+            expression.alias,
+            ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
+            key,
         )
 
 
