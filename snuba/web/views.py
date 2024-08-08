@@ -321,7 +321,11 @@ def storage_delete(
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            payload = delete_from_storage(storage, request_parts.query["columns"])
+            payload = delete_from_storage(
+                storage,
+                request_parts.query["columns"],
+                request_parts.attribution_info,
+            )
         except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
             return make_response(
                 jsonify({"error": str(error)}),
