@@ -135,7 +135,7 @@ def test_subdivide_partitions(
     [
         pytest.param(
             1,
-            [0],
+            [],
             id="no parallel",
         ),
         pytest.param(
@@ -156,7 +156,7 @@ def test_subdivide_partitions(
 )
 def test_start_time_jitter(parallel: int, expected: Sequence[int]) -> None:
     scheduler = OptimizeScheduler(parallel=parallel)
-    assert scheduler.start_time_jitter() == expected
+    assert scheduler.get_start_time_jitter_for_each_partition() == expected
 
 
 last_midnight = (datetime.now() + timedelta(minutes=10)).replace(

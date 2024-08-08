@@ -19,7 +19,7 @@ class OptimizedSchedulerTimeout(Exception):
 
 @dataclass(frozen=True)
 class OptimizationSchedule:
-    partitions: Sequence[Sequence[str]]
+    partitions_groups: Sequence[Sequence[str]]
     cutoff_time: datetime
     start_time_jitter_minutes: Optional[Sequence[int]] = None
 
@@ -87,7 +87,7 @@ class OptimizeScheduler:
 
         return output
 
-    def start_time_jitter(self) -> Sequence[int]:
+    def get_start_time_jitter_for_each_partition(self) -> Sequence[int]:
         """
         Get the start time jitter for each partition. The start time jitter
         is the amount of time to wait before starting each thread. This is
@@ -95,7 +95,7 @@ class OptimizeScheduler:
         optimizations ending at the same time.
         """
         if self.__parallel == 1:
-            return [0]
+            return []
 
         interval = int(
             settings.OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES / (self.__parallel - 1)
@@ -121,24 +121,26 @@ class OptimizeScheduler:
 
         if self.__parallel == 1:
             return OptimizationSchedule(
-                partitions=[self.sort_partitions(partitions)],
+                partitions_groups=[self.sort_partitions(partitions)],
                 cutoff_time=self.__last_midnight
                 + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME),
             )
         else:
             if current_time < self.__parallel_start_time:
                 return OptimizationSchedule(
-                    partitions=[self.sort_partitions(partitions)],
+                    partitions_groups=[self.sort_partitions(partitions)],
                     cutoff_time=self.__parallel_start_time,
                 )
             elif current_time < self.__parallel_end_time:
                 return OptimizationSchedule(
-                    partitions=self.subdivide_partitions(partitions, self.__parallel),
+                    partitions_groups=self.subdivide_partitions(
+                        partitions, self.__parallel
+                    ),
                     cutoff_time=self.__parallel_end_time,
-                    start_time_jitter_minutes=self.start_time_jitter(),
+                    start_time_jitter_minutes=self.get_start_time_jitter_for_each_partition(),
                 )
             else:
                 return OptimizationSchedule(
-                    partitions=[self.sort_partitions(partitions)],
+                    partitions_groups=[self.sort_partitions(partitions)],
                     cutoff_time=self.__full_job_end_time,
                 )
