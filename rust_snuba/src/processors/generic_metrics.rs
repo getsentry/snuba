@@ -65,7 +65,7 @@ struct FromGenericMetricsMessage {
     #[serde(flatten)]
     value: MetricValue,
     retention_days: u16,
-    sampling_weight: Option<u64>,
+    sampling_weight: Option<f64>,
     aggregation_option: Option<String>,
 }
 
@@ -320,7 +320,9 @@ impl Parse for CountersRawRow {
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: parse_matview_ver_from_runtime_opt("counter").unwrap_or(2),
-            sampling_weight: from.sampling_weight,
+            sampling_weight: from
+                .sampling_weight
+                .map(|sampling_weight| sampling_weight as u64),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -592,7 +594,9 @@ impl Parse for DistributionsRawRow {
             tags_raw_value: tag_values,
             materialization_version: parse_matview_ver_from_runtime_opt("distribution")
                 .unwrap_or(3),
-            sampling_weight: from.sampling_weight,
+            sampling_weight: from
+                .sampling_weight
+                .map(|sampling_weight| sampling_weight as u64),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -695,7 +699,9 @@ impl Parse for GaugesRawRow {
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
             materialization_version: parse_matview_ver_from_runtime_opt("gauge").unwrap_or(2),
-            sampling_weight: from.sampling_weight,
+            sampling_weight: from
+                .sampling_weight
+                .map(|sampling_weight| sampling_weight as u64),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -763,7 +769,7 @@ mod tests {
         "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65689":"metric_e2e_spans_counter_k_VUW93LMS"},"d":{"65561":"c:spans/spans@none"}},
         "type": "c",
         "value": 1,
-        "sampling_weight": 100
+        "sampling_weight": 100.1
     }"#;
 
     const DUMMY_SET_MESSAGE: &str = r#"{
@@ -1543,7 +1549,7 @@ mod tests {
                 origin_timestamp: None,
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
-                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 647)])
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 649)])
                 }),
             }
         );
