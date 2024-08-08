@@ -76,7 +76,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import delete_from_storage
+from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc.timeseries import timeseries_query as timeseries_query_impl
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
