@@ -104,9 +104,6 @@ def transform_subscriptables(expression: Expression) -> Expression:
     # assume that it maps to an associative array column with the same name and `value` as the
     # name of the value column
     if isinstance(expression, SubscriptableReference):
-        if expression.emit_as_subscript:
-            # clickhouse itself now supports subscripts, so we can emit things directly
-            return expression
         res = SubscriptableMapper(
             expression.column.table_name,
             expression.column.column_name,
