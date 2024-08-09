@@ -77,6 +77,7 @@ from snuba.web.converters import DatasetConverter, EntityConverter, StorageConve
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
+from snuba.web.view_types import DeleteRequest
 
 logger = logging.getLogger("snuba.api")
 
@@ -318,18 +319,28 @@ def storage_delete(
     if http_request.method == "DELETE":
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
+
         try:
-            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-            request_parts = schema.validate(body)
-            payload = delete_from_storage(storage, request_parts.query["columns"])
+            # schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+            # request_parts = schema.validate(body)
+            tmp = DeleteRequest(**body)
+            payload = delete_from_storage(storage, tmp.query.columns)
         except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
+            details = {
+                "type": "invalid_query",
+                "message": str(error),
+            }
             return make_response(
-                jsonify({"error": str(error)}),
+                jsonify({"error": details}),
                 400,
             )
         except Exception as error:
             logger.warning("Failed query", exc_info=error)
-            return make_response(jsonify({"error": error}), 500)
+            details = details = {
+                "type": "unknown",
+                "message": str(error),
+            }
+            return make_response(jsonify({"error": details}), 500)
 
         return Response(
             dump_payload(payload), 200, {"Content-Type": "application/json"}
