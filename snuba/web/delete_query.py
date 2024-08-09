@@ -81,6 +81,51 @@ def delete_from_storage(
     return results
 
 
+def _delete_from_table(
+    storage: WritableTableStorage,
+    table: str,
+    conditions: Dict[str, Any],
+    attribution_info: AttributionInfo,
+) -> Result:
+    cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
+    on_cluster = literal(cluster_name) if cluster_name else None
+    query = Query(
+        from_clause=Table(
+            table,
+            ColumnSet([]),
+            storage_key=storage.get_storage_key(),
+            allocation_policies=storage.get_delete_allocation_policies(),
+        ),
+        condition=_construct_condition(conditions),
+        on_cluster=on_cluster,
+        is_delete=True,
+    )
+
+    columns = storage.get_schema().get_columns()
+    column_validator = ColumnValidator(columns)
+    try:
+        for col, values in conditions.items():
+            column_validator.validate(col, values)
+    except InvalidColumnType as e:
+        raise InvalidQueryException(e.message)
+
+    try:
+        _enforce_max_rows(query)
+    except NoRowsToDeleteException:
+        result: Result = {}
+        return result
+
+    deletion_processors = storage.get_deletion_processors()
+    # These settings aren't needed at the moment
+    dummy_query_settings = HTTPQuerySettings()
+    for deletion_procesor in deletion_processors:
+        deletion_procesor.process_query(query, dummy_query_settings)
+
+    return _execute_query(
+        query, storage, table, cluster_name, attribution_info, dummy_query_settings
+    )
+
+
 def deletes_are_enabled() -> bool:
     return bool(get_config("storage_deletes_enabled", 0))
 
@@ -158,45 +203,17 @@ def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInf
     return AttributionInfo(**info)
 
 
-def _delete_from_table(
+def _execute_query(
+    query: Query,
     storage: WritableTableStorage,
     table: str,
-    conditions: Dict[str, Any],
+    cluster_name: str,
     attribution_info: AttributionInfo,
 ) -> Result:
-    cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
-    on_cluster = literal(cluster_name) if cluster_name else None
-    query = Query(
-        from_clause=Table(
-            table,
-            ColumnSet([]),
-            storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
-        ),
-        condition=_construct_condition(conditions),
-        on_cluster=on_cluster,
-        is_delete=True,
-    )
-
-    columns = storage.get_schema().get_columns()
-    column_validator = ColumnValidator(columns)
-    try:
-        for col, values in conditions.items():
-            column_validator.validate(col, values)
-    except InvalidColumnType as e:
-        raise InvalidQueryException(e.message)
-
-    try:
-        _enforce_max_rows(query)
-    except NoRowsToDeleteException:
-        result: Result = {}
-        return result
-
-    deletion_processors = storage.get_deletion_processors()
-    # These settings aren't needed at the moment
-    dummy_query_settings = HTTPQuerySettings()
-    for deletion_procesor in deletion_processors:
-        deletion_procesor.process_query(query, dummy_query_settings)
+    """
+    Formats and executes the delete query, taking into account
+    the delete allocation policies as well.
+    """
 
     formatted_query = format_query(query)
     allocation_policies = _get_allocation_policies(query)
@@ -213,7 +230,7 @@ def _delete_from_table(
 
     try:
         _apply_allocation_policies_quota(
-            dummy_query_settings,
+            query_settings,
             attribution_info,
             formatted_query,
             stats,
