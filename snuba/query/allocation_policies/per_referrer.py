@@ -23,7 +23,7 @@ _DEFAULT_MAX_THREADS = 10
 _DEFAULT_CONCURRENT_REQUEST_PER_REFERRER = 100
 _REFERRER_CONCURRENT_OVERRIDE = -1
 _REFERRER_MAX_THREADS_OVERRIDE = -1
-_REQUESTS_THROTTLE_DIVIDER = 2
+_REQUESTS_THROTTLE_DIVIDER = 1.5
 _THREADS_THROTTLE_DIVIDER = 2
 
 QUOTA_UNIT = "concurrent_queries"
@@ -77,7 +77,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             AllocationPolicyConfig(
                 name="requests_throttle_divider",
                 description="default_concurrent_request_per_referrer divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
-                value_type=int,
+                value_type=float,
                 default=_REQUESTS_THROTTLE_DIVIDER,
             ),
             AllocationPolicyConfig(
@@ -129,8 +129,10 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         num_threads = self._get_max_threads(referrer)
         requests_throttle_threshold = max(
             1,
-            self.get_config_value("default_concurrent_request_per_referrer")
-            // self.get_config_value("requests_throttle_divider"),
+            int(
+                self.get_config_value("default_concurrent_request_per_referrer")
+                // self.get_config_value("requests_throttle_divider")
+            ),
         )
 
         is_throttled = False
