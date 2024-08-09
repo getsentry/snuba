@@ -16,7 +16,7 @@
 
 # EAP-related
 /snuba/protobufs @getsentry/events-analytics-platform
-
+/snuba/snuba_migrations/events-analytics-platform @getsentry/events-analytics-platform @getsentry/owners-snuba
 
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba @getsentry/processing
