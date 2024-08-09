@@ -76,6 +76,7 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
+from snuba.web.view_types import DeleteRequest
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -319,9 +320,8 @@ def storage_delete(
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
         try:
-            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-            request_parts = schema.validate(body)
-            payload = delete_from_storage(storage, request_parts.query["columns"])
+            req = DeleteRequest(**body)
+            payload = delete_from_storage(storage, req.query.columns)
         except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
             return make_response(
                 jsonify({"error": str(error)}),
