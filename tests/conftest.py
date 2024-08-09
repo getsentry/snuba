@@ -48,9 +48,11 @@ def create_databases() -> None:
             storage_sets=cluster["storage_sets"],
             single_node=cluster["single_node"],
             cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
-            distributed_cluster_name=cluster["distributed_cluster_name"]
-            if "distributed_cluster_name" in cluster
-            else None,
+            distributed_cluster_name=(
+                cluster["distributed_cluster_name"]
+                if "distributed_cluster_name" in cluster
+                else None
+            ),
         )
 
         database_name = cluster["database"]
