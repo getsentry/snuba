@@ -112,7 +112,7 @@ def test_throttles(
     policy: BytesScannedRejectingPolicy,
 ) -> None:
     _configure_policy(policy)
-    policy.set_config_value("bytes_throttle_divider", 2)
+    policy.set_config_value("bytes_throttle_divider", 1.5)
     policy.set_config_value("threads_throttle_divider", 2)
     tenant_ids: dict[str, int | str] = {
         "organization_id": 123,
