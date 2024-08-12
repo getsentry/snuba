@@ -24,7 +24,10 @@ class _Comparison:
     ValueType = typing.NewType("ValueType", builtins.int)
     V: typing_extensions.TypeAlias = ValueType
 
-class _ComparisonEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Comparison.ValueType], builtins.type):
+class _ComparisonEnumTypeWrapper(
+    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Comparison.ValueType],
+    builtins.type,
+):
     DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
     EQ: _Comparison.ValueType  # 0
     NEQ: _Comparison.ValueType  # 1
@@ -55,7 +58,12 @@ class _AggregationType:
     ValueType = typing.NewType("ValueType", builtins.int)
     V: typing_extensions.TypeAlias = ValueType
 
-class _AggregationTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_AggregationType.ValueType], builtins.type):
+class _AggregationTypeEnumTypeWrapper(
+    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+        _AggregationType.ValueType
+    ],
+    builtins.type,
+):
     DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
     AVG: _AggregationType.ValueType  # 0
     MIN: _AggregationType.ValueType  # 1
@@ -93,9 +101,17 @@ class RequestInfo(google.protobuf.message.Message):
     cogs_category: builtins.str
     referrer: builtins.str
     @property
-    def project_ids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
+    def project_ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.int
+    ]: ...
     @property
-    def organization_ids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
+    def organization_ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.int
+    ]: ...
     @property
     def start_timestamp(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     @property
@@ -110,8 +126,29 @@ class RequestInfo(google.protobuf.message.Message):
         start_timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
         end_timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["end_timestamp", b"end_timestamp", "start_timestamp", b"start_timestamp"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["cogs_category", b"cogs_category", "end_timestamp", b"end_timestamp", "organization_ids", b"organization_ids", "project_ids", b"project_ids", "referrer", b"referrer", "start_timestamp", b"start_timestamp"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "end_timestamp", b"end_timestamp", "start_timestamp", b"start_timestamp"
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "cogs_category",
+            b"cogs_category",
+            "end_timestamp",
+            b"end_timestamp",
+            "organization_ids",
+            b"organization_ids",
+            "project_ids",
+            b"project_ids",
+            "referrer",
+            b"referrer",
+            "start_timestamp",
+            b"start_timestamp",
+        ],
+    ) -> None: ...
 
 global___RequestInfo = RequestInfo
 
@@ -132,14 +169,19 @@ class PentityFilter(google.protobuf.message.Message):
     int_literal: builtins.int
     float_literal: builtins.float
     @property
-    def int_array(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+    def int_array(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
         """like all fields, these are optional and are necessary to allow
         the IN operator. The application is responsible for validating
         protobuf does not allow repeated fields in a oneof
         """
-
     @property
-    def str_array(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
+    def str_array(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.str
+    ]: ...
     def __init__(
         self,
         *,
@@ -151,9 +193,43 @@ class PentityFilter(google.protobuf.message.Message):
         int_array: collections.abc.Iterable[builtins.int] | None = ...,
         str_array: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["float_literal", b"float_literal", "int_literal", b"int_literal", "scalar_value", b"scalar_value", "string_literal", b"string_literal"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["attribute_name", b"attribute_name", "comparison", b"comparison", "float_literal", b"float_literal", "int_array", b"int_array", "int_literal", b"int_literal", "scalar_value", b"scalar_value", "str_array", b"str_array", "string_literal", b"string_literal"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["scalar_value", b"scalar_value"]) -> typing.Literal["string_literal", "int_literal", "float_literal"] | None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "float_literal",
+            b"float_literal",
+            "int_literal",
+            b"int_literal",
+            "scalar_value",
+            b"scalar_value",
+            "string_literal",
+            b"string_literal",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "attribute_name",
+            b"attribute_name",
+            "comparison",
+            b"comparison",
+            "float_literal",
+            b"float_literal",
+            "int_array",
+            b"int_array",
+            "int_literal",
+            b"int_literal",
+            "scalar_value",
+            b"scalar_value",
+            "str_array",
+            b"str_array",
+            "string_literal",
+            b"string_literal",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["scalar_value", b"scalar_value"]
+    ) -> typing.Literal["string_literal", "int_literal", "float_literal"] | None: ...
 
 global___PentityFilter = PentityFilter
 
@@ -165,14 +241,23 @@ class PentityFilters(google.protobuf.message.Message):
     FILTERS_FIELD_NUMBER: builtins.int
     pentity_name: builtins.str
     @property
-    def filters(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PentityFilter]: ...
+    def filters(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___PentityFilter
+    ]: ...
     def __init__(
         self,
         *,
         pentity_name: builtins.str = ...,
         filters: collections.abc.Iterable[global___PentityFilter] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["filters", b"filters", "pentity_name", b"pentity_name"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "filters", b"filters", "pentity_name", b"pentity_name"
+        ],
+    ) -> None: ...
 
 global___PentityFilters = PentityFilters
 
@@ -193,6 +278,16 @@ class PentityAggregation(google.protobuf.message.Message):
         pentity_name: builtins.str = ...,
         attribute_name: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["aggregation_type", b"aggregation_type", "attribute_name", b"attribute_name", "pentity_name", b"pentity_name"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "aggregation_type",
+            b"aggregation_type",
+            "attribute_name",
+            b"attribute_name",
+            "pentity_name",
+            b"pentity_name",
+        ],
+    ) -> None: ...
 
 global___PentityAggregation = PentityAggregation
