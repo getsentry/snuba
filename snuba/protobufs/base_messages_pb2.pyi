@@ -7,11 +7,78 @@ import builtins
 import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
+import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import google.protobuf.timestamp_pb2
+import sys
 import typing
 
+if sys.version_info >= (3, 10):
+    import typing as typing_extensions
+else:
+    import typing_extensions
+
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+
+class _Comparison:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _ComparisonEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Comparison.ValueType], builtins.type):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    EQ: _Comparison.ValueType  # 0
+    NEQ: _Comparison.ValueType  # 1
+    LE: _Comparison.ValueType  # 2
+    GT: _Comparison.ValueType  # 3
+    LTE: _Comparison.ValueType  # 4
+    GTE: _Comparison.ValueType  # 5
+    LIKE: _Comparison.ValueType  # 6
+    NOT_LIKE: _Comparison.ValueType  # 7
+    IN: _Comparison.ValueType  # 8
+    NOT_IN: _Comparison.ValueType  # 9
+
+class Comparison(_Comparison, metaclass=_ComparisonEnumTypeWrapper): ...
+
+EQ: Comparison.ValueType  # 0
+NEQ: Comparison.ValueType  # 1
+LE: Comparison.ValueType  # 2
+GT: Comparison.ValueType  # 3
+LTE: Comparison.ValueType  # 4
+GTE: Comparison.ValueType  # 5
+LIKE: Comparison.ValueType  # 6
+NOT_LIKE: Comparison.ValueType  # 7
+IN: Comparison.ValueType  # 8
+NOT_IN: Comparison.ValueType  # 9
+global___Comparison = Comparison
+
+class _AggregationType:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _AggregationTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_AggregationType.ValueType], builtins.type):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    AVG: _AggregationType.ValueType  # 0
+    MIN: _AggregationType.ValueType  # 1
+    MAX: _AggregationType.ValueType  # 2
+    P50: _AggregationType.ValueType  # 4
+    P90: _AggregationType.ValueType  # 5
+    P95: _AggregationType.ValueType  # 6
+    P99: _AggregationType.ValueType  # 7
+    COUNT: _AggregationType.ValueType  # 8
+    UNIQ: _AggregationType.ValueType  # 9
+
+class AggregationType(_AggregationType, metaclass=_AggregationTypeEnumTypeWrapper): ...
+
+AVG: AggregationType.ValueType  # 0
+MIN: AggregationType.ValueType  # 1
+MAX: AggregationType.ValueType  # 2
+P50: AggregationType.ValueType  # 4
+P90: AggregationType.ValueType  # 5
+P95: AggregationType.ValueType  # 6
+P99: AggregationType.ValueType  # 7
+COUNT: AggregationType.ValueType  # 8
+UNIQ: AggregationType.ValueType  # 9
+global___AggregationType = AggregationType
 
 @typing.final
 class RequestInfo(google.protobuf.message.Message):
@@ -26,17 +93,9 @@ class RequestInfo(google.protobuf.message.Message):
     cogs_category: builtins.str
     referrer: builtins.str
     @property
-    def project_ids(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-        builtins.int
-    ]: ...
+    def project_ids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
     @property
-    def organization_ids(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-        builtins.int
-    ]: ...
+    def organization_ids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
     @property
     def start_timestamp(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     @property
@@ -51,29 +110,8 @@ class RequestInfo(google.protobuf.message.Message):
         start_timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
         end_timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
     ) -> None: ...
-    def HasField(
-        self,
-        field_name: typing.Literal[
-            "end_timestamp", b"end_timestamp", "start_timestamp", b"start_timestamp"
-        ],
-    ) -> builtins.bool: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "cogs_category",
-            b"cogs_category",
-            "end_timestamp",
-            b"end_timestamp",
-            "organization_ids",
-            b"organization_ids",
-            "project_ids",
-            b"project_ids",
-            "referrer",
-            b"referrer",
-            "start_timestamp",
-            b"start_timestamp",
-        ],
-    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["end_timestamp", b"end_timestamp", "start_timestamp", b"start_timestamp"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["cogs_category", b"cogs_category", "end_timestamp", b"end_timestamp", "organization_ids", b"organization_ids", "project_ids", b"project_ids", "referrer", b"referrer", "start_timestamp", b"start_timestamp"]) -> None: ...
 
 global___RequestInfo = RequestInfo
 
@@ -86,54 +124,36 @@ class PentityFilter(google.protobuf.message.Message):
     STRING_LITERAL_FIELD_NUMBER: builtins.int
     INT_LITERAL_FIELD_NUMBER: builtins.int
     FLOAT_LITERAL_FIELD_NUMBER: builtins.int
+    INT_ARRAY_FIELD_NUMBER: builtins.int
+    STR_ARRAY_FIELD_NUMBER: builtins.int
     attribute_name: builtins.str
-    comparison: builtins.str
-    """should maybe make this an enum later"""
+    comparison: global___Comparison.ValueType
     string_literal: builtins.str
     int_literal: builtins.int
     float_literal: builtins.float
+    @property
+    def int_array(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """like all fields, these are optional and are necessary to allow
+        the IN operator. The application is responsible for validating
+        protobuf does not allow repeated fields in a oneof
+        """
+
+    @property
+    def str_array(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
     def __init__(
         self,
         *,
         attribute_name: builtins.str = ...,
-        comparison: builtins.str = ...,
+        comparison: global___Comparison.ValueType = ...,
         string_literal: builtins.str = ...,
         int_literal: builtins.int = ...,
         float_literal: builtins.float = ...,
+        int_array: collections.abc.Iterable[builtins.int] | None = ...,
+        str_array: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
-    def HasField(
-        self,
-        field_name: typing.Literal[
-            "float_literal",
-            b"float_literal",
-            "int_literal",
-            b"int_literal",
-            "string_literal",
-            b"string_literal",
-            "value",
-            b"value",
-        ],
-    ) -> builtins.bool: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "attribute_name",
-            b"attribute_name",
-            "comparison",
-            b"comparison",
-            "float_literal",
-            b"float_literal",
-            "int_literal",
-            b"int_literal",
-            "string_literal",
-            b"string_literal",
-            "value",
-            b"value",
-        ],
-    ) -> None: ...
-    def WhichOneof(
-        self, oneof_group: typing.Literal["value", b"value"]
-    ) -> typing.Literal["string_literal", "int_literal", "float_literal"] | None: ...
+    def HasField(self, field_name: typing.Literal["float_literal", b"float_literal", "int_literal", b"int_literal", "scalar_value", b"scalar_value", "string_literal", b"string_literal"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["attribute_name", b"attribute_name", "comparison", b"comparison", "float_literal", b"float_literal", "int_array", b"int_array", "int_literal", b"int_literal", "scalar_value", b"scalar_value", "str_array", b"str_array", "string_literal", b"string_literal"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["scalar_value", b"scalar_value"]) -> typing.Literal["string_literal", "int_literal", "float_literal"] | None: ...
 
 global___PentityFilter = PentityFilter
 
@@ -145,23 +165,14 @@ class PentityFilters(google.protobuf.message.Message):
     FILTERS_FIELD_NUMBER: builtins.int
     pentity_name: builtins.str
     @property
-    def filters(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___PentityFilter
-    ]: ...
+    def filters(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___PentityFilter]: ...
     def __init__(
         self,
         *,
         pentity_name: builtins.str = ...,
         filters: collections.abc.Iterable[global___PentityFilter] | None = ...,
     ) -> None: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "filters", b"filters", "pentity_name", b"pentity_name"
-        ],
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["filters", b"filters", "pentity_name", b"pentity_name"]) -> None: ...
 
 global___PentityFilters = PentityFilters
 
@@ -172,26 +183,16 @@ class PentityAggregation(google.protobuf.message.Message):
     AGGREGATION_TYPE_FIELD_NUMBER: builtins.int
     PENTITY_NAME_FIELD_NUMBER: builtins.int
     ATTRIBUTE_NAME_FIELD_NUMBER: builtins.int
-    aggregation_type: builtins.str
+    aggregation_type: global___AggregationType.ValueType
     pentity_name: builtins.str
     attribute_name: builtins.str
     def __init__(
         self,
         *,
-        aggregation_type: builtins.str = ...,
+        aggregation_type: global___AggregationType.ValueType = ...,
         pentity_name: builtins.str = ...,
         attribute_name: builtins.str = ...,
     ) -> None: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "aggregation_type",
-            b"aggregation_type",
-            "attribute_name",
-            b"attribute_name",
-            "pentity_name",
-            b"pentity_name",
-        ],
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["aggregation_type", b"aggregation_type", "attribute_name", b"attribute_name", "pentity_name", b"pentity_name"]) -> None: ...
 
 global___PentityAggregation = PentityAggregation

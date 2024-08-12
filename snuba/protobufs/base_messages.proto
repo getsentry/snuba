@@ -11,16 +11,33 @@ message RequestInfo {
   google.protobuf.Timestamp end_timestamp = 6;
 }
 
+enum Comparison {
+  EQ = 0;
+  NEQ = 1;
+  LE = 2;
+  GT = 3;
+  LTE = 4;
+  GTE = 5;
+  LIKE = 6;
+  NOT_LIKE = 7;
+  IN = 8;
+  NOT_IN = 9;
+}
+
 
 message PentityFilter{
   string attribute_name = 1;
-  string comparison = 2; // should maybe make this an enum later
-  oneof value {
+  Comparison comparison = 2;
+  oneof scalar_value {
     string string_literal = 3;
     int64 int_literal = 4;
     float float_literal = 5;
   }
-
+  // like all fields, these are optional and are necessary to allow
+  // the IN operator. The application is responsible for validating
+  // protobuf does not allow repeated fields in a oneof
+  repeated int64 int_array = 6;
+  repeated string str_array = 7;
 }
 
 
@@ -30,8 +47,21 @@ message PentityFilters {
 }
 
 
+enum AggregationType{
+  AVG = 0;
+  MIN = 1;
+  MAX = 2;
+  P50 = 4;
+  P90 = 5;
+  P95 = 6;
+  P99 = 7;
+  COUNT = 8;
+  UNIQ = 9;
+}
+
+
 message PentityAggregation {
-  string aggregation_type = 1;
+  AggregationType aggregation_type = 1;
   string pentity_name = 2;
   string attribute_name = 3;
 }

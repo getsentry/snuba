@@ -119,6 +119,13 @@ format-rust-ci:
 		cargo +stable fmt --all --check
 .PHONY: format-rust-ci
 
+
+protos := $(wildcard snuba/protobufs/*.proto)
+
+
+protobufs $(protos):
+	protoc --proto_path=snuba/protobufs --python_out=snuba/protobufs --mypy_out=snuba/protobufs $(protos)
+
 gocd:
 	rm -rf ./gocd/generated-pipelines
 	mkdir -p ./gocd/generated-pipelines

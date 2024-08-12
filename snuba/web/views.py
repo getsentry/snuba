@@ -51,7 +51,7 @@ from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionEr
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
-from snuba.protobufs import FindTrace_pb2
+from snuba.protobufs import FindTrace_pb2, time_series_pb2
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -74,7 +74,7 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
+from snuba.web.delete_query import delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -279,6 +279,18 @@ def find_trace_endpoint(*, timer: Timer) -> Union[Response, str, WerkzeugRespons
     return ""  # TODO this endpoint is not ready for primetime
 
 
+@application.route("/timeseries", methods=["POST"])
+@util.time_request("query")
+def timeseries_query(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
+    req = time_series_pb2.TimeSeriesRequest()
+    data = req.ParseFromString(http_request.data)
+    from snuba.web.rpc.timeseries import time_series_request
+    time_series_request(req)
+
+    return ""  # TODO this endpoint is not ready for primetime
+
+
+
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
@@ -322,9 +334,9 @@ def storage_delete(
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
             payload = delete_from_storage(storage, request_parts.query["columns"])
-        except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
+        except InvalidJsonRequestException as schema_error:
             return make_response(
-                jsonify({"error": str(error)}),
+                jsonify({"error": str(schema_error)}),
                 400,
             )
         except Exception as error:

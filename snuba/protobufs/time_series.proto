@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "base_messages.proto";
+import "google/protobuf/timestamp.proto";
 
 
 
@@ -9,4 +10,11 @@ message TimeSeriesRequest {
   RequestInfo request_info = 1;
   PentityFilters pentity_filters = 2;
   PentityAggregation pentity_aggregation = 3;
+  uint32 granularity_secs = 4;
+}
+
+
+message TimeSeriesResponse {
+  google.protobuf.Timestamp timestamp = 1;
+  repeated double value = 2;
 }

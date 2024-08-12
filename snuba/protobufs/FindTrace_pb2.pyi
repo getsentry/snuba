@@ -27,9 +27,7 @@ class FindTraceRequest(google.protobuf.message.Message):
             *,
             attr_key: builtins.str = ...,
         ) -> None: ...
-        def ClearField(
-            self, field_name: typing.Literal["attr_key", b"attr_key"]
-        ) -> None: ...
+        def ClearField(self, field_name: typing.Literal["attr_key", b"attr_key"]) -> None: ...
 
     @typing.final
     class SpanWithAttrKeyEqualsValue(google.protobuf.message.Message):
@@ -45,12 +43,7 @@ class FindTraceRequest(google.protobuf.message.Message):
             attr_key: builtins.str = ...,
             attr_value: builtins.str = ...,
         ) -> None: ...
-        def ClearField(
-            self,
-            field_name: typing.Literal[
-                "attr_key", b"attr_key", "attr_value", b"attr_value"
-            ],
-        ) -> None: ...
+        def ClearField(self, field_name: typing.Literal["attr_key", b"attr_key", "attr_value", b"attr_value"]) -> None: ...
 
     @typing.final
     class Filter(google.protobuf.message.Message):
@@ -59,61 +52,26 @@ class FindTraceRequest(google.protobuf.message.Message):
         SPAN_WITH_ATTR_KEY_EXISTS_FIELD_NUMBER: builtins.int
         SPAN_WITH_ATTR_KEY_EQUALS_VALUE_FIELD_NUMBER: builtins.int
         @property
-        def span_with_attr_key_exists(
-            self,
-        ) -> global___FindTraceRequest.SpanWithAttrKeyExists: ...
+        def span_with_attr_key_exists(self) -> global___FindTraceRequest.SpanWithAttrKeyExists: ...
         @property
-        def span_with_attr_key_equals_value(
-            self,
-        ) -> global___FindTraceRequest.SpanWithAttrKeyEqualsValue: ...
+        def span_with_attr_key_equals_value(self) -> global___FindTraceRequest.SpanWithAttrKeyEqualsValue: ...
         def __init__(
             self,
             *,
-            span_with_attr_key_exists: global___FindTraceRequest.SpanWithAttrKeyExists
-            | None = ...,
-            span_with_attr_key_equals_value: global___FindTraceRequest.SpanWithAttrKeyEqualsValue
-            | None = ...,
+            span_with_attr_key_exists: global___FindTraceRequest.SpanWithAttrKeyExists | None = ...,
+            span_with_attr_key_equals_value: global___FindTraceRequest.SpanWithAttrKeyEqualsValue | None = ...,
         ) -> None: ...
-        def HasField(
-            self,
-            field_name: typing.Literal[
-                "span_with_attr_key_equals_value",
-                b"span_with_attr_key_equals_value",
-                "span_with_attr_key_exists",
-                b"span_with_attr_key_exists",
-                "value",
-                b"value",
-            ],
-        ) -> builtins.bool: ...
-        def ClearField(
-            self,
-            field_name: typing.Literal[
-                "span_with_attr_key_equals_value",
-                b"span_with_attr_key_equals_value",
-                "span_with_attr_key_exists",
-                b"span_with_attr_key_exists",
-                "value",
-                b"value",
-            ],
-        ) -> None: ...
-        def WhichOneof(
-            self, oneof_group: typing.Literal["value", b"value"]
-        ) -> typing.Literal[
-            "span_with_attr_key_exists", "span_with_attr_key_equals_value"
-        ] | None: ...
+        def HasField(self, field_name: typing.Literal["span_with_attr_key_equals_value", b"span_with_attr_key_equals_value", "span_with_attr_key_exists", b"span_with_attr_key_exists", "value", b"value"]) -> builtins.bool: ...
+        def ClearField(self, field_name: typing.Literal["span_with_attr_key_equals_value", b"span_with_attr_key_equals_value", "span_with_attr_key_exists", b"span_with_attr_key_exists", "value", b"value"]) -> None: ...
+        def WhichOneof(self, oneof_group: typing.Literal["value", b"value"]) -> typing.Literal["span_with_attr_key_exists", "span_with_attr_key_equals_value"] | None: ...
 
     FILTERS_FIELD_NUMBER: builtins.int
     @property
-    def filters(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___FindTraceRequest.Filter
-    ]: ...
+    def filters(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___FindTraceRequest.Filter]: ...
     def __init__(
         self,
         *,
-        filters: collections.abc.Iterable[global___FindTraceRequest.Filter]
-        | None = ...,
+        filters: collections.abc.Iterable[global___FindTraceRequest.Filter] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["filters", b"filters"]) -> None: ...
 
@@ -125,18 +83,12 @@ class FindTraceResponse(google.protobuf.message.Message):
 
     TRACE_UUIDS_FIELD_NUMBER: builtins.int
     @property
-    def trace_uuids(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-        builtins.str
-    ]: ...
+    def trace_uuids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
     def __init__(
         self,
         *,
         trace_uuids: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["trace_uuids", b"trace_uuids"]
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["trace_uuids", b"trace_uuids"]) -> None: ...
 
 global___FindTraceResponse = FindTraceResponse
