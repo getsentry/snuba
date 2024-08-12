@@ -56,7 +56,6 @@ DELETE_QUERY_SCHEMA = {
             "required": ["columns"],
             "additionalProperties": False,
         },
-        "dataset": {"type": "string"},
     },
     "additionalProperties": False,
 }
