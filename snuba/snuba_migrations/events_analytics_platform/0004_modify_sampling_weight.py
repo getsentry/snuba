@@ -39,14 +39,14 @@ class Migration(migration.ClickhouseNodeMigration):
         return [
             operations.DropColumn(
                 storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
-                table_name=self.local_table_name,
-                column_name="sampling_weight_2",
-                target=operations.OperationTarget.LOCAL,
-            ),
-            operations.DropColumn(
-                storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
                 table_name=self.dist_table_name,
                 column_name="sampling_weight_2",
                 target=operations.OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropColumn(
+                storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
+                table_name=self.local_table_name,
+                column_name="sampling_weight_2",
+                target=operations.OperationTarget.LOCAL,
             ),
         ]
