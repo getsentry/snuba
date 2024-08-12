@@ -319,7 +319,7 @@ impl Parse for CountersRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: parse_matview_ver_from_runtime_opt("counter").unwrap_or(2),
+            materialization_version: 3,
             sampling_weight: from
                 .sampling_weight
                 .map(|sampling_weight| sampling_weight as u64),
@@ -344,6 +344,7 @@ fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &Messa
     false
 }
 
+#[allow(dead_code)]
 fn parse_matview_ver_from_runtime_opt(metric_type: &str) -> Option<u8> {
     get_str_config(&format!("gen_metrics_{}_matview_version", metric_type))
         .ok()
@@ -592,8 +593,7 @@ impl Parse for DistributionsRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: parse_matview_ver_from_runtime_opt("distribution")
-                .unwrap_or(3),
+            materialization_version: 4,
             sampling_weight: from
                 .sampling_weight
                 .map(|sampling_weight| sampling_weight as u64),
@@ -698,7 +698,7 @@ impl Parse for GaugesRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: parse_matview_ver_from_runtime_opt("gauge").unwrap_or(2),
+            materialization_version: 3,
             sampling_weight: from
                 .sampling_weight
                 .map(|sampling_weight| sampling_weight as u64),
@@ -1041,7 +1041,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1100,7 +1100,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1159,7 +1159,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1469,7 +1469,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "counter".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 1979522105,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1526,7 +1526,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "counter".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 1979522105,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1670,7 +1670,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1729,7 +1729,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1788,7 +1788,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1847,7 +1847,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 3,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1921,7 +1921,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "gauge".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 569776957,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1982,7 +1982,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "gauge".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 569776957,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -2043,7 +2043,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "gauge".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 569776957,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
