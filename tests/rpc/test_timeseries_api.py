@@ -7,6 +7,8 @@ from snuba.protobufs.base_messages_pb2 import (
     PentityFilter,
     PentityFilters,
     RequestInfo,
+    AggregationType
+
 )
 from snuba.protobufs.time_series_pb2 import TimeSeriesRequest
 from tests.base import BaseApiTest
