@@ -49,13 +49,14 @@ DELETE_QUERY_SCHEMA = {
                             "items": {"type": "integer"},
                         }
                     },
+                    "required": ["project_id"],
+                    "additionalProperties": {"type": "array"},
                 },
-                "required": ["project_id"],
-                "additionalProperties": {"type": "array"},
             },
             "required": ["columns"],
             "additionalProperties": False,
-        },
+        }
     },
+    "required": ["query"],
     "additionalProperties": False,
 }
