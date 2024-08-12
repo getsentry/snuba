@@ -54,6 +54,9 @@ class MandatoryConditionEnforcer(ClickhouseQueryProcessor):
             ), f"Missing mandatory columns in query. Missing {missing_ids}"
         else:
             if missing_checkers:
+                import pdb
+
+                pdb.set_trace()
                 logger.error(
                     "Query is missing mandatory columns",
                     extra={"missing_checkers": missing_ids},

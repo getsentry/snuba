@@ -15,6 +15,9 @@ schema:
     { name: is_segment, type: UInt, args: { size: 8 } },
     { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
     { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
+    # magic snuba column for timeseries
+    { name: time, type: DateTime },
+    #
     { name: duration_ms, type: UInt, args: { size: 32 } },
     { name: exclusive_time_ms, type: Float, args: { size: 64 } },
     { name: retention_days, type: UInt, args: { size: 16 } },
@@ -54,7 +57,13 @@ storages:
 storage_selector:
   selector: DefaultQueryStorageSelector
 
-query_processors: []
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: start_timestamp
+      time_parse_columns:
+        - start_timestamp
 
 validate_data_model: error
 validators:
