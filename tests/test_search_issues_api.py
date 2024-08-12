@@ -95,7 +95,9 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             "/search_issues/",
             data=json.dumps(
                 {
-                    "columns": {"occurrence_id": [occurrence_id], "project_id": [3]},
+                    "query": {
+                        "columns": {"occurrence_id": [occurrence_id], "project_id": [3]}
+                    },
                     "debug": True,
                     "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
