@@ -77,7 +77,6 @@ from snuba.web.converters import DatasetConverter, EntityConverter, StorageConve
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
-from snuba.web.view_types import DeleteRequest
 
 logger = logging.getLogger("snuba.api")
 
@@ -321,10 +320,11 @@ def storage_delete(
         body = parse_request_body(http_request)
 
         try:
-            # schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
-            # request_parts = schema.validate(body)
-            tmp = DeleteRequest(**body)
-            payload = delete_from_storage(storage, tmp.query.columns)
+            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+            request_parts = schema.validate(body)
+            payload = delete_from_storage(
+                storage, request_parts.query["query"]["columns"]
+            )
         except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
             details = {
                 "type": "invalid_query",
