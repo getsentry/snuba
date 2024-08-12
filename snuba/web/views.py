@@ -285,10 +285,10 @@ def timeseries_query(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
     req = time_series_pb2.TimeSeriesRequest()
     data = req.ParseFromString(http_request.data)
     from snuba.web.rpc.timeseries import time_series_request
+
     time_series_request(req)
 
     return ""  # TODO this endpoint is not ready for primetime
-
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
