@@ -18,7 +18,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.local_table_name,
                 column=Column(
                     "sampling_weight_2",
-                    UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"])),
+                    UInt(64, modifiers=Modifiers(codecs=["ZSTD(1)"], default="1")),
                 ),
                 after="sampling_weight",
                 target=operations.OperationTarget.LOCAL,
