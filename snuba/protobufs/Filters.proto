@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+message AndFilter {
+  repeated SpanFilter filters = 1;
+}
+
+message OrFilter {
+  repeated SpanFilter filters = 1;
+}
+
+message NumericalFilter {
+  enum Op {
+    LESS_THAN = 0;
+    GREATER_THAN = 1;
+    LESS_THAN_OR_EQUALS = 2;
+    GREATER_THAN_OR_EQUALS = 3;
+    EQUALS = 4;
+    NOT_EQUALS = 5;
+  }
+  string tag_name = 1;
+  Op op = 2;
+  float value = 3;
+}
+
+message StringFilter {
+  enum Op {
+    EQUALS = 0;
+    NOT_EQUALS = 1;
+    LIKE = 2;
+    NOT_LIKE = 3;
+  }
+  string tag_name = 1;
+  Op op = 2;
+  string value = 3;
+}
+
+message ExistsFilter {
+  string tag_name = 1;
+}
+
+message SpanFilter {
+  oneof value {
+    AndFilter and = 1;
+    OrFilter or = 2;
+    NumericalFilter number_comparison = 3;
+    StringFilter string_comparison = 4;
+    ExistsFilter exists = 5;
+  }
+}

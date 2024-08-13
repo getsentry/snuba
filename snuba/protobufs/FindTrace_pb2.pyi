@@ -8,6 +8,7 @@ import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
+import snuba.protobufs.Filters_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
@@ -17,90 +18,32 @@ class FindTraceRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     @typing.final
-    class SpanWithAttrKeyExists(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        ATTR_KEY_FIELD_NUMBER: builtins.int
-        attr_key: builtins.str
-        def __init__(
-            self,
-            *,
-            attr_key: builtins.str = ...,
-        ) -> None: ...
-        def ClearField(
-            self, field_name: typing.Literal["attr_key", b"attr_key"]
-        ) -> None: ...
-
-    @typing.final
-    class SpanWithAttrKeyEqualsValue(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        ATTR_KEY_FIELD_NUMBER: builtins.int
-        ATTR_VALUE_FIELD_NUMBER: builtins.int
-        attr_key: builtins.str
-        attr_value: builtins.str
-        def __init__(
-            self,
-            *,
-            attr_key: builtins.str = ...,
-            attr_value: builtins.str = ...,
-        ) -> None: ...
-        def ClearField(
-            self,
-            field_name: typing.Literal[
-                "attr_key", b"attr_key", "attr_value", b"attr_value"
-            ],
-        ) -> None: ...
-
-    @typing.final
     class Filter(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        SPAN_WITH_ATTR_KEY_EXISTS_FIELD_NUMBER: builtins.int
-        SPAN_WITH_ATTR_KEY_EQUALS_VALUE_FIELD_NUMBER: builtins.int
+        SPAN_FILTER_FIELD_NUMBER: builtins.int
         @property
-        def span_with_attr_key_exists(
-            self,
-        ) -> global___FindTraceRequest.SpanWithAttrKeyExists: ...
-        @property
-        def span_with_attr_key_equals_value(
-            self,
-        ) -> global___FindTraceRequest.SpanWithAttrKeyEqualsValue: ...
+        def span_filter(self) -> snuba.protobufs.Filters_pb2.SpanFilter: ...
         def __init__(
             self,
             *,
-            span_with_attr_key_exists: global___FindTraceRequest.SpanWithAttrKeyExists
-            | None = ...,
-            span_with_attr_key_equals_value: global___FindTraceRequest.SpanWithAttrKeyEqualsValue
-            | None = ...,
+            span_filter: snuba.protobufs.Filters_pb2.SpanFilter | None = ...,
         ) -> None: ...
         def HasField(
             self,
             field_name: typing.Literal[
-                "span_with_attr_key_equals_value",
-                b"span_with_attr_key_equals_value",
-                "span_with_attr_key_exists",
-                b"span_with_attr_key_exists",
-                "value",
-                b"value",
+                "span_filter", b"span_filter", "value", b"value"
             ],
         ) -> builtins.bool: ...
         def ClearField(
             self,
             field_name: typing.Literal[
-                "span_with_attr_key_equals_value",
-                b"span_with_attr_key_equals_value",
-                "span_with_attr_key_exists",
-                b"span_with_attr_key_exists",
-                "value",
-                b"value",
+                "span_filter", b"span_filter", "value", b"value"
             ],
         ) -> None: ...
         def WhichOneof(
             self, oneof_group: typing.Literal["value", b"value"]
-        ) -> typing.Literal[
-            "span_with_attr_key_exists", "span_with_attr_key_equals_value"
-        ] | None: ...
+        ) -> typing.Literal["span_filter"] | None: ...
 
     FILTERS_FIELD_NUMBER: builtins.int
     @property
