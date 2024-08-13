@@ -1,9 +1,10 @@
 syntax = "proto3";
 
 import "snuba/protobufs/Filters.proto";
-import "google/protobuf/timestamp.proto";
+import "snuba/protobufs/BaseRequest.proto";
 
 message AggregateBucketRequest {
+  RequestInfo request_info = 1;
   enum Function {
     SUM = 0;
     AVERAGE = 1;
@@ -11,17 +12,12 @@ message AggregateBucketRequest {
     P50 = 3;
     P95 = 4;
     P99 = 5;
+    AVG = 6;
   }
 
-  google.protobuf.Timestamp start_timestamp = 1;
-  google.protobuf.Timestamp end_timestamp = 2;
   Function aggregate = 3;
   TraceItemFilter filter = 4;
-  uint64 organization_id = 5;
-  string cogs_category = 6;
-  string referrer = 7;
-  repeated uint64 project_ids = 8;
-  uint64 num_buckets = 9;
+  uint64 granularity = 5;
 
   //TODO: group by, topn, etc, not necessary for MVP
 }
