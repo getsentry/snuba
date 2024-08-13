@@ -17,9 +17,15 @@ message AggregateBucketRequest {
   google.protobuf.Timestamp end_timestamp = 2;
   Function aggregate = 3;
   TraceItemFilter filter = 4;
+  uint64 organization_id = 5;
+  string cogs_category = 6;
+  string referrer = 7;
+  repeated uint64 project_ids = 8;
+  uint64 num_buckets = 9;
+
   //TODO: group by, topn, etc, not necessary for MVP
 }
 
 message AggregateBucketResponse {
-  float result = 1;
+  repeated float result = 1;
 }
