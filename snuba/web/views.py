@@ -342,8 +342,9 @@ def storage_delete(
             }
             return make_response(jsonify({"error": details}), 500)
 
+        # i put the result inside "data" bc thats how sentry utils/snuba.py expects the result
         return Response(
-            dump_payload(payload), 200, {"Content-Type": "application/json"}
+            dump_payload({"data": payload}), 200, {"Content-Type": "application/json"}
         )
 
     else:
