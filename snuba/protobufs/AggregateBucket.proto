@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+import "snuba/protobufs/Filters.proto";
+import "google/protobuf/timestamp.proto";
+
+message AggregateBucketRequest {
+  enum Function {
+    SUM = 0;
+    AVERAGE = 1;
+    COUNT = 2;
+    P50 = 3;
+    P95 = 4;
+    P99 = 5;
+  }
+
+  google.protobuf.Timestamp start_timestamp = 1;
+  google.protobuf.Timestamp end_timestamp = 2;
+  Function aggregate = 3;
+  TraceItemFilter filter = 4;
+  //TODO: group by, topn, etc, not necessary for MVP
+}
+
+message AggregateBucketResponse {
+  float result = 1;
+}
