@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import chain
@@ -702,3 +703,39 @@ class Enum(ColumnType[TModifiers]):
 
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
+
+
+class ColumnValidator:
+    def __init__(self, column_set: ColumnSet):
+        self._column_set = column_set
+
+    def validate(self, column, values) -> None:
+        expected_type = self._column_set[column].type
+        val_func = None
+        match expected_type:
+            case UUID():
+                val_func = self._validate_uuid
+            case Int():
+                val_func = self._validate_int
+            case UInt():
+                val_func = self._validate_int
+            case Float():
+                val_func = self._validate_float
+            case String():
+                val_func = self._validate_string
+            case _:
+                raise Exception("no type found")
+        for val in values:
+            val_func(val)
+
+    def _validate_uuid(self, value) -> None:
+        assert uuid.UUID(str(value))
+
+    def _validate_int(self, value) -> None:
+        assert isinstance(value, int)
+
+    def _validate_float(self, value) -> None:
+        assert isinstance(value, float)
+
+    def _validate_string(self, value) -> None:
+        assert isinstance(value, str)
