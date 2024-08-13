@@ -28,21 +28,21 @@ async def _find_traces_matching_filter(
         v = filt.string_comparison.value
         bucket_idx = fnv_1a(k.encode("utf-8")) % constants.ATTRIBUTE_BUCKETS
 
-        op_map = {
+        str_op_map = {
             StringFilter.EQUALS: "=",
             StringFilter.NOT_EQUALS: "<>",
             StringFilter.LIKE: " LIKE ",
             StringFilter.NOT_LIKE: " NOT LIKE ",
         }
 
-        cond = f"attr_str_{bucket_idx}['{k}']{op_map[op]}'{v}'"
+        cond = f"attr_str_{bucket_idx}['{k}']{str_op_map[op]}'{v}'"
     elif filt.number_comparison:
         k = filt.number_comparison.key
-        op = filt.number_comparison.op
-        v = filt.number_comparison.value
+        num_op = filt.number_comparison.op
+        num_v = filt.number_comparison.value
         bucket_idx = fnv_1a(k.encode("utf-8")) % constants.ATTRIBUTE_BUCKETS
 
-        op_map = {
+        num_op_map = {
             NumericalFilter.EQUALS: "=",  # TODO: float equality is finnicky, we might want to do |a-b|<epsilon
             NumericalFilter.NOT_EQUALS: "<>",
             NumericalFilter.LESS_THAN: "<",
@@ -50,7 +50,7 @@ async def _find_traces_matching_filter(
             NumericalFilter.GREATER_THAN: ">",
             NumericalFilter.GREATER_THAN_OR_EQUALS: ">=",
         }
-        cond = f"attr_num_{bucket_idx}['{k}']{op_map[op]}{v}"
+        cond = f"attr_num_{bucket_idx}['{k}']{num_op_map[num_op]}{num_v}"
 
     query = f"""
 SELECT trace_id
