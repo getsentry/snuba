@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any, Sequence
 
 import pytest
 
@@ -45,7 +46,7 @@ COLUMNS = ColumnSet(
         pytest.param("date_param", [datetime.now()], False),
     ],
 )
-def test_validator(column_name, values, is_valid) -> None:
+def test_validator(column_name: str, values: Sequence[Any], is_valid: bool) -> None:
     col_validator = ColumnValidator(COLUMNS)
 
     if is_valid == True:

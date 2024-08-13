@@ -4,7 +4,9 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import chain
+from typing import Any as AnyType
 from typing import (
+    Callable,
     Generic,
     Iterator,
     List,
@@ -709,9 +711,9 @@ class ColumnValidator:
     def __init__(self, column_set: ColumnSet):
         self._column_set = column_set
 
-    def validate(self, column, values) -> None:
-        expected_type = self._column_set[column].type
-        val_func = None
+    def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
+        expected_type = self._column_set[column_name].type
+        val_func: Optional[Callable[[AnyType], None]]
         match expected_type:
             case UUID():
                 val_func = self._validate_uuid
@@ -724,18 +726,20 @@ class ColumnValidator:
             case String():
                 val_func = self._validate_string
             case _:
-                raise Exception("no type found")
+                raise NotImplementedError(
+                    f"ColumnValidator not implement for: {expected_type}"
+                )
         for val in values:
             val_func(val)
 
-    def _validate_uuid(self, value) -> None:
+    def _validate_uuid(self, value: str) -> None:
         assert uuid.UUID(str(value))
 
-    def _validate_int(self, value) -> None:
+    def _validate_int(self, value: int) -> None:
         assert isinstance(value, int)
 
-    def _validate_float(self, value) -> None:
+    def _validate_float(self, value: float) -> None:
         assert isinstance(value, float)
 
-    def _validate_string(self, value) -> None:
+    def _validate_string(self, value: str) -> None:
         assert isinstance(value, str)
