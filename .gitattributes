@@ -1,1 +1,2 @@
 snuba/admin/dist/bundle.js binary
+snuba/protobufs/**/* linguist-generated=true

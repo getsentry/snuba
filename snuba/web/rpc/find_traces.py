@@ -19,11 +19,11 @@ async def _find_traces_matching_filter(
 
     # TODO this is just a toy example, sql injection etc
     if filt.exists:
-        k = filt.span_filter.exists.tag_name
+        k = filt.span_filter.exists.key
         bucket_idx = fnv_1a(k.encode("utf-8")) % constants.ATTRIBUTE_BUCKETS
         cond = f"mapContains(attr_str_{bucket_idx}, '{k}') OR mapContains(attr_num_{bucket_idx}, '{k}')"
     elif filt.string_comparison:
-        k = filt.span_filter.string_comparison.tag_name
+        k = filt.span_filter.string_comparison.key
         op = filt.span_filter.string_comparison.op
         v = filt.span_filter.string_comparison.value
         bucket_idx = fnv_1a(k.encode("utf-8")) % constants.ATTRIBUTE_BUCKETS
@@ -37,7 +37,7 @@ async def _find_traces_matching_filter(
 
         cond = f"attr_str_{bucket_idx}['{k}']{op_map[op]}'{v}'"
     elif filt.number_comparison:
-        k = filt.span_filter.number_comparison.tag_name
+        k = filt.span_filter.number_comparison.key
         op = filt.span_filter.number_comparison.op
         v = filt.span_filter.number_comparison.value
         bucket_idx = fnv_1a(k.encode("utf-8")) % constants.ATTRIBUTE_BUCKETS

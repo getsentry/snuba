@@ -76,20 +76,20 @@ class NumericalFilter(google.protobuf.message.Message):
     EQUALS: NumericalFilter.Op.ValueType  # 4
     NOT_EQUALS: NumericalFilter.Op.ValueType  # 5
 
-    TAG_NAME_FIELD_NUMBER: builtins.int
+    KEY_FIELD_NUMBER: builtins.int
     OP_FIELD_NUMBER: builtins.int
     VALUE_FIELD_NUMBER: builtins.int
-    tag_name: builtins.str
+    key: builtins.str
     op: global___NumericalFilter.Op.ValueType
     value: builtins.float
     def __init__(
         self,
         *,
-        tag_name: builtins.str = ...,
+        key: builtins.str = ...,
         op: global___NumericalFilter.Op.ValueType = ...,
         value: builtins.float = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["op", b"op", "tag_name", b"tag_name", "value", b"value"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["key", b"key", "op", b"op", "value", b"value"]) -> None: ...
 
 global___NumericalFilter = NumericalFilter
 
@@ -114,20 +114,20 @@ class StringFilter(google.protobuf.message.Message):
     LIKE: StringFilter.Op.ValueType  # 2
     NOT_LIKE: StringFilter.Op.ValueType  # 3
 
-    TAG_NAME_FIELD_NUMBER: builtins.int
+    KEY_FIELD_NUMBER: builtins.int
     OP_FIELD_NUMBER: builtins.int
     VALUE_FIELD_NUMBER: builtins.int
-    tag_name: builtins.str
+    key: builtins.str
     op: global___StringFilter.Op.ValueType
     value: builtins.str
     def __init__(
         self,
         *,
-        tag_name: builtins.str = ...,
+        key: builtins.str = ...,
         op: global___StringFilter.Op.ValueType = ...,
         value: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["op", b"op", "tag_name", b"tag_name", "value", b"value"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["key", b"key", "op", b"op", "value", b"value"]) -> None: ...
 
 global___StringFilter = StringFilter
 
@@ -135,14 +135,14 @@ global___StringFilter = StringFilter
 class ExistsFilter(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    TAG_NAME_FIELD_NUMBER: builtins.int
-    tag_name: builtins.str
+    KEY_FIELD_NUMBER: builtins.int
+    key: builtins.str
     def __init__(
         self,
         *,
-        tag_name: builtins.str = ...,
+        key: builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["tag_name", b"tag_name"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["key", b"key"]) -> None: ...
 
 global___ExistsFilter = ExistsFilter
 
