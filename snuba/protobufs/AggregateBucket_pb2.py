@@ -26,7 +26,7 @@ from snuba.protobufs import Filters_pb2 as snuba_dot_protobufs_dot_Filters__pb2
 from snuba.protobufs import BaseRequest_pb2 as snuba_dot_protobufs_dot_BaseRequest__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n%snuba/protobufs/AggregateBucket.proto\x1a\x1dsnuba/protobufs/Filters.proto\x1a!snuba/protobufs/BaseRequest.proto\"\xf9\x01\n\x16\x41ggregateBucketRequest\x12\"\n\x0crequest_info\x18\x01 \x01(\x0b\x32\x0c.RequestInfo\x12\x33\n\taggregate\x18\x03 \x01(\x0e\x32 .AggregateBucketRequest.Function\x12 \n\x06\x66ilter\x18\x04 \x01(\x0b\x32\x10.TraceItemFilter\x12\x13\n\x0bgranularity\x18\x05 \x01(\x04\"O\n\x08\x46unction\x12\x07\n\x03SUM\x10\x00\x12\x0b\n\x07\x41VERAGE\x10\x01\x12\t\n\x05\x43OUNT\x10\x02\x12\x07\n\x03P50\x10\x03\x12\x07\n\x03P95\x10\x04\x12\x07\n\x03P99\x10\x05\x12\x07\n\x03\x41VG\x10\x06\")\n\x17\x41ggregateBucketResponse\x12\x0e\n\x06result\x18\x01 \x03(\x02\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n%snuba/protobufs/AggregateBucket.proto\x1a\x1dsnuba/protobufs/Filters.proto\x1a!snuba/protobufs/BaseRequest.proto\"\xfe\x01\n\x16\x41ggregateBucketRequest\x12\"\n\x0crequest_info\x18\x01 \x01(\x0b\x32\x0c.RequestInfo\x12\x33\n\taggregate\x18\x03 \x01(\x0e\x32 .AggregateBucketRequest.Function\x12 \n\x06\x66ilter\x18\x04 \x01(\x0b\x32\x10.TraceItemFilter\x12\x18\n\x10granularity_secs\x18\x05 \x01(\x04\"O\n\x08\x46unction\x12\x07\n\x03SUM\x10\x00\x12\x0b\n\x07\x41VERAGE\x10\x01\x12\t\n\x05\x43OUNT\x10\x02\x12\x07\n\x03P50\x10\x03\x12\x07\n\x03P95\x10\x04\x12\x07\n\x03P99\x10\x05\x12\x07\n\x03\x41VG\x10\x06\")\n\x17\x41ggregateBucketResponse\x12\x0e\n\x06result\x18\x01 \x03(\x02\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,9 +34,9 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'snuba.protobufs.AggregateBu
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_AGGREGATEBUCKETREQUEST']._serialized_start=108
-  _globals['_AGGREGATEBUCKETREQUEST']._serialized_end=357
-  _globals['_AGGREGATEBUCKETREQUEST_FUNCTION']._serialized_start=278
-  _globals['_AGGREGATEBUCKETREQUEST_FUNCTION']._serialized_end=357
-  _globals['_AGGREGATEBUCKETRESPONSE']._serialized_start=359
-  _globals['_AGGREGATEBUCKETRESPONSE']._serialized_end=400
+  _globals['_AGGREGATEBUCKETREQUEST']._serialized_end=362
+  _globals['_AGGREGATEBUCKETREQUEST_FUNCTION']._serialized_start=283
+  _globals['_AGGREGATEBUCKETREQUEST_FUNCTION']._serialized_end=362
+  _globals['_AGGREGATEBUCKETRESPONSE']._serialized_start=364
+  _globals['_AGGREGATEBUCKETRESPONSE']._serialized_end=405
 # @@protoc_insertion_point(module_scope)

@@ -17,7 +17,7 @@ message AggregateBucketRequest {
 
   Function aggregate = 3;
   TraceItemFilter filter = 4;
-  uint64 granularity = 5;
+  uint64 granularity_secs = 5;
 
   //TODO: group by, topn, etc, not necessary for MVP
 }

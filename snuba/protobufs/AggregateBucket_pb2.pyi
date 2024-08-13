@@ -51,9 +51,9 @@ class AggregateBucketRequest(google.protobuf.message.Message):
     REQUEST_INFO_FIELD_NUMBER: builtins.int
     AGGREGATE_FIELD_NUMBER: builtins.int
     FILTER_FIELD_NUMBER: builtins.int
-    GRANULARITY_FIELD_NUMBER: builtins.int
+    GRANULARITY_SECS_FIELD_NUMBER: builtins.int
     aggregate: global___AggregateBucketRequest.Function.ValueType
-    granularity: builtins.int
+    granularity_secs: builtins.int
     @property
     def request_info(self) -> snuba.protobufs.BaseRequest_pb2.RequestInfo: ...
     @property
@@ -64,10 +64,10 @@ class AggregateBucketRequest(google.protobuf.message.Message):
         request_info: snuba.protobufs.BaseRequest_pb2.RequestInfo | None = ...,
         aggregate: global___AggregateBucketRequest.Function.ValueType = ...,
         filter: snuba.protobufs.Filters_pb2.TraceItemFilter | None = ...,
-        granularity: builtins.int = ...,
+        granularity_secs: builtins.int = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["filter", b"filter", "request_info", b"request_info"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["aggregate", b"aggregate", "filter", b"filter", "granularity", b"granularity", "request_info", b"request_info"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["aggregate", b"aggregate", "filter", b"filter", "granularity_secs", b"granularity_secs", "request_info", b"request_info"]) -> None: ...
 
 global___AggregateBucketRequest = AggregateBucketRequest
 
