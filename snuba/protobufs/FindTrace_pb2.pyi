@@ -17,46 +17,13 @@ DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 class FindTraceRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    @typing.final
-    class Filter(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        SPAN_FILTER_FIELD_NUMBER: builtins.int
-        @property
-        def span_filter(self) -> snuba.protobufs.Filters_pb2.SpanFilter: ...
-        def __init__(
-            self,
-            *,
-            span_filter: snuba.protobufs.Filters_pb2.SpanFilter | None = ...,
-        ) -> None: ...
-        def HasField(
-            self,
-            field_name: typing.Literal[
-                "span_filter", b"span_filter", "value", b"value"
-            ],
-        ) -> builtins.bool: ...
-        def ClearField(
-            self,
-            field_name: typing.Literal[
-                "span_filter", b"span_filter", "value", b"value"
-            ],
-        ) -> None: ...
-        def WhichOneof(
-            self, oneof_group: typing.Literal["value", b"value"]
-        ) -> typing.Literal["span_filter"] | None: ...
-
     FILTERS_FIELD_NUMBER: builtins.int
     @property
-    def filters(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___FindTraceRequest.Filter
-    ]: ...
+    def filters(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[snuba.protobufs.Filters_pb2.TraceItemFilter]: ...
     def __init__(
         self,
         *,
-        filters: collections.abc.Iterable[global___FindTraceRequest.Filter]
-        | None = ...,
+        filters: collections.abc.Iterable[snuba.protobufs.Filters_pb2.TraceItemFilter] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["filters", b"filters"]) -> None: ...
 
@@ -68,18 +35,12 @@ class FindTraceResponse(google.protobuf.message.Message):
 
     TRACE_UUIDS_FIELD_NUMBER: builtins.int
     @property
-    def trace_uuids(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-        builtins.str
-    ]: ...
+    def trace_uuids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
     def __init__(
         self,
         *,
         trace_uuids: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["trace_uuids", b"trace_uuids"]
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["trace_uuids", b"trace_uuids"]) -> None: ...
 
 global___FindTraceResponse = FindTraceResponse

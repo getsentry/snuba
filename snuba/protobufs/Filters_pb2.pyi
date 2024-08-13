@@ -25,15 +25,11 @@ class AndFilter(google.protobuf.message.Message):
 
     FILTERS_FIELD_NUMBER: builtins.int
     @property
-    def filters(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___SpanFilter
-    ]: ...
+    def filters(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TraceItemFilter]: ...
     def __init__(
         self,
         *,
-        filters: collections.abc.Iterable[global___SpanFilter] | None = ...,
+        filters: collections.abc.Iterable[global___TraceItemFilter] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["filters", b"filters"]) -> None: ...
 
@@ -45,15 +41,11 @@ class OrFilter(google.protobuf.message.Message):
 
     FILTERS_FIELD_NUMBER: builtins.int
     @property
-    def filters(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___SpanFilter
-    ]: ...
+    def filters(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___TraceItemFilter]: ...
     def __init__(
         self,
         *,
-        filters: collections.abc.Iterable[global___SpanFilter] | None = ...,
+        filters: collections.abc.Iterable[global___TraceItemFilter] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["filters", b"filters"]) -> None: ...
 
@@ -67,12 +59,7 @@ class NumericalFilter(google.protobuf.message.Message):
         ValueType = typing.NewType("ValueType", builtins.int)
         V: typing_extensions.TypeAlias = ValueType
 
-    class _OpEnumTypeWrapper(
-        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
-            NumericalFilter._Op.ValueType
-        ],
-        builtins.type,
-    ):
+    class _OpEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[NumericalFilter._Op.ValueType], builtins.type):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         LESS_THAN: NumericalFilter._Op.ValueType  # 0
         GREATER_THAN: NumericalFilter._Op.ValueType  # 1
@@ -102,12 +89,7 @@ class NumericalFilter(google.protobuf.message.Message):
         op: global___NumericalFilter.Op.ValueType = ...,
         value: builtins.float = ...,
     ) -> None: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "op", b"op", "tag_name", b"tag_name", "value", b"value"
-        ],
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["op", b"op", "tag_name", b"tag_name", "value", b"value"]) -> None: ...
 
 global___NumericalFilter = NumericalFilter
 
@@ -119,12 +101,7 @@ class StringFilter(google.protobuf.message.Message):
         ValueType = typing.NewType("ValueType", builtins.int)
         V: typing_extensions.TypeAlias = ValueType
 
-    class _OpEnumTypeWrapper(
-        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
-            StringFilter._Op.ValueType
-        ],
-        builtins.type,
-    ):
+    class _OpEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[StringFilter._Op.ValueType], builtins.type):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         EQUALS: StringFilter._Op.ValueType  # 0
         NOT_EQUALS: StringFilter._Op.ValueType  # 1
@@ -150,12 +127,7 @@ class StringFilter(google.protobuf.message.Message):
         op: global___StringFilter.Op.ValueType = ...,
         value: builtins.str = ...,
     ) -> None: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "op", b"op", "tag_name", b"tag_name", "value", b"value"
-        ],
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["op", b"op", "tag_name", b"tag_name", "value", b"value"]) -> None: ...
 
 global___StringFilter = StringFilter
 
@@ -170,14 +142,12 @@ class ExistsFilter(google.protobuf.message.Message):
         *,
         tag_name: builtins.str = ...,
     ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["tag_name", b"tag_name"]
-    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["tag_name", b"tag_name"]) -> None: ...
 
 global___ExistsFilter = ExistsFilter
 
 @typing.final
-class SpanFilter(google.protobuf.message.Message):
+class TraceItemFilter(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     AND_FIELD_NUMBER: builtins.int
@@ -198,44 +168,8 @@ class SpanFilter(google.protobuf.message.Message):
         string_comparison: global___StringFilter | None = ...,
         exists: global___ExistsFilter | None = ...,
     ) -> None: ...
-    def HasField(
-        self,
-        field_name: typing.Literal[
-            "and",
-            b"and",
-            "exists",
-            b"exists",
-            "number_comparison",
-            b"number_comparison",
-            "or",
-            b"or",
-            "string_comparison",
-            b"string_comparison",
-            "value",
-            b"value",
-        ],
-    ) -> builtins.bool: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "and",
-            b"and",
-            "exists",
-            b"exists",
-            "number_comparison",
-            b"number_comparison",
-            "or",
-            b"or",
-            "string_comparison",
-            b"string_comparison",
-            "value",
-            b"value",
-        ],
-    ) -> None: ...
-    def WhichOneof(
-        self, oneof_group: typing.Literal["value", b"value"]
-    ) -> typing.Literal[
-        "and", "or", "number_comparison", "string_comparison", "exists"
-    ] | None: ...
+    def HasField(self, field_name: typing.Literal["and", b"and", "exists", b"exists", "number_comparison", b"number_comparison", "or", b"or", "string_comparison", b"string_comparison", "value", b"value"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["and", b"and", "exists", b"exists", "number_comparison", b"number_comparison", "or", b"or", "string_comparison", b"string_comparison", "value", b"value"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["value", b"value"]) -> typing.Literal["and", "or", "number_comparison", "string_comparison", "exists"] | None: ...
 
-global___SpanFilter = SpanFilter
+global___TraceItemFilter = TraceItemFilter

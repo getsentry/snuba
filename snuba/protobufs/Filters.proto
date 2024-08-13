@@ -1,11 +1,11 @@
 syntax = "proto3";
 
 message AndFilter {
-  repeated SpanFilter filters = 1;
+  repeated TraceItemFilter filters = 1;
 }
 
 message OrFilter {
-  repeated SpanFilter filters = 1;
+  repeated TraceItemFilter filters = 1;
 }
 
 message NumericalFilter {
@@ -38,7 +38,7 @@ message ExistsFilter {
   string tag_name = 1;
 }
 
-message SpanFilter {
+message TraceItemFilter {
   oneof value {
     AndFilter and = 1;
     OrFilter or = 2;

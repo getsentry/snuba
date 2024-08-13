@@ -3,12 +3,7 @@ syntax = "proto3";
 import "snuba/protobufs/Filters.proto";
 
 message FindTraceRequest {
-  message Filter {
-    oneof value {
-      SpanFilter span_filter = 1;
-    }
-  }
-  repeated Filter filters = 1;
+  repeated TraceItemFilter filters = 1;
 }
 
 message FindTraceResponse {
