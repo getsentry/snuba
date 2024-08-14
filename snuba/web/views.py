@@ -76,6 +76,7 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
+from snuba.web.rpc.timeseries import timeseries_query as timeseries_query_impl
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -285,9 +286,7 @@ def timeseries_query(*, timer: Timer) -> Response:
     req = AggregateBucket_pb2.AggregateBucketRequest()
     req.ParseFromString(http_request.data)
     # STUB
-    res = AggregateBucket_pb2.AggregateBucketResponse(
-        result=[float(i) for i in range(100)]
-    )
+    res = timeseries_query_impl(req, timer)
     return Response(res.SerializeToString())
 
 
