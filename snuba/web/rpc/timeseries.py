@@ -153,8 +153,9 @@ def _build_snuba_request(
 
 
 def timeseries_query(
-    request: AggregateBucket_pb2.AggregateBucketRequest, timer: Timer
+    request: AggregateBucket_pb2.AggregateBucketRequest, timer: Timer | None = None
 ) -> AggregateBucket_pb2.AggregateBucketResponse:
+    timer = timer or Timer("timeseries_query")
     snuba_request = _build_snuba_request(request)
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
@@ -163,6 +164,7 @@ def timeseries_query(
     )
     assert res.result.get("data", None) is not None
     return AggregateBucket_pb2.AggregateBucketResponse(
-        # result=[float(i) for i in res.result["data"]]
-        result=[float(i) for i in range(100)]
+        result=[float(i) for i in res.result["data"]]
+        # STUB
+        # result=[float(i) for i in range(100)]
     )
