@@ -528,33 +528,6 @@ class DropIndex(SqlOperation):
         )
 
 
-class DropIndices(SqlOperation):
-    """
-    Drops many indices.
-
-    Only works with the MergeTree family of tables.
-
-    In ClickHouse versions prior to 20.1.2.4, this requires setting
-    allow_experimental_data_skipping_indices = 1
-    """
-
-    def __init__(
-        self,
-        storage_set: StorageSetKey,
-        table_name: str,
-        indices: Sequence[str],
-        target: OperationTarget = OperationTarget.UNSET,
-    ):
-        super().__init__(storage_set, target=target)
-        self.__table_name = table_name
-        self.__indices = indices
-
-    def format_sql(self) -> str:
-        statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
-
-        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
-
-
 class InsertIntoSelect(SqlOperation):
     """
     Inserts the results of a select query. Source and destination tables must be
