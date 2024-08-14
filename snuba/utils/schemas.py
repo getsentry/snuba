@@ -725,7 +725,7 @@ class ColumnValidator:
             case Int():
                 is_valid_func = self._valid_int
             case UInt():
-                is_valid_func = self._valid_int
+                is_valid_func = self._valid_uint
             case Float():
                 is_valid_func = self._valid_float
             case String():
@@ -748,6 +748,9 @@ class ColumnValidator:
 
     def _valid_int(self, value: int) -> bool:
         return isinstance(value, int)
+
+    def _valid_uint(self, value: int) -> bool:
+        return isinstance(value, int) and value > 0
 
     def _valid_float(self, value: float) -> bool:
         return isinstance(value, float)

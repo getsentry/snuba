@@ -37,7 +37,7 @@ COLUMNS = ColumnSet(
         pytest.param("float_param", [1.20, 2.0], True),
         pytest.param("uuid_param", ["06a910bc-7682-4c76-b818-666124cc8898"], True),
         # invalid column types
-        pytest.param("uint_param", ["hillo"], False),
+        pytest.param("uint_param", [-17], False),
         pytest.param("str_param", ["hi", 3], False),
         pytest.param("int_param", [1, 2, 3, 4.0], False),
         pytest.param("float_param", [1.20, 2], False),
