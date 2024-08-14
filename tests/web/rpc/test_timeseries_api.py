@@ -9,7 +9,7 @@ from tests.base import BaseApiTest
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesApi(BaseApiTest):
-    def test_basic(self):
+    def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         message = AggregateBucket_pb2.AggregateBucketRequest(
