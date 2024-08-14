@@ -482,8 +482,8 @@ function Client() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          storage: storage_name,
-          columns: column_conditions
+          "storage": storage_name,
+          "query": {"columns": column_conditions}
         })
       })
     },
