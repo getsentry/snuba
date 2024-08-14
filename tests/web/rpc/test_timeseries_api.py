@@ -1,4 +1,5 @@
 import random
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, Mapping
 
@@ -38,7 +39,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
         },
         "measurements": {
             "num_of_spans": {"value": 50.0},
-            "eap.measurement": {"value": random.gauss(420)},
+            "eap.measurement": {"value": 420},
         },
         "organization_id": 1,
         "origin": "auto.http.django",
@@ -64,7 +65,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "8873a98879faf06d",
+        "span_id": uuid.uuid4().hex,
         "tags": {
             "http.status_code": "200",
             "relay_endpoint_version": "3",
@@ -78,21 +79,24 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
             "color": random.choice(["red", "green", "blue"]),
             "location": random.choice(["mobile", "frontend", "backend"]),
         },
-        "trace_id": "d099bf9ad5a143cf8f83a98081d0ed3b",
-        "start_timestamp_ms": int(dt.timestamp()),
+        "trace_id": uuid.uuid4().hex,
+        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
         "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp(),
+        "end_timestamp_precise": dt.timestamp() + 1,
     }
+
+
+@pytest.fixture(autouse=True)
+def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+    spans_storage = get_storage(StorageKey("eap_spans"))
+    start = datetime.utcnow() - timedelta(hours=1)
+    messages = [gen_message(start + timedelta(minutes=i)) for i in range(60)]
+    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesApi(BaseApiTest):
-    @pytest.fixture(autouse=True)
-    def setup_teardown(self, clickhouse_db: None, redis_db: None) -> None:
-        spans_storage = get_storage(StorageKey("eap_spans"))
-        write_raw_unprocessed_events(spans_storage, [gen_message(datetime.utcnow()) for _ in range(10000)])  # type: ignore
-
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
@@ -116,9 +120,8 @@ class TestTimeSeriesApi(BaseApiTest):
 
         # assert pbuf_response.result == [float(i) for i in range(100)]
 
-    def test_with_data(self) -> None:
-        ts = Timestamp()
-        ts.GetCurrentTime()
+    def test_with_data(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(datetime.utcnow().timestamp()))
         hour_ago = int((datetime.utcnow() - timedelta(hours=1)).timestamp())
         message = AggregateBucket_pb2.AggregateBucketRequest(
             request_info=RequestInfo(
@@ -129,7 +132,8 @@ class TestTimeSeriesApi(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
             ),
-            granularity_secs=60,
+            aggregate=AggregateBucket_pb2.AggregateBucketRequest.AVERAGE,
+            granularity_secs=1,
         )
         response = timeseries_query(message)
-        print(response)
+        assert response.result == [420 for _ in range(60)]

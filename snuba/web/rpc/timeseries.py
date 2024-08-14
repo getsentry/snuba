@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from google.protobuf.json_format import MessageToDict
 
@@ -71,9 +72,9 @@ def _get_aggregate_func(
 ) -> Expression:
     FuncEnum = AggregateBucket_pb2.AggregateBucketRequest.Function
     lookup = {
-        FuncEnum.SUM: f.sum(_get_measurement_field(request)),
-        FuncEnum.AVERAGE: f.avg(_get_measurement_field(request)),
-        FuncEnum.COUNT: f.count(_get_measurement_field(request)),
+        FuncEnum.SUM: f.sum(_get_measurement_field(request), alias="measurement"),
+        FuncEnum.AVERAGE: f.avg(_get_measurement_field(request), alias="measurement"),
+        FuncEnum.COUNT: f.count(_get_measurement_field(request), alias="measurement"),
         # curried functions PITA, to do later
         FuncEnum.P50: None,
         FuncEnum.P95: None,
@@ -94,17 +95,26 @@ def _build_condition(request: AggregateBucket_pb2.AggregateBucketRequest) -> Exp
             literals=[literal(pid) for pid in request.request_info.project_ids],
         ),
     )
+
     return and_cond(
         project_ids,
         f.equals(column("organization_id"), request.request_info.organization_id),
         # HACK: timestamp name
         f.less(
             column("start_timestamp"),
-            f.fromUnixTimestamp(request.request_info.end_timestamp.seconds),
+            f.toDateTime(
+                datetime.utcfromtimestamp(
+                    request.request_info.end_timestamp.seconds
+                ).isoformat()
+            ),
         ),
         f.greaterOrEquals(
             column("start_timestamp"),
-            f.fromUnixTimestamp(request.request_info.start_timestamp.seconds),
+            f.toDateTime(
+                datetime.utcfromtimestamp(
+                    request.request_info.start_timestamp.seconds
+                ).isoformat()
+            ),
         ),
     )
 
@@ -119,7 +129,8 @@ def _build_query(request: AggregateBucket_pb2.AggregateBucketRequest) -> Query:
     res = Query(
         from_clause=entity,
         selected_columns=[
-            SelectedExpression(name="agg", expression=_get_aggregate_func(request))
+            SelectedExpression(name="time", expression=column("time", alias="time")),
+            SelectedExpression(name="agg", expression=_get_aggregate_func(request)),
         ],
         condition=_build_condition(request),
         granularity=request.granularity_secs,
@@ -164,7 +175,5 @@ def timeseries_query(
     )
     assert res.result.get("data", None) is not None
     return AggregateBucket_pb2.AggregateBucketResponse(
-        result=[float(i) for i in res.result["data"]]
-        # STUB
-        # result=[float(i) for i in range(100)]
+        result=[float(r["agg"]) for r in res.result["data"]]
     )
