@@ -718,7 +718,7 @@ class ColumnValidator:
 
     def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
         expected_type = self._column_set[column_name].type
-        is_valid_func: Optional[Callable[[AnyType], None]]
+        is_valid_func: Optional[Callable[[AnyType], bool]]
         match expected_type:
             case UUID():
                 is_valid_func = self._valid_uuid
