@@ -337,7 +337,11 @@ def storage_delete(
             payload = delete_from_storage(
                 storage, request_parts.query["query"]["columns"]
             )
-        except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
+        except (
+            InvalidJsonRequestException,
+            DeletesNotEnabledError,
+            InvalidQueryException,
+        ) as error:
             details = {
                 "type": "invalid_query",
                 "message": str(error),

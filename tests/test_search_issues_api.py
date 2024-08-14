@@ -197,6 +197,29 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert int(res.status_code / 100) == 4  # 400 status code
         assert "'query' is a required property" in res.get_json()["error"]["message"]
 
+        # test for invalid column types
+        set_config("storage_deletes_enabled", 1)
+        res = self.app.delete(
+            "/search_issues/",
+            data=json.dumps(
+                {
+                    "columns": {
+                        "occurrence_id": ["invalid_id"],
+                        "project_id": [3],
+                    },
+                    "debug": True,
+                    "tenant_ids": {"referrer": "test", "organization_id": 1},
+                }
+            ),
+            headers={"referer": "test"},
+        )
+        assert res.status_code == 400
+        data = json.loads(res.data)
+        assert (
+            data["error"]
+            == "Invalid value invalid_id for column type schemas.UUID(modifiers=None)"
+        )
+
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
 

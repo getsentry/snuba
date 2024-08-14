@@ -21,6 +21,7 @@ from typing import (
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.utils.constants import NESTED_COL_EXPR_RE
+from snuba.utils.serializable_exception import SerializableException
 
 
 class TypeModifier(ABC):
@@ -707,39 +708,49 @@ class Enum(ColumnType[TModifiers]):
         return Enum(self.values)
 
 
+class InvalidColumnType(SerializableException):
+    pass
+
+
 class ColumnValidator:
     def __init__(self, column_set: ColumnSet):
         self._column_set = column_set
 
     def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
         expected_type = self._column_set[column_name].type
-        val_func: Optional[Callable[[AnyType], None]]
+        is_valid_func: Optional[Callable[[AnyType], None]]
         match expected_type:
             case UUID():
-                val_func = self._validate_uuid
+                is_valid_func = self._valid_uuid
             case Int():
-                val_func = self._validate_int
+                is_valid_func = self._valid_int
             case UInt():
-                val_func = self._validate_int
+                is_valid_func = self._valid_int
             case Float():
-                val_func = self._validate_float
+                is_valid_func = self._valid_float
             case String():
-                val_func = self._validate_string
+                is_valid_func = self._valid_string
             case _:
-                raise NotImplementedError(
-                    f"ColumnValidator not implement for: {expected_type}"
-                )
+                raise InvalidColumnType(f"No validator for type: {expected_type}")
         for val in values:
-            val_func(val)
+            if is_valid_func(val):
+                continue
+            raise InvalidColumnType(
+                f"Invalid value {val} for column type {expected_type}"
+            )
 
-    def _validate_uuid(self, value: str) -> None:
-        assert uuid.UUID(str(value))
+    def _valid_uuid(self, value: str) -> bool:
+        try:
+            uuid.UUID(str(value))
+            return True
+        except ValueError:
+            return False
 
-    def _validate_int(self, value: int) -> None:
-        assert isinstance(value, int)
+    def _valid_int(self, value: int) -> bool:
+        return isinstance(value, int)
 
-    def _validate_float(self, value: float) -> None:
-        assert isinstance(value, float)
+    def _valid_float(self, value: float) -> bool:
+        return isinstance(value, float)
 
-    def _validate_string(self, value: str) -> None:
-        assert isinstance(value, str)
+    def _valid_string(self, value: str) -> bool:
+        return isinstance(value, str)
