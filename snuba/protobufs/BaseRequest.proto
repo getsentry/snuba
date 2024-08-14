@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+message RequestInfo {
+  google.protobuf.Timestamp start_timestamp = 1;
+  google.protobuf.Timestamp end_timestamp = 2;
+  uint64 organization_id = 3;
+  string cogs_category = 4;
+  string referrer = 5;
+  repeated uint64 project_ids = 6;
+}
