@@ -550,7 +550,7 @@ class DropIndices(SqlOperation):
         self.__indices = indices
 
     def format_sql(self) -> str:
-        statements = [f"DROP INDEX IF NOT EXISTS {idx}" for idx in self.__indices]
+        statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
 
         return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
 
