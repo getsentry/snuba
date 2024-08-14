@@ -51,7 +51,7 @@ from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionEr
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
-from snuba.protobufs import FindTrace_pb2
+from snuba.protobufs import AggregateBucket_pb2, FindTrace_pb2
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -277,6 +277,18 @@ def find_trace_endpoint(*, timer: Timer) -> Union[Response, str, WerkzeugRespons
     req = FindTrace_pb2.FindTraceRequest()
     req.ParseFromString(http_request.data)
     return ""  # TODO this endpoint is not ready for primetime
+
+
+@application.route("/timeseries", methods=["POST"])
+@util.time_request("timeseries_query")
+def timeseries_query(*, timer: Timer) -> Response:
+    req = AggregateBucket_pb2.AggregateBucketRequest()
+    req.ParseFromString(http_request.data)
+    # STUB
+    res = AggregateBucket_pb2.AggregateBucketResponse(
+        result=[float(i) for i in range(100)]
+    )
+    return Response(res.SerializeToString())
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
