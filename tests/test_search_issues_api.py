@@ -203,9 +203,11 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             "/search_issues/",
             data=json.dumps(
                 {
-                    "columns": {
-                        "occurrence_id": ["invalid_id"],
-                        "project_id": [3],
+                    "query": {
+                        "columns": {
+                            "occurrence_id": ["invalid_id"],
+                            "project_id": [3],
+                        },
                     },
                     "debug": True,
                     "tenant_ids": {"referrer": "test", "organization_id": 1},
@@ -216,7 +218,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert res.status_code == 400
         data = json.loads(res.data)
         assert (
-            data["error"]
+            data["error"]["message"]
             == "Invalid value invalid_id for column type schemas.UUID(modifiers=None)"
         )
 
