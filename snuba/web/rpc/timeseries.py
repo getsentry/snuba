@@ -84,7 +84,7 @@ def _get_aggregate_func(
     res = lookup[request.aggregate]
     if res is None:
         NotImplementedError()
-    return res
+    return res  # type: ignore
 
 
 def _build_condition(request: AggregateBucket_pb2.AggregateBucketRequest) -> Expression:
