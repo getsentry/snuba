@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.8.0
+
+### Various fixes & improvements
+
+- switch readiness state to limited to skip migrations and unblock CI (#6210) by @volokluev
+- fix: Add DropIndices back as it was removed after a revert (#6209) by @phacops
+- fix(eap): fix number migration collision (#6208) by @volokluev
+- Revert "fix(eap-spans): Drop ineffective indices to speed up insertion (#6206)" (68826531) by @getsentry-bot
+- ref(snuba-deletes) don't run delete queries when 0 rows need to be deleted (#6199) by @xurui-c
+- fix(eap-spans): Drop ineffective indices to speed up insertion (#6206) by @phacops
+- ref(eap): Remove materialized view (#6205) by @evanh
+- fix: deletes api, change success response format, fix admin bug (#6197) by @kylemumma
+- feat(eap): stub API for aggregate bucket request (#6204) by @volokluev
+- ref(eap): Change sampling_weight to a UInt (#6190) by @evanh
+- feat(eap): Aggregate request protobuf endpoint  (#6202) by @volokluev
+- feat(eap): Add the TimeSeriesProcessor to entities/eap_spans (#6195) by @colin-sentry
+- feat(EAP) Add Make directive that creates proper import paths (#6196) by @colin-sentry
+- fix(capman): sets the correct throttle policy in query result metadata when multiple throttle policies present (#6192) by @xurui-c
+- feat(generic-metrics): Bump materialization_version for generic metrics (#6194) by @john-z-yang
+- feat: make deletes endpoint compatible with snuba SDK (#6193) by @kylemumma
+- Change CODEOWNERS for EAP team (#6187) by @colin-sentry
+- feat(generic-metrics): Forward sampling information from consumer to clickhouse (#6177) by @john-z-yang
+- Increase the default throttle/warning threshold for allocation policies (#6189) by @xurui-c
+- fix(eap): Use arrayElement directly to fix alias issues with HashBucketMapper (#6188) by @colin-sentry
+- fix: Migrations ended up with the same number (#6183) by @evanh
+- ref(snuba-deletes): introduce delete allocation policies (#6180) by @MeredithAnya
+- feat(eap): Add an example endpoint that uses protobuf over http (#6173) by @colin-sentry
+- feat(generic-metrics): Add migrations to allow sampling for distributions (#6172) by @enochtangg
+
+_Plus 40 more_
+
 ## 24.7.1
 
 ### Various fixes & improvements
