@@ -5,11 +5,13 @@ from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
+    AggregateBucketRequest,
+)
+from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.protobufs import AggregateBucket_pb2
-from snuba.protobufs.BaseRequest_pb2 import RequestInfo
 from snuba.web.rpc.timeseries import timeseries_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -100,15 +102,15 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = AggregateBucket_pb2.AggregateBucketRequest(
-            request_info=RequestInfo(
+        message = AggregateBucketRequest(
+            meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=ts,
-                end_timestamp=ts,
             ),
+            start_timestamp=ts,
+            end_timestamp=ts,
             granularity_secs=60,
         )
         response = self.app.post("/timeseries", data=message.SerializeToString())
@@ -123,16 +125,16 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(datetime.utcnow().timestamp()))
         hour_ago = int((datetime.utcnow() - timedelta(hours=1)).timestamp())
-        message = AggregateBucket_pb2.AggregateBucketRequest(
-            request_info=RequestInfo(
+        message = AggregateBucketRequest(
+            meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
             ),
-            aggregate=AggregateBucket_pb2.AggregateBucketRequest.AVERAGE,
+            start_timestamp=Timestamp(seconds=hour_ago),
+            end_timestamp=ts,
+            aggregate=AggregateBucketRequest.FUNCTION_AVERAGE,
             granularity_secs=1,
         )
         response = timeseries_query(message)

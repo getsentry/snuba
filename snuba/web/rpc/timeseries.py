@@ -2,13 +2,16 @@ import uuid
 from datetime import datetime
 
 from google.protobuf.json_format import MessageToDict
+from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
+    AggregateBucketRequest,
+    AggregateBucketResponse,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.protobufs import AggregateBucket_pb2
 from snuba.query import SelectedExpression
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.data_source.simple import Entity
@@ -32,11 +35,11 @@ _HARDCODED_MEASUREMENT_NAME = "eap.measurement"
 
 
 def _get_measurement_field(
-    request: AggregateBucket_pb2.AggregateBucketRequest,
+    request: AggregateBucketRequest,
 ) -> Expression:
     field = NestedColumn("attr_num")
     # HACK
-    return field[_HARDCODED_MEASUREMENT_NAME]
+    return field[request.metric_name]
 
 
 def _treeify_or_and_conditions(query: Query) -> None:
@@ -68,18 +71,23 @@ def _treeify_or_and_conditions(query: Query) -> None:
 
 
 def _get_aggregate_func(
-    request: AggregateBucket_pb2.AggregateBucketRequest,
+    request: AggregateBucketRequest,
 ) -> Expression:
-    FuncEnum = AggregateBucket_pb2.AggregateBucketRequest.Function
+    FuncEnum = AggregateBucketRequest.Function
     lookup = {
-        FuncEnum.SUM: f.sum(_get_measurement_field(request), alias="measurement"),
-        FuncEnum.AVERAGE: f.avg(_get_measurement_field(request), alias="measurement"),
-        FuncEnum.COUNT: f.count(_get_measurement_field(request), alias="measurement"),
+        FuncEnum.FUNCTION_SUM: f.sum(
+            _get_measurement_field(request), alias="measurement"
+        ),
+        FuncEnum.FUNCTION_AVERAGE: f.avg(
+            _get_measurement_field(request), alias="measurement"
+        ),
+        FuncEnum.FUNCTION_COUNT: f.count(
+            _get_measurement_field(request), alias="measurement"
+        ),
         # curried functions PITA, to do later
-        FuncEnum.P50: None,
-        FuncEnum.P95: None,
-        FuncEnum.P99: None,
-        FuncEnum.AVG: None,
+        FuncEnum.FUNCTION_P50: None,
+        FuncEnum.FUNCTION_P95: None,
+        FuncEnum.FUNCTION_P99: None,
     }
     res = lookup[request.aggregate]
     if res is None:
@@ -87,39 +95,35 @@ def _get_aggregate_func(
     return res  # type: ignore
 
 
-def _build_condition(request: AggregateBucket_pb2.AggregateBucketRequest) -> Expression:
+def _build_condition(request: AggregateBucketRequest) -> Expression:
     project_ids = in_cond(
         column("project_id"),
         literals_array(
             alias=None,
-            literals=[literal(pid) for pid in request.request_info.project_ids],
+            literals=[literal(pid) for pid in request.meta.project_ids],
         ),
     )
 
     return and_cond(
         project_ids,
-        f.equals(column("organization_id"), request.request_info.organization_id),
+        f.equals(column("organization_id"), request.meta.organization_id),
         # HACK: timestamp name
         f.less(
             column("start_timestamp"),
             f.toDateTime(
-                datetime.utcfromtimestamp(
-                    request.request_info.end_timestamp.seconds
-                ).isoformat()
+                datetime.utcfromtimestamp(request.end_timestamp.seconds).isoformat()
             ),
         ),
         f.greaterOrEquals(
             column("start_timestamp"),
             f.toDateTime(
-                datetime.utcfromtimestamp(
-                    request.request_info.start_timestamp.seconds
-                ).isoformat()
+                datetime.utcfromtimestamp(request.start_timestamp.seconds).isoformat()
             ),
         ),
     )
 
 
-def _build_query(request: AggregateBucket_pb2.AggregateBucketRequest) -> Query:
+def _build_query(request: AggregateBucketRequest) -> Query:
     entity = Entity(
         key=EntityKey("eap_spans"),
         schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -141,7 +145,7 @@ def _build_query(request: AggregateBucket_pb2.AggregateBucketRequest) -> Query:
 
 
 def _build_snuba_request(
-    request: AggregateBucket_pb2.AggregateBucketRequest,
+    request: AggregateBucketRequest,
 ) -> SnubaRequest:
 
     return SnubaRequest(
@@ -150,12 +154,12 @@ def _build_snuba_request(
         query=_build_query(request),
         query_settings=HTTPQuerySettings(),
         attribution_info=AttributionInfo(
-            referrer=request.request_info.referrer,
+            referrer=request.meta.referrer,
             team="eap",
             feature="eap",
             tenant_ids={
-                "organization_id": request.request_info.organization_id,
-                "referrer": request.request_info.referrer,
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
             },
             app_id=AppID("eap"),
             parent_api="eap_timeseries",
@@ -164,8 +168,8 @@ def _build_snuba_request(
 
 
 def timeseries_query(
-    request: AggregateBucket_pb2.AggregateBucketRequest, timer: Timer | None = None
-) -> AggregateBucket_pb2.AggregateBucketResponse:
+    request: AggregateBucketRequest, timer: Timer | None = None
+) -> AggregateBucketResponse:
     timer = timer or Timer("timeseries_query")
     snuba_request = _build_snuba_request(request)
     res = run_query(
@@ -174,6 +178,4 @@ def timeseries_query(
         timer=timer,
     )
     assert res.result.get("data", None) is not None
-    return AggregateBucket_pb2.AggregateBucketResponse(
-        result=[float(r["agg"]) for r in res.result["data"]]
-    )
+    return AggregateBucketResponse(result=[float(r["agg"]) for r in res.result["data"]])
