@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "snuba/protobufs/Filters.proto";
+import "snuba/protobufs/BaseRequest.proto";
+
+message AggregateBucketRequest {
+  RequestInfo request_info = 1;
+  enum Function {
+    SUM = 0;
+    AVERAGE = 1;
+    COUNT = 2;
+    P50 = 3;
+    P95 = 4;
+    P99 = 5;
+    AVG = 6;
+  }
+
+  Function aggregate = 3;
+  TraceItemFilter filter = 4;
+  uint64 granularity_secs = 5;
+
+  //TODO: group by, topn, etc, not necessary for MVP
+}
+
+message AggregateBucketResponse {
+  repeated float result = 1;
+}

@@ -30,7 +30,7 @@ class CreateTableQuery(SystemQuery):
     SELECT
         create_table_query
     FROM system.tables
-    WHERE database not in ('system')
+    WHERE database in ('default')
     """
 
 

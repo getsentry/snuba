@@ -64,6 +64,14 @@ install-brew-dev:
 	brew bundle
 .PHONY: install-brew-dev
 
+# this can go away once sentry formalizes a way of working with protobuf / grpc
+protos:
+	@which protoc || (echo "!!! You need protoc installed in order to build protos. https://grpc.io/docs/protoc-installation/" && exit 1)
+	@type protoc-gen-mypy || (echo "!!! Failed, run this: pip install mypy-protobuf==3.6.0" && exit 1)
+	protoc --python_out=. --mypy_out=. $$(find snuba/protobufs -name '*.proto')
+
+.PHONY: protos
+
 snubadocs:
 	pip install -U -r ./docs-requirements.txt
 	sphinx-build -W -b html docs/source docs/build

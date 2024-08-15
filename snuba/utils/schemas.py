@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import chain
+from typing import Any as AnyType
 from typing import (
+    Callable,
     Generic,
     Iterator,
     List,
@@ -18,6 +21,7 @@ from typing import (
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.utils.constants import NESTED_COL_EXPR_RE
+from snuba.utils.serializable_exception import SerializableException
 
 
 class TypeModifier(ABC):
@@ -702,3 +706,54 @@ class Enum(ColumnType[TModifiers]):
 
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
+
+
+class InvalidColumnType(SerializableException):
+    pass
+
+
+class ColumnValidator:
+    def __init__(self, column_set: ColumnSet):
+        self._column_set = column_set
+
+    def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
+        expected_type = self._column_set[column_name].type
+        is_valid_func: Optional[Callable[[AnyType], bool]]
+        match expected_type:
+            case UUID():
+                is_valid_func = self._valid_uuid
+            case Int():
+                is_valid_func = self._valid_int
+            case UInt():
+                is_valid_func = self._valid_uint
+            case Float():
+                is_valid_func = self._valid_float
+            case String():
+                is_valid_func = self._valid_string
+            case _:
+                raise InvalidColumnType(f"No validator for type: {expected_type}")
+        for val in values:
+            if is_valid_func(val):
+                continue
+            raise InvalidColumnType(
+                f"Invalid value {val} for column type {expected_type}"
+            )
+
+    def _valid_uuid(self, value: str) -> bool:
+        try:
+            uuid.UUID(str(value))
+            return True
+        except ValueError:
+            return False
+
+    def _valid_int(self, value: int) -> bool:
+        return isinstance(value, int)
+
+    def _valid_uint(self, value: int) -> bool:
+        return isinstance(value, int) and value > 0
+
+    def _valid_float(self, value: float) -> bool:
+        return isinstance(value, float)
+
+    def _valid_string(self, value: str) -> bool:
+        return isinstance(value, str)

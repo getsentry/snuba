@@ -11,12 +11,21 @@ from snuba.query import SelectedExpression
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
-from snuba.query.exceptions import TooManyDeleteRowsException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    NoRowsToDeleteException,
+    TooManyDeleteRowsException,
+)
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
+from snuba.utils.schemas import ColumnValidator, InvalidColumnType
+
+
+class DeletesNotEnabledError(Exception):
+    pass
 
 
 @with_span()
@@ -42,18 +51,24 @@ def delete_from_storage(
     Returns a mapping from clickhouse table name to deletion results, there
     will be an entry for every local clickhouse table that makes up the storage.
     """
-    if not get_config("storage_deletes_enabled", 0):
-        raise Exception("Deletes not enabled")
+    if not deletes_are_enabled():
+        raise DeletesNotEnabledError("Deletes not enabled in this region")
 
     delete_settings = storage.get_deletion_settings()
     if not delete_settings.is_enabled:
-        raise Exception(f"Deletes not enabled for {storage.get_storage_key().value}")
+        raise DeletesNotEnabledError(
+            f"Deletes not enabled for {storage.get_storage_key().value}"
+        )
 
     results: dict[str, Result] = {}
     for table in delete_settings.tables:
         result = _delete_from_table(storage, table, columns)
         results[table] = result
     return results
+
+
+def deletes_are_enabled() -> bool:
+    return bool(get_config("storage_deletes_enabled", 0))
 
 
 def _get_rows_to_delete(
@@ -110,6 +125,8 @@ def _enforce_max_rows(delete_query: Query) -> None:
     rows_to_delete = _get_rows_to_delete(
         storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
     )
+    if rows_to_delete == 0:
+        raise NoRowsToDeleteException
     max_rows_allowed = (
         get_storage(storage_key).get_deletion_settings().max_rows_to_delete
     )
@@ -131,14 +148,26 @@ def _delete_from_table(
             table,
             ColumnSet([]),
             storage_key=storage.get_storage_key(),
-            # TODO: add allocation policies
-            allocation_policies=[],
+            allocation_policies=storage.get_delete_allocation_policies(),
         ),
         condition=_construct_condition(conditions),
         on_cluster=on_cluster,
         is_delete=True,
     )
-    _enforce_max_rows(query)
+
+    columns = storage.get_schema().get_columns()
+    column_validator = ColumnValidator(columns)
+    try:
+        for col, values in conditions.items():
+            column_validator.validate(col, values)
+    except InvalidColumnType as e:
+        raise InvalidQueryException(e.message)
+
+    try:
+        _enforce_max_rows(query)
+    except NoRowsToDeleteException:
+        result: Result = {}
+        return result
 
     deletion_processors = storage.get_deletion_processors()
     # These settings aren't needed at the moment
