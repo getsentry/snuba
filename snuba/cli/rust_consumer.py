@@ -174,6 +174,14 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     If not successful, this option should be removed.
     """,
 )
+@click.option(
+    "--allow-mutability",
+    is_flag=True,
+    default=False,
+    help="""
+    This is only to be used for the mutability consumer
+    """,
+)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -203,7 +211,8 @@ def rust_consumer(
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
     batch_write_timeout_ms: Optional[int],
-    max_bytes_before_external_group_by: Optional[int]
+    max_bytes_before_external_group_by: Optional[int],
+    allow_mutability: bool
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -255,6 +264,7 @@ def rust_consumer(
         stop_at_timestamp,
         batch_write_timeout_ms,
         max_bytes_before_external_group_by,
+        allow_mutability,
     )
 
     sys.exit(exitcode)
