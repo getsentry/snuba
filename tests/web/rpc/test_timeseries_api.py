@@ -117,12 +117,6 @@ class TestTimeSeriesApi(BaseApiTest):
         response = self.app.post("/timeseries", data=message.SerializeToString())
         assert response.status_code == 200
 
-        # STUB response test
-        # pbuf_response = AggregateBucket_pb2.AggregateBucketResponse()
-        # pbuf_response.ParseFromString(response.data)
-
-        # assert pbuf_response.result == [float(i) for i in range(100)]
-
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(datetime.utcnow().timestamp()))
         hour_ago = int((datetime.utcnow() - timedelta(hours=1)).timestamp())
