@@ -1389,7 +1389,7 @@ def populate_query_from_mql_context(
             # ensure we correctly join the subqueries. The column names will be the same for all the
             # subqueries, so we just need to map all the table aliases.
             add_time_join_keys(join_clause)
-        elif query.has_totals() and no_groupby_or_one_sided_groupby:
+        elif with_totals and no_groupby_or_one_sided_groupby:
             # If formula query has no interval and no group by or a onesided groupby, but has totals, we need to convert
             # join type to a CROSS join. This is because without a group by, each sub-query will return
             # a single row with single value column. In order to combine the results in the outer query,

@@ -1311,7 +1311,7 @@ def test_formula_no_groupby_no_interval_with_totals() -> None:
         order_by=[],
         limit=1000,
         offset=0,
-        totals=True,
+        totals=False,
     )
 
     generic_metrics = get_dataset(

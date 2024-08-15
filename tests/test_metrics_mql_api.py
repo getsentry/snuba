@@ -742,7 +742,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
 
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
-        assert data["totals"]["aggregate_value"] == 4.0
+        assert len(data["data"]) == 1, data
 
     def test_formula_no_groupby_with_interval_no_totals(self) -> None:
         query = MetricsQuery(
