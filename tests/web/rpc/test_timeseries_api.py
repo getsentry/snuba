@@ -109,6 +109,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 cogs_category="something",
                 referrer="something",
             ),
+            aggregate=AggregateBucketRequest.FUNCTION_SUM,
             start_timestamp=ts,
             end_timestamp=ts,
             granularity_secs=60,
@@ -134,6 +135,7 @@ class TestTimeSeriesApi(BaseApiTest):
             ),
             start_timestamp=Timestamp(seconds=hour_ago),
             end_timestamp=ts,
+            metric_name="eap.measurement",
             aggregate=AggregateBucketRequest.FUNCTION_AVERAGE,
             granularity_secs=1,
         )

@@ -89,7 +89,7 @@ def _get_aggregate_func(
         FuncEnum.FUNCTION_P95: None,
         FuncEnum.FUNCTION_P99: None,
     }
-    res = lookup[request.aggregate]
+    res = lookup.get(request.aggregate, None)
     if res is None:
         NotImplementedError()
     return res  # type: ignore
