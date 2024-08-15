@@ -1301,7 +1301,6 @@ def populate_query_from_mql_context(
         )
         query.add_condition_to_ast(context_condition)
 
-        query.set_totals(with_totals)
         if orderby:
             query.set_ast_orderby([orderby])
 
@@ -1314,6 +1313,10 @@ def populate_query_from_mql_context(
                 query.set_ast_groupby(list(groupby) + [selected_time.expression])
             else:
                 query.set_ast_groupby([selected_time.expression])
+
+        if query.get_groupby():
+            # Only set WITH TOTALS if there is a group by.
+            query.set_totals(with_totals)
 
     if isinstance(query, CompositeQuery):
 
