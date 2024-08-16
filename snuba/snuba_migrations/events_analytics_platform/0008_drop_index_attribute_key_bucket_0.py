@@ -14,6 +14,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name="eap_spans_local",
                 index_name=index_name,
                 target=operations.OperationTarget.LOCAL,
+                run_async=True,
             )
             for bucket in {0}
             for index_name in {f"bf_attr_num_{bucket}", f"bf_attr_str_{bucket}"}

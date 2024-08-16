@@ -517,15 +517,18 @@ class DropIndex(SqlOperation):
         table_name: str,
         index_name: str,
         target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
     ):
         super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__index_name = index_name
+        self.__run_async = run_async
 
     def format_sql(self) -> str:
-        return (
-            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
-        )
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0"
+        return f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
 
 
 class DropIndices(SqlOperation):
