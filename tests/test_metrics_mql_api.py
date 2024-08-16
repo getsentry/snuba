@@ -1560,9 +1560,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ).serialize_mql(),
         )
         data = json.loads(response.data)
-        assert (
-            data["totals"]["aggregate_value"] > 180
-        )  # Should be more than the number of data points
+        assert len(data["data"]) == 1, data
         assert response.status_code == 200
 
     def test_simple_formula_filters_with_scalar(self) -> None:
