@@ -4,6 +4,7 @@ import { Table } from "SnubaAdmin/table";
 
 import { executeActionsStyle, selectStyle, executeButtonStyle } from "SnubaAdmin/snql_to_sql/styles";
 import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
+import { CustomSelect, getDatasetFromUrl } from "SnubaAdmin/components";
 import {
   SnQLRequest,
   SnQLResult,
@@ -13,7 +14,7 @@ import {
 
 function SnQLToSQL(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getDatasetFromUrl("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );
@@ -75,20 +76,12 @@ function SnQLToSQL(props: { api: Client }) {
         </div>
         <div style={executeActionsStyle}>
           <div>
-            <select
+            <CustomSelect
               value={snql_query.dataset || ""}
-              onChange={(evt) => selectDataset(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a dataset
-              </option>
-              {datasets.map((dataset) => (
-                <option key={dataset} value={dataset}>
-                  {dataset}
-                </option>
-              ))}
-            </select>
+              onChange={selectDataset}
+              options={datasets}
+              name="dataset"
+            />
           </div>
           <div>
             <button

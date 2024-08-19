@@ -9,6 +9,7 @@ import { useEditor } from "@tiptap/react";
 import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
+import { CustomSelect, getDatasetFromUrl } from "SnubaAdmin/components";
 
 import {
   ClickhouseNodeData,
@@ -25,7 +26,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [query, setQuery] = useState<QueryState>({});
+  const [query, setQuery] = useState<QueryState>({storage: getDatasetFromUrl("storage")});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );
@@ -138,20 +139,12 @@ function QueryDisplay(props: {
         />
         <div style={executeActionsStyle}>
           <div>
-            <select
+            <CustomSelect
               value={query.storage || ""}
-              onChange={(evt) => selectStorage(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a storage
-              </option>
-              {nodeData.map((storage) => (
-                <option key={storage.storage_name} value={storage.storage_name}>
-                  {storage.storage_name}
-                </option>
-              ))}
-            </select>
+              onChange={selectStorage}
+              name="storage"
+              options={nodeData.map((storage) => storage.storage_name)}
+            />
             <select
               disabled={!query.storage}
               value={
