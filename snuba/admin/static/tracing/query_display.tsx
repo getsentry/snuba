@@ -27,7 +27,7 @@ function QueryDisplay(props: {
     []
   );
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [showFormatted, setShowFormatted] = useState<boolean>(false);
+  const [showFormatted, setShowFormatted] = useState<boolean>(true);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -150,9 +150,15 @@ function QueryDisplay(props: {
             <div>
               <button
                 style={executeButtonStyle}
+                onClick={() => copyText(queryResult.trace_output || "")}
+              >
+                Copy to clipboard (Raw)
+              </button>
+              <button
+                style={executeButtonStyle}
                 onClick={() => copyText(JSON.stringify(queryResult))}
               >
-                Copy to clipboard
+                Copy to clipboard (JSON)
               </button>
               {props.resultDataPopulator(queryResult, showFormatted)}
             </div>,

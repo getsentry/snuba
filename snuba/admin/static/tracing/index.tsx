@@ -198,7 +198,7 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            if (!showFormatted) {
+            if (showFormatted) {
               return (
                 <div>
                   <br />
@@ -213,13 +213,29 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {formattedTraceDisplay(title, value.formatted_trace_output)}
+                  {rawTraceDisplay(title, value.trace_output)}
                 </div>
               );
             }
           }
         })}
       </>
+    );
+  }
+
+  function rawTraceDisplay(title: string, value: any): JSX.Element | undefined {
+    const parsedLines: Array<string> = value.split(/\n/);
+
+    return (
+      <ol style={collapsibleStyle} key={title + "-root"}>
+        {parsedLines.map((line, index) => {
+          return (
+            <li key={title + index}>
+              <span>{line}</span>
+            </li>
+          );
+        })}
+      </ol>
     );
   }
 
