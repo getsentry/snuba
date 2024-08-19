@@ -92,7 +92,10 @@ function QueryDisplay(props: {
   return (
     <div>
       <h2>Construct a ClickHouse Query</h2>
-      <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
+      <a
+        href="https://getsentry.github.io/snuba/clickhouse/death_queries.html"
+        target="_blank"
+      >
         🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
       </a>
       <QueryEditor

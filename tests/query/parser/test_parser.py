@@ -67,7 +67,7 @@ def test_mql() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": "True",
+            "with_totals": "False",
         },
         "scope": {
             "org_ids": [1],
@@ -157,7 +157,7 @@ def test_mql() -> None:
                 ),
             ),
         ],
-        totals=True,
+        totals=False,
         limit=1000,
     )
     actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
@@ -174,7 +174,7 @@ def test_mql_wildcards() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": "True",
+            "with_totals": "False",
         },
         "scope": {
             "org_ids": [1],
@@ -263,7 +263,7 @@ def test_mql_wildcards() -> None:
             ),
         ],
         limit=1000,
-        totals=True,
+        totals=False,
     )
     actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
@@ -279,7 +279,7 @@ def test_mql_negated_wildcards() -> None:
             "orderby": "ASC",
             "granularity": 60,
             "interval": None,
-            "with_totals": "True",
+            "with_totals": "False",
         },
         "scope": {
             "org_ids": [1],
@@ -368,7 +368,7 @@ def test_mql_negated_wildcards() -> None:
             ),
         ],
         limit=1000,
-        totals=True,
+        totals=False,
     )
     actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
     eq, reason = actual.equals(expected)
