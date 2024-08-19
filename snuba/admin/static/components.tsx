@@ -8,10 +8,10 @@ type SelectProps = {
   options: string[];
 }
 
-export function getDatasetFromUrl(key: string) {
+export function getParamFromUrl(key: string) {
   const params = new URLSearchParams(window.location.search)
-  const locationDataset = params.get(key) || undefined;
-  return locationDataset;
+  const locationValue = params.get(key) || undefined;
+  return locationValue;
 }
 
 export function CustomSelect(props: SelectProps) {

@@ -4,7 +4,7 @@ import { Table } from "SnubaAdmin/table";
 
 import { executeActionsStyle, selectStyle, executeButtonStyle } from "SnubaAdmin/snql_to_sql/styles";
 import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
-import { CustomSelect, getDatasetFromUrl } from "SnubaAdmin/components";
+import { CustomSelect, getParamFromUrl } from "SnubaAdmin/components";
 import {
   SnQLRequest,
   SnQLResult,
@@ -14,7 +14,7 @@ import {
 
 function SnQLToSQL(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getDatasetFromUrl("dataset")});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromUrl("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );

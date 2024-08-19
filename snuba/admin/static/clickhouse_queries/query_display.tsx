@@ -9,7 +9,7 @@ import { useEditor } from "@tiptap/react";
 import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
-import { CustomSelect, getDatasetFromUrl } from "SnubaAdmin/components";
+import { CustomSelect, getParamFromUrl } from "SnubaAdmin/components";
 
 import {
   ClickhouseNodeData,
@@ -26,7 +26,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [query, setQuery] = useState<QueryState>({storage: getDatasetFromUrl("storage")});
+  const [query, setQuery] = useState<QueryState>({storage: getParamFromUrl("storage")});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );
