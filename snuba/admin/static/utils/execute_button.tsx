@@ -5,8 +5,11 @@ function ExecuteButton(props: {
   disabled: boolean;
   onClick: () => Promise<any>;
   onError?: (error: any) => any;
+  label?: string;
 }) {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
+
+  let label = props.label || "Execute Query";
 
   const defaultError = (err: any) => {
     console.log("ERROR", err);
@@ -39,7 +42,7 @@ function ExecuteButton(props: {
         loading={isExecuting}
         disabled={isExecuting || props.disabled}
       >
-        Execute Query
+        {label}
       </Button>
     </div>
   );
