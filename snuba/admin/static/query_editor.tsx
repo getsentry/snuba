@@ -2,6 +2,7 @@ import React, { useEffect, useState, ReactElement } from "react";
 
 import { Box } from "@mantine/core";
 import { SQLEditor } from "./common/components/sql_editor";
+import { useLocalStorage } from "@mantine/hooks";
 
 type PredefinedQuery = {
   name: string;
@@ -47,7 +48,14 @@ function QueryEditor(props: {
   predefinedQueryOptions?: Array<PredefinedQuery>;
 }) {
   const [query, setQuery] = useState<string>("");
-  const [queryTemplate, setQueryTemplate] = useState<string>("");
+  const hash = window.location.hash;
+
+  // Namespace the storage by the hash, which corresponds to the screen
+  const [queryTemplate, setQueryTemplate] = useLocalStorage<string>({
+    key: `${hash}-query-editor-query`,
+    defaultValue: "",
+  });
+
   const [queryParamValues, setQueryParamValues] = useState<QueryParamValues>(
     {},
   );
