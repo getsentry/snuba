@@ -10,6 +10,7 @@ import {
   TracingResult,
   PredefinedQuery,
 } from "./types";
+import {CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 
 type QueryState = Partial<TracingRequest>;
 
@@ -22,7 +23,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [storages, setStorages] = useState<string[]>([]);
-  const [query, setQuery] = useState<QueryState>({});
+  const [query, setQuery] = useState<QueryState>({storage: getParamFromStorage("storage")});
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     []
   );
@@ -106,20 +107,12 @@ function QueryDisplay(props: {
       />
       <div style={executeActionsStyle}>
         <div>
-          <select
+          <CustomSelect
             value={query.storage || ""}
-            onChange={(evt) => selectStorage(evt.target.value)}
-            style={selectStyle}
-          >
-            <option disabled value="">
-              Select a storage
-            </option>
-            {storages.map((storage) => (
-              <option key={storage} value={storage}>
-                {storage}
-              </option>
-            ))}
-          </select>
+            onChange={selectStorage}
+            name="storage"
+            options={storages}
+          />
         </div>
         <div>
           <button

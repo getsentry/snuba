@@ -6,7 +6,7 @@ import QueryEditor from "SnubaAdmin/query_editor";
 import { Collapse } from "SnubaAdmin/collapse";
 import { SnQLRequest, SnQLResult, ExplainResult, ExplainStep } from "SnubaAdmin/snuba_explain/types";
 import { Step } from "SnubaAdmin/snuba_explain/step_render";
-import { CustomSelect, getParamFromUrl } from "SnubaAdmin/components";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 
 import {
   executeActionsStyle,
@@ -18,7 +18,7 @@ import { SnubaDatasetName, SnQLQueryState } from "SnubaAdmin/snql_to_sql/types";
 
 function SnubaExplain(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromUrl("dataset")});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromStorage("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );

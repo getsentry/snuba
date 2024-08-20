@@ -13,14 +13,14 @@ import {
   Text,
   Textarea,
 } from "@mantine/core";
-import { CustomSelect, getParamFromUrl } from "SnubaAdmin/components";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { useDisclosure } from "@mantine/hooks";
 import { CSV } from "../cardinality_analyzer/CSV";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
   const [allowedProjects, setAllowedProjects] = useState<string[]>([]);
-  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({dataset: getParamFromUrl("dataset")});
+  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({dataset: getParamFromStorage("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );

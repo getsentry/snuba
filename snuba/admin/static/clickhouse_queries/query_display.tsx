@@ -3,13 +3,14 @@ import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 
+import { SelectItem } from "@mantine/core"
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
 import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
-import { CustomSelect, getParamFromUrl } from "SnubaAdmin/components";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 
 import {
   ClickhouseNodeData,
@@ -26,7 +27,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [query, setQuery] = useState<QueryState>({storage: getParamFromUrl("storage")});
+  const [query, setQuery] = useState<QueryState>({storage: getParamFromStorage("storage")});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );
@@ -88,38 +89,32 @@ function QueryDisplay(props: {
     window.navigator.clipboard.writeText(text);
   }
 
-  function getHosts(nodeData: ClickhouseNodeData[]): JSX.Element[] {
+  function getHosts(nodeData: ClickhouseNodeData[]): SelectItem[] {
     let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
     // populate the hosts entries marking distributed hosts that are not also local
     if (node_info) {
       let local_hosts = node_info.local_nodes.map((node) => (
-        <option
-          key={`${node.host}:${node.port}`}
-          value={`${node.host}:${node.port}`}
-        >
-          {node.host}:{node.port}
-        </option>
+        {
+          value: `${node.host}:${node.port}`,
+          label: `${node.host}:${node.port}`,
+        }
       ));
       let dist_hosts = node_info.dist_nodes
         .filter((node) => !node_info.local_nodes.includes(node))
         .map((node) => (
-          <option
-            key={`${node.host}:${node.port} dist`}
-            value={`${node.host}:${node.port}`}
-          >
-            {node.host}:{node.port} (distributed)
-          </option>
+          {
+            value: `${node.host}:${node.port}`,
+            label: `${node.host}:${node.port} (distributed)`,
+          }
         ));
       let hosts = local_hosts.concat(dist_hosts);
       let query_node = node_info.query_node;
       if (query_node) {
         hosts.push(
-          <option
-            key={`${query_node.host}:${query_node.port} query`}
-            value={`${query_node.host}:${query_node.port}`}
-          >
-            {query_node.host}:{query_node.port} (query node)
-          </option>
+          {
+            value: `${query_node.host}:${query_node.port}`,
+            label: `${query_node.host}:${query_node.port} (query node)`,
+          }
         );
       }
       return hosts;
@@ -145,19 +140,15 @@ function QueryDisplay(props: {
               name="storage"
               options={nodeData.map((storage) => storage.storage_name)}
             />
-            <select
+            <CustomSelect
               disabled={!query.storage}
               value={
                 query.host && query.port ? `${query.host}:${query.port}` : ""
               }
-              onChange={(evt) => selectHost(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a host
-              </option>
-              {getHosts(nodeData)}
-            </select>
+              onChange={selectHost}
+              name="Host"
+              options={getHosts(nodeData)}
+            />
           </div>
           <div>
             <button

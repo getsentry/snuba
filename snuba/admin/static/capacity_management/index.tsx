@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { selectStyle } from "SnubaAdmin/capacity_management/styles";
 import {AllocationPolicyConfigs} from "SnubaAdmin/capacity_management/allocation_policy";
 import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 
 function CapacityManagement(props: { api: Client }) {
   const { api } = props;
 
   const [storages, setStorages] = useState<string[]>([]);
-  const [selectedStorage, setStorage] = useState<string>();
+  const [selectedStorage, setStorage] = useState<string | undefined>();
   const [allocationPolicies, setAllocationPolicies] = useState<
     AllocationPolicy[]
   >([]);
@@ -16,6 +16,10 @@ function CapacityManagement(props: { api: Client }) {
   useEffect(() => {
     api.getStoragesWithAllocationPolicies().then((res) => {
       setStorages(res);
+      const previousStorage = getParamFromStorage("storage");
+      if (previousStorage) {
+        selectStorage(previousStorage);
+      }
     });
   }, []);
 
@@ -39,20 +43,12 @@ function CapacityManagement(props: { api: Client }) {
     <div>
       <p>
         Storage:
-        <select
+        <CustomSelect
           value={selectedStorage || ""}
-          onChange={(evt) => selectStorage(evt.target.value)}
-          style={selectStyle}
-        >
-          <option disabled value="">
-            Select a storage
-          </option>
-          {storages.map((storage_name) => (
-            <option key={storage_name} value={storage_name}>
-              {storage_name}
-            </option>
-          ))}
-        </select>
+          onChange={selectStorage}
+          name="storage"
+          options={storages}
+        />
       </p>
 
       {selectedStorage && allocationPolicies ? (

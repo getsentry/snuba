@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 
-import { executeActionsStyle, selectStyle, executeButtonStyle } from "SnubaAdmin/snql_to_sql/styles";
+import { executeActionsStyle, executeButtonStyle } from "SnubaAdmin/snql_to_sql/styles";
 import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
-import { CustomSelect, getParamFromUrl } from "SnubaAdmin/components";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import {
   SnQLRequest,
   SnQLResult,
@@ -14,7 +14,7 @@ import {
 
 function SnQLToSQL(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromUrl("dataset")});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromStorage("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );
