@@ -3,6 +3,7 @@ import { Switch } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
 import {
   LogLine,
@@ -45,11 +46,7 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    return props.api
       .executeTracingQuery(query as TracingRequest)
       .then((result) => {
         const tracing_result = {
@@ -65,13 +62,6 @@ function QueryDisplay(props: {
           tracing_result,
           ...prevHistory,
         ]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -121,15 +111,10 @@ function QueryDisplay(props: {
             ))}
           </select>
         </div>
-        <div>
-          <button
-            onClick={(_) => executeQuery()}
-            style={executeButtonStyle}
-            disabled={isExecuting || !query.storage || !query.sql}
-          >
-            Execute query
-          </button>
-        </div>
+        <ExecuteButton
+          onClick={executeQuery}
+          disabled={!query.storage || !query.sql}
+        />
       </div>
       <div>
         <h2>Query results</h2>
