@@ -106,7 +106,9 @@ class _CurriedFunctions:
 """
 Usage:
 
-from snuba.query.dsl import Functions as f, CurriedFunctions as cf
+from snuba.query.dsl import CurriedFunctions as cf
+from snuba.query.dsl import Functions as f
+
 assert f.equals(1, 1, alias="eq") == FunctionCall(
     "eq", "equals" (Literal(None, 1), Literal(None, 1))
 )
