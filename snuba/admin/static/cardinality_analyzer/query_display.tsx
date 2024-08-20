@@ -9,7 +9,7 @@ import {
   CardinalityQueryRequest,
   CardinalityQueryResult,
   PredefinedQuery,
-} from "./types";
+} from "SnubaAdmin/cardinality_analyzer/types";
 
 enum ClipboardFormats {
   CSV = "csv",
