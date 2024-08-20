@@ -79,6 +79,10 @@ function QueryEditor(props: {
   }
 
   function renderPredefinedQueriesSelectors() {
+    if (!props.predefinedQueryOptions?.length ?? 0 > 0) {
+      return;
+    }
+
     return (
       <div>
         <label>Predefined query: </label>

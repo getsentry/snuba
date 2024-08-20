@@ -7,6 +7,9 @@
     "test": "jest"
   },
   "dependencies": {
+    "@codemirror/lang-sql": "^6.7.0",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.32.0",
     "@mantine/core": "^6.0.15",
     "@mantine/hooks": "^6.0.15",
     "@mantine/prism": "^6.0.15",
