@@ -1,15 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import QueryDisplay from "SnubaAdmin/tracing/query_display";
-import {
-  LogLine,
-  TracingRequest,
-  TracingResult,
-  PredefinedQuery,
-} from "SnubaAdmin/tracing/types";
+import { LogLine, TracingResult } from "SnubaAdmin/tracing/types";
 import { parseLogLine } from "SnubaAdmin/tracing/util";
-
-type QueryState = Partial<TracingRequest>;
 
 type BucketedLogs = Map<String, Map<MessageCategory, LogLine[]>>;
 
@@ -82,92 +75,13 @@ function NodalDisplay(props: {
   );
 }
 
-function FormattedNodalDisplay(props: {
-  header: string;
-  data: string[] | string | number;
-}) {
-  const [visible, setVisible] = useState<boolean>(false);
-
-  return (
-    <li>
-      <span onClick={() => setVisible(!visible)}>
-        {visible ? "[-]" : "[+]"} {props.header.split("_").join(" ")}
-      </span>
-
-      <ol style={collapsibleStyle}>
-        {visible &&
-          Array.isArray(props.data) &&
-          props.data.map((log: string, log_idx: number) => {
-            return <li>{log}</li>;
-          })}
-        {visible &&
-          (typeof props.data === "string" ||
-            typeof props.data === "number") && <li>{props.data}</li>}
-      </ol>
-    </li>
-  );
-}
-
 function TracingQueries(props: { api: Client }) {
-  const [query, setQuery] = useState<QueryState>({});
-  const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
-    []
-  );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
-    PredefinedQuery[]
-  >([]);
-
-  const endpoint = "clickhouse_trace_query";
   const hidden_formatted_trace_fields = new Set<string>([
     "thread_ids",
     "node_name",
     "node_type",
     "storage_nodes_accessed",
   ]);
-
-  function formatSQL(sql: string) {
-    const formatted = sql
-      .split("\n")
-      .map((line) => line.substring(4, line.length))
-      .join("\n");
-    return formatted.trim();
-  }
-
-  function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
-      .executeTracingQuery(query as TracingRequest)
-      .then((result) => {
-        const tracing_result = {
-          input_query: `${query.sql}`,
-          timestamp: result.timestamp,
-          num_rows_result: result.num_rows_result,
-          cols: result.cols,
-          trace_output: result.trace_output,
-          formatted_trace_output: result.formatted_trace_output,
-          error: result.error,
-        };
-        setQueryResultHistory((prevHistory) => [
-          tracing_result,
-          ...prevHistory,
-        ]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
-      });
-  }
-
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
-  }
 
   function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
@@ -198,7 +112,7 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            if (!showFormatted) {
+            if (showFormatted) {
               return (
                 <div>
                   <br />
@@ -213,13 +127,29 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {formattedTraceDisplay(title, value.formatted_trace_output)}
+                  {rawTraceDisplay(title, value.trace_output)}
                 </div>
               );
             }
           }
         })}
       </>
+    );
+  }
+
+  function rawTraceDisplay(title: string, value: any): JSX.Element | undefined {
+    const parsedLines: Array<string> = value.split(/\n/);
+
+    return (
+      <ol style={collapsibleStyle} key={title + "-root"}>
+        {parsedLines.map((line, index) => {
+          return (
+            <li key={title + index}>
+              <span>{line}</span>
+            </li>
+          );
+        })}
+      </ol>
     );
   }
 
@@ -341,56 +271,6 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  function formattedTraceDisplay(
-    title: string,
-    value: any
-  ): JSX.Element | undefined {
-    let node_names = Object.keys(value);
-    let query_node_name = "";
-    for (const node_name of node_names) {
-      if (value[node_name]["node_type"] == "query") {
-        query_node_name = node_name;
-      }
-    }
-    return (
-      <ol style={collapsibleStyle}>
-        <li>Query node - {query_node_name}</li>
-        <ol style={collapsibleStyle}>
-          {Object.keys(value[query_node_name]).map(
-            (header: string, idx: number) => {
-              if (!hidden_formatted_trace_fields.has(header)) {
-                const data = value[query_node_name][header];
-                return <FormattedNodalDisplay header={header} data={data} />;
-              }
-            }
-          )}
-        </ol>
-        {node_names.map((node_name, idx) => {
-          if (node_name != query_node_name) {
-            return (
-              <ol style={collapsibleStyle}>
-                <br />
-                <li>Storage node - {node_name}</li>
-                <ol style={collapsibleStyle}>
-                  {Object.keys(value[node_name]).map(
-                    (header: string, idx: number) => {
-                      if (!hidden_formatted_trace_fields.has(header)) {
-                        const data = value[node_name][header];
-                        return (
-                          <FormattedNodalDisplay header={header} data={data} />
-                        );
-                      }
-                    }
-                  )}
-                </ol>
-              </ol>
-            );
-          }
-        })}
-      </ol>
-    );
-  }
-
   return (
     <div>
       {QueryDisplay({
@@ -399,39 +279,6 @@ function TracingQueries(props: { api: Client }) {
         predefinedQueryOptions: [],
       })}
     </div>
-  );
-}
-
-const executeActionsStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  marginTop: 8,
-};
-
-const executeButtonStyle = {
-  height: 30,
-  border: 0,
-  padding: "4px 20px",
-};
-
-const selectStyle = {
-  marginRight: 8,
-  height: 30,
-};
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 100 }}
-      placeholder={"Write your query here"}
-    />
   );
 }
 

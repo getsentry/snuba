@@ -4,14 +4,17 @@ import { Prism } from "@mantine/prism";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Collapse } from "SnubaAdmin/collapse";
-import { SnQLRequest, SnQLResult, ExplainResult, ExplainStep } from "SnubaAdmin/snuba_explain/types";
+import {
+  SnQLRequest,
+  SnQLResult,
+  ExplainResult,
+  ExplainStep,
+} from "SnubaAdmin/snuba_explain/types";
 import { Step } from "SnubaAdmin/snuba_explain/step_render";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
-
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import {
   executeActionsStyle,
-  selectStyle,
-  executeButtonStyle,
   collapsibleStyle,
 } from "SnubaAdmin/snuba_explain/styles";
 import { SnubaDatasetName, SnQLQueryState } from "SnubaAdmin/snql_to_sql/types";
@@ -22,7 +25,6 @@ function SnubaExplain(props: { api: Client }) {
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   useEffect(() => {
     props.api.getSnubaDatasetNames().then((res) => {
@@ -49,11 +51,7 @@ function SnubaExplain(props: { api: Client }) {
   }
 
   function explainQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    return props.api
       .debugSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const query_result = {
@@ -62,13 +60,6 @@ function SnubaExplain(props: { api: Client }) {
           explain: result.explain as ExplainResult,
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -113,20 +104,13 @@ function SnubaExplain(props: { api: Client }) {
         </div>
         <div style={executeActionsStyle}>
           <div>
-            <button
-              onClick={(evt) => {
-                evt.preventDefault();
-                explainQuery();
-              }}
-              style={executeButtonStyle}
+            <ExecuteButton
+              onClick={explainQuery}
               disabled={
-                isExecuting ||
-                snql_query.dataset == undefined ||
-                snql_query.query == undefined
+                snql_query.dataset == undefined || snql_query.query == undefined
               }
-            >
-              Explain Query
-            </button>
+              label="Explain Query"
+            />
           </div>
         </div>
       </div>
