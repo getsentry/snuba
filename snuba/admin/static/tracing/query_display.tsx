@@ -58,6 +58,9 @@ function QueryDisplay(props: {
           cols: result.cols,
           trace_output: result.trace_output,
           summarized_trace_output: result.summarized_trace_output,
+          profile_events_results: result.profile_events_results,
+          profile_events_meta: result.profile_events_meta,
+          profile_events_profile: result.profile_events_profile,
           error: result.error,
         };
         setQueryResultHistory((prevHistory) => [

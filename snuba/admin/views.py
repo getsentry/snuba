@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import io
+import re
 import sys
+import time
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
 
 import sentry_sdk
 import simplejson as json
@@ -31,7 +33,7 @@ from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
-from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
 from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
@@ -441,8 +443,51 @@ def clickhouse_trace_query() -> Response:
         )
 
     try:
-        result = run_query_and_get_trace(storage, raw_sql)
-        return make_response(jsonify(asdict(result)), 200)
+        if not raw_sql.endswith("SETTINGS log_profile_events=1"):
+            raw_sql += " SETTINGS log_profile_events=1"
+
+        query_trace = run_query_and_get_trace(storage, raw_sql)
+
+        profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+        hosts_ports_query_ids = parse_trace_for_query_ids(query_trace, storage)
+
+        for host_port_query_id in hosts_ports_query_ids:
+            sql = profile_events_raw_sql.format(host_port_query_id["query_id"])
+            system_query_result, counter = None, 0
+
+            while counter < 10:
+                # There is a race between the original query to trace finishing and the system query log populating.
+                # Sleep between the query executions.
+                system_query_result = run_system_query_on_host_with_sql(
+                    host_port_query_id["host"], host_port_query_id["port"], storage, sql
+                )
+                if not system_query_result.results:
+                    time.sleep(1)
+                    counter += 1
+                else:
+                    break
+
+            assert (
+                system_query_result is not None
+                and len(system_query_result.results) != 0
+            ), "Must get ProfileEvents!"
+
+            query_trace.profile_events_meta.append(system_query_result.meta)
+            query_trace.profile_events_profile = system_query_result.profile
+            columns = system_query_result.meta
+            if columns:
+                res = {}
+                res["column_names"] = [name for name, _ in columns]
+                res["rows"] = []
+                for query_result in system_query_result.results:
+                    if query_result[0]:
+                        res["rows"].append(
+                            json.dumps(query_result[0])
+                            .replace("{", "")
+                            .replace("}", "")
+                        )
+                query_trace.profile_events_results[host_port_query_id["host"]] = res
+        return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -467,6 +512,34 @@ def clickhouse_trace_query() -> Response:
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+valid_host_regex = re.compile("^[a-zA-Z0-9-]+-\d-\d$")
+
+
+def parse_trace_for_query_ids(
+    trace_output: TraceOutput, storage_key: str
+) -> List[Dict[str, str]]:
+    result = []
+    summarized_trace_output = trace_output.summarized_trace_output
+    storage_info = get_storage_info()
+    matched = next(
+        (info for info in storage_info if info["storage_name"] == storage_key), None
+    )
+    if matched is not None:
+        local_nodes = matched.get("local_nodes")
+        for host, query_summary in summarized_trace_output.query_summaries.items():
+            if not valid_host_regex.match(host):
+                host = "127.0.0.1"
+
+            result.append(
+                {
+                    "host": host if host else local_nodes[0].get("host"),
+                    "port": local_nodes[0].get("port"),
+                    "query_id": query_summary.query_id,
+                }
+            )
+    return result
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
