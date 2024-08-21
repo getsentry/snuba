@@ -5,6 +5,8 @@ import { generateQuery, mergeQueryParamValues } from "../query_editor";
 import userEvent from "@testing-library/user-event";
 import QueryEditor from "SnubaAdmin/query_editor";
 
+jest.mock("SnubaAdmin/common/components/sql_editor");
+
 describe("Query editor", () => {
   global.ResizeObserver = require("resize-observer-polyfill");
   afterEach(cleanup);
@@ -90,6 +92,10 @@ describe("Query editor", () => {
           );
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
         }
+
+        await act(async () =>
+          user.selectOptions(getByTestId("select"), "undefined"),
+        );
       });
       it("should show query and description when predefined query selected", async () => {
         const user = userEvent.setup();
@@ -105,8 +111,11 @@ describe("Query editor", () => {
             user.selectOptions(getByTestId("select"), predefinedQuery.name)
           );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
-          expect(getAllByText(predefinedQuery.sql)).toHaveLength(2);
         }
+
+        await act(async () =>
+          user.selectOptions(getByTestId("select"), "undefined"),
+        );
       });
     });
     describe("with text area input", () => {
@@ -117,7 +126,8 @@ describe("Query editor", () => {
           <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
         );
         const input = "abcde";
-        await act(async () => user.type(getByTestId("text-area-input"), input));
+
+        await act(async () => user.type(getByTestId("SQLEditor"), input));
         expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });

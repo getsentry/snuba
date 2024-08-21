@@ -15,6 +15,8 @@ import { ClickhouseNodeData } from "../../clickhouse_queries/types";
 
 import default_response from "./fixture";
 
+jest.mock("SnubaAdmin/common/components/sql_editor");
+
 it("select executor rows should appear", async () => {
   global.ResizeObserver = require("resize-observer-polyfill");
   let mockClient = {
@@ -46,7 +48,7 @@ it("select executor rows should appear", async () => {
     target: { value: "Foo" },
   });
 
-  const submitButton = screen.getByText("Execute Query");
+  const submitButton = screen.getByText("Run Trace");
   expect(submitButton.getAttribute("disabled")).toBeFalsy();
 
   fireEvent.click(submitButton);

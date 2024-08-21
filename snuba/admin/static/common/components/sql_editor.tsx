@@ -5,7 +5,7 @@ import { EditorView, lineNumbers } from "@codemirror/view";
 import { sql } from "@codemirror/lang-sql";
 import { theme, highlighting } from "./theme";
 
-interface Props {
+export interface Props {
   value: string;
   onChange: (newValue: string) => void;
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
 import { Box } from "@mantine/core";
-import { SQLEditor } from "./common/components/sql_editor";
+import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
 import { useLocalStorage } from "@mantine/hooks";
 
 type PredefinedQuery = {
