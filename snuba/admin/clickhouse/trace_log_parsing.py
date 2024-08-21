@@ -106,7 +106,7 @@ class AggregationSummary:
     bytes_per_second: str
 
     @staticmethod
-    def from_log(log_line: str) -> StreamSummary | None:
+    def from_log(log_line: str) -> AggregationSummary | None:
         match = AGGREGATION_MATCHER_RE.match(log_line)
         if not match:
             return None
@@ -138,7 +138,7 @@ class SortingSummary:
     bytes_per_second: str
 
     @staticmethod
-    def from_log(log_line: str) -> StreamSummary | None:
+    def from_log(log_line: str) -> SortingSummary | None:
         match = SORTING_MATCHER_RE.match(log_line)
         if not match:
             return None
@@ -168,7 +168,7 @@ class ExecuteSummary:
     bytes_per_second: str
 
     @staticmethod
-    def from_log(log_line: str) -> StreamSummary | None:
+    def from_log(log_line: str) -> ExecuteSummary | None:
         match = EXECUTE_MATCHER_RE.match(log_line)
         if not match:
             return None
@@ -226,7 +226,7 @@ def summarize_trace_output(raw_trace_logs: str) -> TracingSummary:
 
         query_summary = summary.query_summaries[line["node_name"]]
         for line_type in line_types:
-            parsed_line = line_type.from_log(line["log_content"])
+            parsed_line = line_type.from_log(line["log_content"])  # type: ignore
             if parsed_line is not None:
                 attr_name = (
                     line_type.__name__.lower().replace("summary", "") + "_summaries"
