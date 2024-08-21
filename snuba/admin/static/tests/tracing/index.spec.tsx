@@ -48,7 +48,7 @@ it("select executor rows should appear", async () => {
     target: { value: "Foo" },
   });
 
-  const submitButton = screen.getByText("Run Trace");
+  const submitButton = screen.getByText("Execute Query");
   expect(submitButton.getAttribute("disabled")).toBeFalsy();
 
   fireEvent.click(submitButton);
