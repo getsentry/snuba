@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { Switch } from "@mantine/core";
+import {
+  Accordion,
+  Switch,
+  Code,
+  Stack,
+  Title,
+  Group,
+  Button,
+} from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
-import {
-  LogLine,
-  TracingRequest,
-  TracingResult,
-  PredefinedQuery,
-} from "./types";
+import { TracingRequest, TracingResult, PredefinedQuery } from "./types";
 
 type QueryState = Partial<TracingRequest>;
 
@@ -54,7 +57,7 @@ function QueryDisplay(props: {
           num_rows_result: result.num_rows_result,
           cols: result.cols,
           trace_output: result.trace_output,
-          formatted_trace_output: result.formatted_trace_output,
+          summarized_trace_output: result.summarized_trace_output,
           error: result.error,
         };
         setQueryResultHistory((prevHistory) => [
@@ -81,17 +84,10 @@ function QueryDisplay(props: {
   return (
     <div>
       <h2>Construct a ClickHouse Query</h2>
-      <a
-        href="https://getsentry.github.io/snuba/clickhouse/death_queries.html"
-        target="_blank"
-      >
-        🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
-      </a>
       <QueryEditor
         onQueryUpdate={(sql) => {
           updateQuerySql(sql);
         }}
-        predefinedQueryOptions={props.predefinedQueryOptions}
       />
       <div style={executeActionsStyle}>
         <div>
@@ -128,24 +124,32 @@ function QueryDisplay(props: {
         />
         <br />
         <Table
-          headerData={["Query", "Response"]}
+          headerData={["Response"]}
           rowData={queryResultHistory.map((queryResult) => [
-            <span>{queryResult.input_query}</span>,
-            <div>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(queryResult.trace_output || "")}
-              >
-                Copy to clipboard (Raw)
-              </button>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard (JSON)
-              </button>
+            <Stack>
+              <Group>
+                <Button
+                  onClick={() => copyText(queryResult.trace_output || "")}
+                >
+                  Copy to clipboard (Raw)
+                </Button>
+                <Button onClick={() => copyText(JSON.stringify(queryResult))}>
+                  Copy to clipboard (JSON)
+                </Button>
+              </Group>
+              <Title order={3}>Tracing Data</Title>
               {props.resultDataPopulator(queryResult, showFormatted)}
-            </div>,
+              <Accordion chevronPosition="left">
+                <Accordion.Item value="input-query" key="input-query">
+                  <Accordion.Control>
+                    <Title order={3}>Input Query</Title>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Code block>{queryResult.input_query}</Code>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+            </Stack>,
           ])}
           columnWidths={[1, 5]}
         />
