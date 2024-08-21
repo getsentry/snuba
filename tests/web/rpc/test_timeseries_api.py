@@ -88,11 +88,16 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
     }
 
 
+BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+    minutes=180
+)
+
+
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
-    start = datetime.utcnow() - timedelta(hours=1)
-    messages = [gen_message(start + timedelta(minutes=i)) for i in range(60)]
+    start = BASE_TIME
+    messages = [gen_message(start - timedelta(minutes=i)) for i in range(120)]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
@@ -118,8 +123,8 @@ class TestTimeSeriesApi(BaseApiTest):
         assert response.status_code == 200
 
     def test_with_data(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(datetime.utcnow().timestamp()))
-        hour_ago = int((datetime.utcnow() - timedelta(hours=1)).timestamp())
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = AggregateBucketRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
