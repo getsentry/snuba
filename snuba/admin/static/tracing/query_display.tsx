@@ -27,7 +27,6 @@ function QueryDisplay(props: {
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     []
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [showFormatted, setShowFormatted] = useState<boolean>(true);
 
   useEffect(() => {

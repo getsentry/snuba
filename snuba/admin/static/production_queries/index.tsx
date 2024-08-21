@@ -21,7 +21,7 @@ import {
   Textarea,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { CSV } from "../cardinality_analyzer/CSV";
+import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -30,7 +30,6 @@ function ProductionQueries(props: { api: Client }) {
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   useEffect(() => {
     props.api.getSnubaDatasetNames().then((res) => {
