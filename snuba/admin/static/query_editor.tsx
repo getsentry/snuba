@@ -1,7 +1,7 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
-import { Prism } from "@mantine/prism";
-import { Textarea } from "@mantine/core";
+import { Box } from "@mantine/core";
+import { SQLEditor } from "./common/components/sql_editor";
 
 type PredefinedQuery = {
   name: string;
@@ -16,7 +16,7 @@ type QueryParamValues = {
 /** @private */
 export function generateQuery(
   queryTemplate: string,
-  queryParamValues: QueryParamValues
+  queryParamValues: QueryParamValues,
 ) {
   let query = queryTemplate;
   Object.keys(queryParamValues).forEach((param) => {
@@ -30,7 +30,7 @@ export function generateQuery(
 /** @private */
 export function mergeQueryParamValues(
   newQueryParams: Set<string>,
-  oldQueryParamValues: QueryParamValues
+  oldQueryParamValues: QueryParamValues,
 ) {
   return Array.from(newQueryParams).reduce(
     (o, paramName) => ({
@@ -38,7 +38,7 @@ export function mergeQueryParamValues(
       [paramName]:
         paramName in oldQueryParamValues ? oldQueryParamValues[paramName] : "",
     }),
-    {}
+    {},
   );
 }
 
@@ -49,7 +49,7 @@ function QueryEditor(props: {
   const [query, setQuery] = useState<string>("");
   const [queryTemplate, setQueryTemplate] = useState<string>("");
   const [queryParamValues, setQueryParamValues] = useState<QueryParamValues>(
-    {}
+    {},
   );
   const [selectedPredefinedQuery, setSelectedPredefinedQuery] = useState<
     PredefinedQuery | undefined
@@ -60,11 +60,11 @@ function QueryEditor(props: {
   useEffect(() => {
     const newQueryParams = new Set(
       queryTemplate.match(
-        new RegExp(variableRegex.source, variableRegex.flags + "g")
-      )
+        new RegExp(variableRegex.source, variableRegex.flags + "g"),
+      ),
     );
     setQueryParamValues((oldQueryParamValues) =>
-      mergeQueryParamValues(newQueryParams, oldQueryParamValues)
+      mergeQueryParamValues(newQueryParams, oldQueryParamValues),
     );
   }, [queryTemplate]);
 
@@ -79,10 +79,6 @@ function QueryEditor(props: {
   }
 
   function renderPredefinedQueriesSelectors() {
-    if (!props.predefinedQueryOptions?.length ?? 0 > 0) {
-      return;
-    }
-
     return (
       <div>
         <label>Predefined query: </label>
@@ -90,7 +86,7 @@ function QueryEditor(props: {
           value={selectedPredefinedQuery?.name ?? "undefined"}
           onChange={(evt) => {
             let selectedPredefinedQuery = props?.predefinedQueryOptions?.find(
-              (predefinedQuery) => predefinedQuery.name == evt.target.value
+              (predefinedQuery) => predefinedQuery.name == evt.target.value,
             );
             setSelectedPredefinedQuery(selectedPredefinedQuery);
             setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
@@ -133,7 +129,7 @@ function QueryEditor(props: {
             </label>
           </div>
           <hr />
-        </div>
+        </div>,
       );
     });
     return setters;
@@ -143,25 +139,22 @@ function QueryEditor(props: {
     <form>
       {props.predefinedQueryOptions != null &&
         renderPredefinedQueriesSelectors()}
+
       {selectedPredefinedQuery?.description ? (
         <p>{selectedPredefinedQuery?.description}</p>
       ) : null}
-      <Textarea
-        value={queryTemplate || ""}
-        onChange={(evt) => {
-          setSelectedPredefinedQuery(undefined);
-          setQueryTemplate(evt.target.value);
-        }}
-        placeholder="Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
-        autosize
-        minRows={2}
-        maxRows={8}
-        data-testid="text-area-input"
-      />
+
+      <Box my="md">
+        <SQLEditor
+          value={queryTemplate}
+          onChange={(newValue) => {
+            setSelectedPredefinedQuery(undefined);
+            setQueryTemplate(newValue);
+          }}
+        />
+      </Box>
+
       {renderParameterSetters()}
-      <Prism withLineNumbers language="sql">
-        {query || ""}
-      </Prism>
     </form>
   );
 }

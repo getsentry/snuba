@@ -36,7 +36,7 @@ it("select executor rows should appear", async () => {
   };
 
   let { getByText, getByRole, queryByText } = render(
-    <TracingQueries api={mockClient} />
+    <TracingQueries api={mockClient} />,
   );
   await waitFor(() => expect(mockClient.getClickhouseNodes).toBeCalledTimes(1));
 
