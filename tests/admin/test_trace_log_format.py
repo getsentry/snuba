@@ -9,8 +9,6 @@ from snuba.admin.clickhouse.trace_log_parsing import (
 )
 from tests.fixtures import get_raw_join_query_trace
 
-data = open("/tmp/join_trace.raw", "r").read()
-
 
 def test_tracing_summary() -> None:
     output = summarize_trace_output(get_raw_join_query_trace())
