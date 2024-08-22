@@ -362,6 +362,8 @@ def optimize_partitions(
         PARTITION %(partition)s FINAL
     """
 
+    print("optimize_partitions is called")
+
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
             logger.info(

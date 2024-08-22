@@ -108,9 +108,6 @@ test_data = [
 ]
 
 
-@pytest.mark.xfail(
-    reason="This test still is flaky sometimes and then completely blocks CI / deployment"
-)
 class TestOptimize:
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -129,6 +126,8 @@ class TestOptimize:
         clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
         table = storage.get_table_writer().get_schema().get_local_table_name()
         database = cluster.get_database()
+
+        clickhouse.execute(f"SYSTEM STOP MERGES {database}.{table}")
 
         # no data, 0 partitions to optimize
         partitions = optimize.get_partitions_to_optimize(
@@ -249,19 +248,6 @@ class TestOptimize:
 test_data = [
     pytest.param(
         StorageKey.ERRORS,
-        lambda dt: InsertBatch(
-            [
-                {
-                    "event_id": str(uuid.uuid4()),
-                    "project_id": 1,
-                    "group_id": 1,
-                    "deleted": 0,
-                    "timestamp": dt,
-                    "retention_days": settings.DEFAULT_RETENTION_DAYS,
-                }
-            ],
-            None,
-        ),
         last_midnight
         + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME)
         + timedelta(minutes=30),
@@ -274,7 +260,7 @@ class TestOptimizeFrequency:
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     @pytest.mark.parametrize(
-        "storage_key, create_event_row_for_date, current_time",
+        "storage_key, current_time",
         test_data,
     )
     @patch("snuba.clickhouse.optimize.optimize.optimize_partitions")
@@ -282,7 +268,6 @@ class TestOptimizeFrequency:
         self,
         mock_optimize_partitions: Mock,
         storage_key: StorageKey,
-        create_event_row_for_date: Callable[[datetime], InsertBatch],
         current_time: datetime,
     ) -> None:
         mock_optimize_partitions.side_effect = optimize_partitions
@@ -293,21 +278,6 @@ class TestOptimizeFrequency:
         table = storage.get_table_writer().get_schema().get_local_table_name()
         database = cluster.get_database()
 
-        base = datetime(1999, 12, 26)  # a sunday
-        base_monday = base - timedelta(days=base.weekday())
-        write_processed_messages(storage, [create_event_row_for_date(base)])
-        write_processed_messages(storage, [create_event_row_for_date(base)])
-
-        for i in range(1, 10):
-            earlier = base_monday - timedelta(days=i * 31)
-            earlier_monday = earlier - timedelta(days=earlier.weekday())
-            write_processed_messages(
-                storage, [create_event_row_for_date(earlier_monday)]
-            )
-            write_processed_messages(
-                storage, [create_event_row_for_date(earlier_monday)]
-            )
-
         scheduler = OptimizeScheduler(2)
         tracker = OptimizedPartitionTracker(
             redis_client=redis_client,
@@ -317,24 +287,19 @@ class TestOptimizeFrequency:
             table=table,
             expire_time=datetime.now() + timedelta(minutes=10),
         )
-        partitions = optimize.get_partitions_to_optimize(
-            clickhouse, storage, database, table
-        )
 
-        tracker.update_all_partitions([part.name for part in partitions])
         with time_machine.travel(current_time, tick=False):
             optimize.optimize_partition_runner(
                 clickhouse=clickhouse,
                 database=database,
                 table=table,
-                partitions=[part.name for part in partitions],
+                partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
                 scheduler=scheduler,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
             )
         assert mock_optimize_partitions.call_count == 10
 
-        tracker.delete_all_states()
         # For ClickHouse 23.3 and 23.8 parts from previous test runs
         # interfere with following tests, so best to drop the tables
         clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
