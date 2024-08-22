@@ -235,8 +235,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
-    key = next(iter(data["formatted_trace_output"]))
-    assert "read_performance" in data["formatted_trace_output"][key]
+    assert "summarized_trace_output" in data
 
 
 @pytest.mark.redis_db
