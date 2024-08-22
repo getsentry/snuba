@@ -459,7 +459,10 @@ def clickhouse_trace_query() -> Response:
                 # There is a race between the original query to trace finishing and the system query log populating.
                 # Sleep between the query executions.
                 system_query_result = run_system_query_on_host_with_sql(
-                    host_port_query_id["host"], host_port_query_id["port"], storage, sql
+                    host_port_query_id["host"],
+                    int(host_port_query_id["port"]),
+                    storage,
+                    sql,
                 )
                 if not system_query_result.results:
                     time.sleep(1)
@@ -467,13 +470,16 @@ def clickhouse_trace_query() -> Response:
                 else:
                     break
 
+            print("\n system_query_result = {}".format(system_query_result))
             assert (
                 system_query_result is not None
                 and len(system_query_result.results) != 0
             ), "Must get ProfileEvents!"
 
             query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = system_query_result.profile
+            query_trace.profile_events_profile = cast(
+                Dict[str, int], system_query_result.profile
+            )
             columns = system_query_result.meta
             if columns:
                 res = {}
@@ -519,7 +525,7 @@ valid_host_regex = re.compile("^[a-zA-Z0-9-]+-\d-\d$")
 
 def parse_trace_for_query_ids(
     trace_output: TraceOutput, storage_key: str
-) -> List[Dict[str, str]]:
+) -> List[Dict[str, Any]]:
     result = []
     summarized_trace_output = trace_output.summarized_trace_output
     storage_info = get_storage_info()
@@ -527,7 +533,7 @@ def parse_trace_for_query_ids(
         (info for info in storage_info if info["storage_name"] == storage_key), None
     )
     if matched is not None:
-        local_nodes = matched.get("local_nodes")
+        local_nodes = matched.get("local_nodes", [])
         for host, query_summary in summarized_trace_output.query_summaries.items():
             if not valid_host_regex.match(host):
                 host = "127.0.0.1"

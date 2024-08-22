@@ -21,7 +21,7 @@ class TraceOutput:
     summarized_trace_output: TracingSummary
     cols: list[tuple[str, str]]
     num_rows_result: int
-    profile_events_results: dict[dict[str, str]]
+    profile_events_results: dict[dict[str, str], Any]
     profile_events_meta: list[Any]
     profile_events_profile: Dict[str, int]
 
