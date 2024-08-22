@@ -555,7 +555,7 @@ class DropIndices(SqlOperation):
     def format_sql(self) -> str:
         settings = ""
         if self.__run_async:
-            settings = " SETTINGS mutations_sync=0"
+            settings = " SETTINGS mutations_sync=0, alter_sync=0"
         statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
         return f"ALTER TABLE {self.__table_name} {', '.join(statements)}{settings};"
 
