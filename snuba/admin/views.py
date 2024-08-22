@@ -38,7 +38,7 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_snql_query
+from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -1035,6 +1035,29 @@ def production_snql_query() -> Response:
     body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
         return run_snql_query(body, g.user.email)
+    except InvalidQueryException as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/production_mql_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_mql_query() -> Response:
+    body = json.loads(request.data)
+    print("body received")
+    print(body)
+    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
+    try:
+        return run_mql_query(body, g.user.email)
     except InvalidQueryException as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
