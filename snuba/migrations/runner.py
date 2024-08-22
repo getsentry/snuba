@@ -117,7 +117,7 @@ class Runner:
 
     def force_overwrite_status(
         self, group: MigrationGroup, migration_id: str, new_status: Status
-    ):
+    ) -> None:
         """Sometimes a migration gets blocked or times out for whatever reason.
         This function is used to overwrite the state in the snuba table keeping
         track of migration so we can try again"""
