@@ -10,6 +10,7 @@ import { useEditor } from "@tiptap/react";
 import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 
 import {
   ClickhouseNodeData,
@@ -20,6 +21,7 @@ import {
 
 type QueryState = Partial<QueryRequest>;
 
+const HISTORY_KEY = "clickhouse_queries";
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
@@ -28,7 +30,7 @@ function QueryDisplay(props: {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
 
   useEffect(() => {
@@ -76,6 +78,7 @@ function QueryDisplay(props: {
       .executeSystemQuery(query as QueryRequest)
       .then((result) => {
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
+        setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
       });
   }

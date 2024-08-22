@@ -22,13 +22,15 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 
+const HISTORY_KEY = "production_queries";
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
   const [allowedProjects, setAllowedProjects] = useState<string[]>([]);
   const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
 
   useEffect(() => {
@@ -79,6 +81,7 @@ function ProductionQueries(props: { api: Client }) {
           duration_ms: result.timing.duration_ms,
           quota_allowance: result.quota_allowance,
         };
+        setRecentHistory(HISTORY_KEY, query_result);
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
       });
   }

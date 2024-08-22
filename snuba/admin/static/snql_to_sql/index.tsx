@@ -5,10 +5,10 @@ import { Table } from "SnubaAdmin/table";
 import {
   executeActionsStyle,
   selectStyle,
-  executeButtonStyle,
 } from "SnubaAdmin/snql_to_sql/styles";
 import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import {
   SnQLRequest,
   SnQLResult,
@@ -16,11 +16,12 @@ import {
   SnQLQueryState,
 } from "./types";
 
+const HISTORY_KEY = "snql_to_sql";
 function SnQLToSQL(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
   const [snql_query, setQuery] = useState<SnQLQueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
 
   useEffect(() => {
@@ -55,6 +56,7 @@ function SnQLToSQL(props: { api: Client }) {
           input_query: snql_query.query,
           sql: result.sql,
         };
+        setRecentHistory(HISTORY_KEY, query_result);
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
       });
   }
