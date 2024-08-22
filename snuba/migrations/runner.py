@@ -122,7 +122,7 @@ class Runner:
         This function is used to overwrite the state in the snuba table keeping
         track of migration so we can try again"""
         self.__connection.execute(
-            f"ALTER TABLE {self.__table_name} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
+            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
         )
 
     def show_all(
