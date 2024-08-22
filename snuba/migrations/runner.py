@@ -115,6 +115,16 @@ class Runner:
 
         return Status.NOT_STARTED, None
 
+    def force_overwrite_status(
+        self, group: MigrationGroup, migration_id: str, new_status: Status
+    ):
+        """Sometimes a migration gets blocked or times out for whatever reason.
+        This function is used to overwrite the state in the snuba table keeping
+        track of migration so we can try again"""
+        self.__connection.execute(
+            f"ALTER TABLE {self.__table_name} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
+        )
+
     def show_all(
         self, groups: Optional[Sequence[str]] = None
     ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
