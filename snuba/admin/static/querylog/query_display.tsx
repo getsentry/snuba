@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { Button } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 
 import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
 type QueryState = Partial<QuerylogRequest>;
 
@@ -27,15 +29,11 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    props.api
+    return props.api
       .executeQuerylogQuery(query as QuerylogRequest)
       .then((result) => {
         result.input_query = query.sql || "<Input Query>";
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
       });
   }
 
@@ -79,25 +77,15 @@ function QueryDisplay(props: {
       />
       <div style={executeActionsStyle}>
         <div>
-          <button
-            onClick={(evt) => {
-              evt.preventDefault();
-              executeQuery();
-            }}
-            style={executeButtonStyle}
-            disabled={!query.sql}
-          >
-            Execute Query
-          </button>
-          <button
-            onClick={(evt) => {
+          <ExecuteButton onClick={executeQuery} disabled={!query.sql} />
+          <Button
+            onClick={(evt: any) => {
               evt.preventDefault();
               getQuerylogSchema();
             }}
-            style={executeButtonStyle}
           >
             View Querylog Schema
-          </button>
+          </Button>
         </div>
       </div>
       <div>

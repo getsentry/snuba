@@ -3,6 +3,7 @@ import { Switch } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
 import {
   LogLine,
@@ -26,8 +27,7 @@ function QueryDisplay(props: {
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     []
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [showFormatted, setShowFormatted] = useState<boolean>(false);
+  const [showFormatted, setShowFormatted] = useState<boolean>(true);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -45,11 +45,7 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    return props.api
       .executeTracingQuery(query as TracingRequest)
       .then((result) => {
         const tracing_result = {
@@ -65,13 +61,6 @@ function QueryDisplay(props: {
           tracing_result,
           ...prevHistory,
         ]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -92,7 +81,10 @@ function QueryDisplay(props: {
   return (
     <div>
       <h2>Construct a ClickHouse Query</h2>
-      <a href="https://getsentry.github.io/snuba/clickhouse/death_queries.html">
+      <a
+        href="https://getsentry.github.io/snuba/clickhouse/death_queries.html"
+        target="_blank"
+      >
         🛑 WARNING! BEFORE RUNNING QUERIES, READ THIS 🛑
       </a>
       <QueryEditor
@@ -118,15 +110,10 @@ function QueryDisplay(props: {
             ))}
           </select>
         </div>
-        <div>
-          <button
-            onClick={(_) => executeQuery()}
-            style={executeButtonStyle}
-            disabled={isExecuting || !query.storage || !query.sql}
-          >
-            Execute query
-          </button>
-        </div>
+        <ExecuteButton
+          onClick={executeQuery}
+          disabled={!query.storage || !query.sql}
+        />
       </div>
       <div>
         <h2>Query results</h2>
@@ -147,9 +134,15 @@ function QueryDisplay(props: {
             <div>
               <button
                 style={executeButtonStyle}
+                onClick={() => copyText(queryResult.trace_output || "")}
+              >
+                Copy to clipboard (Raw)
+              </button>
+              <button
+                style={executeButtonStyle}
                 onClick={() => copyText(JSON.stringify(queryResult))}
               >
-                Copy to clipboard
+                Copy to clipboard (JSON)
               </button>
               {props.resultDataPopulator(queryResult, showFormatted)}
             </div>,

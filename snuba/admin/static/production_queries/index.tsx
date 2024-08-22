@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
-import { QueryResult, QueryResultColumnMeta, SnQLRequest } from "SnubaAdmin/production_queries/types";
+import {
+  QueryResult,
+  QueryResultColumnMeta,
+  SnQLRequest,
+} from "SnubaAdmin/production_queries/types";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { executeActionsStyle } from "SnubaAdmin/production_queries/styles";
 import {
   Accordion,
@@ -16,7 +21,7 @@ import {
   Textarea,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { CSV } from "../cardinality_analyzer/CSV";
+import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
 
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
@@ -25,7 +30,6 @@ function ProductionQueries(props: { api: Client }) {
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     []
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   useEffect(() => {
     props.api.getSnubaDatasetNames().then((res) => {
@@ -58,11 +62,7 @@ function ProductionQueries(props: { api: Client }) {
   }
 
   function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    return props.api
       .executeSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const result_columns = result.meta.map(
@@ -80,13 +80,6 @@ function ProductionQueries(props: { api: Client }) {
           quota_allowance: result.quota_allowance,
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -116,15 +109,12 @@ function ProductionQueries(props: { api: Client }) {
             />
           </div>
           <div>
-            <Button
+            <ExecuteButton
               onClick={executeQuery}
-              loading={isExecuting}
               disabled={
                 snql_query.dataset == undefined || snql_query.query == undefined
               }
-            >
-              Execute Query
-            </Button>
+            />
           </div>
         </div>
       </form>
@@ -225,9 +215,9 @@ function renderThrottleStatus(isThrottled: boolean, reasonHeader: string[]) {
     >
       Quota Allowance - Throttled <br />
       <ol>
-      {reasonHeader.map((line, index) => (
+        {reasonHeader.map((line, index) => (
           <li key={index}>{line}</li>
-      ))}
+        ))}
       </ol>
     </Text>
   ) : (
@@ -261,8 +251,9 @@ function QueryResultQuotaAllowance(props: { queryResult: QueryResult }) {
   const isThrottled: boolean =
     (props.queryResult.quota_allowance &&
       Object.values(props.queryResult.quota_allowance).some(
-        (policy) => policy.max_threads < 10,
-      )) || false;
+        (policy) => policy.max_threads < 10
+      )) ||
+    false;
   let reasonHeader: string[] = [];
   if (isThrottled) {
     props.queryResult.quota_allowance &&
@@ -270,8 +261,12 @@ function QueryResultQuotaAllowance(props: { queryResult: QueryResult }) {
         const policy = props.queryResult.quota_allowance![policyName];
         if (policy.max_threads < 10 && policy.explanation.reason != null) {
           reasonHeader.push(
-            policyName + ": " + policy.explanation.reason +
-            ". SnQL Query executed with " + policy.max_threads + " threads.",
+            policyName +
+              ": " +
+              policy.explanation.reason +
+              ". SnQL Query executed with " +
+              policy.max_threads +
+              " threads."
           );
         }
       });
@@ -282,9 +277,7 @@ function QueryResultQuotaAllowance(props: { queryResult: QueryResult }) {
         <Accordion.Control>
           {renderThrottleStatus(isThrottled, reasonHeader)}
         </Accordion.Control>
-        <Accordion.Panel>
-          {renderPolicyDetails(props)}
-        </Accordion.Panel>
+        <Accordion.Panel>{renderPolicyDetails(props)}</Accordion.Panel>
       </Accordion.Item>
     </Accordion>
   );

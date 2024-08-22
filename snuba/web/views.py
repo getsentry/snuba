@@ -35,6 +35,9 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
+from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
+    AggregateBucketRequest,
+)
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -51,7 +54,6 @@ from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionEr
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
-from snuba.protobufs import FindTrace_pb2
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -76,6 +78,7 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
+from snuba.web.rpc.timeseries import timeseries_query as timeseries_query_impl
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -271,12 +274,14 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/find_trace", methods=["POST"])
-@util.time_request("query")
-def find_trace_endpoint(*, timer: Timer) -> Union[Response, str, WerkzeugResponse]:
-    req = FindTrace_pb2.FindTraceRequest()
+@application.route("/timeseries", methods=["POST"])
+@util.time_request("timeseries_query")
+def timeseries_query(*, timer: Timer) -> Response:
+    req = AggregateBucketRequest()
     req.ParseFromString(http_request.data)
-    return ""  # TODO this endpoint is not ready for primetime
+    # STUB
+    res = timeseries_query_impl(req, timer)
+    return Response(res.SerializeToString())
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
@@ -325,7 +330,11 @@ def storage_delete(
             payload = delete_from_storage(
                 storage, request_parts.query["query"]["columns"]
             )
-        except (InvalidJsonRequestException, DeletesNotEnabledError) as error:
+        except (
+            InvalidJsonRequestException,
+            DeletesNotEnabledError,
+            InvalidQueryException,
+        ) as error:
             details = {
                 "type": "invalid_query",
                 "message": str(error),
@@ -342,8 +351,9 @@ def storage_delete(
             }
             return make_response(jsonify({"error": details}), 500)
 
+        # i put the result inside "data" bc thats how sentry utils/snuba.py expects the result
         return Response(
-            dump_payload(payload), 200, {"Content-Type": "application/json"}
+            dump_payload({"data": payload}), 200, {"Content-Type": "application/json"}
         )
 
     else:

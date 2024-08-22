@@ -114,12 +114,6 @@ def rollup_expressions(
         Literal(None, rollup.granularity),
     )
 
-    # Validate totals/interval
-    if rollup.interval is None and rollup.with_totals in (None, "False"):
-        raise ParsingException(
-            "either interval or with_totals must be specified in rollup"
-        )
-
     # Validate totals/orderby
     if rollup.with_totals is not None and rollup.with_totals not in ("True", "False"):
         raise ParsingException("with_totals must be a string, either 'True' or 'False'")
