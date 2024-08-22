@@ -532,7 +532,7 @@ class DropIndex(SqlOperation):
 
     def _block_on_mutations(
         self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
-    ):
+    ) -> None:
         if self.__run_async:
             return
         else:
