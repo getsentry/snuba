@@ -55,38 +55,6 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
   }
 }
 
-function NodalDisplay(props: {
-  host: string;
-  category: MessageCategory;
-  title?: string;
-  logsBucketed: BucketedLogs;
-}) {
-  const [visible, setVisible] = useState<boolean>(false);
-
-  const nodeKey = props.host + "-" + props.category;
-  return (
-    <li key={nodeKey}>
-      <span onClick={() => setVisible(!visible)}>
-        {visible ? "[-]" : "[+]"} {props.title}
-      </span>
-
-      <ol key={nodeKey + "-child"} style={collapsibleStyle}>
-        {visible &&
-          props.logsBucketed
-            .get(props.host)
-            ?.get(props.category)
-            ?.map((line, index) => {
-              return (
-                <li key={nodeKey + index}>
-                  [{line?.log_level}] {line?.component}: {line?.message}
-                </li>
-              );
-            })}
-      </ol>
-    </li>
-  );
-}
-
 function TracingQueries(props: { api: Client }) {
   function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
