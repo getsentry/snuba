@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
@@ -71,15 +72,11 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    props.api
+    return props.api
       .executeSystemQuery(query as QueryRequest)
       .then((result) => {
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error);
       });
   }
 
@@ -167,18 +164,12 @@ function QueryDisplay(props: {
             </select>
           </div>
           <div>
-            <button
-              onClick={(evt) => {
-                evt.preventDefault();
-                executeQuery();
-              }}
-              style={executeButtonStyle}
+            <ExecuteButton
+              onClick={executeQuery}
               disabled={
                 !query.storage || !query.host || !query.port || !query.sql
               }
-            >
-              Execute query
-            </button>
+            />
           </div>
         </div>
       </form>
