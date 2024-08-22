@@ -140,3 +140,22 @@ class TestTimeSeriesApi(BaseApiTest):
         )
         response = timeseries_query(message)
         assert response.result == [420 for _ in range(60)]
+
+    def test_quantiles(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = AggregateBucketRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+            ),
+            start_timestamp=Timestamp(seconds=hour_ago),
+            end_timestamp=ts,
+            metric_name="eap.measurement",
+            aggregate=AggregateBucketRequest.FUNCTION_P99,
+            granularity_secs=1,
+        )
+        response = timeseries_query(message)
+        assert response.result == [420 for _ in range(60)]
