@@ -11,12 +11,17 @@ from snuba.query import SelectedExpression
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
-from snuba.query.exceptions import TooManyDeleteRowsException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    NoRowsToDeleteException,
+    TooManyDeleteRowsException,
+)
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
+from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 
 
 class DeletesNotEnabledError(Exception):
@@ -120,6 +125,8 @@ def _enforce_max_rows(delete_query: Query) -> None:
     rows_to_delete = _get_rows_to_delete(
         storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
     )
+    if rows_to_delete == 0:
+        raise NoRowsToDeleteException
     max_rows_allowed = (
         get_storage(storage_key).get_deletion_settings().max_rows_to_delete
     )
@@ -147,7 +154,20 @@ def _delete_from_table(
         on_cluster=on_cluster,
         is_delete=True,
     )
-    _enforce_max_rows(query)
+
+    columns = storage.get_schema().get_columns()
+    column_validator = ColumnValidator(columns)
+    try:
+        for col, values in conditions.items():
+            column_validator.validate(col, values)
+    except InvalidColumnType as e:
+        raise InvalidQueryException(e.message)
+
+    try:
+        _enforce_max_rows(query)
+    except NoRowsToDeleteException:
+        result: Result = {}
+        return result
 
     deletion_processors = storage.get_deletion_processors()
     # These settings aren't needed at the moment

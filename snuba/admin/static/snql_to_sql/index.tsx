@@ -2,8 +2,13 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 
-import { executeActionsStyle, selectStyle, executeButtonStyle } from "SnubaAdmin/snql_to_sql/styles";
+import {
+  executeActionsStyle,
+  selectStyle,
+  executeButtonStyle,
+} from "SnubaAdmin/snql_to_sql/styles";
 import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import {
   SnQLRequest,
   SnQLResult,
@@ -17,7 +22,6 @@ function SnQLToSQL(props: { api: Client }) {
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   useEffect(() => {
     props.api.getSnubaDatasetNames().then((res) => {
@@ -44,11 +48,7 @@ function SnQLToSQL(props: { api: Client }) {
   }
 
   function convertQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    return props.api
       .debugSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const query_result = {
@@ -56,13 +56,6 @@ function SnQLToSQL(props: { api: Client }) {
           sql: result.sql,
         };
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -91,17 +84,13 @@ function SnQLToSQL(props: { api: Client }) {
             </select>
           </div>
           <div>
-            <button
-              onClick={(_) => convertQuery()}
-              style={executeButtonStyle}
+            <ExecuteButton
+              onClick={convertQuery}
               disabled={
-                isExecuting ||
-                snql_query.dataset == undefined ||
-                snql_query.query == undefined
+                snql_query.dataset == undefined || snql_query.query == undefined
               }
-            >
-              Convert Query
-            </button>
+              label="Convert Query"
+            />
           </div>
         </div>
       </form>

@@ -517,15 +517,51 @@ class DropIndex(SqlOperation):
         table_name: str,
         index_name: str,
         target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
     ):
         super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__index_name = index_name
+        self.__run_async = run_async
 
     def format_sql(self) -> str:
-        return (
-            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
-        )
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0, alter_sync=0"
+        return f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
+
+    def _block_on_mutations(
+        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
+    ) -> None:
+        if self.__run_async:
+            return
+        else:
+            super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
+
+
+class DropIndices(SqlOperation):
+    """
+    Drops many indices.
+    Only works with the MergeTree family of tables.
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        indices: Sequence[str],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__indices = indices
+
+    def format_sql(self) -> str:
+        statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
+
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
 
 
 class InsertIntoSelect(SqlOperation):

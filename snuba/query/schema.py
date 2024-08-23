@@ -38,18 +38,25 @@ MQL_QUERY_SCHEMA = {
 DELETE_QUERY_SCHEMA = {
     "type": "object",
     "properties": {
-        "columns": {
+        "query": {
             "type": "object",
             "properties": {
-                "project_id": {
-                    "type": "array",
-                    "items": {"type": "integer"},
-                }
+                "columns": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                        }
+                    },
+                    "required": ["project_id"],
+                    "additionalProperties": {"type": "array"},
+                },
             },
-            "required": ["project_id"],
-            "additionalProperties": {"type": "array"},
-        },
+            "required": ["columns"],
+            "additionalProperties": False,
+        }
     },
-    "required": ["columns"],
+    "required": ["query"],
     "additionalProperties": False,
 }

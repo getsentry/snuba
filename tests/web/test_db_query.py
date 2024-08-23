@@ -33,7 +33,11 @@ from snuba.state.quota import ResourceQuota
 from snuba.utils.metrics.backends.testing import get_recorded_metric_calls
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from snuba.web.db_query import _get_query_settings_from_config, db_query
+from snuba.web.db_query import (
+    _apply_allocation_policies_quota,
+    _get_query_settings_from_config,
+    db_query,
+)
 
 test_data = [
     pytest.param(
@@ -308,7 +312,7 @@ def test_db_query_success() -> None:
                 "quota_used": 1560000000000,
                 "quota_unit": "bytes",
                 "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
-                "throttle_threshold": 1280000000000,
+                "throttle_threshold": 1706666666666,
             },
         },
         "details": {
@@ -322,7 +326,7 @@ def test_db_query_success() -> None:
                     "storage_key": "StorageKey.ERRORS_RO",
                 },
                 "is_throttled": False,
-                "throttle_threshold": 50,
+                "throttle_threshold": 66,
                 "rejection_threshold": 100,
                 "quota_used": 1,
                 "quota_unit": "concurrent_queries",
@@ -351,7 +355,7 @@ def test_db_query_success() -> None:
                     "storage_key": "StorageKey.ERRORS_RO",
                 },
                 "is_throttled": True,
-                "throttle_threshold": 1280000000000,
+                "throttle_threshold": 1706666666666,
                 "rejection_threshold": 2560000000000,
                 "quota_used": 1560000000000,
                 "quota_unit": "bytes",
@@ -476,6 +480,121 @@ def test_db_query_fail() -> None:
     assert query_metadata_list[0].status.value == "error"
     assert excinfo.value.extra["stats"] == stats
     assert excinfo.value.extra["sql"] is not None
+
+
+class MockThrottleAllocationPolicy(AllocationPolicy):
+    def __init__(
+        self,
+        max_threads: int,
+        policy_name: str,
+        storage_key: StorageKey = StorageKey("doesntmatter"),
+        required_tenant_types: list[str] = ["a", "b", "c"],
+        default_config_overrides: dict[str, Any] = {},
+    ) -> None:
+        super().__init__(
+            storage_key=storage_key,
+            required_tenant_types=required_tenant_types,
+            default_config_overrides=default_config_overrides,
+        )
+        self._max_threads = max_threads
+        self.policy_name = policy_name
+
+    def _get_quota_allowance(
+        self, tenant_ids: dict[str, str | int], query_id: str
+    ) -> QuotaAllowance:
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=self._max_threads,
+            explanation={"reason": self.policy_name + " throttles all queries"},
+            is_throttled=True,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD + 1,
+            quota_used=MAX_THRESHOLD,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
+
+    def _update_quota_balance(
+        self,
+        tenant_ids: dict[str, str | int],
+        query_id: str,
+        result_or_error: QueryResultOrError,
+    ) -> None:
+        return
+
+    def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
+        return []
+
+
+def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
+    query, _, _ = _build_test_query("count(distinct(project_id))")
+
+    class ThrottleAllocationPolicy1(MockThrottleAllocationPolicy):
+        def __init__(self, max_threads: int, policy_name: str) -> None:
+            super().__init__(max_threads=max_threads, policy_name=policy_name)
+
+    class ThrottleAllocationPolicy2(MockThrottleAllocationPolicy):
+        def __init__(self, max_threads: int, policy_name: str) -> None:
+            super().__init__(max_threads=max_threads, policy_name=policy_name)
+
+    stats: MutableMapping[str, Any] = {}
+    _apply_allocation_policies_quota(
+        query_settings=HTTPQuerySettings(),
+        attribution_info=mock.Mock(),
+        formatted_query=format_query(query),
+        stats=stats,
+        allocation_policies=[
+            ThrottleAllocationPolicy1(1, "ThrottleAllocationPolicy1"),
+            ThrottleAllocationPolicy2(2, "ThrottleAllocationPolicy2"),
+        ],
+        query_id="throttle_query",
+    )
+
+    assert stats == {
+        "quota_allowance": {
+            "details": {
+                "ThrottleAllocationPolicy1": {
+                    "can_run": True,
+                    "max_threads": 1,
+                    "explanation": {
+                        "reason": "ThrottleAllocationPolicy1 throttles all queries",
+                        "storage_key": "StorageKey.DOESNTMATTER",
+                    },
+                    "is_throttled": True,
+                    "throttle_threshold": 1000000000000,
+                    "rejection_threshold": 1000000000001,
+                    "quota_used": 1000000000000,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
+                },
+                "ThrottleAllocationPolicy2": {
+                    "can_run": True,
+                    "max_threads": 2,
+                    "explanation": {
+                        "reason": "ThrottleAllocationPolicy2 throttles all queries",
+                        "storage_key": "StorageKey.DOESNTMATTER",
+                    },
+                    "is_throttled": True,
+                    "throttle_threshold": 1000000000000,
+                    "rejection_threshold": 1000000000001,
+                    "quota_used": 1000000000000,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
+                },
+            },
+            "summary": {
+                "threads_used": 1,
+                "rejected_by": {},
+                "throttled_by": {
+                    "policy": "ThrottleAllocationPolicy1",
+                    "quota_used": 1000000000000,
+                    "quota_unit": NO_UNITS,
+                    "suggestion": NO_SUGGESTION,
+                    "throttle_threshold": 1000000000000,
+                },
+            },
+        }
+    }
 
 
 def test_db_query_with_rejecting_allocation_policy() -> None:
