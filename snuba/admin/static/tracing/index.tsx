@@ -122,24 +122,27 @@ function TracingQueries(props: { api: Client }) {
 
     const profileEventRows: Array<string> = [];
     for (const [k, v] of Object.entries(profileEventResults)) {
-      profileEventRows.push(v.rows[0]);
+      profileEventRows.push(k + '=>' + v.rows[0]);
     }
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
-        <h4>Profile Events Output</h4>
+        <Title order={4}>Profile Events Output</Title>
         {profileEventRows.map((line, index) => {
+          console.log("line: ", line)
+          const node_name = line.split("=>")[0];
+          const row = line.split("=>")[1];
           return (
             <li key={title + index}>
-              <span>{line}</span>
+              <Text>[ {node_name} ] {row}</Text>
             </li>
           );
         })}
-        <h4>Trace Output</h4>
+        <Title order={4}>Trace Output</Title>
         {parsedLines.map((line, index) => {
           return (
             <li key={title + index}>
-              <span>{line}</span>
+              <Text>{line}</Text>
             </li>
           );
         })}

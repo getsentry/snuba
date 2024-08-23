@@ -22,7 +22,7 @@ from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_qu
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
-from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.common import ClickHouseTimeoutError, InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -442,7 +442,14 @@ def clickhouse_trace_query() -> Response:
         )
 
     try:
-        if not raw_sql.endswith("SETTINGS log_profile_events=1"):
+        # Append 'log_profile_events=1' with/without the SETTINGS clause to the incoming query.
+        settings_index = raw_sql.lower().find("settings")
+        if settings_index != -1:
+            start_index = settings_index + len("settings")
+            remaining = raw_sql[start_index:].strip()
+            if "log_profile_events=1" not in remaining:
+                raw_sql += ", log_profile_events=1"
+        else:
             raw_sql += " SETTINGS log_profile_events=1"
 
         query_trace = run_query_and_get_trace(storage, raw_sql)
@@ -469,10 +476,10 @@ def clickhouse_trace_query() -> Response:
                 else:
                     break
 
-            assert (
-                system_query_result is not None
-                and len(system_query_result.results) != 0
-            ), "Must get ProfileEvents!"
+            if system_query_result is None or len(system_query_result.results) == 0:
+                raise ClickHouseTimeoutError(
+                    "Timed out while executing: {}".format(sql)
+                )
 
             query_trace.profile_events_meta.append(system_query_result.meta)
             query_trace.profile_events_profile = cast(
@@ -513,6 +520,18 @@ def clickhouse_trace_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except ClickHouseTimeoutError as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "clickhouse_timeout",
+                        "message": err.message or "Query timed out",
+                    }
+                }
+            ),
+            408,
+        )
     except Exception as err:
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),

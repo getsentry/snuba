@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -22,7 +22,7 @@ class TraceOutput:
     num_rows_result: int
     profile_events_results: dict[dict[str, str], Any]
     profile_events_meta: list[Any]
-    profile_events_profile: Dict[str, int]
+    profile_events_profile: dict[str, int]
 
 
 def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
