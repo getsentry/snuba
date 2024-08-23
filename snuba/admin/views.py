@@ -4,6 +4,7 @@ import io
 import re
 import sys
 import time
+import traceback
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
@@ -514,6 +515,11 @@ def clickhouse_trace_query() -> Response:
         }
         return make_response(jsonify({"error": details}), 400)
     except Exception as err:
+        print(
+            "\n HTTP 500 error message: {} \n traceback: {}".format(
+                str(err), traceback.print_exc()
+            )
+        )
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
