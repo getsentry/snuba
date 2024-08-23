@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import io
-import re
+
+# import re
 import sys
 import time
 import traceback
@@ -450,18 +451,18 @@ def clickhouse_trace_query() -> Response:
         query_trace = run_query_and_get_trace(storage, raw_sql)
 
         profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
-        hosts_ports_query_ids = parse_trace_for_query_ids(query_trace, storage)
+        hosts_ports_query_ids_nodes = parse_trace_for_query_ids(query_trace, storage)
 
-        for host_port_query_id in hosts_ports_query_ids:
-            sql = profile_events_raw_sql.format(host_port_query_id["query_id"])
+        for host_port_query_id_node in hosts_ports_query_ids_nodes:
+            sql = profile_events_raw_sql.format(host_port_query_id_node["query_id"])
             system_query_result, counter = None, 0
 
             while counter < 10:
                 # There is a race between the original query to trace finishing and the system query log populating.
                 # Sleep between the query executions.
                 system_query_result = run_system_query_on_host_with_sql(
-                    host_port_query_id["host"],
-                    int(host_port_query_id["port"]),
+                    host_port_query_id_node["host"],
+                    int(host_port_query_id_node["port"]),
                     storage,
                     sql,
                 )
@@ -493,7 +494,9 @@ def clickhouse_trace_query() -> Response:
                             .replace("{", "")
                             .replace("}", "")
                         )
-                query_trace.profile_events_results[host_port_query_id["host"]] = res
+                query_trace.profile_events_results[
+                    host_port_query_id_node["node_name"]
+                ] = res
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
@@ -515,18 +518,14 @@ def clickhouse_trace_query() -> Response:
         }
         return make_response(jsonify({"error": details}), 400)
     except Exception as err:
-        print(
-            "\n HTTP 500 error message: {} \n traceback: {}".format(
-                str(err), traceback.print_exc()
-            )
-        )
+        traceback.print_exc()
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
 
 
-valid_host_regex = re.compile("^[a-zA-Z0-9-]+-\d-\d$")
+# valid_host_regex = re.compile("^[a-zA-Z0-9-]+-\d-\d$")
 
 
 def parse_trace_for_query_ids(
@@ -545,22 +544,32 @@ def parse_trace_for_query_ids(
     )
     if matched is not None:
         local_nodes = matched.get("local_nodes", [])
-        print("\n local_nodes: {}".format(local_nodes))
-        for host, query_summary in summarized_trace_output.query_summaries.items():
-            print("\n host: {}, query_id: {}".format(host, query_summary.query_id))
-            if not valid_host_regex.match(host):
-                print(
-                    "\n host {} was not matched by valid host regex. Setting host to 127.0.0.1".format(
-                        host
-                    )
+        query_node = matched.get("query_node", None)
+        print("\n local_nodes: {}, \n query_node: {}".format(local_nodes, query_node))
+        for node_name, query_summary in summarized_trace_output.query_summaries.items():
+            print(
+                "\n node_name: {}, query_id: {}".format(
+                    node_name, query_summary.query_id
                 )
-                host = "127.0.0.1"
+            )
+            # if not valid_host_regex.match(host):
+            #     print(
+            #         "\n host {} was not matched by valid host regex. Setting host to 127.0.0.1".format(
+            #             host
+            #         )
+            #     )
+            #     host = "127.0.0.1"
 
             result.append(
                 {
-                    "host": host if host else local_nodes[0].get("host"),
-                    "port": local_nodes[0].get("port"),
+                    "host": local_nodes[0].get("host")
+                    if local_nodes
+                    else query_node.get("host"),
+                    "port": local_nodes[0].get("port")
+                    if local_nodes
+                    else query_node.get("port"),
                     "query_id": query_summary.query_id,
+                    "node_name": node_name,
                 }
             )
     return result
