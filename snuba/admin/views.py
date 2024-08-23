@@ -538,10 +538,22 @@ def parse_trace_for_query_ids(
     matched = next(
         (info for info in storage_info if info["storage_name"] == storage_key), None
     )
+    print(
+        "\n summarized_trace_output: {} \n storage_info: {} \n matched: {}".format(
+            summarized_trace_output, storage_info, matched
+        )
+    )
     if matched is not None:
         local_nodes = matched.get("local_nodes", [])
+        print("\n local_nodes: {}".format(local_nodes))
         for host, query_summary in summarized_trace_output.query_summaries.items():
+            print("\n host: {}, query_id: {}".format(host, query_summary.query_id))
             if not valid_host_regex.match(host):
+                print(
+                    "\n host {} was not matched by valid host regex. Setting host to 127.0.0.1".format(
+                        host
+                    )
+                )
                 host = "127.0.0.1"
 
             result.append(
