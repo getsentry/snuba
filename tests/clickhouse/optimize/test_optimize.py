@@ -7,11 +7,11 @@ import pytest
 import time_machine
 
 from snuba import settings
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import (
     _get_metrics_tags,
     optimize_partition_runner,
-    optimize_partitions,
 )
 from snuba.clickhouse.optimize.optimize_scheduler import OptimizedSchedulerTimeout
 from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
@@ -252,6 +252,54 @@ test_data = [
 ]
 
 
+class TestOptimizeError:
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "storage_key, current_time",
+        test_data,
+    )
+    def test_optimize_partition_runner_errors(
+        self,
+        storage_key: StorageKey,
+        current_time: datetime,
+    ) -> None:
+        storage = get_writable_storage(storage_key)
+        cluster = storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+        table = storage.get_table_writer().get_schema().get_local_table_name()
+        database = cluster.get_database()
+
+        tracker = OptimizedPartitionTracker(
+            redis_client=redis_client,
+            host="some-hostname.domain.com",
+            port=9000,
+            database=database,
+            table=table,
+            expire_time=datetime.now() + timedelta(minutes=10),
+        )
+
+        with time_machine.travel(current_time, tick=False):
+            with patch(
+                "snuba.clickhouse.optimize.optimize.optimize_partitions",
+                side_effect=ClickhouseError(),
+            ):
+                with pytest.raises(ClickhouseError):
+                    optimize.optimize_partition_runner(
+                        clickhouse=clickhouse,
+                        database=database,
+                        table=table,
+                        partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+                        default_parallel_threads=3,
+                        tracker=tracker,
+                        clickhouse_host="some-hostname.domain.com",
+                    )
+
+        # For ClickHouse 23.3 and 23.8 parts from previous test runs
+        # interfere with following tests, so best to drop the tables
+        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
+
+
 class TestOptimizeFrequency:
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
@@ -266,7 +314,6 @@ class TestOptimizeFrequency:
         storage_key: StorageKey,
         current_time: datetime,
     ) -> None:
-        mock_optimize_partitions.side_effect = optimize_partitions
 
         storage = get_writable_storage(storage_key)
         cluster = storage.get_cluster()

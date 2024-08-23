@@ -327,9 +327,11 @@ def optimize_partition_runner(
                     )
                 )
 
-            _, futures = concurrent.futures.wait(
+            done, futures = concurrent.futures.wait(
                 futures, return_when=concurrent.futures.FIRST_COMPLETED
             )
+            for future in done:
+                future.result()
 
 
 def _jitter_start_time(start_jitter: Optional[int] = None) -> None:
@@ -354,8 +356,6 @@ def optimize_partitions(
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION %(partition)s FINAL
     """
-
-    print("optimize_partitions is called")
 
     for partition in partitions:
         if cutoff_time is not None and datetime.now() > cutoff_time:
