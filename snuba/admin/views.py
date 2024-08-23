@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import io
-
-# import re
 import sys
 import time
-import traceback
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
@@ -472,7 +469,6 @@ def clickhouse_trace_query() -> Response:
                 else:
                     break
 
-            print("\n system_query_result = {}".format(system_query_result))
             assert (
                 system_query_result is not None
                 and len(system_query_result.results) != 0
@@ -518,14 +514,10 @@ def clickhouse_trace_query() -> Response:
         }
         return make_response(jsonify({"error": details}), 400)
     except Exception as err:
-        traceback.print_exc()
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
-
-
-# valid_host_regex = re.compile("^[a-zA-Z0-9-]+-\d-\d$")
 
 
 def parse_trace_for_query_ids(
@@ -537,37 +529,18 @@ def parse_trace_for_query_ids(
     matched = next(
         (info for info in storage_info if info["storage_name"] == storage_key), None
     )
-    print(
-        "\n summarized_trace_output: {} \n storage_info: {} \n matched: {}".format(
-            summarized_trace_output, storage_info, matched
-        )
-    )
     if matched is not None:
         local_nodes = matched.get("local_nodes", [])
         query_node = matched.get("query_node", None)
-        print("\n local_nodes: {}, \n query_node: {}".format(local_nodes, query_node))
         for node_name, query_summary in summarized_trace_output.query_summaries.items():
-            print(
-                "\n node_name: {}, query_id: {}".format(
-                    node_name, query_summary.query_id
-                )
-            )
-            # if not valid_host_regex.match(host):
-            #     print(
-            #         "\n host {} was not matched by valid host regex. Setting host to 127.0.0.1".format(
-            #             host
-            #         )
-            #     )
-            #     host = "127.0.0.1"
-
             result.append(
                 {
                     "host": local_nodes[0].get("host")
                     if local_nodes
-                    else query_node.get("host"),
+                    else query_node.get("host"),  # type: ignore
                     "port": local_nodes[0].get("port")
                     if local_nodes
-                    else query_node.get("port"),
+                    else query_node.get("port"),  # type: ignore
                     "query_id": query_summary.query_id,
                     "node_name": node_name,
                 }
