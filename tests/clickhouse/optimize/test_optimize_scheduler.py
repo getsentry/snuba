@@ -126,12 +126,14 @@ def test_subdivide_partitions(
     subdivisions: int,
     expected: Sequence[Sequence[str]],
 ) -> None:
-    optimize_scheduler = OptimizeScheduler(parallel=1)
-    assert optimize_scheduler.subdivide_partitions(partitions, subdivisions) == expected
+    optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
+    assert (
+        optimize_scheduler._subdivide_partitions(partitions, subdivisions) == expected
+    )
 
 
 @pytest.mark.parametrize(
-    "parallel,expected",
+    "default_parallel_threads,expected",
     [
         pytest.param(
             1,
@@ -154,9 +156,11 @@ def test_subdivide_partitions(
         ),
     ],
 )
-def test_start_time_jitter(parallel: int, expected: Sequence[int]) -> None:
-    scheduler = OptimizeScheduler(parallel=parallel)
-    assert scheduler.get_start_time_jitter_for_each_partition() == expected
+def test_start_time_jitter(
+    default_parallel_threads: int, expected: Sequence[int]
+) -> None:
+    scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
+    assert scheduler.get_start_time_jitter() == expected
 
 
 last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
@@ -165,7 +169,7 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
 
 
 @pytest.mark.parametrize(
-    "parallel,partitions,current_time,expected",
+    "default_parallel_threads,partitions,current_time,expected",
     [
         pytest.param(
             1,
@@ -243,19 +247,21 @@ last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
     ],
 )
 def test_get_next_schedule(
-    parallel: int,
+    default_parallel_threads: int,
     partitions: Sequence[str],
     current_time: datetime,
     expected: OptimizationSchedule,
 ) -> None:
-    optimize_scheduler = OptimizeScheduler(parallel=parallel)
+    optimize_scheduler = OptimizeScheduler(
+        default_parallel_threads=default_parallel_threads
+    )
 
     with time_machine.travel(current_time, tick=False):
         assert optimize_scheduler.get_next_schedule(partitions) == expected
 
 
 def test_get_next_schedule_raises_exception() -> None:
-    optimize_scheduler = OptimizeScheduler(parallel=1)
+    optimize_scheduler = OptimizeScheduler(default_parallel_threads=1)
     with time_machine.travel(
         last_midnight
         + timedelta(hours=settings.OPTIMIZE_JOB_CUTOFF_TIME)

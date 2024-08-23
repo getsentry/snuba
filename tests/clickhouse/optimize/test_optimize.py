@@ -13,10 +13,7 @@ from snuba.clickhouse.optimize.optimize import (
     optimize_partition_runner,
     optimize_partitions,
 )
-from snuba.clickhouse.optimize.optimize_scheduler import (
-    OptimizedSchedulerTimeout,
-    OptimizeScheduler,
-)
+from snuba.clickhouse.optimize.optimize_scheduler import OptimizedSchedulerTimeout
 from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_writable_storage
@@ -191,8 +188,6 @@ class TestOptimize:
             )
         ] == [(a_month_earlier_monday, 90)]
 
-        scheduler = OptimizeScheduler(2)
-
         tracker = OptimizedPartitionTracker(
             redis_client=redis_client,
             host="some-hostname.domain.com",
@@ -209,7 +204,7 @@ class TestOptimize:
                 database=database,
                 table=table,
                 partitions=[part.name for part in partitions],
-                scheduler=scheduler,
+                default_parallel_threads=2,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
             )
@@ -279,7 +274,6 @@ class TestOptimizeFrequency:
         table = storage.get_table_writer().get_schema().get_local_table_name()
         database = cluster.get_database()
 
-        scheduler = OptimizeScheduler(2)
         tracker = OptimizedPartitionTracker(
             redis_client=redis_client,
             host="some-hostname.domain.com",
@@ -295,7 +289,7 @@ class TestOptimizeFrequency:
                 database=database,
                 table=table,
                 partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
-                scheduler=scheduler,
+                default_parallel_threads=3,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
             )
@@ -337,14 +331,13 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
         + timedelta(minutes=15),
         tick=False,
     ):
-        scheduler = OptimizeScheduler(2)
         with pytest.raises(OptimizedSchedulerTimeout):
             optimize_partition_runner(
                 clickhouse=clickhouse_pool,
                 database=database,
                 table=table,
                 partitions=[dummy_partition],
-                scheduler=scheduler,
+                default_parallel_threads=2,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
             )

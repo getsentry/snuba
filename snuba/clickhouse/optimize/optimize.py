@@ -4,7 +4,6 @@ import multiprocessing
 import os
 import threading
 import time
-import typing
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -20,7 +19,7 @@ from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
 )
-from snuba.clickhouse.optimize.util import MergeInfo
+from snuba.clickhouse.optimize.util import MergeInfo, get_num_threads
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
@@ -29,7 +28,6 @@ from snuba.settings import (
     OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME,
     OPTIMIZE_MERGE_SIZE_CUTOFF,
 )
-from snuba.state import get_config
 from snuba.utils.metrics.wrapper import MetricsWrapper
 
 
@@ -48,8 +46,6 @@ logger = structlog.get_logger().bind(module=__name__)
 logger = structlog.wrap_logger(logger, processors=[thread_info_processor])
 
 metrics = MetricsWrapper(environment.metrics, "optimize")
-
-_OPTIMIZE_PARALLEL_THREADS_KEY = "optimize_parallel_threads"
 
 
 def _get_metrics_tags(table: str, clickhouse_host: Optional[str]) -> Mapping[str, str]:
@@ -96,7 +92,7 @@ def run_optimize_cron_job(
     clickhouse: ClickhousePool,
     storage: ReadableTableStorage,
     database: str,
-    parallel: int,
+    default_parallel_threads: int,
     clickhouse_host: str,
     tracker: OptimizedPartitionTracker,
     before: Optional[datetime] = None,
@@ -114,7 +110,6 @@ def run_optimize_cron_job(
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-    optimize_scheduler = OptimizeScheduler(parallel=parallel)
 
     # if theres a merge in progress wait for it to finish
     while is_busy_merging(clickhouse, database, table):
@@ -151,7 +146,7 @@ def run_optimize_cron_job(
         table=table,
         partitions=list(partitions_to_optimize),
         tracker=tracker,
-        scheduler=optimize_scheduler,
+        default_parallel_threads=default_parallel_threads,
         clickhouse_host=clickhouse_host,
     )
 
@@ -280,7 +275,7 @@ def optimize_partition_runner(
     database: str,
     table: str,
     partitions: Sequence[str],
-    scheduler: OptimizeScheduler,
+    default_parallel_threads: int,
     tracker: OptimizedPartitionTracker,
     clickhouse_host: str,
 ) -> None:
@@ -301,20 +296,18 @@ def optimize_partition_runner(
     3. as soon as one thread finishes, check configured_num_threads from runtime config again
     4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
+    scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
 
     with ThreadPoolExecutor(max_workers=32) as executor:
         futures: set[Future[Any]] = set()
         # jitter start time
-        for jitter in scheduler.get_start_time_jitter_for_each_partition():
+        for jitter in scheduler.get_start_time_jitter():
             futures.add(executor.submit(_jitter_start_time, jitter))
 
         partitions_to_optimize = deque(partitions)
         while partitions_to_optimize:
+            configured_num_threads = get_num_threads(default_parallel_threads)
             schedule = scheduler.get_next_schedule(partitions_to_optimize)
-            default_num_threads = len(schedule.partitions_groups)
-            configured_num_threads = typing.cast(
-                int, get_config(_OPTIMIZE_PARALLEL_THREADS_KEY, default_num_threads)
-            )
             logger.info(
                 f"Running schedule with cutoff time: "
                 f"{schedule.cutoff_time} with {configured_num_threads} threads"
