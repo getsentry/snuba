@@ -52,6 +52,11 @@ describe("Query editor", () => {
     });
   });
   describe("when rendered", () => {
+    beforeEach(() => {
+      // Reset query cache
+      localStorage.setItem("-query-editor-query", "");
+    });
+
     describe("with predefinedQueries", () => {
       const predefinedQueries = [
         {
@@ -73,9 +78,7 @@ describe("Query editor", () => {
             predefinedQueryOptions={predefinedQueries}
           />
         );
-        await act(async () =>
-          userEvent.click(getByTestId("select"))
-        )
+        await act(async () => userEvent.click(getByTestId("select")));
         expect(getAllByTestId("select-option")).toHaveLength(
           predefinedQueries.length
         );
@@ -89,18 +92,12 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
-          await act(async () =>
-            userEvent.click(getByTestId("select"))
-          );
+          await act(async () => userEvent.click(getByTestId("select")));
           await act(async () =>
             userEvent.click(getByText(predefinedQuery.name))
           );
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
         }
-
-        await act(async () =>
-          user.selectOptions(getByTestId("select"), "undefined"),
-        );
       });
       it("should show query and description when predefined query selected", async () => {
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
@@ -111,18 +108,12 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
-          await act(async () =>
-            userEvent.click(getByTestId("select"))
-          );
+          await act(async () => userEvent.click(getByTestId("select")));
           await act(async () =>
             userEvent.click(getByText(predefinedQuery.name))
           );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
         }
-
-        await act(async () =>
-          user.selectOptions(getByTestId("select"), "undefined"),
-        );
       });
     });
     describe("with text area input", () => {
