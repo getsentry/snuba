@@ -14,12 +14,11 @@ import {
   Button,
   Collapse,
   Group,
-  Loader,
-  Select,
   Space,
   Text,
   Textarea,
 } from "@mantine/core";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { useDisclosure } from "@mantine/hooks";
 import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
@@ -28,7 +27,7 @@ const HISTORY_KEY = "production_queries";
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
   const [allowedProjects, setAllowedProjects] = useState<string[]>([]);
-  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({});
+  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({dataset: getParamFromStorage("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     getRecentHistory(HISTORY_KEY)
   );
@@ -104,11 +103,11 @@ function ProductionQueries(props: { api: Client }) {
         </div>
         <div style={executeActionsStyle}>
           <div>
-            <Select
-              placeholder="Select a dataset"
+            <CustomSelect
               value={snql_query.dataset || ""}
               onChange={selectDataset}
-              data={datasets}
+              options={datasets}
+              name="dataset"
             />
           </div>
           <div>
