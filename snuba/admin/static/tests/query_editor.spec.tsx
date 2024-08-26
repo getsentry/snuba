@@ -65,22 +65,24 @@ describe("Query editor", () => {
           description: "descripton for query 2",
         },
       ];
-      it("should show right number of predefined queries in drop down menu", () => {
+      it("should show right number of predefined queries in drop down menu", async () => {
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
-        let { getAllByTestId } = render(
+        let { getAllByTestId, getByTestId } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
           />
         );
+        await act(async () =>
+          userEvent.click(getByTestId("select"))
+        )
         expect(getAllByTestId("select-option")).toHaveLength(
-          predefinedQueries.length + 1
+          predefinedQueries.length
         );
       });
       it("should invoke callback when predefined query is selected", async () => {
-        const user = userEvent.setup();
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
-        let { getByTestId } = render(
+        let { getByTestId, getByText } = render(
           <QueryEditor
             onQueryUpdate={mockOnQueryUpdate}
             predefinedQueryOptions={predefinedQueries}
@@ -88,7 +90,10 @@ describe("Query editor", () => {
         );
         for (const predefinedQuery of predefinedQueries) {
           await act(async () =>
-            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+            userEvent.click(getByTestId("select"))
+          );
+          await act(async () =>
+            userEvent.click(getByText(predefinedQuery.name))
           );
           expect(mockOnQueryUpdate).lastCalledWith(predefinedQuery.sql);
         }
@@ -98,7 +103,6 @@ describe("Query editor", () => {
         );
       });
       it("should show query and description when predefined query selected", async () => {
-        const user = userEvent.setup();
         let mockOnQueryUpdate = jest.fn<(query: string) => {}>();
         let { getByTestId, getByText, getAllByText } = render(
           <QueryEditor
@@ -108,7 +112,10 @@ describe("Query editor", () => {
         );
         for (const predefinedQuery of predefinedQueries) {
           await act(async () =>
-            user.selectOptions(getByTestId("select"), predefinedQuery.name)
+            userEvent.click(getByTestId("select"))
+          );
+          await act(async () =>
+            userEvent.click(getByText(predefinedQuery.name))
           );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
         }

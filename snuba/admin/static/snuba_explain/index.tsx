@@ -11,18 +11,17 @@ import {
   ExplainStep,
 } from "SnubaAdmin/snuba_explain/types";
 import { Step } from "SnubaAdmin/snuba_explain/step_render";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-
 import {
   executeActionsStyle,
-  selectStyle,
   collapsibleStyle,
 } from "SnubaAdmin/snuba_explain/styles";
 import { SnubaDatasetName, SnQLQueryState } from "SnubaAdmin/snql_to_sql/types";
 
 function SnubaExplain(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromStorage("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
     []
   );
@@ -96,20 +95,12 @@ function SnubaExplain(props: { api: Client }) {
       />
       <div style={executeActionsStyle}>
         <div>
-          <select
+          <CustomSelect
             value={snql_query.dataset || ""}
-            onChange={(evt) => selectDataset(evt.target.value)}
-            style={selectStyle}
-          >
-            <option disabled value="">
-              Select a dataset
-            </option>
-            {datasets.map((dataset) => (
-              <option key={dataset} value={dataset}>
-                {dataset}
-              </option>
-            ))}
-          </select>
+            onChange={selectDataset}
+            options={datasets}
+            name="dataset"
+          />
         </div>
         <div style={executeActionsStyle}>
           <div>

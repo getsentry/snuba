@@ -3,6 +3,7 @@ import React, { useEffect, useState, ReactElement } from "react";
 import { Box } from "@mantine/core";
 import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
 import { useLocalStorage } from "@mantine/hooks";
+import { CustomSelect } from "SnubaAdmin/select";
 
 type PredefinedQuery = {
   name: string;
@@ -90,30 +91,26 @@ function QueryEditor(props: {
     return (
       <div>
         <label>Predefined query: </label>
-        <select
-          value={selectedPredefinedQuery?.name ?? "undefined"}
-          onChange={(evt) => {
-            let selectedPredefinedQuery = props?.predefinedQueryOptions?.find(
-              (predefinedQuery) => predefinedQuery.name == evt.target.value
-            );
-            setSelectedPredefinedQuery(selectedPredefinedQuery);
-            setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
-          }}
-          data-testid="select"
-        >
-          <option value={"undefined"} data-testid="select-option">
-            Custom query
-          </option>
-          {props.predefinedQueryOptions?.map((predefinedQuery) => (
-            <option
-              key={predefinedQuery.name}
-              value={predefinedQuery.name}
-              data-testid="select-option"
-            >
-              {predefinedQuery.name}
-            </option>
-          ))}
-        </select>
+        <div style={predefinedQueryStyle}>
+          <CustomSelect
+            value={selectedPredefinedQuery?.name ?? "undefined"}
+            onChange={(value) => {
+              let selectedPredefinedQuery = props?.predefinedQueryOptions?.find(
+                (predefinedQuery) => predefinedQuery.name == value
+              );
+              setSelectedPredefinedQuery(selectedPredefinedQuery);
+              setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
+            }}
+            name="predefined query"
+            options={
+              props.predefinedQueryOptions
+                ? props.predefinedQueryOptions.map(
+                    (predefinedQuery) => predefinedQuery.name
+                  )
+                : []
+            }
+          />
+        </div>
       </div>
     );
   }
@@ -165,5 +162,9 @@ function QueryEditor(props: {
     </form>
   );
 }
+
+const predefinedQueryStyle = {
+  display: "inline-block",
+};
 
 export default QueryEditor;
