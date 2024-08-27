@@ -12,6 +12,7 @@ from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
+    AllocationPolicy,
     AllocationPolicyViolations,
     QueryResultOrError,
 )
@@ -30,10 +31,7 @@ from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
-from snuba.web.db_query import (
-    _apply_allocation_policies_quota,
-    _get_allocation_policies,
-)
+from snuba.web.db_query import _apply_allocation_policies_quota
 
 
 class DeletesNotEnabledError(Exception):
@@ -203,6 +201,13 @@ def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInf
     return AttributionInfo(**info)
 
 
+def _get_delete_allocation_policies(
+    storage: WritableTableStorage,
+) -> list[AllocationPolicy]:
+    """mostly here to be able to stub easily in tests"""
+    return storage.get_delete_allocation_policies()
+
+
 def _execute_query(
     query: Query,
     storage: WritableTableStorage,
@@ -217,7 +222,7 @@ def _execute_query(
     """
 
     formatted_query = format_query(query)
-    allocation_policies = _get_allocation_policies(query)
+    allocation_policies = _get_delete_allocation_policies(storage)
     query_id = uuid.uuid4().hex
     clickhouse_settings: MutableMapping[str, Any] = {"query_id": query_id}
     result = None
