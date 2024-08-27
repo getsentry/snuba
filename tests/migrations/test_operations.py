@@ -177,7 +177,7 @@ def test_drop_index_async() -> None:
         DropIndex(
             StorageSetKey.EVENTS, "test_table", "index_1", run_async=True
         ).format_sql()
-        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1 SETTINGS mutations_sync=0;"
+        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1 SETTINGS mutations_sync=0, alter_sync=0;"
     )
 
 

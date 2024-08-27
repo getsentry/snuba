@@ -12,7 +12,7 @@ import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
-
+import {CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { TracingRequest, TracingResult, PredefinedQuery } from "./types";
 
 type QueryState = Partial<TracingRequest>;
@@ -26,7 +26,7 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [storages, setStorages] = useState<string[]>([]);
-  const [query, setQuery] = useState<QueryState>({});
+  const [query, setQuery] = useState<QueryState>({storage: getParamFromStorage("storage")});
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
     []
   );
@@ -91,20 +91,12 @@ function QueryDisplay(props: {
       />
       <div style={executeActionsStyle}>
         <div>
-          <select
+          <CustomSelect
             value={query.storage || ""}
-            onChange={(evt) => selectStorage(evt.target.value)}
-            style={selectStyle}
-          >
-            <option disabled value="">
-              Select a storage
-            </option>
-            {storages.map((storage) => (
-              <option key={storage} value={storage}>
-                {storage}
-              </option>
-            ))}
-          </select>
+            onChange={selectStorage}
+            name="storage"
+            options={storages}
+          />
         </div>
         <ExecuteButton
           onClick={executeQuery}
