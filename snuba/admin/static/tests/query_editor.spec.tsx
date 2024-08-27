@@ -5,6 +5,8 @@ import { generateQuery, mergeQueryParamValues } from "../query_editor";
 import userEvent from "@testing-library/user-event";
 import QueryEditor from "SnubaAdmin/query_editor";
 
+jest.mock("SnubaAdmin/common/components/sql_editor");
+
 describe("Query editor", () => {
   global.ResizeObserver = require("resize-observer-polyfill");
   afterEach(cleanup);
@@ -50,6 +52,11 @@ describe("Query editor", () => {
     });
   });
   describe("when rendered", () => {
+    beforeEach(() => {
+      // Reset query cache
+      localStorage.setItem("-query-editor-query", "");
+    });
+
     describe("with predefinedQueries", () => {
       const predefinedQueries = [
         {
@@ -71,9 +78,7 @@ describe("Query editor", () => {
             predefinedQueryOptions={predefinedQueries}
           />
         );
-        await act(async () =>
-          userEvent.click(getByTestId("select"))
-        )
+        await act(async () => userEvent.click(getByTestId("select")));
         expect(getAllByTestId("select-option")).toHaveLength(
           predefinedQueries.length
         );
@@ -87,9 +92,7 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
-          await act(async () =>
-            userEvent.click(getByTestId("select"))
-          );
+          await act(async () => userEvent.click(getByTestId("select")));
           await act(async () =>
             userEvent.click(getByText(predefinedQuery.name))
           );
@@ -105,14 +108,11 @@ describe("Query editor", () => {
           />
         );
         for (const predefinedQuery of predefinedQueries) {
-          await act(async () =>
-            userEvent.click(getByTestId("select"))
-          );
+          await act(async () => userEvent.click(getByTestId("select")));
           await act(async () =>
             userEvent.click(getByText(predefinedQuery.name))
           );
           expect(getByText(predefinedQuery.description)).toBeTruthy();
-          expect(getAllByText(predefinedQuery.sql)).toHaveLength(2);
         }
       });
     });
@@ -124,7 +124,8 @@ describe("Query editor", () => {
           <QueryEditor onQueryUpdate={mockOnQueryUpdate} />
         );
         const input = "abcde";
-        await act(async () => user.type(getByTestId("text-area-input"), input));
+
+        await act(async () => user.type(getByTestId("SQLEditor"), input));
         expect(mockOnQueryUpdate).toHaveBeenLastCalledWith(input);
       });
     });
