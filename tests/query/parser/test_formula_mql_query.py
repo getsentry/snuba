@@ -1486,7 +1486,7 @@ def test_formula_onesided_groupby_no_interval_with_totals() -> None:
 
 
 def test_formula_extrapolation_with_nested_functions() -> None:
-    query_body = "apdex(avg(`d:transactions/duration@millisecond`){status_code:418}, 123) / max(`d:transactions/duration@millisecond`){status_code:400}"
+    query_body = "apdex(avg(`d:transactions/duration@millisecond`){status_code:418}, 123) / sum(`c:transactions/duration@millisecond`){status_code:400}"
 
     expected_selected = SelectedExpression(
         "aggregate_value",
@@ -1503,8 +1503,8 @@ def test_formula_extrapolation_with_nested_functions() -> None:
             ),
             FunctionCall(
                 None,
-                "max",
-                (Column("_snuba_value", "d1", "value"),),
+                "sum_weighted",
+                (Column("_snuba_value", "c0", "value"),),
             ),
             "_snuba_aggregate_value",
         ),
@@ -1512,8 +1512,11 @@ def test_formula_extrapolation_with_nested_functions() -> None:
 
     join_clause = JoinClause(
         left_node=IndividualNode(
-            alias="d1",
-            data_source=from_distributions,
+            alias="c0",
+            data_source=QueryEntity(
+                EntityKey.GENERIC_METRICS_COUNTERS,
+                get_entity(EntityKey.GENERIC_METRICS_COUNTERS).get_data_model(),
+            ),
         ),
         right_node=IndividualNode(
             alias="d0",
@@ -1521,7 +1524,7 @@ def test_formula_extrapolation_with_nested_functions() -> None:
         ),
         keys=[
             JoinCondition(
-                left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+                left=JoinConditionExpression(table_alias="c0", column="c0.time"),
                 right=JoinConditionExpression(table_alias="d0", column="d0.time"),
             )
         ],
@@ -1533,13 +1536,13 @@ def test_formula_extrapolation_with_nested_functions() -> None:
         "equals", tag_column("status_code", "d0"), Literal(None, "418")
     )
     tag_condition2 = binary_condition(
-        "equals", tag_column("status_code", "d1"), Literal(None, "400")
+        "equals", tag_column("status_code", "c0"), Literal(None, "400")
     )
     metric_condition1 = metric_id_condition(123456, "d0")
-    metric_condition2 = metric_id_condition(123456, "d1")
+    metric_condition2 = metric_id_condition(123456, "c0")
     formula_condition = combine_and_conditions(
         condition("d0")
-        + condition("d1")
+        + condition("c0")
         + [tag_condition1, metric_condition1, tag_condition2, metric_condition2]
     )
 
@@ -1549,14 +1552,14 @@ def test_formula_extrapolation_with_nested_functions() -> None:
             expected_selected,
             SelectedExpression(
                 "time",
-                time_expression("d1"),
+                time_expression("c0"),
             ),
             SelectedExpression(
                 "time",
                 time_expression("d0"),
             ),
         ],
-        groupby=[time_expression("d1"), time_expression("d0")],
+        groupby=[time_expression("c0"), time_expression("d0")],
         condition=formula_condition,
         order_by=[
             OrderBy(
@@ -1574,6 +1577,9 @@ def test_formula_extrapolation_with_nested_functions() -> None:
 
     mql_context_with_extrapolation = deepcopy(mql_context)
     mql_context_with_extrapolation["extrapolate"] = True
+    mql_context_with_extrapolation["indexer_mappings"][
+        "c:transactions/duration@millisecond"
+    ] = 123456
 
     query = parse_mql_query_new(
         str(query_body), mql_context_with_extrapolation, generic_metrics

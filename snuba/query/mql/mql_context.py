@@ -46,7 +46,7 @@ class MQLContext:
             raise ParsingException("MQL context: limit must be an int")
         if self.offset is not None and not isinstance(self.offset, int):
             raise ParsingException("MQL context: offset must be an int")
-        if self.extrapolate is not None and not isinstance(self.offset, int):
+        if self.extrapolate is not None and not isinstance(self.extrapolate, bool):
             raise ParsingException("MQL context: extrapolate flag must be a bool")
 
     @staticmethod
