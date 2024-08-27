@@ -1582,11 +1582,11 @@ class TestApi(SimpleAPITest):
                 for item in envelope:
                     events.append(item.payload.json)
 
-        hub: sentry_sdk.Hub = sentry_sdk.Hub.current
         client = sentry_sdk.Client(transport=TestTransport())
-        hub.bind_client(client)
 
-        with hub:
+        with sentry_sdk.new_scope() as scope:
+            scope.set_client(client)
+
             # This endpoint should return 500 as it internally raises an exception
             response = self.app.get("/tests/error")
 
