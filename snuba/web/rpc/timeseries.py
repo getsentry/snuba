@@ -15,6 +15,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import SelectedExpression
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
     NestedColumn,
@@ -74,20 +75,16 @@ def _get_aggregate_func(
     request: AggregateBucketRequest,
 ) -> Expression:
     FuncEnum = AggregateBucketRequest.Function
+    measurement_field = _get_measurement_field(request)
+    alias = "measurement"
     lookup = {
-        FuncEnum.FUNCTION_SUM: f.sum(
-            _get_measurement_field(request), alias="measurement"
-        ),
-        FuncEnum.FUNCTION_AVERAGE: f.avg(
-            _get_measurement_field(request), alias="measurement"
-        ),
-        FuncEnum.FUNCTION_COUNT: f.count(
-            _get_measurement_field(request), alias="measurement"
-        ),
+        FuncEnum.FUNCTION_SUM: f.sum(measurement_field, alias=alias),
+        FuncEnum.FUNCTION_AVERAGE: f.avg(measurement_field, alias=alias),
+        FuncEnum.FUNCTION_COUNT: f.count(measurement_field, alias=alias),
         # curried functions PITA, to do later
-        FuncEnum.FUNCTION_P50: None,
-        FuncEnum.FUNCTION_P95: None,
-        FuncEnum.FUNCTION_P99: None,
+        FuncEnum.FUNCTION_P50: cf.quantile(0.5)(measurement_field, alias=alias),
+        FuncEnum.FUNCTION_P95: cf.quantile(0.95)(measurement_field, alias=alias),
+        FuncEnum.FUNCTION_P99: cf.quantile(0.99)(measurement_field, alias=alias),
     }
     res = lookup.get(request.aggregate, None)
     if res is None:
