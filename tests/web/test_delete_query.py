@@ -61,7 +61,7 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
     )
     update_called = False
 
-    class RejectAllocationPolicy(AllocationPolicy):
+    class RejectPolicy(AllocationPolicy):
         def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
             return []
 
@@ -92,9 +92,7 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
 
     with mock.patch(
         "snuba.web.delete_query._get_delete_allocation_policies",
-        return_value=[
-            RejectAllocationPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})
-        ],
+        return_value=[RejectPolicy(StorageKey("doesntmatter"), ["a", "b", "c"], {})],
     ):
         with pytest.raises(QueryException) as excinfo:
             _execute_query(
@@ -107,14 +105,14 @@ def test_delete_query_with_rejecting_allocation_policy() -> None:
             )
         # extra data contains policy failure information
         assert (
-            excinfo.value.extra["stats"]["quota_allowance"]["details"][
-                "RejectAllocationPolicy"
-            ]["explanation"]["reason"]
+            excinfo.value.extra["stats"]["quota_allowance"]["details"]["RejectPolicy"][
+                "explanation"
+            ]["reason"]
             == "policy rejects all queries"
         )
         cause = excinfo.value.__cause__
         assert isinstance(cause, AllocationPolicyViolations)
-        assert "RejectAllocationPolicy" in cause.violations
+        assert "RejectPolicy" in cause.violations
         assert (
             update_called
         ), "update_quota_balance should have been called even though the query was rejected but was not"
