@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, MutableMapping
+from typing import Any, Dict, Mapping, MutableMapping, Optional
 
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
@@ -207,8 +207,9 @@ def _execute_query(
     query: Query,
     storage: WritableTableStorage,
     table: str,
-    cluster_name: str,
+    cluster_name: Optional[str],
     attribution_info: AttributionInfo,
+    query_settings: HTTPQuerySettings,
 ) -> Result:
     """
     Formats and executes the delete query, taking into account
@@ -225,7 +226,7 @@ def _execute_query(
     stats: MutableMapping[str, Any] = {
         "clickhouse_table": table,
         "referrer": attribution_info.referrer,
-        "cluster_name": cluster_name,
+        "cluster_name": cluster_name or "<unknown>",
     }
 
     try:
