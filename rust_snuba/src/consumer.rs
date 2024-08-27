@@ -41,6 +41,8 @@ pub fn consumer(
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
+    batch_write_timeout_ms: Option<u64>,
+    max_bytes_before_external_group_by: Option<usize>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -57,6 +59,8 @@ pub fn consumer(
             python_max_queue_depth,
             health_check_file,
             stop_at_timestamp,
+            batch_write_timeout_ms,
+            max_bytes_before_external_group_by,
         )
     });
 }
@@ -76,12 +80,25 @@ pub fn consumer_impl(
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
+    batch_write_timeout_ms: Option<u64>,
+    max_bytes_before_external_group_by: Option<usize>,
 ) -> usize {
     setup_logging();
 
     let consumer_config = config::ConsumerConfig::load_from_str(consumer_config_raw).unwrap();
     let max_batch_size = consumer_config.max_batch_size;
     let max_batch_time = Duration::from_millis(consumer_config.max_batch_time_ms);
+
+    let batch_write_timeout = match batch_write_timeout_ms {
+        Some(timeout_ms) => {
+            if timeout_ms >= consumer_config.max_batch_time_ms {
+                Some(Duration::from_millis(timeout_ms))
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
 
     for storage in &consumer_config.storages {
         tracing::info!(
@@ -232,6 +249,8 @@ pub fn consumer_impl(
         physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
         accountant_topic_config: consumer_config.accountant_topic,
         stop_at_timestamp,
+        batch_write_timeout,
+        max_bytes_before_external_group_by,
     };
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);

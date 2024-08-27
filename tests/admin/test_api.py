@@ -12,6 +12,9 @@ from snuba.admin.auth import USER_HEADER_KEY
 from snuba.datasets.factory import get_enabled_dataset_names
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
@@ -232,8 +235,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
-    key = next(iter(data["formatted_trace_output"]))
-    assert "read_performance" in data["formatted_trace_output"][key]
+    assert "summarized_trace_output" in data
 
 
 @pytest.mark.redis_db
@@ -329,16 +331,6 @@ def test_get_snuba_datasets(admin_api: FlaskClient) -> None:
 
 
 @pytest.mark.redis_db
-def test_snuba_debug_invalid_dataset(admin_api: FlaskClient) -> None:
-    response = admin_api.post(
-        "/snuba_debug", data=json.dumps({"dataset": "", "query": ""})
-    )
-    assert response.status_code == 400
-    data = json.loads(response.data)
-    assert data["error"]["message"] == "dataset '' does not exist"
-
-
-@pytest.mark.redis_db
 def test_snuba_debug_invalid_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/snuba_debug", data=json.dumps({"dataset": "transactions", "query": ""})
@@ -427,7 +419,17 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
         def _get_quota_allowance(
             self, tenant_ids: dict[str, str | int], query_id: str
         ) -> QuotaAllowance:
-            return QuotaAllowance(True, 1, {})
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=1,
+                explanation={},
+                is_throttled=False,
+                rejection_threshold=MAX_THRESHOLD,
+                throttle_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
 
         def _update_quota_balance(
             self,

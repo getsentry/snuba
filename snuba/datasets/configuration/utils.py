@@ -21,8 +21,10 @@ from snuba.utils.schemas import (
     AggregateFunction,
     ColumnType,
     FixedString,
+    Int,
     IPv4,
     IPv6,
+    Map,
 )
 
 
@@ -59,6 +61,7 @@ def get_mandatory_condition_checkers(
 
 
 NUMBER_COLUMN_TYPES: dict[str, Any] = {
+    "Int": Int,
     "UInt": UInt,
     "Float": Float,
 }
@@ -83,7 +86,11 @@ def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
     col_type = NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
-    assert isinstance(col_type, UInt) or isinstance(col_type, Float)
+    assert (
+        isinstance(col_type, UInt)
+        or isinstance(col_type, Float)
+        or isinstance(col_type, Int)
+    )
     return col_type
 
 
@@ -104,6 +111,12 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = __parse_simple(col, modifiers)
     elif col["type"] == "Nested":
         column_type = Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
+    elif col["type"] == "Map":
+        column_type = Map(
+            __parse_column_type(col["args"]["key"]),
+            __parse_column_type(col["args"]["value"]),
+            modifiers,
+        )
     elif col["type"] == "Array":
         column_type = Array(__parse_column_type(col["args"]["inner_type"]), modifiers)
     elif col["type"] == "AggregateFunction":

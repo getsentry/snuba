@@ -1,8 +1,10 @@
 import os
+import re
 from typing import Optional, Sequence
 
 import click
 
+import snuba.migrations.autogeneration as autogeneration
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
@@ -378,3 +380,32 @@ def add_node(
         password=password,
         database=database,
     )
+
+
+@migrations.command()
+@click.argument("storage_path", type=str)
+@click.option("--name", type=str, help="optional name for the migration")
+def generate(storage_path: str, name: Optional[str] = None) -> None:
+    """
+    Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.yaml),
+    and an optional name for the migration,
+    generates a snuba migration based on the schema modifications to the storage.yaml.
+
+    Currently only column addition is supported.
+
+    The migration is generated based on the diff between HEAD and working dir. Therefore modifications to the
+    storage should be uncommitted in the working dir.
+
+    The generated migration will be written into the local directory. The user is responsible for making
+    the commit, PR, and merging.
+
+    see MIGRATIONS.md in the root folder for more info
+    """
+    expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
+    if not re.fullmatch(expected_pattern, storage_path):
+        raise click.ClickException(
+            f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
+        )
+
+    path = autogeneration.generate(storage_path, migration_name=name)
+    click.echo(f"Migration successfully generated at {path}")

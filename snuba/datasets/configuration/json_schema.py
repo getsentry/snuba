@@ -118,7 +118,7 @@ def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
 
 
 NUMBER_SCHEMA = make_column_schema(
-    column_type={"enum": ["UInt", "Float"]},
+    column_type={"enum": ["UInt", "Float", "Int"]},
     args={
         "type": "object",
         "properties": {
@@ -236,9 +236,23 @@ ARRAY_SCHEMA = make_column_schema(
     },
 )
 
+MAP_SCHEMA = make_column_schema(
+    column_type={"const": "Map"},
+    args={
+        "type": "object",
+        "properties": {
+            "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+            "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+        },
+        "additionalProperties": False,
+    },
+)
+
+
 COLUMN_SCHEMAS = [
     *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
+    MAP_SCHEMA,
 ]
 
 
@@ -538,6 +552,30 @@ ENTITY_JOIN_RELATIONSHIPS = {
     },
 }
 
+DELETION_SETTINGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_enabled": {
+            "type": "integer",
+        },
+        "tables": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Names of the tables to delete from.",
+        },
+        "max_rows_to_delete": {
+            "type": "integer",
+        },
+    },
+    "required": ["is_enabled", "tables"],
+    "additionalProperties": False,
+}
+DELETION_PROCESSORS_SCHEMA = registered_class_array_schema(
+    "processor",
+    "DeletionProcessor",
+    "This processor should validate the query against the storage",
+)
+
 # Full schemas:
 
 V1_READABLE_STORAGE_SCHEMA = {
@@ -551,8 +589,11 @@ V1_READABLE_STORAGE_SCHEMA = {
         "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
+        "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "required_time_column": {
             "type": ["string", "null"],
             "description": "The name of the required time column specifed in schema",
@@ -581,8 +622,11 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
+        "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",

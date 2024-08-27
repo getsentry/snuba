@@ -70,7 +70,7 @@ def parse_subscriptables(
         key_name = match[2]
         return SubscriptableReference(
             alias=exp.column_name,
-            column=Column(None, None, col_name),
+            column=Column(None, exp.table_name, col_name),
             key=Literal(None, key_name),
         )
 

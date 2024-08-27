@@ -211,7 +211,7 @@ def record_invalid_request(
     it records failures during parsing/validation.
     This is for client errors.
     """
-    _record_failure_building_request(
+    _record_failure_metric_with_status(
         QueryStatus.INVALID_REQUEST, request_status, timer, referrer, exception_name
     )
 
@@ -227,12 +227,12 @@ def record_error_building_request(
     it records failures during parsing/validation.
     This is for system errors during parsing/validation.
     """
-    _record_failure_building_request(
+    _record_failure_metric_with_status(
         QueryStatus.ERROR, request_status, timer, referrer, exception_name
     )
 
 
-def _record_failure_building_request(
+def _record_failure_metric_with_status(
     status: QueryStatus,
     request_status: Status,
     timer: Timer,

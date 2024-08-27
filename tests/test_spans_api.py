@@ -83,6 +83,7 @@ class TestSpansApi(BaseApiTest):
                         .process_message(
                             {
                                 "project_id": p,
+                                "organization_id": 1,
                                 "event_id": uuid.uuid4().hex,
                                 "deleted": 0,
                                 "is_segment": False,

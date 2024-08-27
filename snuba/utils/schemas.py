@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import chain
+from typing import Any as AnyType
 from typing import (
+    Callable,
     Generic,
     Iterator,
     List,
@@ -18,6 +21,7 @@ from typing import (
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.utils.constants import NESTED_COL_EXPR_RE
+from snuba.utils.serializable_exception import SerializableException
 
 
 class TypeModifier(ABC):
@@ -86,7 +90,16 @@ class ColumnType(Generic[TModifiers]):
         self.__modifiers = modifiers
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+        # return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+        repr_content = self._repr_content()
+        if repr_content:
+            return "schemas.{}({}, modifiers={})".format(
+                self.__class__.__name__, repr_content, repr(self.__modifiers)
+            )
+        else:
+            return "schemas.{}(modifiers={})".format(
+                self.__class__.__name__, repr(self.__modifiers)
+            )
 
     def _repr_content(self) -> str:
         """
@@ -376,6 +389,38 @@ class Array(ColumnType[TModifiers]):
         return Array(inner_type=self.inner_type.get_raw())
 
 
+class Map(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        key: ColumnType[TModifiers],
+        value: ColumnType[TModifiers],
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.key = key
+        self.value = value
+
+    def _repr_content(self) -> str:
+        return repr(self.key) + ", " + repr(self.value)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.key == cast(Map[TModifiers], other).key
+            and self.value == cast(Map[TModifiers], other).value
+            and self.get_modifiers() == cast(Map[TModifiers], other).get_modifiers()
+        )
+
+    def _for_schema_impl(self) -> str:
+        return f"Map({self.key.for_schema()}, {self.value.for_schema()})"
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Map[TModifiers]:
+        return Map(key=self.key, value=self.value, modifiers=modifiers)
+
+    def get_raw(self) -> Map[TModifiers]:
+        return Map(key=self.key.get_raw(), value=self.value.get_raw())
+
+
 class Nested(ColumnType[TModifiers]):
     def __init__(
         self,
@@ -521,6 +566,32 @@ class UInt(ColumnType[TModifiers]):
         return UInt(self.size)
 
 
+class Int(ColumnType[TModifiers]):
+    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+        super().__init__(modifiers)
+        assert size in (8, 16, 32, 64)
+        self.size = size
+
+    def _repr_content(self) -> str:
+        return str(self.size)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Int[TModifiers], other).get_modifiers()
+            and self.size == cast(Int[TModifiers], other).size
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Int{}".format(self.size)
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Int[TModifiers]:
+        return Int(size=self.size, modifiers=modifiers)
+
+    def get_raw(self) -> Int[TModifiers]:
+        return Int(self.size)
+
+
 class Float(ColumnType[TModifiers]):
     def __init__(
         self,
@@ -635,3 +706,54 @@ class Enum(ColumnType[TModifiers]):
 
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
+
+
+class InvalidColumnType(SerializableException):
+    pass
+
+
+class ColumnValidator:
+    def __init__(self, column_set: ColumnSet):
+        self._column_set = column_set
+
+    def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
+        expected_type = self._column_set[column_name].type
+        is_valid_func: Optional[Callable[[AnyType], bool]]
+        match expected_type:
+            case UUID():
+                is_valid_func = self._valid_uuid
+            case Int():
+                is_valid_func = self._valid_int
+            case UInt():
+                is_valid_func = self._valid_uint
+            case Float():
+                is_valid_func = self._valid_float
+            case String():
+                is_valid_func = self._valid_string
+            case _:
+                raise InvalidColumnType(f"No validator for type: {expected_type}")
+        for val in values:
+            if is_valid_func(val):
+                continue
+            raise InvalidColumnType(
+                f"Invalid value {val} for column type {expected_type}"
+            )
+
+    def _valid_uuid(self, value: str) -> bool:
+        try:
+            uuid.UUID(str(value))
+            return True
+        except ValueError:
+            return False
+
+    def _valid_int(self, value: int) -> bool:
+        return isinstance(value, int)
+
+    def _valid_uint(self, value: int) -> bool:
+        return isinstance(value, int) and value > 0
+
+    def _valid_float(self, value: float) -> bool:
+        return isinstance(value, float)
+
+    def _valid_string(self, value: str) -> bool:
+        return isinstance(value, str)

@@ -65,5 +65,6 @@
   // tests is often in your way and misclicked
   "python.testing.pytestEnabled": true,
   "python.testing.pytestArgs": ["tests"],
+  "python.analysis.autoImportCompletions": true,
   "mypy-type-checker.args": ["--strict"]
 }

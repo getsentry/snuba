@@ -11,7 +11,7 @@ expression: snapshot_payload
       2,
       3
     ],
-    "materialization_version": 2,
+    "materialization_version": 3,
     "metric_id": 1,
     "metric_type": "counter",
     "min_retention_days": 90,

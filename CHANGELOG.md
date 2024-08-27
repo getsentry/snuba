@@ -1,5 +1,126 @@
 # Changelog
 
+## 24.8.0
+
+### Various fixes & improvements
+
+- switch readiness state to limited to skip migrations and unblock CI (#6210) by @volokluev
+- fix: Add DropIndices back as it was removed after a revert (#6209) by @phacops
+- fix(eap): fix number migration collision (#6208) by @volokluev
+- Revert "fix(eap-spans): Drop ineffective indices to speed up insertion (#6206)" (68826531) by @getsentry-bot
+- ref(snuba-deletes) don't run delete queries when 0 rows need to be deleted (#6199) by @xurui-c
+- fix(eap-spans): Drop ineffective indices to speed up insertion (#6206) by @phacops
+- ref(eap): Remove materialized view (#6205) by @evanh
+- fix: deletes api, change success response format, fix admin bug (#6197) by @kylemumma
+- feat(eap): stub API for aggregate bucket request (#6204) by @volokluev
+- ref(eap): Change sampling_weight to a UInt (#6190) by @evanh
+- feat(eap): Aggregate request protobuf endpoint  (#6202) by @volokluev
+- feat(eap): Add the TimeSeriesProcessor to entities/eap_spans (#6195) by @colin-sentry
+- feat(EAP) Add Make directive that creates proper import paths (#6196) by @colin-sentry
+- fix(capman): sets the correct throttle policy in query result metadata when multiple throttle policies present (#6192) by @xurui-c
+- feat(generic-metrics): Bump materialization_version for generic metrics (#6194) by @john-z-yang
+- feat: make deletes endpoint compatible with snuba SDK (#6193) by @kylemumma
+- Change CODEOWNERS for EAP team (#6187) by @colin-sentry
+- feat(generic-metrics): Forward sampling information from consumer to clickhouse (#6177) by @john-z-yang
+- Increase the default throttle/warning threshold for allocation policies (#6189) by @xurui-c
+- fix(eap): Use arrayElement directly to fix alias issues with HashBucketMapper (#6188) by @colin-sentry
+- fix: Migrations ended up with the same number (#6183) by @evanh
+- ref(snuba-deletes): introduce delete allocation policies (#6180) by @MeredithAnya
+- feat(eap): Add an example endpoint that uses protobuf over http (#6173) by @colin-sentry
+- feat(generic-metrics): Add migrations to allow sampling for distributions (#6172) by @enochtangg
+
+_Plus 40 more_
+
+## 24.7.1
+
+### Various fixes & improvements
+
+- feat(cleanup): remove complicated readthrough cache (#6130) by @volokluev
+- fix(transactions): Select transactions entity when using profiler id (#6133) by @Zylphrex
+- Revert "Add processor for new spans schema (#6123)" (d60b3e6f) by @getsentry-bot
+- Revert "Define the models for the new Events Analytics Platform (#6126)" (b1376d69) by @getsentry-bot
+- Add processor for new spans schema (#6123) by @colin-sentry
+- Define the models for the new Events Analytics Platform (#6126) by @colin-sentry
+- code (#6129) by @xurui-c
+- fix: wait on system.mutations between hosts during migration execution (#6121) by @kylemumma
+- feat(transactions): Make profiler queryable (#6122) by @Zylphrex
+- bug(mql): Fix MQL totals queries (#6125) by @enochtangg
+- chore: update some readmes related to migrations and autogen (#6076) by @kylemumma
+- ref(lwdeletes): create parse_and_run_query function (#6120) by @volokluev
+- feat(profiling): Write profiler_id to transactions table (#6111) by @Zylphrex
+- Give telemetry experience team access to cardinality analyzer (#6115) by @vgrozdanic
+- Add an inner join relationship for search_issues and group_attributes (#6119) by @snigdhas
+- support max_bytes_before_external_group_by ClickHouse insert flag (#6118) by @onewland
+- fix(mql): Nested filter conditions (#6117) by @john-z-yang
+- code (#6114) by @xurui-c
+- code (#6113) by @xurui-c
+- chore: cleanup SEARCH_ISSUES_TMP storage set (#6110) by @kylemumma
+- code (#6105) by @xurui-c
+- chore: make snuba co-owners of datasets again (#6104) by @kylemumma
+- fix: LowCardinality column bug w/ aliases (#6108) by @MeredithAnya
+- meta: Bump new development version (5dc9763c)
+
+_Plus 2 more_
+
+## 24.7.0
+
+### Various fixes & improvements
+
+- feat(mql): MQL JOIN subquery generator (#6101) by @enochtangg
+- feat(metrics): add wildcard support to MQL parser (#5972) by @shellmayr
+- Revert "feat(profiling): Add profiler id column to transactions (#6099)" (f941b5e7) by @getsentry-bot
+- feat(profiling): Add profiler id column to transactions (#6099) by @Zylphrex
+- feat: create search_issues_dist_v2 on same query node as group_attributes (#6087) by @kylemumma
+- feat(replays): Set platform as empty string if platform is not provided (#6098) by @cmanallen
+- feat(mql): Add test for formula queries with curried aggregate (#6080) by @john-z-yang
+- feat(mql): Arbitrary nested column aggregates (#6096) by @john-z-yang
+- dev(rate-limits): bump backfill query allocation to 30 per s (#6074) by @JoshFerge
+- ref(snuba-deletes): Skeleton for DeletionProcessor (#6095) by @xurui-c
+- ref(snuba-deletes): add DeletionSettings (#6092) by @MeredithAnya
+- fix: move an import that may be causing issue with sentry devservice (#6090) by @kylemumma
+- Revert "code (#6088)" (#6089) by @kneeyo1
+- fix(capman): emit the bytes scanned metric from db_query (#6075) by @volokluev
+- code (#6088) by @xurui-c
+- feat(mql): Support groupby parsing for formula join queries (#6077) by @enochtangg
+- Revert "code (#6081)" (ba3e5ed3) by @getsentry-bot
+- code (#6081) by @xurui-c
+- Add clickhouse override settings (#6085) by @cmanallen
+- chore: new temporary storage set (#6079) by @kylemumma
+- feat(replays): Add materialization YAML definitions (#6071) by @cmanallen
+- fix(devenv): Auto-install cargo watch (#6078) by @untitaker
+- feat: autogenerate addcolumn migrations (#6053) by @kylemumma
+- test(mql): Add tests for formula queries with scalar values (#6073) by @john-z-yang
+
+_Plus 29 more_
+
+## 24.6.0
+
+### Various fixes & improvements
+
+- chore(on-call): Properly handling query validation errors (#6019) by @enochtangg
+- update CH version used in CI (#6027) by @volokluev
+- code (#6026) by @xurui-c
+- code (#6024) by @xurui-c
+- doc(rs): some docs for the ClickHouse batch module (#6020) by @onewland
+- chore(gocd): Bumping gocd-jsonnet version (#6021) by @IanWoodard
+- [CapMan] change default throttle values (#6022) by @xurui-c
+- [CapMan] Add throttling to ReferrerGuardRail policy (#6014) by @xurui-c
+- feat(issue-search): Add group_first_release_id to GroupAttributes processor (#5987) by @snigdhas
+- Fixing the metric increment for cache hit/miss and (#6018) by @nachivrn
+- ref(ci): update clickhouse versions (#6016) by @MeredithAnya
+- update docs for snuba storage queries (#6013) by @enochtangg
+- In the Snuba Admin Production queries UI (#6015) by @nachivrn
+- SNS-2737: Making changes for a simple readthrough cache without queuing (#5992) by @nachivrn
+- chore(profiles-chunks): Add missing consumer to deployment list (#6001) by @rgibert
+- fix(gocd): Updating canary checks to happen after the deploy goes out (#6004) by @IanWoodard
+- ref(admin): Add a system query for data skipping indexes (#6008) by @evanh
+- feat(issue-search): Add group_first_release_id to the GroupAttributes table (#5986) by @snigdhas
+- ref: sentry-kafka-schemas 0.1.90 (#6007) by @lynnagara
+- ref(async-inserts): add clickhouse-concurrency cli arg (#5999) by @MeredithAnya
+- fix: snuba admin queries check (#6005) by @MeredithAnya
+- add tags[environment] to discover low cardinality processor (#5997) by @enochtangg
+- meta: Bump new development version (9dac11b7)
+
 ## 24.5.1
 
 ### Various fixes & improvements

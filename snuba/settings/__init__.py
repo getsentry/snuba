@@ -111,6 +111,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
+            "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
             "metrics_summaries",
@@ -433,6 +434,8 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
+RUN_NEW_MQL_PARSER_SAMPLE_RATE = 0.0
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

@@ -1010,12 +1010,14 @@ def _qualify_columns(
     from_clause = query.get_from_clause()
     if not isinstance(from_clause, JoinClause):
         return  # We don't qualify columns that have a single source
-
     aliases = set(from_clause.get_alias_node_map().keys())
 
     def transform(exp: Expression) -> Expression:
         if not isinstance(exp, Column):
             return exp
+
+        if exp.table_name is not None:
+            return exp  # Table name is already qualified
 
         parts = exp.column_name.split(".", 1)
         if len(parts) != 2 or parts[0] not in aliases:
