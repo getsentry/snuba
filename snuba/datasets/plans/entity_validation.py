@@ -41,7 +41,7 @@ def _validate_entities_with_query(
                 v.validate(query)
         except InvalidQueryException as e:
             raise ValidationException(
-                f"validation failed for entity {query.get_from_clause().key.value}: {e}",
+                f"Validation failed for entity {query.get_from_clause().key.value}: {e}",
                 should_report=e.should_report,
             )
     else:
@@ -56,7 +56,7 @@ def _validate_entities_with_query(
                         v.validate(query, alias)
                 except InvalidQueryException as e:
                     raise ValidationException(
-                        f"validation failed for entity {node.data_source.key.value}: {e}",
+                        f"Validation failed for entity {node.data_source.key.value}: {e}",
                         should_report=e.should_report,
                     )
 
