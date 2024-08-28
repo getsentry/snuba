@@ -74,6 +74,7 @@ from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.migrations.status import Status
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -949,10 +950,26 @@ def storages_with_allocation_policies() -> Response:
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_configs(storage_key: str) -> Response:
 
-    policies = (
-        get_storage(StorageKey(storage_key)).get_allocation_policies()
-        + get_storage(StorageKey(storage_key)).get_delete_allocation_policies()
-    )
+    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    delete_policies = get_storage(
+        StorageKey(storage_key)
+    ).get_delete_allocation_policies()
+
+    data = []
+
+    def add_policy_data(policies: Sequence[AllocationPolicy], query_type: str) -> None:
+        for policy in policies:
+            data.append(
+                {
+                    "policy_name": policy.config_key(),
+                    "configs": policy.get_current_configs(),
+                    "optional_config_definitions": policy.get_optional_config_definitions_json(),
+                    "query_type": query_type,
+                }
+            )
+
+    add_policy_data(policies, "select")
+    add_policy_data(delete_policies, "delete")
 
     data = [
         {
