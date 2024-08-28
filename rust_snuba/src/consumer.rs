@@ -21,6 +21,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
+use crate::mutations_factory::MutConsumerStrategyFactory;
 use crate::processors;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
@@ -38,12 +39,12 @@ pub fn consumer(
     enforce_schema: bool,
     max_poll_interval_ms: usize,
     async_inserts: bool,
+    allow_mutability: bool,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_bytes_before_external_group_by: Option<usize>,
-    allow_mutability: bool,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -231,8 +232,10 @@ pub fn consumer_impl(
         None
     };
 
-    if allow_mutability {
-        let factory = MutConsumerStrategyFactory {
+    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
+
+    let processor = if allow_mutability {
+        let mut_factory = MutConsumerStrategyFactory {
             storage_config: first_storage,
             env_config,
             logical_topic_name,
@@ -256,6 +259,8 @@ pub fn consumer_impl(
             batch_write_timeout,
             max_bytes_before_external_group_by,
         };
+
+        StreamProcessor::with_kafka(config, mut_factory, topic, dlq_policy)
     } else {
         let factory = ConsumerStrategyFactory {
             storage_config: first_storage,
@@ -281,10 +286,12 @@ pub fn consumer_impl(
             batch_write_timeout,
             max_bytes_before_external_group_by,
         };
-    }
 
-    let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
-    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
+        StreamProcessor::with_kafka(config, factory, topic, dlq_policy)
+    };
+
+    //let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
+    // let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
 
     let mut handle = processor.get_handle();
 

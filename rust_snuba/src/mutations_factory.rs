@@ -8,9 +8,7 @@ use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
-    ConcurrencyConfig, RunTaskInThreads,
-};
+use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
@@ -22,17 +20,13 @@ use sentry_kafka_schemas::Schema;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
-use crate::processors::{self, get_cogs_label};
+use crate::processors::get_cogs_label;
 use crate::strategies::accountant::RecordCogs;
 use crate::strategies::clickhouse::batch::{BatchFactory, HttpBatch};
 use crate::strategies::clickhouse::ClickhouseWriterStep;
 use crate::strategies::commit_log::ProduceCommitLog;
 use crate::strategies::join_timeout::SetJoinTimeout;
-use crate::strategies::processor::{
-    get_schema, make_rust_processor, make_rust_processor_with_replacements, validate_schema,
-};
-use crate::strategies::python::PythonTransformStep;
-use crate::strategies::replacements::ProduceReplacements;
+use crate::strategies::processor::validate_schema;
 use crate::types::{BytesInsertBatch, CogsData, RowData};
 
 pub struct MutConsumerStrategyFactory {

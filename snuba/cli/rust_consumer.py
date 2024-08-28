@@ -259,12 +259,12 @@ def rust_consumer(
         enforce_schema,
         max_poll_interval_ms,
         async_inserts,
+        allow_mutability,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
         batch_write_timeout_ms,
         max_bytes_before_external_group_by,
-        allow_mutability,
     )
 
     sys.exit(exitcode)
