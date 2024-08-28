@@ -38,6 +38,7 @@ from flask import request as http_request
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -78,7 +79,9 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc.timeseries import timeseries_query as timeseries_query_impl
+from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
+from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -275,13 +278,27 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 
 
 @application.route("/timeseries", methods=["POST"])
-@util.time_request("timeseries_query")
-def timeseries_query(*, timer: Timer) -> Response:
-    req = AggregateBucketRequest()
-    req.ParseFromString(http_request.data)
-    # STUB
-    res = timeseries_query_impl(req, timer)
-    return Response(res.SerializeToString())
+@util.time_request("timeseries")
+def timeseries(*, timer: Timer) -> Response:
+    try:
+        req = AggregateBucketRequest()
+        req.ParseFromString(http_request.data)
+        res = timeseries_query(req, timer)
+        return Response(res.SerializeToString())
+    except BadSnubaRPCRequestException as e:
+        return Response(str(e), status=400)
+
+
+@application.route("/span_samples", methods=["POST"])
+@util.time_request("span_samples")
+def span_samples(*, timer: Timer) -> Response:
+    try:
+        req = SpanSamplesRequest()
+        req.ParseFromString(http_request.data)
+        res = span_samples_query(req, timer)
+        return Response(res.SerializeToString())
+    except BadSnubaRPCRequestException as e:
+        return Response(str(e), status=400)
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
