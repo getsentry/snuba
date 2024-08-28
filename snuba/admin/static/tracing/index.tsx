@@ -16,7 +16,14 @@ import {
   SortingSummary,
 } from "SnubaAdmin/tracing/types";
 
-type BucketedLogs = Map<String, Map<MessageCategory, LogLine[]>>;
+type ProfileEventValue = {
+  column_names: string[];
+  rows: string[];
+};
+
+type ProfileEvent = {
+  [host_name: string]: ProfileEventValue;
+};
 
 enum MessageCategory {
   housekeeping,
@@ -100,7 +107,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {rawTraceDisplay(title, value.trace_output)}
+                  {rawTraceDisplay(title, value.trace_output, value.profile_events_results)}
                 </div>
               );
             }
@@ -110,15 +117,32 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  function rawTraceDisplay(title: string, value: any): JSX.Element {
+  function rawTraceDisplay(title: string, value: any, profileEventResults: ProfileEvent): JSX.Element | undefined {
     const parsedLines: Array<string> = value.split(/\n/);
+
+    const profileEventRows: Array<string> = [];
+    for (const [k, v] of Object.entries(profileEventResults)) {
+      profileEventRows.push(k + '=>' + v.rows[0]);
+    }
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
+        <Title order={4}>Profile Events Output</Title>
+        {profileEventRows.map((line, index) => {
+          const node_name = line.split("=>")[0];
+          const row = line.split("=>")[1];
+          return (
+            <li key={title + index}>
+              <Text>[ {node_name} ] {row}</Text>
+            </li>
+          );
+        })}
+        <br/>
+        <Title order={4}>Trace Output</Title>
         {parsedLines.map((line, index) => {
           return (
             <li key={title + index}>
-              <span>{line}</span>
+              <Text>{line}</Text>
             </li>
           );
         })}
