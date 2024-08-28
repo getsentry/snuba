@@ -527,7 +527,7 @@ class DropIndex(SqlOperation):
     def format_sql(self) -> str:
         settings = ""
         if self.__run_async:
-            settings = " SETTINGS mutations_sync=0, alter_sync=0"
+            settings = " SETTINGS mutations_sync=0"
         return f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
 
     def _block_on_mutations(
