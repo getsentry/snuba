@@ -949,7 +949,11 @@ def storages_with_allocation_policies() -> Response:
 @check_tool_perms(tools=[AdminTools.CAPACITY_MANAGEMENT])
 def get_allocation_policy_configs(storage_key: str) -> Response:
 
-    policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    policies = (
+        get_storage(StorageKey(storage_key)).get_allocation_policies()
+        + get_storage(StorageKey(storage_key)).get_delete_allocation_policies()
+    )
+
     data = [
         {
             "policy_name": policy.config_key(),
@@ -978,7 +982,10 @@ def set_allocation_policy_config() -> Response:
         assert key != "", "Key cannot be empty string"
         assert isinstance(policy_name, str), "Invalid policy name"
 
-        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policies = (
+            get_storage(StorageKey(storage)).get_allocation_policies()
+            + get_storage(StorageKey(storage)).get_delete_allocation_policies()
+        )
         policy = next(
             (p for p in policies if p.config_key() == policy_name),
             None,
