@@ -2,14 +2,25 @@ import re
 
 from clickhouse_driver.errors import ErrorCodes
 
-from snuba.admin.clickhouse.common import InvalidCustomQuery, get_ro_node_connection
+from snuba.admin.auth_roles import ExecuteSudoSystemQuery
+from snuba.admin.clickhouse.common import (
+    InvalidCustomQuery,
+    get_ro_node_connection,
+    get_sudo_node_connection,
+)
+from snuba.admin.user import AdminUser
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.utils.serializable_exception import SerializableException
+
+
+class UnauthorizedForSudo(SerializableException):
+    pass
 
 
 def _run_sql_query_on_host(
-    clickhouse_host: str, clickhouse_port: int, storage_name: str, sql: str
+    clickhouse_host: str, clickhouse_port: int, storage_name: str, sql: str, sudo: bool
 ) -> ClickhouseResult:
     """
     Run the SQL query. It should be validated before getting to this point
@@ -23,11 +34,14 @@ def _run_sql_query_on_host(
     else:
         settings = ClickhouseClientSettings.QUERY
 
-    connection = get_ro_node_connection(
-        clickhouse_host, clickhouse_port, storage_name, settings
+    connection = (
+        get_ro_node_connection(clickhouse_host, clickhouse_port, storage_name, settings)
+        if not sudo
+        else get_sudo_node_connection(
+            clickhouse_host, clickhouse_port, storage_name, settings
+        )
     )
     query_result = connection.execute(query=sql, with_column_types=True)
-
     return query_result
 
 
@@ -74,6 +88,31 @@ SHOW_QUERY_RE = re.compile(
     re.VERBOSE,
 )
 
+SYSTEM_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (SYSTEM)
+        \s
+        (?!SHUTDOWN\b)(?!KILL\b)
+        [\w\s]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
+ALTER_QUERY_RE = re.compile(
+    r"""
+        ^
+        (ALTER)
+        \s
+        [\w\s,=()*+<>'%"\-\/:]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 
 def is_query_select(sql_query: str) -> bool:
     """
@@ -102,21 +141,59 @@ def is_query_describe(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_system_command(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like SYSTEM STOP MERGES
+    """
+    sql_query = " ".join(sql_query.split())
+    match = SYSTEM_COMMAND_RE.match(sql_query)
+    return True if match else False
+
+
+def is_query_alter(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like ALTER TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = ALTER_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
+def _can_user_sudo(user: AdminUser) -> bool:
+    for role in user.roles:
+        for action in role.actions:
+            if isinstance(action, ExecuteSudoSystemQuery):
+                return True
+    return False
+
+
 def run_system_query_on_host_with_sql(
-    clickhouse_host: str, clickhouse_port: int, storage_name: str, system_query_sql: str
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    system_query_sql: str,
+    sudo_mode: bool,
+    user: AdminUser,
 ) -> ClickhouseResult:
+    if sudo_mode and not _can_user_sudo(user):
+        raise UnauthorizedForSudo()
+
     if is_query_select(system_query_sql):
         validate_system_query(system_query_sql)
     elif is_query_describe(system_query_sql):
         pass
     elif is_query_show(system_query_sql):
         pass
+    elif sudo_mode and (
+        is_system_command(system_query_sql) or is_query_alter(system_query_sql)
+    ):
+        pass
     else:
         raise InvalidCustomQuery("Query is invalid")
 
     try:
         return _run_sql_query_on_host(
-            clickhouse_host, clickhouse_port, storage_name, system_query_sql
+            clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
         )
     except ClickhouseError as exc:
         # Don't send error to Snuba if it is an unknown table or column as it

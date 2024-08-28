@@ -48,6 +48,13 @@
         "group:team-sns@sentry.io"
       ],
       "role": "roles/AllMigrationsExecutor"
+    },
+    {
+      "members": [
+        "group:team-ops@sentry.io",
+        "group:team-sns@sentry.io"
+      ],
+      "role": "roles/ClickhouseAdmin"
     }
   ]
 }
