@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef } from "react";
 import { EditorState } from "@codemirror/state";
-import { EditorView, lineNumbers } from "@codemirror/view";
+import { EditorView, lineNumbers, keymap } from "@codemirror/view";
+import { insertNewline } from "@codemirror/commands";
 
 import { sql } from "@codemirror/lang-sql";
 import { theme, highlighting } from "./theme";
@@ -22,8 +23,13 @@ export function SQLEditor({ value, onChange }: Props) {
     });
   }, [onChange]);
 
+  const multiNewLine = useMemo(() => {
+    return keymap.of([{ key: "Enter", run: insertNewline }]);
+  }, []);
+
   const extensions = [
     updateListener,
+    multiNewLine,
     theme,
     highlighting,
     lineNumbers(),
