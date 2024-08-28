@@ -129,7 +129,6 @@ function TracingQueries(props: { api: Client }) {
       <ol style={collapsibleStyle} key={title + "-root"}>
         <Title order={4}>Profile Events Output</Title>
         {profileEventRows.map((line, index) => {
-          console.log("line: ", line)
           const node_name = line.split("=>")[0];
           const row = line.split("=>")[1];
           return (
@@ -138,6 +137,7 @@ function TracingQueries(props: { api: Client }) {
             </li>
           );
         })}
+        <br/>
         <Title order={4}>Trace Output</Title>
         {parsedLines.map((line, index) => {
           return (

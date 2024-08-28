@@ -24,7 +24,7 @@ class InvalidStorageError(SerializableException):
     pass
 
 
-class ClickHouseTimeoutError(SerializableException):
+class ClickhouseTimeoutError(SerializableException):
     pass
 
 

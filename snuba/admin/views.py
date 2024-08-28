@@ -22,7 +22,7 @@ from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_qu
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
-from snuba.admin.clickhouse.common import ClickHouseTimeoutError, InvalidCustomQuery
+from snuba.admin.clickhouse.common import ClickhouseTimeoutError, InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -32,7 +32,11 @@ from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
 from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
-from snuba.admin.clickhouse.tracing import TraceOutput, run_query_and_get_trace
+from snuba.admin.clickhouse.tracing import (
+    QueryTraceData,
+    TraceOutput,
+    run_query_and_get_trace,
+)
 from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
@@ -455,18 +459,17 @@ def clickhouse_trace_query() -> Response:
         query_trace = run_query_and_get_trace(storage, raw_sql)
 
         profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
-        hosts_ports_query_ids_nodes = parse_trace_for_query_ids(query_trace, storage)
 
-        for host_port_query_id_node in hosts_ports_query_ids_nodes:
-            sql = profile_events_raw_sql.format(host_port_query_id_node["query_id"])
+        for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
+            sql = profile_events_raw_sql.format(query_trace_data.query_id)
             system_query_result, counter = None, 0
 
             while counter < 10:
-                # There is a race between the original query to trace finishing and the system query log populating.
-                # Sleep between the query executions.
+                # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
+                # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
                 system_query_result = run_system_query_on_host_with_sql(
-                    host_port_query_id_node["host"],
-                    int(host_port_query_id_node["port"]),
+                    query_trace_data.host,
+                    int(query_trace_data.port),
                     storage,
                     sql,
                 )
@@ -477,8 +480,8 @@ def clickhouse_trace_query() -> Response:
                     break
 
             if system_query_result is None or len(system_query_result.results) == 0:
-                raise ClickHouseTimeoutError(
-                    "Timed out while executing: {}".format(sql)
+                raise ClickhouseTimeoutError(
+                    "Waited too long for getting the result of query: {}".format(sql)
                 )
 
             query_trace.profile_events_meta.append(system_query_result.meta)
@@ -492,14 +495,8 @@ def clickhouse_trace_query() -> Response:
                 res["rows"] = []
                 for query_result in system_query_result.results:
                     if query_result[0]:
-                        res["rows"].append(
-                            json.dumps(query_result[0])
-                            .replace("{", "")
-                            .replace("}", "")
-                        )
-                query_trace.profile_events_results[
-                    host_port_query_id_node["node_name"]
-                ] = res
+                        res["rows"].append(json.dumps(query_result[0]))
+                query_trace.profile_events_results[query_trace_data.node_name] = res
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
@@ -520,7 +517,7 @@ def clickhouse_trace_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
-    except ClickHouseTimeoutError as err:
+    except ClickhouseTimeoutError as err:
         return make_response(
             jsonify(
                 {
@@ -541,7 +538,7 @@ def clickhouse_trace_query() -> Response:
 
 def parse_trace_for_query_ids(
     trace_output: TraceOutput, storage_key: str
-) -> List[Dict[str, Any]]:
+) -> List[QueryTraceData]:
     result = []
     summarized_trace_output = trace_output.summarized_trace_output
     storage_info = get_storage_info()
@@ -551,19 +548,15 @@ def parse_trace_for_query_ids(
     if matched is not None:
         local_nodes = matched.get("local_nodes", [])
         query_node = matched.get("query_node", None)
-        for node_name, query_summary in summarized_trace_output.query_summaries.items():
-            result.append(
-                {
-                    "host": local_nodes[0].get("host")
-                    if local_nodes
-                    else query_node.get("host"),  # type: ignore
-                    "port": local_nodes[0].get("port")
-                    if local_nodes
-                    else query_node.get("port"),  # type: ignore
-                    "query_id": query_summary.query_id,
-                    "node_name": node_name,
-                }
+        result = [
+            QueryTraceData(
+                host=local_nodes[0].get("host") if local_nodes else query_node.get("host"),  # type: ignore
+                port=local_nodes[0].get("port") if local_nodes else query_node.get("port"),  # type: ignore
+                query_id=query_summary.query_id,
+                node_name=node_name,
             )
+            for node_name, query_summary in summarized_trace_output.query_summaries.items()
+        ]
     return result
 
 

@@ -15,12 +15,20 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 
 
 @dataclass
+class QueryTraceData:
+    host: str
+    port: int
+    query_id: str
+    node_name: str
+
+
+@dataclass
 class TraceOutput:
     trace_output: str
     summarized_trace_output: TracingSummary
     cols: list[tuple[str, str]]
     num_rows_result: int
-    profile_events_results: dict[dict[str, str], Any]
+    profile_events_results: dict[str, Any]
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
 
