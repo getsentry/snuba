@@ -235,13 +235,13 @@ def trace_item_filters_to_expression(
 
     if item_filter.exists_filter:
         k = item_filter.exists_filter.key
-        if k in NORMALIZED_COLUMNS.keys():
-            return f.isNotNull(column(k))
-        if item_filter.exists_filter.type == AttributeKey.Type.TYPE_STRING:
+        if k.name in NORMALIZED_COLUMNS.keys():
+            return f.isNotNull(column(k.name))
+        if k.type == AttributeKey.Type.TYPE_STRING:
             # TODO: this doesn't actually work yet, need to make mapContains work with hash mapper too
-            return f.mapContains(column("attr_str"), literal(k))
+            return f.mapContains(column("attr_str"), literal(k.name))
         else:
-            return f.mapContains(column("attr_num"), literal(k))
+            return f.mapContains(column("attr_num"), literal(k.name))
 
     raise Exception("Unknown filter: ", item_filter)
 
