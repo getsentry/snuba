@@ -10,11 +10,11 @@ from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba.query import Expression, Query
+from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
-from snuba.query.expressions import FunctionCall, SubscriptableReference
+from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
@@ -47,7 +47,7 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
-NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type]] = {
+NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "project_name": AttributeKey.Type.TYPE_STRING,  # extra special column, derived from a context sent with the request
     "organization_id": AttributeKey.Type.TYPE_INT,
     "project_id": AttributeKey.Type.TYPE_INT,
@@ -86,8 +86,12 @@ def attribute_key_to_expression(
             )
         return f.transform(
             column("project_id"),
-            literals_array(None, context.project_ids_to_names.keys()),
-            literals_array(None, context.project_ids_to_names.values()),
+            literals_array(
+                None, [literal(k) for k in context.project_ids_to_names.keys()]
+            ),
+            literals_array(
+                None, [literal(v) for v in context.project_ids_to_names.values()]
+            ),
             literal("unknown"),
             alias="project_name",
         )
@@ -186,12 +190,19 @@ def trace_item_filters_to_expression(
         k_expression = attribute_key_to_expression(k, context)
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
+
+        value_type = v.WhichOneof("value")
+        if value_type is None:
+            raise BadSnubaRPCRequestException(
+                "comparison does not have a right hand side"
+            )
+
         v_expression = {
             "val_bool": literal(v.val_bool),
             "val_str": literal(v.val_str),
             "val_float": literal(v.val_float),
             "val_int": literal(v.val_int),
-        }[v.WhichOneof()]
+        }[value_type]
 
         if op == ComparisonFilter.OP_EQUALS:
             return f.equals(k_expression, v_expression)
@@ -219,7 +230,7 @@ def trace_item_filters_to_expression(
             return f.greaterOrEquals(k_expression, v_expression)
 
         raise BadSnubaRPCRequestException(
-            "Invalid string comparison, unknown op: ", item_filter.string_filter
+            "Invalid string comparison, unknown op: ", item_filter.comparison_filter
         )
 
     if item_filter.exists_filter:
