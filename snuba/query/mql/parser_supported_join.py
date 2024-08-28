@@ -1398,6 +1398,59 @@ def populate_query_from_mql_context(
             join_clause = convert_to_cross_join(join_clause)
             query.set_from_clause(join_clause)
 
+    if mql_context.extrapolate:
+        extrapolatable_functions = {"avg", "sum", "count", "quantiles"}
+
+        def convert_cols_to_extrapolated(expr: Expression) -> Expression:
+            match expr:
+                case FunctionCall(
+                    function_name=function_name,
+                    alias=alias,
+                    parameters=parameters,
+                ) if function_name in extrapolatable_functions:
+                    return FunctionCall(
+                        function_name=function_name + "_weighted",
+                        alias=alias,
+                        parameters=parameters,
+                    )
+                case FunctionCall(
+                    function_name=function_name,
+                    alias=alias,
+                    parameters=parameters,
+                ):
+                    return FunctionCall(
+                        function_name=function_name,
+                        alias=alias,
+                        parameters=tuple(
+                            [
+                                convert_cols_to_extrapolated(parameter)
+                                for parameter in parameters
+                            ]
+                        ),
+                    )
+                case CurriedFunctionCall(
+                    alias=alias,
+                    internal_function=internal_function,
+                    parameters=parameters,
+                ):
+                    converted_internal_fn = convert_cols_to_extrapolated(
+                        internal_function
+                    )
+                    assert isinstance(converted_internal_fn, FunctionCall)
+                    return CurriedFunctionCall(
+                        alias=alias,
+                        internal_function=converted_internal_fn,
+                        parameters=tuple(
+                            [
+                                convert_cols_to_extrapolated(parameter)
+                                for parameter in parameters
+                            ]
+                        ),
+                    )
+            return expr
+
+        query.transform_expressions(convert_cols_to_extrapolated)
+
     limit = limit_value(mql_context)
     offset = offset_value(mql_context)
     query.set_limit(limit)
