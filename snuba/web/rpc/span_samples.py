@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Callable, Dict, Generator, Iterable, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
@@ -36,13 +36,17 @@ from snuba.web.rpc.common import (
 def _convert_order_by(
     order_by: Sequence[SpanSamplesRequest.OrderBy],
     key_context: Optional[AttributeKeyTransformContext],
-) -> Generator[OrderBy]:
+) -> Sequence[OrderBy]:
+    res: List[OrderBy] = []
     for x in order_by:
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
-        yield OrderBy(
-            direction=direction,
-            expression=attribute_key_to_expression(x.key, key_context),
+        res.append(
+            OrderBy(
+                direction=direction,
+                expression=attribute_key_to_expression(x.key, key_context),
+            )
         )
+    return res
 
 
 def _build_query(request: SpanSamplesRequest) -> Query:
