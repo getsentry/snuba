@@ -326,7 +326,7 @@ def optimize_partition_runner(
                     )
                 )
 
-            completed_futures, futures = concurrent.futures.wait(
+            completed_futures, pending_futures = concurrent.futures.wait(
                 pending_futures, return_when=concurrent.futures.FIRST_COMPLETED
             )
             for future in completed_futures:
