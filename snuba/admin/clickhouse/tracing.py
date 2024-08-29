@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from snuba.admin.clickhouse.common import (
     get_ro_query_node_connection,
@@ -14,11 +15,22 @@ from snuba.clusters.cluster import ClickhouseClientSettings
 
 
 @dataclass
+class QueryTraceData:
+    host: str
+    port: int
+    query_id: str
+    node_name: str
+
+
+@dataclass
 class TraceOutput:
     trace_output: str
     summarized_trace_output: TracingSummary
     cols: list[tuple[str, str]]
     num_rows_result: int
+    profile_events_results: dict[str, Any]
+    profile_events_meta: list[Any]
+    profile_events_profile: dict[str, int]
 
 
 def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
@@ -35,4 +47,7 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
         summarized_trace_output=summarized_trace_output,
         cols=query_result.meta,  # type: ignore
         num_rows_result=len(query_result.results),
+        profile_events_results={},
+        profile_events_meta=[],
+        profile_events_profile={},
     )

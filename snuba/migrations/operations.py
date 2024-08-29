@@ -527,7 +527,7 @@ class DropIndex(SqlOperation):
     def format_sql(self) -> str:
         settings = ""
         if self.__run_async:
-            settings = " SETTINGS mutations_sync=0, alter_sync=0"
+            settings = " SETTINGS mutations_sync=0"
         return f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
 
     def _block_on_mutations(
@@ -553,15 +553,19 @@ class DropIndices(SqlOperation):
         table_name: str,
         indices: Sequence[str],
         target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
     ):
         super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__indices = indices
+        self.__run_async = run_async
 
     def format_sql(self) -> str:
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0, alter_sync=0"
         statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
-
-        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)}{settings};"
 
 
 class InsertIntoSelect(SqlOperation):

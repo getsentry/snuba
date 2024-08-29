@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import io
 import sys
+import time
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
 
 import sentry_sdk
 import simplejson as json
@@ -21,7 +22,7 @@ from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_qu
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
-from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.common import ClickhouseTimeoutError, InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -34,7 +35,11 @@ from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
     run_system_query_on_host_with_sql,
 )
-from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.clickhouse.tracing import (
+    QueryTraceData,
+    TraceOutput,
+    run_query_and_get_trace,
+)
 from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
@@ -450,8 +455,60 @@ def clickhouse_trace_query() -> Response:
         )
 
     try:
-        result = run_query_and_get_trace(storage, raw_sql)
-        return make_response(jsonify(asdict(result)), 200)
+        # Append 'log_profile_events=1' with/without the SETTINGS clause to the incoming query.
+        settings_index = raw_sql.lower().find("settings")
+        if settings_index != -1:
+            start_index = settings_index + len("settings")
+            remaining = raw_sql[start_index:].strip()
+            if "log_profile_events=1" not in remaining:
+                raw_sql += ", log_profile_events=1"
+        else:
+            raw_sql += " SETTINGS log_profile_events=1"
+
+        query_trace = run_query_and_get_trace(storage, raw_sql)
+
+        profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+
+        for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
+            sql = profile_events_raw_sql.format(query_trace_data.query_id)
+            system_query_result, counter = None, 0
+
+            while counter < 10:
+                # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
+                # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
+                system_query_result = run_system_query_on_host_with_sql(
+                    query_trace_data.host,
+                    int(query_trace_data.port),
+                    storage,
+                    sql,
+                    False,
+                    g.user,
+                )
+                if not system_query_result.results:
+                    time.sleep(1)
+                    counter += 1
+                else:
+                    break
+
+            if system_query_result is None or len(system_query_result.results) == 0:
+                raise ClickhouseTimeoutError(
+                    "Waited too long for getting the result of query: {}".format(sql)
+                )
+
+            query_trace.profile_events_meta.append(system_query_result.meta)
+            query_trace.profile_events_profile = cast(
+                Dict[str, int], system_query_result.profile
+            )
+            columns = system_query_result.meta
+            if columns:
+                res = {}
+                res["column_names"] = [name for name, _ in columns]
+                res["rows"] = []
+                for query_result in system_query_result.results:
+                    if query_result[0]:
+                        res["rows"].append(json.dumps(query_result[0]))
+                query_trace.profile_events_results[query_trace_data.node_name] = res
+        return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -471,11 +528,47 @@ def clickhouse_trace_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
+    except ClickhouseTimeoutError as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "clickhouse_timeout",
+                        "message": err.message or "Query timed out",
+                    }
+                }
+            ),
+            408,
+        )
     except Exception as err:
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+def parse_trace_for_query_ids(
+    trace_output: TraceOutput, storage_key: str
+) -> List[QueryTraceData]:
+    result = []
+    summarized_trace_output = trace_output.summarized_trace_output
+    storage_info = get_storage_info()
+    matched = next(
+        (info for info in storage_info if info["storage_name"] == storage_key), None
+    )
+    if matched is not None:
+        local_nodes = matched.get("local_nodes", [])
+        query_node = matched.get("query_node", None)
+        result = [
+            QueryTraceData(
+                host=local_nodes[0].get("host") if local_nodes else query_node.get("host"),  # type: ignore
+                port=local_nodes[0].get("port") if local_nodes else query_node.get("port"),  # type: ignore
+                query_id=query_summary.query_id,
+                node_name=node_name,
+            )
+            for node_name, query_summary in summarized_trace_output.query_summaries.items()
+        ]
+    return result
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
@@ -1111,7 +1204,9 @@ def delete() -> Response:
         schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
         request_parts = schema.validate(body)
         delete_results = delete_from_storage(
-            storage, request_parts.query["query"]["columns"]
+            storage,
+            request_parts.query["query"]["columns"],
+            request_parts.attribution_info,
         )
     except (InvalidJsonRequestException, DeletesNotEnabledError) as schema_error:
         return make_response(
