@@ -300,9 +300,6 @@ def optimize_partition_runner(
 
     with ThreadPoolExecutor(max_workers=32) as executor:
         futures: set[Future[Any]] = set()
-        # jitter start time
-        for jitter in scheduler.get_start_time_jitter():
-            futures.add(executor.submit(_jitter_start_time, jitter))
 
         partitions_to_optimize = deque(partitions)
         while partitions_to_optimize:
@@ -332,15 +329,6 @@ def optimize_partition_runner(
             )
             for future in done:
                 future.result()
-
-
-def _jitter_start_time(start_jitter: Optional[int] = None) -> None:
-    if start_jitter is not None:
-        logger.info(
-            f"{threading.current_thread().name}: Jittering start time by"
-            f" {start_jitter} minutes"
-        )
-        time.sleep(start_jitter * 60)
 
 
 def optimize_partitions(
