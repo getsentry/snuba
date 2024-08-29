@@ -299,7 +299,7 @@ def optimize_partition_runner(
     scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
 
     with ThreadPoolExecutor(max_workers=32) as executor:
-        futures: set[Future[Any]] = set()
+        pending_futures: set[Future[Any]] = set()
 
         partitions_to_optimize = deque(partitions)
         while partitions_to_optimize:
@@ -310,8 +310,10 @@ def optimize_partition_runner(
                 f"{schedule.cutoff_time} with {configured_num_threads} threads"
             )
 
-            while partitions_to_optimize and len(futures) < configured_num_threads:
-                futures.add(
+            while (
+                partitions_to_optimize and len(pending_futures) < configured_num_threads
+            ):
+                pending_futures.add(
                     executor.submit(
                         optimize_partitions,
                         clickhouse,
@@ -324,10 +326,10 @@ def optimize_partition_runner(
                     )
                 )
 
-            done, futures = concurrent.futures.wait(
-                futures, return_when=concurrent.futures.FIRST_COMPLETED
+            completed_futures, futures = concurrent.futures.wait(
+                pending_futures, return_when=concurrent.futures.FIRST_COMPLETED
             )
-            for future in done:
+            for future in completed_futures:
                 future.result()
 
 
