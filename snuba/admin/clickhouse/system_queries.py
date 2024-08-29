@@ -163,14 +163,6 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
-def _can_user_sudo(user: AdminUser) -> bool:
-    for role in user.roles:
-        for action in role.actions:
-            if isinstance(action, ExecuteSudoSystemQuery):
-                return True
-    return False
-
-
 def run_system_query_on_host_with_sql(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -180,7 +172,12 @@ def run_system_query_on_host_with_sql(
     user: AdminUser,
 ) -> ClickhouseResult:
     if sudo_mode:
-        if not _can_user_sudo(user):
+        can_sudo = any(
+            isinstance(action, ExecuteSudoSystemQuery)
+            for role in user.roles
+            for action in role.actions
+        )
+        if not can_sudo:
             raise UnauthorizedForSudo()
 
         audit_log.record(
