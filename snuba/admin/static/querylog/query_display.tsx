@@ -3,11 +3,13 @@ import { Button } from "@mantine/core";
 import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 
 import { QuerylogRequest, QuerylogResult, PredefinedQuery } from "./types";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
 type QueryState = Partial<QuerylogRequest>;
+const HISTORY_KEY = "querylog";
 
 function QueryDisplay(props: {
   api: Client;
@@ -17,7 +19,7 @@ function QueryDisplay(props: {
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setQueryResultHistory] = useState<
     QuerylogResult[]
-  >([]);
+  >(getRecentHistory(HISTORY_KEY));
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -33,6 +35,7 @@ function QueryDisplay(props: {
       .executeQuerylogQuery(query as QuerylogRequest)
       .then((result) => {
         result.input_query = query.sql || "<Input Query>";
+        setRecentHistory(HISTORY_KEY, result)
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
       });
   }
