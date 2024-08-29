@@ -130,6 +130,7 @@ def test_sudo_queries(sudo_query: str, expected: bool) -> None:
         ),
     ],
 )
+@pytest.mark.clickhouse_db
 def test_run_sudo_queries(
     query: str,
     roles: Sequence[Role],
