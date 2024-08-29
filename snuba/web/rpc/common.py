@@ -82,10 +82,11 @@ def attribute_key_to_expression(
         )
     # Snuba doesn't have access to postgres, which stores project_id to project_name mappings.
     # This context object lets the caller specify that mapping, so that they can (for example) order by project name
-    if (
-        attr_key.name == "project_name"
-        and attr_key.type == AttributeKey.Type.TYPE_STRING
-    ):
+    if attr_key.name == "project_name":
+        if attr_key.type != AttributeKey.Type.TYPE_STRING:
+            raise BadSnubaRPCRequestException(
+                f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
+            )
         if context is None or len(context.project_ids_to_names) == 0:
             raise BadSnubaRPCRequestException(
                 "If you request project_name, the AttributeKeyTransformContext must be "
@@ -103,12 +104,18 @@ def attribute_key_to_expression(
             alias="project_name",
         )
 
-    if attr_key.name == "trace_id" and attr_key.type == AttributeKey.Type.TYPE_STRING:
-        return f.CAST(column("trace_id"), "String", alias="trace_id")
+    if attr_key.name == "trace_id":
+        if attr_key.type == AttributeKey.Type.TYPE_STRING:
+            return f.CAST(column("trace_id"), "String", alias="trace_id")
+        raise BadSnubaRPCRequestException(
+            f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
+        )
 
     if attr_key.name in HEX_ID_COLUMNS:
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.hex(column(attr_key.name))
+            return f.hex(column(attr_key.name), alias=attr_key.name)
+        if attr_key.type == AttributeKey.Type.TYPE_INT:
+            return f.CAST(column(attr_key.name), "UInt64", alias=attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
         )
