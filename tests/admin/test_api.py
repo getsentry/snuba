@@ -584,6 +584,28 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_force_overwrite(admin_api: FlaskClient) -> None:
+    migration_id = "0009_add_message"
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "completed"
+
+    response = admin_api.post(
+        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "not_started"
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
