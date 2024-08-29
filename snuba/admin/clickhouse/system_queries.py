@@ -2,6 +2,8 @@ import re
 
 from clickhouse_driver.errors import ErrorCodes
 
+from snuba.admin.audit_log.action import AuditLogAction
+from snuba.admin.audit_log.base import AuditLog
 from snuba.admin.auth_roles import ExecuteSudoSystemQuery
 from snuba.admin.clickhouse.common import (
     InvalidCustomQuery,
@@ -13,6 +15,8 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.utils.serializable_exception import SerializableException
+
+audit_log = AuditLog()
 
 
 class UnauthorizedForSudo(SerializableException):
@@ -175,8 +179,15 @@ def run_system_query_on_host_with_sql(
     sudo_mode: bool,
     user: AdminUser,
 ) -> ClickhouseResult:
-    if sudo_mode and not _can_user_sudo(user):
-        raise UnauthorizedForSudo()
+    if sudo_mode:
+        if not _can_user_sudo(user):
+            raise UnauthorizedForSudo()
+
+        audit_log.record(
+            user.email,
+            AuditLogAction.RAN_SUDO_SYSTEM_QUERY,
+            {"query": system_query_sql},
+        )
 
     if is_query_select(system_query_sql):
         validate_system_query(system_query_sql)
