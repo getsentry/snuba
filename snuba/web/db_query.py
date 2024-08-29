@@ -847,6 +847,26 @@ def _add_quota_info(
             quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
 
 
+def _populate_query_status(
+    summary: dict[str, Any],
+    rejection_quota_and_policy: Optional[_QuotaAndPolicy],
+    throttle_quota_and_policy: Optional[_QuotaAndPolicy],
+) -> None:
+    is_successful = "is_successful"
+    is_rejected = "is_rejected"
+    is_throttled = "is_throttled"
+    summary[is_successful] = True
+    summary[is_rejected] = False
+    summary[is_throttled] = False
+
+    if rejection_quota_and_policy:
+        summary[is_successful] = False
+        summary[is_rejected] = True
+    if throttle_quota_and_policy:
+        summary[is_successful] = False
+        summary[is_throttled] = True
+
+
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -908,6 +928,9 @@ def _apply_allocation_policies_quota(
 
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
+        _populate_query_status(
+            summary, rejection_quota_and_policy, throttle_quota_and_policy
+        )
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary

@@ -306,6 +306,9 @@ def test_db_query_success() -> None:
     assert stats["quota_allowance"] == {
         "summary": {
             "threads_used": 5,
+            "is_successful": False,
+            "is_rejected": False,
+            "is_throttled": True,
             "rejected_by": {},
             "throttled_by": {
                 "policy": "BytesScannedRejectingPolicy",
@@ -584,6 +587,9 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
             },
             "summary": {
                 "threads_used": 1,
+                "is_successful": False,
+                "is_rejected": False,
+                "is_throttled": True,
                 "rejected_by": {},
                 "throttled_by": {
                     "policy": "ThrottleAllocationPolicy1",
@@ -657,6 +663,9 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
         assert stats["quota_allowance"] == {
             "summary": {
                 "threads_used": 0,
+                "is_successful": False,
+                "is_rejected": True,
+                "is_throttled": True,
                 "rejected_by": {
                     "policy": "RejectAllocationPolicy",
                     "rejection_threshold": MAX_THRESHOLD,
@@ -897,6 +906,9 @@ def test_allocation_policy_updates_quota() -> None:
     assert e.value.extra["stats"]["quota_allowance"] == {
         "summary": {
             "threads_used": 0,
+            "is_successful": False,
+            "is_rejected": True,
+            "is_throttled": False,
             "rejected_by": {
                 "policy": "CountQueryPolicy",
                 "rejection_threshold": MAX_QUERIES_TO_RUN,
