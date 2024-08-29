@@ -117,6 +117,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 start_timestamp=ts,
                 end_timestamp=ts,
             ),
+            key=AttributeKey(name="project_id", type=AttributeKey.TYPE_INT),
             aggregate=AggregateBucketRequest.FUNCTION_SUM,
             granularity_secs=60,
         )

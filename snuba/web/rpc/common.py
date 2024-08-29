@@ -62,6 +62,9 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "retention_days": AttributeKey.Type.TYPE_INT,
     "name": AttributeKey.Type.TYPE_STRING,
     "sample_weight": AttributeKey.Type.TYPE_FLOAT,
+    "timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
+    "start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
+    "end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
 }
 
 # Columns stored as integers that are usually presented to users as hex strings
@@ -73,6 +76,10 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {"timestamp", "start_timestamp", "end_times
 def attribute_key_to_expression(
     attr_key: AttributeKey, context: Optional[AttributeKeyTransformContext]
 ) -> Expression:
+    if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
+        raise BadSnubaRPCRequestException(
+            f"attribute key {attr_key.name} must have a type specified"
+        )
     # Snuba doesn't have access to postgres, which stores project_id to project_name mappings.
     # This context object lets the caller specify that mapping, so that they can (for example) order by project name
     if (
