@@ -1348,6 +1348,9 @@ class TestSnQLApi(BaseApiTest):
                 },
                 "summary": {
                     "threads_used": 0,
+                    "is_successful": False,
+                    "is_rejected": True,
+                    "is_throttled": False,
                     "rejected_by": {
                         "policy": "RejectAllocationPolicy123",
                         "quota_used": 0,
