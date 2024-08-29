@@ -31,7 +31,7 @@ class TestCommon:
             alias="project_name",
         )
 
-    def test_expression_trace_id(self):
+    def test_expression_trace_id(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(
                 type=AttributeKey.TYPE_STRING,
@@ -40,7 +40,7 @@ class TestCommon:
             AttributeKeyTransformContext(),
         ) == f.CAST(column("trace_id"), "String", alias="trace_id")
 
-    def test_hex_id_columns(self):
+    def test_hex_id_columns(self) -> None:
         for col in ["span_id", "parent_span_id", "segment_id"]:
             assert attribute_key_to_expression(
                 AttributeKey(
@@ -58,7 +58,7 @@ class TestCommon:
                 AttributeKeyTransformContext(),
             ) == f.CAST(column(col), "UInt64", alias=col)
 
-    def test_timestamp_columns(self):
+    def test_timestamp_columns(self) -> None:
         for col in ["timestamp", "start_timestamp", "end_timestamp"]:
             assert attribute_key_to_expression(
                 AttributeKey(
@@ -82,7 +82,7 @@ class TestCommon:
                 AttributeKeyTransformContext(),
             ) == f.CAST(column(col), "Float64", alias=col)
 
-    def test_normalized_col(self):
+    def test_normalized_col(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(
                 type=AttributeKey.TYPE_STRING,
@@ -91,7 +91,7 @@ class TestCommon:
             AttributeKeyTransformContext(),
         ) == column("service")
 
-    def test_attributes(self):
+    def test_attributes(self) -> None:
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_STRING, name="derp"),
             AttributeKeyTransformContext(),
