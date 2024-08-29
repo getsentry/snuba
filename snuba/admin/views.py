@@ -243,8 +243,16 @@ def force_overwrite_migration_status(
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
 
-    migration_group = MigrationGroup(group)
     runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
+    user = request.headers.get(USER_HEADER_KEY)
+
+    audit_log.record(
+        user or "",
+        AuditLogAction.FORCE_MIGRATION_OVERWRITE,
+        {"group": group, "migration": migration_id, "new_status": new_status},
+        notify=True,
+    )
+
     res = {"status": "OK"}
     return make_response(jsonify(res), 200)
 
