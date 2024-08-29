@@ -12,11 +12,13 @@ import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import {CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { TracingRequest, TracingResult, PredefinedQuery } from "./types";
 
 type QueryState = Partial<TracingRequest>;
 
+const HISTORY_KEY = "tracing_queries";
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (
@@ -28,7 +30,7 @@ function QueryDisplay(props: {
   const [storages, setStorages] = useState<string[]>([]);
   const [query, setQuery] = useState<QueryState>({storage: getParamFromStorage("storage")});
   const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
   const [showFormatted, setShowFormatted] = useState<boolean>(true);
 
@@ -63,6 +65,7 @@ function QueryDisplay(props: {
           profile_events_profile: result.profile_events_profile,
           error: result.error,
         };
+        setRecentHistory(HISTORY_KEY, tracing_result)
         setQueryResultHistory((prevHistory) => [
           tracing_result,
           ...prevHistory,

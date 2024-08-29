@@ -4,6 +4,7 @@ import { Collapse } from "SnubaAdmin/collapse";
 import { CSV } from "SnubaAdmin/cardinality_analyzer/CSV";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 
 import {
   CardinalityQueryRequest,
@@ -17,6 +18,7 @@ enum ClipboardFormats {
 }
 type QueryState = Partial<CardinalityQueryRequest>;
 
+const HISTORY_KEY = "cardinality_analyzer";
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: CardinalityQueryResult) => JSX.Element;
@@ -25,7 +27,7 @@ function QueryDisplay(props: {
   const [query, setQuery] = useState<QueryState>({});
   const [queryResultHistory, setCardinalityQueryResultHistory] = useState<
     CardinalityQueryResult[]
-  >([]);
+  >(getRecentHistory(HISTORY_KEY));
 
   function updateQuerySql(sql: string) {
     setQuery((prevQuery) => {
@@ -63,6 +65,7 @@ function QueryDisplay(props: {
       .executeCardinalityQuery(query as CardinalityQueryRequest)
       .then((result) => {
         result.input_query = query.sql || "<Input Query>";
+        setRecentHistory(HISTORY_KEY, result)
         setCardinalityQueryResultHistory((prevHistory) => [
           result,
           ...prevHistory,

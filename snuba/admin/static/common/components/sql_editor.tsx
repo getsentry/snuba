@@ -32,6 +32,7 @@ export function SQLEditor({ value, onChange }: Props) {
     multiNewLine,
     theme,
     highlighting,
+    EditorView.lineWrapping,
     lineNumbers(),
     sql(),
   ];

@@ -77,6 +77,7 @@ from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
+from snuba.migrations.status import Status
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
@@ -234,6 +235,34 @@ def reverse_migration(group: str, migration_id: str) -> Response:
     return run_or_reverse_migration(
         group=group, action="reverse", migration_id=migration_id
     )
+
+
+@application.route(
+    "/migrations/<group>/overwrite/<migration_id>/status/<new_status>",
+    methods=["POST"],
+)
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
+def force_overwrite_migration_status(
+    group: str, migration_id: str, new_status: str
+) -> Response:
+    try:
+        migration_group = MigrationGroup(group)
+    except ValueError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+
+    runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
+    user = request.headers.get(USER_HEADER_KEY)
+
+    audit_log.record(
+        user or "",
+        AuditLogAction.FORCE_MIGRATION_OVERWRITE,
+        {"group": group, "migration": migration_id, "new_status": new_status},
+        notify=True,
+    )
+
+    res = {"status": "OK"}
+    return make_response(jsonify(res), 200)
 
 
 @check_migration_perms
