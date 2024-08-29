@@ -85,6 +85,7 @@ def test_is_query_select() -> None:
         ("system SHUTDOWN", False),
         ("system KILL", False),
         ("ALTER TABLE eap_spans_local_merge DROP PARTITION '1970-01-01'", True),
+        ("CREATE TABLE eap_spans_local_merge (all my fieds)", True),
     ],
 )
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:

@@ -108,7 +108,7 @@ SYSTEM_COMMAND_RE = re.compile(
 ALTER_QUERY_RE = re.compile(
     r"""
         ^
-        (ALTER)
+        (ALTER|CREATE)
         \s
         [\w\s,=()*+<>'%"\-\/:]+
         ;? # Optional semicolon
