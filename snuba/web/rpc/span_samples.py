@@ -9,7 +9,6 @@ from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
 )
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
     AttributeKey,
-    AttributeKeyTransformContext,
     AttributeValue,
 )
 
@@ -35,7 +34,6 @@ from snuba.web.rpc.common import (
 
 def _convert_order_by(
     order_by: Sequence[SpanSamplesRequest.OrderBy],
-    key_context: Optional[AttributeKeyTransformContext],
 ) -> Sequence[OrderBy]:
     res: List[OrderBy] = []
     for x in order_by:
@@ -43,7 +41,7 @@ def _convert_order_by(
         res.append(
             OrderBy(
                 direction=direction,
-                expression=attribute_key_to_expression(x.key, key_context),
+                expression=attribute_key_to_expression(x.key),
             )
         )
     return res
@@ -69,9 +67,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
             request.meta,
             trace_item_filters_to_expression(request.filter),
         ),
-        order_by=_convert_order_by(
-            request.order_by, request.attribute_key_transform_context
-        ),
+        order_by=_convert_order_by(request.order_by),
         limit=request.limit,
     )
     treeify_or_and_conditions(res)
