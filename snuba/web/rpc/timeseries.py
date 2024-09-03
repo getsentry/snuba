@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
@@ -13,110 +12,44 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import SelectedExpression
-from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    NestedColumn,
-    and_cond,
-    column,
-    in_cond,
-    literal,
-    literals_array,
-)
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.dsl import column
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
-
-_HARDCODED_MEASUREMENT_NAME = "eap.measurement"
-
-
-def _get_measurement_field(
-    request: AggregateBucketRequest,
-) -> Expression:
-    field = NestedColumn("attr_num")
-    # HACK
-    return field[request.metric_name]
-
-
-def _treeify_or_and_conditions(query: Query) -> None:
-    """
-    look for expressions like or(a, b, c) and turn them into or(a, or(b, c))
-                              and(a, b, c) and turn them into and(a, and(b, c))
-
-    even though clickhouse sql supports arbitrary amount of arguments there are other parts of the
-    codebase which assume `or` and `and` have two arguments
-
-    Adding this post-process step is easier than changing the rest of the query pipeline
-
-    Note: does not apply to the conditions of a from_clause subquery (the nested one)
-        this is bc transform_expressions is not implemented for composite queries
-    """
-
-    def transform(exp: Expression) -> Expression:
-        if not isinstance(exp, FunctionCall):
-            return exp
-
-        if exp.function_name == "and":
-            return combine_and_conditions(exp.parameters)
-        elif exp.function_name == "or":
-            return combine_or_conditions(exp.parameters)
-        else:
-            return exp
-
-    query.transform_expressions(transform)
+from snuba.web.rpc.common import (
+    attribute_key_to_expression,
+    base_conditions_and,
+    trace_item_filters_to_expression,
+    treeify_or_and_conditions,
+)
+from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
 def _get_aggregate_func(
     request: AggregateBucketRequest,
 ) -> Expression:
-    FuncEnum = AggregateBucketRequest.Function
-    measurement_field = _get_measurement_field(request)
-    alias = "measurement"
-    lookup = {
-        FuncEnum.FUNCTION_SUM: f.sum(measurement_field, alias=alias),
-        FuncEnum.FUNCTION_AVERAGE: f.avg(measurement_field, alias=alias),
-        FuncEnum.FUNCTION_COUNT: f.count(measurement_field, alias=alias),
-        # curried functions PITA, to do later
-        FuncEnum.FUNCTION_P50: cf.quantile(0.5)(measurement_field, alias=alias),
-        FuncEnum.FUNCTION_P95: cf.quantile(0.95)(measurement_field, alias=alias),
-        FuncEnum.FUNCTION_P99: cf.quantile(0.99)(measurement_field, alias=alias),
-    }
-    res = lookup.get(request.aggregate, None)
-    if res is None:
-        NotImplementedError()
-    return res  # type: ignore
+    key_col = attribute_key_to_expression(request.key)
+    if request.aggregate == AggregateBucketRequest.FUNCTION_SUM:
+        return f.sum(key_col, alias="sum")
+    if request.aggregate == AggregateBucketRequest.FUNCTION_AVERAGE:
+        return f.avg(key_col, alias="avg")
+    if request.aggregate == AggregateBucketRequest.FUNCTION_COUNT:
+        return f.count(key_col, alias="count")
+    if request.aggregate == AggregateBucketRequest.FUNCTION_P50:
+        return cf.quantile(0.5)(key_col, alias="p50")
+    if request.aggregate == AggregateBucketRequest.FUNCTION_P95:
+        return cf.quantile(0.95)(key_col, alias="p90")
+    if request.aggregate == AggregateBucketRequest.FUNCTION_P99:
+        return cf.quantile(0.99)(key_col, alias="p95")
 
-
-def _build_condition(request: AggregateBucketRequest) -> Expression:
-    project_ids = in_cond(
-        column("project_id"),
-        literals_array(
-            alias=None,
-            literals=[literal(pid) for pid in request.meta.project_ids],
-        ),
-    )
-
-    return and_cond(
-        project_ids,
-        f.equals(column("organization_id"), request.meta.organization_id),
-        # HACK: timestamp name
-        f.less(
-            column("start_timestamp"),
-            f.toDateTime(
-                datetime.utcfromtimestamp(request.end_timestamp.seconds).isoformat()
-            ),
-        ),
-        f.greaterOrEquals(
-            column("start_timestamp"),
-            f.toDateTime(
-                datetime.utcfromtimestamp(request.start_timestamp.seconds).isoformat()
-            ),
-        ),
+    raise BadSnubaRPCRequestException(
+        f"Aggregate {request.aggregate} had an unknown or unset type"
     )
 
 
@@ -133,11 +66,14 @@ def _build_query(request: AggregateBucketRequest) -> Query:
             SelectedExpression(name="time", expression=column("time", alias="time")),
             SelectedExpression(name="agg", expression=_get_aggregate_func(request)),
         ],
-        condition=_build_condition(request),
+        condition=base_conditions_and(
+            request.meta,
+            trace_item_filters_to_expression(request.filter),
+        ),
         granularity=request.granularity_secs,
         groupby=[column("time")],
     )
-    _treeify_or_and_conditions(res)
+    treeify_or_and_conditions(res)
     return res
 
 
