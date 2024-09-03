@@ -45,7 +45,6 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
 NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
-    "project_name": AttributeKey.Type.TYPE_STRING,  # extra special column, derived from a context sent with the request
     "organization_id": AttributeKey.Type.TYPE_INT,
     "project_id": AttributeKey.Type.TYPE_INT,
     "service": AttributeKey.Type.TYPE_STRING,

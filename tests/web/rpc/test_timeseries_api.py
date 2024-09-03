@@ -121,7 +121,9 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregate=AggregateBucketRequest.FUNCTION_SUM,
             granularity_secs=60,
         )
-        response = self.app.post("/timeseries", data=message.SerializeToString())
+        response = self.app.post(
+            "/rpc/AggregateBucketRequest", data=message.SerializeToString()
+        )
         assert response.status_code == 200
 
     def test_with_data(self, setup_teardown: Any) -> None:

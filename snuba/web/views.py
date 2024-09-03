@@ -35,6 +35,7 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
@@ -277,25 +278,21 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/timeseries", methods=["POST"])
+@application.route("/rpc/<name>", methods=["POST"])
 @util.time_request("timeseries")
-def timeseries(*, timer: Timer) -> Response:
+def rpc(*, name: str, timer: Timer) -> Response:
+    rpcs: Mapping[
+        str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
+    ] = {
+        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
+        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
+    }
     try:
-        req = AggregateBucketRequest()
-        req.ParseFromString(http_request.data)
-        res = timeseries_query(req, timer)
-        return Response(res.SerializeToString())
-    except BadSnubaRPCRequestException as e:
-        return Response(str(e), status=400)
+        endpoint, req_class = rpcs[name]
 
-
-@application.route("/span_samples", methods=["POST"])
-@util.time_request("span_samples")
-def span_samples(*, timer: Timer) -> Response:
-    try:
-        req = SpanSamplesRequest()
+        req = req_class()
         req.ParseFromString(http_request.data)
-        res = span_samples_query(req, timer)
+        res = endpoint(req, timer)
         return Response(res.SerializeToString())
     except BadSnubaRPCRequestException as e:
         return Response(str(e), status=400)
