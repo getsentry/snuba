@@ -361,8 +361,6 @@ OPTIMIZE_MAX_SLEEP_TIME = 2 * 60 * 60  # 2 hours
 OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
-# Maximum jitter to add to the scheduling of threads of an optimize job
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
