@@ -59,9 +59,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
     selected_columns = []
 
     for key in request.keys:
-        key_col = attribute_key_to_expression(
-            key, request.attribute_key_transform_context
-        )
+        key_col = attribute_key_to_expression(key)
         selected_columns.append(SelectedExpression(name=key.name, expression=key_col))
 
     res = Query(
@@ -69,10 +67,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
         selected_columns=selected_columns,
         condition=base_conditions_and(
             request.meta,
-            trace_item_filters_to_expression(
-                request.filter,
-                request.attribute_key_transform_context,
-            ),
+            trace_item_filters_to_expression(request.filter),
         ),
         order_by=_convert_order_by(
             request.order_by, request.attribute_key_transform_context

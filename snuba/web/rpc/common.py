@@ -1,10 +1,7 @@
-from typing import Final, Mapping, Optional, Set
+from typing import Final, Mapping, Set
 
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
-    AttributeKey,
-    AttributeKeyTransformContext,
-)
+from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -73,35 +70,10 @@ HEX_ID_COLUMNS: Final[Set[str]] = {"span_id", "parent_span_id", "segment_id"}
 TIMESTAMP_COLUMNS: Final[Set[str]] = {"timestamp", "start_timestamp", "end_timestamp"}
 
 
-def attribute_key_to_expression(
-    attr_key: AttributeKey, context: Optional[AttributeKeyTransformContext]
-) -> Expression:
+def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
-        )
-    # Snuba doesn't have access to postgres, which stores project_id to project_name mappings.
-    # This context object lets the caller specify that mapping, so that they can (for example) order by project name
-    if attr_key.name == "project_name":
-        if attr_key.type != AttributeKey.Type.TYPE_STRING:
-            raise BadSnubaRPCRequestException(
-                f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
-            )
-        if context is None or len(context.project_ids_to_names) == 0:
-            raise BadSnubaRPCRequestException(
-                "If you request project_name, the AttributeKeyTransformContext must be "
-                "sent. Snuba doesn't have access to project names directly."
-            )
-        return f.transform(
-            column("project_id"),
-            literals_array(
-                None, [literal(k) for k in context.project_ids_to_names.keys()]
-            ),
-            literals_array(
-                None, [literal(v) for v in context.project_ids_to_names.values()]
-            ),
-            literal("unknown"),
-            alias="project_name",
         )
 
     if attr_key.name == "trace_id":
@@ -170,9 +142,7 @@ def attribute_key_to_expression(
     )
 
 
-def trace_item_filters_to_expression(
-    item_filter: TraceItemFilter, context: Optional[AttributeKeyTransformContext]
-) -> Expression:
+def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression:
     """
     Trace Item Filters are things like (span.id=12345 AND start_timestamp >= "june 4th, 2024")
     This maps those filters into an expression which can be used in a WHERE clause
@@ -184,10 +154,8 @@ def trace_item_filters_to_expression(
         if len(filters) == 0:
             return literal(True)
         if len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], context)
-        return and_cond(
-            *(trace_item_filters_to_expression(x, context) for x in filters)
-        )
+            return trace_item_filters_to_expression(filters[0])
+        return and_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
     if item_filter.or_filter:
         filters = item_filter.or_filter.filters
@@ -196,12 +164,12 @@ def trace_item_filters_to_expression(
                 "Invalid trace item filter, empty 'or' clause"
             )
         if len(filters) == 1:
-            return trace_item_filters_to_expression(filters[0], context)
-        return or_cond(*(trace_item_filters_to_expression(x, context) for x in filters))
+            return trace_item_filters_to_expression(filters[0])
+        return or_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
     if item_filter.comparison_filter:
         k = item_filter.comparison_filter.key
-        k_expression = attribute_key_to_expression(k, context)
+        k_expression = attribute_key_to_expression(k)
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
 

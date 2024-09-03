@@ -34,9 +34,7 @@ from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 def _get_aggregate_func(
     request: AggregateBucketRequest,
 ) -> Expression:
-    key_col = attribute_key_to_expression(
-        request.key, request.attribute_key_transform_context
-    )
+    key_col = attribute_key_to_expression(request.key)
     if request.aggregate == AggregateBucketRequest.FUNCTION_SUM:
         return f.sum(key_col, alias="sum")
     if request.aggregate == AggregateBucketRequest.FUNCTION_AVERAGE:
@@ -70,9 +68,7 @@ def _build_query(request: AggregateBucketRequest) -> Query:
         ],
         condition=base_conditions_and(
             request.meta,
-            trace_item_filters_to_expression(
-                request.filter, request.attribute_key_transform_context
-            ),
+            trace_item_filters_to_expression(request.filter),
         ),
         granularity=request.granularity_secs,
         groupby=[column("time")],
