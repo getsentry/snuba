@@ -35,6 +35,7 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
@@ -280,7 +281,9 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 @application.route("/rpc/<name>", methods=["POST"])
 @util.time_request("timeseries")
 def rpc(*, name: str, timer: Timer) -> Response:
-    rpcs = {
+    rpcs: Mapping[
+        str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
+    ] = {
         "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
         "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
     }
