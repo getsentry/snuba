@@ -295,18 +295,6 @@ def rpc(*, name: str, timer: Timer) -> Response:
         return Response(str(e), status=400)
 
 
-@application.route("/span_samples", methods=["POST"])
-@util.time_request("span_samples")
-def span_samples(*, timer: Timer) -> Response:
-    try:
-        req = SpanSamplesRequest()
-        req.ParseFromString(http_request.data)
-        res = span_samples_query(req, timer)
-        return Response(res.SerializeToString())
-    except BadSnubaRPCRequestException as e:
-        return Response(str(e), status=400)
-
-
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
