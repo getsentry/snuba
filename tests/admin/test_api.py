@@ -223,6 +223,29 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_sudo_system_query(admin_api: FlaskClient) -> None:
+    _, host, port = get_node_for_table(admin_api, "errors")
+    response = admin_api.post(
+        "/run_clickhouse_system_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps(
+            {
+                "host": host,
+                "port": port,
+                "storage": "errors_ro",
+                "sql": "SYSTEM START MERGES",
+                "sudo": True,
+            }
+        ),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["column_names"] == []
+    assert data["rows"] == []
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(

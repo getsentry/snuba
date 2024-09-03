@@ -31,7 +31,10 @@ from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
-from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
+from snuba.admin.clickhouse.system_queries import (
+    UnauthorizedForSudo,
+    run_system_query_on_host_with_sql,
+)
 from snuba.admin.clickhouse.tracing import (
     QueryTraceData,
     TraceOutput,
@@ -410,7 +413,7 @@ def auto_replacements_bypass_projects() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
+#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
@@ -425,20 +428,26 @@ def clickhouse_system_query() -> Response:
         port = req["port"]
         storage = req["storage"]
         raw_sql = req["sql"]
+        sudo_mode = req.get("sudo", False)
     except KeyError:
         return make_response(jsonify({"error": "Invalid request"}), 400)
 
     try:
-        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
+        result = run_system_query_on_host_with_sql(
+            host, port, storage, raw_sql, sudo_mode, g.user
+        )
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
-        if columns:
+        if columns is not None:
             res = {}
             res["column_names"] = [name for name, _ in columns]
             res["rows"] = [[str(col) for col in row] for row in rows]
 
             return make_response(jsonify(res), 200)
+    except UnauthorizedForSudo as err:
+        return make_response(jsonify({"error": err.message or "Cannot sudo"}), 400)
+
     except InvalidCustomQuery as err:
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
@@ -502,6 +511,8 @@ def clickhouse_trace_query() -> Response:
                     int(query_trace_data.port),
                     storage,
                     sql,
+                    False,
+                    g.user,
                 )
                 if not system_query_result.results:
                     time.sleep(1)

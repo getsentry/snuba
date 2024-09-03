@@ -4,7 +4,7 @@ import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
-import { SelectItem } from "@mantine/core"
+import { SelectItem, Switch } from "@mantine/core";
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
@@ -30,7 +30,9 @@ function QueryDisplay(props: {
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [query, setQuery] = useState<QueryState>({storage: getParamFromStorage("storage")});
+  const [query, setQuery] = useState<QueryState>({
+    storage: getParamFromStorage("storage"),
+  });
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     getRecentHistory(HISTORY_KEY)
   );
@@ -50,6 +52,15 @@ function QueryDisplay(props: {
       return {
         ...prevQuery,
         storage: storage,
+      };
+    });
+  }
+
+  function setSudo(value: boolean) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        sudo: value,
       };
     });
   }
@@ -93,29 +104,23 @@ function QueryDisplay(props: {
     let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
     // populate the hosts entries marking distributed hosts that are not also local
     if (node_info) {
-      let local_hosts = node_info.local_nodes.map((node) => (
-        {
-          value: `${node.host}:${node.port}`,
-          label: `${node.host}:${node.port}`,
-        }
-      ));
+      let local_hosts = node_info.local_nodes.map((node) => ({
+        value: `${node.host}:${node.port}`,
+        label: `${node.host}:${node.port}`,
+      }));
       let dist_hosts = node_info.dist_nodes
         .filter((node) => !node_info.local_nodes.includes(node))
-        .map((node) => (
-          {
-            value: `${node.host}:${node.port}`,
-            label: `${node.host}:${node.port} (distributed)`,
-          }
-        ));
+        .map((node) => ({
+          value: `${node.host}:${node.port}`,
+          label: `${node.host}:${node.port} (distributed)`,
+        }));
       let hosts = local_hosts.concat(dist_hosts);
       let query_node = node_info.query_node;
       if (query_node) {
-        hosts.push(
-          {
-            value: `${query_node.host}:${query_node.port}`,
-            label: `${query_node.host}:${query_node.port} (query node)`,
-          }
-        );
+        hosts.push({
+          value: `${query_node.host}:${query_node.port}`,
+          label: `${query_node.host}:${query_node.port} (query node)`,
+        });
       }
       return hosts;
     }
@@ -124,8 +129,19 @@ function QueryDisplay(props: {
 
   return (
     <div>
-      <form>
+      <form style={query.sudo ? sudoForm : standardForm}>
         <h2>Construct a ClickHouse System Query</h2>
+        <div>
+          <Switch
+            checked={query.sudo}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+              setSudo(evt.currentTarget.checked)
+            }
+            onLabel="Sudo mode"
+            offLabel="User mode"
+            size="xl"
+          />
+        </div>
         <QueryEditor
           onQueryUpdate={(sql) => {
             updateQuerySql(sql);
@@ -197,6 +213,12 @@ function QueryDisplay(props: {
   );
 }
 
+const sudoForm = {
+  border: "8px solid red",
+};
+
+const standardForm = {};
+
 const executeActionsStyle = {
   display: "flex",
   justifyContent: "space-between",
@@ -256,4 +278,5 @@ const queryDescription = {
   fontSize: 16,
   padding: "10px 5px",
 };
+
 export default QueryDisplay;
