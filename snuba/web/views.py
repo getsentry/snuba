@@ -277,13 +277,19 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/timeseries", methods=["POST"])
+@application.route("/rpc/<name>", methods=["POST"])
 @util.time_request("timeseries")
-def timeseries(*, timer: Timer) -> Response:
+def rpc(*, name: str, timer: Timer) -> Response:
+    rpcs = {
+        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
+        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
+    }
     try:
-        req = AggregateBucketRequest()
+        endpoint, req_class = rpcs[name]
+
+        req = req_class()
         req.ParseFromString(http_request.data)
-        res = timeseries_query(req, timer)
+        res = endpoint(req, timer)
         return Response(res.SerializeToString())
     except BadSnubaRPCRequestException as e:
         return Response(str(e), status=400)
