@@ -25,10 +25,6 @@ class InvalidStorageError(SerializableException):
     pass
 
 
-class ClickhouseTimeoutError(SerializableException):
-    pass
-
-
 def is_valid_node(
     host: str, port: int, cluster: ClickhouseCluster, storage_name: str
 ) -> bool:
