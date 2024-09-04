@@ -183,7 +183,13 @@ def run_system_query_on_host_with_sql(
         audit_log.record(
             user.email,
             AuditLogAction.RAN_SUDO_SYSTEM_QUERY,
-            {"query": system_query_sql},
+            {
+                "query": system_query_sql,
+                "clickhouse_port": clickhouse_port,
+                "clickhouse_host": clickhouse_host,
+                "storage_name": storage_name,
+                "sudo_mode": sudo_mode,
+            },
         )
 
     if is_query_select(system_query_sql):
