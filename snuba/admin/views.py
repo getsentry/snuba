@@ -505,41 +505,7 @@ def clickhouse_trace_query() -> Response:
                     query_trace_data.host, query_trace_data.port, storage, sql, g.user
                 )
             )
-
-            # TODO: Onkar to fix this logic later.
-            # system_query_result, counter = None, 0
-
-            # while counter < 60:
-            #     # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
-            #     # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
-            #     system_query_result = run_system_query_on_host_with_sql(
-            #         query_trace_data.host,
-            #         int(query_trace_data.port),
-            #         storage,
-            #         sql,
-            #         False,
-            #         g.user,
-            #     )
-            #     if not system_query_result.results:
-            #         time.sleep(1)
-            #         counter += 1
-            #     else:
-            #         break
-
-            # if system_query_result is not None and len(system_query_result.results) > 0:
-            #     query_trace.profile_events_meta.append(system_query_result.meta)
-            #     query_trace.profile_events_profile = cast(
-            #         Dict[str, int], system_query_result.profile
-            #     )
-            #     columns = system_query_result.meta
-            #     if columns:
-            #         res = {}
-            #         res["column_names"] = [name for name, _ in columns]
-            #         res["rows"] = []
-            #         for query_result in system_query_result.results:
-            #             if query_result[0]:
-            #                 res["rows"].append(json.dumps(query_result[0]))
-            #         query_trace.profile_events_results[query_trace_data.node_name] = res
+            # TODO: Onkar to add the profile event logic later.
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
