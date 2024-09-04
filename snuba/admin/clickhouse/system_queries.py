@@ -180,18 +180,6 @@ def run_system_query_on_host_with_sql(
         if not can_sudo:
             raise UnauthorizedForSudo()
 
-        audit_log.record(
-            user.email,
-            AuditLogAction.RAN_SUDO_SYSTEM_QUERY,
-            {
-                "query": system_query_sql,
-                "clickhouse_port": clickhouse_port,
-                "clickhouse_host": clickhouse_host,
-                "storage_name": storage_name,
-                "sudo_mode": sudo_mode,
-            },
-        )
-
     if is_query_select(system_query_sql):
         validate_system_query(system_query_sql)
     elif is_query_describe(system_query_sql):
@@ -216,6 +204,19 @@ def run_system_query_on_host_with_sql(
             raise InvalidCustomQuery(f"Invalid query: {exc.message} {exc.code}")
 
         raise
+    finally:
+        if sudo_mode:
+            audit_log.record(
+                user.email,
+                AuditLogAction.RAN_SUDO_SYSTEM_QUERY,
+                {
+                    "query": system_query_sql,
+                    "clickhouse_port": clickhouse_port,
+                    "clickhouse_host": clickhouse_host,
+                    "storage_name": storage_name,
+                    "sudo_mode": sudo_mode,
+                },
+            )
 
 
 def validate_system_query(sql_query: str) -> None:
