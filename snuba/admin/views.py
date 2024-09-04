@@ -520,19 +520,20 @@ def clickhouse_trace_query() -> Response:
                 else:
                     break
 
-            query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(
-                Dict[str, int], system_query_result.profile
-            )
-            columns = system_query_result.meta
-            if columns:
-                res = {}
-                res["column_names"] = [name for name, _ in columns]
-                res["rows"] = []
-                for query_result in system_query_result.results:
-                    if query_result[0]:
-                        res["rows"].append(json.dumps(query_result[0]))
-                query_trace.profile_events_results[query_trace_data.node_name] = res
+            if system_query_result is not None and len(system_query_result.results) > 0:
+                query_trace.profile_events_meta.append(system_query_result.meta)
+                query_trace.profile_events_profile = cast(
+                    Dict[str, int], system_query_result.profile
+                )
+                columns = system_query_result.meta
+                if columns:
+                    res = {}
+                    res["column_names"] = [name for name, _ in columns]
+                    res["rows"] = []
+                    for query_result in system_query_result.results:
+                        if query_result[0]:
+                            res["rows"].append(json.dumps(query_result[0]))
+                    query_trace.profile_events_results[query_trace_data.node_name] = res
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
