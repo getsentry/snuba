@@ -99,7 +99,7 @@ GROUP BY
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        ops: Sequence[SqlOperation] = [
+        return [
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.meta_view_name,
@@ -121,4 +121,3 @@ GROUP BY
                 target=OperationTarget.DISTRIBUTED,
             ),
         ]
-        return ops
