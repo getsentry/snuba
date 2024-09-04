@@ -22,6 +22,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import String, UInt
+from snuba.utils.schemas import Map
 
 TEST_CASES = [
     pytest.param(
@@ -122,17 +123,52 @@ TEST_CASES = [
         id="nested",
     ),
     pytest.param(
+        Map(
+            key=String(),
+            value=Array(String()),
+        ),
+        Map(
+            key=String(),
+            value=Array(String()),
+        ),
         cast(
             Column[Modifier],
-            AggregateFunction("uniqIf", [UInt(8), UInt(32)], Modifier(nullable=True)),
+            Map(key=String(), value=UInt(64)),
+        ),
+        "Map(String, Array(String))",
+        id="map",
+    ),
+    pytest.param(
+        cast(
+            Column[Modifier],
+            AggregateFunction(
+                "uniqIf", [UInt(8), UInt(32)], False, Modifier(nullable=True)
+            ),
         ),
         AggregateFunction("uniqIf", [UInt(8), UInt(32)]),
         cast(
             Column[Modifier],
-            AggregateFunction("uniqIf", [UInt(8)], Modifier(nullable=True)),
+            AggregateFunction("uniqIf", [UInt(8)], False, Modifier(nullable=True)),
         ),
         "Nullable(AggregateFunction(uniqIf, UInt8, UInt32))",
         id="aggregated",
+    ),
+    pytest.param(
+        cast(
+            Column[Modifier],
+            AggregateFunction(
+                "sum", [UInt(8), UInt(32)], True, Modifier(nullable=True)
+            ),
+        ),
+        AggregateFunction("sum", [UInt(8), UInt(32)], True),
+        cast(
+            Column[Modifier],
+            AggregateFunction(
+                "sum", [UInt(8), UInt(32)], False, Modifier(nullable=True)
+            ),
+        ),
+        "Nullable(SimpleAggregateFunction(sum, UInt8, UInt32))",
+        id="simple-aggregated",
     ),
     pytest.param(
         Enum([("a", 1), ("b", 2)], Modifier(nullable=True)),

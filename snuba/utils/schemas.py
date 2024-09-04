@@ -466,11 +466,13 @@ class AggregateFunction(ColumnType[TModifiers]):
         self,
         func: str,
         arg_types: Sequence[ColumnType[TModifiers]],
+        simple: bool = False,  # SimpleAggregateFunction is faster for things like sum
         modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
         self.func = func
         self.arg_types = arg_types
+        self.simple = simple
 
     def _repr_content(self) -> str:
         return ", ".join(repr(x) for x in chain([self.func], self.arg_types))
@@ -482,35 +484,24 @@ class AggregateFunction(ColumnType[TModifiers]):
             == cast(AggregateFunction[TModifiers], other).get_modifiers()
             and self.func == cast(AggregateFunction[TModifiers], other).func
             and self.arg_types == cast(AggregateFunction[TModifiers], other).arg_types
+            and self.simple == cast(AggregateFunction[TModifiers], other).simple
         )
 
     def _for_schema_impl(self) -> str:
-        return "AggregateFunction({})".format(
+        return "{}({})".format(
+            "SimpleAggregateFunction" if self.simple else "AggregateFunction",
             ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
         )
 
     def set_modifiers(
         self, modifiers: Optional[TModifiers]
     ) -> AggregateFunction[TModifiers]:
-        return AggregateFunction(self.func, self.arg_types, modifiers)
+        return AggregateFunction(self.func, self.arg_types, self.simple, modifiers)
 
     def get_raw(self) -> AggregateFunction[TModifiers]:
-        return AggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
-
-
-class SimpleAggregateFunction(AggregateFunction):
-    def _for_schema_impl(self) -> str:
-        return "SimpleAggregateFunction({})".format(
-            ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
+        return AggregateFunction(
+            self.func, [t.get_raw() for t in self.arg_types], self.simple
         )
-
-    def set_modifiers(
-        self, modifiers: Optional[TModifiers]
-    ) -> SimpleAggregateFunction[TModifiers]:
-        return SimpleAggregateFunction(self.func, self.arg_types, modifiers)
-
-    def get_raw(self) -> SimpleAggregateFunction[TModifiers]:
-        return SimpleAggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
 
 
 class String(ColumnType[TModifiers]):
