@@ -166,7 +166,7 @@ def test_run_optimize_with_partition_tracker() -> None:
         clickhouse=clickhouse_pool,
         storage=storage,
         database=database,
-        parallel=1,
+        default_parallel_threads=1,
         clickhouse_host="127.0.0.1",
         tracker=tracker,
     )
@@ -179,7 +179,7 @@ def test_run_optimize_with_partition_tracker() -> None:
         clickhouse=clickhouse_pool,
         storage=storage,
         database=database,
-        parallel=1,
+        default_parallel_threads=1,
         clickhouse_host="127.0.0.1",
         tracker=tracker,
     )
@@ -272,7 +272,7 @@ def test_run_optimize_with_ongoing_merges() -> None:
                 clickhouse=clickhouse_pool,
                 storage=storage,
                 database=database,
-                parallel=1,
+                default_parallel_threads=1,
                 clickhouse_host="127.0.0.1",
                 tracker=tracker,
             )

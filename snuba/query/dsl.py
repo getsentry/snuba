@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 
 from snuba.query.expressions import (
     Column,
+    CurriedFunctionCall,
     Expression,
     FunctionCall,
     Literal,
@@ -37,14 +38,15 @@ class NestedColumn:
         )
 
 
+def _arg_to_literal_expr(arg: Expression | OptionalScalarType) -> Expression:
+    if isinstance(arg, Expression):
+        return arg
+    return Literal(None, arg)
+
+
 class _FunctionCall:
     def __init__(self, name: str) -> None:
         self.name = name
-
-    def _arg_to_literal_expr(self, arg: Expression | OptionalScalarType) -> Expression:
-        if isinstance(arg, Expression):
-            return arg
-        return Literal(None, arg)
 
     def __call__(
         self, *args: Expression | OptionalScalarType, **kwargs: str
@@ -52,8 +54,28 @@ class _FunctionCall:
         alias = kwargs.pop("alias", None)
         if kwargs:
             raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
-        transformed_args = [self._arg_to_literal_expr(arg) for arg in args]
+        transformed_args = [_arg_to_literal_expr(arg) for arg in args]
         return FunctionCall(alias, self.name, tuple(transformed_args))
+
+
+class _CurriedFunctionCall:
+    def __init__(self, internal_function: FunctionCall):
+        self.internal_function = internal_function
+
+    def __call__(
+        self, *args: Expression | OptionalScalarType, **kwargs: str
+    ) -> CurriedFunctionCall:
+        alias = kwargs.pop("alias", None)
+        if kwargs:
+            raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
+
+        transformed_args = [_arg_to_literal_expr(arg) for arg in args]
+
+        return CurriedFunctionCall(
+            alias=alias,
+            internal_function=self.internal_function,
+            parameters=tuple(transformed_args),
+        )
 
 
 class _Functions:
@@ -61,15 +83,44 @@ class _Functions:
         return _FunctionCall(name)
 
 
+class _InternalCurriedFunction:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __call__(
+        self, *args: Expression | OptionalScalarType, **kwargs: str
+    ) -> _CurriedFunctionCall:
+        alias = kwargs.pop("alias", None)
+        if kwargs:
+            raise ValueError(f"Unsuppored dsl kwargs: {kwargs}")
+        transformed_args = [_arg_to_literal_expr(arg) for arg in args]
+        internal_function = FunctionCall(alias, self.name, tuple(transformed_args))
+        return _CurriedFunctionCall(internal_function=internal_function)
+
+
+class _CurriedFunctions:
+    def __getattr__(self, name: str) -> _InternalCurriedFunction:
+        return _InternalCurriedFunction(name)
+
+
 """
 Usage:
 
+from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
+
 assert f.equals(1, 1, alias="eq") == FunctionCall(
     "eq", "equals" (Literal(None, 1), Literal(None, 1))
 )
+
+assert cf.quantile(0.9)(column("measurement"), alias="p90") == CurriedFunctionCall(
+        alias="p90",
+        internal_function=f.quantile(0.9),
+        parameters=(column("measurement"), )
+    )
 """
 Functions = _Functions()
+CurriedFunctions = _CurriedFunctions()
 
 
 def column(

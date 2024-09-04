@@ -165,6 +165,114 @@ def test_mql() -> None:
     assert eq, reason
 
 
+def test_mql_extrapolate() -> None:
+    mql = 'sum(`d:transactions/duration@millisecond`){dist:["dist1", "dist2"]}'
+    context = {
+        "start": "2021-01-01T00:00:00",
+        "end": "2021-01-02T00:00:00",
+        "rollup": {
+            "orderby": "ASC",
+            "granularity": 60,
+            "interval": None,
+            "with_totals": "False",
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1],
+            "use_case_id": "transactions",
+        },
+        "limit": None,
+        "offset": None,
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "dist": 888,
+        },
+        "extrapolate": True,
+    }
+    expected = Query(
+        QueryEntity(
+            EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+            get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+        ),
+        selected_columns=[
+            SelectedExpression(
+                "aggregate_value",
+                FunctionCall(
+                    "_snuba_aggregate_value",
+                    "sum_weighted",
+                    (Column("_snuba_value", None, "value"),),
+                ),
+            ),
+        ],
+        groupby=[],
+        condition=and_cond(
+            and_cond(
+                and_cond(
+                    f.greaterOrEquals(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 1, 0, 0)),
+                    ),
+                    f.less(
+                        column("timestamp", None, "_snuba_timestamp"),
+                        literal(datetime(2021, 1, 2, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    in_cond(
+                        column("project_id", None, "_snuba_project_id"),
+                        f.tuple(literal(1)),
+                    ),
+                    in_cond(
+                        column("org_id", None, "_snuba_org_id"), f.tuple(literal(1))
+                    ),
+                ),
+            ),
+            and_cond(
+                and_cond(
+                    f.equals(
+                        column("use_case_id", None, "_snuba_use_case_id"),
+                        literal("transactions"),
+                    ),
+                    f.equals(
+                        column("granularity", None, "_snuba_granularity"), literal(60)
+                    ),
+                ),
+                and_cond(
+                    f.equals(
+                        column("metric_id", None, "_snuba_metric_id"), literal(123456)
+                    ),
+                    in_cond(
+                        tags_raw["888"], f.tuple(literal("dist1"), literal("dist2"))
+                    ),
+                ),
+            ),
+        ),
+        order_by=[
+            OrderBy(
+                OrderByDirection.ASC,
+                FunctionCall(
+                    alias="_snuba_aggregate_value",
+                    function_name="sum_weighted",
+                    parameters=(
+                        (
+                            Column(
+                                alias="_snuba_value",
+                                table_name=None,
+                                column_name="value",
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        ],
+        totals=False,
+        limit=1000,
+    )
+    actual = parse_mql_query(mql, context, get_dataset("generic_metrics"))
+    eq, reason = actual.equals(expected)
+    assert eq, reason
+
+
 def test_mql_wildcards() -> None:
     mql = 'sum(`d:transactions/duration@millisecond`){mytag:"before_wildcard_*"}'
     context = {

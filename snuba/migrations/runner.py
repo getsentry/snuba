@@ -68,12 +68,14 @@ class MigrationDetails(NamedTuple):
 
 class Runner:
     def __init__(self) -> None:
-        migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
+        self.__migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         self.__table_name = (
-            LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
+            LOCAL_TABLE_NAME
+            if self.__migrations_cluster.is_single_node()
+            else DIST_TABLE_NAME
         )
 
-        self.__connection = migrations_cluster.get_query_connection(
+        self.__connection = self.__migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
 
@@ -114,6 +116,21 @@ class Runner:
                 raise e
 
         return Status.NOT_STARTED, None
+
+    def force_overwrite_status(
+        self, group: MigrationGroup, migration_id: str, new_status: Status
+    ) -> None:
+        """Sometimes a migration gets blocked or times out for whatever reason.
+        This function is used to overwrite the state in the snuba table keeping
+        track of migration so we can try again"""
+        local_node = self.__migrations_cluster.get_local_nodes()[0]
+        local_node_connection = self.__migrations_cluster.get_node_connection(
+            ClickhouseClientSettings.MIGRATE, local_node
+        )
+
+        local_node_connection.execute(
+            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
+        )
 
     def show_all(
         self, groups: Optional[Sequence[str]] = None
