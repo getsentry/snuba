@@ -503,7 +503,7 @@ def clickhouse_trace_query() -> Response:
             sql = profile_events_raw_sql.format(query_trace_data.query_id)
             system_query_result, counter = None, 0
 
-            while counter < 10:
+            while counter < 60:
                 # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
                 # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
                 system_query_result = run_system_query_on_host_with_sql(
@@ -520,24 +520,20 @@ def clickhouse_trace_query() -> Response:
                 else:
                     break
 
-            if system_query_result is None or len(system_query_result.results) == 0:
-                raise ClickhouseTimeoutError(
-                    "Waited too long for getting the result of query: {}".format(sql)
+            if system_query_result is not None and len(system_query_result.results) > 0:
+                query_trace.profile_events_meta.append(system_query_result.meta)
+                query_trace.profile_events_profile = cast(
+                    Dict[str, int], system_query_result.profile
                 )
-
-            query_trace.profile_events_meta.append(system_query_result.meta)
-            query_trace.profile_events_profile = cast(
-                Dict[str, int], system_query_result.profile
-            )
-            columns = system_query_result.meta
-            if columns:
-                res = {}
-                res["column_names"] = [name for name, _ in columns]
-                res["rows"] = []
-                for query_result in system_query_result.results:
-                    if query_result[0]:
-                        res["rows"].append(json.dumps(query_result[0]))
-                query_trace.profile_events_results[query_trace_data.node_name] = res
+                columns = system_query_result.meta
+                if columns:
+                    res = {}
+                    res["column_names"] = [name for name, _ in columns]
+                    res["rows"] = []
+                    for query_result in system_query_result.results:
+                        if query_result[0]:
+                            res["rows"].append(json.dumps(query_result[0]))
+                    query_trace.profile_events_results[query_trace_data.node_name] = res
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
