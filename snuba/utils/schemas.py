@@ -516,9 +516,10 @@ class SimpleAggregateFunction(ColumnType[TModifiers]):
         return (
             self.__class__ == other.__class__
             and self.get_modifiers()
-            == cast(AggregateFunction[TModifiers], other).get_modifiers()
-            and self.func == cast(AggregateFunction[TModifiers], other).func
-            and self.arg_types == cast(AggregateFunction[TModifiers], other).arg_types
+            == cast(SimpleAggregateFunction[TModifiers], other).get_modifiers()
+            and self.func == cast(SimpleAggregateFunction[TModifiers], other).func
+            and self.arg_types
+            == cast(SimpleAggregateFunction[TModifiers], other).arg_types
         )
 
     def _for_schema_impl(self) -> str:
@@ -528,11 +529,11 @@ class SimpleAggregateFunction(ColumnType[TModifiers]):
 
     def set_modifiers(
         self, modifiers: Optional[TModifiers]
-    ) -> AggregateFunction[TModifiers]:
-        return AggregateFunction(self.func, self.arg_types, modifiers)
+    ) -> SimpleAggregateFunction[TModifiers]:
+        return SimpleAggregateFunction(self.func, self.arg_types, modifiers)
 
-    def get_raw(self) -> AggregateFunction[TModifiers]:
-        return AggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
+    def get_raw(self) -> SimpleAggregateFunction[TModifiers]:
+        return SimpleAggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
 
 
 class String(ColumnType[TModifiers]):
