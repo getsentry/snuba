@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import io
 import sys
-import time
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
 
 import sentry_sdk
 import simplejson as json
@@ -22,7 +21,7 @@ from snuba.admin.cardinality_analyzer.cardinality_analyzer import run_metrics_qu
 from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
-from snuba.admin.clickhouse.common import ClickhouseTimeoutError, InvalidCustomQuery
+from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -501,39 +500,12 @@ def clickhouse_trace_query() -> Response:
 
         for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
             sql = profile_events_raw_sql.format(query_trace_data.query_id)
-            system_query_result, counter = None, 0
-
-            while counter < 60:
-                # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
-                # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
-                system_query_result = run_system_query_on_host_with_sql(
-                    query_trace_data.host,
-                    int(query_trace_data.port),
-                    storage,
-                    sql,
-                    False,
-                    g.user,
+            logger.info(
+                "Profile event gathering host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
+                    query_trace_data.host, query_trace_data.port, storage, sql, g.user
                 )
-                if not system_query_result.results:
-                    time.sleep(1)
-                    counter += 1
-                else:
-                    break
-
-            if system_query_result is not None and len(system_query_result.results) > 0:
-                query_trace.profile_events_meta.append(system_query_result.meta)
-                query_trace.profile_events_profile = cast(
-                    Dict[str, int], system_query_result.profile
-                )
-                columns = system_query_result.meta
-                if columns:
-                    res = {}
-                    res["column_names"] = [name for name, _ in columns]
-                    res["rows"] = []
-                    for query_result in system_query_result.results:
-                        if query_result[0]:
-                            res["rows"].append(json.dumps(query_result[0]))
-                    query_trace.profile_events_results[query_trace_data.node_name] = res
+            )
+            # TODO: Onkar to add the profile event logic later.
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
@@ -554,18 +526,6 @@ def clickhouse_trace_query() -> Response:
             "code": err.code,
         }
         return make_response(jsonify({"error": details}), 400)
-    except ClickhouseTimeoutError as err:
-        return make_response(
-            jsonify(
-                {
-                    "error": {
-                        "type": "clickhouse_timeout",
-                        "message": err.message or "Query timed out",
-                    }
-                }
-            ),
-            408,
-        )
     except Exception as err:
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
