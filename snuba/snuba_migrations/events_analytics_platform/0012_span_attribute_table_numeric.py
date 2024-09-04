@@ -36,6 +36,7 @@ class Migration(migration.ClickhouseNodeMigration):
         Column(
             "trace_id", UUID()
         ),  # recommended by altinity, this lets us find traces which have k=v set
+        Column("project_id", UInt(64)),
         Column("attr_key", String()),
         Column("attr_value", Float(64)),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
@@ -52,7 +53,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     primary_key="(organization_id, attr_key)",
-                    order_by="(organization_id, attr_key, attr_value, timestamp, trace_id, retention_days)",
+                    order_by="(organization_id, attr_key, attr_value, timestamp, trace_id, project_id, retention_days)",
                     partition_by="toMonday(timestamp)",
                     settings={
                         "index_granularity": self.granularity,
@@ -80,6 +81,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 query=f"""
 SELECT
     organization_id,
+    project_id,
     trace_id,
     attrs.1 as attr_key,
     attrs.2 as attr_value,
@@ -92,6 +94,7 @@ LEFT ARRAY JOIN
     arrayConcat({",".join(f"CAST(attr_num_{n}, 'Array(Tuple(String, Float64))')" for n in range(ATTRIBUTE_BUCKETS))}) AS attrs
 GROUP BY
     organization_id,
+    project_id,
     trace_id,
     attr_key,
     attr_value,
