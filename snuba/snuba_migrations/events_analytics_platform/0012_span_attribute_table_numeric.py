@@ -86,7 +86,7 @@ SELECT
     toStartOfDay(_sort_timestamp) AS timestamp,
     retention_days,
     1 AS count,
-    duration_ms
+    maxSimpleState(duration_ms)
 FROM eap_spans_local
 LEFT ARRAY JOIN
     arrayConcat({",".join(f"CAST(attr_num_{n}, 'Array(Tuple(String, Float64))')" for n in range(ATTRIBUTE_BUCKETS))}) AS attrs
