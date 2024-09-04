@@ -105,6 +105,11 @@ GROUP BY
                 table_name=self.meta_view_name,
                 target=OperationTarget.LOCAL,
             ),
+            operations.TruncateTable(
+                storage_set=self.storage_set_key,
+                table_name=self.meta_local_table_name,
+                target=OperationTarget.LOCAL,
+            ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.meta_local_table_name,
