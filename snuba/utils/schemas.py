@@ -498,6 +498,21 @@ class AggregateFunction(ColumnType[TModifiers]):
         return AggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
 
 
+class SimpleAggregateFunction(AggregateFunction):
+    def _for_schema_impl(self) -> str:
+        return "SimpleAggregateFunction({})".format(
+            ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
+        )
+
+    def set_modifiers(
+        self, modifiers: Optional[TModifiers]
+    ) -> SimpleAggregateFunction[TModifiers]:
+        return SimpleAggregateFunction(self.func, self.arg_types, modifiers)
+
+    def get_raw(self) -> SimpleAggregateFunction[TModifiers]:
+        return SimpleAggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
+
+
 class String(ColumnType[TModifiers]):
     pass
 
