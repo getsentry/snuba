@@ -16,12 +16,12 @@
 
 # EAP-related
 /snuba/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
-/snuba/snuba_migrations/events-analytics-platform @getsentry/events-analytics-platform @getsentry/owners-snuba
+/snuba/snuba_migrations/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
+/rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform
 
 # rust_snuba
 /rust_snuba @getsentry/owners-snuba
 /rust_snuba/src/processors/replays.rs @getsentry/replay-backend
-/rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform
 
 # Legal
 /LICENSE.md  @getsentry/owners-legal
