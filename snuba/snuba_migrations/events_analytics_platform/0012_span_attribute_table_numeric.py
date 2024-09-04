@@ -11,6 +11,7 @@ from snuba.utils.schemas import (
     UUID,
     Column,
     DateTime,
+    Float,
     SimpleAggregateFunction,
     String,
     UInt,
@@ -27,18 +28,19 @@ class Migration(migration.ClickhouseNodeMigration):
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
     granularity = "8192"
 
-    meta_view_name = "spans_str_attrs_mv"
-    meta_local_table_name = "spans_str_attrs_local"
-    meta_dist_table_name = "spans_str_attrs_dist"
+    meta_view_name = "spans_num_attrs_mv"
+    meta_local_table_name = "spans_num_attrs_local"
+    meta_dist_table_name = "spans_num_attrs_dist"
     meta_table_columns: Sequence[Column[Modifiers]] = [
         Column("organization_id", UInt(64)),
         Column(
             "trace_id", UUID()
         ),  # recommended by altinity, this lets us find traces which have k=v set
         Column("attr_key", String()),
-        Column("attr_value", String()),
+        Column("attr_value", Float(64)),
         Column("timestamp", DateTime(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("retention_days", UInt(16)),
+        Column("duration_ms", SimpleAggregateFunction("max", [UInt(32)])),
         Column("count", SimpleAggregateFunction("sum", [UInt(64)])),
     ]
 
@@ -83,10 +85,11 @@ SELECT
     attrs.2 as attr_value,
     toStartOfDay(_sort_timestamp) AS timestamp,
     retention_days,
-    1 AS count
+    1 AS count,
+    duration_ms
 FROM eap_spans_local
 LEFT ARRAY JOIN
-    arrayConcat({",".join(f"CAST(attr_str_{n}, 'Array(Tuple(String, String))')" for n in range(ATTRIBUTE_BUCKETS))}) AS attrs
+    arrayConcat({",".join(f"CAST(attr_num_{n}, 'Array(Tuple(String, Float64))')" for n in range(ATTRIBUTE_BUCKETS))}) AS attrs
 GROUP BY
     organization_id,
     trace_id,
