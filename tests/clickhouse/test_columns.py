@@ -17,12 +17,12 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
+    Map,
     Nested,
     ReadOnly,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
 from snuba.clickhouse.columns import SimpleAggregateFunction, String, UInt
-from snuba.utils.schemas import Map
 
 TEST_CASES = [
     pytest.param(
