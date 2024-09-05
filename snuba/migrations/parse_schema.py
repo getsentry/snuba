@@ -174,7 +174,7 @@ class Visitor(NodeVisitor):  # type: ignore
             _sp,
             _paren,
         ) = visited_children
-        return AggregateFunction(agg_func, [*agg_types])
+        return SimpleAggregateFunction(agg_func, [*agg_types])
 
     def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
         return str(node.text)
