@@ -29,7 +29,7 @@ def tags_list_query(
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
     start_timestamp = datetime.utcfromtimestamp(request.meta.start_timestamp.seconds)
-    if start_timestamp.day >= datetime.now().day and start_timestamp.hour != 0:
+    if start_timestamp.day >= datetime.utcnow().day and start_timestamp.hour != 0:
         raise BadSnubaRPCRequestException(
             "Tags' timestamps are stored per-day, you probably want to set start_timestamp to UTC 00:00 today or a time yesterday."
         )
@@ -48,6 +48,7 @@ SELECT * FROM (
     FROM {num_data_source.get_table_name()}
     WHERE organization_id={request.meta.organization_id}
     AND project_id IN ({', '.join(str(pid) for pid in request.meta.project_ids)})
+    AND timestamp BETWEEN fromUnixTimestamp({request.meta.start_timestamp.seconds}) AND fromUnixTimestamp({request.meta.end_timestamp.seconds})
 )
 ORDER BY attr_key
 LIMIT {request.limit} OFFSET {request.offset}
