@@ -7,9 +7,7 @@ from typing import Any, Dict, MutableMapping, Optional, Protocol, Type, Union
 
 import sentry_sdk
 
-from snuba import environment
-from snuba import settings as snuba_settings
-from snuba import state
+from snuba import environment, state
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query_dsl.accessors import get_object_ids_in_query_ast
@@ -20,9 +18,6 @@ from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
-from snuba.query.mql.parser_supported_join import (
-    parse_mql_query_new as _parse_mql_query_new,
-)
 from snuba.query.parser.exceptions import PostProcessingError
 from snuba.query.query_settings import (
     HTTPQuerySettings,
@@ -70,30 +65,13 @@ def parse_mql_query(
     dataset: Dataset,
     custom_processing: Optional[CustomProcessors] = None,
 ) -> Union[Query, CompositeQuery[LogicalDataSource]]:
-    run_new_mql_parser_rollout = state.get_float_config(
-        "run_new_mql_parser", snuba_settings.RUN_NEW_MQL_PARSER_SAMPLE_RATE
+    return _parse_mql_query(
+        request_parts.query["query"],
+        request_parts.query["mql_context"],
+        dataset,
+        custom_processing,
+        settings,
     )
-    run_new_mql_parser = (
-        random.random() < run_new_mql_parser_rollout
-        if run_new_mql_parser_rollout is not None
-        else False
-    )
-    if run_new_mql_parser:
-        return _parse_mql_query_new(
-            request_parts.query["query"],
-            request_parts.query["mql_context"],
-            dataset,
-            custom_processing,
-            settings,
-        )
-    else:
-        return _parse_mql_query(
-            request_parts.query["query"],
-            request_parts.query["mql_context"],
-            dataset,
-            custom_processing,
-            settings,
-        )
 
 
 def _consistent_override(original_setting: bool, referrer: str) -> bool:
