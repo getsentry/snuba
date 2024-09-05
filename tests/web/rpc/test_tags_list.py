@@ -49,8 +49,8 @@ def gen_message(id: int) -> Mapping[str, Any]:
         "end_timestamp_precise": BASE_TIME.timestamp() + 1,
     }
     for i in range(id * 10, id * 10 + 10):
-        res["tags"][f"a_tag_{i:03}"] = "blah"
-        res["measurements"][f"b_measurement_{i:03}"] = {"value": 10}
+        res["tags"][f"a_tag_{i:03}"] = "blah"  # type: ignore
+        res["measurements"][f"b_measurement_{i:03}"] = {"value": 10}  # type: ignore
     return res
 
 
