@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-name: eap_spans
+name: spans_num_attrs
 
 schema:
   [
