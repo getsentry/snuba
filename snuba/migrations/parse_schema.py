@@ -22,6 +22,7 @@ from snuba.clickhouse.columns import (
     IPv4,
     IPv6,
     Map,
+    SimpleAggregateFunction,
     String,
     UInt,
 )
@@ -29,7 +30,7 @@ from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(
     r"""
-    type             = primitive / lowcardinality / agg / nullable / array / map
+    type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map
     # datetime64 needs to be before basic_type to not be parsed as DateTime
     primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
@@ -48,6 +49,7 @@ grammar = Grammar(
     enum_str         = ~r"([a-zA-Z0-9\-]+)"
     enum_val         = ~r"\d+"
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
+    simple_agg       = "SimpleAggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
     agg_func         = ~r"[a-zA-Z0-9]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z0-9]+"
     agg_types        = (type (space* comma space*)?)*
     array            = "Array" open_paren space* (array / primitive / lowcardinality / nullable) space* close_paren
@@ -156,6 +158,23 @@ class Visitor(NodeVisitor):  # type: ignore
             _paren,
         ) = visited_children
         return AggregateFunction(agg_func, [*agg_types])
+
+    def visit_simple_agg(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> SimpleAggregateFunction[MigrationModifiers]:
+        (
+            _agg,
+            _paren,
+            _sp,
+            agg_func,
+            _sp,
+            _comma,
+            _sp,
+            agg_types,
+            _sp,
+            _paren,
+        ) = visited_children
+        return SimpleAggregateFunction(agg_func, [*agg_types])
 
     def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
         return str(node.text)
