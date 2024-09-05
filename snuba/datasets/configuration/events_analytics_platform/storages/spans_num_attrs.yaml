@@ -1,9 +1,9 @@
 version: v1
 kind: readable_storage
-name: spans_str_attrs
+name: spans_num_attrs
 
 storage:
-  key: spans_str_attrs
+  key: spans_num_attrs
   set_key: events_analytics_platform
 
 readiness_state: partial
@@ -28,8 +28,8 @@ schema:
           },
       },
     ]
-  local_table_name: spans_str_attrs_local
-  dist_table_name: spans_str_attrs_dist
+  local_table_name: spans_num_attrs_local
+  dist_table_name: spans_num_attrs_dist
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:

@@ -23,7 +23,7 @@ schema:
   ]
 
 storages:
-  - storage: spans_str_attrs
+  - storage: spans_num_attrs
     is_writable: false
 
 storage_selector:
