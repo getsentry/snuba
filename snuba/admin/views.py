@@ -1053,8 +1053,6 @@ def production_snql_query() -> Response:
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def production_mql_query() -> Response:
     body = json.loads(request.data)
-    print("body received")
-    print(body)
     body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
         return run_mql_query(body, g.user.email)
