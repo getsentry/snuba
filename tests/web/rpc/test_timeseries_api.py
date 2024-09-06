@@ -9,6 +9,7 @@ from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -88,11 +89,16 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
     }
 
 
+BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
+    minutes=180
+)
+
+
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
-    start = datetime.utcnow() - timedelta(hours=1)
-    messages = [gen_message(start + timedelta(minutes=i)) for i in range(60)]
+    start = BASE_TIME
+    messages = [gen_message(start - timedelta(minutes=i)) for i in range(120)]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
@@ -108,29 +114,51 @@ class TestTimeSeriesApi(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
             ),
+            key=AttributeKey(name="project_id", type=AttributeKey.TYPE_INT),
             aggregate=AggregateBucketRequest.FUNCTION_SUM,
-            start_timestamp=ts,
-            end_timestamp=ts,
             granularity_secs=60,
         )
-        response = self.app.post("/timeseries", data=message.SerializeToString())
+        response = self.app.post(
+            "/rpc/AggregateBucketRequest", data=message.SerializeToString()
+        )
         assert response.status_code == 200
 
     def test_with_data(self, setup_teardown: Any) -> None:
-        ts = Timestamp(seconds=int(datetime.utcnow().timestamp()))
-        hour_ago = int((datetime.utcnow() - timedelta(hours=1)).timestamp())
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = AggregateBucketRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
             ),
-            start_timestamp=Timestamp(seconds=hour_ago),
-            end_timestamp=ts,
-            metric_name="eap.measurement",
+            key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
             aggregate=AggregateBucketRequest.FUNCTION_AVERAGE,
+            granularity_secs=1,
+        )
+        response = timeseries_query(message)
+        assert response.result == [420 for _ in range(60)]
+
+    def test_quantiles(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = AggregateBucketRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
+            aggregate=AggregateBucketRequest.FUNCTION_P99,
             granularity_secs=1,
         )
         response = timeseries_query(message)

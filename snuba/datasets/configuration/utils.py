@@ -25,6 +25,7 @@ from snuba.utils.schemas import (
     IPv4,
     IPv6,
     Map,
+    SimpleAggregateFunction,
 )
 
 
@@ -121,6 +122,12 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = Array(__parse_column_type(col["args"]["inner_type"]), modifiers)
     elif col["type"] == "AggregateFunction":
         column_type = AggregateFunction(
+            col["args"]["func"],
+            [__parse_column_type(c) for c in col["args"]["arg_types"]],
+            modifiers,
+        )
+    elif col["type"] == "SimpleAggregateFunction":
+        column_type = SimpleAggregateFunction(
             col["args"]["func"],
             [__parse_column_type(c) for c in col["args"]["arg_types"]],
             modifiers,

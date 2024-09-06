@@ -82,6 +82,7 @@ TOOL_RESOURCES = {
     "cardinality-analyzer": ToolResource("cardinality-analyzer"),
     "production-queries": ToolResource("production-queries"),
     "system-queries": ToolResource("system-queries"),
+    "sudo-system-queries": ToolResource("system-queries"),
     "clickhouse-migrations": ToolResource("clickhouse-migrations"),
     "snuba-explain": ToolResource("snuba-explain"),
     "all": ToolResource("all"),
@@ -107,6 +108,14 @@ class ExecuteNonBlockingAction(MigrationAction):
 
 
 class ExecuteNoneAction(MigrationAction):
+    pass
+
+
+class ExecuteSudoSystemQuery(ToolAction):
+    """
+    Allow specific users to run system queries with elevated permissions
+    """
+
     pass
 
 
@@ -173,6 +182,10 @@ ROLES = {
         name="AllMigrationsExecutor",
         actions={ExecuteAllAction(list(MIGRATIONS_RESOURCES.values()))},
     ),
+    "ClickhouseAdmin": Role(
+        name="clickhouse-admin",
+        actions={ExecuteSudoSystemQuery([TOOL_RESOURCES["sudo-system-queries"]])},
+    ),
 }
 
 DEFAULT_ROLES = [
@@ -184,3 +197,4 @@ DEFAULT_ROLES = [
 
 if settings.TESTING or settings.DEBUG:
     DEFAULT_ROLES.append(ROLES["AllTools"])
+    DEFAULT_ROLES.append(ROLES["ClickhouseAdmin"])

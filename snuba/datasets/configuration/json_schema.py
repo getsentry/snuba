@@ -169,6 +169,21 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     },
 )
 
+SIMPLE_AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
+    column_type={"const": "SimpleAggregateFunction"},
+    args={
+        "type": "object",
+        "properties": {
+            "func": TYPE_STRING,
+            "arg_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
+            },
+        },
+        "additionalProperties": False,
+    },
+)
+
 ENUM_SCHEMA = make_column_schema(
     column_type={"const": "Enum"},
     args={
@@ -206,6 +221,7 @@ SIMPLE_COLUMN_SCHEMAS = [
     FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
+    SIMPLE_AGGREGATE_FUNCTION_SCHEMA,
     ENUM_SCHEMA,
     DATETIME64_SCHEMA,
 ]

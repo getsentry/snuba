@@ -35,9 +35,12 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import TagsListRequest
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -78,7 +81,10 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc.timeseries import timeseries_query as timeseries_query_impl
+from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
+from snuba.web.rpc.tags_list import tags_list_query
+from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -274,14 +280,25 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/timeseries", methods=["POST"])
-@util.time_request("timeseries_query")
-def timeseries_query(*, timer: Timer) -> Response:
-    req = AggregateBucketRequest()
-    req.ParseFromString(http_request.data)
-    # STUB
-    res = timeseries_query_impl(req, timer)
-    return Response(res.SerializeToString())
+@application.route("/rpc/<name>", methods=["POST"])
+@util.time_request("timeseries")
+def rpc(*, name: str, timer: Timer) -> Response:
+    rpcs: Mapping[
+        str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
+    ] = {
+        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
+        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
+        "TagsListRequest": (tags_list_query, TagsListRequest),
+    }
+    try:
+        endpoint, req_class = rpcs[name]
+
+        req = req_class()
+        req.ParseFromString(http_request.data)
+        res = endpoint(req, timer)
+        return Response(res.SerializeToString())
+    except BadSnubaRPCRequestException as e:
+        return Response(str(e), status=400)
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
@@ -328,7 +345,9 @@ def storage_delete(
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
             payload = delete_from_storage(
-                storage, request_parts.query["query"]["columns"]
+                storage,
+                request_parts.query["query"]["columns"],
+                request_parts.attribution_info,
             )
         except (
             InvalidJsonRequestException,

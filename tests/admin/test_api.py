@@ -223,6 +223,29 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_sudo_system_query(admin_api: FlaskClient) -> None:
+    _, host, port = get_node_for_table(admin_api, "errors")
+    response = admin_api.post(
+        "/run_clickhouse_system_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps(
+            {
+                "host": host,
+                "port": port,
+                "storage": "errors_ro",
+                "sql": "SYSTEM START MERGES",
+                "sudo": True,
+            }
+        ),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["column_names"] == []
+    assert data["rows"] == []
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -235,8 +258,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
-    key = next(iter(data["formatted_trace_output"]))
-    assert "read_performance" in data["formatted_trace_output"][key]
+    assert "summarized_trace_output" in data
 
 
 @pytest.mark.redis_db
@@ -580,6 +602,28 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
         data["error"]["message"]
         == "Rule 'query_exp' didn't match at '' (line 1, column 1)."
     )
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_force_overwrite(admin_api: FlaskClient) -> None:
+    migration_id = "0009_add_message"
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "completed"
+
+    response = admin_api.post(
+        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "not_started"
 
 
 @pytest.mark.redis_db

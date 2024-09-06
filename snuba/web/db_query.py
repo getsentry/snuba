@@ -847,6 +847,26 @@ def _add_quota_info(
             quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
 
 
+def _populate_query_status(
+    summary: dict[str, Any],
+    rejection_quota_and_policy: Optional[_QuotaAndPolicy],
+    throttle_quota_and_policy: Optional[_QuotaAndPolicy],
+) -> None:
+    is_successful = "is_successful"
+    is_rejected = "is_rejected"
+    is_throttled = "is_throttled"
+    summary[is_successful] = True
+    summary[is_rejected] = False
+    summary[is_throttled] = False
+
+    if rejection_quota_and_policy:
+        summary[is_successful] = False
+        summary[is_rejected] = True
+    if throttle_quota_and_policy:
+        summary[is_successful] = False
+        summary[is_throttled] = True
+
+
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -908,12 +928,30 @@ def _apply_allocation_policies_quota(
 
         summary: dict[str, Any] = {}
         summary["threads_used"] = min_threads_across_policies
+        _populate_query_status(
+            summary, rejection_quota_and_policy, throttle_quota_and_policy
+        )
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
+            metrics.increment(
+                "rejected_query",
+                tags={"storage_key": allocation_policies[0].storage_key.value},
+            )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
+
+        if throttle_quota_and_policy is not None:
+            metrics.increment(
+                "throttled_query",
+                tags={"storage_key": allocation_policies[0].storage_key.value},
+            )
+        else:
+            metrics.increment(
+                "successful_query",
+                tags={"storage_key": allocation_policies[0].storage_key.value},
+            )
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

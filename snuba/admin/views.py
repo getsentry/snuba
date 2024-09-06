@@ -30,8 +30,15 @@ from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
-from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
-from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.clickhouse.system_queries import (
+    UnauthorizedForSudo,
+    run_system_query_on_host_with_sql,
+)
+from snuba.admin.clickhouse.tracing import (
+    QueryTraceData,
+    TraceOutput,
+    run_query_and_get_trace,
+)
 from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
@@ -69,6 +76,8 @@ from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
+from snuba.migrations.status import Status
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
@@ -228,6 +237,34 @@ def reverse_migration(group: str, migration_id: str) -> Response:
     )
 
 
+@application.route(
+    "/migrations/<group>/overwrite/<migration_id>/status/<new_status>",
+    methods=["POST"],
+)
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
+def force_overwrite_migration_status(
+    group: str, migration_id: str, new_status: str
+) -> Response:
+    try:
+        migration_group = MigrationGroup(group)
+    except ValueError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+
+    runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
+    user = request.headers.get(USER_HEADER_KEY)
+
+    audit_log.record(
+        user or "",
+        AuditLogAction.FORCE_MIGRATION_OVERWRITE,
+        {"group": group, "migration": migration_id, "new_status": new_status},
+        notify=True,
+    )
+
+    res = {"status": "OK"}
+    return make_response(jsonify(res), 200)
+
+
 @check_migration_perms
 def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
     try:
@@ -375,7 +412,7 @@ def auto_replacements_bypass_projects() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
+#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
@@ -390,20 +427,26 @@ def clickhouse_system_query() -> Response:
         port = req["port"]
         storage = req["storage"]
         raw_sql = req["sql"]
+        sudo_mode = req.get("sudo", False)
     except KeyError:
         return make_response(jsonify({"error": "Invalid request"}), 400)
 
     try:
-        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
+        result = run_system_query_on_host_with_sql(
+            host, port, storage, raw_sql, sudo_mode, g.user
+        )
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
-        if columns:
+        if columns is not None:
             res = {}
             res["column_names"] = [name for name, _ in columns]
             res["rows"] = [[str(col) for col in row] for row in rows]
 
             return make_response(jsonify(res), 200)
+    except UnauthorizedForSudo as err:
+        return make_response(jsonify({"error": err.message or "Cannot sudo"}), 400)
+
     except InvalidCustomQuery as err:
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
@@ -441,8 +484,29 @@ def clickhouse_trace_query() -> Response:
         )
 
     try:
-        result = run_query_and_get_trace(storage, raw_sql)
-        return make_response(jsonify(asdict(result)), 200)
+        # Append 'log_profile_events=1' with/without the SETTINGS clause to the incoming query.
+        settings_index = raw_sql.lower().find("settings")
+        if settings_index != -1:
+            start_index = settings_index + len("settings")
+            remaining = raw_sql[start_index:].strip()
+            if "log_profile_events=1" not in remaining:
+                raw_sql += ", log_profile_events=1"
+        else:
+            raw_sql += " SETTINGS log_profile_events=1"
+
+        query_trace = run_query_and_get_trace(storage, raw_sql)
+
+        profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+
+        for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
+            sql = profile_events_raw_sql.format(query_trace_data.query_id)
+            logger.info(
+                "Profile event gathering host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
+                    query_trace_data.host, query_trace_data.port, storage, sql, g.user
+                )
+            )
+            # TODO: Onkar to add the profile event logic later.
+        return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -467,6 +531,30 @@ def clickhouse_trace_query() -> Response:
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+def parse_trace_for_query_ids(
+    trace_output: TraceOutput, storage_key: str
+) -> List[QueryTraceData]:
+    result = []
+    summarized_trace_output = trace_output.summarized_trace_output
+    storage_info = get_storage_info()
+    matched = next(
+        (info for info in storage_info if info["storage_name"] == storage_key), None
+    )
+    if matched is not None:
+        local_nodes = matched.get("local_nodes", [])
+        query_node = matched.get("query_node", None)
+        result = [
+            QueryTraceData(
+                host=local_nodes[0].get("host") if local_nodes else query_node.get("host"),  # type: ignore
+                port=local_nodes[0].get("port") if local_nodes else query_node.get("port"),  # type: ignore
+                query_id=query_summary.query_id,
+                node_name=node_name,
+            )
+            for node_name, query_summary in summarized_trace_output.query_summaries.items()
+        ]
+    return result
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
@@ -830,6 +918,26 @@ def storages_with_allocation_policies() -> Response:
 def get_allocation_policy_configs(storage_key: str) -> Response:
 
     policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
+    delete_policies = get_storage(
+        StorageKey(storage_key)
+    ).get_delete_allocation_policies()
+
+    data = []
+
+    def add_policy_data(policies: Sequence[AllocationPolicy], query_type: str) -> None:
+        for policy in policies:
+            data.append(
+                {
+                    "policy_name": policy.config_key(),
+                    "configs": policy.get_current_configs(),
+                    "optional_config_definitions": policy.get_optional_config_definitions_json(),
+                    "query_type": query_type,
+                }
+            )
+
+    add_policy_data(policies, "select")
+    add_policy_data(delete_policies, "delete")
+
     data = [
         {
             "policy_name": policy.config_key(),
@@ -858,7 +966,10 @@ def set_allocation_policy_config() -> Response:
         assert key != "", "Key cannot be empty string"
         assert isinstance(policy_name, str), "Invalid policy name"
 
-        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policies = (
+            get_storage(StorageKey(storage)).get_allocation_policies()
+            + get_storage(StorageKey(storage)).get_delete_allocation_policies()
+        )
         policy = next(
             (p for p in policies if p.config_key() == policy_name),
             None,
@@ -1123,7 +1234,9 @@ def delete() -> Response:
         schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
         request_parts = schema.validate(body)
         delete_results = delete_from_storage(
-            storage, request_parts.query["query"]["columns"]
+            storage,
+            request_parts.query["query"]["columns"],
+            request_parts.attribution_info,
         )
     except (InvalidJsonRequestException, DeletesNotEnabledError) as schema_error:
         return make_response(
