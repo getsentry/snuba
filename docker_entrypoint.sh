@@ -19,7 +19,7 @@ else
 fi
 
 if [[ $* == *--heaptrack* ]]; then
-  (sleep 10 && pid=$(ps -A | awk '/python/ {print $1}') && echo "$pid") & exec "$@"
+  (sleep 10 && pid=$(ps -A | awk '/snuba/ {print $1}') && heaptrack -p "$pid") & exec "$@"
 else
   exec "$@"
 fi
