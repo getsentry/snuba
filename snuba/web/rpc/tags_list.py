@@ -53,7 +53,6 @@ SELECT * FROM (
 ORDER BY attr_key
 LIMIT {request.limit} OFFSET {request.offset}
 """
-    print(query, file=open("/tmp/derp", "w+"))
 
     cluster = str_storage.get_cluster()
     reader = cluster.get_reader()
