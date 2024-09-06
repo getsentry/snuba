@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 import sys
 import time
 from contextlib import redirect_stdout
@@ -499,7 +500,7 @@ def clickhouse_trace_query() -> Response:
 
         profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
 
-        for query_trace_data in parse_trace_for_query_ids(query_trace, storage):
+        for query_trace_data in parse_trace_for_query_ids(query_trace):
             sql = profile_events_raw_sql.format(query_trace_data.query_id)
             logger.info(
                 "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
@@ -568,40 +569,30 @@ def clickhouse_trace_query() -> Response:
         )
 
 
-def parse_trace_for_query_ids(
-    trace_output: TraceOutput, storage_key: str
-) -> List[QueryTraceData]:
-    traces = []
+def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]:
     summarized_trace_output = trace_output.summarized_trace_output
-    storage_info = get_storage_info()
-    matched = next(
-        (info for info in storage_info if info["storage_name"] == storage_key), None
-    )
-    if matched is not None:
-        local_nodes = matched.get("local_nodes", [])
-        query_node = matched.get("query_node", None)
-        for node_name, query_summary in summarized_trace_output.query_summaries.items():
-            if local_nodes:
-                for local_node in local_nodes:
-                    traces.append(
-                        QueryTraceData(
-                            host=local_node.get("host"),  # type: ignore
-                            port=local_node.get("port"),  # type: ignore
-                            query_id=query_summary.query_id,
-                            node_name=node_name,
-                        )
-                    )
-            if query_node:
-                traces.append(
-                    QueryTraceData(
-                        host=query_node.get("host"),  # type: ignore
-                        port=query_node.get("port"),  # type: ignore
-                        query_id=query_summary.query_id,
-                        node_name=node_name,
-                    )
-                )
+    node_name_to_query_id = {
+        node_name: query_summary.query_id
+        for node_name, query_summary in summarized_trace_output.query_summaries.items()
+    }
+    return [
+        QueryTraceData(
+            host="127.0.0.1" if is_local_container_id(node_name) else node_name,
+            port=9000,
+            query_id=query_id,
+            node_name=node_name,
+        )
+        for node_name, query_id in node_name_to_query_id.items()
+    ]
 
-    return traces
+
+def is_local_container_id(container_id: str) -> bool:
+    # Local Clickhouse docker container ids are like e51ba1535fb1. They can be either 12 charcters or 64 characters long
+    # and must be hexadecimal. Regular expression fullmatch() makes sure that entire string matches the pattern. Thus,
+    # strings like "clickhouse" or "snuba-event-analytics-platform-query-1-1" are not matched.
+    # This is to make sure that snuba admin running locally on laptop has host set as "127.0.0.1" instead of "e51ba1535fb1".
+    pattern = r"^[a-f0-9]{12}$|^[a-f0-9]{64}$"
+    return bool(re.fullmatch(pattern, container_id))
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
