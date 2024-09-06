@@ -651,7 +651,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         params_dict = dict()
         if params:
             # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
+            params_string = ".".join(params)
             params_split = params_string.split(",")
             for param_string in params_split:
                 param_key, param_value = param_string.split(":")
