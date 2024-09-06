@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
 import { Table } from "SnubaAdmin/table";
 import {
   QueryResult,
@@ -74,10 +75,6 @@ function MQLQueries(props: { api: Client }) {
   }
 
   function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-
     try {
       let mql_context_obj = JSON.parse(raw_mql_context!);
       mql_query.mql_context = mql_context_obj;
@@ -86,38 +83,27 @@ function MQLQueries(props: { api: Client }) {
       if (err instanceof Error) {
         console.log("ERROR", err);
         window.alert("An error occurred: " + err.message);
-        return;
       }
     }
 
-    setIsExecuting(true);
-    props.api
-      .executeMQLQuery(mql_query as MQLRequest)
-      .then((result) => {
-        const result_columns = result.meta.map(
-          (col: QueryResultColumnMeta) => col.name
-        );
-        const query_result: QueryResult = {
-          input_query: mql_query.query,
-          input_mql_context: mql_query.mql_context,
-          columns: result_columns,
-          rows: result.data.map((obj: object) =>
-            result_columns.map(
-              (col_name: string) => obj[col_name as keyof typeof obj]
-            )
-          ),
-          duration_ms: result.timing.duration_ms,
-          quota_allowance: result.quota_allowance,
-        };
-        setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
-      });
+    return props.api.executeMQLQuery(mql_query as MQLRequest).then((result) => {
+      const result_columns = result.meta.map(
+        (col: QueryResultColumnMeta) => col.name
+      );
+      const query_result: QueryResult = {
+        input_query: mql_query.query,
+        input_mql_context: mql_query.mql_context,
+        columns: result_columns,
+        rows: result.data.map((obj: object) =>
+          result_columns.map(
+            (col_name: string) => obj[col_name as keyof typeof obj]
+          )
+        ),
+        duration_ms: result.timing.duration_ms,
+        quota_allowance: result.quota_allowance,
+      };
+      setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
+    });
   }
 
   return (
@@ -152,15 +138,12 @@ function MQLQueries(props: { api: Client }) {
         </div>
         <div style={executeActionsStyle}>
           <div>
-            <Button
+            <ExecuteButton
               onClick={executeQuery}
-              loading={isExecuting}
               disabled={
                 mql_query.query == undefined || raw_mql_context == undefined
               }
-            >
-              Execute Query
-            </Button>
+            />
           </div>
         </div>
       </form>
