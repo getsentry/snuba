@@ -18,4 +18,8 @@ else
   printf "\n${help_result}"
 fi
 
-exec "$@"
+if [[ $* == *--heaptrack* ]]; then
+  (sleep 10 && pid=$(ps -A | awk '/python/ {print $1}') && echo "$pid") & exec "$@"
+else
+  exec "$@"
+fi
