@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import re
 import sys
 import time
 from contextlib import redirect_stdout
@@ -578,7 +577,8 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]
     logger.info("node to query id mapping: {}".format(node_name_to_query_id))
     return [
         QueryTraceData(
-            host="127.0.0.1" if is_local_container_id(node_name) else node_name,
+            # host="127.0.0.1" if is_local_container_id(node_name) else node_name,
+            host=node_name,
             port=9000,
             query_id=query_id,
             node_name=node_name,
@@ -587,13 +587,13 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]
     ]
 
 
-def is_local_container_id(container_id: str) -> bool:
-    # Local Clickhouse docker container ids are like e51ba1535fb1. They can be either 12 charcters or 64 characters long
-    # and must be hexadecimal. Regular expression fullmatch() makes sure that entire string matches the pattern. Thus,
-    # strings like "clickhouse" or "snuba-event-analytics-platform-query-1-1" are not matched.
-    # This is to make sure that snuba admin running locally on laptop has host set as "127.0.0.1" instead of "e51ba1535fb1".
-    pattern = r"^[a-f0-9]{12}$|^[a-f0-9]{64}$"
-    return bool(re.fullmatch(pattern, container_id))
+# def is_local_container_id(container_id: str) -> bool:
+#     # Local Clickhouse docker container ids are like e51ba1535fb1. They can be either 12 charcters or 64 characters long
+#     # and must be hexadecimal. Regular expression fullmatch() makes sure that entire string matches the pattern. Thus,
+#     # strings like "clickhouse" or "snuba-event-analytics-platform-query-1-1" are not matched.
+#     # This is to make sure that snuba admin running locally on laptop has host set as "127.0.0.1" instead of "e51ba1535fb1".
+#     pattern = r"^[a-f0-9]{12}$|^[a-f0-9]{64}$"
+#     return bool(re.fullmatch(pattern, container_id))
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
