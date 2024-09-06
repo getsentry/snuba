@@ -11,6 +11,7 @@ import CapacityManagement from "SnubaAdmin/capacity_management";
 import DeadLetterQueue from "SnubaAdmin/dead_letter_queue";
 import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
+import MQLQueries from "SnubaAdmin/mql_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
@@ -82,6 +83,11 @@ const NAV_ITEMS = [
     id: "production-queries",
     display: "🔦 Production Queries",
     component: ProductionQueries,
+  },
+  {
+    id: "mql-queries",
+    display: "🎨 MQL Queries",
+    component: MQLQueries,
   },
   {
     id: "delete-tool",
