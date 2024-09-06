@@ -575,6 +575,7 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]
         node_name: query_summary.query_id
         for node_name, query_summary in summarized_trace_output.query_summaries.items()
     }
+    logger.info("node to query id mapping: {}".format(node_name_to_query_id))
     return [
         QueryTraceData(
             host="127.0.0.1" if is_local_container_id(node_name) else node_name,
