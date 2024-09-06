@@ -40,6 +40,7 @@ from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import TagsListRequest
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -82,6 +83,7 @@ from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
+from snuba.web.rpc.tags_list import tags_list_query
 from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -286,6 +288,7 @@ def rpc(*, name: str, timer: Timer) -> Response:
     ] = {
         "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
         "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
+        "TagsListRequest": (tags_list_query, TagsListRequest),
     }
     try:
         endpoint, req_class = rpcs[name]
