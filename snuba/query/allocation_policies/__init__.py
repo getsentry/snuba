@@ -635,7 +635,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     def __deserialize_runtime_config_key(self, key: str) -> tuple[str, dict[str, Any]]:
         """
-        Given a raw runtime config key, deconstructs it into it's AllocationPolicy config
+        Given a raw runtime config key, deconstructs it into its AllocationPolicy config
         key and parameters components.
 
         Examples:
@@ -651,7 +651,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
         params_dict = dict()
         if params:
             # convert ["param1:val1,param2:val2"] to {"param1": "val1", "param2": "val2"}
-            [params_string] = params
+            params_string = ".".join(params)  # Join all remaining segments
             params_split = params_string.split(",")
             for param_string in params_split:
                 param_key, param_value = param_string.split(":")
