@@ -99,7 +99,6 @@ delete_allocation_policies:
         is_enforced: 0
 
 query_processors:
-  - processor: TableRateLimit
   - processor: MappingOptimizer
     args:
       column_name: tags

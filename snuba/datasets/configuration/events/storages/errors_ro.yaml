@@ -334,4 +334,3 @@ query_processors:
         - message
         - environment
         - project_id
-  - processor: TableRateLimit
