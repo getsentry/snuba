@@ -17,7 +17,7 @@ x-test-common: &test-common
     - ".artifacts:/.artifacts"
   environment:
     SNUBA_SETTINGS: "$SNUBA_SETTINGS"
-    CLICKHOUSE_HOST: clickhouse
+    CLICKHOUSE_HOST: clickhouse.dev.ci
     USE_REDIS_CLUSTER: "1"
     REDIS_HOST: "redis-cluster"
     REDIS_PORT: 7000
