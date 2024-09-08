@@ -2,7 +2,7 @@ import importlib
 import logging
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional
 from unittest import mock
 
@@ -148,7 +148,10 @@ def test_tick_time_shift() -> None:
     assert tick.time_shift(timedelta(hours=24).total_seconds()) == Tick(
         partition,
         offsets,
-        Interval(datetime(1970, 1, 2).timestamp(), datetime(1970, 1, 3).timestamp()),
+        Interval(
+            datetime(1970, 1, 2, tzinfo=timezone.utc).timestamp(),
+            datetime(1970, 1, 3, tzinfo=timezone.utc).timestamp(),
+        ),
     )
 
 
@@ -437,7 +440,7 @@ def test_invalid_commit_log_message(caplog: Any) -> None:
         "orig_message_ts",
     )
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
 
     def _assignment_callback(offsets: Mapping[Partition, int]) -> None:
         assert inner_consumer.tell() == {partition: 0}
