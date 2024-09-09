@@ -221,7 +221,8 @@ function TracingQueries(props: { api: Client }) {
   }
 
   function querySummary(value: QuerySummary): JSX.Element {
-    const execute = value.execute_summaries[0];
+    const execute = value.execute_summaries ?
+      value.execute_summaries[0] : null;
     const dist = value.is_distributed ? " (Distributed)" : "";
     const index_summaries = value.index_summaries
       ? value.index_summaries.map((s) => indexSummary(s))
@@ -245,7 +246,7 @@ function TracingQueries(props: { api: Client }) {
       <Accordion.Item key={value.node_name} value={value.node_name}>
         <Accordion.Control>
           <Title order={4}>
-            {value.node_name} {dist}: {execute.seconds} sec.
+            {value.node_name} {dist}: {execute ? execute.seconds : "N/A"} sec.
           </Title>
         </Accordion.Control>
         <Accordion.Panel>
