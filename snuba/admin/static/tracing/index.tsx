@@ -259,7 +259,7 @@ function TracingQueries(props: { api: Client }) {
             {aggregation_summaries}
             {sorting_summaries}
             <Title order={4}>Total</Title>
-            {value.execute_summaries.map((e) => executeSummary(e))}
+            {value.execute_summaries && value.execute_summaries.map((e) => executeSummary(e))}
           </Stack>
         </Accordion.Panel>
       </Accordion.Item>
