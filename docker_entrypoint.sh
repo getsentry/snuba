@@ -1,25 +1,10 @@
 #!/bin/bash
 set -e
 
-# first check if we're passing flags, if so
-# prepend with snuba
-if [ "${1:0:1}" = '-' ]; then
-    set -- snuba "$@"
-fi
-
-help_result=$(snuba "${1}" --help)
-help_return=$?
-
-if [[ "${help_return}" -eq 0 ]]; then
+if [[ -z "${ENABLE_HEAPTRACK}" ]]; then
+  set -- heaptrack snuba "$@"
+else
   set -- snuba "$@"
-else
-  # Print the error message if it returns non-zero, to help with troubleshooting.
-  printf "Error running snuba ${1} --help, passing command to exec directly."
-  printf "\n${help_result}"
 fi
 
-if [[ $* == *--heaptrack* ]]; then
-  (sleep 10 && pid=$(ps -A | awk '/snuba/ {print $1}') && heaptrack -p "$pid") & exec "$@"
-else
-  exec "$@"
-fi
+exec "$@"
