@@ -64,6 +64,11 @@ query_processors:
       time_parse_columns:
         - start_timestamp
         - end_timestamp
+  - processor: HashBucketFunctionTransformer
+    args:
+      hash_bucket_names:
+        - attr_str
+        - attr_num
 
 validate_data_model: error
 validators:
