@@ -1,9 +1,17 @@
 from click.testing import CliRunner
 
-from snuba.cli.jobs import jobs
+from snuba.cli.jobs import run
 
 
-def test_dry_run_cli() -> None:
+def test_valid_job() -> None:
     runner = CliRunner()
-    result = runner.invoke(jobs, ["--dry_run", "--storage_name", "doesntmatter"])
+    result = runner.invoke(run, ["ToyJob", "--dry_run", "True", "k1=v1", "k2=v2"])
     assert result.exit_code == 0
+
+
+def test_invalid_job() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        run, ["SomeJobThatDoesntExist", "--dry_run", "True", "k1=v1", "k2=v2"]
+    )
+    assert result.exit_code == 1
