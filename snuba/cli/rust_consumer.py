@@ -141,6 +141,14 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Enable async inserts for ClickHouse",
 )
 @click.option(
+    "--allow-mutability",
+    is_flag=True,
+    default=False,
+    help="""
+    This is only to be used for the mutability consumer
+    """,
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -172,14 +180,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     Allow batching on disk for GROUP BY queries. This is a test mitigation for whether a
     materialized view is causing OOM on inserts. If successful, this should be set in storage config.
     If not successful, this option should be removed.
-    """,
-)
-@click.option(
-    "--allow-mutability",
-    is_flag=True,
-    default=False,
-    help="""
-    This is only to be used for the mutability consumer
     """,
 )
 def rust_consumer(
