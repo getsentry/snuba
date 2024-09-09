@@ -51,7 +51,6 @@ query_processors:
   - processor: UUIDColumnProcessor
     args:
       columns: [trace_id]
-  - processor: TableRateLimit
   - processor: TupleUnaliaser
 
 mandatory_condition_checkers:

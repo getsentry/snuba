@@ -247,7 +247,6 @@ query_processors:
     args:
       prewhere_candidates:
         [event_id, trace_id, span_id, transaction_name, transaction, title]
-  - processor: TableRateLimit
   - processor: TupleUnaliaser
 
 mandatory_condition_checkers:

@@ -57,12 +57,7 @@ from snuba.state.cache.redis.backend import (
     RedisCache,
 )
 from snuba.state.quota import ResourceQuota
-from snuba.state.rate_limit import (
-    TABLE_RATE_LIMIT_NAME,
-    RateLimitAggregator,
-    RateLimitExceeded,
-    RateLimitStatsContainer,
-)
+from snuba.state.rate_limit import RateLimitExceeded
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -201,84 +196,6 @@ def execute_query(
     return result
 
 
-def _record_rate_limit_metrics(
-    rate_limit_stats_container: RateLimitStatsContainer,
-    reader: Reader,
-    stats: MutableMapping[str, Any],
-) -> None:
-    table_rate_limit_stats = rate_limit_stats_container.get_stats(TABLE_RATE_LIMIT_NAME)
-    if table_rate_limit_stats is not None:
-        metrics.gauge(
-            name="table_concurrent",
-            value=table_rate_limit_stats.concurrent,
-            tags={
-                "table": stats.get("clickhouse_table", ""),
-                "cache_partition": (
-                    reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default"
-                ),
-            },
-        )
-        metrics.gauge(
-            name="table_per_second",
-            value=table_rate_limit_stats.rate,
-            tags={
-                "table": stats.get("clickhouse_table", ""),
-                "cache_partition": (
-                    reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default"
-                ),
-            },
-        )
-        metrics.timing(
-            name="table_concurrent_v2",
-            value=table_rate_limit_stats.concurrent,
-            tags={
-                "table": stats.get("clickhouse_table", ""),
-                "cache_partition": (
-                    reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default"
-                ),
-            },
-        )
-
-
-@with_span(op="function")
-def execute_query_with_rate_limits(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
-    formatted_query: FormattedQuery,
-    reader: Reader,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    robust: bool,
-) -> Result:
-    # XXX: We should consider moving this that it applies to the logical query,
-    # not the physical query.
-    with RateLimitAggregator(
-        query_settings.get_rate_limit_params()
-    ) as rate_limit_stats_container:
-        stats.update(rate_limit_stats_container.to_dict())
-        timer.mark("rate_limit")
-
-        _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
-
-        return execute_query(
-            clickhouse_query,
-            query_settings,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            clickhouse_query_settings,
-            robust=robust,
-        )
-
-
 def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
@@ -387,7 +304,7 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("query_id", query_id)
 
-        return execute_query_with_rate_limits(
+        return execute_query(
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -395,7 +312,7 @@ def execute_query_with_readthrough_caching(
             timer,
             stats,
             clickhouse_query_settings,
-            robust,
+            robust=robust,
         )
 
     clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
@@ -425,7 +342,7 @@ def execute_query_with_readthrough_caching(
     return cache_partition.get_readthrough(
         query_id,
         partial(
-            execute_query_with_rate_limits,
+            execute_query,
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -722,7 +639,6 @@ def db_query(
                     --> ...irrelevant stuff
                         --> execute_query_with_readthrough_caching
                             ### READTHROUGH CACHE GOES HERE ###
-                                --> execute_query_with_rate_limits
                                     --> execute_query
 
         The implication is that if a user hits the cache they will not be rate limited because the
