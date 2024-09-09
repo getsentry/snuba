@@ -32,7 +32,6 @@ RUN set -ex; \
         libjemalloc2 \
         gdb \
         heaptrack \
-        procps \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps $runtimeDeps --no-install-recommends; \
