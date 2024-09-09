@@ -94,7 +94,6 @@ query_processors:
     args:
       prewhere_candidates:
         [project_id, metric_mri]
-  - processor: TableRateLimit
   - processor: TupleUnaliaser
 
 mandatory_condition_checkers:
