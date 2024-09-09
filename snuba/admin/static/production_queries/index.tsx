@@ -27,7 +27,9 @@ const HISTORY_KEY = "production_queries";
 function ProductionQueries(props: { api: Client }) {
   const [datasets, setDatasets] = useState<string[]>([]);
   const [allowedProjects, setAllowedProjects] = useState<string[]>([]);
-  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({dataset: getParamFromStorage("dataset")});
+  const [snql_query, setQuery] = useState<Partial<SnQLRequest>>({
+    dataset: getParamFromStorage("dataset"),
+  });
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     getRecentHistory(HISTORY_KEY)
   );

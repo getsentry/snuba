@@ -65,7 +65,7 @@ function QueryDisplay(props: {
       .executeCardinalityQuery(query as CardinalityQueryRequest)
       .then((result) => {
         result.input_query = query.sql || "<Input Query>";
-        setRecentHistory(HISTORY_KEY, result)
+        setRecentHistory(HISTORY_KEY, result);
         setCardinalityQueryResultHistory((prevHistory) => [
           result,
           ...prevHistory,
