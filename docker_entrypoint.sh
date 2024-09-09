@@ -2,9 +2,9 @@
 set -e
 
 if [[ -z "${ENABLE_HEAPTRACK}" ]]; then
-  set -- heaptrack snuba "$@"
-else
   set -- snuba "$@"
+else
+  set -- heaptrack snuba "$@"
 fi
 
 exec "$@"
