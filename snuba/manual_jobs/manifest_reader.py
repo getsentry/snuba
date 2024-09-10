@@ -5,7 +5,8 @@ import simplejson
 
 
 class _ManifestReader:
-    def read(filename) -> Sequence[Any]:
+    @staticmethod
+    def read(filename: str) -> Sequence[Any]:
         local_root = os.path.dirname(__file__)
         with open(os.path.join(local_root, filename)) as stream:
             contents = simplejson.loads(stream.read())
