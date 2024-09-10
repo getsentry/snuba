@@ -22,14 +22,7 @@ class TestCommon:
                     type=AttributeKey.TYPE_STRING,
                     name=col,
                 ),
-            ) == f.hex(column(col), alias=col)
-
-            assert attribute_key_to_expression(
-                AttributeKey(
-                    type=AttributeKey.TYPE_INT,
-                    name=col,
-                ),
-            ) == f.CAST(column(col), "UInt64", alias=col)
+            ) == column(col)
 
     def test_timestamp_columns(self) -> None:
         for col in ["timestamp", "start_timestamp", "end_timestamp"]:

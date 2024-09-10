@@ -93,7 +93,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name in NORMALIZED_COLUMNS:
         if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
-            return column(attr_key.name, alias=attr_key.name)
+            return column(attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
         )
@@ -110,22 +110,20 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.type == AttributeKey.Type.TYPE_INT:
         return f.CAST(
             SubscriptableReference(
-                alias=None,
+                alias=alias,
                 column=column("attr_num"),
                 key=literal(attr_key.name),
             ),
             "Int64",
-            alias=alias,
         )
     if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
         return f.CAST(
             SubscriptableReference(
-                alias=None,
+                alias=alias,
                 column=column("attr_num"),
                 key=literal(attr_key.name),
             ),
             "Boolean",
-            alias=alias,
         )
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
