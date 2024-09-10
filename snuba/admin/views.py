@@ -72,6 +72,7 @@ from snuba.datasets.storages.factory import (
     get_writable_storage,
 )
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.manual_jobs.manifest_reader import read_jobs_manifest
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
@@ -1264,3 +1265,9 @@ def delete() -> Response:
 @check_tool_perms(tools=[AdminTools.DELETE_TOOL])
 def deletes_enabled() -> Response:
     return make_response(jsonify(deletes_are_enabled()), 200)
+
+
+@application.route("/job-manifests", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.ALL])
+def get_job_manifests() -> Response:
+    return make_response(jsonify(read_jobs_manifest()), 200)
