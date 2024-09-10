@@ -34,15 +34,14 @@ class EntityProcessingStage(
         if translated_storage_query:
             return translated_storage_query
 
+        run_entity_validators(cast(EntityQuery, query), pipe_input.query_settings)
         if isinstance(query, LogicalQuery) and isinstance(
             query.get_from_clause(), Entity
         ):
-            run_entity_validators(cast(EntityQuery, query), pipe_input.query_settings)
             return run_entity_processing_executor(query, pipe_input.query_settings)
         elif isinstance(query, CompositeQuery):
             # if we were not able to translate the storage query earlier and we got to this point, this is
             # definitely a composite entity query
-            run_entity_validators(query, pipe_input.query_settings)
             return translate_composite_query(
                 cast(CompositeQuery[Entity], query),
                 pipe_input.query_settings,
