@@ -65,7 +65,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.num_dist_table_name,
-                target=OperationTarget.LOCAL,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
@@ -80,7 +80,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.str_dist_table_name,
-                target=OperationTarget.LOCAL,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
@@ -99,7 +99,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.num_dist_table_name,
-                target=OperationTarget.LOCAL,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
@@ -114,7 +114,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropTable(
                 storage_set=self.storage_set_key,
                 table_name=self.str_dist_table_name,
-                target=OperationTarget.LOCAL,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.CreateTable(
                 storage_set=self.storage_set_key,
