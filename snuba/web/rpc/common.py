@@ -48,9 +48,9 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "organization_id": AttributeKey.Type.TYPE_INT,
     "project_id": AttributeKey.Type.TYPE_INT,
     "service": AttributeKey.Type.TYPE_STRING,
-    "span_id": AttributeKey.Type.TYPE_INT,
-    "parent_span_id": AttributeKey.Type.TYPE_INT,
-    "segment_id": AttributeKey.Type.TYPE_INT,
+    "span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
+    "parent_span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
+    "segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "segment_name": AttributeKey.Type.TYPE_STRING,
     "is_segment": AttributeKey.Type.TYPE_BOOLEAN,
     "duration_ms": AttributeKey.Type.TYPE_INT,
@@ -63,9 +63,6 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
 }
 
-# Columns stored as integers that are usually presented to users as hex strings
-HEX_ID_COLUMNS: Final[Set[str]] = {"span_id", "parent_span_id", "segment_id"}
-
 TIMESTAMP_COLUMNS: Final[Set[str]] = {"timestamp", "start_timestamp", "end_timestamp"}
 
 
@@ -74,37 +71,29 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
         )
+    alias = attr_key.name
 
     if attr_key.name == "trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(column("trace_id"), "String", alias="trace_id")
-        raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
-        )
-
-    if attr_key.name in HEX_ID_COLUMNS:
-        if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.hex(column(attr_key.name), alias=attr_key.name)
-        if attr_key.type == AttributeKey.Type.TYPE_INT:
-            return f.CAST(column(attr_key.name), "UInt64", alias=attr_key.name)
+            return f.CAST(column("trace_id"), "String", alias=alias)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, got {attr_key.type}"
         )
 
     if attr_key.name in TIMESTAMP_COLUMNS:
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(column(attr_key.name), "String", alias=attr_key.name)
+            return f.CAST(column(attr_key.name), "String", alias=alias)
         if attr_key.type == AttributeKey.Type.TYPE_INT:
-            return f.CAST(column(attr_key.name), "Int64", alias=attr_key.name)
+            return f.CAST(column(attr_key.name), "Int64", alias=alias)
         if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
-            return f.CAST(column(attr_key.name), "Float64", alias=attr_key.name)
+            return f.CAST(column(attr_key.name), "Float64", alias=alias)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
         if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
-            return column(attr_key.name)
+            return column(attr_key.name, alias=attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
         )
@@ -112,29 +101,31 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     # End of special handling, just send to the appropriate bucket
     if attr_key.type == AttributeKey.Type.TYPE_STRING:
         return SubscriptableReference(
-            alias=attr_key.name, column=column("attr_str"), key=literal(attr_key.name)
+            alias=alias, column=column("attr_str"), key=literal(attr_key.name)
         )
     if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
         return SubscriptableReference(
-            alias=attr_key.name, column=column("attr_num"), key=literal(attr_key.name)
+            alias=alias, column=column("attr_num"), key=literal(attr_key.name)
         )
     if attr_key.type == AttributeKey.Type.TYPE_INT:
         return f.CAST(
             SubscriptableReference(
-                alias=attr_key.name,
+                alias=None,
                 column=column("attr_num"),
                 key=literal(attr_key.name),
             ),
             "Int64",
+            alias=alias,
         )
     if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
         return f.CAST(
             SubscriptableReference(
-                alias=attr_key.name,
+                alias=None,
                 column=column("attr_num"),
                 key=literal(attr_key.name),
             ),
             "Boolean",
+            alias=alias,
         )
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
