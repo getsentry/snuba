@@ -1,6 +1,5 @@
 from typing import Sequence
 
-from snuba.query.dsl import Functions as f
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
@@ -88,10 +87,13 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                 return exp
 
             bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-            return f.mapContains(
-                Column(None, None, f"{column.column_name}_{bucket_idx}"),
-                key,
+            return FunctionCall(
                 alias=exp.alias,
+                function_name=exp.function_name,
+                parameters=(
+                    Column(None, None, f"{column.column_name}_{bucket_idx}"),
+                    key,
+                ),
             )
 
         query.transform_expressions(transform_map_keys_and_values_expression)
