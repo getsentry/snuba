@@ -42,6 +42,7 @@ class EntityProcessingStage(
         elif isinstance(query, CompositeQuery):
             # if we were not able to translate the storage query earlier and we got to this point, this is
             # definitely a composite entity query
+            run_entity_validators(query, pipe_input.query_settings)
             return translate_composite_query(
                 cast(CompositeQuery[Entity], query),
                 pipe_input.query_settings,

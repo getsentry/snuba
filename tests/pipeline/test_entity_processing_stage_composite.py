@@ -29,6 +29,7 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity, Table
+from snuba.query.exceptions import ValidationException
 from snuba.query.expressions import (
     Column,
     FunctionCall,
@@ -456,3 +457,92 @@ def test_composite(
         .data
     )
     assert actual == expected
+
+
+TEST_CASES_INVALID = [
+    pytest.param(
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=IndividualNode(
+                    alias="err",
+                    data_source=events_ent,
+                ),
+                right_node=IndividualNode(
+                    alias="groups",
+                    data_source=groups_ent,
+                ),
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression("err", "group_id"),
+                        right=JoinConditionExpression("groups", "id"),
+                    )
+                ],
+                join_type=JoinType.INNER,
+            ),
+            selected_columns=[
+                SelectedExpression(
+                    "f_release",
+                    FunctionCall(
+                        "f_release",
+                        "f",
+                        (Column(None, "err", "release"),),
+                    ),
+                ),
+                SelectedExpression(
+                    "_snuba_right",
+                    Column("_snuba_right", "groups", "status"),
+                ),
+            ],
+            condition=binary_condition(
+                BooleanFunctions.AND,
+                binary_condition(
+                    ConditionFunctions.EQ,
+                    Column(None, "err", "project_id"),
+                    Literal(None, 1),
+                ),
+                binary_condition(
+                    BooleanFunctions.AND,
+                    binary_condition(
+                        ConditionFunctions.GTE,
+                        Column(None, "err", "timestamp"),
+                        Literal(None, datetime(2020, 1, 1, 12, 0)),
+                    ),
+                    binary_condition(
+                        ConditionFunctions.GTE,
+                        Column(None, "err", "foo"),
+                        Literal(None, 1),
+                    ),
+                ),
+            ),
+        ),
+        ValidationException,
+        id="Join query with missing column",
+    ),
+]
+
+
+@pytest.mark.parametrize("logical_query, expected_error", TEST_CASES_INVALID)
+@pytest.mark.clickhouse_db
+def test_invalid_composite(
+    logical_query: CompositeQuery[Entity],
+    expected_error: Exception,
+) -> None:
+    request = Request(
+        id="",
+        original_body={"query": "placeholder"},
+        query=cast(LogicalQuery, logical_query),
+        query_settings=HTTPQuerySettings(),
+        attribution_info=AttributionInfo(
+            get_app_id("blah"), {"tenant_type": "tenant_id"}, "blah", None, None, None
+        ),
+    )
+    actual = EntityProcessingStage().execute(
+        QueryPipelineResult(
+            data=request,
+            query_settings=request.query_settings,
+            timer=Timer("test"),
+            error=None,
+        )
+    )
+    assert actual.error and not actual.data
+    assert isinstance(type(actual.error), type(expected_error))
