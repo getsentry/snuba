@@ -7,7 +7,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
 from snuba.query.data_source.simple import Entity as QueryEntity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import binary_condition, literal
+from snuba.query.dsl import binary_condition, column, literal
 from snuba.query.expressions import Column, FunctionCall
 from snuba.query.logical import Query
 from snuba.query.processors.logical.hash_bucket_functions import (
@@ -181,6 +181,36 @@ test_data = [
                     ),
                     literal(2),
                 ),
+            ),
+        ),
+    ),
+    (
+        Query(
+            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "unrelated",
+                    Column(None, None, "column2"),
+                ),
+            ],
+            condition=binary_condition(
+                "or",
+                f.mapContains(column("attr_str"), literal("blah"), alias="x"),
+                f.mapContains(column("attr_strz"), literal("blah"), alias="z"),
+            ),
+        ),
+        Query(
+            QueryEntity(EntityKey.EAP_SPANS, ColumnSet([])),
+            selected_columns=[
+                SelectedExpression(
+                    "unrelated",
+                    Column(None, None, "column2"),
+                ),
+            ],
+            condition=binary_condition(
+                "or",
+                f.mapContains(column("attr_str_2"), literal("blah"), alias="x"),
+                f.mapContains(column("attr_strz"), literal("blah"), alias="z"),
             ),
         ),
     ),
