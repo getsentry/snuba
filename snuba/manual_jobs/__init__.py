@@ -1,15 +1,25 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Any, cast
+from dataclasses import dataclass
+from typing import Any, MutableMapping, Optional, cast
 
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 
+@dataclass
+class JobSpec:
+    job_id: str
+    job_type: str
+    params: Optional[MutableMapping[Any, Any]]
+
+
 class Job(ABC, metaclass=RegisteredClass):
-    def __init__(self, dry_run: bool, **kwargs: Any) -> None:
+    def __init__(self, job_spec: JobSpec, dry_run: bool) -> None:
+        self.job_spec = job_spec
         self.dry_run = dry_run
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+        if job_spec.params:
+            for k, v in job_spec.params.items():
+                setattr(self, k, v)
 
     @abstractmethod
     def execute(self) -> None:
