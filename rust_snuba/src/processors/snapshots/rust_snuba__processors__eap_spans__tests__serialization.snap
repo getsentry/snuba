@@ -71,6 +71,7 @@ expression: span
   },
   "attr_str_12": {
     "relay_use_post_or_schedule_rejected": "version",
+    "sentry.event_id": "d826225d-e75d-42d6-b2f0-1b957d51f18f",
     "server_name": "D23CXQ4GK2.local"
   },
   "attr_str_13": {

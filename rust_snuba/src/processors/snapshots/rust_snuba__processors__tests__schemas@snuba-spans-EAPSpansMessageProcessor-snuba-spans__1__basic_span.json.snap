@@ -14,6 +14,9 @@ expression: snapshot_payload
       "tag3": "True",
       "transaction.op": "navigation"
     },
+    "attr_str_12": {
+      "sentry.event_id": "dcc403b7-3ef5-4864-8188-bbfa6012e9dc"
+    },
     "attr_str_18": {
       "tag1": "value1"
     },

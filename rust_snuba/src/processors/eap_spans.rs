@@ -133,6 +133,9 @@ impl From<FromSpanMessage> for EAPSpan {
                 attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
                     .insert(k.clone(), v);
             };
+            if let Some(event_id) = from.event_id {
+                insert_string("sentry.event_id".into(), event_id.to_string())
+            }
 
             if let Some(sentry_tags) = from.sentry_tags {
                 sentry_tags.iter().for_each(|(k, v)| {
