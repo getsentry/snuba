@@ -20,6 +20,7 @@ expression: span
   "retention_days": 90,
   "name": "/api/0/relays/projectconfigs/",
   "sampling_factor": 1.0,
+  "sampling_weight": 1.0,
   "sampling_weight_2": 1,
   "sign": 1,
   "attr_str_0": {
