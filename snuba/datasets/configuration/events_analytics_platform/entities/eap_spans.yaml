@@ -22,7 +22,7 @@ schema:
     { name: retention_days, type: UInt, args: { size: 16 } },
     { name: name, type: String },
     { name: sampling_factor, type: Float, args: { size: 64 } },
-    { name: sampling_weight, type: Float, args: { size: 64 } },
+    { name: sampling_weight, type: UInt, args: { size: 64 } },
     { name: sign, type: Int, args: { size: 8 } },
     { name: attr_str, type: Map, args: { key: { type: String }, value: { type: String } } },
     { name: attr_num, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
@@ -39,6 +39,12 @@ storages:
             from_col_name: timestamp
             to_table_name: null
             to_col_name: _sort_timestamp
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: sampling_weight
+            to_table_name: null
+            to_col_name: sampling_weight_2
       subscriptables:
         - mapper: SubscriptableHashBucketMapper
           args:
