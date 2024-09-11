@@ -15,22 +15,6 @@ class TestCommon:
             ),
         ) == f.CAST(column("trace_id"), "String", alias="trace_id")
 
-    def test_hex_id_columns(self) -> None:
-        for col in ["span_id", "parent_span_id", "segment_id"]:
-            assert attribute_key_to_expression(
-                AttributeKey(
-                    type=AttributeKey.TYPE_STRING,
-                    name=col,
-                ),
-            ) == f.hex(column(col), alias=col)
-
-            assert attribute_key_to_expression(
-                AttributeKey(
-                    type=AttributeKey.TYPE_INT,
-                    name=col,
-                ),
-            ) == f.CAST(column(col), "UInt64", alias=col)
-
     def test_timestamp_columns(self) -> None:
         for col in ["timestamp", "start_timestamp", "end_timestamp"]:
             assert attribute_key_to_expression(
@@ -53,12 +37,13 @@ class TestCommon:
             ) == f.CAST(column(col), "Float64", alias=col)
 
     def test_normalized_col(self) -> None:
-        assert attribute_key_to_expression(
-            AttributeKey(
-                type=AttributeKey.TYPE_STRING,
-                name="service",
-            ),
-        ) == column("service")
+        for col in ["span_id", "parent_span_id", "segment_id", "service"]:
+            assert attribute_key_to_expression(
+                AttributeKey(
+                    type=AttributeKey.TYPE_STRING,
+                    name=col,
+                ),
+            ) == column(col, alias=col)
 
     def test_attributes(self) -> None:
         assert attribute_key_to_expression(

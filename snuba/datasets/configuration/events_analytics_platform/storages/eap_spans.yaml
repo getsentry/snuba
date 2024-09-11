@@ -29,6 +29,7 @@ schema:
       { name: name, type: String },
       { name: sampling_factor, type: Float, args: { size: 64 } },
       { name: sampling_weight, type: Float, args: { size: 64 } },
+      { name: sampling_weight_2, type: UInt, args: { size: 64 } },
       { name: sign, type: Int, args: { size: 8 } },
       { name: attr_str_0, type: Map, args: { key: { type: String }, value: { type: String } } },
       { name: attr_str_1, type: Map, args: { key: { type: String }, value: { type: String } } },
@@ -107,7 +108,7 @@ query_processors:
       columns: [transaction_id, trace_id, profile_id]
   - processor: HexIntColumnProcessor
     args:
-      columns: [span_id, parent_span_id, segment_id, group, group_raw]
+      columns: [span_id, parent_span_id, segment_id]
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
