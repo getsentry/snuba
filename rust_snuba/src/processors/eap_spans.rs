@@ -220,6 +220,9 @@ mod tests {
     "measurements": {
         "num_of_spans": {
             "value": 50.0
+        },
+        "client_sample_rate": {
+            "value": 0.01
         }
     },
     "organization_id": 1,
