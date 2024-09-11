@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import socket
 import sys
 import time
 from contextlib import redirect_stdout
@@ -568,6 +569,15 @@ def clickhouse_trace_query() -> Response:
         )
 
 
+def hostname_resolves(hostname: str) -> bool:
+    try:
+        socket.gethostbyname(hostname)
+    except socket.error:
+        return False
+    else:
+        return True
+
+
 def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]:
     summarized_trace_output = trace_output.summarized_trace_output
     node_name_to_query_id = {
@@ -577,7 +587,7 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]
     logger.info("node to query id mapping: {}".format(node_name_to_query_id))
     return [
         QueryTraceData(
-            host=node_name,
+            host=node_name if hostname_resolves(node_name) else "127.0.0.1",
             port=9000,
             query_id=query_id,
             node_name=node_name,
