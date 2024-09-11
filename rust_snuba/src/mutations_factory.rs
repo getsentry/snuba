@@ -6,19 +6,18 @@ use rust_arroyo::backends::kafka::config::KafkaConfig;
 use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
-    RunTaskError, RunTaskFunc, TaskRunner,
+    ConcurrencyConfig, RunTaskInThreads,
 };
 use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use rust_arroyo::types::Message;
 use rust_arroyo::types::{Partition, Topic};
-use sentry::{Hub, SentryFutureExt};
-use sentry_kafka_schemas::Schema;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
-use crate::strategies::processor::validate_schema;
+use crate::mutations::clickhouse::ClickhouseWriter;
+use crate::mutations::parser::{MutationBatch, MutationMessage, MutationParser};
 
 pub struct MutConsumerStrategyFactory {
     pub storage_config: config::StorageConfig,
@@ -56,32 +55,53 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
     fn create(&self) -> Box<dyn ProcessingStrategy<KafkaPayload>> {
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
+        let next_step = RunTaskInThreads::new(
+            Box::new(next_step),
+            Box::new(ClickhouseWriter::new(
+                &self.storage_config.clickhouse_cluster.host,
+                self.storage_config.clickhouse_cluster.http_port,
+                &self.storage_config.clickhouse_table_name,
+                &self.storage_config.clickhouse_cluster.database,
+                &self.storage_config.clickhouse_cluster.user,
+                &self.storage_config.clickhouse_cluster.password,
+                self.batch_write_timeout,
+            )),
+            &self.clickhouse_concurrency,
+            Some("clickhouse"),
+        );
+
+        let next_step = Reduce::new(
+            next_step,
+            Arc::new(
+                move |mut batch: MutationBatch, message: Message<MutationMessage>| {
+                    let message = message.into_payload();
+                    match batch.0.entry(message.filter) {
+                        std::collections::btree_map::Entry::Occupied(mut entry) => {
+                            entry.get_mut().merge(message.update);
+                        }
+                        std::collections::btree_map::Entry::Vacant(entry) => {
+                            entry.insert(message.update);
+                        }
+                    }
+
+                    Ok(batch)
+                },
+            ),
+            Arc::new(move || MutationBatch::default()),
+            self.max_batch_size,
+            self.max_batch_time,
+            // TODO: batch sizes are currently not properly computed. if two mutations are merged
+            // together, they still count against the batch size as 2.
+            |_| 1,
+        );
+
+        let next_step = RunTaskInThreads::new(
+            Box::new(next_step),
+            Box::new(MutationParser),
+            &self.processing_concurrency,
+            Some("parse"),
+        );
+
         Box::new(next_step)
-    }
-}
-
-#[derive(Clone)]
-struct SchemaValidator {
-    schema: Option<Arc<Schema>>,
-    enforce_schema: bool,
-}
-
-impl SchemaValidator {
-    async fn process_message(
-        self,
-        message: Message<KafkaPayload>,
-    ) -> Result<Message<KafkaPayload>, RunTaskError<anyhow::Error>> {
-        validate_schema(&message, &self.schema, self.enforce_schema)?;
-        Ok(message)
-    }
-}
-
-impl TaskRunner<KafkaPayload, KafkaPayload, anyhow::Error> for SchemaValidator {
-    fn get_task(&self, message: Message<KafkaPayload>) -> RunTaskFunc<KafkaPayload, anyhow::Error> {
-        Box::pin(
-            self.clone()
-                .process_message(message)
-                .bind_hub(Hub::new_from_top(Hub::current())),
-        )
     }
 }
