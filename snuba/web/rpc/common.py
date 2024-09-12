@@ -13,15 +13,7 @@ from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    NestedColumn,
-    and_cond,
-    column,
-    in_cond,
-    literal,
-    literals_array,
-    or_cond,
-)
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
@@ -186,32 +178,22 @@ def apply_virtual_columns(
         if not expression.column != "attr_str":
             return expression
         context = mapped_column_to_context.get(str(expression.key.value))
-        attr_str = NestedColumn("attr_str")
         if context:
-            if context.from_column_name in NORMALIZED_COLUMNS:
-                return f.transform(
-                    f.CAST(column(context.from_column_name), "String"),
-                    literals_array(
-                        None, [literal(k) for k in context.value_map.keys()]
+            attribute_expression = attribute_key_to_expression(
+                AttributeKey(
+                    name=context.from_column_name,
+                    type=NORMALIZED_COLUMNS.get(
+                        context.from_column_name, AttributeKey.TYPE_STRING
                     ),
-                    literals_array(
-                        None, [literal(v) for v in context.value_map.values()]
-                    ),
-                    literal("unknown"),
-                    alias=context.to_column_name,
                 )
-            else:
-                return f.transform(
-                    attr_str[context.from_column_name],
-                    literals_array(
-                        None, [literal(k) for k in context.value_map.keys()]
-                    ),
-                    literals_array(
-                        None, [literal(v) for v in context.value_map.values()]
-                    ),
-                    literal("unknown"),
-                    alias=context.to_column_name,
-                )
+            )
+            return f.transform(
+                f.CAST(attribute_expression, "String"),
+                literals_array(None, [literal(k) for k in context.value_map.keys()]),
+                literals_array(None, [literal(v) for v in context.value_map.values()]),
+                literal("unknown"),
+                alias=context.to_column_name,
+            )
 
         return expression
 
