@@ -1,4 +1,4 @@
-from typing import Final, Mapping, Set
+from typing import Final, Mapping, Sequence, Set
 
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
@@ -134,7 +134,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
 
 def apply_virtual_columns(
-    query: Query, virtual_column_contexts: list[VirtualColumnContext]
+    query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
 ) -> None:
     """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
     dynamic columns in attr_str
@@ -175,7 +175,7 @@ def apply_virtual_columns(
         if not isinstance(expression, SubscriptableReference):
             return expression
 
-        if not expression.column != "attr_str":
+        if not expression.column.column_name != "attr_str":
             return expression
         context = mapped_column_to_context.get(str(expression.key.value))
         if context:
