@@ -21,6 +21,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "GROUP_ATTRIBUTES": "group_attributes",
     "METRICS_SUMMARIES": "metrics_summaries",
     "PROFILE_CHUNKS": "profile_chunks",
+    "FUNCTIONS_SUMMARIES": "functions_summaries",
 }
 
 

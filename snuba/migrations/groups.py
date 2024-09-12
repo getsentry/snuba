@@ -8,6 +8,7 @@ from snuba.migrations.group_loader import (
     EventsAnalyticsPlatformLoader,
     EventsLoader,
     FunctionsLoader,
+    FunctionsSummariesLoader,
     GenericMetricsLoader,
     GroupAttributesLoader,
     GroupLoader,
@@ -47,6 +48,7 @@ class MigrationGroup(Enum):
     GROUP_ATTRIBUTES = "group_attributes"
     METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
+    FUNCTIONS_SUMMARIES = "functions_summaries"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -64,6 +66,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
     MigrationGroup.PROFILE_CHUNKS,
+    MigrationGroup.FUNCTIONS_SUMMARIES,
 }
 
 
@@ -185,6 +188,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
         readiness_state=ReadinessState.PARTIAL,
+    ),
+    MigrationGroup.FUNCTIONS_SUMMARIES: _MigrationGroup(
+        loader=FunctionsSummariesLoader(),
+        storage_sets_keys={StorageSetKey.FUNCTIONS_SUMMARIES},
+        readiness_state=ReadinessState.EXPERIMENTAL,
     ),
 }
 

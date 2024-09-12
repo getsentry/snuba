@@ -116,6 +116,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "generic_metrics_gauges",
             "metrics_summaries",
             "profile_chunks",
+            "functions_summaries",
         },
         "single_node": True,
     },
