@@ -19,6 +19,9 @@ columns: List[Column[Modifiers]] = [
     Column("profiler_id", UUID(Modifiers(nullable=True, low_cardinality=False))),
     # transaction_name is nullable since this will only be used by transaction-based profiling
     Column("transaction_name", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("fingerprint", UInt(64)),
+    Column("name", String()),
+    Column("package", String()),
     Column("thread_id", String()),
     Column("min", Float(64)),
     Column("max", Float(64)),
