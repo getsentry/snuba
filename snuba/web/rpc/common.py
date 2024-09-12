@@ -175,7 +175,7 @@ def apply_virtual_columns(
         if not isinstance(expression, SubscriptableReference):
             return expression
 
-        if not expression.column.column_name != "attr_str":
+        if expression.column.column_name != "attr_str":
             return expression
         context = mapped_column_to_context.get(str(expression.key.value))
         if context:

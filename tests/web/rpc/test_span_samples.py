@@ -257,7 +257,9 @@ class TestSpanSamples(BaseApiTest):
             ],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project_name")
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="project_name"
+                    ),
                 )
             ],
             limit=61,
@@ -306,7 +308,6 @@ class TestSpanSamples(BaseApiTest):
             ),
             keys=[
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="special_color"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"),
             ],
             order_by=[
                 SpanSamplesRequest.OrderBy(
