@@ -149,7 +149,7 @@ class Runner:
             migration_groups = get_active_migration_groups()
 
         migration_status = self._get_migration_status(migration_groups)
-        clickhouse_group_migrations = {}
+        clickhouse_group_migrations: MutableMapping[MigrationGroup, List[str]] = {}
         for group, migration_id in migration_status.keys():
             clickhouse_group_migrations.setdefault(group, []).append(migration_id)
 

@@ -208,7 +208,7 @@ def migrations_groups_list(group: str) -> Response:
                             "status": status.value,
                             "blocking": blocking,
                         }
-                        for migration_id, status, blocking in runner_group_migrations
+                        for migration_id, status, blocking, _ in runner_group_migrations
                     ]
                 ),
                 200,
