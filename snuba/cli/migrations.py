@@ -40,7 +40,7 @@ def list() -> None:
     for group, group_migrations in runner.show_all():
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
-        for migration_id, status, blocking in group_migrations:
+        for migration_id, status, blocking, existing in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
                 Status.NOT_STARTED: " ",
@@ -53,7 +53,11 @@ def list() -> None:
             if status != Status.COMPLETED and blocking:
                 blocking_text = " (blocking)"
 
-            click.echo(f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}")
+            existing_text = "" if existing else " (this migration no longer exists)"
+
+            click.echo(
+                f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}{existing_text}"
+            )
 
         click.echo()
 
