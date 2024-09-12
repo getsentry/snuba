@@ -508,7 +508,7 @@ def clickhouse_trace_query() -> Response:
                 )
             )
             system_query_result, counter = None, 0
-            while counter < 60:
+            while counter < 30:
                 # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
                 # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
                 system_query_result = run_system_query_on_host_with_sql(
