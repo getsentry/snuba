@@ -114,6 +114,10 @@ query_processors:
       prewhere_candidates:
         [span_id, trace_id, segment_name]
   - processor: TupleUnaliaser
+  - processor: ClickhouseSettingsOverride
+    args:
+      settings:
+        max_memory_usage: 5000000000
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
