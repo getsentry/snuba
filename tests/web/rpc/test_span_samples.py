@@ -286,3 +286,48 @@ class TestSpanSamples(BaseApiTest):
             }
             for _ in range(60)
         ]
+
+    def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = SpanSamplesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                )
+            ),
+            keys=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="special_color"),
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"),
+            ],
+            order_by=[
+                SpanSamplesRequest.OrderBy(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="special_color"
+                    )
+                )
+            ],
+            limit=61,
+            virtual_column_context=[
+                VirtualColumnContext(
+                    from_column_name="color",
+                    to_column_name="special_color",
+                    value_map={"red": "1", "green": "2", "blue": "3"},
+                ),
+            ],
+        )
+        response = span_samples_query(message)
+        result_dicts = [
+            dict((k, x.results[k].val_str) for k in x.results)
+            for x in response.span_samples
+        ]
+        colors = [d["special_color"] for d in result_dicts]
+        assert sorted(colors) == colors
