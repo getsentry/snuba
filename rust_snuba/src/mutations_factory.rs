@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
-use rust_arroyo::backends::kafka::producer::KafkaProducer;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::reduce::Reduce;
@@ -32,13 +30,10 @@ pub struct MutConsumerStrategyFactory {
     pub use_rust_processor: bool,
     pub health_check_file: Option<String>,
     pub enforce_schema: bool,
-    pub commit_log_producer: Option<(Arc<KafkaProducer>, Topic)>,
     pub physical_consumer_group: String,
     pub physical_topic_name: Topic,
     pub accountant_topic_config: config::TopicConfig,
-    pub stop_at_timestamp: Option<i64>,
     pub batch_write_timeout: Option<Duration>,
-    pub max_bytes_before_external_group_by: Option<usize>,
 }
 
 impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {

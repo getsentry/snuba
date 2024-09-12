@@ -39,7 +39,7 @@ pub fn consumer(
     enforce_schema: bool,
     max_poll_interval_ms: usize,
     async_inserts: bool,
-    allow_mutability: bool,
+    mutations_mode: bool,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
@@ -63,7 +63,7 @@ pub fn consumer(
             stop_at_timestamp,
             batch_write_timeout_ms,
             max_bytes_before_external_group_by,
-            allow_mutability,
+            mutations_mode,
         )
     });
 }
@@ -85,7 +85,7 @@ pub fn consumer_impl(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_bytes_before_external_group_by: Option<usize>,
-    allow_mutability: bool,
+    mutations_mode: bool,
 ) -> usize {
     setup_logging();
 
@@ -234,7 +234,7 @@ pub fn consumer_impl(
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
-    let processor = if allow_mutability {
+    let processor = if mutations_mode {
         let mut_factory = MutConsumerStrategyFactory {
             storage_config: first_storage,
             env_config,
@@ -248,13 +248,10 @@ pub fn consumer_impl(
             use_rust_processor,
             health_check_file: health_check_file.map(ToOwned::to_owned),
             enforce_schema,
-            commit_log_producer,
             physical_consumer_group: consumer_group.to_owned(),
             physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
             accountant_topic_config: consumer_config.accountant_topic,
-            stop_at_timestamp,
             batch_write_timeout,
-            max_bytes_before_external_group_by,
         };
 
         StreamProcessor::with_kafka(config, mut_factory, topic, dlq_policy)

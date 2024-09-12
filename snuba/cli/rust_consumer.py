@@ -212,7 +212,7 @@ def rust_consumer(
     stop_at_timestamp: Optional[int],
     batch_write_timeout_ms: Optional[int],
     max_bytes_before_external_group_by: Optional[int],
-    allow_mutability: bool
+    mutations_mode: bool
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -259,7 +259,7 @@ def rust_consumer(
         enforce_schema,
         max_poll_interval_ms,
         async_inserts,
-        allow_mutability,
+        mutations_mode,
         python_max_queue_depth,
         health_check_file,
         stop_at_timestamp,
