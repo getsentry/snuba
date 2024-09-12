@@ -25,6 +25,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common import (
+    apply_virtual_columns,
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -71,6 +72,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
         limit=request.limit,
     )
     treeify_or_and_conditions(res)
+    apply_virtual_columns(res, request.virtual_column_context)
     return res
 
 
@@ -123,6 +125,9 @@ def span_samples_query(
 ) -> SpanSamplesResponse:
     timer = timer or Timer("timeseries_query")
     snuba_request = _build_snuba_request(request)
+    import pdb
+
+    pdb.set_trace()
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=snuba_request,

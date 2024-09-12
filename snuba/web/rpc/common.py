@@ -1,7 +1,10 @@
 from typing import Final, Mapping, Set
 
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
+    AttributeKey,
+    VirtualColumnContext,
+)
 from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
@@ -10,7 +13,15 @@ from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import (
+    NestedColumn,
+    and_cond,
+    column,
+    in_cond,
+    literal,
+    literals_array,
+    or_cond,
+)
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
@@ -128,6 +139,86 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
     )
+
+
+def apply_virtual_columns(
+    query: Query, virtual_column_contexts: list[VirtualColumnContext]
+) -> None:
+    """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
+    dynamic columns in attr_str
+
+    attr_num not supported because mapping on floats is a bad idea
+
+    Example:
+
+        SELECT
+          project_name AS `project_name`,
+          attr_str['release'] AS `release`,
+          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
+        ... rest of query
+
+        contexts:
+            [   {from_column_name: project_id, to_column_name: project_name, value_map: {1: "sentry", 2: "snuba"}} ]
+
+
+        Query will be transformed into:
+
+        SELECT
+        -- see the project name column transformed and the value mapping injected
+          transform( CAST( project_id, 'String'), array( '1', '2'), array( 'sentry', 'snuba'), 'unknown') AS `project_name`,
+        --
+          attr_str['release'] AS `release`,
+          attr_str['sentry.sdk.name'] AS `sentry.sdk.name`,
+        ... rest of query
+
+    """
+
+    if not virtual_column_contexts:
+        return
+
+    mapped_column_to_context = {c.to_column_name: c for c in virtual_column_contexts}
+
+    def transform_expressions(expression: Expression) -> Expression:
+        # virtual columns will show up as `attr_str[virtual_column_name]` or `attr_num[virtual_column_name]`
+        if not isinstance(expression, SubscriptableReference):
+            return expression
+
+        if not expression.column != "attr_str":
+            return expression
+        context = mapped_column_to_context.get(str(expression.key.value))
+        attr_str = NestedColumn("attr_str")
+        import pdb
+
+        pdb.set_trace()
+        if context:
+            if context.from_column_name in NORMALIZED_COLUMNS:
+                return f.transform(
+                    f.CAST(column(context.from_column_name), "String"),
+                    literals_array(
+                        None, [literal(k) for k in context.value_map.keys()]
+                    ),
+                    literals_array(
+                        None, [literal(v) for v in context.value_map.values()]
+                    ),
+                    literal("unknown"),
+                    alias=context.to_column_name,
+                )
+            else:
+                return f.transform(
+                    attr_str[context.from_column_name],
+                    literals_array(
+                        None, [literal(k) for k in context.value_map.keys()]
+                    ),
+                    literals_array(
+                        None, [literal(v) for v in context.value_map.values()]
+                    ),
+                    literal("unknown"),
+                    alias=context.to_column_name,
+                )
+
+        return expression
+
+    query.transform_expressions(transform_expressions)
 
 
 def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression:
