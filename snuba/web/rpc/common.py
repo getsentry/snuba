@@ -278,7 +278,6 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
         if k.name in NORMALIZED_COLUMNS.keys():
             return f.isNotNull(column(k.name))
         if k.type == AttributeKey.Type.TYPE_STRING:
-            # TODO: this doesn't actually work yet, need to make mapContains work with hash mapper too
             return f.mapContains(column("attr_str"), literal(k.name))
         else:
             return f.mapContains(column("attr_num"), literal(k.name))
