@@ -187,9 +187,6 @@ def apply_virtual_columns(
             return expression
         context = mapped_column_to_context.get(str(expression.key.value))
         attr_str = NestedColumn("attr_str")
-        import pdb
-
-        pdb.set_trace()
         if context:
             if context.from_column_name in NORMALIZED_COLUMNS:
                 return f.transform(

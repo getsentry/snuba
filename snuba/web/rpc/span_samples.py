@@ -125,9 +125,6 @@ def span_samples_query(
 ) -> SpanSamplesResponse:
     timer = timer or Timer("timeseries_query")
     snuba_request = _build_snuba_request(request)
-    import pdb
-
-    pdb.set_trace()
     res = run_query(
         dataset=PluggableDataset(name="eap", all_entities=[]),
         request=snuba_request,
