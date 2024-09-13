@@ -72,7 +72,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
         limit=request.limit,
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns(res, request.virtual_column_context)
+    apply_virtual_columns(res, request.virtual_column_contexts)
     return res
 
 

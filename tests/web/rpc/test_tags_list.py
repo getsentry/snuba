@@ -5,10 +5,11 @@ from typing import Any, Mapping
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    TagsListRequest,
-    TagsListResponse,
+    TraceItemAttributesRequest,
+    TraceItemAttributesResponse,
 )
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -63,11 +64,11 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestTagsList(BaseApiTest):
+class TestTraceItemAttributes(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = TagsListRequest(
+        message = TraceItemAttributesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -98,12 +99,12 @@ class TestTagsList(BaseApiTest):
             offset=20,
         )
         response = self.app.post(
-            "/rpc/TagsListRequest", data=message.SerializeToString()
+            "/rpc/TraceItemAttributesRequest", data=message.SerializeToString()
         )
         assert response.status_code == 200
 
-    def test_simple_case(self, setup_teardown: Any) -> None:
-        message = TagsListRequest(
+    def test_simple_case_str(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -132,17 +133,58 @@ class TestTagsList(BaseApiTest):
             ),
             limit=10,
             offset=0,
+            type=AttributeKey.Type.TYPE_STRING,
         )
         response = tags_list_query(message)
         assert response.tags == [
-            TagsListResponse.Tag(
-                name=f"a_tag_{i:03}", type=TagsListResponse.TYPE_STRING
+            TraceItemAttributesResponse.Tag(
+                name=f"a_tag_{i:03}", type=AttributeKey.Type.TYPE_STRING
+            )
+            for i in range(0, 10)
+        ]
+
+    def test_simple_case_float(self, setup_teardown: Any) -> None:
+        message = TraceItemAttributesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int(
+                        datetime(
+                            year=BASE_TIME.year,
+                            month=BASE_TIME.month,
+                            day=BASE_TIME.day - 1,
+                            tzinfo=UTC,
+                        ).timestamp()
+                    )
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int(
+                        datetime(
+                            year=BASE_TIME.year,
+                            month=BASE_TIME.month,
+                            day=BASE_TIME.day + 1,
+                            tzinfo=UTC,
+                        ).timestamp()
+                    )
+                ),
+            ),
+            limit=10,
+            offset=0,
+            type=AttributeKey.Type.TYPE_FLOAT,
+        )
+        response = tags_list_query(message)
+        assert response.tags == [
+            TraceItemAttributesResponse.Tag(
+                name=f"b_measurement_{i:03}", type=AttributeKey.Type.TYPE_FLOAT
             )
             for i in range(0, 10)
         ]
 
     def test_with_offset(self, setup_teardown: Any) -> None:
-        message = TagsListRequest(
+        message = TraceItemAttributesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -170,21 +212,24 @@ class TestTagsList(BaseApiTest):
                 ),
             ),
             limit=5,
-            offset=29,
+            offset=10,
+            type=AttributeKey.Type.TYPE_FLOAT,
         )
         response = tags_list_query(message)
         assert response.tags == [
-            TagsListResponse.Tag(name="a_tag_029", type=TagsListResponse.TYPE_STRING),
-            TagsListResponse.Tag(
-                name="b_measurement_000", type=TagsListResponse.TYPE_NUMBER
+            TraceItemAttributesResponse.Tag(
+                name="b_measurement_010", type=AttributeKey.Type.TYPE_FLOAT
             ),
-            TagsListResponse.Tag(
-                name="b_measurement_001", type=TagsListResponse.TYPE_NUMBER
+            TraceItemAttributesResponse.Tag(
+                name="b_measurement_011", type=AttributeKey.Type.TYPE_FLOAT
             ),
-            TagsListResponse.Tag(
-                name="b_measurement_002", type=TagsListResponse.TYPE_NUMBER
+            TraceItemAttributesResponse.Tag(
+                name="b_measurement_012", type=AttributeKey.Type.TYPE_FLOAT
             ),
-            TagsListResponse.Tag(
-                name="b_measurement_003", type=TagsListResponse.TYPE_NUMBER
+            TraceItemAttributesResponse.Tag(
+                name="b_measurement_013", type=AttributeKey.Type.TYPE_FLOAT
+            ),
+            TraceItemAttributesResponse.Tag(
+                name="b_measurement_014", type=AttributeKey.Type.TYPE_FLOAT
             ),
         ]
