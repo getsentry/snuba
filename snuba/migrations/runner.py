@@ -176,7 +176,7 @@ class Runner:
 
             if include_nonexistent:
                 non_existing_migrations = clickhouse_group_migrations.get(
-                    group, []
+                    group, set()
                 ).difference(set(migration_ids))
                 for migration_id in non_existing_migrations:
                     migration_key = MigrationKey(group, migration_id)
