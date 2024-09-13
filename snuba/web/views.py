@@ -41,6 +41,7 @@ from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
 )
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
+    AttributeValuesRequest,
     TraceItemAttributesRequest,
 )
 from werkzeug import Response as WerkzeugResponse
@@ -85,8 +86,9 @@ from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
-from snuba.web.rpc.tags_list import tags_list_query
 from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
+from snuba.web.rpc.trace_item_attributes import trace_items_attributes_query
+from snuba.web.rpc.trace_item_values import trace_item_values_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -290,7 +292,11 @@ def rpc(*, name: str, timer: Timer) -> Response:
     ] = {
         "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
         "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
-        "TraceItemAttributesRequest": (tags_list_query, TraceItemAttributesRequest),
+        "TraceItemAttributesRequest": (
+            trace_items_attributes_query,
+            TraceItemAttributesRequest,
+        ),
+        "AttributeValuesRequest": (trace_item_values_query, AttributeValuesRequest),
     }
     try:
         endpoint, req_class = rpcs[name]

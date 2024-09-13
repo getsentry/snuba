@@ -15,7 +15,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
-def tags_list_query(
+def trace_items_attributes_query(
     request: TraceItemAttributesRequest, _timer: Optional[Timer] = None
 ) -> TraceItemAttributesResponse:
     if request.type == AttributeKey.Type.TYPE_STRING:
