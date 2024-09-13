@@ -44,7 +44,7 @@ COMMON_META = RequestMeta(
 )
 
 
-def gen_message(tags) -> Mapping[str, Any]:
+def gen_message(tags: Mapping[str, str]) -> Mapping[str, Any]:
     return {
         "description": "/api/0/relays/projectconfigs/",
         "duration_ms": 152,
