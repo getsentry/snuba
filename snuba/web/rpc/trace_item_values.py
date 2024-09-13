@@ -56,7 +56,7 @@ def _build_query(request: AttributeValuesRequest) -> Query:
         condition=base_conditions_and(
             request.meta,
             f.equals(column("attr_key"), literal(request.name)),
-            # multiSearchAny has special treatment with bloom filters
+            # multiSearchAny has special treatment with ngram bloom filters
             # https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree#functions-support
             f.multiSearchAny(
                 column("attr_value"),
