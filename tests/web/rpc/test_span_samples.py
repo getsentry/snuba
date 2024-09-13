@@ -263,7 +263,7 @@ class TestSpanSamples(BaseApiTest):
                 )
             ],
             limit=61,
-            virtual_column_context=[
+            virtual_column_contexts=[
                 VirtualColumnContext(
                     from_column_name="project_id",
                     to_column_name="project_name",
@@ -317,7 +317,7 @@ class TestSpanSamples(BaseApiTest):
                 )
             ],
             limit=61,
-            virtual_column_context=[
+            virtual_column_contexts=[
                 VirtualColumnContext(
                     from_column_name="color",
                     to_column_name="special_color",
