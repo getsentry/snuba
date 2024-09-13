@@ -48,7 +48,7 @@ class MigrationGroup(Enum):
     GROUP_ATTRIBUTES = "group_attributes"
     METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
-    FUNCTIONS_SUMMARIES = "functions_summaries"
+    FUNCTIONS_EXAMPLES = "functions_examples"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -66,7 +66,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.METRICS_SUMMARIES,
     MigrationGroup.PROFILE_CHUNKS,
-    MigrationGroup.FUNCTIONS_SUMMARIES,
+    MigrationGroup.FUNCTIONS_EXAMPLES,
 }
 
 
@@ -189,9 +189,9 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
         readiness_state=ReadinessState.PARTIAL,
     ),
-    MigrationGroup.FUNCTIONS_SUMMARIES: _MigrationGroup(
+    MigrationGroup.FUNCTIONS_EXAMPLES: _MigrationGroup(
         loader=FunctionsSummariesLoader(),
-        storage_sets_keys={StorageSetKey.FUNCTIONS_SUMMARIES},
+        storage_sets_keys={StorageSetKey.FUNCTIONS_EXAMPLES},
         readiness_state=ReadinessState.EXPERIMENTAL,
     ),
 }

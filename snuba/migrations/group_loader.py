@@ -185,4 +185,4 @@ class ProfileChunksLoader(DirectoryLoader):
 
 class FunctionsSummariesLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.functions_summaries")
+        super().__init__("snuba.snuba_migrations.functions_examples")

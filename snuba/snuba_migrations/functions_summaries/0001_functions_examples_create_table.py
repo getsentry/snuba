@@ -7,9 +7,9 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.schemas import Float
 
-storage_set_name = StorageSetKey.FUNCTIONS_SUMMARIES
-local_table_name = "functions_summaries_local"
-dist_table_name = "functions_summaries_dist"
+storage_set_name = StorageSetKey.FUNCTIONS_EXAMPLES
+local_table_name = "functions_examples_local"
+dist_table_name = "functions_examples_dist"
 
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
