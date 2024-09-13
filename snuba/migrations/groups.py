@@ -7,8 +7,8 @@ from snuba.migrations.group_loader import (
     DiscoverLoader,
     EventsAnalyticsPlatformLoader,
     EventsLoader,
+    FunctionsExamplesLoader,
     FunctionsLoader,
-    FunctionsSummariesLoader,
     GenericMetricsLoader,
     GroupAttributesLoader,
     GroupLoader,
@@ -190,7 +190,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.FUNCTIONS_EXAMPLES: _MigrationGroup(
-        loader=FunctionsSummariesLoader(),
+        loader=FunctionsExamplesLoader(),
         storage_sets_keys={StorageSetKey.FUNCTIONS_EXAMPLES},
         readiness_state=ReadinessState.EXPERIMENTAL,
     ),

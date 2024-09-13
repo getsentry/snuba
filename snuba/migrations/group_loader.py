@@ -183,6 +183,6 @@ class ProfileChunksLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.profile_chunks")
 
 
-class FunctionsSummariesLoader(DirectoryLoader):
+class FunctionsExamplesLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.functions_examples")
