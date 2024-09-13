@@ -2,9 +2,10 @@ from datetime import datetime
 from typing import List, Optional
 
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    TagsListRequest,
-    TagsListResponse,
+    TraceItemAttributesRequest,
+    TraceItemAttributesResponse,
 )
+from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery, StringNode
 from snuba.datasets.schemas.tables import TableSource
@@ -15,15 +16,17 @@ from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
 def tags_list_query(
-    request: TagsListRequest, _timer: Optional[Timer] = None
-) -> TagsListResponse:
-    str_storage = get_storage(StorageKey("spans_str_attrs"))
-    num_storage = get_storage(StorageKey("spans_num_attrs"))
+    request: TraceItemAttributesRequest, _timer: Optional[Timer] = None
+) -> TraceItemAttributesResponse:
+    if request.type == AttributeKey.Type.TYPE_STRING:
+        storage = get_storage(StorageKey("spans_str_attrs"))
+    elif request.type == AttributeKey.Type.TYPE_FLOAT:
+        storage = get_storage(StorageKey("spans_num_attrs"))
+    else:
+        return TraceItemAttributesResponse(tags=[])
 
-    str_data_source = str_storage.get_schema().get_data_source()
-    assert isinstance(str_data_source, TableSource)
-    num_data_source = num_storage.get_schema().get_data_source()
-    assert isinstance(num_data_source, TableSource)
+    data_source = storage.get_schema().get_data_source()
+    assert isinstance(data_source, TableSource)
 
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
@@ -35,39 +38,26 @@ def tags_list_query(
         )
 
     query = f"""
-SELECT * FROM (
-    SELECT DISTINCT attr_key, 'str' as type, timestamp
-    FROM {str_data_source.get_table_name()}
-    WHERE organization_id={request.meta.organization_id}
-    AND project_id IN ({', '.join(str(pid) for pid in request.meta.project_ids)})
-    AND timestamp BETWEEN fromUnixTimestamp({request.meta.start_timestamp.seconds}) AND fromUnixTimestamp({request.meta.end_timestamp.seconds})
-
-    UNION ALL
-
-    SELECT DISTINCT attr_key, 'num' as type, timestamp
-    FROM {num_data_source.get_table_name()}
-    WHERE organization_id={request.meta.organization_id}
-    AND project_id IN ({', '.join(str(pid) for pid in request.meta.project_ids)})
-    AND timestamp BETWEEN fromUnixTimestamp({request.meta.start_timestamp.seconds}) AND fromUnixTimestamp({request.meta.end_timestamp.seconds})
-)
+SELECT DISTINCT attr_key, timestamp
+FROM {data_source.get_table_name()}
+WHERE organization_id={request.meta.organization_id}
+AND project_id IN ({', '.join(str(pid) for pid in request.meta.project_ids)})
+AND timestamp BETWEEN fromUnixTimestamp({request.meta.start_timestamp.seconds}) AND fromUnixTimestamp({request.meta.end_timestamp.seconds})
 ORDER BY attr_key
 LIMIT {request.limit} OFFSET {request.offset}
 """
 
-    cluster = str_storage.get_cluster()
+    cluster = storage.get_cluster()
     reader = cluster.get_reader()
     result = reader.execute(FormattedQuery([StringNode(query)]))
 
-    tags: List[TagsListResponse.Tag] = []
+    tags: List[TraceItemAttributesResponse.Tag] = []
     for row in result.get("data", []):
         tags.append(
-            TagsListResponse.Tag(
+            TraceItemAttributesResponse.Tag(
                 name=row["attr_key"],
-                type={
-                    "str": TagsListResponse.TYPE_STRING,
-                    "num": TagsListResponse.TYPE_NUMBER,
-                }[row["type"]],
+                type=request.type,
             )
         )
 
-    return TagsListResponse(tags=tags)
+    return TraceItemAttributesResponse(tags=tags)
