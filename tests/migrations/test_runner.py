@@ -111,6 +111,26 @@ def test_show_all_for_groups() -> None:
 
 
 @pytest.mark.clickhouse_db
+def test_show_all_nonexistent_migration() -> None:
+    runner = Runner()
+    assert all(
+        [
+            migration.status == Status.NOT_STARTED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
+    runner.run_all(force=True)
+    assert all(
+        [
+            migration.status == Status.COMPLETED
+            for (_, group_migrations) in runner.show_all()
+            for migration in group_migrations
+        ]
+    )
+
+
+@pytest.mark.clickhouse_db
 def test_run_migration() -> None:
     runner = Runner()
     runner.run_migration(
