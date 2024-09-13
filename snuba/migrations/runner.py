@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
@@ -134,7 +135,7 @@ class Runner:
         )
 
     def show_all(
-        self, groups: Optional[Sequence[str]] = None
+        self, groups: Optional[Sequence[str]] = None, include_nonexistent: bool = False
     ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
@@ -149,9 +150,9 @@ class Runner:
             migration_groups = get_active_migration_groups()
 
         migration_status = self._get_migration_status(migration_groups)
-        clickhouse_group_migrations: MutableMapping[MigrationGroup, List[str]] = {}
+        clickhouse_group_migrations = defaultdict(set)
         for group, migration_id in migration_status.keys():
-            clickhouse_group_migrations.setdefault(group, []).append(migration_id)
+            clickhouse_group_migrations[group].add(migration_id)
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
@@ -173,16 +174,17 @@ class Runner:
                     )
                 )
 
-            non_existing_migrations = set(
-                clickhouse_group_migrations.get(group, [])
-            ).difference(set(migration_ids))
-            for migration_id in non_existing_migrations:
-                migration_key = MigrationKey(group, migration_id)
-                group_migrations.append(
-                    MigrationDetails(
-                        migration_id, get_status(migration_key), False, False
+            if include_nonexistent:
+                non_existing_migrations = clickhouse_group_migrations.get(
+                    group, []
+                ).difference(set(migration_ids))
+                for migration_id in non_existing_migrations:
+                    migration_key = MigrationKey(group, migration_id)
+                    group_migrations.append(
+                        MigrationDetails(
+                            migration_id, get_status(migration_key), False, False
+                        )
                     )
-                )
 
             migrations.append((group, group_migrations))
 

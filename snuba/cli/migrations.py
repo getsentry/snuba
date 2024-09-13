@@ -37,7 +37,7 @@ def list() -> None:
     setup_logging()
     check_clickhouse_connections(CLUSTERS)
     runner = Runner()
-    for group, group_migrations in runner.show_all():
+    for group, group_migrations in runner.show_all(include_nonexistent=True):
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
         for migration_id, status, blocking, existing in group_migrations:
