@@ -14,6 +14,16 @@ use crate::processors::spans::FromSpanMessage;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
+pub const ATTRS_SHARD_FACTOR: usize = 20;
+
+macro_rules! seq_attrs {
+    ($($tt:tt)*) => {
+        seq!(N in 0..20 {
+            $($tt)*
+        });
+    }
+}
+
 pub fn process_message(
     payload: KafkaPayload,
     _metadata: KafkaMessageMetadata,
@@ -30,7 +40,7 @@ pub fn process_message(
     InsertBatch::from_rows([span], origin_timestamp)
 }
 
-seq!(N in 0..20 {
+seq_attrs! {
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct AttributeMap {
     #(
@@ -41,29 +51,29 @@ pub(crate) struct AttributeMap {
     attr_num_~N: HashMap<String, f64>,
     )*
 }
-});
+}
 
 impl AttributeMap {
     pub fn insert_str(&mut self, k: String, v: String) {
-        seq!(N in 0..20 {
+        seq_attrs! {
             let attr_str_buckets = [
                 #(
                 &mut self.attr_str_~N,
                 )*
             ];
-        });
+        };
 
         attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()].insert(k, v);
     }
 
     pub fn insert_num(&mut self, k: String, v: f64) {
-        seq!(N in 0..20 {
+        seq_attrs! {
             let attr_num_buckets = [
                 #(
                 &mut self.attr_num_~N,
                 )*
             ];
-        });
+        }
 
         attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()].insert(k, v);
     }

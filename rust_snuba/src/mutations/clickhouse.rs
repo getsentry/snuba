@@ -10,7 +10,7 @@ use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
 
 use crate::mutations::parser::MutationBatch;
-use crate::processors::eap_spans::{AttributeMap, PrimaryKey};
+use crate::processors::eap_spans::{AttributeMap, PrimaryKey, ATTRS_SHARD_FACTOR};
 
 #[derive(Clone)]
 pub struct ClickhouseWriter {
@@ -93,7 +93,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
     // INSERT INTO .. SELECT FROM .. matches up columns by position only, and ignores names.
     // subqueries don't have this property.
     let mut attr_combined_columns = String::new();
-    for i in 0..20 {
+    for i in 0..ATTRS_SHARD_FACTOR {
         attr_columns.push_str(&format!(",attr_str_{i} Map(String, String)"));
 
         attr_combined_columns.push_str(&format!(
@@ -101,7 +101,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
         ));
     }
 
-    for i in 0..20 {
+    for i in 0..ATTRS_SHARD_FACTOR {
         attr_columns.push_str(&format!(",attr_num_{i} Map(String, Float64)"));
         attr_combined_columns.push_str(&format!(
             ",mapUpdate(old_data.attr_num_{i}, new_data.attr_num_{i}) AS attr_num_{i}"
