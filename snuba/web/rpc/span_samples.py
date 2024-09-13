@@ -25,6 +25,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from snuba.web.rpc.common import (
+    apply_virtual_columns,
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -71,6 +72,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
         limit=request.limit,
     )
     treeify_or_and_conditions(res)
+    apply_virtual_columns(res, request.virtual_column_contexts)
     return res
 
 
