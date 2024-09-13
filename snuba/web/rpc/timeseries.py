@@ -37,7 +37,7 @@ def _get_aggregate_func(
     request: AggregateBucketRequest,
 ) -> Expression:
     key_expr = attribute_key_to_expression(request.key)
-    exists_condition = literal(True)
+    exists_condition: Expression = literal(True)
     if request.key.name not in NORMALIZED_COLUMNS:
         if request.key.type == AttributeKey.TYPE_STRING:
             exists_condition = f.mapContains(
