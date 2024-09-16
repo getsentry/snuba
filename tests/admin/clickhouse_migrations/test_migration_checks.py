@@ -29,9 +29,9 @@ def group_loader() -> GroupLoader:
 
 
 RUN_MIGRATIONS: Sequence[MigrationDetails] = [
-    MigrationDetails("0001", Status.COMPLETED, True),
-    MigrationDetails("0002", Status.NOT_STARTED, True),
-    MigrationDetails("0003", Status.NOT_STARTED, True),
+    MigrationDetails("0001", Status.COMPLETED, True, True),
+    MigrationDetails("0002", Status.NOT_STARTED, True, True),
+    MigrationDetails("0003", Status.NOT_STARTED, True, True),
 ]
 
 
@@ -62,9 +62,9 @@ def test_status_checker_run(
 
 
 REVERSE_MIGRATIONS: Sequence[MigrationDetails] = [
-    MigrationDetails("0001", Status.COMPLETED, True),
-    MigrationDetails("0002", Status.IN_PROGRESS, True),
-    MigrationDetails("0003", Status.NOT_STARTED, True),
+    MigrationDetails("0001", Status.COMPLETED, True, True),
+    MigrationDetails("0002", Status.IN_PROGRESS, True, True),
+    MigrationDetails("0003", Status.NOT_STARTED, True, True),
 ]
 
 
@@ -155,7 +155,10 @@ def test_run_migration_checks_and_policies(
     mock_policy = Mock()
     checker = mock_checker()
     mock_runner.show_all.return_value = [
-        (MigrationGroup("events"), [MigrationDetails("0001", Status.COMPLETED, True)])
+        (
+            MigrationGroup("events"),
+            [MigrationDetails("0001", Status.COMPLETED, True, True)],
+        )
     ]
 
     mock_policy.can_run.return_value = policy_result[0]
