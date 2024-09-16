@@ -67,11 +67,11 @@ def _get_aggregate_func(
         )
     if request.aggregate == AggregateBucketRequest.FUNCTION_P95:
         return cf.quantileTDigestWeighted(0.95)(
-            key_expr, sampling_weight_expr, alias="p90"
+            key_expr, sampling_weight_expr, alias="p95"
         )
     if request.aggregate == AggregateBucketRequest.FUNCTION_P99:
         return cf.quantileTDigestWeighted(0.99)(
-            key_expr, sampling_weight_expr, alias="p95"
+            key_expr, sampling_weight_expr, alias="p99"
         )
 
     raise BadSnubaRPCRequestException(
