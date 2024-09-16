@@ -40,7 +40,9 @@ from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest,
 )
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import TagsListRequest
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
+    TraceItemAttributesRequest,
+)
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -288,7 +290,7 @@ def rpc(*, name: str, timer: Timer) -> Response:
     ] = {
         "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
         "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
-        "TagsListRequest": (tags_list_query, TagsListRequest),
+        "TraceItemAttributesRequest": (tags_list_query, TraceItemAttributesRequest),
     }
     try:
         endpoint, req_class = rpcs[name]

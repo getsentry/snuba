@@ -19,8 +19,9 @@ expression: span
   "exclusive_time_ms": 0.228,
   "retention_days": 90,
   "name": "/api/0/relays/projectconfigs/",
-  "sampling_factor": 1.0,
-  "sampling_weight": 1.0,
+  "sampling_factor": 0.01,
+  "sampling_weight": 100.0,
+  "sampling_weight_2": 100,
   "sign": 1,
   "attr_str_0": {
     "relay_protocol_version": "3",
