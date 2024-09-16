@@ -1,6 +1,6 @@
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Set
 from unittest.mock import call, patch
 
@@ -136,11 +136,11 @@ def test_run_optimize_with_partition_tracker() -> None:
     for week in range(0, 4):
         write_error_message(
             writable_storage=storage,
-            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
+            time=int((datetime.now(timezone.utc) - timedelta(weeks=week)).timestamp()),
         )
         write_error_message(
             writable_storage=storage,
-            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
+            time=int((datetime.now(timezone.utc) - timedelta(weeks=week)).timestamp()),
         )
 
     partitions = optimize.get_partitions_to_optimize(
@@ -227,11 +227,11 @@ def test_run_optimize_with_ongoing_merges() -> None:
     for week in range(0, 4):
         write_error_message(
             writable_storage=storage,
-            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
+            time=int((datetime.now(timezone.utc) - timedelta(weeks=week)).timestamp()),
         )
         write_error_message(
             writable_storage=storage,
-            time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
+            time=int((datetime.now(timezone.utc) - timedelta(weeks=week)).timestamp()),
         )
 
     partitions = optimize.get_partitions_to_optimize(
