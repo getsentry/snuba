@@ -39,11 +39,6 @@ REPLACER_PROCESSING_TIMEOUT_THRESHOLD = 0  # ms
 # Set enforce retention to true for tests
 ENFORCE_RETENTION = True
 
-# Ignore optimize job cut off time for tests
-OPTIMIZE_JOB_CUTOFF_TIME = 24
-
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
-
 ADMIN_ALLOWED_PROD_PROJECTS = [1, 11276]
 
 REDIS_CLUSTERS = {
