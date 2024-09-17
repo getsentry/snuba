@@ -50,7 +50,8 @@ def _build_query(request: AttributeValuesRequest) -> Query:
         from_clause=entity,
         selected_columns=[
             SelectedExpression(
-                name="attr_value", expression=column("attr_value", alias="attr_value")
+                name="attr_value",
+                expression=f.distinct(column("attr_value", alias="attr_value")),
             ),
         ],
         condition=base_conditions_and(
@@ -63,11 +64,6 @@ def _build_query(request: AttributeValuesRequest) -> Query:
                 literals_array(None, [literal(request.value_substring_match)]),
             ),
         ),
-        groupby=[
-            column("organization_id", alias="organization_id"),
-            column("attr_key", alias="attr_key"),
-            column("attr_value", alias="attr_value"),
-        ],
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC, expression=column("organization_id")
