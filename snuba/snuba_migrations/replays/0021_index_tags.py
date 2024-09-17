@@ -48,26 +48,11 @@ def forward_columns_iter() -> list[operations.SqlOperation]:
             granularity=1,
             target=operations.OperationTarget.LOCAL,
         ),
-        operations.AddIndex(
-            storage_set=StorageSetKey.REPLAYS,
-            table_name="replays_dist",
-            index_name="bf_tags_hash_map",
-            index_expression="_tags_hash_map",
-            index_type="bloom_filter",
-            granularity=1,
-            target=operations.OperationTarget.DISTRIBUTED,
-        ),
     ]
 
 
 def backward_columns_iter() -> list[operations.SqlOperation]:
     return [
-        operations.DropIndex(
-            StorageSetKey.REPLAYS,
-            "replays_dist",
-            "_tags_hash_map",
-            target=operations.OperationTarget.DISTRIBUTED,
-        ),
         operations.DropIndex(
             StorageSetKey.REPLAYS,
             "replays_local",
