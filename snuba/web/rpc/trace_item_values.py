@@ -65,7 +65,11 @@ def _build_query(request: AttributeValuesRequest) -> Query:
         ),
         groupby=[column("attr_value", alias="attr_value")],
         order_by=[
-            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value"))
+            OrderBy(
+                direction=OrderByDirection.ASC, expression=column("organization_id")
+            ),
+            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
+            OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
         offset=request.offset,
