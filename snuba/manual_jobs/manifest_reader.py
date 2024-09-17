@@ -16,7 +16,6 @@ class _ManifestReader:
 
             job_specs = {}
             for content in contents:
-
                 job_id = content["id"]
                 assert isinstance(job_id, str)
                 job_type = content["job_type"]
