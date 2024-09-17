@@ -15,7 +15,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
-def tags_list_query(
+def trace_item_attribute_list_query(
     request: TraceItemAttributesRequest, _timer: Optional[Timer] = None
 ) -> TraceItemAttributesResponse:
     if request.type == AttributeKey.Type.TYPE_STRING:
@@ -31,11 +31,16 @@ def tags_list_query(
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
+    # this table stores timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
     start_timestamp = datetime.utcfromtimestamp(request.meta.start_timestamp.seconds)
-    if start_timestamp.day >= datetime.utcnow().day and start_timestamp.hour != 0:
-        raise BadSnubaRPCRequestException(
-            "Tags' timestamps are stored per-day, you probably want to set start_timestamp to UTC 00:00 today or a time yesterday."
+    end_timestamp = datetime.utcfromtimestamp(request.meta.end_timestamp.seconds)
+    if start_timestamp.day == end_timestamp.day:
+        start_timestamp = start_timestamp.replace(
+            day=start_timestamp.day - 1, hour=0, minute=0, second=0, microsecond=0
         )
+        end_timestamp = end_timestamp.replace(day=end_timestamp.day + 1)
+        request.meta.start_timestamp.seconds = int(start_timestamp.timestamp())
+        request.meta.end_timestamp.seconds = int(end_timestamp.timestamp())
 
     query = f"""
 SELECT DISTINCT attr_key, timestamp
