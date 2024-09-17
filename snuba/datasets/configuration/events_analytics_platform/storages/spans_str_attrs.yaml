@@ -13,7 +13,6 @@ schema:
     [
       { name: organization_id, type: UInt, args: { size: 64 } },
       { name: project_id, type: UInt, args: { size: 64 } },
-      { name: trace_id, type: UUID },
       { name: attr_key, type: String },
       { name: attr_value, type: String },
       { name: timestamp, type: DateTime },
@@ -28,8 +27,8 @@ schema:
           },
       }
     ]
-  local_table_name: spans_str_attrs_local
-  dist_table_name: spans_str_attrs_dist
+  local_table_name: spans_str_attrs_2_local
+  dist_table_name: spans_str_attrs_2_dist
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
