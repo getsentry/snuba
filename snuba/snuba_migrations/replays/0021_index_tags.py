@@ -56,7 +56,7 @@ def backward_columns_iter() -> list[operations.SqlOperation]:
         operations.DropIndex(
             StorageSetKey.REPLAYS,
             "replays_local",
-            "_tags_hash_map",
+            "bf_tags_hash_map",
             target=operations.OperationTarget.LOCAL,
         ),
         operations.DropColumn(
