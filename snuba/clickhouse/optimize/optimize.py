@@ -5,7 +5,7 @@ import threading
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Mapping, Optional, Sequence
 
 import structlog
@@ -347,7 +347,7 @@ def optimize_partitions(
     """
 
     for partition in partitions:
-        if cutoff_time is not None and datetime.now(timezone.utc) > cutoff_time:
+        if cutoff_time is not None and datetime.now() > cutoff_time:
             logger.info(
                 f"Optimize job is running past provided cutoff time"
                 f" {cutoff_time}. Cancelling.",
