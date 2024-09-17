@@ -4,7 +4,7 @@ import click
 
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_loader import JobLoader
-from snuba.manual_jobs.manifest_reader import ManifestReader
+from snuba.manual_jobs.manifest_reader import _ManifestReader
 
 JOB_SPECIFICATION_ERROR_MSG = "Missing job type and/or job id"
 
@@ -12,14 +12,6 @@ JOB_SPECIFICATION_ERROR_MSG = "Missing job type and/or job id"
 @click.group()
 def jobs() -> None:
     pass
-
-
-def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
-    params = {}
-    for pair in pairs:
-        k, v = pair.split("=")
-        params[k] = v
-    return params
 
 
 @jobs.command()
@@ -30,12 +22,20 @@ def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
     default=True,
 )
 def run_from_manifest(*, json_manifest: str, job_id: str, dry_run: bool) -> None:
-    job_specs = ManifestReader.read(json_manifest)
+    job_specs = _ManifestReader.read(json_manifest)
     if job_id not in job_specs.keys():
         raise click.ClickException("Provide a valid job id")
 
     job_to_run = JobLoader.get_job_instance(job_specs[job_id], dry_run)
     job_to_run.execute()
+
+
+def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
+    params = {}
+    for pair in pairs:
+        k, v = pair.split("=")
+        params[k] = v
+    return params
 
 
 @jobs.command()
