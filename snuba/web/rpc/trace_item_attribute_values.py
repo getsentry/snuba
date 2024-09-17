@@ -100,7 +100,7 @@ def _build_snuba_request(
     )
 
 
-def trace_item_values_query(
+def trace_item_attribute_values_query(
     request: AttributeValuesRequest, timer: Timer | None = None
 ) -> AttributeValuesResponse:
     timer = timer or Timer("trace_item_values")

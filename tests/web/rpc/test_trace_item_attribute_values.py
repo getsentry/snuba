@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.trace_item_values import trace_item_values_query
+from snuba.web.rpc.trace_item_attribute_values import trace_item_attribute_values_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -103,14 +103,14 @@ class TestTraceItemAttributes(BaseApiTest):
 
     def test_simple_case(self, setup_teardown: Any) -> None:
         message = AttributeValuesRequest(meta=COMMON_META, limit=5, name="tag1")
-        response = trace_item_values_query(message)
+        response = trace_item_attribute_values_query(message)
         assert response.values == ["blah", "derpderp", "durp", "herp", "herpderp"]
 
     def test_offset(self, setup_teardown: Any) -> None:
         message = AttributeValuesRequest(
             meta=COMMON_META, limit=5, offset=1, name="tag1"
         )
-        response = trace_item_values_query(message)
+        response = trace_item_attribute_values_query(message)
         assert response.values == [
             "derpderp",
             "durp",
@@ -123,5 +123,5 @@ class TestTraceItemAttributes(BaseApiTest):
         message = AttributeValuesRequest(
             meta=COMMON_META, limit=5, name="tag1", value_substring_match="erp"
         )
-        response = trace_item_values_query(message)
+        response = trace_item_attribute_values_query(message)
         assert response.values == ["derpderp", "herp", "herpderp"]

@@ -13,8 +13,8 @@ from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.span_samples import span_samples_query
 from snuba.web.rpc.timeseries import timeseries_query
-from snuba.web.rpc.trace_item_attributes import trace_items_attributes_query
-from snuba.web.rpc.trace_item_values import trace_item_values_query
+from snuba.web.rpc.trace_item_attribute_list import trace_item_attribute_list_query
+from snuba.web.rpc.trace_item_attribute_values import trace_item_attribute_values_query
 
 ALL_RPCS: Mapping[
     str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
@@ -22,8 +22,11 @@ ALL_RPCS: Mapping[
     "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
     "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
     "TraceItemAttributesRequest": (
-        trace_items_attributes_query,
+        trace_item_attribute_list_query,
         TraceItemAttributesRequest,
     ),
-    "AttributeValuesRequest": (trace_item_values_query, AttributeValuesRequest),
+    "AttributeValuesRequest": (
+        trace_item_attribute_values_query,
+        AttributeValuesRequest,
+    ),
 }
