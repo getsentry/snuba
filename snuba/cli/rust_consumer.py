@@ -141,7 +141,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     help="Enable async inserts for ClickHouse",
 )
 @click.option(
-    "--allow-mutability",
+    "--mutations-mode",
     is_flag=True,
     default=False,
     help="""

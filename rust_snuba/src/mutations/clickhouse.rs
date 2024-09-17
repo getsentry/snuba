@@ -108,6 +108,22 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
         ));
     }
 
+    // rewriting the update query
+    // WITH () as new_data
+    // INSERT INTO table
+    // SELECT .... updateMap stuff
+    // WHERE old = new
+
+    // filter for org_id first
+    // then do the join
+
+    // PREWHERE for making the query faster
+
+    // another join for getting the cancellation
+    // JOIN ON VALUES (x) (1) (-1)
+
+    // Async inserts ??
+
     let mut body = format!(
         "
         INSERT INTO {table}
