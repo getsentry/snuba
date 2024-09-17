@@ -16,6 +16,7 @@
 
 # EAP-related
 /snuba/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
+/tests/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
 /snuba/snuba_migrations/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
 /rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform
 
