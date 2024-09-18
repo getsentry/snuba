@@ -1,15 +1,19 @@
-from typing import Any, cast
+from typing import cast
 
-from snuba.manual_jobs import Job
+from snuba.manual_jobs import Job, JobSpec
+from snuba.utils.serializable_exception import SerializableException
+
+
+class NonexistentJobException(SerializableException):
+    def __init__(self, job_type: str):
+        super().__init__(f"Job does not exist. Did you make a file {job_type}.py yet?")
 
 
 class JobLoader:
     @staticmethod
-    def get_job_instance(class_name: str, dry_run: bool, **kwargs: Any) -> "Job":
-        job_type_class = Job.class_from_name(class_name)
+    def get_job_instance(job_spec: JobSpec, dry_run: bool) -> "Job":
+        job_type_class = Job.class_from_name(job_spec.job_type)
         if job_type_class is None:
-            raise Exception(
-                f"Job does not exist. Did you make a file {class_name}.py yet?"
-            )
+            raise NonexistentJobException(job_spec.job_type)
 
-        return cast("Job", job_type_class(dry_run=dry_run, **kwargs))
+        return cast("Job", job_type_class(job_spec, dry_run=dry_run))
