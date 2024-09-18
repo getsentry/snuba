@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional
 
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
@@ -12,6 +11,7 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.common import truncate_request_meta_to_day
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
@@ -31,16 +31,7 @@ def trace_item_attribute_list_query(
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
-    # this table stores timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
-    start_timestamp = datetime.utcfromtimestamp(request.meta.start_timestamp.seconds)
-    end_timestamp = datetime.utcfromtimestamp(request.meta.end_timestamp.seconds)
-    if start_timestamp.day == end_timestamp.day:
-        start_timestamp = start_timestamp.replace(
-            day=start_timestamp.day - 1, hour=0, minute=0, second=0, microsecond=0
-        )
-        end_timestamp = end_timestamp.replace(day=end_timestamp.day + 1)
-        request.meta.start_timestamp.seconds = int(start_timestamp.timestamp())
-        request.meta.end_timestamp.seconds = int(end_timestamp.timestamp())
+    truncate_request_meta_to_day(request.meta)
 
     query = f"""
 SELECT DISTINCT attr_key, timestamp
