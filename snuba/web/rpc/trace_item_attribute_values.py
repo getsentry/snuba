@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
@@ -21,7 +20,11 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
-from snuba.web.rpc.common import base_conditions_and, treeify_or_and_conditions
+from snuba.web.rpc.common import (
+    base_conditions_and,
+    treeify_or_and_conditions,
+    truncate_request_meta_to_day,
+)
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
@@ -35,16 +38,7 @@ def _build_query(request: AttributeValuesRequest) -> Query:
         sample=None,
     )
 
-    # this table stores timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
-    start_timestamp = datetime.utcfromtimestamp(request.meta.start_timestamp.seconds)
-    end_timestamp = datetime.utcfromtimestamp(request.meta.end_timestamp.seconds)
-    if start_timestamp.day == end_timestamp.day:
-        start_timestamp = start_timestamp.replace(
-            day=start_timestamp.day - 1, hour=0, minute=0, second=0, microsecond=0
-        )
-        end_timestamp = end_timestamp.replace(day=end_timestamp.day + 1)
-        request.meta.start_timestamp.seconds = int(start_timestamp.timestamp())
-        request.meta.end_timestamp.seconds = int(end_timestamp.timestamp())
+    truncate_request_meta_to_day(request.meta)
 
     res = Query(
         from_clause=entity,
