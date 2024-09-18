@@ -13,6 +13,8 @@ schema:
     { name: segment_id, type: UInt, args: { size: 64 } },
     { name: segment_name, type: String },
     { name: is_segment, type: UInt, args: { size: 8 } },
+    { name: time, type: DateTime }, # virtual column, used by TimeSeriesProcessor
+    { name: timestamp, type: DateTime }, # virtual column, mapped to _sort_timestamp
     { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
     { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
     { name: duration_ms, type: UInt, args: { size: 32 } },
@@ -21,6 +23,7 @@ schema:
     { name: name, type: String },
     { name: sampling_factor, type: Float, args: { size: 64 } },
     { name: sampling_weight, type: Float, args: { size: 64 } },
+    { name: sampling_weight_2, type: UInt, args: { size: 64 } },
     { name: sign, type: Int, args: { size: 8 } },
     { name: attr_str, type: Map, args: { key: { type: String }, value: { type: String } } },
     { name: attr_num, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
@@ -34,9 +37,10 @@ storages:
         - mapper: ColumnToColumn
           args:
             from_table_name: null
-            from_col_name: start_timestamp
+            from_col_name: timestamp
             to_table_name: null
             to_col_name: _sort_timestamp
+
       subscriptables:
         - mapper: SubscriptableHashBucketMapper
           args:
@@ -54,7 +58,19 @@ storages:
 storage_selector:
   selector: DefaultQueryStorageSelector
 
-query_processors: []
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - start_timestamp
+        - end_timestamp
+  - processor: HashBucketFunctionTransformer
+    args:
+      hash_bucket_names:
+        - attr_str
+        - attr_num
 
 validate_data_model: error
 validators:
@@ -62,4 +78,4 @@ validators:
     args:
       required_filter_columns: [organization_id]
 
-required_time_column: start_timestamp
+required_time_column: timestamp

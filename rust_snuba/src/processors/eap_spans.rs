@@ -110,7 +110,8 @@ struct EAPSpan {
     name: String, //aka description
 
     sampling_factor: f64,
-    sampling_weight: f64,
+    sampling_weight: f64, //remove eventually
+    sampling_weight_2: u64,
     sign: u8, //1 for additions, -1 for deletions - for this worker it should be 1
 
     #[serde(flatten)]
@@ -155,7 +156,8 @@ impl From<FromSpanMessage> for EAPSpan {
             retention_days: from.retention_days,
             name: from.description.unwrap_or_default(),
 
-            sampling_weight: 1.,
+            sampling_weight: 1., //remove eventually
+            sampling_weight_2: 1,
             sampling_factor: 1.,
             sign: 1,
 
@@ -184,6 +186,7 @@ impl From<FromSpanMessage> for EAPSpan {
                     if k == "client_sample_rate" && v.value != 0.0 {
                         res.sampling_factor = v.value;
                         res.sampling_weight = 1.0 / v.value;
+                        res.sampling_weight_2 = (1.0 / v.value) as u64;
                     } else {
                         res.attributes.insert_num(k, v.value);
                     }
@@ -246,6 +249,9 @@ mod tests {
     "measurements": {
         "num_of_spans": {
             "value": 50.0
+        },
+        "client_sample_rate": {
+            "value": 0.01
         }
     },
     "organization_id": 1,

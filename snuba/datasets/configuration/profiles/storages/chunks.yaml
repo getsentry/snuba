@@ -25,7 +25,6 @@ query_processors:
       columns: !!set
         profiler_id: null
         chunk_id: null
-  - processor: TableRateLimit
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:

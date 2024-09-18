@@ -345,7 +345,6 @@ schema:
   local_table_name: replays_aggregated_local
   dist_table_name: replays_aggregated_dist
 query_processors:
-  - processor: TableRateLimit
   - processor: ClickhouseSettingsOverride
     args:
       settings:

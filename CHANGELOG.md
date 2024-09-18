@@ -1,5 +1,67 @@
 # Changelog
 
+## 24.9.0
+
+### Various fixes & improvements
+
+- Update migrations list command to show migrations that no longer exist in the codebase (#6299) by @davidtsuk
+- metric(consumer): Add a metric to track the size of individual spans (#6300) by @ayirr7
+- feat(rpc): Update tags list rpc (#6301) by @Zylphrex
+- feat(eap): add virtual column support (#6292) by @volokluev
+- tweak(eap): Allow more memory usage for eap spans (#6298) by @volokluev
+- ref(doc): add documentation for the ReadinessState enum (#6295) by @viglia
+- feat(eap): Start ingesting data into sample_weight_2 column (#6290) by @colin-sentry
+- Update docker entrypoint to run heaptrack  (#6273) by @ayirr7
+- fix(eap): Switch to sampling_weight_2 in entity (#6287) by @colin-sentry
+- bug(query): Run entity validators in composite query pipeline (#6285) by @enochtangg
+- feat(eap): make mapContains work with EAP dataset (#6284) by @colin-sentry
+- feat(job-runner): create a new `snuba jobs` command (#6281) by @xurui-c
+- feat(eap): Shard meta tables by trace ID (#6286) by @colin-sentry
+- fix(eap): Make span_id be returned as a string correctly (#6283) by @colin-sentry
+- feat(job-runner): scaffolding for job manifest testing (#6282) by @onewland
+- bug(admin): Fix invalid query error alerting in snuba admin (#6280) by @enochtangg
+- Fixing Snuba Admin trace UI error. (#6278) by @nachivrn
+- feat(eap): Add a processor that allows you to do mapKeys on attr_str (#6277) by @colin-sentry
+- cleanup(capman): remove legacy table rate limits (#6274) by @volokluev
+- Fixing Snuba Admin trace UI error. (#6276) by @nachivrn
+- hackweek(snuba-admin): MQL query tool (#6235) by @enochtangg
+- feat(eap): Endpoint to get the tags available for a project (#6270) by @colin-sentry
+- feat(sudo): issue slack notifications when sudo mode is used (#6271) by @volokluev
+- chore(eap): Add entities and storages for EAP span meta tables (#6269) by @colin-sentry
+
+_Plus 60 more_
+
+## 24.8.0
+
+### Various fixes & improvements
+
+- switch readiness state to limited to skip migrations and unblock CI (#6210) by @volokluev
+- fix: Add DropIndices back as it was removed after a revert (#6209) by @phacops
+- fix(eap): fix number migration collision (#6208) by @volokluev
+- Revert "fix(eap-spans): Drop ineffective indices to speed up insertion (#6206)" (68826531) by @getsentry-bot
+- ref(snuba-deletes) don't run delete queries when 0 rows need to be deleted (#6199) by @xurui-c
+- fix(eap-spans): Drop ineffective indices to speed up insertion (#6206) by @phacops
+- ref(eap): Remove materialized view (#6205) by @evanh
+- fix: deletes api, change success response format, fix admin bug (#6197) by @kylemumma
+- feat(eap): stub API for aggregate bucket request (#6204) by @volokluev
+- ref(eap): Change sampling_weight to a UInt (#6190) by @evanh
+- feat(eap): Aggregate request protobuf endpoint  (#6202) by @volokluev
+- feat(eap): Add the TimeSeriesProcessor to entities/eap_spans (#6195) by @colin-sentry
+- feat(EAP) Add Make directive that creates proper import paths (#6196) by @colin-sentry
+- fix(capman): sets the correct throttle policy in query result metadata when multiple throttle policies present (#6192) by @xurui-c
+- feat(generic-metrics): Bump materialization_version for generic metrics (#6194) by @john-z-yang
+- feat: make deletes endpoint compatible with snuba SDK (#6193) by @kylemumma
+- Change CODEOWNERS for EAP team (#6187) by @colin-sentry
+- feat(generic-metrics): Forward sampling information from consumer to clickhouse (#6177) by @john-z-yang
+- Increase the default throttle/warning threshold for allocation policies (#6189) by @xurui-c
+- fix(eap): Use arrayElement directly to fix alias issues with HashBucketMapper (#6188) by @colin-sentry
+- fix: Migrations ended up with the same number (#6183) by @evanh
+- ref(snuba-deletes): introduce delete allocation policies (#6180) by @MeredithAnya
+- feat(eap): Add an example endpoint that uses protobuf over http (#6173) by @colin-sentry
+- feat(generic-metrics): Add migrations to allow sampling for distributions (#6172) by @enochtangg
+
+_Plus 40 more_
+
 ## 24.7.1
 
 ### Various fixes & improvements

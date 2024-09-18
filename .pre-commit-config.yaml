@@ -1,7 +1,8 @@
 exclude: >
     (?x)(
         ^snuba/admin/dist/|
-        ^snuba/admin/static/
+        ^snuba/admin/static/|
+        ^snuba/protobufs/
     )
 
 repos:

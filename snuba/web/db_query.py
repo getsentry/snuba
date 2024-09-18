@@ -57,12 +57,7 @@ from snuba.state.cache.redis.backend import (
     RedisCache,
 )
 from snuba.state.quota import ResourceQuota
-from snuba.state.rate_limit import (
-    TABLE_RATE_LIMIT_NAME,
-    RateLimitAggregator,
-    RateLimitExceeded,
-    RateLimitStatsContainer,
-)
+from snuba.state.rate_limit import RateLimitExceeded
 from snuba.util import force_bytes
 from snuba.utils.codecs import ExceptionAwareCodec
 from snuba.utils.metrics.timer import Timer
@@ -201,84 +196,6 @@ def execute_query(
     return result
 
 
-def _record_rate_limit_metrics(
-    rate_limit_stats_container: RateLimitStatsContainer,
-    reader: Reader,
-    stats: MutableMapping[str, Any],
-) -> None:
-    table_rate_limit_stats = rate_limit_stats_container.get_stats(TABLE_RATE_LIMIT_NAME)
-    if table_rate_limit_stats is not None:
-        metrics.gauge(
-            name="table_concurrent",
-            value=table_rate_limit_stats.concurrent,
-            tags={
-                "table": stats.get("clickhouse_table", ""),
-                "cache_partition": (
-                    reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default"
-                ),
-            },
-        )
-        metrics.gauge(
-            name="table_per_second",
-            value=table_rate_limit_stats.rate,
-            tags={
-                "table": stats.get("clickhouse_table", ""),
-                "cache_partition": (
-                    reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default"
-                ),
-            },
-        )
-        metrics.timing(
-            name="table_concurrent_v2",
-            value=table_rate_limit_stats.concurrent,
-            tags={
-                "table": stats.get("clickhouse_table", ""),
-                "cache_partition": (
-                    reader.cache_partition_id
-                    if reader.cache_partition_id
-                    else "default"
-                ),
-            },
-        )
-
-
-@with_span(op="function")
-def execute_query_with_rate_limits(
-    clickhouse_query: Union[Query, CompositeQuery[Table]],
-    query_settings: QuerySettings,
-    formatted_query: FormattedQuery,
-    reader: Reader,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    clickhouse_query_settings: MutableMapping[str, Any],
-    robust: bool,
-) -> Result:
-    # XXX: We should consider moving this that it applies to the logical query,
-    # not the physical query.
-    with RateLimitAggregator(
-        query_settings.get_rate_limit_params()
-    ) as rate_limit_stats_container:
-        stats.update(rate_limit_stats_container.to_dict())
-        timer.mark("rate_limit")
-
-        _record_rate_limit_metrics(rate_limit_stats_container, reader, stats)
-
-        return execute_query(
-            clickhouse_query,
-            query_settings,
-            formatted_query,
-            reader,
-            timer,
-            stats,
-            clickhouse_query_settings,
-            robust=robust,
-        )
-
-
 def get_query_cache_key(formatted_query: FormattedQuery) -> str:
     return md5(force_bytes(formatted_query.get_sql())).hexdigest()
 
@@ -387,7 +304,7 @@ def execute_query_with_readthrough_caching(
         if span:
             span.set_data("query_id", query_id)
 
-        return execute_query_with_rate_limits(
+        return execute_query(
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -395,7 +312,7 @@ def execute_query_with_readthrough_caching(
             timer,
             stats,
             clickhouse_query_settings,
-            robust,
+            robust=robust,
         )
 
     clickhouse_query_settings["query_id"] = f"randomized-{uuid.uuid4().hex}"
@@ -425,7 +342,7 @@ def execute_query_with_readthrough_caching(
     return cache_partition.get_readthrough(
         query_id,
         partial(
-            execute_query_with_rate_limits,
+            execute_query,
             clickhouse_query,
             query_settings,
             formatted_query,
@@ -722,7 +639,6 @@ def db_query(
                     --> ...irrelevant stuff
                         --> execute_query_with_readthrough_caching
                             ### READTHROUGH CACHE GOES HERE ###
-                                --> execute_query_with_rate_limits
                                     --> execute_query
 
         The implication is that if a user hits the cache they will not be rate limited because the
@@ -847,6 +763,26 @@ def _add_quota_info(
             quota_info["throttle_threshold"] = quota_allowance.throttle_threshold
 
 
+def _populate_query_status(
+    summary: dict[str, Any],
+    rejection_quota_and_policy: Optional[_QuotaAndPolicy],
+    throttle_quota_and_policy: Optional[_QuotaAndPolicy],
+) -> None:
+    is_successful = "is_successful"
+    is_rejected = "is_rejected"
+    is_throttled = "is_throttled"
+    summary[is_successful] = True
+    summary[is_rejected] = False
+    summary[is_throttled] = False
+
+    if rejection_quota_and_policy:
+        summary[is_successful] = False
+        summary[is_rejected] = True
+    if throttle_quota_and_policy:
+        summary[is_successful] = False
+        summary[is_throttled] = True
+
+
 def _apply_allocation_policies_quota(
     query_settings: QuerySettings,
     attribution_info: AttributionInfo,
@@ -863,7 +799,7 @@ def _apply_allocation_policies_quota(
     can_run = True
     rejection_quota_and_policy = None
     throttle_quota_and_policy = None
-    num_threads = MAX_THRESHOLD
+    min_threads_across_policies = MAX_THRESHOLD
     with sentry_sdk.start_span(
         op="allocation_policy", description="_apply_allocation_policies_quota"
     ) as span:
@@ -875,18 +811,23 @@ def _apply_allocation_policies_quota(
                 allowance = allocation_policy.get_quota_allowance(
                     attribution_info.tenant_ids, query_id
                 )
-                num_threads = min(num_threads, allowance.max_threads)
                 can_run &= allowance.can_run
                 quota_allowances[allocation_policy.config_key()] = allowance
                 span.set_data(
                     "quota_allowance",
                     quota_allowances[allocation_policy.config_key()],
                 )
-                if allowance.is_throttled:
+                if (
+                    allowance.is_throttled
+                    and allowance.max_threads < min_threads_across_policies
+                ):
                     throttle_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
                         policy_name=allocation_policy.config_key(),
                     )
+                min_threads_across_policies = min(
+                    min_threads_across_policies, allowance.max_threads
+                )
                 if not can_run:
                     rejection_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
@@ -902,13 +843,31 @@ def _apply_allocation_policies_quota(
         stats["quota_allowance"]["details"] = allowance_dicts
 
         summary: dict[str, Any] = {}
-        summary["threads_used"] = num_threads
+        summary["threads_used"] = min_threads_across_policies
+        _populate_query_status(
+            summary, rejection_quota_and_policy, throttle_quota_and_policy
+        )
         _add_quota_info(summary, _REJECTED_BY, rejection_quota_and_policy)
         _add_quota_info(summary, _THROTTLED_BY, throttle_quota_and_policy)
         stats["quota_allowance"]["summary"] = summary
 
         if not can_run:
+            metrics.increment(
+                "rejected_query",
+                tags={"storage_key": allocation_policies[0].storage_key.value},
+            )
             raise AllocationPolicyViolations.from_args(stats["quota_allowance"])
+
+        if throttle_quota_and_policy is not None:
+            metrics.increment(
+                "throttled_query",
+                tags={"storage_key": allocation_policies[0].storage_key.value},
+            )
+        else:
+            metrics.increment(
+                "successful_query",
+                tags={"storage_key": allocation_policies[0].storage_key.value},
+            )
         # Before allocation policies were a thing, the query pipeline would apply
         # thread limits in a query processor. That is not necessary if there
         # is an allocation_policy in place but nobody has removed that code yet.

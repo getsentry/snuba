@@ -8,7 +8,7 @@ type ClickhouseNodeData = {
   local_table_name: string;
   local_nodes: ClickhouseNode[];
   dist_nodes: ClickhouseNode[];
-  query_node: ClickhouseNode
+  query_node: ClickhouseNode;
 };
 
 type QueryRequest = {
@@ -16,6 +16,7 @@ type QueryRequest = {
   host: string;
   port: number;
   sql: string;
+  sudo: boolean;
 };
 
 type QueryResultColumnMetadata = [string];

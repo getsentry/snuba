@@ -1,6 +1,9 @@
 import typing
-from typing import Any, Dict
+import uuid
+from typing import Any, Dict, Mapping, MutableMapping, Optional
 
+from snuba.attribution import get_app_id
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
@@ -8,15 +11,27 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
+from snuba.query.allocation_policies import (
+    AllocationPolicy,
+    AllocationPolicyViolations,
+    QueryResultOrError,
+)
 from snuba.query.conditions import combine_and_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import column, equals, in_cond, literal, literals_tuple
-from snuba.query.exceptions import TooManyDeleteRowsException
+from snuba.query.exceptions import (
+    InvalidQueryException,
+    NoRowsToDeleteException,
+    TooManyDeleteRowsException,
+)
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
 from snuba.state import get_config
 from snuba.utils.metrics.util import with_span
+from snuba.utils.schemas import ColumnValidator, InvalidColumnType
+from snuba.web import QueryException, QueryExtraData, QueryResult
+from snuba.web.db_query import _apply_allocation_policies_quota
 
 
 class DeletesNotEnabledError(Exception):
@@ -27,6 +42,7 @@ class DeletesNotEnabledError(Exception):
 def delete_from_storage(
     storage: WritableTableStorage,
     columns: Dict[str, list[Any]],
+    attribution_info: Mapping[str, Any],
 ) -> dict[str, Result]:
     """
     Inputs:
@@ -56,10 +72,56 @@ def delete_from_storage(
         )
 
     results: dict[str, Result] = {}
+    attr_info = _get_attribution_info(attribution_info)
     for table in delete_settings.tables:
-        result = _delete_from_table(storage, table, columns)
+        result = _delete_from_table(storage, table, columns, attr_info)
         results[table] = result
     return results
+
+
+def _delete_from_table(
+    storage: WritableTableStorage,
+    table: str,
+    conditions: Dict[str, Any],
+    attribution_info: AttributionInfo,
+) -> Result:
+    cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
+    on_cluster = literal(cluster_name) if cluster_name else None
+    query = Query(
+        from_clause=Table(
+            table,
+            ColumnSet([]),
+            storage_key=storage.get_storage_key(),
+            allocation_policies=storage.get_delete_allocation_policies(),
+        ),
+        condition=_construct_condition(conditions),
+        on_cluster=on_cluster,
+        is_delete=True,
+    )
+
+    columns = storage.get_schema().get_columns()
+    column_validator = ColumnValidator(columns)
+    try:
+        for col, values in conditions.items():
+            column_validator.validate(col, values)
+    except InvalidColumnType as e:
+        raise InvalidQueryException(e.message)
+
+    try:
+        _enforce_max_rows(query)
+    except NoRowsToDeleteException:
+        result: Result = {}
+        return result
+
+    deletion_processors = storage.get_deletion_processors()
+    # These settings aren't needed at the moment
+    dummy_query_settings = HTTPQuerySettings()
+    for deletion_procesor in deletion_processors:
+        deletion_procesor.process_query(query, dummy_query_settings)
+
+    return _execute_query(
+        query, storage, table, cluster_name, attribution_info, dummy_query_settings
+    )
 
 
 def deletes_are_enabled() -> bool:
@@ -120,6 +182,8 @@ def _enforce_max_rows(delete_query: Query) -> None:
     rows_to_delete = _get_rows_to_delete(
         storage_key=storage_key, select_query_to_count_rows=select_query_to_count_rows
     )
+    if rows_to_delete == 0:
+        raise NoRowsToDeleteException
     max_rows_allowed = (
         get_storage(storage_key).get_deletion_settings().max_rows_to_delete
     )
@@ -129,35 +193,95 @@ def _enforce_max_rows(delete_query: Query) -> None:
         )
 
 
-def _delete_from_table(
+def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInfo:
+    info = dict(attribution_info)
+    info["app_id"] = get_app_id(attribution_info["app_id"])
+    info["referrer"] = attribution_info["referrer"]
+    info["tenant_ids"] = attribution_info["tenant_ids"]
+    return AttributionInfo(**info)
+
+
+def _get_delete_allocation_policies(
+    storage: WritableTableStorage,
+) -> list[AllocationPolicy]:
+    """mostly here to be able to stub easily in tests"""
+    return storage.get_delete_allocation_policies()
+
+
+def _execute_query(
+    query: Query,
     storage: WritableTableStorage,
     table: str,
-    conditions: Dict[str, Any],
+    cluster_name: Optional[str],
+    attribution_info: AttributionInfo,
+    query_settings: HTTPQuerySettings,
 ) -> Result:
-    cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
-    on_cluster = literal(cluster_name) if cluster_name else None
-    query = Query(
-        from_clause=Table(
-            table,
-            ColumnSet([]),
-            storage_key=storage.get_storage_key(),
-            allocation_policies=storage.get_delete_allocation_policies(),
-        ),
-        condition=_construct_condition(conditions),
-        on_cluster=on_cluster,
-        is_delete=True,
-    )
-    _enforce_max_rows(query)
-
-    deletion_processors = storage.get_deletion_processors()
-    # These settings aren't needed at the moment
-    dummy_query_settings = HTTPQuerySettings()
-    for deletion_procesor in deletion_processors:
-        deletion_procesor.process_query(query, dummy_query_settings)
+    """
+    Formats and executes the delete query, taking into account
+    the delete allocation policies as well.
+    """
 
     formatted_query = format_query(query)
-    # TODO error handling and the lot
-    return storage.get_cluster().get_deleter().execute(formatted_query)
+    allocation_policies = _get_delete_allocation_policies(storage)
+    query_id = uuid.uuid4().hex
+    clickhouse_settings: MutableMapping[str, Any] = {"query_id": query_id}
+    result = None
+    error = None
+
+    stats: MutableMapping[str, Any] = {
+        "clickhouse_table": table,
+        "referrer": attribution_info.referrer,
+        "cluster_name": cluster_name or "<unknown>",
+    }
+
+    try:
+        _apply_allocation_policies_quota(
+            query_settings,
+            attribution_info,
+            formatted_query,
+            stats,
+            allocation_policies,
+            query_id,
+        )
+        result = (
+            storage.get_cluster()
+            .get_deleter()
+            .execute(formatted_query, clickhouse_settings)
+        )
+    except AllocationPolicyViolations as e:
+        error = QueryException.from_args(
+            AllocationPolicyViolations.__name__,
+            "Query cannot be run due to allocation policies",
+            extra={
+                "stats": stats,
+                "sql": "no sql run",
+                "experiments": {},
+            },
+        )
+        error.__cause__ = e
+    finally:
+        query_result = (
+            QueryResult(
+                result=result,
+                extra=QueryExtraData(
+                    stats=stats, sql=formatted_query.get_sql(), experiments={}
+                ),
+            )
+            if result
+            else None
+        )
+        result_or_error = QueryResultOrError(query_result=query_result, error=error)
+        for allocation_policy in allocation_policies:
+            allocation_policy.update_quota_balance(
+                tenant_ids=attribution_info.tenant_ids,
+                query_id=query_id,
+                result_or_error=result_or_error,
+            )
+        if result:
+            return result
+        raise error or Exception(
+            "No error or result when running query, this should never happen"
+        )
 
 
 def _construct_condition(columns: Dict[str, Any]) -> Expression:

@@ -21,6 +21,7 @@ import {
   RunMigrationResult,
 } from "SnubaAdmin/clickhouse_migrations/types";
 import { TracingRequest, TracingResult } from "SnubaAdmin/tracing/types";
+import { MQLRequest } from "SnubaAdmin/mql_queries/types";
 import {
   SnQLRequest,
   SnQLResult,
@@ -62,6 +63,7 @@ interface Client {
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
+  executeMQLQuery: (query: MQLRequest) => Promise<any>;
   debugSnQLQuery: (query: SnQLRequest) => Promise<SnQLResult>;
   getPredefinedQueryOptions: () => Promise<[PredefinedQuery]>;
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
@@ -100,7 +102,10 @@ interface Client {
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
-  runLightweightDelete: (storage_name: string, column_conditions: object) => Promise<Response>
+  runLightweightDelete: (
+    storage_name: string,
+    column_conditions: object
+  ) => Promise<Response>;
 }
 
 function Client() {
@@ -236,6 +241,25 @@ function Client() {
 
     executeSnQLQuery: (query: SnQLRequest) => {
       const url = baseUrl + "production_snql_query";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        body: JSON.stringify(query),
+      }).then((res) => {
+        if (res.ok) {
+          return Promise.resolve(res.json());
+        } else {
+          return res.json().then((err) => {
+            let errMsg = err?.error.message || "Could not execute SnQL";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
+
+    executeMQLQuery: (query: MQLRequest) => {
+      const url = baseUrl + "production_mql_query";
+      query.dataset = "generic_metrics";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -475,17 +499,17 @@ function Client() {
       }).then((resp) => resp.json());
     },
     runLightweightDelete: (storage_name: string, column_conditions: object) => {
-      const url = baseUrl + "delete"
+      const url = baseUrl + "delete";
       return fetch(url, {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json'
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           storage: storage_name,
-          columns: column_conditions
-        })
-      })
+          query: { columns: column_conditions },
+        }),
+      });
     },
   };
 }

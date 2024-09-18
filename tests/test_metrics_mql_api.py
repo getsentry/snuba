@@ -61,6 +61,7 @@ SHARED_MAPPING_META = {
         "65593": "200",
         "65594": "platform",
         "65595": "ios",
+        "65596": "999",
     },
     "h": {
         "9223372036854776010": "status_code",
@@ -742,7 +743,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
 
         assert response.status_code == 200, response.data
         data = json.loads(response.data)
-        assert data["totals"]["aggregate_value"] == 4.0
+        assert len(data["data"]) == 1, data
 
     def test_formula_no_groupby_with_interval_no_totals(self) -> None:
         query = MetricsQuery(
@@ -1560,9 +1561,7 @@ class TestGenericMetricsMQLApi(BaseApiTest):
             ).serialize_mql(),
         )
         data = json.loads(response.data)
-        assert (
-            data["totals"]["aggregate_value"] > 180
-        )  # Should be more than the number of data points
+        assert len(data["data"]) == 1, data
         assert response.status_code == 200
 
     def test_simple_formula_filters_with_scalar(self) -> None:

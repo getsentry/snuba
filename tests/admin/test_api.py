@@ -223,6 +223,29 @@ def test_predefined_system_queries(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_sudo_system_query(admin_api: FlaskClient) -> None:
+    _, host, port = get_node_for_table(admin_api, "errors")
+    response = admin_api.post(
+        "/run_clickhouse_system_query",
+        headers={"Content-Type": "application/json", USER_HEADER_KEY: "test"},
+        data=json.dumps(
+            {
+                "host": host,
+                "port": port,
+                "storage": "errors_ro",
+                "sql": "SYSTEM START MERGES",
+                "sudo": True,
+            }
+        ),
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["column_names"] == []
+    assert data["rows"] == []
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_query_trace(admin_api: FlaskClient) -> None:
     table, _, _ = get_node_for_table(admin_api, "errors_ro")
     response = admin_api.post(
@@ -235,8 +258,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
-    key = next(iter(data["formatted_trace_output"]))
-    assert "read_performance" in data["formatted_trace_output"][key]
+    assert "summarized_trace_output" in data
 
 
 @pytest.mark.redis_db
@@ -584,6 +606,28 @@ def test_prod_snql_query_invalid_query(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 @pytest.mark.clickhouse_db
+def test_force_overwrite(admin_api: FlaskClient) -> None:
+    migration_id = "0009_add_message"
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "completed"
+
+    response = admin_api.post(
+        f"/migrations/search_issues/overwrite/{migration_id}/status/not_started",
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    migrations = json.loads(admin_api.get("/migrations/search_issues/list").data)
+    downgraded_migration = [
+        m for m in migrations if m.get("migration_id") == migration_id
+    ][0]
+    assert downgraded_migration["status"] == "not_started"
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
 def test_prod_snql_query_valid_query(admin_api: FlaskClient) -> None:
     snql_query = """
     MATCH (events)
@@ -635,6 +679,162 @@ def test_prod_snql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     response = admin_api.post(
         "/production_snql_query",
         data=json.dumps({"dataset": "events", "query": snql_query}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "Cannot access the following project ids: {2}"
+
+
+@pytest.mark.redis_db
+def test_prod_mql_query_invalid_dataset(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps({"dataset": "", "query": "", "mql_context": {}}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data["error"]["message"] == "dataset '' does not exist"
+
+
+@pytest.mark.redis_db
+def test_prod_mql_query_invalid_query(admin_api: FlaskClient) -> None:
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps({"dataset": "functions", "query": "", "mql_context": {}}),
+    )
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert (
+        data["error"]["message"]
+        == "Rule 'expression' didn't match at '' (line 1, column 1)."
+    )
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_mql_query_valid_query(admin_api: FlaskClient) -> None:
+    mql_query = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 789012,
+            "status_code": 222222,
+            "transaction": 333333,
+        },
+        "limit": None,
+        "offset": None,
+    }
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps(
+            {
+                "dataset": "generic_metrics",
+                "query": mql_query,
+                "mql_context": mql_context,
+            }
+        ),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_mql_query_multiple_allowed_projects(admin_api: FlaskClient) -> None:
+    mql_query = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [1, 11276],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 789012,
+            "status_code": 222222,
+            "transaction": 333333,
+        },
+        "limit": None,
+        "offset": None,
+    }
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps(
+            {
+                "dataset": "generic_metrics",
+                "query": mql_query,
+                "mql_context": mql_context,
+            }
+        ),
+        headers={"Referer": "https://snuba-admin.getsentry.net/"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert "data" in data
+
+
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_prod_mql_query_invalid_project_query(admin_api: FlaskClient) -> None:
+    mql_query = "sum(`d:transactions/duration@millisecond`){status_code:200} / sum(`d:transactions/duration@millisecond`)"
+    mql_context = {
+        "entity": "generic_metrics_distributions",
+        "start": "2023-11-23T18:30:00",
+        "end": "2023-11-23T22:30:00",
+        "rollup": {
+            "granularity": 60,
+            "interval": 60,
+            "with_totals": "False",
+            "orderby": None,
+        },
+        "scope": {
+            "org_ids": [1],
+            "project_ids": [2],
+            "use_case_id": "transactions",
+        },
+        "indexer_mappings": {
+            "d:transactions/duration@millisecond": 123456,
+            "d:transactions/measurements.fp@millisecond": 789012,
+            "status_code": 222222,
+            "transaction": 333333,
+        },
+        "limit": None,
+        "offset": None,
+    }
+    response = admin_api.post(
+        "/production_mql_query",
+        data=json.dumps(
+            {
+                "dataset": "generic_metrics",
+                "query": mql_query,
+                "mql_context": mql_context,
+            }
+        ),
     )
     assert response.status_code == 400
     data = json.loads(response.data)

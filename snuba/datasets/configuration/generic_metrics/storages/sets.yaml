@@ -86,5 +86,4 @@ allocation_policies:
         is_active: 0
 
 query_processors:
-  - processor: TableRateLimit
   - processor: TupleUnaliaser

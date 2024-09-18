@@ -15,15 +15,103 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
 from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.composite import CompositeQuery
+from snuba.query.data_source.join import (
+    IndividualNode,
+    JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinType,
+)
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal
-from snuba.query.expressions import CurriedFunctionCall
+from snuba.query.dsl import and_cond, column, divide, in_cond, literal, multiply, plus
+from snuba.query.expressions import (
+    Column,
+    CurriedFunctionCall,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query
 from snuba.query.mql.parser import ParsePopulateResolveMQL
 from snuba.query.parser.exceptions import ParsingException
 from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
 from snuba.utils.metrics.timer import Timer
+
+
+def subscriptable_expression(
+    tag_key: str, table_alias: str | None = None
+) -> SubscriptableReference:
+    return SubscriptableReference(
+        alias=None,
+        column=Column(alias=None, table_name=table_alias, column_name="tags_raw"),
+        key=Literal(alias=None, value=tag_key),
+    )
+
+
+from_distributions = Entity(
+    EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
+    get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+)
+join_clause = JoinClause(
+    left_node=IndividualNode(
+        alias="d1",
+        data_source=from_distributions,
+    ),
+    right_node=IndividualNode(
+        alias="d0",
+        data_source=from_distributions,
+    ),
+    keys=[
+        JoinCondition(
+            left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+            right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+        )
+    ],
+    join_type=JoinType.INNER,
+    join_modifier=None,
+)
+join_clause_with_groupby = JoinClause(
+    left_node=IndividualNode(
+        alias="d1",
+        data_source=from_distributions,
+    ),
+    right_node=IndividualNode(
+        alias="d0",
+        data_source=from_distributions,
+    ),
+    keys=[
+        JoinCondition(
+            left=JoinConditionExpression(table_alias="d1", column="tags_raw[333333]"),
+            right=JoinConditionExpression(table_alias="d0", column="tags_raw[333333]"),
+        ),
+        JoinCondition(
+            left=JoinConditionExpression(table_alias="d1", column="d1.time"),
+            right=JoinConditionExpression(table_alias="d0", column="d0.time"),
+        ),
+    ],
+    join_type=JoinType.INNER,
+    join_modifier=None,
+)
+
+
+def time_expression(
+    table_alias: str | None = None, to_interval_seconds: int = 60
+) -> FunctionCall:
+    alias_prefix = f"{table_alias}." if table_alias else ""
+    return FunctionCall(
+        f"{alias_prefix}time",
+        "toStartOfInterval",
+        (
+            Column(None, table_alias, "timestamp"),
+            FunctionCall(
+                None, "toIntervalSecond", (Literal(None, to_interval_seconds),)
+            ),
+            Literal(None, "Universal"),
+        ),
+    )
+
 
 test_cases = [
     pytest.param(
@@ -55,80 +143,102 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
-                        f.sumIf(
-                            column("value"),
-                            and_cond(
-                                f.equals(column("tags_raw[222222]"), literal("200")),
-                                f.equals(column("metric_id"), literal(123456)),
-                            ),
+                    divide(
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d0", "value"),),
                         ),
-                        f.sumIf(
-                            column("value"),
-                            f.equals(column("metric_id"), literal(123456)),
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d1", "value"),),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(column("tags_raw[222222]", "d0"), literal("200")),
+                        and_cond(
+                            f.equals(column("metric_id", "d0"), literal(123456)),
+                            f.equals(column("metric_id", "d1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
+            groupby=[time_expression("d1"), time_expression("d0")],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -165,85 +275,105 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.plus(
-                        literal(1.0),
-                        f.divide(
-                            f.sumIf(
-                                column("value"),
-                                and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
-                                    f.equals(column("metric_id"), literal(123456)),
-                                ),
+                    plus(
+                        Literal(None, 1.0),
+                        divide(
+                            FunctionCall(
+                                None,
+                                "sum",
+                                (Column(None, "d0", "value"),),
                             ),
-                            f.sumIf(
-                                column("value"),
-                                f.equals(column("metric_id"), literal(123456)),
+                            FunctionCall(
+                                None,
+                                "sum",
+                                (Column(None, "d1", "value"),),
                             ),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(column("tags_raw[222222]", "d0"), literal("200")),
+                        and_cond(
+                            f.equals(column("metric_id", "d0"), literal(123456)),
+                            f.equals(column("metric_id", "d1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
+            groupby=[time_expression("d1"), time_expression("d0")],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -280,84 +410,115 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause_with_groupby,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
-                        f.sumIf(
-                            column("value"),
-                            and_cond(
-                                f.equals(column("tags_raw[222222]"), literal("200")),
-                                f.equals(column("metric_id"), literal(123456)),
-                            ),
+                    divide(
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d0", "value"),),
                         ),
-                        f.sumIf(
-                            column("value"),
-                            f.equals(column("metric_id"), literal(123456)),
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d1", "value"),),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
-                    "transaction", column("tags_raw[333333]", None, "transaction")
+                    "transaction",
+                    column("tags_raw[333333]", "d0", "d0.transaction"),
+                ),
+                SelectedExpression(
+                    "transaction",
+                    column("tags_raw[333333]", "d1", "d1.transaction"),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(column("tags_raw[222222]", "d0"), literal("200")),
+                        and_cond(
+                            f.equals(column("metric_id", "d0"), literal(123456)),
+                            f.equals(column("metric_id", "d1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[333333]", None, "transaction"),
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                ),
+                column("tags_raw[333333]", "d0", "d0.transaction"),
+                column("tags_raw[333333]", "d1", "d1.transaction"),
+                time_expression("d1"),
+                time_expression("d0"),
             ],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -394,90 +555,115 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause_with_groupby,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
+                    divide(
                         CurriedFunctionCall(
                             None,
-                            f.quantilesIf(literal(0.5)),
-                            (
-                                column("value"),
-                                and_cond(
-                                    f.equals(
-                                        column("tags_raw[222222]"), literal("200")
-                                    ),
-                                    f.equals(column("metric_id"), literal(123456)),
-                                ),
-                            ),
+                            f.quantiles(literal(0.5)),
+                            (column("value", "d0"),),
                         ),
-                        f.sumIf(
-                            column("value"),
-                            f.equals(column("metric_id"), literal(123456)),
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d1", "value"),),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
-                    "transaction", column("tags_raw[333333]", None, "transaction")
+                    "transaction",
+                    column("tags_raw[333333]", "d0", "d0.transaction"),
+                ),
+                SelectedExpression(
+                    "transaction",
+                    column("tags_raw[333333]", "d1", "d1.transaction"),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(column("tags_raw[222222]", "d0"), literal("200")),
+                        and_cond(
+                            f.equals(column("metric_id", "d0"), literal(123456)),
+                            f.equals(column("metric_id", "d1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[333333]", None, "transaction"),
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                ),
+                column("tags_raw[333333]", "d0", "d0.transaction"),
+                column("tags_raw[333333]", "d1", "d1.transaction"),
+                time_expression("d1"),
+                time_expression("d0"),
             ],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -514,89 +700,261 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
+        CompositeQuery(
+            from_clause=JoinClause(
+                left_node=JoinClause(
+                    left_node=JoinClause(
+                        left_node=IndividualNode(
+                            alias="d3",
+                            data_source=from_distributions,
+                        ),
+                        right_node=IndividualNode(
+                            alias="d2",
+                            data_source=from_distributions,
+                        ),
+                        keys=[
+                            JoinCondition(
+                                left=JoinConditionExpression(
+                                    table_alias="d3", column="d3.time"
+                                ),
+                                right=JoinConditionExpression(
+                                    table_alias="d2", column="d2.time"
+                                ),
+                            )
+                        ],
+                        join_type=JoinType.INNER,
+                        join_modifier=None,
+                    ),
+                    right_node=IndividualNode(
+                        alias="d1",
+                        data_source=from_distributions,
+                    ),
+                    keys=[
+                        JoinCondition(
+                            left=JoinConditionExpression(
+                                table_alias="d2", column="d2.time"
+                            ),
+                            right=JoinConditionExpression(
+                                table_alias="d1", column="d1.time"
+                            ),
+                        )
+                    ],
+                    join_type=JoinType.INNER,
+                    join_modifier=None,
+                ),
+                right_node=IndividualNode(
+                    alias="d0",
+                    data_source=from_distributions,
+                ),
+                keys=[
+                    JoinCondition(
+                        left=JoinConditionExpression(
+                            table_alias="d1", column="d1.time"
+                        ),
+                        right=JoinConditionExpression(
+                            table_alias="d0", column="d0.time"
+                        ),
+                    )
+                ],
+                join_type=JoinType.INNER,
+                join_modifier=None,
             ),
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
-                        f.sumIf(
-                            column("value"),
-                            f.equals(column("metric_id"), literal(123456)),
+                    divide(
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d0", "value"),),
                         ),
-                        f.multiply(
-                            f.plus(
-                                f.maxIf(
-                                    column("value"),
-                                    f.equals(column("metric_id"), literal(123456)),
+                        multiply(
+                            plus(
+                                FunctionCall(
+                                    None,
+                                    "max",
+                                    (Column(None, "d1", "value"),),
                                 ),
-                                f.avgIf(
-                                    column("value"),
-                                    f.equals(column("metric_id"), literal(123456)),
+                                FunctionCall(
+                                    None,
+                                    "avg",
+                                    (Column(None, "d2", "value"),),
                                 ),
                             ),
-                            f.minIf(
-                                column("value"),
-                                f.equals(column("metric_id"), literal(123456)),
+                            FunctionCall(
+                                None,
+                                "min",
+                                (Column(None, "d3", "value"),),
                             ),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d3"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d2"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            and_cond(
+                                f.greaterOrEquals(
+                                    column("timestamp", "d2"),
+                                    literal(datetime(2023, 11, 23, 18, 30)),
+                                ),
+                                f.less(
+                                    column("timestamp", "d2"),
+                                    literal(datetime(2023, 11, 23, 22, 30)),
+                                ),
+                            ),
+                            and_cond(
+                                and_cond(
+                                    in_cond(
+                                        column("project_id", "d2"), f.tuple(literal(11))
+                                    ),
+                                    and_cond(
+                                        in_cond(
+                                            column("org_id", "d2"), f.tuple(literal(1))
+                                        ),
+                                        f.equals(
+                                            column("use_case_id", "d2"),
+                                            literal("transactions"),
+                                        ),
+                                    ),
+                                ),
+                                f.equals(column("granularity", "d2"), literal(60)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                and_cond(
+                                    f.greaterOrEquals(
+                                        column("timestamp", "d3"),
+                                        literal(datetime(2023, 11, 23, 18, 30)),
+                                    ),
+                                    f.less(
+                                        column("timestamp", "d3"),
+                                        literal(datetime(2023, 11, 23, 22, 30)),
+                                    ),
+                                ),
+                                and_cond(
+                                    and_cond(
+                                        in_cond(
+                                            column("project_id", "d3"),
+                                            f.tuple(literal(11)),
+                                        ),
+                                        and_cond(
+                                            in_cond(
+                                                column("org_id", "d3"),
+                                                f.tuple(literal(1)),
+                                            ),
+                                            f.equals(
+                                                column("use_case_id", "d3"),
+                                                literal("transactions"),
+                                            ),
+                                        ),
+                                    ),
+                                    f.equals(column("granularity", "d3"), literal(60)),
+                                ),
+                            ),
+                            and_cond(
+                                and_cond(
+                                    f.equals(
+                                        column("metric_id", "d0"), literal(123456)
+                                    ),
+                                    f.equals(
+                                        column("metric_id", "d1"), literal(123456)
+                                    ),
+                                ),
+                                and_cond(
+                                    f.equals(
+                                        column("metric_id", "d2"), literal(123456)
+                                    ),
+                                    f.equals(
+                                        column("metric_id", "d3"), literal(123456)
+                                    ),
+                                ),
+                            ),
                         ),
                     ),
                 ),
             ),
             groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
+                time_expression("d3"),
+                time_expression("d2"),
+                time_expression("d1"),
+                time_expression("d0"),
             ],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -633,83 +991,105 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
-                        f.sumIf(
-                            column("value"),
-                            and_cond(
-                                f.equals(column("tags_raw[222222]"), literal("200")),
-                                f.equals(column("metric_id"), literal(123456)),
-                            ),
+                    divide(
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d0", "value"),),
                         ),
-                        f.maxIf(
-                            column("value"),
-                            and_cond(
-                                f.equals(column("tags_raw[222222]"), literal("200")),
-                                f.equals(column("metric_id"), literal(123456)),
-                            ),
+                        FunctionCall(
+                            None,
+                            "max",
+                            (Column(None, "d1", "value"),),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            f.equals(column("tags_raw[222222]", "d0"), literal("200")),
+                            f.equals(column("metric_id", "d0"), literal(123456)),
+                        ),
+                        and_cond(
+                            f.equals(column("tags_raw[222222]", "d1"), literal("200")),
+                            f.equals(column("metric_id", "d1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
+            groupby=[time_expression("d1"), time_expression("d0")],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -746,87 +1126,118 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause_with_groupby,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
-                        f.sumIf(
-                            column("value"),
-                            and_cond(
-                                f.equals(column("tags_raw[222222]"), literal("200")),
-                                f.equals(column("metric_id"), literal(123456)),
-                            ),
+                    divide(
+                        FunctionCall(
+                            None,
+                            "sum",
+                            (Column(None, "d0", "value"),),
                         ),
-                        f.maxIf(
-                            column("value"),
-                            and_cond(
-                                f.equals(column("tags_raw[222222]"), literal("200")),
-                                f.equals(column("metric_id"), literal(123456)),
-                            ),
+                        FunctionCall(
+                            None,
+                            "max",
+                            (Column(None, "d1", "value"),),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
-                    "transaction", column("tags_raw[333333]", None, "transaction")
+                    "transaction",
+                    column("tags_raw[333333]", "d0", "d0.transaction"),
+                ),
+                SelectedExpression(
+                    "transaction",
+                    column("tags_raw[333333]", "d1", "d1.transaction"),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
+                        ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            f.equals(column("tags_raw[222222]", "d0"), literal("200")),
+                            f.equals(column("metric_id", "d0"), literal(123456)),
+                        ),
+                        and_cond(
+                            f.equals(column("tags_raw[222222]", "d1"), literal("200")),
+                            f.equals(column("metric_id", "d1"), literal(123456)),
                         ),
                     ),
                 ),
             ),
             groupby=[
-                column("tags_raw[333333]", None, "transaction"),
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                ),
+                column("tags_raw[333333]", "d0", "d0.transaction"),
+                column("tags_raw[333333]", "d1", "d1.transaction"),
+                time_expression("d1"),
+                time_expression("d0"),
             ],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -863,80 +1274,102 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.plus(
-                        f.divide(
-                            f.sumIf(
-                                column("value"),
-                                f.equals(column("metric_id"), literal(123456)),
+                    plus(
+                        divide(
+                            FunctionCall(
+                                None,
+                                "sum",
+                                (Column(None, "d0", "value"),),
                             ),
-                            f.sumIf(
-                                column("value"),
-                                f.equals(column("metric_id"), literal(123456)),
+                            FunctionCall(
+                                None,
+                                "sum",
+                                (Column(None, "d1", "value"),),
                             ),
                         ),
-                        literal(100.0),
-                        alias="aggregate_value",
+                        Literal(None, 100.0),
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
                         ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(column("metric_id", "d0"), literal(123456)),
+                        f.equals(column("metric_id", "d1"), literal(123456)),
                     ),
                 ),
             ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
+            groupby=[time_expression("d1"), time_expression("d0")],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -973,77 +1406,106 @@ test_cases = [
             },
             None,
         ),
-        Query(
-            from_clause=Entity(
-                EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
-                get_entity(EntityKey.GENERIC_METRICS_DISTRIBUTIONS).get_data_model(),
-            ),
+        CompositeQuery(
+            from_clause=join_clause,
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.divide(
-                        f.apdexIf(
-                            f.sum(column("value")),
-                            f.equals(column("metric_id"), literal(123456)),
+                    divide(
+                        FunctionCall(
+                            None,
+                            "apdex",
+                            (
+                                FunctionCall(
+                                    None,
+                                    "sum",
+                                    (Column(None, "d0", "value"),),
+                                ),
+                                Literal(None, 123.0),
+                            ),
                         ),
-                        f.maxIf(
-                            column("value"),
-                            f.equals(column("metric_id"), literal(123456)),
+                        FunctionCall(
+                            None,
+                            "max",
+                            (Column(None, "d1", "value"),),
                         ),
-                        alias="aggregate_value",
+                        "aggregate_value",
                     ),
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression("d1"),
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression("d0"),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", "d0"),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 18, 30))
+                        and_cond(
+                            in_cond(column("project_id", "d0"), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", "d0"), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", "d0"), literal("transactions")
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2023, 11, 23, 22, 30))
+                        f.equals(column("granularity", "d0"), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 18, 30)),
+                            ),
+                            f.less(
+                                column("timestamp", "d1"),
+                                literal(datetime(2023, 11, 23, 22, 30)),
+                            ),
                         ),
+                        and_cond(
+                            and_cond(
+                                in_cond(
+                                    column("project_id", "d1"), f.tuple(literal(11))
+                                ),
+                                and_cond(
+                                    in_cond(
+                                        column("org_id", "d1"), f.tuple(literal(1))
+                                    ),
+                                    f.equals(
+                                        column("use_case_id", "d1"),
+                                        literal("transactions"),
+                                    ),
+                                ),
+                            ),
+                            f.equals(column("granularity", "d1"), literal(60)),
+                        ),
+                    ),
+                    and_cond(
+                        f.equals(column("metric_id", "d0"), literal(123456)),
+                        f.equals(column("metric_id", "d1"), literal(123456)),
                     ),
                 ),
             ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
+            groupby=[time_expression("d1"), time_expression("d0")],
             having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                )
-            ],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression("d0"))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1107,33 +1569,35 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"),
-                                literal(datetime(2023, 11, 23, 18, 30)),
-                            ),
-                            f.less(
-                                column("timestamp"),
-                                literal(datetime(2023, 11, 23, 22, 30)),
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(123456)),
-                            in_cond(
-                                column("tags_raw[888]"),
-                                f.tuple(literal("dist1"), literal("dist2")),
+                            in_cond(column("project_id", None), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
+                                ),
                             ),
                         ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(123456)),
+                    in_cond(
+                        column("tags_raw[888]"),
+                        f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
             ),
@@ -1174,9 +1638,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1201,41 +1665,49 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value", f.sum(column("value"), alias="aggregate_value")
-                )
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression(None),
+                ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"), literal(datetime(2021, 1, 1, 0, 0))
-                            ),
-                            f.less(
-                                column("timestamp"), literal(datetime(2021, 1, 2, 0, 0))
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(123456)),
-                            in_cond(
-                                column("tags_raw[888]"),
-                                f.tuple(literal("dist1"), literal("dist2")),
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
+                                ),
                             ),
                         ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(123456)),
+                    in_cond(
+                        column("tags_raw[888]"),
+                        f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
             ),
-            groupby=None,
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1251,9 +1723,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1275,35 +1747,43 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value", f.sum(column("value"), alias="aggregate_value")
-                )
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression(None),
+                ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"), literal(datetime(2021, 1, 1, 0, 0))
-                            ),
-                            f.less(
-                                column("timestamp"), literal(datetime(2021, 1, 2, 0, 0))
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
+                                ),
                             ),
                         ),
-                        f.equals(column("metric_id"), literal(123456)),
+                        f.equals(column("granularity", None), literal(60)),
                     ),
                 ),
+                f.equals(column("metric_id", None), literal(123456)),
             ),
-            groupby=None,
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1320,8 +1800,8 @@ test_cases = [
                 "end": "2021-01-05T04:15:00",
                 "rollup": {
                     "orderby": None,
-                    "granularity": 3600,
-                    "interval": None,
+                    "granularity": 60,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1358,45 +1838,54 @@ test_cases = [
                 SelectedExpression(
                     "transaction", column("tags_raw[111111]", None, "transaction")
                 ),
+                SelectedExpression(
+                    "time",
+                    time_expression(None),
+                ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(3600)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 1, 36)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 5, 4, 15)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"),
-                                literal(datetime(2021, 1, 1, 1, 36)),
-                            ),
-                            f.less(
-                                column("timestamp"),
-                                literal(datetime(2021, 1, 5, 4, 15)),
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(567890)),
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
                             and_cond(
-                                f.notIn(
-                                    column("tags_raw[888888]"),
-                                    f.tuple(literal("dist1"), literal("dist2")),
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
                                 ),
-                                f.equals(column("tags_raw[777777]"), literal("bar")),
                             ),
                         ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(567890)),
+                    and_cond(
+                        f.notIn(
+                            column("tags_raw[888888]"),
+                            f.tuple(literal("dist1"), literal("dist2")),
+                        ),
+                        f.equals(column("tags_raw[777777]"), literal("bar")),
                     ),
                 ),
             ),
-            groupby=[column("tags_raw[111111]", None, "transaction")],
+            groupby=[
+                column("tags_raw[111111]", None, "transaction"),
+                time_expression(None),
+            ],
             having=None,
-            order_by=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=100,
             offset=3,
@@ -1453,55 +1942,47 @@ test_cases = [
                 ),
                 SelectedExpression(
                     "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression(None),
                 ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(11))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2023, 11, 23, 18, 30)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2023, 11, 23, 22, 30)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"),
-                                literal(datetime(2023, 11, 23, 18, 30)),
-                            ),
-                            f.less(
-                                column("timestamp"),
-                                literal(datetime(2023, 11, 23, 22, 30)),
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(123456)),
-                            in_cond(
-                                column("tags_raw[888]"),
-                                f.tuple(literal("dist1"), literal("dist2")),
+                            in_cond(column("project_id", None), f.tuple(literal(11))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
+                                ),
                             ),
                         ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(123456)),
+                    in_cond(
+                        column("tags_raw[888]"),
+                        f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
             ),
             groupby=[
                 column("tags_raw[111111]", None, "transaction"),
                 column("tags_raw[222222]", None, "status_code"),
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                ),
+                time_expression(None),
             ],
             having=None,
             order_by=[
@@ -1530,9 +2011,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1561,39 +2042,45 @@ test_cases = [
                     "aggregate_value", f.sum(column("value"), alias="aggregate_value")
                 ),
                 SelectedExpression("release", column("tags[111]", None, "release")),
+                SelectedExpression("time", time_expression(None)),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("sessions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"), literal(datetime(2021, 1, 1, 0, 0))
-                            ),
-                            f.less(
-                                column("timestamp"), literal(datetime(2021, 1, 2, 0, 0))
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(123456)),
-                            in_cond(
-                                column("tags[111]"), f.tuple(literal(222), literal(333))
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("sessions")
+                                ),
                             ),
                         ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(123456)),
+                    in_cond(
+                        column("tags[111]"),
+                        f.tuple(literal(222), literal(333)),
                     ),
                 ),
             ),
-            groupby=[column("tags[111]", None, "release")],
+            groupby=[column("tags[111]", None, "release"), time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1654,57 +2141,49 @@ test_cases = [
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2024, 1, 7, 13, 35)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2024, 1, 8, 13, 40)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"),
-                                literal(datetime(2024, 1, 7, 13, 35)),
-                            ),
-                            f.less(
-                                column("timestamp"),
-                                literal(datetime(2024, 1, 8, 13, 40)),
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(123456)),
-                            f.equals(
-                                column("tags_raw[111213]"),
-                                literal(
-                                    " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
                                 ),
                             ),
+                        ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(123456)),
+                    f.equals(
+                        column("tags_raw[111213]"),
+                        literal(
+                            " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
                         ),
                     ),
                 ),
             ),
             groupby=[
                 column("tags_raw[141516]", None, "transaction"),
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(300)),
-                    literal("Universal"),
-                    alias="time",
-                ),
+                time_expression(None, 300),
             ],
             having=None,
             order_by=[
                 OrderBy(
                     OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(300)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
+                    time_expression(None, 300),
                 )
             ],
             limitby=None,
@@ -1722,9 +2201,9 @@ test_cases = [
                 "start": "2021-01-01T00:00:00",
                 "end": "2021-01-02T00:00:00",
                 "rollup": {
-                    "orderby": "ASC",
+                    "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1752,41 +2231,49 @@ test_cases = [
                     f.apdex(
                         f.sum(column("value")), literal(500.0), alias="aggregate_value"
                     ),
-                )
+                ),
+                SelectedExpression(
+                    "time",
+                    time_expression(None),
+                ),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"), literal(datetime(2021, 1, 1, 0, 0))
-                            ),
-                            f.less(
-                                column("timestamp"), literal(datetime(2021, 1, 2, 0, 0))
-                            ),
-                        ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(123456)),
-                            in_cond(
-                                column("tags_raw[888]"),
-                                f.tuple(literal("dist1"), literal("dist2")),
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
+                                ),
                             ),
                         ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id", None), literal(123456)),
+                    in_cond(
+                        column("tags_raw[888]"),
+                        f.tuple(literal("dist1"), literal("dist2")),
                     ),
                 ),
             ),
-            groupby=None,
+            groupby=[time_expression(None)],
             having=None,
-            order_by=[OrderBy(OrderByDirection.ASC, column("aggregate_value"))],
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1804,7 +2291,7 @@ test_cases = [
                 "rollup": {
                     "orderby": None,
                     "granularity": 3600,
-                    "interval": None,
+                    "interval": 3600,
                     "with_totals": None,
                 },
                 "scope": {
@@ -1840,37 +2327,40 @@ test_cases = [
                             literal(300.0),
                         ),
                     ),
-                )
+                ),
+                SelectedExpression("time", time_expression(None, 3600)),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(3600)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("transactions")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 1, 36)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 5, 4, 15)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"),
-                                literal(datetime(2021, 1, 1, 1, 36)),
-                            ),
-                            f.less(
-                                column("timestamp"),
-                                literal(datetime(2021, 1, 5, 4, 15)),
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("transactions")
+                                ),
                             ),
                         ),
-                        f.equals(column("metric_id"), literal(567890)),
+                        f.equals(column("granularity", None), literal(3600)),
                     ),
                 ),
+                f.equals(column("metric_id", None), literal(567890)),
             ),
-            groupby=None,
+            groupby=[time_expression(None, 3600)],
             having=None,
-            order_by=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None, 3600))],
             limitby=None,
             limit=100,
             offset=3,
@@ -1888,7 +2378,7 @@ test_cases = [
                 "rollup": {
                     "orderby": None,
                     "granularity": 60,
-                    "interval": None,
+                    "interval": 60,
                     "with_totals": None,
                 },
                 "scope": {"org_ids": [1], "project_ids": [1], "use_case_id": "custom"},
@@ -1910,48 +2400,49 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value", f.avg(column("value"), alias="aggregate_value")
-                )
+                ),
+                SelectedExpression("time", time_expression(None)),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("custom")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                     and_cond(
                         and_cond(
-                            f.greaterOrEquals(
-                                column("timestamp"), literal(datetime(2021, 1, 1, 0, 0))
-                            ),
-                            f.less(
-                                column("timestamp"), literal(datetime(2021, 1, 2, 0, 0))
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None), literal("custom")
+                                ),
                             ),
                         ),
-                        and_cond(
-                            f.equals(column("metric_id"), literal(111111)),
-                            and_cond(
-                                f.equals(
-                                    column("tags_raw[222222]"), literal("transaction")
-                                ),
-                                f.equals(
-                                    column("tags_raw[333333]"),
-                                    literal(
-                                        "sentry.tasks.store.save_event_transaction"
-                                    ),
-                                ),
-                            ),
+                        f.equals(column("granularity", None), literal(60)),
+                    ),
+                ),
+                and_cond(
+                    f.equals(column("metric_id"), literal(111111)),
+                    and_cond(
+                        f.equals(column("tags_raw[222222]"), literal("transaction")),
+                        f.equals(
+                            column("tags_raw[333333]"),
+                            literal("sentry.tasks.store.save_event_transaction"),
                         ),
                     ),
                 ),
             ),
-            groupby=None,
+            groupby=[time_expression(None)],
             having=None,
-            order_by=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=1000,
             offset=0,
@@ -1994,80 +2485,59 @@ test_cases = [
             selected_columns=[
                 SelectedExpression(
                     "aggregate_value",
-                    f.multiply(
-                        f.multiply(
-                            f.avgIf(
-                                column("value"),
-                                and_cond(
-                                    f.equals(
-                                        column("tags_raw[9223372036854776020]"),
-                                        literal(
-                                            "getsentry.tasks.calculate_spike_projections"
-                                        ),
-                                    ),
-                                    f.equals(
-                                        column("metric_id"),
-                                        literal(9223372036854775909),
-                                    ),
-                                ),
+                    multiply(
+                        multiply(
+                            FunctionCall(
+                                None,
+                                "avg",
+                                (Column(None, None, "value"),),
                             ),
-                            literal(100.0),
+                            Literal(None, 100.0),
                         ),
-                        literal(100.0),
-                        alias="aggregate_value",
+                        Literal(None, 100.0),
+                        "aggregate_value",
                     ),
                 ),
-                SelectedExpression(
-                    "time",
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
-                    ),
-                ),
+                SelectedExpression("time", time_expression(None)),
             ],
             array_join=None,
             condition=and_cond(
-                f.equals(column("granularity"), literal(60)),
                 and_cond(
                     and_cond(
-                        in_cond(column("project_id"), f.tuple(literal(1))),
-                        and_cond(
-                            in_cond(column("org_id"), f.tuple(literal(1))),
-                            f.equals(column("use_case_id"), literal("'transactions'")),
+                        f.greaterOrEquals(
+                            column("timestamp", None),
+                            literal(datetime(2024, 4, 8, 5, 48)),
+                        ),
+                        f.less(
+                            column("timestamp", None),
+                            literal(datetime(2024, 4, 8, 6, 49)),
                         ),
                     ),
                     and_cond(
-                        f.greaterOrEquals(
-                            column("timestamp"), literal(datetime(2024, 4, 8, 5, 48))
+                        and_cond(
+                            in_cond(column("project_id", None), f.tuple(literal(1))),
+                            and_cond(
+                                in_cond(column("org_id", None), f.tuple(literal(1))),
+                                f.equals(
+                                    column("use_case_id", None),
+                                    literal("'transactions'"),
+                                ),
+                            ),
                         ),
-                        f.less(
-                            column("timestamp"), literal(datetime(2024, 4, 8, 6, 49))
-                        ),
+                        f.equals(column("granularity", None), literal(60)),
                     ),
                 ),
-            ),
-            groupby=[
-                f.toStartOfInterval(
-                    column("timestamp"),
-                    f.toIntervalSecond(literal(60)),
-                    literal("Universal"),
-                    alias="time",
-                )
-            ],
-            having=None,
-            order_by=[
-                OrderBy(
-                    OrderByDirection.ASC,
-                    f.toStartOfInterval(
-                        column("timestamp"),
-                        f.toIntervalSecond(literal(60)),
-                        literal("Universal"),
-                        alias="time",
+                and_cond(
+                    f.equals(
+                        column("tags_raw[9223372036854776020]"),
+                        literal("getsentry.tasks.calculate_spike_projections"),
                     ),
-                )
-            ],
+                    f.equals(column("metric_id"), literal(9223372036854775909)),
+                ),
+            ),
+            groupby=[time_expression(None)],
+            having=None,
+            order_by=[OrderBy(OrderByDirection.ASC, time_expression(None))],
             limitby=None,
             limit=10000,
             offset=0,

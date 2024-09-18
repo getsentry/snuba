@@ -983,7 +983,7 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400
         assert (
             json.loads(response.data)["error"]["message"]
-            == "validation failed for entity outcomes: Entity outcomes: Query column 'fake_column' does not exist"
+            == "Validation failed for entity outcomes: Tag keys (fake_column) not resolved"
         )
 
     def test_valid_columns_composite_query(self) -> None:
@@ -1209,7 +1209,7 @@ class TestSnQLApi(BaseApiTest):
             assert data["error"]["type"] == "invalid_query"
             assert (
                 data["error"]["message"]
-                == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
+                == "Validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
             )
 
             response = self.post(
@@ -1240,7 +1240,7 @@ class TestSnQLApi(BaseApiTest):
             assert data["error"]["type"] == "invalid_query"
             assert (
                 data["error"]["message"]
-                == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
+                == "Validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
             )
             assert record_failure_metric_mock.call_count == 2
 
@@ -1348,6 +1348,9 @@ class TestSnQLApi(BaseApiTest):
                 },
                 "summary": {
                     "threads_used": 0,
+                    "is_successful": False,
+                    "is_rejected": True,
+                    "is_throttled": False,
                     "rejected_by": {
                         "policy": "RejectAllocationPolicy123",
                         "quota_used": 0,

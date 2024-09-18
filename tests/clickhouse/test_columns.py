@@ -17,11 +17,12 @@ from snuba.clickhouse.columns import (
     Float,
     IPv4,
     IPv6,
+    Map,
     Nested,
     ReadOnly,
 )
 from snuba.clickhouse.columns import SchemaModifiers as Modifier
-from snuba.clickhouse.columns import String, UInt
+from snuba.clickhouse.columns import SimpleAggregateFunction, String, UInt
 
 TEST_CASES = [
     pytest.param(
@@ -122,6 +123,22 @@ TEST_CASES = [
         id="nested",
     ),
     pytest.param(
+        Map(
+            key=String(),
+            value=Array(String()),
+        ),
+        Map(
+            key=String(),
+            value=Array(String()),
+        ),
+        cast(
+            Column[Modifier],
+            Map(key=String(), value=UInt(64)),
+        ),
+        "Map(String, Array(String))",
+        id="map",
+    ),
+    pytest.param(
         cast(
             Column[Modifier],
             AggregateFunction("uniqIf", [UInt(8), UInt(32)], Modifier(nullable=True)),
@@ -133,6 +150,21 @@ TEST_CASES = [
         ),
         "Nullable(AggregateFunction(uniqIf, UInt8, UInt32))",
         id="aggregated",
+    ),
+    pytest.param(
+        cast(
+            Column[Modifier],
+            SimpleAggregateFunction(
+                "sum", [UInt(8), UInt(32)], Modifier(nullable=True)
+            ),
+        ),
+        SimpleAggregateFunction("sum", [UInt(8), UInt(32)]),
+        cast(
+            Column[Modifier],
+            SimpleAggregateFunction("sum", [UInt(8), UInt(8)], Modifier(nullable=True)),
+        ),
+        "Nullable(SimpleAggregateFunction(sum, UInt8, UInt32))",
+        id="simple-aggregated",
     ),
     pytest.param(
         Enum([("a", 1), ("b", 2)], Modifier(nullable=True)),
