@@ -97,14 +97,14 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
         attr_columns.push_str(&format!(",attr_str_{i} Map(String, String)"));
 
         attr_combined_columns.push_str(&format!(
-            ",mapUpdate(old_data.attr_str_{i}, new_data.attr_str_{i}) AS attr_str_{i}"
+            ",if(signs.new_sign = 1, mapUpdate(old_data.attr_str_{i}, new_data.attr_str_{i}), old_data.attr_str_{i}) AS attr_str_{i}"
         ));
     }
 
     for i in 0..ATTRS_SHARD_FACTOR {
         attr_columns.push_str(&format!(",attr_num_{i} Map(String, Float64)"));
         attr_combined_columns.push_str(&format!(
-            ",mapUpdate(old_data.attr_num_{i}, new_data.attr_num_{i}) AS attr_num_{i}"
+            ",if(signs.new_sign = 1, mapUpdate(old_data.attr_num_{i}, new_data.attr_num_{i}), old_data.attr_num_{i}) AS attr_num_{i}"
         ));
     }
 
@@ -127,16 +127,18 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
     let mut body = format!(
         "
         INSERT INTO {table}
-        SELECT old_data.* EXCEPT ('attr_.*') {attr_combined_columns}
-        FROM {table} old_data
-        JOIN (SELECT * FROM input(
+        SELECT old_data.* EXCEPT ('sign|attr_.*'), signs.new_sign as sign {attr_combined_columns}
+        FROM input(
             'organization_id UInt64, trace_id UUID, span_id UInt64, _sort_timestamp DateTime {attr_columns}'
-        )) new_data
+        ) new_data
+        JOIN {table} old_data
         ON old_data.organization_id = new_data.organization_id
             and old_data.trace_id = new_data.trace_id
             and old_data.span_id = new_data.span_id
             and old_data._sort_timestamp = new_data._sort_timestamp
             and old_data.sign = 1
+        JOIN (SELECT arrayJoin([1, -1]) AS new_sign) as signs
+        ON 1
 
         FORMAT JSONEachRow\n"
     )
@@ -171,4 +173,32 @@ struct MutationRow {
 
     #[serde(flatten)]
     filter: PrimaryKey,
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use crate::mutations::parser::Update;
+
+    use super::*;
+
+    #[test]
+    fn format_query_snap() {
+        let mut batch = MutationBatch::default();
+
+        batch.0.insert(
+            PrimaryKey {
+                organization_id: 69,
+                _sort_timestamp: 1715868485,
+                trace_id: Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap(),
+                span_id: 16045690984833335023,
+            },
+            Update::default(),
+        );
+        let query = format_query("eap_spans_local", &batch);
+        let query = String::from_utf8(query).unwrap();
+
+        insta::assert_snapshot!(query);
+    }
 }
