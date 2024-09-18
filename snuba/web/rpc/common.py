@@ -19,7 +19,7 @@ from snuba.query.expressions import Expression, FunctionCall, SubscriptableRefer
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
-def truncate_request_meta_to_day(meta: RequestMeta):
+def truncate_request_meta_to_day(meta: RequestMeta) -> None:
     # some tables store timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
     # this changes a request from 4PM - 8PM to a request from midnight today to midnight tomorrow UTC
     start_timestamp = datetime.utcfromtimestamp(meta.start_timestamp.seconds)
