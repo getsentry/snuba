@@ -13,7 +13,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.tags_list import tags_list_query
+from snuba.web.rpc.trace_item_attribute_list import trace_item_attribute_list_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -135,7 +135,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=0,
             type=AttributeKey.Type.TYPE_STRING,
         )
-        response = tags_list_query(message)
+        response = trace_item_attribute_list_query(message)
         assert response.tags == [
             TraceItemAttributesResponse.Tag(
                 name=f"a_tag_{i:03}", type=AttributeKey.Type.TYPE_STRING
@@ -175,7 +175,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=0,
             type=AttributeKey.Type.TYPE_FLOAT,
         )
-        response = tags_list_query(message)
+        response = trace_item_attribute_list_query(message)
         assert response.tags == [
             TraceItemAttributesResponse.Tag(
                 name=f"b_measurement_{i:03}", type=AttributeKey.Type.TYPE_FLOAT
@@ -215,7 +215,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=10,
             type=AttributeKey.Type.TYPE_FLOAT,
         )
-        response = tags_list_query(message)
+        response = trace_item_attribute_list_query(message)
         assert response.tags == [
             TraceItemAttributesResponse.Tag(
                 name="b_measurement_010", type=AttributeKey.Type.TYPE_FLOAT

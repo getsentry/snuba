@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List, Optional
 
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
@@ -12,10 +11,11 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.common import truncate_request_meta_to_day
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
-def tags_list_query(
+def trace_item_attribute_list_query(
     request: TraceItemAttributesRequest, _timer: Optional[Timer] = None
 ) -> TraceItemAttributesResponse:
     if request.type == AttributeKey.Type.TYPE_STRING:
@@ -31,11 +31,7 @@ def tags_list_query(
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
-    start_timestamp = datetime.utcfromtimestamp(request.meta.start_timestamp.seconds)
-    if start_timestamp.day >= datetime.utcnow().day and start_timestamp.hour != 0:
-        raise BadSnubaRPCRequestException(
-            "Tags' timestamps are stored per-day, you probably want to set start_timestamp to UTC 00:00 today or a time yesterday."
-        )
+    truncate_request_meta_to_day(request.meta)
 
     query = f"""
 SELECT DISTINCT attr_key, timestamp

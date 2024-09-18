@@ -35,14 +35,6 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
-from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
-    AggregateBucketRequest,
-)
-from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    TraceItemAttributesRequest,
-)
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -83,10 +75,8 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
+from snuba.web.rpc import ALL_RPCS
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
-from snuba.web.rpc.tags_list import tags_list_query
-from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -285,15 +275,8 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 @application.route("/rpc/<name>", methods=["POST"])
 @util.time_request("timeseries")
 def rpc(*, name: str, timer: Timer) -> Response:
-    rpcs: Mapping[
-        str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
-    ] = {
-        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
-        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
-        "TraceItemAttributesRequest": (tags_list_query, TraceItemAttributesRequest),
-    }
     try:
-        endpoint, req_class = rpcs[name]
+        endpoint, req_class = ALL_RPCS[name]
 
         req = req_class()
         req.ParseFromString(http_request.data)

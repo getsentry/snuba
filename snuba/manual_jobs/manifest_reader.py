@@ -15,4 +15,4 @@ class _ManifestReader:
 
 
 def read_jobs_manifest() -> Sequence[Any]:
-    return _ManifestReader.read("run_manifest.json")
+    return _ManifestReader.read("job_manifest.json")
