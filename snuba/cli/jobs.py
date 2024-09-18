@@ -2,7 +2,7 @@ from typing import Any, MutableMapping, Tuple
 
 import click
 
-from snuba.manual_jobs import JobSpec
+from snuba.manual_jobs import JobSpec, get_job_status
 from snuba.manual_jobs.job_loader import JobLoader
 from snuba.manual_jobs.manifest_reader import _ManifestReader
 
@@ -49,3 +49,9 @@ def run(*, job_type: str, job_id: str, dry_run: bool, pairs: Tuple[str, ...]) ->
 
     job_to_run = JobLoader.get_job_instance(job_spec, dry_run)
     job_to_run.execute()
+
+
+@jobs.command()
+@click.option("--job_id")
+def status(*, job_id: str) -> str:
+    return get_job_status(job_id)

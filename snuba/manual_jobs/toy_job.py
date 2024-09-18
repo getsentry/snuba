@@ -15,7 +15,7 @@ class ToyJob(Job):
         else:
             return "not dry run query"
 
-    def execute(self) -> None:
+    def _execute(self) -> None:
         logger.info(
             "executing job "
             + self.job_spec.job_id

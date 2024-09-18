@@ -1,6 +1,7 @@
+import pytest
 from click.testing import CliRunner
 
-from snuba.cli.jobs import JOB_SPECIFICATION_ERROR_MSG, run, run_from_manifest
+from snuba.cli.jobs import JOB_SPECIFICATION_ERROR_MSG, run, run_from_manifest, status
 
 
 def test_cmd_line_valid() -> None:
@@ -68,4 +69,20 @@ def test_json_valid() -> None:
             "abc1234",
         ],
     )
+    assert result.exit_code == 0
+
+
+@pytest.mark.redis_db
+def test_jobs_status() -> None:
+    runner = CliRunner()
+    runner.invoke(
+        run_from_manifest,
+        [
+            "--json_manifest",
+            "job_manifest.json",
+            "--job_id",
+            "abc1234",
+        ],
+    )
+    result = runner.invoke(status, ["--job_id", "abc1234"])
     assert result.exit_code == 0
