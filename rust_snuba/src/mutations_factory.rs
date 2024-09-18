@@ -79,7 +79,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
                     Ok(batch)
                 },
             ),
-            Arc::new(move || MutationBatch::default()),
+            Arc::new(MutationBatch::default),
             self.max_batch_size,
             self.max_batch_time,
             // TODO: batch sizes are currently not properly computed. if two mutations are merged
