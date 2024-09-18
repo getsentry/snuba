@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Final, Mapping, Sequence, Set
 
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
@@ -16,6 +17,24 @@ from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+
+
+def truncate_request_meta_to_day(meta: RequestMeta):
+    # some tables store timestamp as toStartOfDay(x) in UTC, so if you request 4PM - 8PM on a specific day, nada
+    # this changes a request from 4PM - 8PM to a request from midnight today to midnight tomorrow UTC
+    start_timestamp = datetime.utcfromtimestamp(meta.start_timestamp.seconds)
+    end_timestamp = datetime.utcfromtimestamp(meta.end_timestamp.seconds)
+    today = datetime.utcnow()
+    start_timestamp = start_timestamp.replace(
+        day=start_timestamp.day, hour=0, minute=0, second=0, microsecond=0
+    )
+    if end_timestamp.day == today.day:
+        end_timestamp = end_timestamp.replace(
+            day=end_timestamp.day + 1, hour=0, minute=0, second=0, microsecond=0
+        )
+
+    meta.start_timestamp.seconds = int(start_timestamp.timestamp())
+    meta.end_timestamp.seconds = int(end_timestamp.timestamp())
 
 
 def treeify_or_and_conditions(query: Query) -> None:
