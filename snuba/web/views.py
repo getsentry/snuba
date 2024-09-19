@@ -272,8 +272,8 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/rpc/<name>", methods=["POST"])
-@util.time_request("timeseries")
+@application.route("/rpc/<version>/<name>", methods=["POST"])
+@util.time_request("rpc")
 def rpc(*, name: str, timer: Timer) -> Response:
     try:
         endpoint, req_class = ALL_RPCS[name]
