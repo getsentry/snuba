@@ -75,7 +75,7 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc import ALL_RPCS
+from snuba.web.rpc import get_rpc_endpoint
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -272,11 +272,11 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/rpc/<version>/<name>", methods=["POST"])
+@application.route("/rpc/<name>/<version>", methods=["POST"])
 @util.time_request("rpc")
-def rpc(*, name: str, timer: Timer) -> Response:
+def rpc(*, name: str, version: str, timer: Timer) -> Response:
     try:
-        endpoint, req_class = ALL_RPCS[name]
+        endpoint, req_class = get_rpc_endpoint(name, version)
 
         req = req_class()
         req.ParseFromString(http_request.data)

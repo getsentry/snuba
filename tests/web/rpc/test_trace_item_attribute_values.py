@@ -9,7 +9,9 @@ from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.trace_item_attribute_values import trace_item_attribute_values_query
+from snuba.web.rpc.v1alpha.trace_item_attribute_values import (
+    trace_item_attribute_values_query,
+)
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
