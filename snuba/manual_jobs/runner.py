@@ -31,7 +31,7 @@ def _job_spec_from_entry(content: Any) -> JobSpec:
         params=content.get("params"),
     )
 
-    return job_id, job_spec
+    return job_spec
 
 
 def list_job_specs(
