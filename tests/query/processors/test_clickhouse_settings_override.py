@@ -52,7 +52,11 @@ def test_apply_clickhouse_settings(
             )
         ],
     )
+
     settings = HTTPQuerySettings()
+    settings.set_clickhouse_settings({"use_query_cache": "true"})
 
     ClickhouseSettingsOverride(clickhouse_settings).process_query(query, settings)
-    assert settings.get_clickhouse_settings() == clickhouse_settings
+    expected = dict(clickhouse_settings)
+    expected["use_query_cache"] = "true"
+    assert settings.get_clickhouse_settings() == expected
