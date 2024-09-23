@@ -4,7 +4,7 @@ import click
 
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_loader import JobLoader
-from snuba.manual_jobs.runner import list_available_jobs
+from snuba.manual_jobs.runner import list_job_specs
 
 JOB_SPECIFICATION_ERROR_MSG = "Missing job type and/or job id"
 
@@ -22,7 +22,7 @@ def jobs() -> None:
     default=True,
 )
 def run_from_manifest(*, json_manifest: str, job_id: str, dry_run: bool) -> None:
-    job_specs = list_available_jobs(json_manifest)
+    job_specs = list_job_specs(json_manifest)
     if job_id not in job_specs.keys():
         raise click.ClickException("Provide a valid job id")
 

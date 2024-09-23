@@ -34,7 +34,7 @@ def _job_spec_from_entry(content: Any) -> JobSpec:
     return job_id, job_spec
 
 
-def list_available_jobs(
+def list_job_specs(
     jobs_filename: str = "job_manifest.json",
 ) -> Mapping[str, JobSpec]:
     return _read_from_path(jobs_filename)
