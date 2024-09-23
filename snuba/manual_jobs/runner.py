@@ -14,12 +14,12 @@ def _read_from_path(filename: str) -> Mapping[str, JobSpec]:
 
         job_specs = {}
         for content in contents:
-            job_spec = _job_spec_from_entry(content)
+            job_spec = _build_job_spec_from_entry(content)
             job_specs[job_spec.job_id] = job_spec
         return job_specs
 
 
-def _job_spec_from_entry(content: Any) -> JobSpec:
+def _build_job_spec_from_entry(content: Any) -> JobSpec:
     job_id = content["id"]
     assert isinstance(job_id, str)
     job_type = content["job_type"]
