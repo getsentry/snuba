@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import time
 from random import random
 from typing import Any, Mapping, Optional, Union
 
 import sentry_sdk
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from sentry_sdk import Hub
 from usageaccountant import UsageUnit
 
@@ -201,7 +203,44 @@ def _add_tags(
                     break
 
 
+def _build_failed_request_dict(
+    request_id: str,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
+    request_status: Status,
+    referrer: Optional[str],
+    exception_name: str | None = None,
+) -> snuba_queries_v1.Querylog:
+    return {
+        "request": {
+            "id": request_id,
+            "body": body,
+            "referrer": str(referrer),
+            "team": None,
+            "app_id": "none",
+            "feature": None,
+        },
+        "dataset": dataset,
+        "entity": "error",
+        "start_timestamp": None,
+        "end_timestamp": None,
+        "status": request_status.status.value,
+        "request_status": request_status.status.value,
+        "slo": request_status.slo.value,
+        "projects": [],
+        "query_list": [],
+        "timing": {"timestamp": int(time.time()), "duration_ms": 0, "tags": {}},
+        "snql_anonymized": "",
+        "organization": organization,
+    }
+
+
 def record_invalid_request(
+    request_id: str,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
     timer: Timer,
     request_status: Status,
     referrer: Optional[str],
@@ -215,9 +254,24 @@ def record_invalid_request(
     _record_failure_metric_with_status(
         QueryStatus.INVALID_REQUEST, request_status, timer, referrer, exception_name
     )
+    state.record_query(
+        _build_failed_request_dict(
+            request_id,
+            body,
+            dataset,
+            organization,
+            request_status,
+            referrer,
+            exception_name,
+        )
+    )
 
 
 def record_error_building_request(
+    request_id: str,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
     timer: Timer,
     request_status: Status,
     referrer: Optional[str],
@@ -230,6 +284,17 @@ def record_error_building_request(
     """
     _record_failure_metric_with_status(
         QueryStatus.ERROR, request_status, timer, referrer, exception_name
+    )
+    state.record_query(
+        _build_failed_request_dict(
+            request_id,
+            body,
+            dataset,
+            organization,
+            request_status,
+            referrer,
+            exception_name,
+        )
     )
 
 
