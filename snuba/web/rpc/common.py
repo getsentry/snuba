@@ -66,25 +66,29 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
 NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
-    "organization_id": AttributeKey.Type.TYPE_INT,
-    "project_id": AttributeKey.Type.TYPE_INT,
-    "service": AttributeKey.Type.TYPE_STRING,
-    "span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "parent_span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
-    "segment_name": AttributeKey.Type.TYPE_STRING,
-    "is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "duration_ms": AttributeKey.Type.TYPE_INT,
-    "exclusive_time_ms": AttributeKey.Type.TYPE_INT,
-    "retention_days": AttributeKey.Type.TYPE_INT,
-    "name": AttributeKey.Type.TYPE_STRING,
-    "sample_weight": AttributeKey.Type.TYPE_FLOAT,
-    "timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-    "start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
-    "end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
+    "sentry.organization_id": AttributeKey.Type.TYPE_INT,
+    "sentry.project_id": AttributeKey.Type.TYPE_INT,
+    "sentry.service": AttributeKey.Type.TYPE_STRING,
+    "sentry.span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
+    "sentry.parent_span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
+    "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
+    "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
+    "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
+    "sentry.duration_ms": AttributeKey.Type.TYPE_INT,
+    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_INT,
+    "sentry.retention_days": AttributeKey.Type.TYPE_INT,
+    "sentry.name": AttributeKey.Type.TYPE_STRING,
+    "sentry.sample_weight": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
+    "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
+    "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
 }
 
-TIMESTAMP_COLUMNS: Final[Set[str]] = {"timestamp", "start_timestamp", "end_timestamp"}
+TIMESTAMP_COLUMNS: Final[Set[str]] = {
+    "sentry.timestamp",
+    "sentry.start_timestamp",
+    "sentry.end_timestamp",
+}
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
@@ -94,7 +98,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         )
     alias = attr_key.name
 
-    if attr_key.name == "trace_id":
+    if attr_key.name == "sentry.trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
             return f.CAST(column("trace_id"), "String", alias=alias)
         raise BadSnubaRPCRequestException(
@@ -103,18 +107,22 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name in TIMESTAMP_COLUMNS:
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
-            return f.CAST(column(attr_key.name), "String", alias=alias)
+            return f.CAST(
+                column(attr_key.name[len("sentry.") :]), "String", alias=alias
+            )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
-            return f.CAST(column(attr_key.name), "Int64", alias=alias)
+            return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
         if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
-            return f.CAST(column(attr_key.name), "Float64", alias=alias)
+            return f.CAST(
+                column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
+            )
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
         if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
-            return column(attr_key.name, alias=attr_key.name)
+            return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
         )

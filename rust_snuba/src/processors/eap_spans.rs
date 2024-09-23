@@ -139,7 +139,7 @@ impl From<FromSpanMessage> for EAPSpan {
                     if k == "transaction" {
                         res.segment_name = v.clone();
                     } else {
-                        insert_string(k.clone(), v.clone());
+                        insert_string(format!("sentry.{}", k), v.clone());
                     }
                 })
             }
