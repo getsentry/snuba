@@ -151,16 +151,17 @@ impl From<FromSpanMessage> for EAPSpan {
             }
 
             if let Some(measurements) = from.measurements {
-                measurements.iter().for_each(|(k, v)| {
-                    if k == "client_sample_rate" && v.value != 0.0 {
-                        res.sampling_factor = v.value;
-                        res.sampling_weight = 1.0 / v.value;
-                        res.sampling_weight_2 = (1.0 / v.value) as u64;
-                    } else {
-                        insert_num(k.clone(), v.value);
-                    }
+                measurements.iter().for_each(|(k, v)| match k.as_str() {
+                    "client_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                    "server_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                    _ => insert_num(k.clone(), v.value),
                 });
             }
+
+            // lower precision to compensate floating point errors
+            res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
+            res.sampling_weight *= 1.0 / res.sampling_factor;
+            res.sampling_weight_2 = res.sampling_weight.round() as u64;
 
             if let Some(data) = from.data {
                 data.iter().for_each(|(k, v)| {
@@ -222,7 +223,10 @@ mod tests {
             "value": 50.0
         },
         "client_sample_rate": {
-            "value": 0.01
+            "value": 0.1
+        },
+        "server_sample_rate": {
+            "value": 0.2
         }
     },
     "organization_id": 1,
