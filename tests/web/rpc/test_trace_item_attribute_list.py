@@ -62,7 +62,6 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
-@pytest.mark.skip(reason="temporarily disabled to allow a migration to run")
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTraceItemAttributes(BaseApiTest):

@@ -129,13 +129,13 @@ class TestSpanSamples(BaseApiTest):
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
                 )
             ),
-            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="platform")],
+            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="status")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
                 )
             ],
             limit=10,
@@ -159,13 +159,13 @@ class TestSpanSamples(BaseApiTest):
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
                 )
             ),
-            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name")],
+            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="status")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
                 )
             ],
             limit=61,
@@ -174,7 +174,7 @@ class TestSpanSamples(BaseApiTest):
         assert [
             dict((k, x.results[k].val_str) for k in x.results)
             for x in response.span_samples
-        ] == [{"sentry.sdk.name": "sentry.python.django"} for _ in range(60)]
+        ] == [{"server_name": "D23CXQ4GK2.local"} for _ in range(60)]
 
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -215,12 +215,14 @@ class TestSpanSamples(BaseApiTest):
                 )
             ),
             keys=[
-                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="is_segment"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="span_id"),
+                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"),
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"),
             ],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="status")
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.status"
+                    )
                 )
             ],
             limit=61,
@@ -231,7 +233,10 @@ class TestSpanSamples(BaseApiTest):
                 (k, (x.results[k].val_bool or x.results[k].val_str)) for k in x.results
             )
             for x in response.span_samples
-        ] == [{"is_segment": True, "span_id": "123456781234567d"} for _ in range(60)]
+        ] == [
+            {"sentry.is_segment": True, "sentry.span_id": "123456781234567d"}
+            for _ in range(60)
+        ]
 
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -247,12 +252,16 @@ class TestSpanSamples(BaseApiTest):
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
                 )
             ),
             keys=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="project_name"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="release_version"),
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.project_name"),
+                AttributeKey(
+                    type=AttributeKey.TYPE_STRING, name="sentry.release_version"
+                ),
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"),
             ],
             order_by=[
@@ -265,13 +274,13 @@ class TestSpanSamples(BaseApiTest):
             limit=61,
             virtual_column_contexts=[
                 VirtualColumnContext(
-                    from_column_name="project_id",
-                    to_column_name="project_name",
+                    from_column_name="sentry.project_id",
+                    to_column_name="sentry.project_name",
                     value_map={"1": "sentry", "2": "snuba"},
                 ),
                 VirtualColumnContext(
-                    from_column_name="release",
-                    to_column_name="release_version",
+                    from_column_name="sentry.release",
+                    to_column_name="sentry.release_version",
                     value_map={_RELEASE_TAG: "4.2.0.69"},
                 ),
             ],
@@ -282,9 +291,9 @@ class TestSpanSamples(BaseApiTest):
             for x in response.span_samples
         ] == [
             {
-                "project_name": "sentry",
+                "sentry.project_name": "sentry",
                 "sentry.sdk.name": "sentry.python.django",
-                "release_version": "4.2.0.69",
+                "sentry.release_version": "4.2.0.69",
             }
             for _ in range(60)
         ]
@@ -303,7 +312,9 @@ class TestSpanSamples(BaseApiTest):
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
                 )
             ),
             keys=[
