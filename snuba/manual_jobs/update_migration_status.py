@@ -11,8 +11,8 @@ class UpdateMigrationStatus(Job):
     """
     UpdateMigrationStatus is a manual job for correcting the status of an
     entry in the migrations_[local|dist] table, to be run via the snuba jobs CLI
-    or via snuba admin (this should not be instantiated from the manual jobs runner,
-    not from other packages).
+    or via snuba admin (this should exclusively be instantiated from the manual
+    jobs runner, not imported by other packages).
 
     It requires the following parameters:
         - group - migration group that the entry belongs to
