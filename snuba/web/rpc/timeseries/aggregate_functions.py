@@ -63,26 +63,31 @@ def merge_t_digests_states(states: Iterable[str], level: float) -> float:
 
     x = level * total_count
     prev_x = 0.0
-    total = 0
+    total = 0.0
     for centroid in centroids:
-        mean: float = centroid[0]
-        count: float = centroid[1]
+        curr_mean: float = centroid[0]
+        curr_count: float = centroid[1]
 
-        current_x = total + count * 0.5
+        current_x = total + curr_count * 0.5
         if current_x >= x:
             left = prev_x + (0.5 if prev_count == 1 else 0)
-            right = current_x - (0.5 if count == 1 else 0)
+            right = current_x - (0.5 if curr_count == 1 else 0)
             if x <= left:
                 return prev_mean
             if x >= right:
-                return mean
-            return interpolate(x, left, prev_mean, right, mean)
+                return curr_mean
+            return interpolate(x, left, prev_mean, right, curr_mean)
 
-        total += count
-        prev_mean = mean
-        prev_count = count
+        total += curr_count
+        prev_mean = curr_mean
+        prev_count = curr_count
         prev_x = current_x
     return total_count
+
+
+def merge_summable_states(states: Iterable[Any]) -> float:
+    res: float = sum(states)
+    return res
 
 
 def merge_avg_states(states: Iterable[Any]) -> float:
@@ -117,14 +122,14 @@ def get_aggregate_func(
             expression=f.sum(
                 f.multiply(key_expr, sampling_weight_times_sign), alias="sum"
             ),
-            merge=lambda values: sum(values),
+            merge=merge_summable_states,
         )
     if request.aggregate == AggregateBucketRequest.FUNCTION_COUNT:
         return AggregateFunction(
             expression=f.sumIf(
                 sampling_weight_times_sign, exists_condition, alias="count"
             ),
-            merge=lambda counts: sum(counts),
+            merge=merge_summable_states,
         )
     if request.aggregate == AggregateBucketRequest.FUNCTION_AVERAGE:
         return AggregateFunction(
