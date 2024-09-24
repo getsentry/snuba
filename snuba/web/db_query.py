@@ -738,7 +738,7 @@ def db_query(
 @dataclass
 class _QuotaAndPolicy:
     quota_allowance: QuotaAllowance
-    policy_name: str
+    policy: AllocationPolicy
 
 
 def _add_quota_info(
@@ -751,11 +751,12 @@ def _add_quota_info(
     summary[action] = quota_info
 
     if quota_and_policy is not None:
-        quota_info["policy"] = quota_and_policy.policy_name
+        quota_info["policy"] = quota_and_policy.policy.config_key()
         quota_allowance = quota_and_policy.quota_allowance
         quota_info["quota_used"] = quota_allowance.quota_used
         quota_info["quota_unit"] = quota_allowance.quota_unit
         quota_info["suggestion"] = quota_allowance.suggestion
+        quota_info["storage_key"] = quota_and_policy.policy.storage_key
 
         if action == _REJECTED_BY:
             quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
@@ -823,7 +824,7 @@ def _apply_allocation_policies_quota(
                 ):
                     throttle_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
-                        policy_name=allocation_policy.config_key(),
+                        policy=allocation_policy,
                     )
                 min_threads_across_policies = min(
                     min_threads_across_policies, allowance.max_threads
@@ -831,7 +832,7 @@ def _apply_allocation_policies_quota(
                 if not can_run:
                     rejection_quota_and_policy = _QuotaAndPolicy(
                         quota_allowance=allowance,
-                        policy_name=allocation_policy.config_key(),
+                        policy=allocation_policy,
                     )
                     break
 
