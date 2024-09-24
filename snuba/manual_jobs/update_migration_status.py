@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Mapping
+from typing import Any, Mapping, Optional
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
@@ -16,7 +16,10 @@ class UpdateMigrationStatus(Job):
         self.__validate_job_params(job_spec.params)
         super().__init__(job_spec, dry_run)
 
-    def __validate_job_params(self, params: Mapping[str, str]) -> None:
+    def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
+        assert (
+            params is not None
+        ), "group, migration_id, old_status, new_status parameters required"
         assert params["group"], "group required"
         assert params["migration_id"], "migration_id required"
         assert params["new_status"], "new_status required"
@@ -25,6 +28,10 @@ class UpdateMigrationStatus(Job):
         self._migration_id = params["migration_id"]
         self._new_status = params["new_status"]
         self._old_status = params["old_status"]
+        assert isinstance(self._group, str)
+        assert isinstance(self._migration_id, str)
+        assert isinstance(self._new_status, str)
+        assert isinstance(self._old_status, str)
 
     def _select_query(self, table_name: str) -> str:
         return f"SELECT status, version FROM {table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;"
