@@ -13,7 +13,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.timeseries import timeseries_query
+from snuba.web.rpc.timeseries.timeseries import timeseries_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
