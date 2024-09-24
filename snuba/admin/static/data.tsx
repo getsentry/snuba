@@ -15,7 +15,7 @@ import MQLQueries from "SnubaAdmin/mql_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
-import ViewCustomJobs from "./manual_jobs";
+import ViewCustomJobs from "SnubaAdmin/manual_jobs";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
