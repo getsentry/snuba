@@ -756,7 +756,7 @@ def _add_quota_info(
         quota_info["quota_used"] = quota_allowance.quota_used
         quota_info["quota_unit"] = quota_allowance.quota_unit
         quota_info["suggestion"] = quota_allowance.suggestion
-        quota_info["storage_key"] = quota_and_policy.policy.storage_key
+        quota_info["storage_key"] = str(quota_and_policy.policy.storage_key)
 
         if action == _REJECTED_BY:
             quota_info["rejection_threshold"] = quota_allowance.rejection_threshold
@@ -776,12 +776,23 @@ def _populate_query_status(
     summary[is_rejected] = False
     summary[is_throttled] = False
 
+    rejection_storage_key = "rejection_storage_key"
+    throttle_storage_key = "throttle_storage_key"
+    summary[rejection_storage_key] = None
+    summary[throttle_storage_key] = None
+
     if rejection_quota_and_policy:
         summary[is_successful] = False
         summary[is_rejected] = True
+        summary[rejection_storage_key] = str(
+            rejection_quota_and_policy.policy.storage_key
+        )
     if throttle_quota_and_policy:
         summary[is_successful] = False
         summary[is_throttled] = True
+        summary[throttle_storage_key] = str(
+            throttle_quota_and_policy.policy.storage_key
+        )
 
 
 def _apply_allocation_policies_quota(
