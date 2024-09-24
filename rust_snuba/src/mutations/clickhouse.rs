@@ -159,18 +159,19 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
         INSERT INTO {table}
         SELECT old_data.* EXCEPT ('sign|attr_.*'), arrayJoin([1, -1]) as sign {attr_combined_columns}
         FROM {table} old_data
-        JOIN new_data
+        GLOBAL JOIN new_data
         ON old_data.organization_id = new_data.organization_id
             and old_data.trace_id = new_data.trace_id
             and old_data.span_id = new_data.span_id
             and old_data._sort_timestamp = new_data._sort_timestamp
-            and old_data.sign = 1
         PREWHERE
         (old_data.organization_id,
+            old_data._sort_timestamp,
             old_data.trace_id,
             old_data.span_id,
-            old_data._sort_timestamp) in new_data
-
+            ) GLOBAL IN (SELECT organization_id, _sort_timestamp, trace_id, span_id FROM new_data)
+        WHERE
+        old_data.sign = 1
         "
     )
     .into_bytes();
