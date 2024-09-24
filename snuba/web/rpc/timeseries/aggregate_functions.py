@@ -6,10 +6,10 @@ from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
 )
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
-from snuba.query import Expression
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
+from snuba.query.expressions import Expression
 from snuba.web.rpc.common.common import NORMALIZED_COLUMNS, attribute_key_to_expression
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
@@ -28,14 +28,14 @@ AGGREGATE_QUANTILE_FUNCTIONS = {
 
 
 # https://github.com/ClickHouse/ClickHouse/blob/f7ca33868b976b92499178d475a21fd72e9badfa/src/AggregateFunctions/QuantileTDigest.h#L104
-def interpolate(x, x1, y1, x2, y2):
+def interpolate(x: float, x1: float, y1: float, x2: float, y2: float) -> float:
     k = (x - x1) / (x2 - x1)
     return (1 - k) * y1 + k * y2
 
 
 # this is a port of quantileTDigestMerge(...) in clickhouse, in this file:
 # https://github.com/ClickHouse/ClickHouse/blob/f7ca33868b976b92499178d475a21fd72e9badfa/src/AggregateFunctions/QuantileTDigest.h
-def merge_t_digests_states(states: Iterable[str], level: float):
+def merge_t_digests_states(states: Iterable[str], level: float) -> float:
     centroids: List[Tuple[float, float]] = []
     total_count = 0
     for state in states:

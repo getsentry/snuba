@@ -69,7 +69,7 @@ class TimeseriesQuerier:
 
     def aggregate_bucket_request(
         self, start_ts: int, end_ts: int, bucket_size_secs: int
-    ):
+    ) -> SnubaRequest:
         entity = Entity(
             key=EntityKey("eap_spans"),
             schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -123,7 +123,9 @@ class TimeseriesQuerier:
             ),
         )
 
-    async def execute(self, start_ts: int, end_ts: int, bucket_size_secs: int):
+    async def execute(
+        self, start_ts: int, end_ts: int, bucket_size_secs: int
+    ) -> UnmergedTimeseriesQuerierResult:
         async with self.semaphore:
             # TODO this isn't actually async yet, need to add a way of running async clickhouse queries
             data = run_query(
@@ -133,7 +135,6 @@ class TimeseriesQuerier:
                 ),
                 timer=self.timer,
             ).result["data"]
-            print("data: ", data)
 
             return UnmergedTimeseriesQuerierResult(
                 start_ts=start_ts,
@@ -143,7 +144,7 @@ class TimeseriesQuerier:
                 ),
             )
 
-    def get_request_granularity(self):
+    def get_request_granularity(self) -> int:
         if (
             self.granularity_secs % FOUR_HOUR_GRANULARITY == 0
             and self.granularity_secs != FOUR_HOUR_GRANULARITY
@@ -180,7 +181,7 @@ class TimeseriesQuerier:
             )
         return results
 
-    async def run(self):
+    async def run(self) -> AggregateBucketResponse:
         # if you request one day of data, we'd ideally like to split that up into 6 requests of 4 hours of data
         # so that if you refresh the page, we don't have to aggregate a bunch of data again.
         # the request granularity is the size of requests that are ultimately sent to clickhouse,
@@ -211,4 +212,5 @@ def timeseries_query(
     timer = timer or Timer("timeseries_query")
     querier = TimeseriesQuerier(request, timer)
     loop = asyncio.get_event_loop()
-    return loop.run_until_complete(querier.run())
+    resp: AggregateBucketResponse = loop.run_until_complete(querier.run())
+    return resp
