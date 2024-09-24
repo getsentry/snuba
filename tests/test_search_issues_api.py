@@ -92,7 +92,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         debug: bool = True,
     ) -> Any:
         return self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "query": {
