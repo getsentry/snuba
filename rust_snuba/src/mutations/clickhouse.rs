@@ -129,7 +129,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
 
     // Async inserts ??
 
-    let input_schema = format!("organization_id UInt64, trace_id UUID, span_id UInt64, _sort_timestamp DateTime {attr_columns}");
+    let input_schema = format!("organization_id UInt64, _sort_timestamp DateTime, trace_id UUID, span_id UInt64 {attr_columns}");
     let create_tmp_table = format!("CREATE TEMPORARY TABLE new_data ({input_schema})").into_bytes();
     let mut insert_tmp_table = format!("INSERT INTO new_data FORMAT JSONEachRow\n").into_bytes();
 
