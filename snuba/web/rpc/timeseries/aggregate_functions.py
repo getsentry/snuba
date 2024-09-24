@@ -62,7 +62,10 @@ def merge_t_digests_states(states: Iterable[str], level: float) -> float:
     x = level * total_count
     prev_x = 0.0
     total = 0
-    for mean, count in centroids:
+    for centroid in centroids:
+        mean: float = centroid[0]
+        count: float = centroid[1]
+
         current_x = total + count * 0.5
         if current_x >= x:
             left = prev_x + (0.5 if prev_count == 1 else 0)
