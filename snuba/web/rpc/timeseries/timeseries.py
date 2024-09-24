@@ -1,7 +1,7 @@
-import asyncio
+import itertools
 import time
 import uuid
-from typing import Any, Sequence
+from typing import Any, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
@@ -50,7 +50,6 @@ class TimeseriesQuerierResult:
 
 class TimeseriesQuerier:
     def __init__(self, request: AggregateBucketRequest, timer: Timer):
-        self.semaphore = asyncio.Semaphore(5)  # 5 concurrent requests
         self.start_ts = request.meta.start_timestamp.seconds
         self.end_ts = request.meta.end_timestamp.seconds
         self.rounded_start_ts = self.start_ts - (
@@ -123,26 +122,22 @@ class TimeseriesQuerier:
             ),
         )
 
-    async def execute(
+    def execute(
         self, start_ts: int, end_ts: int, bucket_size_secs: int
     ) -> UnmergedTimeseriesQuerierResult:
-        async with self.semaphore:
-            # TODO this isn't actually async yet, need to add a way of running async clickhouse queries
-            data = run_query(
-                dataset=PluggableDataset(name="eap", all_entities=[]),
-                request=self.aggregate_bucket_request(
-                    start_ts, end_ts, bucket_size_secs
-                ),
-                timer=self.timer,
-            ).result["data"]
+        data = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=self.aggregate_bucket_request(start_ts, end_ts, bucket_size_secs),
+            timer=self.timer,
+        ).result["data"]
 
-            return UnmergedTimeseriesQuerierResult(
-                start_ts=start_ts,
-                end_ts=end_ts,
-                aggregate_results=list(
-                    data[0][f"agg{agg_idx}"] for agg_idx in range(len(self.aggregates))
-                ),
-            )
+        return UnmergedTimeseriesQuerierResult(
+            start_ts=start_ts,
+            end_ts=end_ts,
+            aggregate_results=list(
+                data[0][f"agg{agg_idx}"] for agg_idx in range(len(self.aggregates))
+            ),
+        )
 
     def get_request_granularity(self) -> int:
         if (
@@ -156,32 +151,26 @@ class TimeseriesQuerier:
 
     def merge_results(
         self,
-        all_results: list[UnmergedTimeseriesQuerierResult],
+        unmerged_results: Iterable[UnmergedTimeseriesQuerierResult],
         request_granularity: int,
-    ) -> Sequence[TimeseriesQuerierResult]:
+    ) -> Iterable[TimeseriesQuerierResult]:
         # if we fulfilled a "1 day of data" request with 6 x 4 hour blocks, we need to merge those 6 back into
         # one big bucket to send back to the UI
         number_of_results_to_merge = self.granularity_secs // request_granularity
-        results = []
-        for i in range(len(all_results) // number_of_results_to_merge):
-            results.append(
-                TimeseriesQuerierResult(
-                    start_ts=all_results[i * number_of_results_to_merge].start_ts,
-                    end_ts=all_results[i : i + number_of_results_to_merge][-1].end_ts,
-                    aggregate_results=[
-                        agg.merge(
-                            all_results[
-                                i * number_of_results_to_merge + j
-                            ].raw_aggregate_results[agg_idx]
-                            for j in range(number_of_results_to_merge)
-                        )
-                        for agg_idx, agg in enumerate(self.aggregates)
-                    ],
-                )
+        while True:
+            chunk = list(itertools.islice(unmerged_results, number_of_results_to_merge))
+            if not chunk:
+                return None
+            yield TimeseriesQuerierResult(
+                start_ts=chunk[0].start_ts,
+                end_ts=chunk[-1].end_ts,
+                aggregate_results=[
+                    agg.merge(x.raw_aggregate_results[agg_idx] for x in chunk)
+                    for agg_idx, agg in enumerate(self.aggregates)
+                ],
             )
-        return results
 
-    async def run(self) -> AggregateBucketResponse:
+    def run(self) -> AggregateBucketResponse:
         # if you request one day of data, we'd ideally like to split that up into 6 requests of 4 hours of data
         # so that if you refresh the page, we don't have to aggregate a bunch of data again.
         # the request granularity is the size of requests that are ultimately sent to clickhouse,
@@ -189,18 +178,20 @@ class TimeseriesQuerier:
         # into one big response (if necessary)
         request_granularity = self.get_request_granularity()
 
-        # TODO: after async clickhouse request works, need to switch this to be smarter
-        all_results: list[UnmergedTimeseriesQuerierResult] = []
-        for i in range(self.rounded_start_ts, self.end_ts, request_granularity):
-            all_results.append(
-                await self.execute(
-                    i, min(i + request_granularity, self.end_ts), request_granularity
-                )
+        all_results: Iterable[UnmergedTimeseriesQuerierResult] = (
+            self.execute(
+                start_ts,
+                min(start_ts + request_granularity, self.end_ts),
+                request_granularity,
             )
-        all_results.sort(key=lambda result: result.end_ts)
+            for start_ts in range(
+                self.rounded_start_ts, self.end_ts, request_granularity
+            )
+        )
+
         merged_results = self.merge_results(all_results, request_granularity)
 
-        # TODO: allow multiple aggregates
+        # TODO: allow multiple aggregates once proto is done
         return AggregateBucketResponse(
             result=[float(r.aggregate_results[0]) for r in merged_results]
         )
@@ -211,6 +202,5 @@ def timeseries_query(
 ) -> AggregateBucketResponse:
     timer = timer or Timer("timeseries_query")
     querier = TimeseriesQuerier(request, timer)
-    loop = asyncio.get_event_loop()
-    resp: AggregateBucketResponse = loop.run_until_complete(querier.run())
+    resp: AggregateBucketResponse = querier.run()
     return resp
