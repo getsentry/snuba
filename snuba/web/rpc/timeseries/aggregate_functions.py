@@ -55,6 +55,8 @@ def merge_t_digests_states(states: Iterable[str], level: float) -> float:
             total_count += count
 
     centroids.sort(key=lambda tup: tup[0])
+    if len(centroids) == 0:
+        return 0
     prev_mean, prev_count = centroids[0]
     if len(centroids) == 1:
         return prev_mean
