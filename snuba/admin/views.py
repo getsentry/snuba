@@ -1268,6 +1268,6 @@ def deletes_enabled() -> Response:
 
 
 @application.route("/job-specs", methods=["GET"])
-@check_tool_perms(tools=[AdminTools.ALL])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def get_job_specs() -> Response:
     return make_response(jsonify(list_job_specs()), 200)

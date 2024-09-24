@@ -34,7 +34,7 @@ client.getSettings().then((settings) => {
       tracesSampleRate: settings.tracesSampleRate,
       // Profiles
       profilesSampleRate: settings.profilesSampleRate,
-      tracePropagationTargets: settings.tracePropagationTargets,
+      tracePropagationTargets: settings.tracePropagationTargets ?? undefined,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
       replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
