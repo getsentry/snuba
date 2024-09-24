@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
+use uuid::Uuid;
 
 use crate::mutations::parser::MutationBatch;
 use crate::processors::eap_spans::{AttributeMap, PrimaryKey, ATTRS_SHARD_FACTOR};
@@ -61,14 +62,18 @@ impl ClickhouseWriter {
     }
 
     async fn process_message(&self, message: &Message<MutationBatch>) -> anyhow::Result<()> {
-        let body = format_query(&self.table, message.payload());
+        let queries = format_query(&self.table, message.payload());
+        let session_id = Uuid::new_v4().to_string();
 
-        self.client
-            .post(&self.url)
-            .body(body)
-            .send()
-            .await?
-            .error_for_status()?;
+        for query in queries {
+            self.client
+                .post(&self.url)
+                .query(&[("session_id", &session_id)])
+                .body(query)
+                .send()
+                .await?
+                .error_for_status()?;
+        }
 
         Ok(())
     }
@@ -87,7 +92,7 @@ impl TaskRunner<MutationBatch, (), anyhow::Error> for ClickhouseWriter {
     }
 }
 
-fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
+fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
     let mut attr_columns = String::new();
     // attr_combined_columns is intentionally ordered the same as the clickhouse schema.
     // INSERT INTO .. SELECT FROM .. matches up columns by position only, and ignores names.
@@ -97,14 +102,14 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
         attr_columns.push_str(&format!(",attr_str_{i} Map(String, String)"));
 
         attr_combined_columns.push_str(&format!(
-            ",if(signs.new_sign = 1, mapUpdate(old_data.attr_str_{i}, new_data.attr_str_{i}), old_data.attr_str_{i}) AS attr_str_{i}"
+            ",if(sign = 1, mapUpdate(old_data.attr_str_{i}, new_data.attr_str_{i}), old_data.attr_str_{i}) AS attr_str_{i}"
         ));
     }
 
     for i in 0..ATTRS_SHARD_FACTOR {
         attr_columns.push_str(&format!(",attr_num_{i} Map(String, Float64)"));
         attr_combined_columns.push_str(&format!(
-            ",if(signs.new_sign = 1, mapUpdate(old_data.attr_num_{i}, new_data.attr_num_{i}), old_data.attr_num_{i}) AS attr_num_{i}"
+            ",if(sign = 1, mapUpdate(old_data.attr_num_{i}, new_data.attr_num_{i}), old_data.attr_num_{i}) AS attr_num_{i}"
         ));
     }
 
@@ -124,25 +129,9 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
 
     // Async inserts ??
 
-    let mut body = format!(
-        "
-        INSERT INTO {table}
-        SELECT old_data.* EXCEPT ('sign|attr_.*'), signs.new_sign as sign {attr_combined_columns}
-        FROM input(
-            'organization_id UInt64, trace_id UUID, span_id UInt64, _sort_timestamp DateTime {attr_columns}'
-        ) new_data
-        JOIN {table} old_data
-        ON old_data.organization_id = new_data.organization_id
-            and old_data.trace_id = new_data.trace_id
-            and old_data.span_id = new_data.span_id
-            and old_data._sort_timestamp = new_data._sort_timestamp
-            and old_data.sign = 1
-        JOIN (SELECT arrayJoin([1, -1]) AS new_sign) as signs
-        ON 1
-
-        FORMAT JSONEachRow\n"
-    )
-    .into_bytes();
+    let input_schema = format!("organization_id UInt64, trace_id UUID, span_id UInt64, _sort_timestamp DateTime {attr_columns}");
+    let create_tmp_table = format!("CREATE TEMPORARY TABLE new_data ({input_schema})").into_bytes();
+    let mut insert_tmp_table = format!("INSERT INTO new_data FORMAT JSONEachRow\n").into_bytes();
 
     for (filter, update) in &batch.0 {
         let mut attributes = AttributeMap::default();
@@ -159,11 +148,39 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<u8> {
             attributes,
         };
 
-        serde_json::to_writer(&mut body, &row).unwrap();
-        body.push(b'\n');
+        serde_json::to_writer(&mut insert_tmp_table, &row).unwrap();
+        insert_tmp_table.push(b'\n');
     }
 
-    body
+    let main_insert = format!(
+        "
+        INSERT INTO {table}
+        SELECT old_data.* EXCEPT ('sign|attr_.*'), arrayJoin([1, -1]) as sign {attr_combined_columns}
+        FROM {table} old_data
+        JOIN new_data
+        ON old_data.organization_id = new_data.organization_id
+            and old_data.trace_id = new_data.trace_id
+            and old_data.span_id = new_data.span_id
+            and old_data._sort_timestamp = new_data._sort_timestamp
+            and old_data.sign = 1
+        PREWHERE
+        (old_data.organization_id,
+            old_data.trace_id,
+            old_data.span_id,
+            old_data._sort_timestamp) in new_data
+
+        "
+    )
+    .into_bytes();
+
+    let drop_tmp_table = "DROP TABLE IF EXISTS new_data".to_owned().into_bytes();
+
+    vec![
+        create_tmp_table,
+        insert_tmp_table,
+        main_insert,
+        drop_tmp_table,
+    ]
 }
 
 #[derive(Serialize, Default)]
@@ -196,9 +213,12 @@ mod tests {
             },
             Update::default(),
         );
-        let query = format_query("eap_spans_local", &batch);
-        let query = String::from_utf8(query).unwrap();
+        let mut snapshot = String::new();
+        for query in format_query("eap_spans_local", &batch) {
+            snapshot.push_str(std::str::from_utf8(&query).unwrap());
+            snapshot.push_str(";\n");
+        }
 
-        insta::assert_snapshot!(query);
+        insta::assert_snapshot!(snapshot);
     }
 }
