@@ -17,7 +17,8 @@ function ViewCustomJobs(props: { api: Client }) {
         spec.job_id,
         spec.job_type,
         JSON.stringify(spec.params),
-        "status not yet implemented",
+        "TODO",
+        "TODO",
       ];
     });
   }
