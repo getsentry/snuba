@@ -14,4 +14,7 @@ class ClickhouseSettingsOverride(ClickhouseQueryProcessor):
         self.__settings = settings
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        query_settings.set_clickhouse_settings(self.__settings)
+        new_settings: MutableMapping[str, Any] = {}
+        new_settings.update(query_settings.get_clickhouse_settings())
+        new_settings.update(self.__settings)
+        query_settings.set_clickhouse_settings(new_settings)
