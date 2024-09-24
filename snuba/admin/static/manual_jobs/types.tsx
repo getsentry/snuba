@@ -7,7 +7,3 @@ type JobSpec = {
 type JobSpecMap = {
   [key: string]: JobSpec;
 };
-
-type UIJobSpecRow = {
-  job_id: string;
-};
