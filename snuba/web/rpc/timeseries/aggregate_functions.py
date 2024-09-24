@@ -15,7 +15,7 @@ from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
 class AggregateFunction:
-    def __init__(self, expression: Expression, merge: Callable[[Iterable[Any]], Any]):
+    def __init__(self, expression: Expression, merge: Callable[[Iterable[Any]], float]):
         self.expression = expression
         self.merge = merge
 
@@ -80,6 +80,15 @@ def merge_t_digests_states(states: Iterable[str], level: float) -> float:
     return total_count
 
 
+def merge_avg_states(states: Iterable[any]) -> float:
+    total_count = 0
+    total_sum = 0
+    for state in states:
+        total_sum += state[0]
+        total_count += state[1]
+    return total_sum / total_count
+
+
 def get_aggregate_func(
     request: AggregateBucketRequest,
 ) -> AggregateFunction:
@@ -119,8 +128,7 @@ def get_aggregate_func(
                 f.sumIf(sampling_weight_times_sign, exists_condition, alias="count"),
                 alias="avg",
             ),
-            merge=lambda totals_and_counts: sum(next(iter(totals_and_counts)))
-            / sum(next(iter(totals_and_counts))),
+            merge=merge_avg_states,
         )
 
     if request.aggregate in AGGREGATE_QUANTILE_FUNCTIONS:
