@@ -8,6 +8,23 @@ from snuba.migrations.runner import DIST_TABLE_NAME, LOCAL_TABLE_NAME
 
 
 class UpdateMigrationStatus(Job):
+    """
+    UpdateMigrationStatus is a manual job for correcting the status of an
+    entry in the migrations_[local|dist] table, to be run via the snuba jobs CLI
+    or via snuba admin (this should not be instantiated from the manual jobs runner,
+    not from other packages).
+
+    It requires the following parameters:
+        - group - migration group that the entry belongs to
+        - migration_id - specific ID for the entry
+        - old_status - the current entry's status in the table (to make sure the user understands what they're
+          updating from)
+        - new_status - the status that the entry should contain after the update is run.
+
+    It uses an INSERT rather than an ALTER TABLE ... UPDATE in order to keep record-keeping
+    in the migrations table sensible.
+    """
+
     def __init__(
         self,
         job_spec: JobSpec,
@@ -36,8 +53,6 @@ class UpdateMigrationStatus(Job):
     def _select_query(self, table_name: str) -> str:
         return f"SELECT status, version FROM {table_name} FINAL WHERE group = %(group)s AND migration_id = %(migration_id)s;"
 
-    # by INSERTing instead of ALTER TABLE, we update the version to make it clear
-    # that a change occurred
     def _insert_query(self, table_name: str) -> str:
         return f"INSERT INTO {table_name} FORMAT JSONEachRow"
 
@@ -59,10 +74,6 @@ class UpdateMigrationStatus(Job):
         ), f"cannot find row with group {self._group}, ID {self._migration_id} in table {table_name}: no update to be performed"
         version = existing_row.results[0][1]
         status = existing_row.results[0][0]
-
-        logger.debug(existing_row)
-        logger.debug(version)
-        logger.debug(status)
 
         assert (
             status == self._old_status
