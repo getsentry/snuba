@@ -170,7 +170,7 @@ impl From<FromSpanMessage> for EAPSpan {
                     if k == "transaction" {
                         res.segment_name = v;
                     } else {
-                        res.attributes.insert_str(k, v);
+                        res.attributes.insert_str(format!("sentry.{k}"), v);
                     }
                 }
             }
@@ -183,15 +183,18 @@ impl From<FromSpanMessage> for EAPSpan {
 
             if let Some(measurements) = from.measurements {
                 for (k, v) in measurements {
-                    if k == "client_sample_rate" && v.value != 0.0 {
-                        res.sampling_factor = v.value;
-                        res.sampling_weight = 1.0 / v.value;
-                        res.sampling_weight_2 = (1.0 / v.value) as u64;
-                    } else {
-                        res.attributes.insert_num(k, v.value);
+                    match k.as_str() {
+                        "client_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                        "server_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                        _ => res.attributes.insert_num(k, v.value),
                     }
                 }
             }
+
+            // lower precision to compensate floating point errors
+            res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
+            res.sampling_weight *= 1.0 / res.sampling_factor;
+            res.sampling_weight_2 = res.sampling_weight.round() as u64;
 
             if let Some(data) = from.data {
                 for (k, v) in data {
@@ -251,7 +254,10 @@ mod tests {
             "value": 50.0
         },
         "client_sample_rate": {
-            "value": 0.01
+            "value": 0.1
+        },
+        "server_sample_rate": {
+            "value": 0.2
         }
     },
     "organization_id": 1,
