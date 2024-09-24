@@ -80,7 +80,7 @@ def merge_t_digests_states(states: Iterable[str], level: float) -> float:
     return total_count
 
 
-def merge_avg_states(states: Iterable[any]) -> float:
+def merge_avg_states(states: Iterable[Any]) -> float:
     total_count = 0
     total_sum = 0
     for state in states:
