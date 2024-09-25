@@ -180,7 +180,7 @@ impl ClickhouseTestClient {
     pub async fn new(table: String) -> anyhow::Result<Self> {
         // hardcoding local Clickhouse settings
         let hostname = "127.0.0.1";
-        let http_port = 8123;
+        let http_port = 9000;
         let url = format!("http://{hostname}:{http_port}");
 
         let client = reqwest::Client::new();
