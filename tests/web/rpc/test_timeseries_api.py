@@ -1,7 +1,8 @@
 import random
 import uuid
-from datetime import datetime, timedelta
-from typing import Any, Mapping
+from datetime import UTC, datetime, timedelta
+from typing import Any, MutableMapping
+from unittest.mock import patch
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -13,12 +14,13 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.query import run_query
 from snuba.web.rpc.timeseries.timeseries import timeseries_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
 
-def gen_message(dt: datetime, msg_index: int) -> Mapping[str, Any]:
+def gen_message(dt: datetime, msg_index: int) -> MutableMapping[str, Any]:
     dt = dt - timedelta(hours=1) + timedelta(minutes=msg_index)
     return {
         "description": "/api/0/relays/projectconfigs/",
@@ -95,15 +97,22 @@ def gen_message(dt: datetime, msg_index: int) -> Mapping[str, Any]:
     }
 
 
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.utcnow().replace(
+    hour=8, minute=0, second=0, microsecond=0, tzinfo=UTC
+) - timedelta(hours=24)
 
 
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     messages = [gen_message(BASE_TIME, i) for i in range(120)]
+
+    # we also add some junk messages to make sure filtering works properly
+    for junk_message in [gen_message(BASE_TIME, i) for i in range(120)]:
+        junk_message["tags"] = {"hello": "world"}
+        junk_message["measurements"] = {"blah": {"value": 50}}
+        messages.append(junk_message)
+
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
 
@@ -160,7 +169,7 @@ class TestTimeSeriesApi(BaseApiTest):
         ]
         assert response.result == expected_results
 
-    def test_quantiles(self, setup_teardown: Any) -> None:
+    def test_p99(self, setup_teardown: Any) -> None:
         message = AggregateBucketRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -188,8 +197,37 @@ class TestTimeSeriesApi(BaseApiTest):
             ],
             rel=3,
         )
-        print(response.result)
-        print(expected_results)
+        assert response.result == expected_results
+
+    def test_median(self, setup_teardown: Any) -> None:
+        message = AggregateBucketRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 60)),
+            ),
+            key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
+            aggregate=AggregateBucketRequest.FUNCTION_P50,
+            granularity_secs=60 * 20,
+        )
+        response = timeseries_query(message)
+        # spans have measurement = 0, 1, 2, ...
+        # for us, starts at 60, and granularity puts 20 spans into each bucket
+        # where the first and tenth of every 20 is 100x upscaled
+        # so the P50 should be that the 10th, 30th, and 50th elements
+        # (i.e., 70, 90, and 110)
+        # T-Digest is approximate, so these numbers can be +- 3 or so.
+        expected_results = pytest.approx(
+            [
+                60 + 20 * 0 + 10,
+                60 + 20 * 1 + 10,
+                60 + 20 * 2 + 10,
+            ],
+            rel=3,
+        )
         assert response.result == expected_results
 
     def test_average(self, setup_teardown: Any) -> None:
@@ -222,3 +260,121 @@ class TestTimeSeriesApi(BaseApiTest):
             ]
         )
         assert response.result == expected_results
+
+    @pytest.mark.parametrize(
+        "aggregate, expected_result",
+        [
+            (
+                AggregateBucketRequest.FUNCTION_COUNT,
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    sum((100 if x % 10 == 0 else 1) for x in range(120)),
+                ],
+            ),
+            (
+                AggregateBucketRequest.FUNCTION_AVERAGE,
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    pytest.approx(
+                        sum(x * (100 if x % 10 == 0 else 1) for x in range(120))
+                        / sum((100 if x % 10 == 0 else 1) for x in range(120))
+                    ),
+                ],
+            ),
+            (
+                AggregateBucketRequest.FUNCTION_SUM,
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    sum(x * (100 if x % 10 == 0 else 1) for x in range(120)),
+                ],
+            ),
+            (
+                AggregateBucketRequest.FUNCTION_P50,
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(59.5, rel=0.01)],
+            ),
+            (
+                AggregateBucketRequest.FUNCTION_P95,
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(110, rel=0.01)],
+            ),
+            (
+                AggregateBucketRequest.FUNCTION_P99,
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(110, rel=0.01)],
+            ),
+        ],
+    )
+    def test_query_caching(
+        self,
+        setup_teardown: Any,
+        aggregate: AggregateBucketRequest.Function.ValueType,
+        expected_result: list[float],
+    ) -> None:
+        with patch(
+            "snuba.web.rpc.timeseries.timeseries.run_query", side_effect=run_query
+        ) as mocked_run_query:
+            # this test does a daily aggregate on a week + 9 hours of data.
+            # that is, the user is visiting the page at 09:01 GMT, so the 8 buckets returned would be:
+            # 00:00-23:99 7 days ago,
+            # 00:00-23:99 6 days ago,
+            # (etc)
+            # 00:00-23:99 yesterday
+            # 00:00-09:00 today
+
+            base_timestamp = int(BASE_TIME.replace(hour=0).timestamp())
+            # due to our caching logic, each bucket will be split into three smaller requests from 0-8, 8-16, 16-24
+            # we only have data for the 00:00-23:99 yesterday and 00:00-00:01 buckets, the rest are all 0
+            message = AggregateBucketRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(
+                        seconds=base_timestamp - 60 * 60 * 24 * 7
+                    ),
+                    end_timestamp=Timestamp(seconds=base_timestamp + 60 * 60 * 9),
+                ),
+                key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
+                aggregate=aggregate,
+                granularity_secs=60 * 60 * 24,
+            )
+            response = timeseries_query(message)
+
+            assert (
+                mocked_run_query.call_count == 3 * 7 + 2
+            )  # 3 8-hour buckets/day + 0:00-8:00 + 8:00-9:00
+
+            # we expect all buckets except the last one to be cached
+            assert list(
+                call[1]["request"].query_settings.get_clickhouse_settings()[
+                    "use_query_cache"
+                ]
+                for call in mocked_run_query.call_args_list[:-1]
+            ) == ["true"] * (3 * 7 + 1)
+
+            # we expect all buckets >4 hours old to have a long TTL
+            assert list(
+                call[1]["request"].query_settings.get_clickhouse_settings()[
+                    "query_cache_ttl"
+                ]
+                for call in mocked_run_query.call_args_list[:-2]
+            ) == [90 * 24 * 60 * 60] * (3 * 7)
+
+            assert response.result == expected_result

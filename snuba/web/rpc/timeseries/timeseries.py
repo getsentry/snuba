@@ -30,7 +30,7 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.timeseries import aggregate_functions
 
-FOUR_HOUR_GRANULARITY = 60 * 60 * 4
+EIGHT_HOUR_GRANULARITY = 60 * 60 * 8
 ONE_HOUR_GRANULARITY = 60 * 60
 
 
@@ -90,19 +90,18 @@ class TimeseriesQuerier:
         )
         treeify_or_and_conditions(query)
         settings = HTTPQuerySettings()
-        # we don't want to cache partial results, we'll never get cache hits on those
+        # we don't want to cache the "last bucket", we'll never get cache hits on it
         if (end_ts - start_ts) % bucket_size_secs == 0:
-            # we also don't want to store things in the query cache if they are too recent, needs to be >4 hours ago
+            clickhouse_settings = {
+                "use_query_cache": "true",
+                "query_cache_ttl": 60 * 5,  # 5 minutes
+            }
+            # store things in the query cache long-term if they are >4 hours old
             if end_ts < time.time() - 4 * 60 * 60:
-                settings.set_clickhouse_settings(
-                    {
-                        "use_query_cache": "true",
-                        "query_cache_ttl": 90
-                        * 24
-                        * 60
-                        * 60,  # store this query cache entry for 90 days
-                    }
-                )
+                clickhouse_settings["query_cache_ttl"] = (
+                    90 * 24 * 60 * 60
+                )  # store this query cache entry for 90 days
+            settings.set_clickhouse_settings(clickhouse_settings)
 
         return SnubaRequest(
             id=str(uuid.uuid4()),
@@ -141,10 +140,10 @@ class TimeseriesQuerier:
 
     def get_request_granularity(self) -> int:
         if (
-            self.granularity_secs % FOUR_HOUR_GRANULARITY == 0
-            and self.granularity_secs != FOUR_HOUR_GRANULARITY
+            self.granularity_secs % EIGHT_HOUR_GRANULARITY == 0
+            and self.granularity_secs != EIGHT_HOUR_GRANULARITY
         ):
-            return FOUR_HOUR_GRANULARITY
+            return EIGHT_HOUR_GRANULARITY
         if self.granularity_secs % ONE_HOUR_GRANULARITY == 0:
             return ONE_HOUR_GRANULARITY
         return self.granularity_secs

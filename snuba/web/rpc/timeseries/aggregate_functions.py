@@ -96,6 +96,8 @@ def merge_avg_states(states: Iterable[Any]) -> float:
     for state in states:
         total_sum += state[0]
         total_count += state[1]
+    if total_count == 0:
+        return 0
     return total_sum / total_count
 
 
@@ -145,10 +147,10 @@ def get_aggregate_func(
         quantile_number = AGGREGATE_QUANTILE_FUNCTIONS[request.aggregate]
         return AggregateFunction(
             expression=f.hex(
-                cf.quantileTDigestWeightedState(
+                cf.quantileTDigestWeightedIfState(
                     0
                 )(  # the actual quantile doesn't affect the state
-                    key_expr, sampling_weight_expr
+                    key_expr, sampling_weight_expr, exists_condition
                 ),
                 alias="quantile",
             ),
