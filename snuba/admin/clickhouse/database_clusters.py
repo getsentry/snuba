@@ -27,7 +27,12 @@ def get_node_info() -> Sequence[Node]:
     node_info = []
     hosts = set()
     for storage_info in get_storage_info():
-        for node in storage_info["dist_nodes"] + storage_info["local_nodes"]:
+        for node in storage_info["dist_nodes"]:
+            hosts.add(
+                HostInfo(node["host"], node["port"], storage_info["storage_name"])
+            )
+
+        for node in storage_info["local_nodes"]:
             hosts.add(
                 HostInfo(node["host"], node["port"], storage_info["storage_name"])
             )
