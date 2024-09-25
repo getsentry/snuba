@@ -1,8 +1,11 @@
+mod arroyo_utils;
 mod config;
 mod consumer;
 mod factory;
 mod logging;
 mod metrics;
+mod mutations;
+mod mutations_factory;
 mod processors;
 mod runtime_config;
 mod strategies;
@@ -27,6 +30,7 @@ pub use config::{
 };
 pub use factory::ConsumerStrategyFactory;
 pub use metrics::statsd::StatsDBackend;
+pub use mutations_factory::MutConsumerStrategyFactory;
 pub use processors::{ProcessingFunction, ProcessingFunctionType, PROCESSORS};
 pub use strategies::noop::Noop;
 pub use strategies::python::PythonTransformStep;

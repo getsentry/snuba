@@ -92,7 +92,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         debug: bool = True,
     ) -> Any:
         return self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "query": {
@@ -185,7 +185,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
     def test_bad_delete(self) -> None:
         res = self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "debug": True,
@@ -198,9 +198,8 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         assert "'query' is a required property" in res.get_json()["error"]["message"]
 
         # test for invalid column types
-        set_config("storage_deletes_enabled", 1)
         res = self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "query": {

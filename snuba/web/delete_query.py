@@ -125,7 +125,7 @@ def _delete_from_table(
 
 
 def deletes_are_enabled() -> bool:
-    return bool(get_config("storage_deletes_enabled", 0))
+    return bool(get_config("storage_deletes_enabled", 1))
 
 
 def _get_rows_to_delete(

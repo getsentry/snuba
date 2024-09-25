@@ -15,6 +15,7 @@ import MQLQueries from "SnubaAdmin/mql_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
+import ViewCustomJobs from "SnubaAdmin/manual_jobs";
 import DatabaseClusters from "./database_clusters";
 
 const NAV_ITEMS = [
@@ -94,6 +95,11 @@ const NAV_ITEMS = [
     id: "delete-tool",
     display: "🗑️ Delete Tool",
     component: DeleteTool,
+  },
+  {
+    id: "run-custom-jobs",
+    display: "▶️ View/Run Custom Jobs",
+    component: ViewCustomJobs,
   },
   {
     id: "database-clusters",
