@@ -316,7 +316,7 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<storage:storage>/", methods=["DELETE"])
+@application.route("/<storage:storage>", methods=["DELETE"])
 @util.time_request("delete_query")
 @rate_limit(RateLimitParameters("delete", "bucket", None, 1))
 def storage_delete(
