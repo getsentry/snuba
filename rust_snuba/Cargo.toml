@@ -55,7 +55,6 @@ zstd = "0.12.3"
 serde_with = "3.8.1"
 seq-macro = "0.3"
 
-
 [patch.crates-io]
 rdkafka = { git = "https://github.com/fede1024/rust-rdkafka" }
 
