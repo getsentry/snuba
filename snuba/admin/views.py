@@ -1275,10 +1275,6 @@ def get_job_specs() -> Response:
 
 
 @application.route("/clickhouse_node_info")
-@check_tool_perms(tools=[AdminTools.SYSTEM_QUERIES, AdminTools.QUERY_TRACING])
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
 def clickhouse_node_info() -> Response:
-    return Response(
-        json.dumps(list(map(asdict, get_node_info()))),
-        200,
-        {"Content-Type": "application/json"},
-    )
+    return make_response(jsonify(get_node_info()), 200)
