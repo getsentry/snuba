@@ -15,6 +15,7 @@ import MQLQueries from "SnubaAdmin/mql_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
+import DatabaseClusters from "./database_clusters";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -93,6 +94,11 @@ const NAV_ITEMS = [
     id: "delete-tool",
     display: "🗑️ Delete Tool",
     component: DeleteTool,
+  },
+  {
+    id: "database-clusters",
+    display: "🗂️ Database Clusters",
+    component: DatabaseClusters,
   },
 ];
 

@@ -39,6 +39,7 @@ import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
+import { ClickhouseNodeInfo } from "./database_clusters/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
@@ -60,6 +61,7 @@ interface Client {
   getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
+  getClickhouseNodeInfo: () => Promise<[ClickhouseNodeInfo]>
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
@@ -204,6 +206,11 @@ function Client() {
               storage.query_node
           );
         });
+    },
+
+    getClickhouseNodeInfo: () => {
+      const url = baseUrl + "clickhouse_node_info";
+      return fetch(url).then((resp) => resp.json());
     },
 
     getSnubaDatasetNames: () => {
