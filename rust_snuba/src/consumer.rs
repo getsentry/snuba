@@ -21,6 +21,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
+use crate::mutations_factory::MutConsumerStrategyFactory;
 use crate::processors;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
@@ -38,6 +39,7 @@ pub fn consumer(
     enforce_schema: bool,
     max_poll_interval_ms: usize,
     async_inserts: bool,
+    mutations_mode: bool,
     python_max_queue_depth: Option<usize>,
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
@@ -61,6 +63,7 @@ pub fn consumer(
             stop_at_timestamp,
             batch_write_timeout_ms,
             max_bytes_before_external_group_by,
+            mutations_mode,
         )
     });
 }
@@ -82,6 +85,7 @@ pub fn consumer_impl(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_bytes_before_external_group_by: Option<usize>,
+    mutations_mode: bool,
 ) -> usize {
     setup_logging();
 
@@ -228,33 +232,57 @@ pub fn consumer_impl(
         None
     };
 
-    let factory = ConsumerStrategyFactory {
-        storage_config: first_storage,
-        env_config,
-        logical_topic_name,
-        max_batch_size,
-        max_batch_time,
-        processing_concurrency: ConcurrencyConfig::new(concurrency),
-        clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
-        commitlog_concurrency: ConcurrencyConfig::new(2),
-        replacements_concurrency: ConcurrencyConfig::new(4),
-        async_inserts,
-        python_max_queue_depth,
-        use_rust_processor,
-        health_check_file: health_check_file.map(ToOwned::to_owned),
-        enforce_schema,
-        commit_log_producer,
-        replacements_config,
-        physical_consumer_group: consumer_group.to_owned(),
-        physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
-        accountant_topic_config: consumer_config.accountant_topic,
-        stop_at_timestamp,
-        batch_write_timeout,
-        max_bytes_before_external_group_by,
-    };
-
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
-    let processor = StreamProcessor::with_kafka(config, factory, topic, dlq_policy);
+
+    let processor = if mutations_mode {
+        let mut_factory = MutConsumerStrategyFactory {
+            storage_config: first_storage,
+            env_config,
+            logical_topic_name,
+            max_batch_size,
+            max_batch_time,
+            processing_concurrency: ConcurrencyConfig::new(concurrency),
+            clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
+            async_inserts,
+            python_max_queue_depth,
+            use_rust_processor,
+            health_check_file: health_check_file.map(ToOwned::to_owned),
+            enforce_schema,
+            physical_consumer_group: consumer_group.to_owned(),
+            physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
+            accountant_topic_config: consumer_config.accountant_topic,
+            batch_write_timeout,
+        };
+
+        StreamProcessor::with_kafka(config, mut_factory, topic, dlq_policy)
+    } else {
+        let factory = ConsumerStrategyFactory {
+            storage_config: first_storage,
+            env_config,
+            logical_topic_name,
+            max_batch_size,
+            max_batch_time,
+            processing_concurrency: ConcurrencyConfig::new(concurrency),
+            clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
+            commitlog_concurrency: ConcurrencyConfig::new(2),
+            replacements_concurrency: ConcurrencyConfig::new(4),
+            async_inserts,
+            python_max_queue_depth,
+            use_rust_processor,
+            health_check_file: health_check_file.map(ToOwned::to_owned),
+            enforce_schema,
+            commit_log_producer,
+            replacements_config,
+            physical_consumer_group: consumer_group.to_owned(),
+            physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
+            accountant_topic_config: consumer_config.accountant_topic,
+            stop_at_timestamp,
+            batch_write_timeout,
+            max_bytes_before_external_group_by,
+        };
+
+        StreamProcessor::with_kafka(config, factory, topic, dlq_policy)
+    };
 
     let mut handle = processor.get_handle();
 

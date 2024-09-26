@@ -92,7 +92,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         debug: bool = True,
     ) -> Any:
         return self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "query": {
@@ -185,7 +185,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
     def test_bad_delete(self) -> None:
         res = self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "debug": True,
@@ -199,7 +199,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
         # test for invalid column types
         res = self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "query": {
