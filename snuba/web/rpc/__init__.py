@@ -12,7 +12,7 @@ from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
 
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc.span_samples import span_samples_query
-from snuba.web.rpc.timeseries import timeseries_query
+from snuba.web.rpc.timeseries.timeseries import timeseries_query
 from snuba.web.rpc.trace_item_attribute_list import trace_item_attribute_list_query
 from snuba.web.rpc.trace_item_attribute_values import trace_item_attribute_values_query
 
