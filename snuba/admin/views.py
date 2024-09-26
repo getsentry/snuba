@@ -22,6 +22,7 @@ from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.database_clusters import get_node_info
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -1263,3 +1264,9 @@ def deletes_enabled() -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def get_job_specs() -> Response:
     return make_response(jsonify(list_job_specs()), 200)
+
+
+@application.route("/clickhouse_node_info")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_node_info() -> Response:
+    return make_response(jsonify(get_node_info()), 200)
