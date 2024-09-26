@@ -7,6 +7,7 @@ from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -38,11 +39,16 @@ class DeletesNotEnabledError(Exception):
     pass
 
 
+class TooManyOngoingMutationsError(Exception):
+    pass
+
+
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
     columns: Dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
+    max_ongoing_mutations: int = 5,
 ) -> dict[str, Result]:
     """
     Inputs:
@@ -55,6 +61,11 @@ def delete_from_storage(
             }
             represents
             DELETE FROM ... WHERE id in (1,2,3) AND status='failed'
+        attribution_info - see other parts of repo
+        max_ongoing_mutations - the max number of mutations that can be in-progress
+            on any replica in the clickhouse cluster for the delete to be scheduled.
+            If any replica in the cluster has more than max_ongoing_mutations in progress,
+            then the delete will fail and wont be scheduled.
 
     Deletes all rows in the given storage, that satisfy the conditions
     defined in 'columns' input.
@@ -73,6 +84,33 @@ def delete_from_storage(
 
     results: dict[str, Result] = {}
     attr_info = _get_attribution_info(attribution_info)
+
+    # fail if too many mutations ongoing
+    cluster = storage.get_cluster()
+    if cluster.is_single_node():
+        query = f"""
+    SELECT count() as cnt
+    FROM system.mutations
+    WHERE table IN ({", ".join(map(repr, delete_settings.tables))}) AND is_done=0
+"""
+    else:
+        query = f"""
+SELECT max(cnt)
+FROM (
+    SELECT hostname() as host, count() as cnt
+    FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', mutations)
+    WHERE table IN ({", ".join(map(repr, delete_settings.tables))}) AND is_done=0
+    GROUP BY host
+    )
+"""
+    num_ongoing_mutations = (
+        cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        .execute(query)
+        .results[0][0]
+    )
+    if num_ongoing_mutations > max_ongoing_mutations:
+        raise TooManyOngoingMutationsError()
+
     for table in delete_settings.tables:
         result = _delete_from_table(storage, table, columns, attr_info)
         results[table] = result
