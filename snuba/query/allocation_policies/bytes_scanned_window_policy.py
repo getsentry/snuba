@@ -258,7 +258,12 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
             self.metrics.increment(
                 "progress_bytes_scanned",
                 progress_bytes_scanned,
-                tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
+                tags={
+                    "referrer": str(tenant_ids.get("referrer", "no_referrer")),
+                    "organization_id": str(
+                        tenant_ids.get("organization_id", "no_organization_id")
+                    ),
+                },
             )
 
         return progress_bytes_scanned
