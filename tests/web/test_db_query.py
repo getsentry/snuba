@@ -309,6 +309,8 @@ def test_db_query_success() -> None:
             "is_successful": False,
             "is_rejected": False,
             "is_throttled": True,
+            "rejection_storage_key": None,
+            "throttle_storage_key": "StorageKey.ERRORS_RO",
             "rejected_by": {},
             "throttled_by": {
                 "policy": "BytesScannedRejectingPolicy",
@@ -316,6 +318,7 @@ def test_db_query_success() -> None:
                 "quota_unit": "bytes",
                 "suggestion": "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API",
                 "throttle_threshold": 1706666666666,
+                "storage_key": "StorageKey.ERRORS_RO",
             },
         },
         "details": {
@@ -590,6 +593,8 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                 "is_successful": False,
                 "is_rejected": False,
                 "is_throttled": True,
+                "rejection_storage_key": None,
+                "throttle_storage_key": "StorageKey.DOESNTMATTER",
                 "rejected_by": {},
                 "throttled_by": {
                     "policy": "ThrottleAllocationPolicy1",
@@ -597,6 +602,7 @@ def test_apply_allocation_policies_quota_sets_throttle_policy() -> None:
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
                     "throttle_threshold": 1000000000000,
+                    "storage_key": "StorageKey.DOESNTMATTER",
                 },
             },
         }
@@ -666,12 +672,15 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                 "is_successful": False,
                 "is_rejected": True,
                 "is_throttled": True,
+                "rejection_storage_key": "StorageKey.DOESNTMATTER",
+                "throttle_storage_key": "StorageKey.DOESNTMATTER",
                 "rejected_by": {
                     "policy": "RejectAllocationPolicy",
                     "rejection_threshold": MAX_THRESHOLD,
                     "quota_used": 0,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
+                    "storage_key": "StorageKey.DOESNTMATTER",
                 },
                 "throttled_by": {
                     "policy": "RejectAllocationPolicy",
@@ -679,6 +688,7 @@ def test_db_query_with_rejecting_allocation_policy() -> None:
                     "quota_used": 0,
                     "quota_unit": NO_UNITS,
                     "suggestion": NO_SUGGESTION,
+                    "storage_key": "StorageKey.DOESNTMATTER",
                 },
             },
             "details": {
@@ -909,12 +919,15 @@ def test_allocation_policy_updates_quota() -> None:
             "is_successful": False,
             "is_rejected": True,
             "is_throttled": False,
+            "rejection_storage_key": "StorageKey.DOESNTMATTER",
+            "throttle_storage_key": None,
             "rejected_by": {
                 "policy": "CountQueryPolicy",
                 "rejection_threshold": MAX_QUERIES_TO_RUN,
                 "quota_used": queries_run,
                 "quota_unit": "queries",
                 "suggestion": "scan less concurrent queries",
+                "storage_key": "StorageKey.DOESNTMATTER",
             },
             "throttled_by": {},
         },

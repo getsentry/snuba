@@ -482,6 +482,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     assert response.json is not None and len(response.json) == 1
     [data] = response.json
+    assert data["query_type"] == "select"
     assert data["policy_name"] == "FakePolicy"
     assert data["optional_config_definitions"] == [
         {

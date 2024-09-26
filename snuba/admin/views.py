@@ -940,14 +940,6 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     add_policy_data(policies, "select")
     add_policy_data(delete_policies, "delete")
 
-    data = [
-        {
-            "policy_name": policy.config_key(),
-            "configs": policy.get_current_configs(),
-            "optional_config_definitions": policy.get_optional_config_definitions_json(),
-        }
-        for policy in policies
-    ]
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 

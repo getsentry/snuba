@@ -43,6 +43,7 @@ it("should display allocation policy configs once a storage is selected", async 
         },
       ],
       optional_config_definitions: [],
+      query_type: "select",
     },
     {
       policy_name: "some_other_policy",
@@ -56,6 +57,7 @@ it("should display allocation policy configs once a storage is selected", async 
         },
       ],
       optional_config_definitions: [],
+      query_type: "select",
     },
   ];
 
