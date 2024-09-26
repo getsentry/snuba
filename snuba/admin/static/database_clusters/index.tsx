@@ -6,13 +6,10 @@ import { ClickhouseNodeInfo } from "./types";
 
 function DatabaseClusters(props: { api: Client }) {
     const [nodeData, setNodeData] = useState<ClickhouseNodeInfo[]>([]);
-    const [versionList, setVersionList] = useState<string[]>([]);
 
     useEffect(() => {
         props.api.getClickhouseNodeInfo().then((res) => {
             setNodeData(res);
-            setVersionList([... new Set(res.map(nodeInfo => nodeInfo.version))]);
-            console.log([... new Set(res.map(nodeInfo => nodeInfo.version))]);
         });
     }, []);
 
