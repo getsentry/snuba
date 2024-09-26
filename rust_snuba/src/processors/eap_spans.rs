@@ -132,7 +132,7 @@ fn fnv_1a(input: &[u8]) -> u32 {
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub(crate) struct FromPrimaryKey {
     pub organization_id: u64,
-    pub start_timestamp_ms: u64,
+    pub start_timestamp: f64,
     pub trace_id: Uuid,
     pub span_id: String,
 }
@@ -141,7 +141,7 @@ impl From<FromPrimaryKey> for PrimaryKey {
     fn from(from: FromPrimaryKey) -> PrimaryKey {
         PrimaryKey {
             organization_id: from.organization_id,
-            _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
+            _sort_timestamp: from.start_timestamp as u32,
             trace_id: from.trace_id,
             span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
         }
@@ -153,7 +153,7 @@ impl From<FromSpanMessage> for EAPSpan {
         let mut res = Self {
             primary_key: FromPrimaryKey {
                 organization_id: from.organization_id,
-                start_timestamp_ms: from.start_timestamp_ms,
+                start_timestamp: from.start_timestamp_ms as f64 / 1000.0,
                 trace_id: from.trace_id,
                 span_id: from.span_id,
             }
