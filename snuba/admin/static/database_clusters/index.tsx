@@ -6,10 +6,13 @@ import { ClickhouseNodeInfo } from "./types";
 
 function DatabaseClusters(props: { api: Client }) {
     const [nodeData, setNodeData] = useState<ClickhouseNodeInfo[]>([]);
+    const [versionList, setVersionList] = useState<string[]>([]);
 
     useEffect(() => {
         props.api.getClickhouseNodeInfo().then((res) => {
             setNodeData(res);
+            setVersionList([... new Set(res.map(nodeInfo => nodeInfo.version))]);
+            console.log([... new Set(res.map(nodeInfo => nodeInfo.version))]);
         });
     }, []);
 
@@ -34,6 +37,7 @@ function DatabaseClusters(props: { api: Client }) {
             {
                 accessorKey: 'version',
                 header: 'Version',
+                filterVariant: 'multi-select',
             },
         ],
         [],
@@ -42,6 +46,8 @@ function DatabaseClusters(props: { api: Client }) {
     const table = useMantineReactTable({
         columns,
         data: nodeData,
+        initialState: { showColumnFilters: true },
+        enableFacetedValues: true,
     });
 
     return <MantineReactTable table={table} />;
