@@ -181,9 +181,11 @@ impl ClickhouseTestClient {
         let hostname = "127.0.0.1";
         let http_port = 8123;
         let url = format!("http://{hostname}:{http_port}");
+        let uuid = Uuid::new_v4().to_string();
+        let table_id = uuid.split("-").next().unwrap();
 
         let client = reqwest::Client::new();
-        let test_table = format!("{table}_test_local\n");
+        let test_table = format!("{table}_{table_id}_local\n");
 
         let body =
             format!("CREATE TABLE IF NOT EXISTS {test_table} AS {table}_local\n").into_bytes();
@@ -192,9 +194,9 @@ impl ClickhouseTestClient {
         client.post(url.clone()).body(body).send().await?;
 
         Ok(Self {
-            url: url,
+            url,
             table: test_table,
-            client: client,
+            client,
         })
     }
 
