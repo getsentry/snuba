@@ -52,7 +52,7 @@ columns: List[Column[Modifiers]] = [
     Column("name", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column("sampling_weight", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
-    Column("sign", Int(8, modifiers=Modifiers(codecs=["DoubleDelta"])),
+    Column("sign", Int(8, modifiers=Modifiers(codecs=["DoubleDelta"]))),
 ]
 columns.extend(
     [
