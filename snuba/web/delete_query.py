@@ -96,7 +96,7 @@ def delete_from_storage(
     assert max_ongoing_mutations
     if ongoing_mutations > max_ongoing_mutations:
         raise TooManyOngoingMutationsError(
-            "max ongoing mutations to do a delete is {max_ongoing_mutations}, but at least one replica has {num_ongoing_mutations} ongoing"
+            f"max ongoing mutations to do a delete is {max_ongoing_mutations}, but at least one replica has {ongoing_mutations} ongoing"
         )
 
     for table in delete_settings.tables:

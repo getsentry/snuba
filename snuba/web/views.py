@@ -351,10 +351,10 @@ def storage_delete(
                 jsonify({"error": details}),
                 400,
             )
-        except TooManyOngoingMutationsError:
+        except TooManyOngoingMutationsError as e:
             details = {
                 "type": "too_many_ongoing_mutations",
-                "message": "there are too many ongoing mutations on the requested storage, please try again.",
+                "message": str(e),
             }
             return make_response(
                 jsonify({"error": details}),

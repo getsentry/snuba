@@ -232,7 +232,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             assert response.status_code == 503
             assert (
                 json.loads(response.data)["error"]["message"]
-                == "there are too many ongoing mutations on the requested storage, please try again."
+                == f"max ongoing mutations to do a delete is {settings.MAX_ONGOING_MUTATIONS_FOR_DELETE}, but at least one replica has {settings.MAX_ONGOING_MUTATIONS_FOR_DELETE+1} ongoing"
             )
 
     def test_simple_search_query(self) -> None:
