@@ -14,8 +14,7 @@ use uuid::Uuid;
 use crate::mutations::parser::MutationBatch;
 use crate::processors::eap_spans::{AttributeMap, PrimaryKey, ATTRS_SHARD_FACTOR};
 
-use super::parser::Update;
-
+use tokio::runtime::Runtime;
 #[derive(Clone)]
 pub struct ClickhouseWriter {
     url: String,
@@ -302,7 +301,7 @@ mod tests {
 
         assert!(mutation.unwrap().contains("{'a':'b'}"));
 
-        stest_client.drop_table().await;
+        test_client.drop_table();
     }
 
     #[test]
