@@ -15,7 +15,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.query import run_query
-from snuba.web.rpc.timeseries.timeseries import timeseries_query
+from snuba.web.rpc.v1alpha.timeseries.timeseries import timeseries_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -136,7 +136,7 @@ class TestTimeSeriesApi(BaseApiTest):
             granularity_secs=60,
         )
         response = self.app.post(
-            "/rpc/AggregateBucketRequest", data=message.SerializeToString()
+            "/rpc/AggregateBucketRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200
 
@@ -327,7 +327,8 @@ class TestTimeSeriesApi(BaseApiTest):
         expected_result: list[float],
     ) -> None:
         with patch(
-            "snuba.web.rpc.timeseries.timeseries.run_query", side_effect=run_query
+            "snuba.web.rpc.v1alpha.timeseries.timeseries.run_query",
+            side_effect=run_query,
         ) as mocked_run_query:
             # this test does a daily aggregate on a week + 9 hours of data.
             # that is, the user is visiting the page at 09:01 GMT, so the 8 buckets returned would be:
