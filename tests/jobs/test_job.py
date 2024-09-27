@@ -9,6 +9,7 @@ from snuba.manual_jobs.job_loader import _JobLoader
 from snuba.manual_jobs.runner import (
     JobLockedException,
     JobStatus,
+    JobStatusException,
     _acquire_job_lock,
     get_job_status,
     run_job,
@@ -41,6 +42,8 @@ def test_job_status_changes_to_finished() -> None:
     assert get_job_status(JOB_ID) is None
     run_job(test_job_spec, False)
     assert get_job_status(JOB_ID) == JobStatus.FINISHED
+    with pytest.raises(JobStatusException):
+        run_job(test_job_spec, False)
 
 
 @pytest.mark.redis_db

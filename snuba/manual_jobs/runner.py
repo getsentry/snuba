@@ -22,7 +22,14 @@ class JobStatus(StrEnum):
 
 class JobLockedException(SerializableException):
     def __init__(self, job_id: str):
-        super().__init__(f"Job {job_id} lock exists, not able to run")
+        super().__init__(f"Job {job_id} lock exists, not available to run")
+
+
+class JobStatusException(SerializableException):
+    def __init__(self, job_id: str, status: JobStatus):
+        super().__init__(
+            f"Job {job_id} has run before, status = {status}, not available to run"
+        )
 
 
 MANIFEST_FILENAME = "job_manifest.json"
@@ -98,9 +105,7 @@ def list_job_specs(
 def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:
     current_job_status = get_job_status(job_spec.job_id)
     if current_job_status is not None and current_job_status != JobStatus.NOT_STARTED:
-        raise SerializableException(
-            f"attempting to run job that has been started, status = {current_job_status}"
-        )
+        raise JobStatusException(job_id=job_spec.job_id, status=current_job_status)
 
     have_lock = _acquire_job_lock(job_spec.job_id)
     if not have_lock:
