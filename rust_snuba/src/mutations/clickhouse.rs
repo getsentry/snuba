@@ -1,11 +1,9 @@
-use std::collections::BTreeMap;
-use std::time::Duration;
-
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
 use rust_arroyo::types::Message;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
@@ -13,8 +11,6 @@ use uuid::Uuid;
 
 use crate::mutations::parser::MutationBatch;
 use crate::processors::eap_spans::{AttributeMap, PrimaryKey, ATTRS_SHARD_FACTOR};
-
-use tokio::runtime::Runtime;
 #[derive(Clone)]
 pub struct ClickhouseWriter {
     url: String,
@@ -178,6 +174,7 @@ struct ClickhouseTestClient {
     client: Client,
 }
 
+#[allow(dead_code)]
 impl ClickhouseTestClient {
     pub async fn new(table: String) -> anyhow::Result<Self> {
         // hardcoding local Clickhouse settings
@@ -247,7 +244,7 @@ impl ClickhouseTestClient {
 
     pub async fn drop_table(&self) -> anyhow::Result<()> {
         let table = &self.table;
-        let drop = format!("DROP TABLE IF EXISTS {table}\n").into_bytes();
+        let drop = format!("DROP TABLE {table}\n").into_bytes();
 
         self.client.post(&self.url).body(drop).send().await?;
 
@@ -291,17 +288,17 @@ mod tests {
             .await
             .unwrap();
 
-        test_client.insert_data(primary_key).await;
+        let _ = test_client.insert_data(primary_key).await;
 
         let all_queries = format_query(&test_client.table, &batch);
-        test_client.run_mutation(all_queries).await;
+        let _ = test_client.run_mutation(all_queries).await;
 
         // it is the test writer's responsibility to provide assertions
         let mutation = test_client.optimize_table().await;
 
         assert!(mutation.unwrap().contains("{'a':'b'}"));
 
-        test_client.drop_table();
+        let _ = test_client.drop_table().await;
     }
 
     #[test]
