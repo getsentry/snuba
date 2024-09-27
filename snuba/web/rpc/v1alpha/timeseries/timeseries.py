@@ -65,7 +65,7 @@ class TimeseriesQuerier:
     @staticmethod
     def get_clickhouse_settings(
         start_ts: int, is_full_bucket: bool, bucket_size_secs: int
-    ) -> Optional[MutableMapping[str, any]]:
+    ) -> Optional[MutableMapping[str, Any]]:
         # we don't want to cache the "last bucket", we'll never get cache hits on it
         if not is_full_bucket:
             return None
