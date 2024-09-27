@@ -1,3 +1,5 @@
+from threading import Thread
+from time import sleep
 from unittest.mock import patch
 
 import pytest
@@ -19,6 +21,15 @@ class FailJob(Job):
         raise SerializableException("Intended failure")
 
 
+class SlowJob(Job):
+    def __init__(self):
+        self.stop = False
+
+    def execute(self):
+        while not self.stop:
+            sleep(0.005)
+
+
 @pytest.mark.redis_db
 def test_job_status_changes_to_finished() -> None:
     assert get_job_status(JOB_ID) is None
@@ -33,6 +44,21 @@ def test_job_with_exception_causes_failure() -> None:
         assert get_job_status(JOB_ID) is None
         run_job(test_job_spec, False)
         assert get_job_status(JOB_ID) == JobStatus.FAILED
+
+
+@pytest.mark.redis_db
+def test_slow_job_stay_running() -> None:
+    with patch.object(_JobLoader, "get_job_instance") as MockGetInstance:
+        job = SlowJob()
+        MockGetInstance.return_value = job
+        assert get_job_status(JOB_ID) is None
+        t = Thread(
+            target=run_job, name="slow-background-job", args=[test_job_spec, False]
+        )
+        t.start()
+        sleep(0.1)
+        assert get_job_status(JOB_ID) == JobStatus.RUNNING
+        job.stop = True
 
 
 @pytest.mark.redis_db
