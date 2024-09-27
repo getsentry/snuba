@@ -20,6 +20,11 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class JobLockedException(SerializableException):
+    def __init__(self, job_id: str):
+        super().__init__(f"Job {job_id} lock exists, not able to run")
+
+
 MANIFEST_FILENAME = "job_manifest.json"
 
 
@@ -99,9 +104,7 @@ def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:
 
     have_lock = _acquire_job_lock(job_spec.job_id)
     if not have_lock:
-        raise SerializableException(
-            "could not acquire lock, another thread is attempting to run job"
-        )
+        raise JobLockedException(job_spec.job_id)
 
     current_job_status = _set_job_status(job_spec.job_id, JobStatus.NOT_STARTED)
 

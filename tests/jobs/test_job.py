@@ -6,7 +6,13 @@ import pytest
 
 from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.job_loader import _JobLoader
-from snuba.manual_jobs.runner import JobStatus, get_job_status, run_job
+from snuba.manual_jobs.runner import (
+    JobLockedException,
+    JobStatus,
+    _acquire_job_lock,
+    get_job_status,
+    run_job,
+)
 from snuba.utils.serializable_exception import SerializableException
 
 JOB_ID = "abc1234"
@@ -64,3 +70,10 @@ def test_slow_job_stay_running() -> None:
 @pytest.mark.redis_db
 def test_job_status_with_invalid_job_id() -> None:
     assert get_job_status("invalid_job_id") is None
+
+
+@pytest.mark.redis_db
+def test_job_lock() -> None:
+    _acquire_job_lock(JOB_ID)
+    with pytest.raises(JobLockedException):
+        run_job(test_job_spec, False)
