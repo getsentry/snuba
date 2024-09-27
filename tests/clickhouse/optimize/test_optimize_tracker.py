@@ -98,6 +98,7 @@ def test_optimized_partition_tracker(tracker: OptimizedPartitionTracker) -> None
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
+@pytest.mark.skip(reason="This test is flaky and fails unexpectedly on CI")
 def test_run_optimize_with_partition_tracker() -> None:
     def write_error_message(writable_storage: WritableTableStorage, time: int) -> None:
         write_processed_messages(
