@@ -60,7 +60,7 @@ REDIS_CLUSTERS = {
         (7, "dlq"),
         (8, "optimize"),
         (9, "admin_auth"),
-        (10, "job"),
+        (10, "manual_jobs"),
     ]
 }
 VALIDATE_DATASET_YAMLS_ON_STARTUP = True

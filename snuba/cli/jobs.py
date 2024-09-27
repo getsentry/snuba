@@ -25,6 +25,11 @@ def list(*, json_manifest: str) -> None:
     click.echo(job_specs)
 
 
+def _run_job_and_echo_status(job_spec: JobSpec, dry_run: bool) -> None:
+    status = run_job(job_spec, dry_run)
+    click.echo(f"resulting job status = {status}")
+
+
 @jobs.command()
 @click.option("--json_manifest", default=MANIFEST_FILENAME)
 @click.option("--job_id")
@@ -37,7 +42,7 @@ def run_from_manifest(*, json_manifest: str, job_id: str, dry_run: bool) -> None
     if job_id not in job_specs.keys():
         raise click.ClickException("Provide a valid job id")
 
-    run_job(job_specs[job_id], dry_run)
+    _run_job_and_echo_status(job_specs[job_id], dry_run)
 
 
 def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
@@ -57,10 +62,10 @@ def run(*, job_type: str, job_id: str, dry_run: bool, pairs: Tuple[str, ...]) ->
         raise click.ClickException(JOB_SPECIFICATION_ERROR_MSG)
     job_spec = JobSpec(job_id=job_id, job_type=job_type, params=_parse_params(pairs))
 
-    run_job(job_spec, dry_run)
+    _run_job_and_echo_status(job_spec, dry_run)
 
 
 @jobs.command()
 @click.option("--job_id")
-def status(*, job_id: str) -> str:
+def status(*, job_id: str) -> None:
     click.echo(get_job_status(job_id))

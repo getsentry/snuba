@@ -1,5 +1,5 @@
 import os
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Mapping, Optional
 
 import simplejson
@@ -10,10 +10,10 @@ from snuba.manual_jobs.job_loader import _JobLoader
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.serializable_exception import SerializableException
 
-redis_client = get_redis_client(RedisClientKey.JOB)
+_redis_client = get_redis_client(RedisClientKey.MANUAL_JOBS)
 
 
-class JobStatus(Enum):
+class JobStatus(StrEnum):
     RUNNING = "running"
     FINISHED = "finished"
     NOT_STARTED = "not_started"
@@ -60,21 +60,28 @@ def _job_status_key(job_id: str) -> str:
 
 
 def _acquire_job_lock(job_id: str) -> bool:
-    return redis_client.set(
-        name=_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
+    return bool(
+        _redis_client.set(
+            name=_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
+        )
     )
 
 
-def _release_job_lock(job_id: str) -> bool:
-    redis_client.delete(_job_lock_key(job_id))
+def _release_job_lock(job_id: str) -> None:
+    _redis_client.delete(_job_lock_key(job_id))
 
 
-def _set_job_status(job_id: str, status: JobStatus) -> bool:
-    return redis_client.set(name=_job_status_key(job_id), value=status.name)
+def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
+    _redis_client.set(name=_job_status_key(job_id), value=status.value)
+    return status
 
 
 def get_job_status(job_id: str) -> Optional[JobStatus]:
-    return redis_client.get(name=_job_status_key(job_id))
+    redis_status = _redis_client.get(name=_job_status_key(job_id))
+    if redis_status is None:
+        return redis_status
+    else:
+        return JobStatus(redis_status.decode("utf-8"))
 
 
 def list_job_specs(
@@ -83,7 +90,7 @@ def list_job_specs(
     return _read_manifest_from_path(manifest_filename)
 
 
-def run_job(job_spec: JobSpec, dry_run: bool):
+def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:
     current_job_status = get_job_status(job_spec.job_id)
     if current_job_status is not None and current_job_status != JobStatus.NOT_STARTED:
         raise SerializableException(
@@ -92,18 +99,22 @@ def run_job(job_spec: JobSpec, dry_run: bool):
 
     have_lock = _acquire_job_lock(job_spec.job_id)
     if not have_lock:
-        raise SerializableException("could not acquire lock, job already running")
+        raise SerializableException(
+            "could not acquire lock, another thread is attempting to run job"
+        )
 
-    _set_job_status(job_spec.job_id, JobStatus.NOT_STARTED)
+    current_job_status = _set_job_status(job_spec.job_id, JobStatus.NOT_STARTED)
 
     job_to_run = _JobLoader.get_job_instance(job_spec, dry_run)
 
     try:
-        _set_job_status(job_spec.job_id, JobStatus.RUNNING)
+        current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
         job_to_run.execute()
-        _set_job_status(job_spec.job_id, JobStatus.FINISHED)
+        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
     except BaseException:
-        _set_job_status(job_spec.job_id, JobStatus.FAILED)
+        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
         capture_exception()
     finally:
         _release_job_lock(job_spec.job_id)
+
+    return current_job_status

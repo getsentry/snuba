@@ -114,7 +114,7 @@ class RedisClientKey(Enum):
     DLQ = "dlq"
     OPTIMIZE = "optimize"
     ADMIN_AUTH = "admin_auth"
-    JOB = "job"
+    MANUAL_JOBS = "manual_jobs"
 
 
 _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
@@ -142,8 +142,8 @@ _redis_clients: Mapping[RedisClientKey, RedisClientType] = {
     RedisClientKey.ADMIN_AUTH: _initialize_specialized_redis_cluster(
         settings.REDIS_CLUSTERS["admin_auth"]
     ),
-    RedisClientKey.JOB: _initialize_specialized_redis_cluster(
-        settings.REDIS_CLUSTERS["job"]
+    RedisClientKey.MANUAL_JOBS: _initialize_specialized_redis_cluster(
+        settings.REDIS_CLUSTERS["manual_jobs"]
     ),
 }
 
