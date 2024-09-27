@@ -311,13 +311,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
     raise Exception("Unknown filter: ", item_filter)
 
 
-def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expression:
-    """
-
-    :param meta: The RequestMeta field, common across all RPCs
-    :param other_exprs: other expressions to add to the *and* clause
-    :return: an expression which looks like (project_id IN (a, b, c) AND organization_id=d AND ...)
-    """
+def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
     return and_cond(
         in_cond(
             column("project_id"),
@@ -327,13 +321,33 @@ def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expressi
             ),
         ),
         f.equals(column("organization_id"), meta.organization_id),
+    )
+
+
+def timestamp_in_range_condition(start_ts: int, end_ts: int) -> Expression:
+    return and_cond(
         f.less(
             column("timestamp"),
-            f.toDateTime(meta.end_timestamp.seconds),
+            f.toDateTime(end_ts),
         ),
         f.greaterOrEquals(
             column("timestamp"),
-            f.toDateTime(meta.start_timestamp.seconds),
+            f.toDateTime(start_ts),
+        ),
+    )
+
+
+def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expression:
+    """
+
+    :param meta: The RequestMeta field, common across all RPCs
+    :param other_exprs: other expressions to add to the *and* clause
+    :return: an expression which looks like (project_id IN (a, b, c) AND organization_id=d AND ...)
+    """
+    return and_cond(
+        project_id_and_org_conditions(meta),
+        timestamp_in_range_condition(
+            meta.start_timestamp.seconds, meta.end_timestamp.seconds
         ),
         *other_exprs,
     )
