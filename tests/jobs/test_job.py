@@ -1,6 +1,7 @@
 import pytest
 
-from snuba.manual_jobs import FINISHED, NOT_STARTED, JobSpec, get_job_status
+from snuba.manual_jobs import JobSpec, get_job_status
+from snuba.manual_jobs.runner import FINISHED, NOT_STARTED
 from snuba.manual_jobs.toy_job import ToyJob
 
 JOB_ID = "abc1234"
