@@ -108,11 +108,14 @@ def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:
     job_to_run = _JobLoader.get_job_instance(job_spec, dry_run)
 
     try:
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
+        if not dry_run:
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
         job_to_run.execute()
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
+        if not dry_run:
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
     except BaseException:
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
+        if not dry_run:
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
         capture_exception()
     finally:
         _release_job_lock(job_spec.job_id)
