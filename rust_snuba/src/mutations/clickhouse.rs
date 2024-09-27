@@ -182,7 +182,7 @@ impl ClickhouseTestClient {
         let http_port = 8123;
         let url = format!("http://{hostname}:{http_port}");
         let uuid = Uuid::new_v4().to_string();
-        let table_id = uuid.split("-").next().unwrap();
+        let table_id = uuid.split('-').next().unwrap();
 
         let client = reqwest::Client::new();
         let test_table = format!("{table}_{table_id}_local\n");
