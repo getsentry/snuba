@@ -21,18 +21,18 @@ test_job_spec = JobSpec(job_id=JOB_ID, job_type="ToyJob")
 
 
 class FailJob(Job):
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
-    def execute(self):
+    def execute(self) -> None:
         raise SerializableException("Intended failure")
 
 
 class SlowJob(Job):
-    def __init__(self):
+    def __init__(self) -> None:
         self.stop = False
 
-    def execute(self):
+    def execute(self) -> None:
         while not self.stop:
             sleep(0.005)
 
