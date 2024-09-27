@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Callable, MutableMapping, Tuple, Union
+from unittest.mock import patch
 
 import pytest
 import simplejson as json
 
+from snuba import settings
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -219,6 +221,19 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             data["error"]["message"]
             == "Invalid value invalid_id for column type schemas.UInt(64, modifiers=None)"
         )
+
+    def test_delete_with_too_many_ongoing_mutation(self) -> None:
+        with patch(
+            "snuba.web.delete_query._num_ongoing_mutations",
+            return_value=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE + 1,
+        ):
+            occurrence_id = str(uuid.uuid4())
+            response = self.delete_query(occurrence_id)
+            assert response.status_code == 503
+            assert (
+                json.loads(response.data)["error"]["message"]
+                == "there are too many ongoing mutations on the requested storage, please try again."
+            )
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)

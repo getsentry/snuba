@@ -1,13 +1,14 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, MutableMapping, Optional
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence
 
+from snuba import settings
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter.query import format_query
 from snuba.clickhouse.query import Query
-from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -28,7 +29,7 @@ from snuba.query.exceptions import (
 from snuba.query.expressions import Expression, FunctionCall
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Result
-from snuba.state import get_config
+from snuba.state import get_config, get_int_config
 from snuba.utils.metrics.util import with_span
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
@@ -48,7 +49,6 @@ def delete_from_storage(
     storage: WritableTableStorage,
     columns: Dict[str, list[Any]],
     attribution_info: Mapping[str, Any],
-    max_ongoing_mutations: int = 5,
 ) -> dict[str, Result]:
     """
     Inputs:
@@ -86,30 +86,18 @@ def delete_from_storage(
     attr_info = _get_attribution_info(attribution_info)
 
     # fail if too many mutations ongoing
-    cluster = storage.get_cluster()
-    if cluster.is_single_node():
-        query = f"""
-    SELECT count() as cnt
-    FROM system.mutations
-    WHERE table IN ({", ".join(map(repr, delete_settings.tables))}) AND is_done=0
-"""
-    else:
-        query = f"""
-SELECT max(cnt)
-FROM (
-    SELECT hostname() as host, count() as cnt
-    FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', mutations)
-    WHERE table IN ({", ".join(map(repr, delete_settings.tables))}) AND is_done=0
-    GROUP BY host
+    ongoing_mutations = _num_ongoing_mutations(
+        storage.get_cluster(), delete_settings.tables
     )
-"""
-    num_ongoing_mutations = (
-        cluster.get_query_connection(ClickhouseClientSettings.QUERY)
-        .execute(query)
-        .results[0][0]
+    max_ongoing_mutations = get_int_config(
+        "MAX_ONGOING_MUTATIONS_FOR_DELETE",
+        default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
     )
-    if num_ongoing_mutations > max_ongoing_mutations:
-        raise TooManyOngoingMutationsError()
+    assert max_ongoing_mutations
+    if ongoing_mutations > max_ongoing_mutations:
+        raise TooManyOngoingMutationsError(
+            "max ongoing mutations to do a delete is {max_ongoing_mutations}, but at least one replica has {num_ongoing_mutations} ongoing"
+        )
 
     for table in delete_settings.tables:
         result = _delete_from_table(storage, table, columns, attr_info)
@@ -159,6 +147,35 @@ def _delete_from_table(
 
     return _execute_query(
         query, storage, table, cluster_name, attribution_info, dummy_query_settings
+    )
+
+
+def _num_ongoing_mutations(cluster: ClickhouseCluster, tables: Sequence[str]) -> int:
+    """
+    Given a clickhouse cluster and a list of tables,
+    returns the maximum of ongoing mutations for the tables,
+    across all replicas
+    """
+    if cluster.is_single_node():
+        query = f"""
+    SELECT count() as cnt
+    FROM system.mutations
+    WHERE table IN ({", ".join(map(repr, tables))}) AND is_done=0
+"""
+    else:
+        query = f"""
+SELECT max(cnt)
+FROM (
+    SELECT hostname() as host, count() as cnt
+    FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', mutations)
+    WHERE table IN ({", ".join(map(repr, tables))}) AND is_done=0
+    GROUP BY host
+    )
+"""
+    return int(
+        cluster.get_query_connection(ClickhouseClientSettings.QUERY)
+        .execute(query)
+        .results[0][0]
     )
 
 
