@@ -200,9 +200,7 @@ impl ClickhouseTestClient {
         })
     }
 
-    // actually run a query in the table
     pub async fn run_mutation(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
-        // run the vec of queries against Clickhouse
         let session_id = Uuid::new_v4().to_string();
 
         for query in queries {
@@ -213,23 +211,6 @@ impl ClickhouseTestClient {
                 .send()
                 .await?;
         }
-        Ok(())
-    }
-
-    pub async fn insert_data(&self, primary_key: PrimaryKey) -> anyhow::Result<()> {
-        let organization_id = primary_key.organization_id;
-        let _sort_timestamp = primary_key._sort_timestamp;
-        let trace_id = primary_key.trace_id;
-        let span_id = primary_key.span_id;
-        let retention = 90;
-
-        let table = &self.table;
-
-        let insert =
-        format!("INSERT INTO {table} (organization_id, _sort_timestamp, trace_id, span_id, sign, retention_days) VALUES ({organization_id}, {_sort_timestamp}, \'{trace_id}\', {span_id}, 1, {retention})\n").into_bytes();
-
-        self.client.post(&self.url).body(insert).send().await?;
-
         Ok(())
     }
 
@@ -275,29 +256,44 @@ mod tests {
     async fn test_simple_mutation() {
         let mut batch = MutationBatch::default();
         let mut update = Update::default();
+
+        let organization_id = 69;
+        let _sort_timestamp = 1727466947;
+        let trace_id = Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap();
+        let span_id = 16045690984833335023;
+
         let primary_key = PrimaryKey {
-            organization_id: 69,
-            _sort_timestamp: 1727466947,
-            trace_id: Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap(),
-            span_id: 16045690984833335023,
+            organization_id,
+            _sort_timestamp,
+            trace_id,
+            span_id,
         };
         update.attr_str.insert("a".to_string(), "b".to_string());
 
+        // build the mutation batch
         batch.0.insert(primary_key.clone(), update);
-        // assert_eq!(batch.0[&primary_key].attr_str["a"], "b");
 
         let test_client = ClickhouseTestClient::new("eap_spans".to_string())
             .await
             .unwrap();
 
-        let _ = test_client.insert_data(primary_key).await;
+        let test_table = &test_client.table;
 
-        let all_queries = format_query(&test_client.table, &batch);
+        let insert =
+        format!("INSERT INTO {test_table} (organization_id, _sort_timestamp, trace_id, span_id, sign, retention_days) VALUES ({organization_id}, {_sort_timestamp}, \'{trace_id}\', {span_id}, 1, 90)\n").into_bytes();
+
+        let _ = test_client
+            .client
+            .post(&test_client.url)
+            .body(insert)
+            .send()
+            .await;
+
+        let all_queries = format_query(test_table, &batch);
         let _ = test_client.run_mutation(all_queries).await;
 
         // it is the test writer's responsibility to provide assertions
         let mutation = test_client.optimize_table().await;
-
         assert!(mutation.unwrap().contains("{'a':'b'}"));
 
         let _ = test_client.drop_table().await;
