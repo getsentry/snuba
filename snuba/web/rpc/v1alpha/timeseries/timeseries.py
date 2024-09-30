@@ -28,7 +28,7 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.timeseries import aggregate_functions
+from snuba.web.rpc.v1alpha.timeseries import aggregate_functions
 
 EIGHT_HOUR_GRANULARITY = 60 * 60 * 8
 ONE_HOUR_GRANULARITY = 60 * 60

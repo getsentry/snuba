@@ -21,7 +21,7 @@ from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.span_samples import span_samples_query
+from snuba.web.rpc.v1alpha.span_samples import span_samples_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -141,7 +141,7 @@ class TestSpanSamples(BaseApiTest):
             limit=10,
         )
         response = self.app.post(
-            "/rpc/SpanSamplesRequest", data=message.SerializeToString()
+            "/rpc/SpanSamplesRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200, response.text
 
