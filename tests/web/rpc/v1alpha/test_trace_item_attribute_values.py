@@ -16,7 +16,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
+    days=2, minutes=180
 )
 COMMON_META = RequestMeta(
     project_ids=[1, 2, 3],
