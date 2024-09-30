@@ -11,7 +11,7 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.timer import Timer
-from snuba.web.rpc.common import truncate_request_meta_to_day
+from snuba.web.rpc.common.common import truncate_request_meta_to_day
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
