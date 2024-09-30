@@ -194,7 +194,6 @@ mod tests {
 
     impl ClickhouseTestClient {
         pub async fn new(table: String) -> anyhow::Result<Self> {
-            // hardcoding local Clickhouse settings
             let hostname = env::var("CLICKHOUSE_HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
             let http_port = 8123;
             let url = format!("http://{hostname}:{http_port}");
@@ -207,7 +206,7 @@ mod tests {
             let body =
                 format!("CREATE TABLE IF NOT EXISTS {test_table} AS {table}_local\n").into_bytes();
 
-            // use client to create a new table in local CH
+            // use client to create a new table locally
             client.post(url.clone()).body(body).send().await?;
 
             Ok(Self {
@@ -231,7 +230,7 @@ mod tests {
             Ok(())
         }
 
-        pub async fn optimize_table(&self) -> anyhow::Result<String> {
+        pub async fn select_final(&self) -> anyhow::Result<String> {
             let table = &self.table;
             let final_query = format!("SELECT * FROM {table} FINAL\n").into_bytes();
 
@@ -292,9 +291,11 @@ mod tests {
         let all_queries = format_query(test_table, &batch);
         let _ = test_client.run_mutation(all_queries).await;
 
-        let mutation = test_client.optimize_table().await;
+        // merge data at query time for up-to-date results
+        let mutation = test_client.select_final().await;
         assert!(mutation.unwrap().contains("{'a':'b'}"));
 
+        // clean up the temporary table at the end of test
         let _ = test_client.drop_table().await;
     }
 
