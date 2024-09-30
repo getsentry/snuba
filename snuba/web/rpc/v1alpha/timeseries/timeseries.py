@@ -4,8 +4,9 @@ import uuid
 from typing import Any, Iterable
 
 from google.protobuf.json_format import MessageToDict
+from snuba.web.rpc import RPCEndpoint
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
-    AggregateBucketRequest,
+    AggregateBucketRequest as AggregateBucketRequestProto,
     AggregateBucketResponse,
 )
 
@@ -49,7 +50,7 @@ class TimeseriesQuerierResult:
 
 
 class TimeseriesQuerier:
-    def __init__(self, request: AggregateBucketRequest, timer: Timer):
+    def __init__(self, request: AggregateBucketRequestProto, timer: Timer):
         self.start_ts = request.meta.start_timestamp.seconds
         self.end_ts = request.meta.end_timestamp.seconds
         self.rounded_start_ts = self.start_ts - (
@@ -196,10 +197,16 @@ class TimeseriesQuerier:
         )
 
 
-def timeseries_query(
-    request: AggregateBucketRequest, timer: Timer | None = None
-) -> AggregateBucketResponse:
-    timer = timer or Timer("timeseries_query")
-    querier = TimeseriesQuerier(request, timer)
-    resp: AggregateBucketResponse = querier.run()
-    return resp
+
+
+class AggregateBucketRequest(RPCEndpoint[AggregateBucketRequestProto, AggregateBucketResponse]):
+
+    @classmethod
+    def version(cls) -> str:
+        return "v1alpha"
+
+
+    def _execute(self, in_msg: AggregateBucketRequestProto) -> AggregateBucketResponse:
+        querier = TimeseriesQuerier(in_msg, self._timer)
+        resp: AggregateBucketResponse = querier.run()
+        return resp

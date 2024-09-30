@@ -1,9 +1,10 @@
 from snuba.web.rpc import RPCEndpoint
+from google.protobuf.timestamp_pb2 import Timestamp
 
 
-class MyRPC(RPCEndpoint[int, str]):
+class MyRPC(RPCEndpoint[Timestamp, Timestamp]):
     @classmethod
-    def version(cls):
+    def version(cls) -> str:
         return "v1"
 
 

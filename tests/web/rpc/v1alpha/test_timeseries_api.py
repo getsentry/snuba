@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
-    AggregateBucketRequest,
+    AggregateBucketRequest as AggregateBucketRequestProto,
 )
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
@@ -15,7 +15,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.query import run_query
-from snuba.web.rpc.v1alpha.timeseries.timeseries import timeseries_query
+from snuba.web.rpc.v1alpha.timeseries.timeseries import AggregateBucketRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -122,7 +122,7 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = AggregateBucketRequest(
+        message = AggregateBucketRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -132,7 +132,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=ts,
             ),
             key=AttributeKey(name="project_id", type=AttributeKey.TYPE_INT),
-            aggregate=AggregateBucketRequest.FUNCTION_SUM,
+            aggregate=AggregateBucketRequestProto.FUNCTION_SUM,
             granularity_secs=60,
         )
         response = self.app.post(
@@ -141,7 +141,7 @@ class TestTimeSeriesApi(BaseApiTest):
         assert response.status_code == 200
 
     def test_sum(self, setup_teardown: Any) -> None:
-        message = AggregateBucketRequest(
+        message = AggregateBucketRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -151,10 +151,10 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
             ),
             key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
-            aggregate=AggregateBucketRequest.FUNCTION_SUM,
+            aggregate=AggregateBucketRequestProto.FUNCTION_SUM,
             granularity_secs=300,
         )
-        response = timeseries_query(message)
+        response = AggregateBucketRequest().execute(message)
         # spans have (measurement, sample rate) = (0, 100), (10, 1), ..., (100, 100)
         # granularity puts five spans into the same bucket
         # whole interval is 30 minutes, so there should be 6 buckets
@@ -170,7 +170,7 @@ class TestTimeSeriesApi(BaseApiTest):
         assert response.result == expected_results
 
     def test_p99(self, setup_teardown: Any) -> None:
-        message = AggregateBucketRequest(
+        message = AggregateBucketRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -180,10 +180,10 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 60)),
             ),
             key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
-            aggregate=AggregateBucketRequest.FUNCTION_P99,
+            aggregate=AggregateBucketRequestProto.FUNCTION_P99,
             granularity_secs=60 * 15,
         )
-        response = timeseries_query(message)
+        response = AggregateBucketRequest().execute(message)
         # spans have measurement = 0, 1, 2, ...
         # for us, starts at 60, and granularity puts 15 spans into each bucket
         # and the P99 of 15 spans is just the maximum of the 15.
@@ -200,7 +200,7 @@ class TestTimeSeriesApi(BaseApiTest):
         assert response.result == expected_results
 
     def test_median(self, setup_teardown: Any) -> None:
-        message = AggregateBucketRequest(
+        message = AggregateBucketRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -210,10 +210,10 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 60)),
             ),
             key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
-            aggregate=AggregateBucketRequest.FUNCTION_P50,
+            aggregate=AggregateBucketRequestProto.FUNCTION_P50,
             granularity_secs=60 * 20,
         )
-        response = timeseries_query(message)
+        response = AggregateBucketRequest().execute(message)
         # spans have measurement = 0, 1, 2, ...
         # for us, starts at 60, and granularity puts 20 spans into each bucket
         # where the first and tenth of every 20 is 100x upscaled
@@ -231,7 +231,7 @@ class TestTimeSeriesApi(BaseApiTest):
         assert response.result == expected_results
 
     def test_average(self, setup_teardown: Any) -> None:
-        message = AggregateBucketRequest(
+        message = AggregateBucketRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -241,10 +241,10 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
             ),
             key=AttributeKey(name="eap.measurement", type=AttributeKey.TYPE_FLOAT),
-            aggregate=AggregateBucketRequest.FUNCTION_AVERAGE,
+            aggregate=AggregateBucketRequestProto.FUNCTION_AVERAGE,
             granularity_secs=300,
         )
-        response = timeseries_query(message)
+        response = AggregateBucketRequest().execute(message)
         # spans have (measurement, sample rate) = (0, 100), (10, 1), ..., (100, 100)
         # granularity puts five spans into the same bucket
         # whole interval is 30 minutes, so there should be 6 buckets
@@ -265,7 +265,7 @@ class TestTimeSeriesApi(BaseApiTest):
         "aggregate, expected_result",
         [
             (
-                AggregateBucketRequest.FUNCTION_COUNT,
+                AggregateBucketRequestProto.FUNCTION_COUNT,
                 [
                     0.0,
                     0.0,
@@ -278,7 +278,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
             (
-                AggregateBucketRequest.FUNCTION_AVERAGE,
+                AggregateBucketRequestProto.FUNCTION_AVERAGE,
                 [
                     0.0,
                     0.0,
@@ -294,7 +294,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
             (
-                AggregateBucketRequest.FUNCTION_SUM,
+                AggregateBucketRequestProto.FUNCTION_SUM,
                 [
                     0.0,
                     0.0,
@@ -307,15 +307,15 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
             (
-                AggregateBucketRequest.FUNCTION_P50,
+                AggregateBucketRequestProto.FUNCTION_P50,
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(59.5, rel=0.01)],
             ),
             (
-                AggregateBucketRequest.FUNCTION_P95,
+                AggregateBucketRequestProto.FUNCTION_P95,
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(110, rel=0.01)],
             ),
             (
-                AggregateBucketRequest.FUNCTION_P99,
+                AggregateBucketRequestProto.FUNCTION_P99,
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pytest.approx(110, rel=0.01)],
             ),
         ],
@@ -323,7 +323,7 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_query_caching(
         self,
         setup_teardown: Any,
-        aggregate: AggregateBucketRequest.Function.ValueType,
+        aggregate: AggregateBucketRequestProto.Function.ValueType,
         expected_result: list[float],
     ) -> None:
         with patch(
@@ -341,7 +341,7 @@ class TestTimeSeriesApi(BaseApiTest):
             base_timestamp = int(BASE_TIME.replace(hour=0).timestamp())
             # due to our caching logic, each bucket will be split into three smaller requests from 0-8, 8-16, 16-24
             # we only have data for the 00:00-23:99 yesterday and 00:00-00:01 buckets, the rest are all 0
-            message = AggregateBucketRequest(
+            message = AggregateBucketRequestProto(
                 meta=RequestMeta(
                     project_ids=[1, 2, 3],
                     organization_id=1,
@@ -356,7 +356,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 aggregate=aggregate,
                 granularity_secs=60 * 60 * 24,
             )
-            response = timeseries_query(message)
+            response = AggregateBucketRequest().execute(message)
 
             assert (
                 mocked_run_query.call_count == 3 * 7 + 2

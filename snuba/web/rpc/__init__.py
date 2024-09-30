@@ -1,5 +1,5 @@
+from typing import Any, Callable, Mapping, Tuple, Generic, TypeVar, cast, Type
 import os
-from typing import Any, Callable, Generic, Mapping, Tuple, Type, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
@@ -10,11 +10,9 @@ from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
     AttributeValuesRequest,
     TraceItemAttributesRequest,
 )
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
-from snuba.web.rpc.v1alpha.span_samples import span_samples_query
-from snuba.web.rpc.v1alpha.timeseries.timeseries import timeseries_query
 from snuba.web.rpc.v1alpha.trace_item_attribute_list import (
     trace_item_attribute_list_query,
 )
@@ -33,8 +31,8 @@ ALL_RPCS: Mapping[
     ],
 ] = {
     "v1alpha": {
-        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
-        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
+        # "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
+        # "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
         "TraceItemAttributesRequest": (
             trace_item_attribute_list_query,
             TraceItemAttributesRequest,
@@ -46,13 +44,24 @@ ALL_RPCS: Mapping[
     }
 }
 
-Tin = TypeVar("Tin")
-Tout = TypeVar("Tout")
-
+Tin = TypeVar("Tin", bound=ProtobufMessage)
+Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
+
+    def __init__(self) -> None:
+        self._timer = Timer(self.config_key())
+
     @classmethod
-    def version(cls):
+    def request_class(cls) ->Type[Tin]:
+        raise NotImplementedError
+
+    @classmethod
+    def response_class(cls) -> Type[Tout]:
+        raise NotImplementedError
+
+    @classmethod
+    def version(cls) -> str:
         raise NotImplementedError
 
     @classmethod
@@ -60,11 +69,15 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return f"{cls.__name__}__{cls.version()}"
 
     @classmethod
-    def get_from_name(cls, name: str, version: str) -> Type[Any]:
+    def get_from_name(cls, name: str, version: str) -> Type["RPCEndpoint[Tin, Tout]"]:
         return cast(
-            Type["RPCEndpoint"],
+            Type["RPCEndpoint[Tin, Tout]"],
             getattr(cls, "_registry").get_class_from_name(f"{name}__{version}"),
         )
+
+    def parse_from_string(self, bytestring: bytes) -> Tin:
+        return self.request_class().ParseFromString(bytestring)  # type: ignore
+
 
     def execute(self, in_msg: Tin) -> Tout:
         self._before_execute(in_msg)
@@ -81,20 +94,16 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return out_msg
 
 
-def get_rpc_endpoint(
-    name: str, version: str
-) -> Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]:
-    return ALL_RPCS[version][name]
+
+_VERSIONS = ["v1alpha"]
+_TO_IMPORT= {p: os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        p
+    ) for p in _VERSIONS}
 
 
-versions = ["v1alpha"]
-to_import = {
-    p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in versions
-}
-
-
-for version, module_path in to_import.items():
-    import pdb
-
-    pdb.set_trace()
-    import_submodules_in_directory(module_path, f"snuba.web.rpc.{version}")
+for version, module_path in _TO_IMPORT.items():
+    import_submodules_in_directory(
+        module_path,
+        f"snuba.web.rpc.{version}"
+    )
