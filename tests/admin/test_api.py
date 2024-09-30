@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 from unittest import mock
 
 import pytest
 import simplejson as json
+from attr import dataclass
 from flask.testing import FlaskClient
 
 from snuba import state
@@ -20,6 +21,11 @@ from snuba.query.allocation_policies import (
     QueryResultOrError,
     QuotaAllowance,
 )
+
+
+@dataclass
+class FakeClickhouseResult:
+    results: Sequence[Any]
 
 
 @pytest.fixture
@@ -476,6 +482,7 @@ def test_get_allocation_policy_configs(admin_api: FlaskClient) -> None:
     assert response.status_code == 200
     assert response.json is not None and len(response.json) == 1
     [data] = response.json
+    assert data["query_type"] == "select"
     assert data["policy_name"] == "FakePolicy"
     assert data["optional_config_definitions"] == [
         {
@@ -839,3 +846,30 @@ def test_prod_mql_query_invalid_project_query(admin_api: FlaskClient) -> None:
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data["error"]["message"] == "Cannot access the following project ids: {2}"
+
+
+@mock.patch("snuba.admin.clickhouse.database_clusters.get_ro_node_connection")
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_clickhouse_node_info(
+    get_ro_node_connection_mock: mock.Mock, admin_api: FlaskClient
+) -> None:
+    expected_result = {
+        "cluster": "Cluster",
+        "host_name": "Host",
+        "host_address": "127.0.0.1",
+        "shard": 1,
+        "replica": 1,
+        "version": "v1",
+    }
+
+    connection_mock = mock.Mock()
+    connection_mock.execute.return_value = FakeClickhouseResult(
+        [("Cluster", "Host", "127.0.0.1", 1, 1, "v1")]
+    )
+    get_ro_node_connection_mock.return_value = connection_mock
+    response = admin_api.get("/clickhouse_node_info")
+    assert response.status_code == 200
+
+    response_data = json.loads(response.data)
+    assert len(response_data) > 0 and response_data[0] == expected_result
