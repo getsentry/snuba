@@ -158,18 +158,22 @@ def _num_ongoing_mutations(cluster: ClickhouseCluster, tables: Sequence[str]) ->
     """
     if cluster.is_single_node():
         query = f"""
-    SELECT count() as cnt
+SELECT max(cnt)
+FROM (
+    SELECT table, count() as cnt
     FROM system.mutations
     WHERE table IN ({", ".join(map(repr, tables))}) AND is_done=0
+    GROUP BY table
+)
 """
     else:
         query = f"""
 SELECT max(cnt)
 FROM (
-    SELECT hostname() as host, count() as cnt
+    SELECT hostname() as host, table, count() as cnt
     FROM clusterAllReplicas('{cluster.get_clickhouse_cluster_name()}', 'system', mutations)
     WHERE table IN ({", ".join(map(repr, tables))}) AND is_done=0
-    GROUP BY host
+    GROUP BY host, table
     )
 """
     return int(
