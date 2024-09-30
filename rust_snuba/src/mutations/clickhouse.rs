@@ -168,73 +168,6 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
     ]
 }
 
-struct ClickhouseTestClient {
-    url: String,
-    table: String,
-    client: Client,
-}
-
-#[allow(dead_code)]
-impl ClickhouseTestClient {
-    pub async fn new(table: String) -> anyhow::Result<Self> {
-        // hardcoding local Clickhouse settings
-        let hostname = "127.0.0.1";
-        let http_port = 8123;
-        let url = format!("http://{hostname}:{http_port}");
-        let uuid = Uuid::new_v4().to_string();
-        let table_id = uuid.split('-').next().unwrap();
-
-        let client = reqwest::Client::new();
-        let test_table = format!("{table}_{table_id}_local\n");
-
-        let body =
-            format!("CREATE TABLE IF NOT EXISTS {test_table} AS {table}_local\n").into_bytes();
-
-        // use client to create a new table in local CH
-        client.post(url.clone()).body(body).send().await?;
-
-        Ok(Self {
-            url,
-            table: test_table,
-            client,
-        })
-    }
-
-    pub async fn run_mutation(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
-        let session_id = Uuid::new_v4().to_string();
-
-        for query in queries {
-            self.client
-                .post(&self.url)
-                .query(&[("session_id", &session_id)])
-                .body(query)
-                .send()
-                .await?;
-        }
-        Ok(())
-    }
-
-    pub async fn optimize_table(&self) -> anyhow::Result<String> {
-        let table = &self.table;
-        let final_query = format!("SELECT * FROM {table} FINAL\n").into_bytes();
-
-        let response = self.client.post(&self.url).body(final_query).send().await?;
-
-        let update = response.text().await?;
-
-        Ok(update)
-    }
-
-    pub async fn drop_table(&self) -> anyhow::Result<()> {
-        let table = &self.table;
-        let drop = format!("DROP TABLE {table}\n").into_bytes();
-
-        self.client.post(&self.url).body(drop).send().await?;
-
-        Ok(())
-    }
-}
-
 #[derive(Serialize, Default)]
 struct MutationRow {
     #[serde(flatten)]
@@ -246,11 +179,78 @@ struct MutationRow {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use uuid::Uuid;
 
     use crate::mutations::parser::Update;
 
     use super::*;
+
+    struct ClickhouseTestClient {
+        url: String,
+        table: String,
+        client: Client,
+    }
+
+    impl ClickhouseTestClient {
+        pub async fn new(table: String) -> anyhow::Result<Self> {
+            // hardcoding local Clickhouse settings
+            let hostname = env::var("CLICKHOUSE_HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
+            let http_port = 8123;
+            let url = format!("http://{hostname}:{http_port}");
+            let uuid = Uuid::new_v4().to_string();
+            let table_id = uuid.split('-').next().unwrap();
+
+            let client = reqwest::Client::new();
+            let test_table = format!("{table}_{table_id}_local\n");
+
+            let body =
+                format!("CREATE TABLE IF NOT EXISTS {test_table} AS {table}_local\n").into_bytes();
+
+            // use client to create a new table in local CH
+            client.post(url.clone()).body(body).send().await?;
+
+            Ok(Self {
+                url,
+                table: test_table,
+                client,
+            })
+        }
+
+        pub async fn run_mutation(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
+            let session_id = Uuid::new_v4().to_string();
+
+            for query in queries {
+                self.client
+                    .post(&self.url)
+                    .query(&[("session_id", &session_id)])
+                    .body(query)
+                    .send()
+                    .await?;
+            }
+            Ok(())
+        }
+
+        pub async fn optimize_table(&self) -> anyhow::Result<String> {
+            let table = &self.table;
+            let final_query = format!("SELECT * FROM {table} FINAL\n").into_bytes();
+
+            let response = self.client.post(&self.url).body(final_query).send().await?;
+
+            let update = response.text().await?;
+
+            Ok(update)
+        }
+
+        pub async fn drop_table(&self) -> anyhow::Result<()> {
+            let table = &self.table;
+            let drop = format!("DROP TABLE {table}\n").into_bytes();
+
+            self.client.post(&self.url).body(drop).send().await?;
+
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn test_simple_mutation() {
@@ -292,7 +292,6 @@ mod tests {
         let all_queries = format_query(test_table, &batch);
         let _ = test_client.run_mutation(all_queries).await;
 
-        // it is the test writer's responsibility to provide assertions
         let mutation = test_client.optimize_table().await;
         assert!(mutation.unwrap().contains("{'a':'b'}"));
 
