@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import pytest
@@ -19,9 +19,9 @@ from snuba.web.rpc.v1alpha.trace_item_attribute_list import (
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.now(timezone.utc).replace(
+    minute=0, second=0, microsecond=0
+) - timedelta(minutes=180)
 
 
 def gen_message(id: int) -> Mapping[str, Any]:
