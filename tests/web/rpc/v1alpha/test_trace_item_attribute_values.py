@@ -35,11 +35,14 @@ COMMON_META = RequestMeta(
     ),
     end_timestamp=Timestamp(
         seconds=int(
-            datetime(
-                year=BASE_TIME.year,
-                month=BASE_TIME.month,
-                day=BASE_TIME.day + 1,
-                tzinfo=UTC,
+            (
+                datetime(
+                    year=BASE_TIME.year,
+                    month=BASE_TIME.month,
+                    day=BASE_TIME.day,
+                    tzinfo=UTC,
+                )
+                + timedelta(days=1)
             ).timestamp()
         )
     ),
