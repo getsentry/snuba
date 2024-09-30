@@ -1,7 +1,7 @@
 import itertools
 import time
 import uuid
-from typing import Any, Iterable
+from typing import Any, Iterable, Type
 
 from google.protobuf.json_format import MessageToDict
 from snuba.web.rpc import RPCEndpoint
@@ -205,6 +205,9 @@ class AggregateBucketRequest(RPCEndpoint[AggregateBucketRequestProto, AggregateB
     def version(cls) -> str:
         return "v1alpha"
 
+    @classmethod
+    def request_class(cls) -> Type[AggregateBucketRequestProto]:
+        return AggregateBucketRequestProto
 
     def _execute(self, in_msg: AggregateBucketRequestProto) -> AggregateBucketResponse:
         querier = TimeseriesQuerier(in_msg, self._timer)

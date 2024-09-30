@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
@@ -126,6 +126,10 @@ class SpanSamplesRequest(RPCEndpoint[SpanSamplesRequestProto, SpanSamplesRespons
     @classmethod
     def version(cls) -> str:
         return "v1alpha"
+
+    @classmethod
+    def request_class(cls) ->Type[SpanSamplesRequestProto]:
+        return SpanSamplesRequestProto
 
 
     def execute(self, in_msg: SpanSamplesRequestProto) -> SpanSamplesResponse:
