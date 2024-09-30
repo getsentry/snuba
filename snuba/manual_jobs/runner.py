@@ -1,6 +1,6 @@
 import os
 from enum import StrEnum
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence, Union
 
 import simplejson
 from sentry_sdk import capture_exception
@@ -111,13 +111,10 @@ def list_job_specs(
 
 def list_job_specs_with_status(
     manifest_filename: str = MANIFEST_FILENAME,
-) -> Mapping[str, Tuple[JobSpec, JobStatus]]:
+) -> Mapping[str, Mapping[str, Union[JobSpec, JobStatus]]]:
     specs = list_job_specs(manifest_filename)
     job_ids = specs.keys()
     statuses = _get_job_status_multi([_job_status_key(job_id) for job_id in job_ids])
-    print(specs)
-    print(job_ids)
-    print(statuses)
     return {
         job_id: {"spec": specs[job_id], "status": statuses[i]}
         for i, job_id in enumerate(job_ids)
