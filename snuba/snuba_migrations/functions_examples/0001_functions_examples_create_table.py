@@ -26,6 +26,7 @@ columns: List[Column[Modifiers]] = [
     Column("count", UInt(64)),
     Column("start_timestamp", DateTime()),
     Column("end_timestamp", DateTime()),
+    Column("is_application", UInt(8)),
     Column("platform", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("release", String(Modifiers(nullable=True, low_cardinality=True))),
