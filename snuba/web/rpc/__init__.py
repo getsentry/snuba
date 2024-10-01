@@ -1,22 +1,21 @@
-from typing import Any, Callable, Mapping, Tuple, Generic, TypeVar, cast, Type
 import os
+from typing import Any, Callable, Generic, Mapping, Tuple, Type, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 from snuba.utils.metrics.timer import Timer
-
+from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
-class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
+class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self) -> None:
         self._timer = Timer(self.config_key())
 
     @classmethod
-    def request_class(cls) ->Type[Tin]:
+    def request_class(cls) -> Type[Tin]:
         raise NotImplementedError
 
     @classmethod
@@ -41,7 +40,6 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def parse_from_string(self, bytestring: bytes) -> Tin:
         return self.request_class().ParseFromString(bytestring)  # type: ignore
 
-
     def execute(self, in_msg: Tin) -> Tout:
         self._before_execute(in_msg)
         out = self._execute(in_msg)
@@ -57,16 +55,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return out_msg
 
 
-
 _VERSIONS = ["v1alpha"]
-_TO_IMPORT= {p: os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        p
-    ) for p in _VERSIONS}
+_TO_IMPORT = {
+    p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
+}
 
 
 for version, module_path in _TO_IMPORT.items():
-    import_submodules_in_directory(
-        module_path,
-        f"snuba.web.rpc.{version}"
-    )
+    import_submodules_in_directory(module_path, f"snuba.web.rpc.{version}")
