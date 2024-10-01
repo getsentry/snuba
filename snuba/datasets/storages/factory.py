@@ -57,6 +57,7 @@ class _StorageFactory(ConfigComponentFactory[Storage, StorageKey]):
 
 _STORAGE_FACTORY: _StorageFactory | None = None
 
+
 def _storage_factory() -> _StorageFactory:
     global _STORAGE_FACTORY
     if _STORAGE_FACTORY is None:
