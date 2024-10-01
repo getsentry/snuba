@@ -91,10 +91,7 @@ def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
 
 def get_job_status(job_id: str) -> Optional[JobStatus]:
     redis_status = _redis_client.get(name=_build_job_status_key(job_id))
-    if redis_status is None:
-        return redis_status
-    else:
-        return JobStatus(redis_status.decode("utf-8"))
+    return JobStatus(redis_status.decode("utf-8")) if redis_status else redis_status
 
 
 def list_job_specs(
