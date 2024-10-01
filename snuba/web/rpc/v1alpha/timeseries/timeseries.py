@@ -4,9 +4,10 @@ import uuid
 from typing import Any, Iterable, MutableMapping, Optional, Type
 
 from google.protobuf.json_format import MessageToDict
-from snuba.web.rpc import RPCEndpoint
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest as AggregateBucketRequestProto,
+)
+from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketResponse,
 )
 
@@ -14,6 +15,7 @@ from snuba.query import SelectedExpression
 from snuba.query.dsl import and_cond
 from snuba.query.logical import Query
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     project_id_and_org_conditions,
     timestamp_in_range_condition,
@@ -153,10 +155,9 @@ class TimeseriesQuerier:
         return AggregateBucketResponse(result=[float(r[0]) for r in merged_results])
 
 
-
-
-class AggregateBucketRequest(RPCEndpoint[AggregateBucketRequestProto, AggregateBucketResponse]):
-
+class AggregateBucketRequest(
+    RPCEndpoint[AggregateBucketRequestProto, AggregateBucketResponse]
+):
     @classmethod
     def version(cls) -> str:
         return "v1alpha"
