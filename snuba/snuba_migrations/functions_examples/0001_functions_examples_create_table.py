@@ -29,7 +29,7 @@ columns: List[Column[Modifiers]] = [
     Column("is_application", UInt(8)),
     Column("platform", String(Modifiers(low_cardinality=True))),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("release", String(Modifiers(nullable=True))),
+    Column("release", String()),
     # snuba internals
     Column("retention_days", UInt(16)),
 ]
