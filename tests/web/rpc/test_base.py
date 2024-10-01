@@ -1,5 +1,6 @@
-from snuba.web.rpc import RPCEndpoint
 from google.protobuf.timestamp_pb2 import Timestamp
+
+from snuba.web.rpc import RPCEndpoint
 
 
 class MyRPC(RPCEndpoint[Timestamp, Timestamp]):
