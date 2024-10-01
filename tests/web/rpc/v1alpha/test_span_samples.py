@@ -5,7 +5,9 @@ from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest as SpanSamplesRequestProto
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
+    SpanSamplesRequest as SpanSamplesRequestProto,
+)
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
     AttributeKey,
