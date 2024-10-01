@@ -102,6 +102,9 @@ def test_transform_column_names() -> None:
         timer,
     )
 
+    print(result)
+    assert False
+
     data = result.result["data"]
     assert data == [{"event_id": event_id, "message": "a message"}]
     meta = result.result["meta"]

@@ -106,6 +106,7 @@ def test_simple() -> None:
         .get_stream_loader()
         .get_processor()
     )
+    print("processor", processor)
 
     assert processor.process_message(
         message, KafkaMessageMetadata(0, 0, datetime.now())
@@ -152,3 +153,4 @@ def test_simple() -> None:
         ],
         None,
     )
+    assert False

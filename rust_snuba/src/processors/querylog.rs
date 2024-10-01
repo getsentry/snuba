@@ -224,7 +224,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             groupby_columns.push(q.profile.groupby_cols);
             array_join_columns.push(q.profile.array_join_cols);
             let result_profile = q.result_profile.unwrap_or_default();
-            bytes_scanned.push(result_profile.bytes);
+            bytes_scanned.push(result_profile.progress_bytes);
             duration_ms.push((result_profile.elapsed * 1000.0) as u64);
 
             // consistent, cache hit, max_threads and is_duplicated may not be present

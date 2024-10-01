@@ -350,6 +350,8 @@ def record_query(query_metadata: snuba_queries_v1.Querylog) -> None:
     try:
         producer = _kafka_producer()
         data = safe_dumps(query_metadata)
+        print("data")
+        print(data)
         rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
             queries_list, 0, max_redis_queries - 1
         ).execute()

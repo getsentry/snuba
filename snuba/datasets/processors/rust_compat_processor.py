@@ -31,7 +31,10 @@ class RustCompatProcessor(DatasetMessageProcessor):
             int(metadata.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
         )
 
+        print(insert_payload)
+
         if insert_payload is not None:
+            print("insert_payload")
             assert replacement_payload is None
 
             rows = [
@@ -46,6 +49,7 @@ class RustCompatProcessor(DatasetMessageProcessor):
                 sentry_received_timestamp=None,
             )
         elif replacement_payload is not None:
+            print("replacement_payload")
             assert insert_payload is None
             key, values_bytes = replacement_payload
 

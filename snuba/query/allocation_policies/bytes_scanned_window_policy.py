@@ -253,7 +253,13 @@ class BytesScannedWindowAllocationPolicy(AllocationPolicy):
     def _get_bytes_scanned_in_query(
         self, tenant_ids: dict[str, str | int], result_or_error: QueryResultOrError
     ) -> int:
-        progress_bytes_scanned = cast(int, result_or_error.query_result.result.get("profile", {}).get("progress_bytes", None))  # type: ignore
+        progress_bytes_scanned = cast(
+            int,
+            result_or_error.query_result.result.get("profile", {}).get(
+                "progress_bytes", None
+            ),
+        )
+        print("progress_bytes_scanned", progress_bytes_scanned)  # type: ignore
         if isinstance(progress_bytes_scanned, (int, float)):
             self.metrics.increment(
                 "progress_bytes_scanned",
