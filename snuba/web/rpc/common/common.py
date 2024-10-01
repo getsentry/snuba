@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Final, Mapping, Sequence, Set
 
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
@@ -26,11 +26,11 @@ def truncate_request_meta_to_day(meta: RequestMeta) -> None:
     start_timestamp = datetime.utcfromtimestamp(meta.start_timestamp.seconds)
     end_timestamp = datetime.utcfromtimestamp(meta.end_timestamp.seconds)
     start_timestamp = start_timestamp.replace(
-        day=start_timestamp.day - 1, hour=0, minute=0, second=0, microsecond=0
-    )
+        hour=0, minute=0, second=0, microsecond=0
+    ) - timedelta(days=1)
     end_timestamp = end_timestamp.replace(
-        day=end_timestamp.day + 1, hour=0, minute=0, second=0, microsecond=0
-    )
+        hour=0, minute=0, second=0, microsecond=0
+    ) + timedelta(days=1)
 
     meta.start_timestamp.seconds = int(start_timestamp.timestamp())
     meta.end_timestamp.seconds = int(end_timestamp.timestamp())
