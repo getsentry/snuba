@@ -35,12 +35,6 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
-from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
-    AggregateBucketRequest,
-)
-from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import TagsListRequest
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -81,10 +75,8 @@ from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
 from snuba.web.query import parse_and_run_query
+from snuba.web.rpc import get_rpc_endpoint
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
-from snuba.web.rpc.tags_list import tags_list_query
-from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -280,18 +272,11 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/rpc/<name>", methods=["POST"])
-@util.time_request("timeseries")
-def rpc(*, name: str, timer: Timer) -> Response:
-    rpcs: Mapping[
-        str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
-    ] = {
-        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
-        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
-        "TagsListRequest": (tags_list_query, TagsListRequest),
-    }
+@application.route("/rpc/<name>/<version>", methods=["POST"])
+@util.time_request("rpc")
+def rpc(*, name: str, version: str, timer: Timer) -> Response:
     try:
-        endpoint, req_class = rpcs[name]
+        endpoint, req_class = get_rpc_endpoint(name, version)
 
         req = req_class()
         req.ParseFromString(http_request.data)
@@ -331,7 +316,7 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<storage:storage>/", methods=["DELETE"])
+@application.route("/<storage:storage>", methods=["DELETE"])
 @util.time_request("delete_query")
 @rate_limit(RateLimitParameters("delete", "bucket", None, 1))
 def storage_delete(

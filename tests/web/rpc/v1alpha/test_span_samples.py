@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
+    VirtualColumnContext,
 )
 from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -20,9 +21,11 @@ from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.span_samples import span_samples_query
+from snuba.web.rpc.v1alpha.span_samples import span_samples_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
+
+_RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 
 
 def gen_message(dt: datetime) -> Mapping[str, Any]:
@@ -34,7 +37,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
         "is_segment": True,
         "data": {
             "sentry.environment": "development",
-            "sentry.release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
+            "sentry.release": _RELEASE_TAG,
             "thread.name": "uWSGIWorker1Core0",
             "thread.id": "8522009600",
             "sentry.segment.name": "/api/0/relays/projectconfigs/",
@@ -62,7 +65,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
             "environment": "development",
             "op": "http.server",
             "platform": "python",
-            "release": "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b",
+            "release": _RELEASE_TAG,
             "sdk.name": "sentry.python.django",
             "sdk.version": "2.7.0",
             "status": "ok",
@@ -126,19 +129,19 @@ class TestSpanSamples(BaseApiTest):
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
                 )
             ),
-            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="platform")],
+            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="status")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
                 )
             ],
             limit=10,
         )
         response = self.app.post(
-            "/rpc/SpanSamplesRequest", data=message.SerializeToString()
+            "/rpc/SpanSamplesRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200, response.text
 
@@ -156,23 +159,22 @@ class TestSpanSamples(BaseApiTest):
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="category")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
                 )
             ),
-            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name")],
+            keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="status")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
                 )
             ],
             limit=61,
-            attribute_key_transform_context=None,
         )
         response = span_samples_query(message)
         assert [
             dict((k, x.results[k].val_str) for k in x.results)
             for x in response.span_samples
-        ] == [{"sentry.sdk.name": "sentry.python.django"} for _ in range(60)]
+        ] == [{"server_name": "D23CXQ4GK2.local"} for _ in range(60)]
 
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -213,16 +215,17 @@ class TestSpanSamples(BaseApiTest):
                 )
             ),
             keys=[
-                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="is_segment"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="span_id"),
+                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"),
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"),
             ],
             order_by=[
                 SpanSamplesRequest.OrderBy(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="status")
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.status"
+                    )
                 )
             ],
             limit=61,
-            attribute_key_transform_context=None,
         )
         response = span_samples_query(message)
         assert [
@@ -230,4 +233,113 @@ class TestSpanSamples(BaseApiTest):
                 (k, (x.results[k].val_bool or x.results[k].val_str)) for k in x.results
             )
             for x in response.span_samples
-        ] == [{"is_segment": True, "span_id": "123456781234567d"} for _ in range(60)]
+        ] == [
+            {"sentry.is_segment": True, "sentry.span_id": "123456781234567d"}
+            for _ in range(60)
+        ]
+
+    def test_with_virtual_columns(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = SpanSamplesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            keys=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.project_name"),
+                AttributeKey(
+                    type=AttributeKey.TYPE_STRING, name="sentry.release_version"
+                ),
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"),
+            ],
+            order_by=[
+                SpanSamplesRequest.OrderBy(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="project_name"
+                    ),
+                )
+            ],
+            limit=61,
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="sentry.project_id",
+                    to_column_name="sentry.project_name",
+                    value_map={"1": "sentry", "2": "snuba"},
+                ),
+                VirtualColumnContext(
+                    from_column_name="sentry.release",
+                    to_column_name="sentry.release_version",
+                    value_map={_RELEASE_TAG: "4.2.0.69"},
+                ),
+            ],
+        )
+        response = span_samples_query(message)
+        assert [
+            dict((k, x.results[k].val_str) for k in x.results)
+            for x in response.span_samples
+        ] == [
+            {
+                "sentry.project_name": "sentry",
+                "sentry.sdk.name": "sentry.python.django",
+                "sentry.release_version": "4.2.0.69",
+            }
+            for _ in range(60)
+        ]
+
+    def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = SpanSamplesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            keys=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="special_color"),
+            ],
+            order_by=[
+                SpanSamplesRequest.OrderBy(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="special_color"
+                    )
+                )
+            ],
+            limit=61,
+            virtual_column_contexts=[
+                VirtualColumnContext(
+                    from_column_name="color",
+                    to_column_name="special_color",
+                    value_map={"red": "1", "green": "2", "blue": "3"},
+                ),
+            ],
+        )
+        response = span_samples_query(message)
+        result_dicts = [
+            dict((k, x.results[k].val_str) for k in x.results)
+            for x in response.span_samples
+        ]
+        colors = [d["special_color"] for d in result_dicts]
+        assert sorted(colors) == colors

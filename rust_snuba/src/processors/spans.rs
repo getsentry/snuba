@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::DateTime;
+use rust_arroyo::timer;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -21,6 +22,8 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
+
+    timer!("spans.messages.size", payload_bytes.len() as f64);
 
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: Span = msg.try_into()?;

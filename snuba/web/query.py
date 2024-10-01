@@ -88,10 +88,16 @@ def run_query(
     except InvalidQueryException as error:
         request_status = get_request_status(error)
         record_invalid_request(
-            timer,
-            request_status,
-            request.attribution_info.referrer,
-            str(type(error).__name__),
+            request_id=request.id,
+            body=request.original_body,
+            dataset=get_dataset_name(dataset),
+            organization=int(
+                request.attribution_info.tenant_ids.get("organization_id", 0)
+            ),
+            timer=timer,
+            request_status=request_status,
+            referrer=request.attribution_info.referrer,
+            exception_name=str(type(error).__name__),
         )
         raise error
     except QueryException as error:

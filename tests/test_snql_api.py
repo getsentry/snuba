@@ -1351,16 +1351,22 @@ class TestSnQLApi(BaseApiTest):
                     "is_successful": False,
                     "is_rejected": True,
                     "is_throttled": False,
+                    "rejection_storage_key": "StorageKey.DOESNTMATTER",
+                    "throttle_storage_key": None,
                     "rejected_by": {
                         "policy": "RejectAllocationPolicy123",
                         "quota_used": 0,
                         "quota_unit": "no_units",
                         "suggestion": "no_suggestion",
+                        "storage_key": "StorageKey.DOESNTMATTER",
                         "rejection_threshold": 1000000000000,
                     },
                     "throttled_by": {},
                 },
             }
+
+            print("info")
+            print(info)
 
             assert (
                 response.json["error"]["message"]
