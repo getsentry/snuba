@@ -2,16 +2,15 @@ import uuid
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSample
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
-    SpanSample,
     SpanSamplesRequest as SpanSamplesRequestProto,
-    SpanSamplesResponse,
 )
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesResponse
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
 )
-from snuba.web.rpc import RPCEndpoint
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -25,6 +24,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
@@ -122,15 +122,13 @@ def _convert_results(
 
 
 class SpanSamplesRequest(RPCEndpoint[SpanSamplesRequestProto, SpanSamplesResponse]):
-
     @classmethod
     def version(cls) -> str:
         return "v1alpha"
 
     @classmethod
-    def request_class(cls) ->Type[SpanSamplesRequestProto]:
+    def request_class(cls) -> Type[SpanSamplesRequestProto]:
         return SpanSamplesRequestProto
-
 
     def execute(self, in_msg: SpanSamplesRequestProto) -> SpanSamplesResponse:
         snuba_request = _build_snuba_request(in_msg)
@@ -142,4 +140,3 @@ class SpanSamplesRequest(RPCEndpoint[SpanSamplesRequestProto, SpanSamplesRespons
         span_samples = _convert_results(in_msg.keys, res.result.get("data", []))
 
         return SpanSamplesResponse(span_samples=span_samples)
-
