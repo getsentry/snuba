@@ -14,7 +14,7 @@ dist_table_name = "functions_examples_dist"
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("profile_id", UUID(Modifiers(low_cardinality=False))),
-    Column("is_continuous", UInt(8)),
+    Column("profiling_type", String(Modifiers(low_cardinality=True))),
     Column("transaction_name", String()),
     Column("fingerprint", UInt(64)),
     Column("name", String()),
