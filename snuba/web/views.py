@@ -275,7 +275,7 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 @application.route("/rpc/<name>/<version>", methods=["POST"])
 def rpc(*, name: str, version: str) -> Response:
     try:
-        endpoint= RPCEndpoint.get_from_name(name, version)()  # type: ignore
+        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
         deserialized_protobuf = endpoint.parse_from_string(http_request.data)
         res = endpoint.execute(deserialized_protobuf)
         return Response(res.SerializeToString())
