@@ -63,28 +63,29 @@ def _build_job_spec_from_entry(content: Any) -> JobSpec:
     return job_spec
 
 
-def _job_lock_key(job_id: str) -> str:
+def _build_job_lock_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:lock"
 
 
-def _job_status_key(job_id: str) -> str:
+def _build_job_status_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:execution_status"
 
 
 def _acquire_job_lock(job_id: str) -> bool:
     return bool(
         _redis_client.set(
-            name=_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
+            name=_build_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
         )
     )
 
 
 def _release_job_lock(job_id: str) -> None:
-    _redis_client.delete(_job_lock_key(job_id))
+    _redis_client.delete(_build_job_lock_key(job_id))
 
 
 def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
-    _redis_client.set(name=_job_status_key(job_id), value=status.value)
+    if not _redis_client.set(name=_build_job_status_key(job_id), value=status.value):
+        raise SerializableException(f"Failed to set job status {status} on {job_id}")
     return status
 
 
@@ -96,11 +97,12 @@ def _get_job_status_multi(job_ids: Sequence[str]) -> Sequence[JobStatus]:
 
 
 def get_job_status(job_id: str) -> JobStatus:
-    redis_status = _redis_client.get(name=_job_status_key(job_id))
-    if redis_status is None:
-        return JobStatus.NOT_STARTED
-    else:
-        return JobStatus(redis_status.decode())
+    redis_status = _redis_client.get(name=_build_job_status_key(job_id))
+    return (
+        JobStatus(redis_status.decode("utf-8"))
+        if redis_status
+        else JobStatus.NOT_STARTED
+    )
 
 
 def list_job_specs(
@@ -114,7 +116,9 @@ def list_job_specs_with_status(
 ) -> Mapping[str, Mapping[str, Union[JobSpec, JobStatus]]]:
     specs = list_job_specs(manifest_filename)
     job_ids = specs.keys()
-    statuses = _get_job_status_multi([_job_status_key(job_id) for job_id in job_ids])
+    statuses = _get_job_status_multi(
+        [_build_job_status_key(job_id) for job_id in job_ids]
+    )
     return {
         job_id: {"spec": specs[job_id], "status": statuses[i]}
         for i, job_id in enumerate(job_ids)
