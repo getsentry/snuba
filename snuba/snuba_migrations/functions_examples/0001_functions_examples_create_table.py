@@ -15,8 +15,7 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("profile_id", UUID(Modifiers(low_cardinality=False))),
     Column("is_continuous", UInt(8)),
-    # transaction_name is nullable since this will only be used by transaction-based profiling
-    Column("transaction_name", String(Modifiers(nullable=True, low_cardinality=True))),
+    Column("transaction_name", String()),
     Column("fingerprint", UInt(64)),
     Column("name", String()),
     Column("package", String()),
