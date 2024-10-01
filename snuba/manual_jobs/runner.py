@@ -84,7 +84,8 @@ def _release_job_lock(job_id: str) -> None:
 
 
 def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
-    _redis_client.set(name=_build_job_status_key(job_id), value=status.value)
+    if not _redis_client.set(name=_build_job_status_key(job_id), value=status.value):
+        raise SerializableException(f"Failed to set job status {status} on {job_id}")
     return status
 
 
