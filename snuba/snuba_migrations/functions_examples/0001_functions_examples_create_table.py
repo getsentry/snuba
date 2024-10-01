@@ -45,8 +45,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.MergeTree(
-                    order_by="(project_id, fingerprint, start_timestamp)",
-                    partition_by="(retention_days, toMonday(end_timestamp))",
+                    order_by="(project_id, start_timestamp, fingerprint, transaction_name)",
+                    partition_by="(retention_days, toMonday(start_timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set_name,
                     ttl="end_timestamp + toIntervalDay(retention_days)",
