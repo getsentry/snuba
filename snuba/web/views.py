@@ -73,7 +73,11 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
+from snuba.web.delete_query import (
+    DeletesNotEnabledError,
+    TooManyOngoingMutationsError,
+    delete_from_storage,
+)
 from snuba.web.query import parse_and_run_query
 from snuba.web.rpc import get_rpc_endpoint
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
@@ -346,6 +350,15 @@ def storage_delete(
             return make_response(
                 jsonify({"error": details}),
                 400,
+            )
+        except TooManyOngoingMutationsError as e:
+            details = {
+                "type": "too_many_ongoing_mutations",
+                "message": str(e),
+            }
+            return make_response(
+                jsonify({"error": details}),
+                503,
             )
         except Exception as error:
             logger.warning("Failed query", exc_info=error)
