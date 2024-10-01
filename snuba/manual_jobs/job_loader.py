@@ -9,7 +9,7 @@ class NonexistentJobException(SerializableException):
         super().__init__(f"Job does not exist. Did you make a file {job_type}.py yet?")
 
 
-class JobLoader:
+class _JobLoader:
     @staticmethod
     def get_job_instance(job_spec: JobSpec, dry_run: bool) -> "Job":
         job_type_class = Job.class_from_name(job_spec.job_type)
