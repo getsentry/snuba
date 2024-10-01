@@ -227,8 +227,8 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
             "snuba.web.delete_query._num_ongoing_mutations",
             return_value=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE + 1,
         ):
-            occurrence_id = str(uuid.uuid4())
-            response = self.delete_query(occurrence_id)
+            group_id = 3
+            response = self.delete_query(group_id)
             assert response.status_code == 503
             assert (
                 json.loads(response.data)["error"]["message"]
