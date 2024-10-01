@@ -2,32 +2,36 @@ from typing import List, Optional, Type
 
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
     TraceItemAttributesRequest as TraceItemAttributesRequestProto,
+)
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
     TraceItemAttributesResponse,
 )
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
-from snuba.web.rpc import RPCEndpoint
 
 from snuba.clickhouse.formatter.nodes import FormattedQuery, StringNode
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import truncate_request_meta_to_day
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
-class TraceItemAttributesRequest(RPCEndpoint[TraceItemAttributesRequestProto, TraceItemAttributesResponse]):
-
+class TraceItemAttributesRequest(
+    RPCEndpoint[TraceItemAttributesRequestProto, TraceItemAttributesResponse]
+):
     @classmethod
-    def request_class(cls) ->Type[TraceItemAttributesRequestProto]:
+    def request_class(cls) -> Type[TraceItemAttributesRequestProto]:
         return TraceItemAttributesRequestProto
-
 
     @classmethod
     def version(cls) -> str:
         return "v1alpha"
 
-    def _execute(self, in_msg: TraceItemAttributesRequestProto) -> TraceItemAttributesResponse:
+    def _execute(
+        self, in_msg: TraceItemAttributesRequestProto
+    ) -> TraceItemAttributesResponse:
         if in_msg.type == AttributeKey.Type.TYPE_STRING:
             storage = get_storage(StorageKey("spans_str_attrs"))
         elif in_msg.type == AttributeKey.Type.TYPE_FLOAT:
