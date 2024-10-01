@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from unittest import mock
 
 import pytest
@@ -35,11 +34,11 @@ def get_delete_query() -> Query:
         storage_key=StorageKey.SEARCH_ISSUES,
         allocation_policies=[],
     )
-    occurrence_id = str(uuid.uuid4())
+    group_id = 10
     return Query(
         from_clause=from_clause,
         condition=and_cond(
-            equals(column("occurrence_id"), literal(occurrence_id)),
+            equals(column("group_id"), literal(group_id)),
             equals(column("project_id"), literal(3)),
         ),
         on_cluster=None,

@@ -14,7 +14,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.query import run_query
+from snuba.web.rpc.common.eap_execute import run_eap_query
 from snuba.web.rpc.v1alpha.timeseries.timeseries import timeseries_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -327,8 +327,8 @@ class TestTimeSeriesApi(BaseApiTest):
         expected_result: list[float],
     ) -> None:
         with patch(
-            "snuba.web.rpc.v1alpha.timeseries.timeseries.run_query",
-            side_effect=run_query,
+            "snuba.web.rpc.common.eap_execute.run_eap_query",
+            side_effect=run_eap_query,
         ) as mocked_run_query:
             # this test does a daily aggregate on a week + 9 hours of data.
             # that is, the user is visiting the page at 09:01 GMT, so the 8 buckets returned would be:
@@ -364,17 +364,13 @@ class TestTimeSeriesApi(BaseApiTest):
 
             # we expect all buckets except the last one to be cached
             assert list(
-                call[1]["request"].query_settings.get_clickhouse_settings()[
-                    "use_query_cache"
-                ]
+                call[1]["clickhouse_settings"]["use_query_cache"]
                 for call in mocked_run_query.call_args_list[:-1]
             ) == ["true"] * (3 * 7 + 1)
 
             # we expect all buckets >4 hours old to have a long TTL
             assert list(
-                call[1]["request"].query_settings.get_clickhouse_settings()[
-                    "query_cache_ttl"
-                ]
+                call[1]["clickhouse_settings"]["query_cache_ttl"]
                 for call in mocked_run_query.call_args_list[:-2]
             ) == [90 * 24 * 60 * 60] * (3 * 7)
 
