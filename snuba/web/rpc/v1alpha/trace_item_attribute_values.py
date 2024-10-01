@@ -1,13 +1,12 @@
 import uuid
-
 from typing import Type
+
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
     AttributeValuesRequest as AttributeValuesRequestProto,
-    AttributeValuesResponse,
 )
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import AttributeValuesResponse
 
-from snuba.web.rpc import RPCEndpoint
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
@@ -22,6 +21,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     treeify_or_and_conditions,
@@ -96,8 +96,9 @@ def _build_snuba_request(
     )
 
 
-class AttributeValuesRequest(RPCEndpoint[AttributeValuesRequestProto, AttributeValuesResponse]):
-
+class AttributeValuesRequest(
+    RPCEndpoint[AttributeValuesRequestProto, AttributeValuesResponse]
+):
     @classmethod
     def version(cls) -> str:
         return "v1alpha"
@@ -116,4 +117,3 @@ class AttributeValuesRequest(RPCEndpoint[AttributeValuesRequestProto, AttributeV
         return AttributeValuesResponse(
             values=[r["attr_value"] for r in res.result.get("data", [])]
         )
-
