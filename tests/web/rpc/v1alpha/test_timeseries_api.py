@@ -301,7 +301,7 @@ class TestTimeSeriesApi(BaseApiTest):
     )
     def test_merge_t_digests_states(
         self, states: list[str], level: float, expected_result: float
-    ):
+    ) -> None:
         assert merge_t_digests_states(states, level) == pytest.approx(
             expected_result, rel=0.01
         )
