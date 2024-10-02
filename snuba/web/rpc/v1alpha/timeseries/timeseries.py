@@ -1,6 +1,5 @@
 import itertools
 import time
-import uuid
 from typing import Any, Iterable, MutableMapping, Optional, Type
 
 from google.protobuf.json_format import MessageToDict

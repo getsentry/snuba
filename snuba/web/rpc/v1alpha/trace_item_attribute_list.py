@@ -1,5 +1,5 @@
-from typing import List, Optional, Type
 import uuid
+from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
@@ -23,14 +23,12 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     treeify_or_and_conditions,
     truncate_request_meta_to_day,
 )
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import truncate_request_meta_to_day
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
@@ -48,11 +46,10 @@ class TraceItemAttributesRequest(
     def _execute(
         self, in_msg: TraceItemAttributesRequestProto
     ) -> TraceItemAttributesResponse:
-      return trace_item_attribute_list_query(in_msg, self._timer)
+        return trace_item_attribute_list_query(in_msg, self._timer)
 
 
-
- def _build_query(request: TraceItemAttributesRequest) -> Query:
+def _build_query(request: TraceItemAttributesRequestProto) -> Query:
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
@@ -104,7 +101,7 @@ class TraceItemAttributesRequest(
 
 
 def _build_snuba_request(
-    request: TraceItemAttributesRequest,
+    request: TraceItemAttributesRequestProto,
 ) -> SnubaRequest:
     return SnubaRequest(
         id=str(uuid.uuid4()),
@@ -126,7 +123,7 @@ def _build_snuba_request(
 
 
 def trace_item_attribute_list_query(
-    request: TraceItemAttributesRequest, timer: Timer | None = None
+    request: TraceItemAttributesRequestProto, timer: Timer | None = None
 ) -> TraceItemAttributesResponse:
     timer = timer or Timer("trace_item_attributes")
     snuba_request = _build_snuba_request(request)
