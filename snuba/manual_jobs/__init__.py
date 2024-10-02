@@ -6,14 +6,14 @@ from typing import Any, MutableMapping, Optional, cast
 
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
-logger = logging.getLogger("snuba_init")
+logger = logging.getLogger("snuba.manual_jobs")
 
 
 @dataclass
 class JobSpec:
     job_id: str
     job_type: str
-    params: Optional[MutableMapping[Any, Any]]
+    params: Optional[MutableMapping[Any, Any]] = None
 
 
 class Job(ABC, metaclass=RegisteredClass):
@@ -26,7 +26,7 @@ class Job(ABC, metaclass=RegisteredClass):
 
     @abstractmethod
     def execute(self) -> None:
-        pass
+        raise NotImplementedError
 
     @classmethod
     def config_key(cls) -> str:
