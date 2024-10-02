@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations, table_engines
+from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.schemas import AggregateFunction, Column, DateTime, String, UInt
@@ -40,33 +40,4 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        return [
-            operations.CreateTable(
-                storage_set=self.storage_set_key,
-                table_name=self.meta_local_table_name,
-                engine=table_engines.AggregatingMergeTree(
-                    storage_set=self.storage_set_key,
-                    primary_key="(organization_id, attribute_key)",
-                    order_by="(organization_id, attribute_key, attribute_value, timestamp)",
-                    partition_by="toMonday(timestamp)",
-                    settings={
-                        "index_granularity": self.granularity,
-                        # Since the partitions contain multiple retention periods, need to ensure
-                        # that rows within partitions are dropped
-                        "ttl_only_drop_parts": 0,
-                    },
-                    ttl="timestamp + toIntervalDay(retention_days)",
-                ),
-                columns=self.meta_table_columns,
-                target=OperationTarget.LOCAL,
-            ),
-            operations.CreateTable(
-                storage_set=self.storage_set_key,
-                table_name=self.meta_dist_table_name,
-                engine=table_engines.Distributed(
-                    local_table_name=self.meta_local_table_name, sharding_key=None
-                ),
-                columns=self.meta_table_columns,
-                target=OperationTarget.DISTRIBUTED,
-            ),
-        ]
+        return []  # All or nothing
