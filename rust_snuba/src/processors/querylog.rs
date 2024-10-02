@@ -383,6 +383,7 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes", 1306,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -490,6 +491,7 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes", 1306,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -597,6 +599,7 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes", 1306,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
