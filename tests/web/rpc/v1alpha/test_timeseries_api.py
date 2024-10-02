@@ -1,4 +1,5 @@
 import random
+import struct
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, MutableMapping
@@ -15,6 +16,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.eap_execute import run_eap_query
+from snuba.web.rpc.v1alpha.timeseries.aggregate_functions import merge_t_digests_states
 from snuba.web.rpc.v1alpha.timeseries.timeseries import timeseries_query
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -260,6 +262,49 @@ class TestTimeSeriesApi(BaseApiTest):
             ]
         )
         assert response.result == expected_results
+
+    @pytest.mark.parametrize(
+        "states, level, expected_result",
+        [
+            pytest.param(
+                # 8105 = 2 bytes varuint (ignored), then mean = 1, count = 1, mean = 5, count = 1
+                # select quantileTDigest(0.5)(x) from numbers(1) array join [1, 5] as x;
+                ["8105" + struct.pack("ffff", 1, 1, 5, 1).hex()],
+                0.5,
+                1,
+                id="median of two numbers is smaller one",
+            ),
+            pytest.param(
+                # ffffff05 = 4 bytes varuint (ignored), then mean = 1, count = 1, mean = 5, count = 1
+                # select quantileTDigest(0.5)(x) from numbers(1) array join [1, 5, 5] as x;
+                ["ffffff05" + struct.pack("ffffff", 1, 1, 5, 1, 5, 1).hex()],
+                0.5,
+                5,
+                id="median of [1, 5, 5] = 5",
+            ),
+            pytest.param(
+                # 05 = 1 byte varuint (ignored), then mean = 5, count = 1, mean = 100, count = 1
+                ["05" + struct.pack("f" * 198, *[1, 1] * 98 + [100, 1]).hex()],
+                0.99,
+                100,
+                id="p99 of [1] * 98 + [100] = 100",
+            ),
+            pytest.param(
+                # 05 = 1 byte varuint (ignored), then mean = 5, count = 1, mean = 100, count = 1
+                ["05" + struct.pack("ffff", 1, 199, 100, 1).hex()],
+                0.99,
+                99,
+                # this is a test of interpolation, the centroids here are not ones you'd normally get from T-digest
+                id="p99 of [1] * 199 + [100] * 1 = 99",
+            ),
+        ],
+    )
+    def test_merge_t_digests_states(
+        self, states: list[str], level: float, expected_result: float
+    ) -> None:
+        assert merge_t_digests_states(states, level) == pytest.approx(
+            expected_result, rel=0.01
+        )
 
     @pytest.mark.parametrize(
         "aggregate, expected_result",
