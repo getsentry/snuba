@@ -102,7 +102,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=20,
         )
         response = self.app.post(
-            "/rpc/AttributeValuesRequestProto/v1alpha", data=message.SerializeToString()
+            "/rpc/AttributeValuesRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200
 
