@@ -12,7 +12,6 @@ from snuba.utils.registered_class import RegisteredClass, import_submodules_in_d
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
 
-
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
