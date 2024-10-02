@@ -102,6 +102,7 @@ struct Profile {
 #[serde(default)]
 struct ResultProfile {
     bytes: u64,
+    progress_bytes: u64,
     elapsed: f64,
 }
 
