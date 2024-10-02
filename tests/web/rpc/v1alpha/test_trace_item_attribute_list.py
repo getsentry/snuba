@@ -100,6 +100,7 @@ class TestTraceItemAttributes(BaseApiTest):
                     )
                 ),
             ),
+            type=AttributeKey.Type.TYPE_STRING,
             limit=10,
             offset=20,
         )
