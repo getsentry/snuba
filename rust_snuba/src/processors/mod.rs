@@ -159,7 +159,8 @@ mod tests {
                 settings.set_description(std::str::from_utf8(example.payload()).unwrap());
                 let _guard = settings.bind_to_scope();
 
-                let payload = KafkaPayload::new(None, None, Some(example.payload().to_vec()));
+                let payload: KafkaPayload =
+                    KafkaPayload::new(None, None, Some(example.payload().to_vec()));
 
                 match processor_fn_type {
                     ProcessingFunctionType::ProcessingFunction(processor_fn) => {

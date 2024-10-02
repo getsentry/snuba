@@ -101,6 +101,7 @@ struct Profile {
 #[derive(Debug, Deserialize, JsonSchema, Default)]
 #[serde(default)]
 struct ResultProfile {
+    bytes: u64,
     progress_bytes: u64,
     elapsed: f64,
 }
@@ -224,6 +225,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             groupby_columns.push(q.profile.groupby_cols);
             array_join_columns.push(q.profile.array_join_cols);
             let result_profile = q.result_profile.unwrap_or_default();
+            bytes_scanned.push(result_profile.bytes);
             bytes_scanned.push(result_profile.progress_bytes);
             duration_ms.push((result_profile.elapsed * 1000.0) as u64);
 
@@ -383,6 +385,7 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes": 0,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -490,6 +493,7 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes": 0,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -597,6 +601,7 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes": 0,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
