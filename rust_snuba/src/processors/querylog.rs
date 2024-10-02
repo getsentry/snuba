@@ -382,7 +382,7 @@ mod tests {
                   "array_join_cols": ["errors_local.tags.key", "errors_local.tags.value"]
                 },
                 "result_profile": {
-                  "progress_bytes": 1305,
+                  "bytes": 1305,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -489,7 +489,7 @@ mod tests {
                   "array_join_cols": ["errors_local.tags.key", "errors_local.tags.value"]
                 },
                 "result_profile": {
-                  "progress_bytes": 1305,
+                  "bytes": 1305,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -596,7 +596,7 @@ mod tests {
                   "array_join_cols": ["errors_local.tags.key", "errors_local.tags.value"]
                 },
                 "result_profile": {
-                  "progress_bytes": 1305,
+                  "bytes": 1305,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
