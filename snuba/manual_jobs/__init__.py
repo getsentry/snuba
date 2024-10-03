@@ -17,9 +17,8 @@ class JobSpec:
 
 
 class Job(ABC, metaclass=RegisteredClass):
-    def __init__(self, job_spec: JobSpec, dry_run: bool) -> None:
+    def __init__(self, job_spec: JobSpec) -> None:
         self.job_spec = job_spec
-        self.dry_run = dry_run
         if job_spec.params:
             for k, v in job_spec.params.items():
                 setattr(self, k, v)

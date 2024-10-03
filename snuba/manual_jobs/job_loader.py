@@ -11,9 +11,9 @@ class NonexistentJobException(SerializableException):
 
 class _JobLoader:
     @staticmethod
-    def get_job_instance(job_spec: JobSpec, dry_run: bool) -> "Job":
+    def get_job_instance(job_spec: JobSpec) -> "Job":
         job_type_class = Job.class_from_name(job_spec.job_type)
         if job_type_class is None:
             raise NonexistentJobException(job_spec.job_type)
 
-        return cast("Job", job_type_class(job_spec, dry_run=dry_run))
+        return cast("Job", job_type_class(job_spec))

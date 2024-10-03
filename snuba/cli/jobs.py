@@ -25,24 +25,20 @@ def list(*, json_manifest: str) -> None:
     click.echo(job_specs)
 
 
-def _run_job_and_echo_status(job_spec: JobSpec, dry_run: bool) -> None:
-    status = run_job(job_spec, dry_run)
+def _run_job_and_echo_status(job_spec: JobSpec) -> None:
+    status = run_job(job_spec)
     click.echo(f"resulting job status = {status}")
 
 
 @jobs.command()
 @click.option("--json_manifest", default=MANIFEST_FILENAME)
 @click.option("--job_id")
-@click.option(
-    "--dry_run",
-    default=True,
-)
-def run_from_manifest(*, json_manifest: str, job_id: str, dry_run: bool) -> None:
+def run_from_manifest(*, json_manifest: str, job_id: str) -> None:
     job_specs = list_job_specs(json_manifest)
     if job_id not in job_specs.keys():
         raise click.ClickException("Provide a valid job id")
 
-    _run_job_and_echo_status(job_specs[job_id], dry_run)
+    _run_job_and_echo_status(job_specs[job_id])
 
 
 def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
@@ -52,17 +48,13 @@ def _parse_params(pairs: Tuple[str, ...]) -> MutableMapping[Any, Any]:
 @jobs.command()
 @click.option("--job_type")
 @click.option("--job_id")
-@click.option(
-    "--dry_run",
-    default=True,
-)
 @click.argument("pairs", nargs=-1)
-def run(*, job_type: str, job_id: str, dry_run: bool, pairs: Tuple[str, ...]) -> None:
+def run(*, job_type: str, job_id: str, pairs: Tuple[str, ...]) -> None:
     if not job_type or not job_id:
         raise click.ClickException(JOB_SPECIFICATION_ERROR_MSG)
     job_spec = JobSpec(job_id=job_id, job_type=job_type, params=_parse_params(pairs))
 
-    _run_job_and_echo_status(job_spec, dry_run)
+    _run_job_and_echo_status(job_spec)
 
 
 @jobs.command()

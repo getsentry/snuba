@@ -25,8 +25,6 @@ def test_invalid_job_errors() -> None:
             "NonexistentJob",
             "--job_id",
             "0001",
-            "--dry_run",
-            "True",
             "k1=v1",
             "k2=v2",
         ],
@@ -38,7 +36,7 @@ def test_invalid_job_errors() -> None:
 @pytest.mark.redis_db
 def test_cmd_line_no_job_specification_errors() -> None:
     runner = CliRunner()
-    result = runner.invoke(run, ["--dry_run", "True", "k1=v1", "k2=v2"])
+    result = runner.invoke(run, ["k1=v1", "k2=v2"])
     assert result.exit_code == 1
     assert result.output == "Error: " + JOB_SPECIFICATION_ERROR_MSG + "\n"
 
@@ -46,9 +44,7 @@ def test_cmd_line_no_job_specification_errors() -> None:
 @pytest.mark.redis_db
 def test_cmd_line_no_job_id_errors() -> None:
     runner = CliRunner()
-    result = runner.invoke(
-        run, ["--job_type", "ToyJob", "--dry_run", "True", "k1=v1", "k2=v2"]
-    )
+    result = runner.invoke(run, ["--job_type", "ToyJob", "k1=v1", "k2=v2"])
     assert result.exit_code == 1
     assert result.output == "Error: " + JOB_SPECIFICATION_ERROR_MSG + "\n"
 
@@ -56,9 +52,7 @@ def test_cmd_line_no_job_id_errors() -> None:
 @pytest.mark.redis_db
 def test_cmd_line_no_job_type_errors() -> None:
     runner = CliRunner()
-    result = runner.invoke(
-        run, ["--job_id", "0001", "--dry_run", "True", "k1=v1", "k2=v2"]
-    )
+    result = runner.invoke(run, ["--job_id", "0001", "k1=v1", "k2=v2"])
     assert result.exit_code == 1
     assert result.output == "Error: " + JOB_SPECIFICATION_ERROR_MSG + "\n"
 
