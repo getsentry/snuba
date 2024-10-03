@@ -1270,7 +1270,7 @@ def get_job_specs() -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def execute_job(job_id: str) -> Response:
     job_specs = list_job_specs()
-    return make_response(run_job(job_specs[job_id])), 200
+    return make_response(run_job(job_specs[job_id]), 200)
 
 
 @application.route("/clickhouse_node_info")
