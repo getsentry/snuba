@@ -6,6 +6,7 @@ import simplejson
 
 from snuba.manual_jobs import JobSpec, JobStatus
 from snuba.manual_jobs.job_loader import _JobLoader
+from snuba.manual_jobs.job_logging import _MultiplexingRedisLogger
 from snuba.manual_jobs.redis import (
     _acquire_job_lock,
     _build_job_status_key,
@@ -93,6 +94,7 @@ def list_job_specs_with_status(
 
 def run_job(job_spec: JobSpec) -> JobStatus:
     current_job_status = get_job_status(job_spec.job_id)
+    job_logger = _MultiplexingRedisLogger(logger, job_spec.job_id)
     if current_job_status is not None and current_job_status != JobStatus.NOT_STARTED:
         raise JobStatusException(job_id=job_spec.job_id, status=current_job_status)
 
@@ -106,7 +108,7 @@ def run_job(job_spec: JobSpec) -> JobStatus:
 
     try:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
-        job_to_run.execute()
+        job_to_run.execute(job_logger)
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
     except BaseException:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)

@@ -1,9 +1,10 @@
+import logging
 from datetime import datetime
 from typing import Any, Mapping, Optional
 
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.manual_jobs import Job, JobSpec, logger
+from snuba.manual_jobs import Job, JobSpec
 from snuba.migrations.runner import DIST_TABLE_NAME, LOCAL_TABLE_NAME
 
 
@@ -52,7 +53,7 @@ class UpdateMigrationStatus(Job):
     def _insert_query(self, table_name: str) -> str:
         return f"INSERT INTO {table_name} FORMAT JSONEachRow"
 
-    def execute(self) -> None:
+    def execute(self, logger: logging.Logger) -> None:
         migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         table_name = (
             LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME

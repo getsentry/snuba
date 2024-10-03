@@ -32,7 +32,7 @@ class Job(ABC, metaclass=RegisteredClass):
                 setattr(self, k, v)
 
     @abstractmethod
-    def execute(self) -> None:
+    def execute(self, logger: logging.Logger) -> None:
         raise NotImplementedError
 
     @classmethod

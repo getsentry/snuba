@@ -15,12 +15,20 @@ def _build_job_status_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:execution_status"
 
 
+def _build_job_log_key(job_id: str) -> str:
+    return f"snuba:manual_jobs:{job_id}:log"
+
+
 def _acquire_job_lock(job_id: str) -> bool:
     return bool(
         _redis_client.set(
             name=_build_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
         )
     )
+
+
+def _push_job_log_line(job_id: str, line: str) -> bool:
+    return bool(_redis_client.rpush(_build_job_log_key(job_id), line))
 
 
 def _release_job_lock(job_id: str) -> None:

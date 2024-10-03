@@ -1,3 +1,4 @@
+import logging
 from threading import Thread
 from time import sleep
 from unittest.mock import patch
@@ -23,7 +24,7 @@ class FailJob(Job):
     def __init__(self) -> None:
         pass
 
-    def execute(self) -> None:
+    def execute(self, logger: logging.Logger) -> None:
         raise SerializableException("Intended failure")
 
 
@@ -31,7 +32,7 @@ class SlowJob(Job):
     def __init__(self) -> None:
         self.stop = False
 
-    def execute(self) -> None:
+    def execute(self, logger: logging.Logger) -> None:
         while not self.stop:
             sleep(0.005)
 

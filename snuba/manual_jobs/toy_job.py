@@ -1,4 +1,6 @@
-from snuba.manual_jobs import Job, JobSpec, logger
+import logging
+
+from snuba.manual_jobs import Job, JobSpec
 
 
 class ToyJob(Job):
@@ -11,7 +13,7 @@ class ToyJob(Job):
     def _build_query(self) -> str:
         return "query"
 
-    def execute(self) -> None:
+    def execute(self, logger: logging.Logger) -> None:
         logger.info(
             "executing job "
             + self.job_spec.job_id
