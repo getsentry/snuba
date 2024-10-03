@@ -16,6 +16,7 @@ import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
 import ViewCustomJobs from "SnubaAdmin/manual_jobs";
+import DatabaseClusters from "./database_clusters";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -99,6 +100,11 @@ const NAV_ITEMS = [
     id: "run-custom-jobs",
     display: "▶️ View/Run Custom Jobs",
     component: ViewCustomJobs,
+  },
+  {
+    id: "database-clusters",
+    display: "🗂️ Database Clusters",
+    component: DatabaseClusters,
   },
 ];
 

@@ -33,6 +33,7 @@ class AdminTools(Enum):
     SNUBA_EXPLAIN = "snuba-explain"
     DELETE_TOOL = "delete_tool"
     MANUAL_JOBS = "view-jobs"
+    DATABASE_CLUSTERS = "database-clusters"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}

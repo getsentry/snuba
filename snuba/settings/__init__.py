@@ -175,6 +175,7 @@ class RedisClusters(TypedDict):
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
     admin_auth: RedisClusterConfig | None
+    manual_jobs: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -186,6 +187,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "dlq": None,
     "optimize": None,
     "admin_auth": None,
+    "manual_jobs": None,
 }
 
 # Query Recording Options
@@ -433,6 +435,8 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # yaml file as well because we validate them. By skipping these steps in production environments
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
+MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

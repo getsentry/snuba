@@ -1,17 +1,28 @@
 use anyhow::Context;
 use chrono::DateTime;
 use seq_macro::seq;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
+use schemars::JsonSchema;
 use serde_json::Value;
 
 use crate::config::ProcessorConfig;
 use crate::processors::spans::FromSpanMessage;
 use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
+
+pub const ATTRS_SHARD_FACTOR: usize = 20;
+
+macro_rules! seq_attrs {
+    ($($tt:tt)*) => {
+        seq!(N in 0..20 {
+            $($tt)*
+        });
+    }
+}
 
 pub fn process_message(
     payload: KafkaPayload,
@@ -29,21 +40,68 @@ pub fn process_message(
     InsertBatch::from_rows([span], origin_timestamp)
 }
 
-seq!(N in 0..20 {
+seq_attrs! {
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct AttributeMap {
+    #(
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_str_~N: HashMap<String, String>,
+
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    attr_num_~N: HashMap<String, f64>,
+    )*
+}
+}
+
+impl AttributeMap {
+    pub fn insert_str(&mut self, k: String, v: String) {
+        seq_attrs! {
+            let attr_str_buckets = [
+                #(
+                &mut self.attr_str_~N,
+                )*
+            ];
+        };
+
+        attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()].insert(k, v);
+    }
+
+    pub fn insert_num(&mut self, k: String, v: f64) {
+        seq_attrs! {
+            let attr_num_buckets = [
+                #(
+                &mut self.attr_num_~N,
+                )*
+            ];
+        }
+
+        attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()].insert(k, v);
+    }
+}
+
+#[derive(
+    Debug, Default, Deserialize, Serialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Clone,
+)]
+pub(crate) struct PrimaryKey {
+    pub organization_id: u64,
+    pub _sort_timestamp: u32,
+    pub trace_id: Uuid,
+    pub span_id: u64,
+}
+
+/// the span object for the new "events analytics platform"
 #[derive(Debug, Default, Serialize)]
 struct EAPSpan {
-    // the span object for the new "events analytics platform"
-    organization_id: u64,
+    #[serde(flatten)]
+    primary_key: PrimaryKey,
+
     project_id: u64,
     service: String, //currently just project ID as a string
-    trace_id: Uuid,
-    span_id: u64,
     #[serde(default)]
     parent_span_id: u64,
     segment_id: u64,      //aka transaction ID
     segment_name: String, //aka transaction name
     is_segment: bool,     //aka "is transaction"
-    _sort_timestamp: u32,
     start_timestamp: u64,
     end_timestamp: u64,
     duration_ms: u32,
@@ -56,15 +114,9 @@ struct EAPSpan {
     sampling_weight_2: u64,
     sign: u8, //1 for additions, -1 for deletions - for this worker it should be 1
 
-    #(
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attr_str_~N: HashMap<String, String>,
-
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    attr_num_~N: HashMap<String, f64>,
-    )*
+    #[serde(flatten)]
+    attributes: AttributeMap,
 }
-});
 
 fn fnv_1a(input: &[u8]) -> u32 {
     const FNV_1A_PRIME: u32 = 16777619;
@@ -82,11 +134,14 @@ fn fnv_1a(input: &[u8]) -> u32 {
 impl From<FromSpanMessage> for EAPSpan {
     fn from(from: FromSpanMessage) -> EAPSpan {
         let mut res = Self {
-            organization_id: from.organization_id,
+            primary_key: PrimaryKey {
+                organization_id: from.organization_id,
+                _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
+                trace_id: from.trace_id,
+                span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
+            },
             project_id: from.project_id,
-            trace_id: from.trace_id,
             service: from.project_id.to_string(),
-            span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
             parent_span_id: from
                 .parent_span_id
                 .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
@@ -94,7 +149,6 @@ impl From<FromSpanMessage> for EAPSpan {
                 .segment_id
                 .map_or(0, |s| u64::from_str_radix(&s, 16).unwrap_or(0)),
             is_segment: from.is_segment,
-            _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
             start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
             end_timestamp: (from.end_timestamp_precise * 1e6) as u64,
             duration_ms: from.duration_ms,
@@ -111,51 +165,30 @@ impl From<FromSpanMessage> for EAPSpan {
         };
 
         {
-            seq!(N in 0..20 {
-            let mut attr_str_buckets = [
-                #(
-                &mut res.attr_str_~N,
-                )*
-            ];
-            let mut attr_num_buckets = [
-                #(
-                &mut res.attr_num_~N,
-                )*
-            ];
-            });
-
-            let mut insert_string = |k: String, v: String| {
-                attr_str_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_str_buckets.len()]
-                    .insert(k.clone(), v.clone());
-            };
-
-            let mut insert_num = |k: String, v: f64| {
-                attr_num_buckets[(fnv_1a(k.as_bytes()) as usize) % attr_num_buckets.len()]
-                    .insert(k.clone(), v);
-            };
-
             if let Some(sentry_tags) = from.sentry_tags {
-                sentry_tags.iter().for_each(|(k, v)| {
+                for (k, v) in sentry_tags {
                     if k == "transaction" {
-                        res.segment_name = v.clone();
+                        res.segment_name = v;
                     } else {
-                        insert_string(format!("sentry.{}", k), v.clone());
+                        res.attributes.insert_str(format!("sentry.{k}"), v);
                     }
-                })
+                }
             }
 
             if let Some(tags) = from.tags {
-                tags.iter().for_each(|(k, v)| {
-                    insert_string(k.clone(), v.clone());
-                })
+                for (k, v) in tags {
+                    res.attributes.insert_str(k, v);
+                }
             }
 
             if let Some(measurements) = from.measurements {
-                measurements.iter().for_each(|(k, v)| match k.as_str() {
-                    "client_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
-                    "server_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
-                    _ => insert_num(k.clone(), v.value),
-                });
+                for (k, v) in measurements {
+                    match k.as_str() {
+                        "client_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                        "server_sample_rate" if v.value > 0.0 => res.sampling_factor *= v.value,
+                        _ => res.attributes.insert_num(k, v.value),
+                    }
+                }
             }
 
             // lower precision to compensate floating point errors
@@ -164,25 +197,23 @@ impl From<FromSpanMessage> for EAPSpan {
             res.sampling_weight_2 = res.sampling_weight.round() as u64;
 
             if let Some(data) = from.data {
-                data.iter().for_each(|(k, v)| {
+                for (k, v) in data {
                     match v {
-                        Value::String(string) => insert_string(k.clone(), string.clone()),
-                        Value::Array(array) => insert_string(
-                            k.clone(),
-                            serde_json::to_string(array).unwrap_or_default(),
-                        ),
-                        Value::Object(object) => insert_string(
-                            k.clone(),
-                            serde_json::to_string(object).unwrap_or_default(),
-                        ),
-                        Value::Number(number) => {
-                            insert_num(k.clone(), number.as_f64().unwrap_or_default())
-                        }
-                        Value::Bool(true) => insert_num(k.clone(), 1.0),
-                        Value::Bool(false) => insert_num(k.clone(), 0.0),
-                        _ => Default::default(),
-                    };
-                })
+                        Value::String(string) => res.attributes.insert_str(k, string),
+                        Value::Array(array) => res
+                            .attributes
+                            .insert_str(k, serde_json::to_string(&array).unwrap_or_default()),
+                        Value::Object(object) => res
+                            .attributes
+                            .insert_str(k, serde_json::to_string(&object).unwrap_or_default()),
+                        Value::Number(number) => res
+                            .attributes
+                            .insert_num(k, number.as_f64().unwrap_or_default()),
+                        Value::Bool(true) => res.attributes.insert_num(k, 1.0),
+                        Value::Bool(false) => res.attributes.insert_num(k, 0.0),
+                        _ => (),
+                    }
+                }
             }
         }
 

@@ -1,4 +1,4 @@
-mod eap_spans;
+pub(crate) mod eap_spans;
 mod errors;
 mod functions;
 mod generic_metrics;

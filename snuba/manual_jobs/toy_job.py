@@ -5,15 +5,11 @@ class ToyJob(Job):
     def __init__(
         self,
         job_spec: JobSpec,
-        dry_run: bool,
     ):
-        super().__init__(job_spec, dry_run)
+        super().__init__(job_spec)
 
     def _build_query(self) -> str:
-        if self.dry_run:
-            return "dry run query"
-        else:
-            return "not dry run query"
+        return "query"
 
     def execute(self) -> None:
         logger.info(

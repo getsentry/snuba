@@ -1,21 +1,23 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import AttributeValuesRequest
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
+    AttributeValuesRequest as AttributeValuesRequestProto,
+)
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.trace_item_attribute_values import trace_item_attribute_values_query
+from snuba.web.rpc.v1alpha.trace_item_attribute_values import AttributeValuesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
-BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-    minutes=180
-)
+BASE_TIME = datetime.now(timezone.utc).replace(
+    minute=0, second=0, microsecond=0
+) - timedelta(minutes=180)
 COMMON_META = RequestMeta(
     project_ids=[1, 2, 3],
     organization_id=1,
@@ -33,11 +35,14 @@ COMMON_META = RequestMeta(
     ),
     end_timestamp=Timestamp(
         seconds=int(
-            datetime(
-                year=BASE_TIME.year,
-                month=BASE_TIME.month,
-                day=BASE_TIME.day + 1,
-                tzinfo=UTC,
+            (
+                datetime(
+                    year=BASE_TIME.year,
+                    month=BASE_TIME.month,
+                    day=BASE_TIME.day,
+                    tzinfo=UTC,
+                )
+                + timedelta(days=1)
             ).timestamp()
         )
     ),
@@ -90,27 +95,27 @@ class TestTraceItemAttributes(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = AttributeValuesRequest(
+        message = AttributeValuesRequestProto(
             meta=COMMON_META,
             name="tag1",
             limit=10,
             offset=20,
         )
         response = self.app.post(
-            "/rpc/AttributeValuesRequest", data=message.SerializeToString()
+            "/rpc/AttributeValuesRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200
 
     def test_simple_case(self, setup_teardown: Any) -> None:
-        message = AttributeValuesRequest(meta=COMMON_META, limit=5, name="tag1")
-        response = trace_item_attribute_values_query(message)
+        message = AttributeValuesRequestProto(meta=COMMON_META, limit=5, name="tag1")
+        response = AttributeValuesRequest().execute(message)
         assert response.values == ["blah", "derpderp", "durp", "herp", "herpderp"]
 
     def test_offset(self, setup_teardown: Any) -> None:
-        message = AttributeValuesRequest(
+        message = AttributeValuesRequestProto(
             meta=COMMON_META, limit=5, offset=1, name="tag1"
         )
-        response = trace_item_attribute_values_query(message)
+        response = AttributeValuesRequest().execute(message)
         assert response.values == [
             "derpderp",
             "durp",
@@ -120,8 +125,8 @@ class TestTraceItemAttributes(BaseApiTest):
         ]
 
     def test_with_value_filter(self, setup_teardown: Any) -> None:
-        message = AttributeValuesRequest(
+        message = AttributeValuesRequestProto(
             meta=COMMON_META, limit=5, name="tag1", value_substring_match="erp"
         )
-        response = trace_item_attribute_values_query(message)
+        response = AttributeValuesRequest().execute(message)
         assert response.values == ["derpderp", "herp", "herpderp"]

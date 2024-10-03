@@ -136,7 +136,7 @@ def enforce_retention(
     return retention_days
 
 
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\\|", "=": "\\="})
 
 
 class EventTooOld(SerializableException):

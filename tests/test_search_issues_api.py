@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Callable, MutableMapping, Tuple, Union
+from unittest.mock import patch
 
 import pytest
 import simplejson as json
 
+from snuba import settings
 from snuba.core.initialize import initialize_snuba
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -88,16 +90,14 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
     def delete_query(
         self,
-        occurrence_id: str,
+        group_id: int,
         debug: bool = True,
     ) -> Any:
         return self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
-                    "query": {
-                        "columns": {"occurrence_id": [occurrence_id], "project_id": [3]}
-                    },
+                    "query": {"columns": {"group_id": [group_id], "project_id": [3]}},
                     "debug": True,
                     "tenant_ids": {"referrer": "test", "organization_id": 1},
                 }
@@ -109,12 +109,13 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         set_config("read_through_cache.short_circuit", 1)
         now = datetime.now().replace(minute=0, second=0, microsecond=0)
         occurrence_id = str(uuid.uuid4())
+        group_id = 3
 
         evt: MutableMapping[str, Any] = dict(
             organization_id=1,
             project_id=3,
             event_id=str(uuid.uuid4().hex),
-            group_id=3,
+            group_id=group_id,
             primary_hash=str(uuid.uuid4().hex),
             datetime=datetime.utcnow().isoformat() + "Z",
             platform="other",
@@ -157,12 +158,12 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
         # delete fails when feature flag is off
         set_config("storage_deletes_enabled", 0)
-        response = self.delete_query(occurrence_id)
+        response = self.delete_query(group_id)
         assert int(int(response.status_code) / 100) != 2
 
         # delete succeeds when feature flag is on
         set_config("storage_deletes_enabled", 1)
-        response = self.delete_query(occurrence_id)
+        response = self.delete_query(group_id)
         data = json.loads(response.data)
         assert response.status_code == 200, data
         # TODO: response is different b/n single node and
@@ -185,7 +186,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
     def test_bad_delete(self) -> None:
         res = self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "debug": True,
@@ -199,12 +200,12 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
 
         # test for invalid column types
         res = self.app.delete(
-            "/search_issues/",
+            "/search_issues",
             data=json.dumps(
                 {
                     "query": {
                         "columns": {
-                            "occurrence_id": ["invalid_id"],
+                            "group_id": ["invalid_id"],
                             "project_id": [3],
                         },
                     },
@@ -218,8 +219,21 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         data = json.loads(res.data)
         assert (
             data["error"]["message"]
-            == "Invalid value invalid_id for column type schemas.UUID(modifiers=None)"
+            == "Invalid value invalid_id for column type schemas.UInt(64, modifiers=None)"
         )
+
+    def test_delete_with_too_many_ongoing_mutation(self) -> None:
+        with patch(
+            "snuba.web.delete_query._num_ongoing_mutations",
+            return_value=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE + 1,
+        ):
+            group_id = 3
+            response = self.delete_query(group_id)
+            assert response.status_code == 503
+            assert (
+                json.loads(response.data)["error"]["message"]
+                == f"max ongoing mutations to do a delete is {settings.MAX_ONGOING_MUTATIONS_FOR_DELETE}, but at least one replica has {settings.MAX_ONGOING_MUTATIONS_FOR_DELETE+1} ongoing"
+            )
 
     def test_simple_search_query(self) -> None:
         now = datetime.now().replace(minute=0, second=0, microsecond=0)

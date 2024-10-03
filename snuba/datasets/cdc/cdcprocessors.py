@@ -15,10 +15,10 @@ POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
 
 date_re = re.compile(
-    "^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(\+\d{2})"
+    r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(\+\d{2})"
 )
 
-date_with_nanosec = re.compile("^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.")
+date_with_nanosec = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.")
 
 
 def parse_postgres_datetime(date: str) -> datetime:

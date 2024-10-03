@@ -5,7 +5,9 @@ from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
+    SpanSamplesRequest as SpanSamplesRequestProto,
+)
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
     AttributeKey,
@@ -21,7 +23,7 @@ from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.span_samples import span_samples_query
+from snuba.web.rpc.v1alpha.span_samples import SpanSamplesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -118,7 +120,7 @@ class TestSpanSamples(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = SpanSamplesRequest(
+        message = SpanSamplesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -134,21 +136,21 @@ class TestSpanSamples(BaseApiTest):
             ),
             keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
             order_by=[
-                SpanSamplesRequest.OrderBy(
+                SpanSamplesRequestProto.OrderBy(
                     key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
                 )
             ],
             limit=10,
         )
         response = self.app.post(
-            "/rpc/SpanSamplesRequest", data=message.SerializeToString()
+            "/rpc/SpanSamplesRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200, response.text
 
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequest(
+        message = SpanSamplesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -164,13 +166,13 @@ class TestSpanSamples(BaseApiTest):
             ),
             keys=[AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")],
             order_by=[
-                SpanSamplesRequest.OrderBy(
+                SpanSamplesRequestProto.OrderBy(
                     key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
                 )
             ],
             limit=61,
         )
-        response = span_samples_query(message)
+        response = SpanSamplesRequest().execute(message)
         assert [
             dict((k, x.results[k].val_str) for k in x.results)
             for x in response.span_samples
@@ -179,7 +181,7 @@ class TestSpanSamples(BaseApiTest):
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequest(
+        message = SpanSamplesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -219,7 +221,7 @@ class TestSpanSamples(BaseApiTest):
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"),
             ],
             order_by=[
-                SpanSamplesRequest.OrderBy(
+                SpanSamplesRequestProto.OrderBy(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING, name="sentry.status"
                     )
@@ -227,7 +229,7 @@ class TestSpanSamples(BaseApiTest):
             ],
             limit=61,
         )
-        response = span_samples_query(message)
+        response = SpanSamplesRequest().execute(message)
         assert [
             dict(
                 (k, (x.results[k].val_bool or x.results[k].val_str)) for k in x.results
@@ -241,7 +243,7 @@ class TestSpanSamples(BaseApiTest):
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequest(
+        message = SpanSamplesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -265,7 +267,7 @@ class TestSpanSamples(BaseApiTest):
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"),
             ],
             order_by=[
-                SpanSamplesRequest.OrderBy(
+                SpanSamplesRequestProto.OrderBy(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING, name="project_name"
                     ),
@@ -285,7 +287,7 @@ class TestSpanSamples(BaseApiTest):
                 ),
             ],
         )
-        response = span_samples_query(message)
+        response = SpanSamplesRequest().execute(message)
         assert [
             dict((k, x.results[k].val_str) for k in x.results)
             for x in response.span_samples
@@ -301,7 +303,7 @@ class TestSpanSamples(BaseApiTest):
     def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequest(
+        message = SpanSamplesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -321,7 +323,7 @@ class TestSpanSamples(BaseApiTest):
                 AttributeKey(type=AttributeKey.TYPE_STRING, name="special_color"),
             ],
             order_by=[
-                SpanSamplesRequest.OrderBy(
+                SpanSamplesRequestProto.OrderBy(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING, name="special_color"
                     )
@@ -336,7 +338,7 @@ class TestSpanSamples(BaseApiTest):
                 ),
             ],
         )
-        response = span_samples_query(message)
+        response = SpanSamplesRequest().execute(message)
         result_dicts = [
             dict((k, x.results[k].val_str) for k in x.results)
             for x in response.span_samples
