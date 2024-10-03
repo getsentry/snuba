@@ -5,7 +5,9 @@ from typing import Any, Mapping
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    TraceItemAttributesRequest,
+    TraceItemAttributesRequest as TraceItemAttributesRequestProto,
+)
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
     TraceItemAttributesResponse,
 )
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
@@ -13,9 +15,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.v1alpha.trace_item_attribute_list import (
-    trace_item_attribute_list_query,
-)
+from snuba.web.rpc.v1alpha.trace_item_attribute_list import TraceItemAttributesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -70,7 +70,7 @@ class TestTraceItemAttributes(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = TraceItemAttributesRequest(
+        message = TraceItemAttributesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -105,12 +105,13 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=20,
         )
         response = self.app.post(
-            "/rpc/TraceItemAttributesRequest/v1alpha", data=message.SerializeToString()
+            "/rpc/TraceItemAttributesRequest/v1alpha",
+            data=message.SerializeToString(),
         )
         assert response.status_code == 200
 
     def test_simple_case_str(self, setup_teardown: Any) -> None:
-        message = TraceItemAttributesRequest(
+        message = TraceItemAttributesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -147,7 +148,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=0,
             type=AttributeKey.Type.TYPE_STRING,
         )
-        response = trace_item_attribute_list_query(message)
+        response = TraceItemAttributesRequest().execute(message)
         assert response.tags == [
             TraceItemAttributesResponse.Tag(
                 name=f"a_tag_{i:03}", type=AttributeKey.Type.TYPE_STRING
@@ -156,7 +157,7 @@ class TestTraceItemAttributes(BaseApiTest):
         ]
 
     def test_simple_case_float(self, setup_teardown: Any) -> None:
-        message = TraceItemAttributesRequest(
+        message = TraceItemAttributesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -193,7 +194,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=0,
             type=AttributeKey.Type.TYPE_FLOAT,
         )
-        response = trace_item_attribute_list_query(message)
+        response = TraceItemAttributesRequest().execute(message)
         assert response.tags == [
             TraceItemAttributesResponse.Tag(
                 name=f"b_measurement_{i:03}", type=AttributeKey.Type.TYPE_FLOAT
@@ -202,7 +203,7 @@ class TestTraceItemAttributes(BaseApiTest):
         ]
 
     def test_with_offset(self, setup_teardown: Any) -> None:
-        message = TraceItemAttributesRequest(
+        message = TraceItemAttributesRequestProto(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -239,7 +240,7 @@ class TestTraceItemAttributes(BaseApiTest):
             offset=10,
             type=AttributeKey.Type.TYPE_FLOAT,
         )
-        response = trace_item_attribute_list_query(message)
+        response = TraceItemAttributesRequest().execute(message)
         assert response.tags == [
             TraceItemAttributesResponse.Tag(
                 name="b_measurement_010", type=AttributeKey.Type.TYPE_FLOAT
