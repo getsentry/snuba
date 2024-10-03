@@ -125,7 +125,7 @@ def list_job_specs_with_status(
     }
 
 
-def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:
+def run_job(job_spec: JobSpec) -> JobStatus:
     current_job_status = get_job_status(job_spec.job_id)
     if current_job_status is not None and current_job_status != JobStatus.NOT_STARTED:
         raise JobStatusException(job_id=job_spec.job_id, status=current_job_status)
@@ -136,17 +136,14 @@ def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:
 
     current_job_status = _set_job_status(job_spec.job_id, JobStatus.NOT_STARTED)
 
-    job_to_run = _JobLoader.get_job_instance(job_spec, dry_run)
+    job_to_run = _JobLoader.get_job_instance(job_spec)
 
     try:
-        if not dry_run:
-            current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
+        current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
         job_to_run.execute()
-        if not dry_run:
-            current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
+        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
     except BaseException:
-        if not dry_run:
-            current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
+        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
         capture_exception()
     finally:
         _release_job_lock(job_spec.job_id)
