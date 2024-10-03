@@ -33,7 +33,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "processors.tags_hash_map")
 logger = logging.getLogger("snuba.mapping_optimizer")
 
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "=": "\\="})
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "=": "\="})
 
 
 class ConditionClass(Enum):

@@ -90,17 +90,17 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
         cache_key = ",".join([segment.value for segment in format])
 
         PARTSEGMENT_RE = {
-            PartSegment.DATE: r"('(?P<date>\d{4}-\d{2}-\d{2})')",
-            PartSegment.RETENTION_DAYS: r"(?P<retention_days>\d+)",
+            PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
+            PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
         }
 
-        SEP = r",\s*"
+        SEP = ",\s*"
 
         try:
             return re_cache[cache_key]
         except KeyError:
             re_cache[cache_key] = re.compile(
-                rf"\({SEP.join([PARTSEGMENT_RE[s] for s in partition_format])}\)"
+                f"\({SEP.join([PARTSEGMENT_RE[s] for s in partition_format])}\)"
             )
 
         return re_cache[cache_key]
