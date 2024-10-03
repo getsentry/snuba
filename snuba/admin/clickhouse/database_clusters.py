@@ -74,10 +74,16 @@ def get_node_info() -> Sequence[Node]:
         )
         nodes = [
             Node(
-                *result,
-                host_info.storage_name,
-                host_info.is_query_node,
-                host_info.is_distributed
+                cluster=result[0],
+                host_name=result[1],
+                host_address=result[2],
+                port=result[3],
+                shard=result[4],
+                replica=result[5],
+                version=result[6],
+                storage_name=host_info.storage_name,
+                is_query_node=host_info.is_query_node,
+                is_distributed=host_info.is_distributed,
             )
             for result in connection.execute(
                 "SELECT cluster, host_name, host_address, port, shard_num, replica_num, version() FROM system.clusters WHERE is_local = 1;"

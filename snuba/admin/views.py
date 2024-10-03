@@ -1284,7 +1284,8 @@ def clickhouse_system_settings() -> Response:
                 jsonify({"error": "Host, port, and storage are required"}), 400
             )
 
-        settings = get_system_settings(host, int(port), storage)
+        # conversions for typing
+        settings = get_system_settings(str(host), int(str(port)), str(storage))
         return make_response(jsonify(settings), 200)
     except Exception as e:
         sentry_sdk.capture_exception(e)
