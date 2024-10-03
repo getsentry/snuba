@@ -22,7 +22,8 @@ expression: snapshot_payload
       ]
     ],
     "clickhouse_queries.bytes_scanned": [
-      1305
+      1305,
+      0
     ],
     "clickhouse_queries.cache_hit": [
       0

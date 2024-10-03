@@ -1,0 +1,13 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: ".query_list.?.result_profile.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "progress_bytes",
+        },
+    },
+]
