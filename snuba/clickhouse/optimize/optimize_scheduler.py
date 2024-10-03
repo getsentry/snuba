@@ -6,7 +6,7 @@ from typing import MutableSequence, Sequence
 from snuba import settings
 from snuba.clickhouse.optimize.util import get_num_threads
 
-CLICKHOUSE_PARTITION_RE = re.compile("\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")
+CLICKHOUSE_PARTITION_RE = re.compile(r"\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])")
 
 
 class OptimizedSchedulerTimeout(Exception):

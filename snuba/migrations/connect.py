@@ -110,7 +110,7 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     Checks that the clickhouse version is at least the min version and at most the max version
     """
     ver = clickhouse.execute("SELECT version()").results[0][0]
-    ver = re.search("(\d+.\d+.\d+.\d+)", ver)
+    ver = re.search(r"(\d+.\d+.\d+.\d+)", ver)
     if ver is None or version.parse(ver.group()) < version.parse(
         CLICKHOUSE_SERVER_MIN_VERSION
     ):
