@@ -1,10 +1,11 @@
 import uuid
+from typing import Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    AttributeValuesRequest,
-    AttributeValuesResponse,
+    AttributeValuesRequest as AttributeValuesRequestProto,
 )
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import AttributeValuesResponse
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -18,8 +19,8 @@ from snuba.query.dsl import column, literal, literals_array
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
     treeify_or_and_conditions,
@@ -28,7 +29,7 @@ from snuba.web.rpc.common.common import (
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
-def _build_query(request: AttributeValuesRequest) -> Query:
+def _build_query(request: AttributeValuesRequestProto) -> Query:
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
@@ -73,7 +74,7 @@ def _build_query(request: AttributeValuesRequest) -> Query:
 
 
 def _build_snuba_request(
-    request: AttributeValuesRequest,
+    request: AttributeValuesRequestProto,
 ) -> SnubaRequest:
     return SnubaRequest(
         id=str(uuid.uuid4()),
@@ -94,16 +95,24 @@ def _build_snuba_request(
     )
 
 
-def trace_item_attribute_values_query(
-    request: AttributeValuesRequest, timer: Timer | None = None
-) -> AttributeValuesResponse:
-    timer = timer or Timer("trace_item_values")
-    snuba_request = _build_snuba_request(request)
-    res = run_query(
-        dataset=PluggableDataset(name="eap", all_entities=[]),
-        request=snuba_request,
-        timer=timer,
-    )
-    return AttributeValuesResponse(
-        values=[r["attr_value"] for r in res.result.get("data", [])]
-    )
+class AttributeValuesRequest(
+    RPCEndpoint[AttributeValuesRequestProto, AttributeValuesResponse]
+):
+    @classmethod
+    def version(cls) -> str:
+        return "v1alpha"
+
+    @classmethod
+    def request_class(cls) -> Type[AttributeValuesRequestProto]:
+        return AttributeValuesRequestProto
+
+    def _execute(self, in_msg: AttributeValuesRequestProto) -> AttributeValuesResponse:
+        snuba_request = _build_snuba_request(in_msg)
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
+        )
+        return AttributeValuesResponse(
+            values=[r["attr_value"] for r in res.result.get("data", [])]
+        )

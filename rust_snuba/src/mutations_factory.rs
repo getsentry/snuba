@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
@@ -94,6 +95,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
             Some("parse"),
         );
 
-        Box::new(next_step)
+        if let Some(path) = &self.health_check_file {
+            Box::new(HealthCheck::new(next_step, path))
+        } else {
+            Box::new(next_step)
+        }
     }
 }

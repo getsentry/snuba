@@ -1,12 +1,12 @@
 import uuid
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSample
 from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import (
-    SpanSample,
-    SpanSamplesRequest,
-    SpanSamplesResponse,
+    SpanSamplesRequest as SpanSamplesRequestProto,
 )
+from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesResponse
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
@@ -22,8 +22,8 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
@@ -34,7 +34,7 @@ from snuba.web.rpc.common.common import (
 
 
 def _convert_order_by(
-    order_by: Sequence[SpanSamplesRequest.OrderBy],
+    order_by: Sequence[SpanSamplesRequestProto.OrderBy],
 ) -> Sequence[OrderBy]:
     res: List[OrderBy] = []
     for x in order_by:
@@ -48,7 +48,7 @@ def _convert_order_by(
     return res
 
 
-def _build_query(request: SpanSamplesRequest) -> Query:
+def _build_query(request: SpanSamplesRequestProto) -> Query:
     entity = Entity(
         key=EntityKey("eap_spans"),
         schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -77,7 +77,7 @@ def _build_query(request: SpanSamplesRequest) -> Query:
 
 
 def _build_snuba_request(
-    request: SpanSamplesRequest,
+    request: SpanSamplesRequestProto,
 ) -> SnubaRequest:
     return SnubaRequest(
         id=str(uuid.uuid4()),
@@ -120,16 +120,22 @@ def _convert_results(
         yield SpanSample(results=results)
 
 
-def span_samples_query(
-    request: SpanSamplesRequest, timer: Optional[Timer] = None
-) -> SpanSamplesResponse:
-    timer = timer or Timer("timeseries_query")
-    snuba_request = _build_snuba_request(request)
-    res = run_query(
-        dataset=PluggableDataset(name="eap", all_entities=[]),
-        request=snuba_request,
-        timer=timer,
-    )
-    span_samples = _convert_results(request.keys, res.result.get("data", []))
+class SpanSamplesRequest(RPCEndpoint[SpanSamplesRequestProto, SpanSamplesResponse]):
+    @classmethod
+    def version(cls) -> str:
+        return "v1alpha"
 
-    return SpanSamplesResponse(span_samples=span_samples)
+    @classmethod
+    def request_class(cls) -> Type[SpanSamplesRequestProto]:
+        return SpanSamplesRequestProto
+
+    def execute(self, in_msg: SpanSamplesRequestProto) -> SpanSamplesResponse:
+        snuba_request = _build_snuba_request(in_msg)
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
+        )
+        span_samples = _convert_results(in_msg.keys, res.result.get("data", []))
+
+        return SpanSamplesResponse(span_samples=span_samples)

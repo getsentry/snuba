@@ -1,10 +1,9 @@
-use std::time::Duration;
-
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
 use rust_arroyo::types::Message;
 use serde::Serialize;
+use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
@@ -12,7 +11,6 @@ use uuid::Uuid;
 
 use crate::mutations::parser::MutationBatch;
 use crate::processors::eap_spans::{AttributeMap, PrimaryKey, ATTRS_SHARD_FACTOR};
-
 #[derive(Clone)]
 pub struct ClickhouseWriter {
     url: String,
@@ -141,7 +139,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
     let main_insert = format!(
         "
         INSERT INTO {table}
-        SELECT old_data.* EXCEPT ('sign|attr_.*'), arrayJoin([1, -1]) as sign {attr_combined_columns}
+        SELECT old_data.* EXCEPT ('sign|attr_.*'), arrayJoin([-1, 1]) as sign {attr_combined_columns}
         FROM {table} old_data
         GLOBAL JOIN new_data
         ON old_data.organization_id = new_data.organization_id
@@ -181,25 +179,140 @@ struct MutationRow {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use uuid::Uuid;
 
     use crate::mutations::parser::Update;
 
     use super::*;
 
+    struct ClickhouseTestClient {
+        url: String,
+        table: String,
+        client: Client,
+    }
+
+    impl ClickhouseTestClient {
+        pub async fn new(table: String) -> anyhow::Result<Self> {
+            let hostname = env::var("CLICKHOUSE_HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
+            let http_port = 8123;
+            let url = format!("http://{hostname}:{http_port}");
+            let uuid = Uuid::new_v4().to_string();
+            let table_id = uuid.split('-').next().unwrap();
+
+            let client = reqwest::Client::new();
+            let test_table = format!("{table}_{table_id}_local\n");
+
+            let body =
+                format!("CREATE TABLE IF NOT EXISTS {test_table} AS {table}_local\n").into_bytes();
+
+            // use client to create a new table locally
+            client.post(url.clone()).body(body).send().await?;
+
+            Ok(Self {
+                url,
+                table: test_table,
+                client,
+            })
+        }
+
+        pub async fn run_mutation(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
+            let session_id = Uuid::new_v4().to_string();
+
+            for query in queries {
+                self.client
+                    .post(&self.url)
+                    .query(&[("session_id", &session_id)])
+                    .body(query)
+                    .send()
+                    .await?;
+            }
+            Ok(())
+        }
+
+        pub async fn select_final(&self) -> anyhow::Result<String> {
+            let table = &self.table;
+            let final_query = format!("SELECT * FROM {table} FINAL\n").into_bytes();
+
+            let response = self.client.post(&self.url).body(final_query).send().await?;
+
+            let update = response.text().await?;
+
+            Ok(update)
+        }
+
+        pub async fn drop_table(&self) -> anyhow::Result<()> {
+            let table = &self.table;
+            let drop = format!("DROP TABLE {table}\n").into_bytes();
+
+            self.client.post(&self.url).body(drop).send().await?;
+
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_simple_mutation() {
+        let mut batch = MutationBatch::default();
+        let mut update = Update::default();
+
+        let organization_id = 69;
+        let _sort_timestamp = 1727466947;
+        let trace_id = Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap();
+        let span_id = 16045690984833335023;
+
+        let primary_key = PrimaryKey {
+            organization_id,
+            _sort_timestamp,
+            trace_id,
+            span_id,
+        };
+        update.attr_str.insert("a".to_string(), "b".to_string());
+
+        // build the mutation batch
+        batch.0.insert(primary_key.clone(), update);
+
+        let test_client = ClickhouseTestClient::new("eap_spans".to_string())
+            .await
+            .unwrap();
+
+        let test_table = &test_client.table;
+
+        let insert =
+        format!("INSERT INTO {test_table} (organization_id, _sort_timestamp, trace_id, span_id, sign, retention_days) VALUES ({organization_id}, {_sort_timestamp}, \'{trace_id}\', {span_id}, 1, 90)\n").into_bytes();
+
+        let _ = test_client
+            .client
+            .post(&test_client.url)
+            .body(insert)
+            .send()
+            .await;
+
+        let all_queries = format_query(test_table, &batch);
+        let _ = test_client.run_mutation(all_queries).await;
+
+        // merge data at query time for up-to-date results
+        let mutation = test_client.select_final().await;
+        assert!(mutation.unwrap().contains("{'a':'b'}"));
+
+        // clean up the temporary table at the end of test
+        let _ = test_client.drop_table().await;
+    }
+
     #[test]
     fn format_query_snap() {
         let mut batch = MutationBatch::default();
+        let mut update = Update::default();
+        let primary_key = PrimaryKey {
+            organization_id: 69,
+            _sort_timestamp: 1727466947,
+            trace_id: Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap(),
+            span_id: 16045690984833335023,
+        };
+        update.attr_str.insert("a".to_string(), "b".to_string());
 
-        batch.0.insert(
-            PrimaryKey {
-                organization_id: 69,
-                _sort_timestamp: 1715868485,
-                trace_id: Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap(),
-                span_id: 16045690984833335023,
-            },
-            Update::default(),
-        );
+        batch.0.insert(primary_key.clone(), update);
+
         let mut snapshot = String::new();
         for query in format_query("eap_spans_local", &batch) {
             snapshot.push_str(std::str::from_utf8(&query).unwrap());

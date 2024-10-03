@@ -73,9 +73,13 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
+from snuba.web.delete_query import (
+    DeletesNotEnabledError,
+    TooManyOngoingMutationsError,
+    delete_from_storage,
+)
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc import get_rpc_endpoint
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
@@ -273,14 +277,11 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 
 
 @application.route("/rpc/<name>/<version>", methods=["POST"])
-@util.time_request("rpc")
-def rpc(*, name: str, version: str, timer: Timer) -> Response:
+def rpc(*, name: str, version: str) -> Response:
     try:
-        endpoint, req_class = get_rpc_endpoint(name, version)
-
-        req = req_class()
-        req.ParseFromString(http_request.data)
-        res = endpoint(req, timer)
+        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
+        deserialized_protobuf = endpoint.parse_from_string(http_request.data)
+        res = endpoint.execute(deserialized_protobuf)
         return Response(res.SerializeToString())
     except BadSnubaRPCRequestException as e:
         return Response(str(e), status=400)
@@ -346,6 +347,15 @@ def storage_delete(
             return make_response(
                 jsonify({"error": details}),
                 400,
+            )
+        except TooManyOngoingMutationsError as e:
+            details = {
+                "type": "too_many_ongoing_mutations",
+                "message": str(e),
+            }
+            return make_response(
+                jsonify({"error": details}),
+                503,
             )
         except Exception as error:
             logger.warning("Failed query", exc_info=error)
