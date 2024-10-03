@@ -11,9 +11,23 @@ class Node:
     cluster: str
     host_name: str
     host_address: str
+    port: int
     shard: int
     replica: int
     version: str
+    storage_name: str
+    is_query_node: bool
+    is_distributed: bool
+
+
+@dataclass(frozen=True)
+class SystemSetting:
+    name: str
+    value: str
+    default: str
+    changed: int
+    description: str
+    type: str
 
 
 @dataclass(frozen=True)
@@ -21,6 +35,8 @@ class HostInfo:
     host: str
     port: int
     storage_name: str
+    is_query_node: bool
+    is_distributed: bool
 
 
 def get_node_info() -> Sequence[Node]:
@@ -29,12 +45,24 @@ def get_node_info() -> Sequence[Node]:
     for storage_info in get_storage_info():
         for node in storage_info["dist_nodes"]:
             hosts.add(
-                HostInfo(node["host"], node["port"], storage_info["storage_name"])
+                HostInfo(
+                    node["host"],
+                    node["port"],
+                    storage_info["storage_name"],
+                    storage_info["query_node"] == node,
+                    True,
+                )
             )
 
         for node in storage_info["local_nodes"]:
             hosts.add(
-                HostInfo(node["host"], node["port"], storage_info["storage_name"])
+                HostInfo(
+                    node["host"],
+                    node["port"],
+                    storage_info["storage_name"],
+                    storage_info["query_node"] == node,
+                    False,
+                )
             )
 
     for host_info in hosts:
@@ -45,11 +73,32 @@ def get_node_info() -> Sequence[Node]:
             ClickhouseClientSettings.QUERY,
         )
         nodes = [
-            Node(*result)
+            Node(
+                *result,
+                host_info.storage_name,
+                host_info.is_query_node,
+                host_info.is_distributed
+            )
             for result in connection.execute(
-                "SELECT cluster, host_name, host_address, shard_num, replica_num, version() FROM system.clusters WHERE is_local = 1;"
+                "SELECT cluster, host_name, host_address, port, shard_num, replica_num, version() FROM system.clusters WHERE is_local = 1;"
             ).results
         ]
         node_info.extend(nodes)
 
     return node_info
+
+
+def get_system_settings(host: str, port: int, storage: str) -> Sequence[SystemSetting]:
+    connection = get_ro_node_connection(
+        host,
+        port,
+        storage,
+        ClickhouseClientSettings.QUERY,
+    )
+
+    return [
+        SystemSetting(*result)
+        for result in connection.execute(
+            "SELECT name, value, default, changed, description, type FROM system.server_settings;"
+        ).results
+    ]
