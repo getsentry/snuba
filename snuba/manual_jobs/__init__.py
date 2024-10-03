@@ -2,11 +2,19 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, MutableMapping, Optional, cast
 
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 logger = logging.getLogger("snuba.manual_jobs")
+
+
+class JobStatus(StrEnum):
+    RUNNING = "running"
+    FINISHED = "finished"
+    NOT_STARTED = "not_started"
+    FAILED = "failed"
 
 
 @dataclass

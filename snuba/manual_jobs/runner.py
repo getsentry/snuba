@@ -1,25 +1,22 @@
 import logging
 import os
-from enum import StrEnum
-from typing import Any, Mapping, Sequence, Union
+from typing import Any, Mapping, Union
 
 import simplejson
 
-from snuba.manual_jobs import JobSpec
+from snuba.manual_jobs import JobSpec, JobStatus
 from snuba.manual_jobs.job_loader import _JobLoader
-from snuba.redis import RedisClientKey, get_redis_client
+from snuba.manual_jobs.redis import (
+    _acquire_job_lock,
+    _build_job_status_key,
+    _get_job_status_multi,
+    _redis_client,
+    _release_job_lock,
+    _set_job_status,
+)
 from snuba.utils.serializable_exception import SerializableException
 
-_redis_client = get_redis_client(RedisClientKey.MANUAL_JOBS)
-
 logger = logging.getLogger("snuba.manual_jobs")
-
-
-class JobStatus(StrEnum):
-    RUNNING = "running"
-    FINISHED = "finished"
-    NOT_STARTED = "not_started"
-    FAILED = "failed"
 
 
 class JobLockedException(SerializableException):
@@ -63,39 +60,6 @@ def _build_job_spec_from_entry(content: Any) -> JobSpec:
     )
 
     return job_spec
-
-
-def _build_job_lock_key(job_id: str) -> str:
-    return f"snuba:manual_jobs:{job_id}:lock"
-
-
-def _build_job_status_key(job_id: str) -> str:
-    return f"snuba:manual_jobs:{job_id}:execution_status"
-
-
-def _acquire_job_lock(job_id: str) -> bool:
-    return bool(
-        _redis_client.set(
-            name=_build_job_lock_key(job_id), value=1, nx=True, ex=(24 * 60 * 60)
-        )
-    )
-
-
-def _release_job_lock(job_id: str) -> None:
-    _redis_client.delete(_build_job_lock_key(job_id))
-
-
-def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
-    if not _redis_client.set(name=_build_job_status_key(job_id), value=status.value):
-        raise SerializableException(f"Failed to set job status {status} on {job_id}")
-    return status
-
-
-def _get_job_status_multi(job_ids: Sequence[str]) -> Sequence[JobStatus]:
-    return [
-        redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
-        for redis_status in _redis_client.mget(job_ids)
-    ]
 
 
 def get_job_status(job_id: str) -> JobStatus:
