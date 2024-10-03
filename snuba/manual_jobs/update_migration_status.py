@@ -25,13 +25,9 @@ class UpdateMigrationStatus(Job):
     in the migrations table sensible.
     """
 
-    def __init__(
-        self,
-        job_spec: JobSpec,
-        dry_run: bool,
-    ):
+    def __init__(self, job_spec: JobSpec):
         self.__validate_job_params(job_spec.params)
-        super().__init__(job_spec, dry_run)
+        super().__init__(job_spec)
 
     def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
         assert (
