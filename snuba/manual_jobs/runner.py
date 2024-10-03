@@ -1,6 +1,6 @@
 import os
 from enum import StrEnum
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Sequence, Union
 
 import simplejson
 from sentry_sdk import capture_exception
@@ -89,15 +89,40 @@ def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
     return status
 
 
-def get_job_status(job_id: str) -> Optional[JobStatus]:
+def _get_job_status_multi(job_ids: Sequence[str]) -> Sequence[JobStatus]:
+    return [
+        redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
+        for redis_status in _redis_client.mget(job_ids)
+    ]
+
+
+def get_job_status(job_id: str) -> JobStatus:
     redis_status = _redis_client.get(name=_build_job_status_key(job_id))
-    return JobStatus(redis_status.decode("utf-8")) if redis_status else redis_status
+    return (
+        JobStatus(redis_status.decode("utf-8"))
+        if redis_status
+        else JobStatus.NOT_STARTED
+    )
 
 
 def list_job_specs(
     manifest_filename: str = MANIFEST_FILENAME,
 ) -> Mapping[str, JobSpec]:
     return _read_manifest_from_path(manifest_filename)
+
+
+def list_job_specs_with_status(
+    manifest_filename: str = MANIFEST_FILENAME,
+) -> Mapping[str, Mapping[str, Union[JobSpec, JobStatus]]]:
+    specs = list_job_specs(manifest_filename)
+    job_ids = specs.keys()
+    statuses = _get_job_status_multi(
+        [_build_job_status_key(job_id) for job_id in job_ids]
+    )
+    return {
+        job_id: {"spec": specs[job_id], "status": statuses[i]}
+        for i, job_id in enumerate(job_ids)
+    }
 
 
 def run_job(job_spec: JobSpec, dry_run: bool) -> JobStatus:

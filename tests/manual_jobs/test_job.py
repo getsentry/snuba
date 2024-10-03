@@ -39,7 +39,7 @@ class SlowJob(Job):
 
 @pytest.mark.redis_db
 def test_job_status_changes_to_finished() -> None:
-    assert get_job_status(JOB_ID) is None
+    assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
     run_job(test_job_spec, False)
     assert get_job_status(JOB_ID) == JobStatus.FINISHED
     with pytest.raises(JobStatusException):
@@ -50,7 +50,7 @@ def test_job_status_changes_to_finished() -> None:
 def test_job_with_exception_causes_failure() -> None:
     with patch.object(_JobLoader, "get_job_instance") as MockGetInstance:
         MockGetInstance.return_value = FailJob()
-        assert get_job_status(JOB_ID) is None
+        assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
         run_job(test_job_spec, False)
         assert get_job_status(JOB_ID) == JobStatus.FAILED
 
@@ -60,7 +60,7 @@ def test_slow_job_stay_running() -> None:
     with patch.object(_JobLoader, "get_job_instance") as MockGetInstance:
         job = SlowJob()
         MockGetInstance.return_value = job
-        assert get_job_status(JOB_ID) is None
+        assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
         t = Thread(
             target=run_job, name="slow-background-job", args=[test_job_spec, False]
         )
@@ -72,7 +72,7 @@ def test_slow_job_stay_running() -> None:
 
 @pytest.mark.redis_db
 def test_job_status_with_invalid_job_id() -> None:
-    assert get_job_status("invalid_job_id") is None
+    assert get_job_status("invalid_job_id") == JobStatus.NOT_STARTED
 
 
 @pytest.mark.redis_db

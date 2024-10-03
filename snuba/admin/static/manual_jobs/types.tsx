@@ -5,5 +5,8 @@ type JobSpec = {
 };
 
 type JobSpecMap = {
-  [key: string]: JobSpec;
+  [key: string]: {
+    spec: JobSpec;
+    status: string;
+  };
 };

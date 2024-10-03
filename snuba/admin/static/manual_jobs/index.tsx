@@ -12,12 +12,12 @@ function ViewCustomJobs(props: { api: Client }) {
   }, []);
 
   function jobSpecsAsRows() {
-    return Object.entries(jobSpecs).map(([_, spec]) => {
+    return Object.entries(jobSpecs).map(([_, job_info]) => {
       return [
-        spec.job_id,
-        spec.job_type,
-        JSON.stringify(spec.params),
-        "TODO",
+        job_info.spec.job_id,
+        job_info.spec.job_type,
+        JSON.stringify(job_info.spec.params),
+        job_info.status,
         "TODO",
       ];
     });
