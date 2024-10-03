@@ -22,7 +22,7 @@ def test_before_and_after_execute() -> None:
         def version(cls) -> str:
             return "v1"
 
-        def _before_execute(self, in_msg: Timestamp):
+        def _before_execute(self, in_msg: Timestamp) -> None:
             nonlocal before_called
             before_called = True
 

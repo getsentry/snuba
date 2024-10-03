@@ -39,7 +39,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     def parse_from_string(self, bytestring: bytes) -> Tin:
         res = self.request_class()()
-        res.ParseFromString(bytestring)  # type: ignore
+        res.ParseFromString(bytestring)
         return res
 
     def execute(self, in_msg: Tin) -> Tout:
