@@ -148,7 +148,7 @@ def test_simple() -> None:
                 "clickhouse_queries.groupby_columns": [[]],
                 "clickhouse_queries.array_join_columns": [[]],
                 "clickhouse_queries.bytes_scanned": [0],
-                "clickhouse_queries.result_set_bytes": [1337],
+                "clickhouse_queries.bytes": [1337],
             }
         ],
         None,
