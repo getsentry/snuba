@@ -39,7 +39,7 @@ import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
-import { ClickhouseNodeInfo } from "./database_clusters/types";
+import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "SnubaAdmin/database_clusters/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
@@ -110,6 +110,7 @@ interface Client {
   ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
+  getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
 }
 
 function Client(): Client {
@@ -533,7 +534,23 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       }).then((resp) => resp.text());
-    }
+    },
+    getClickhouseSystemSettings: (host: string, port: number, storage: string) => {
+      const url = `${baseUrl}clickhouse_system_settings?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&storage=${encodeURIComponent(storage)}`;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "GET",
+      }).then((resp) => {
+        if (resp.ok) {
+          return resp.json();
+        } else {
+          return resp.json().then((err) => {
+            let errMsg = err?.error || "Could not get Clickhouse system settings";
+            throw new Error(errMsg);
+          });
+        }
+      });
+    },
   };
 }
 
