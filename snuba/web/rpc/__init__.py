@@ -13,10 +13,9 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
-    def __init__(self) -> None:
-        self._timer = Timer(
-            self.config_key(),
-        )
+    def __init__(self, metrics_backend=None) -> None:
+        self._timer = Timer("endpoint_timing")
+        self._metrics_backend = metrics_backend or environment.metrics
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -37,7 +36,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @property
     def metrics(self) -> MetricsWrapper:
         return MetricsWrapper(
-            environment.metrics,
+            self._metrics_backend,
             "rpc",
             tags={"endpoint_name": self.__class__.__name__, "version": self.version()},
         )
@@ -69,6 +68,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         self._before_execute(in_msg)
 
     def _before_execute(self, in_msg: Tin) -> None:
+        """Override this for any pre-processing/logging before the _execute method"""
         pass
 
     def _execute(self, in_msg: Tin) -> Tout:
@@ -77,17 +77,20 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def __after_execute(
         self, in_msg: Tin, out_msg: Tout, error: Exception | None
     ) -> Tout:
+        res = self._after_execute(in_msg, out_msg, error)
         self._timer.mark("rpc_end")
         self._timer.send_metrics_to(self.metrics)
         if error is not None:
             self.metrics.increment("request_error")
+            raise error
         else:
             self.metrics.increment("request_success")
-        return self._after_execute(in_msg, out_msg, error)
+        return res
 
     def _after_execute(
         self, in_msg: Tin, out_msg: Tout, error: Exception | None
     ) -> Tout:
+        """Override this for any post-processing/logging after the _execute method"""
         return out_msg
 
 
