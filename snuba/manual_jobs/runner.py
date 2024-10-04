@@ -1,9 +1,9 @@
+import logging
 import os
 from enum import StrEnum
 from typing import Any, Mapping, Sequence, Union
 
 import simplejson
-from sentry_sdk import capture_exception
 
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_loader import _JobLoader
@@ -11,6 +11,8 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.serializable_exception import SerializableException
 
 _redis_client = get_redis_client(RedisClientKey.MANUAL_JOBS)
+
+logger = logging.getLogger("snuba.manual_jobs")
 
 
 class JobStatus(StrEnum):
@@ -144,7 +146,7 @@ def run_job(job_spec: JobSpec) -> JobStatus:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
     except BaseException:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
-        capture_exception()
+        logger.error("Job failed", exc_info=True)
     finally:
         _release_job_lock(job_spec.job_id)
 
