@@ -112,10 +112,11 @@ def run_job(job_spec: JobSpec) -> JobStatus:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
         job_to_run.execute(job_logger)
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
+        job_logger.info("[runner] job execution finished")
     except BaseException:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
-        job_logger.error("Job execution failed")
-        job_logger.info(f"exception {traceback.format_exc()}")
+        job_logger.error("[runner] job execution failed")
+        job_logger.info(f"[runner] exception {traceback.format_exc()}")
     finally:
         _release_job_lock(job_spec.job_id)
 
