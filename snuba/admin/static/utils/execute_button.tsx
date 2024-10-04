@@ -13,7 +13,12 @@ function ExecuteButton(props: {
 
   const defaultError = (err: any) => {
     console.log("ERROR", err);
-    window.alert("An error occurred: " + err);
+    try {
+      window.alert("An error occurred: " + JSON.stringify(err));
+    }
+    catch {
+      window.alert("An error occurred: " + err);
+    }
   };
   let errorCallback = props.onError || defaultError;
 
