@@ -1,7 +1,7 @@
 import Client from "SnubaAdmin/api_client";
 import { Table } from "SnubaAdmin/table";
 import React, { useEffect, useState } from "react";
-import Button from "react-bootstrap/esm/Button";
+import Button from "react-bootstrap/Button";
 
 function ViewCustomJobs(props: { api: Client }) {
   const [jobSpecs, setJobSpecs] = useState<JobSpecMap>({});
