@@ -1,12 +1,13 @@
 import logging
 import os
+import traceback
 from typing import Any, Mapping, Sequence, Union
 
 import simplejson
 
 from snuba.manual_jobs import JobSpec, JobStatus
 from snuba.manual_jobs.job_loader import _JobLoader
-from snuba.manual_jobs.job_logging import _MultiplexingRedisLogger
+from snuba.manual_jobs.job_logging import get_job_logger
 from snuba.manual_jobs.redis import (
     _acquire_job_lock,
     _build_job_log_key,
@@ -95,7 +96,7 @@ def list_job_specs_with_status(
 
 def run_job(job_spec: JobSpec) -> JobStatus:
     current_job_status = get_job_status(job_spec.job_id)
-    job_logger = _MultiplexingRedisLogger(logger, job_spec.job_id)
+    job_logger = get_job_logger(logger, job_spec.job_id)
     if current_job_status is not None and current_job_status != JobStatus.NOT_STARTED:
         raise JobStatusException(job_id=job_spec.job_id, status=current_job_status)
 
@@ -113,7 +114,8 @@ def run_job(job_spec: JobSpec) -> JobStatus:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
     except BaseException:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
-        logger.error("Job failed", exc_info=True)
+        job_logger.error("Job execution failed")
+        job_logger.info(f"exception {traceback.format_exc()}")
     finally:
         _release_job_lock(job_spec.job_id)
 

@@ -17,6 +17,28 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class JobLogger(ABC):
+    @abstractmethod
+    def debug(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def info(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def warning(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def warn(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def error(self, line: str) -> None:
+        pass
+
+
 @dataclass
 class JobSpec:
     job_id: str
@@ -32,7 +54,7 @@ class Job(ABC, metaclass=RegisteredClass):
                 setattr(self, k, v)
 
     @abstractmethod
-    def execute(self, logger: logging.Logger) -> None:
+    def execute(self, logger: JobLogger) -> None:
         raise NotImplementedError
 
     @classmethod
