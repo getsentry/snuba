@@ -19,7 +19,7 @@ function DatabaseClusters(props: { api: Client }) {
 
     const handleNodeClick = (node: ClickhouseNodeInfo) => {
         setSelectedNode(node);
-        props.api.getClickhouseSystemSettings(node.host_address, node.port, node.storage_name).then((res) => {
+        props.api.getClickhouseSystemSettings(node.host_name, node.port, node.storage_name).then((res) => {
             setSystemSettings(res);
         });
     };
