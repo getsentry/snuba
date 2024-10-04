@@ -21,6 +21,9 @@ expression: snapshot_payload
         "errors_local.tags.value"
       ]
     ],
+    "clickhouse_queries.bytes": [
+      1305
+    ],
     "clickhouse_queries.bytes_scanned": [
       0
     ],
@@ -59,9 +62,6 @@ expression: snapshot_payload
     ],
     "clickhouse_queries.query_id": [
       "9079915acbacff0804ed45c72b865024"
-    ],
-    "clickhouse_queries.result_set_bytes": [
-      1305
     ],
     "clickhouse_queries.sample": [
       0.0
