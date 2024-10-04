@@ -170,6 +170,30 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--auto-offset-reset=latest",
                 ],
             ),
+            (
+                "subscriptions-scheduler-eap-spans",
+                [
+                    "snuba",
+                    "subscriptions-scheduler",
+                    "--entity=eap_spans",
+                    "--consumer-group=snuba-eap_spans-subscriptions-scheduler",
+                    "--followed-consumer-group=eap_spans_group",
+                    "--auto-offset-reset=latest",
+                    "--log-level=debug",
+                    "--schedule-ttl=10",
+                ],
+            ),
+            (
+                "subscriptions-executor-eap-spans",
+                [
+                    "snuba",
+                    "subscriptions-executor",
+                    "--dataset=events_analytics_platform",
+                    "--entity=eap_spans",
+                    "--consumer-group=snuba-eap_spans-subscription-executor",
+                    "--auto-offset-reset=latest",
+                ],
+            ),
         ]
 
     else:
