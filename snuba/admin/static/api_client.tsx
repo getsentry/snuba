@@ -109,6 +109,7 @@ interface Client {
     column_conditions: object
   ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
+  runJob(job_id: string): Promise<String>;
 }
 
 function Client(): Client {
@@ -526,6 +527,13 @@ function Client(): Client {
         method: "GET",
       }).then((resp) => resp.json());
     },
+    runJob: (job_id: string) => {
+      const url = baseUrl + "job-specs/" + job_id;
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      }).then((resp) => resp.text());
+    }
   };
 }
 

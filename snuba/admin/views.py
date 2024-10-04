@@ -73,7 +73,7 @@ from snuba.datasets.storages.factory import (
     get_writable_storage,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.manual_jobs.runner import list_job_specs_with_status
+from snuba.manual_jobs.runner import list_job_specs, list_job_specs_with_status, run_job
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
@@ -1264,6 +1264,13 @@ def deletes_enabled() -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def get_job_specs() -> Response:
     return make_response(jsonify(list_job_specs_with_status()), 200)
+
+
+@application.route("/job-specs/<job_id>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def execute_job(job_id: str) -> Response:
+    job_specs = list_job_specs()
+    return make_response(run_job(job_specs[job_id]), 200)
 
 
 @application.route("/clickhouse_node_info")
