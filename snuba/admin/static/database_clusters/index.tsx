@@ -2,7 +2,7 @@ import { MantineReactTable, MRT_ColumnDef, useMantineReactTable } from "mantine-
 import React, { useMemo } from "react";
 import { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
-import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "./types";
+import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "SnubaAdmin/database_clusters/types";
 import { Button } from "@mantine/core";
 
 

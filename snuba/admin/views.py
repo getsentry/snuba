@@ -1282,15 +1282,14 @@ def clickhouse_node_info() -> Response:
 @application.route("/clickhouse_system_settings")
 @check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
 def clickhouse_system_settings() -> Response:
+    host = request.args.get("host")
+    port = request.args.get("port")
+    storage = request.args.get("storage")
+    if not all([host, port, storage]):
+        return make_response(
+            jsonify({"error": "Host, port, and storage are required"}), 400
+        )
     try:
-        host = request.args.get("host")
-        port = request.args.get("port")
-        storage = request.args.get("storage")
-        if not all([host, port, storage]):
-            return make_response(
-                jsonify({"error": "Host, port, and storage are required"}), 400
-            )
-
         # conversions for typing
         settings = get_system_settings(str(host), int(str(port)), str(storage))
         return make_response(jsonify(settings), 200)

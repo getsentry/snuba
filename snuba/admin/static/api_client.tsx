@@ -39,7 +39,7 @@ import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
 
 import { ReplayInstruction, Topic } from "SnubaAdmin/dead_letter_queue/types";
 import { AutoReplacementsBypassProjectsData } from "SnubaAdmin/auto_replacements_bypass_projects/types";
-import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "./database_clusters/types";
+import { ClickhouseNodeInfo, ClickhouseSystemSetting } from "SnubaAdmin/database_clusters/types";
 
 interface Client {
   getSettings: () => Promise<Settings>;
