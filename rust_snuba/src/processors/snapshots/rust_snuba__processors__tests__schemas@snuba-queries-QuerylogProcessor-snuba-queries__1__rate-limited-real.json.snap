@@ -55,6 +55,9 @@ expression: snapshot_payload
     "clickhouse_queries.query_id": [
       "3c369a12aedfa413840c5449a1573575"
     ],
+    "clickhouse_queries.result_set_bytes": [
+      0
+    ],
     "clickhouse_queries.sample": [
       1.0
     ],

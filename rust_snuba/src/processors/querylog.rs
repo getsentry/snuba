@@ -164,6 +164,8 @@ struct QueryList {
     array_join_columns: Vec<Vec<String>>,
     #[serde(rename(serialize = "clickhouse_queries.bytes_scanned"))]
     bytes_scanned: Vec<u64>,
+    #[serde(rename(serialize = "clickhouse_queries.result_set_bytes"))]
+    result_set_bytes: Vec<u64>,
     #[serde(rename(serialize = "clickhouse_queries.duration_ms"))]
     duration_ms: Vec<u64>,
 }
@@ -191,6 +193,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
         let mut groupby_columns = vec![];
         let mut array_join_columns = vec![];
         let mut bytes_scanned = vec![];
+        let mut result_set_bytes = vec![];
         let mut duration_ms = vec![];
 
         for q in from {
@@ -225,8 +228,8 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             groupby_columns.push(q.profile.groupby_cols);
             array_join_columns.push(q.profile.array_join_cols);
             let result_profile = q.result_profile.unwrap_or_default();
-            bytes_scanned.push(result_profile.bytes);
             bytes_scanned.push(result_profile.progress_bytes);
+            result_set_bytes.push(result_profile.bytes);
             duration_ms.push((result_profile.elapsed * 1000.0) as u64);
 
             // consistent, cache hit, max_threads and is_duplicated may not be present
@@ -275,6 +278,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             groupby_columns,
             array_join_columns,
             bytes_scanned,
+            result_set_bytes,
             duration_ms,
         })
     }
