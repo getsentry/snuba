@@ -23,5 +23,5 @@ class ToyJob(Job):
         if not self.job_spec.params:
             return
 
-        if self.job_spec.params["fail"]:
+        if self.job_spec.params.get("fail"):
             raise Exception("failed as requested")

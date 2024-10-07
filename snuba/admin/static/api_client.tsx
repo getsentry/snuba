@@ -110,6 +110,7 @@ interface Client {
   ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
+  getJobLogs(job_id: string): Promise<string[]>;
   getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
 }
 
@@ -534,6 +535,13 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       }).then((resp) => resp.text());
+    },
+    getJobLogs: (job_id: string) => {
+      const url = baseUrl + "job-specs/" + job_id + "/logs";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+        method: "GET",
+      }).then((resp) => resp.json());
     },
     getClickhouseSystemSettings: (host: string, port: number, storage: string) => {
       const url = `${baseUrl}clickhouse_system_settings?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&storage=${encodeURIComponent(storage)}`;
