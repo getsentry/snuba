@@ -22,7 +22,7 @@ from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.database_clusters import get_node_info
+from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -1288,3 +1288,22 @@ def get_job_logs(job_id: str) -> Response:
 @check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
 def clickhouse_node_info() -> Response:
     return make_response(jsonify(get_node_info()), 200)
+
+
+@application.route("/clickhouse_system_settings")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_system_settings() -> Response:
+    host = request.args.get("host")
+    port = request.args.get("port")
+    storage = request.args.get("storage")
+    if not all([host, port, storage]):
+        return make_response(
+            jsonify({"error": "Host, port, and storage are required"}), 400
+        )
+    try:
+        # conversions for typing
+        settings = get_system_settings(str(host), int(str(port)), str(storage))
+        return make_response(jsonify(settings), 200)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        return make_response(jsonify({"error": str(e)}), 500)
