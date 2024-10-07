@@ -99,4 +99,4 @@ def test_error_metrics() -> None:
     ]
 
     metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
-    assert metric_names_to_metric["rpc.request_error"].value == 1
+    assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore

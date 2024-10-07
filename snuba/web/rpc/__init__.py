@@ -4,6 +4,7 @@ from typing import Generic, Type, TypeVar, cast
 from google.protobuf.message import Message as ProtobufMessage
 
 from snuba import environment
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
@@ -13,7 +14,7 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
-    def __init__(self, metrics_backend=None) -> None:
+    def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
         self._timer = Timer("endpoint_timing")
         self._metrics_backend = metrics_backend or environment.metrics
 
@@ -63,7 +64,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
             error = e
         return self.__after_execute(in_msg, out, error)
 
-    def __before_execute(self, in_msg: Tin):
+    def __before_execute(self, in_msg: Tin) -> None:
         self._timer.mark("rpc_start")
         self._before_execute(in_msg)
 
