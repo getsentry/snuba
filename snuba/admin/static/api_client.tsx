@@ -542,7 +542,7 @@ function Client(): Client {
         headers: { "Content-Type": "application/json" },
         method: "GET",
       }).then((resp) => resp.json());
-    }
+    },
     getClickhouseSystemSettings: (host: string, port: number, storage: string) => {
       const url = `${baseUrl}clickhouse_system_settings?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&storage=${encodeURIComponent(storage)}`;
       return fetch(url, {
