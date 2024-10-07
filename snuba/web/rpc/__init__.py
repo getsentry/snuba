@@ -3,7 +3,10 @@ from typing import Generic, Type, TypeVar, cast
 
 from google.protobuf.message import Message as ProtobufMessage
 
+from snuba import environment
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
@@ -11,8 +14,9 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
-    def __init__(self) -> None:
-        self._timer = Timer(self.config_key())
+    def __init__(self, metrics_backend: MetricsBackend | None = None) -> None:
+        self._timer = Timer("endpoint_timing")
+        self._metrics_backend = metrics_backend or environment.metrics
 
     @classmethod
     def request_class(cls) -> Type[Tin]:
@@ -30,6 +34,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def config_key(cls) -> str:
         return f"{cls.__name__}__{cls.version()}"
 
+    @property
+    def metrics(self) -> MetricsWrapper:
+        return MetricsWrapper(
+            self._metrics_backend,
+            "rpc",
+            tags={"endpoint_name": self.__class__.__name__, "version": self.version()},
+        )
+
     @classmethod
     def get_from_name(cls, name: str, version: str) -> Type["RPCEndpoint[Tin, Tout]"]:
         return cast(
@@ -43,17 +55,43 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return res
 
     def execute(self, in_msg: Tin) -> Tout:
+        self.__before_execute(in_msg)
+        error = None
+        try:
+            out = self._execute(in_msg)
+        except Exception as e:
+            out = self.response_class()()
+            error = e
+        return self.__after_execute(in_msg, out, error)
+
+    def __before_execute(self, in_msg: Tin) -> None:
+        self._timer.mark("rpc_start")
         self._before_execute(in_msg)
-        out = self._execute(in_msg)
-        return self._after_execute(in_msg, out)
 
     def _before_execute(self, in_msg: Tin) -> None:
+        """Override this for any pre-processing/logging before the _execute method"""
         pass
 
     def _execute(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
 
-    def _after_execute(self, in_msg: Tin, out_msg: Tout) -> Tout:
+    def __after_execute(
+        self, in_msg: Tin, out_msg: Tout, error: Exception | None
+    ) -> Tout:
+        res = self._after_execute(in_msg, out_msg, error)
+        self._timer.mark("rpc_end")
+        self._timer.send_metrics_to(self.metrics)
+        if error is not None:
+            self.metrics.increment("request_error")
+            raise error
+        else:
+            self.metrics.increment("request_success")
+        return res
+
+    def _after_execute(
+        self, in_msg: Tin, out_msg: Tout, error: Exception | None
+    ) -> Tout:
+        """Override this for any post-processing/logging after the _execute method"""
         return out_msg
 
 
