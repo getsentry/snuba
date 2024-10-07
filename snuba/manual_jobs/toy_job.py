@@ -1,4 +1,4 @@
-from snuba.manual_jobs import Job, JobSpec, logger
+from snuba.manual_jobs import Job, JobLogger, JobSpec
 
 
 class ToyJob(Job):
@@ -11,7 +11,7 @@ class ToyJob(Job):
     def _build_query(self) -> str:
         return "query"
 
-    def execute(self) -> None:
+    def execute(self, logger: JobLogger) -> None:
         logger.info(
             "executing job "
             + self.job_spec.job_id
@@ -19,3 +19,9 @@ class ToyJob(Job):
             + self._build_query()
             + "`"
         )
+
+        if not self.job_spec.params:
+            return
+
+        if self.job_spec.params["fail"]:
+            raise Exception("failed as requested")

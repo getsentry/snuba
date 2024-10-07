@@ -8,6 +8,7 @@ from snuba.manual_jobs.runner import (
     get_job_status,
     list_job_specs,
     run_job,
+    view_job_logs,
 )
 
 JOB_SPECIFICATION_ERROR_MSG = "Missing job type and/or job id"
@@ -61,3 +62,17 @@ def run(*, job_type: str, job_id: str, pairs: Tuple[str, ...]) -> None:
 @click.option("--job_id")
 def status(*, job_id: str) -> None:
     click.echo(get_job_status(job_id))
+
+
+@jobs.command()
+@click.option("--job_id")
+def view_logs(*, job_id: str) -> None:
+    logs = view_job_logs(job_id)
+
+    if len(logs) == 0:
+        click.echo("No logs found")
+        return
+
+    click.echo("start redis logs")
+    click.echo("\n".join(logs))
+    click.echo("end redis logs")

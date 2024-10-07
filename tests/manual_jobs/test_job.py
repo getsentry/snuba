@@ -4,13 +4,12 @@ from unittest.mock import patch
 
 import pytest
 
-from snuba.manual_jobs import Job, JobSpec
+from snuba.manual_jobs import Job, JobLogger, JobSpec, JobStatus
 from snuba.manual_jobs.job_loader import _JobLoader
+from snuba.manual_jobs.redis import _acquire_job_lock
 from snuba.manual_jobs.runner import (
     JobLockedException,
-    JobStatus,
     JobStatusException,
-    _acquire_job_lock,
     get_job_status,
     run_job,
 )
@@ -24,7 +23,7 @@ class FailJob(Job):
     def __init__(self) -> None:
         pass
 
-    def execute(self) -> None:
+    def execute(self, logger: JobLogger) -> None:
         raise SerializableException("Intended failure")
 
 
@@ -32,7 +31,7 @@ class SlowJob(Job):
     def __init__(self) -> None:
         self.stop = False
 
-    def execute(self) -> None:
+    def execute(self, logger: JobLogger) -> None:
         while not self.stop:
             sleep(0.005)
 
