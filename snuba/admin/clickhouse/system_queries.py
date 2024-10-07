@@ -110,7 +110,7 @@ ALTER_QUERY_RE = re.compile(
         ^
         (ALTER|CREATE)
         \s
-        [\w\s,=()*+<>'%"\-\/:]+
+        [\w\s,=()*+<>'%"\-\/:\.`]+
         ;? # Optional semicolon
         $
     """,

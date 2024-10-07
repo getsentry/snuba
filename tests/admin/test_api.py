@@ -858,6 +858,7 @@ def test_clickhouse_node_info(
         "cluster": "Cluster",
         "host_name": "Host",
         "host_address": "127.0.0.1",
+        "port": 9000,
         "shard": 1,
         "replica": 1,
         "version": "v1",
@@ -865,11 +866,78 @@ def test_clickhouse_node_info(
 
     connection_mock = mock.Mock()
     connection_mock.execute.return_value = FakeClickhouseResult(
-        [("Cluster", "Host", "127.0.0.1", 1, 1, "v1")]
+        [("Cluster", "Host", "127.0.0.1", 9000, 1, 1, "v1")]
     )
     get_ro_node_connection_mock.return_value = connection_mock
     response = admin_api.get("/clickhouse_node_info")
     assert response.status_code == 200
 
     response_data = json.loads(response.data)
-    assert len(response_data) > 0 and response_data[0] == expected_result
+    assert (
+        len(response_data) > 0
+        and {k: response_data[0][k] for k in expected_result.keys()} == expected_result
+    )
+
+
+@mock.patch("snuba.admin.clickhouse.database_clusters.get_ro_node_connection")
+@pytest.mark.redis_db
+@pytest.mark.clickhouse_db
+def test_clickhouse_system_settings(
+    get_ro_node_connection_mock: mock.Mock, admin_api: FlaskClient
+) -> None:
+    expected_result = [
+        {
+            "name": "max_memory_usage",
+            "value": "10000000000",
+            "default": "10000000000",
+            "changed": 0,
+            "description": "Maximum memory usage for query execution",
+            "type": "UInt64",
+        },
+        {
+            "name": "max_threads",
+            "value": "8",
+            "default": "8",
+            "changed": 0,
+            "description": "The maximum number of threads to execute the request",
+            "type": "UInt64",
+        },
+    ]
+
+    connection_mock = mock.Mock()
+    connection_mock.execute.return_value = FakeClickhouseResult(
+        [
+            (
+                "max_memory_usage",
+                "10000000000",
+                "10000000000",
+                0,
+                "Maximum memory usage for query execution",
+                "UInt64",
+            ),
+            (
+                "max_threads",
+                "8",
+                "8",
+                0,
+                "The maximum number of threads to execute the request",
+                "UInt64",
+            ),
+        ]
+    )
+    get_ro_node_connection_mock.return_value = connection_mock
+
+    response = admin_api.get(
+        "/clickhouse_system_settings?host=test_host&port=9000&storage=test_storage"
+    )
+    assert response.status_code == 200
+
+    response_data = json.loads(response.data)
+    assert response_data == expected_result
+
+    # Test error case when parameters are missing
+    response = admin_api.get("/clickhouse_system_settings")
+    assert response.status_code == 400
+    assert json.loads(response.data) == {
+        "error": "Host, port, and storage are required"
+    }

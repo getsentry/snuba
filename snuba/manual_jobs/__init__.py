@@ -2,11 +2,41 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, MutableMapping, Optional, cast
 
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 logger = logging.getLogger("snuba.manual_jobs")
+
+
+class JobStatus(StrEnum):
+    RUNNING = "running"
+    FINISHED = "finished"
+    NOT_STARTED = "not_started"
+    FAILED = "failed"
+
+
+class JobLogger(ABC):
+    @abstractmethod
+    def debug(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def info(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def warning(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def warn(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def error(self, line: str) -> None:
+        pass
 
 
 @dataclass
@@ -24,7 +54,7 @@ class Job(ABC, metaclass=RegisteredClass):
                 setattr(self, k, v)
 
     @abstractmethod
-    def execute(self) -> None:
+    def execute(self, logger: JobLogger) -> None:
         raise NotImplementedError
 
     @classmethod

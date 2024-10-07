@@ -22,7 +22,7 @@ from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery
-from snuba.admin.clickhouse.database_clusters import get_node_info
+from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -73,7 +73,7 @@ from snuba.datasets.storages.factory import (
     get_writable_storage,
 )
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.manual_jobs.runner import list_job_specs_with_status
+from snuba.manual_jobs.runner import list_job_specs, list_job_specs_with_status, run_job
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
@@ -1266,7 +1266,33 @@ def get_job_specs() -> Response:
     return make_response(jsonify(list_job_specs_with_status()), 200)
 
 
+@application.route("/job-specs/<job_id>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def execute_job(job_id: str) -> Response:
+    job_specs = list_job_specs()
+    return make_response(run_job(job_specs[job_id]), 200)
+
+
 @application.route("/clickhouse_node_info")
 @check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
 def clickhouse_node_info() -> Response:
     return make_response(jsonify(get_node_info()), 200)
+
+
+@application.route("/clickhouse_system_settings")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_system_settings() -> Response:
+    host = request.args.get("host")
+    port = request.args.get("port")
+    storage = request.args.get("storage")
+    if not all([host, port, storage]):
+        return make_response(
+            jsonify({"error": "Host, port, and storage are required"}), 400
+        )
+    try:
+        # conversions for typing
+        settings = get_system_settings(str(host), int(str(port)), str(storage))
+        return make_response(jsonify(settings), 200)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        return make_response(jsonify({"error": str(e)}), 500)
