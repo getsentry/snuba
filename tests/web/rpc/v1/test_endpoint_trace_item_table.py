@@ -376,12 +376,10 @@ class TestTraceItemTable(BaseApiTest):
             MessageToDict(expected_response),
         )
 
-
-"""
     def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequestProto(
+        message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -397,13 +395,19 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 )
             ),
-            keys=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="special_color"),
-            ],
-            order_by=[
-                SpanSamplesRequestProto.OrderBy(
+            columns=[
+                Column(
                     key=AttributeKey(
                         type=AttributeKey.TYPE_STRING, name="special_color"
+                    )
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="special_color"
+                        )
                     )
                 )
             ],
@@ -416,11 +420,6 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
         )
-        response = SpanSamplesRequest().execute(message)
-        result_dicts = [
-            dict((k, x.results[k].val_str) for k in x.results)
-            for x in response.span_samples
-        ]
-        colors = [d["special_color"] for d in result_dicts]
-        assert sorted(colors) == colors
-"""
+        response = EndpointTraceItemTable().execute(message)
+        result_colors = [c.val_str for c in response.column_values[0].results]
+        assert sorted(result_colors) == result_colors

@@ -140,18 +140,18 @@ def _convert_results(
                 column.label or column.aggregation.label
             ] = lambda x: AttributeValue(val_float=float(x))
 
-    column_ordering = {
-        column.label or column.key.name: i for i, column in enumerate(request.columns)
-    }
-
-    # map of attribute_name to results
     res = defaultdict(TraceItemColumnValues)
     for row in data:
         for column_name, value in row.items():
             res[column_name].results.append(converters[column_name](value))
             res[column_name].attribute_name = column_name
 
+    column_ordering = {
+        column.label or column.key.name: i for i, column in enumerate(request.columns)
+    }
+
     return list(
+        # we return the columns in the order they were requested
         sorted(
             res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name)
         )
