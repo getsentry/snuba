@@ -34,7 +34,7 @@ pub fn process_message(
                 transaction_name: &msg.transaction_name,
                 start_timestamp: msg.start_timestamp,
                 end_timestamp: msg.end_timestamp,
-                profiling_type: &msg.profiling_type,
+                profiling_type: msg.profiling_type.as_deref(),
 
                 // Function metadata
                 fingerprint: from.fingerprint,
@@ -59,6 +59,7 @@ struct InputFunction {
     in_app: bool,
     package: String,
     self_times_ns: Vec<u64>,
+    #[serde(default)]
     thread_id: Option<String>,
 }
 
@@ -75,10 +76,13 @@ struct InputMessage {
     release: Option<String>,
     retention_days: u32,
     timestamp: u64,
-    start_timestamp: f64,
-    end_timestamp: f64,
+    #[serde(default)]
+    start_timestamp: Option<f64>,
+    #[serde(default)]
+    end_timestamp: Option<f64>,
     transaction_name: String,
-    profiling_type: String,
+    #[serde(default)]
+    profiling_type: Option<String>,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -96,11 +100,11 @@ struct Function<'a> {
     release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
-    start_timestamp: f64,
-    end_timestamp: f64,
+    start_timestamp: Option<f64>,
+    end_timestamp: Option<f64>,
     transaction_name: &'a str,
     thread_id: Option<&'a str>,
-    profiling_type: &'a str,
+    profiling_type: Option<&'a str>,
 
     // Deprecated fields
     browser_name: &'a str,
