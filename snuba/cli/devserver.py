@@ -115,8 +115,8 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--storage=eap_spans",
                 "--consumer-group=eap_spans_group",
                 "--use-rust-processor",
-                "--commit-log-topic=snuba-eap-spans-commit-log"
-                * COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                "--commit-log-topic=snuba-eap-spans-commit-log",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
     ]
