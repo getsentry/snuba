@@ -113,7 +113,7 @@ def _build_snuba_request(
 
 def _convert_results(
     request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
-) -> Iterable[TraceItemColumnValues]:
+) -> list[TraceItemColumnValues]:
 
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
@@ -153,6 +153,8 @@ def _convert_results(
 def _get_page_token(
     request: TraceItemTableRequest, response: list[TraceItemColumnValues]
 ) -> PageToken:
+    if not response:
+        return PageToken(offset=0)
     num_rows = len(response[0].results)
     return PageToken(offset=num_rows)
 

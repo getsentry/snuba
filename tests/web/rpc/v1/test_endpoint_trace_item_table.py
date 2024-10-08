@@ -12,11 +12,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeKey,
-    AttributeValue,
-    VirtualColumnContext,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     ExistsFilter,
@@ -27,11 +23,11 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
-from snuba.web.rpc.v1alpha.span_samples import SpanSamplesRequest
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
+_SERVER_NAME = "D23CXQ4GK2.local"
 
 
 def gen_message(dt: datetime) -> Mapping[str, Any]:
@@ -93,7 +89,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
             "relay_protocol_version": "3",
             "relay_use_post_or_schedule": "True",
             "relay_use_post_or_schedule_rejected": "version",
-            "server_name": "D23CXQ4GK2.local",
+            "server_name": _SERVER_NAME,
             "spans_over_limit": "False",
             "color": random.choice(["red", "green", "blue"]),
             "location": random.choice(["mobile", "frontend", "backend"]),
@@ -194,21 +190,17 @@ class TestTraceItemTable(BaseApiTest):
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="server_name",
-                    results=[
-                        AttributeValue(val_str="D23CXQ4GK2.local") for _ in range(60)
-                    ],
+                    results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(60)],
                 )
             ],
             page_token=PageToken(offset=60),
         )
         assert response == expected_response
 
-
-"""
     def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequestProto(
+        message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -243,30 +235,49 @@ class TestTraceItemTable(BaseApiTest):
                     ]
                 )
             ),
-            keys=[
-                AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"
+                    )
+                ),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                    )
+                ),
             ],
             order_by=[
-                SpanSamplesRequestProto.OrderBy(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="sentry.status"
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.status"
+                        )
                     )
                 )
             ],
             limit=61,
         )
-        response = SpanSamplesRequest().execute(message)
-        assert [
-            dict(
-                (k, (x.results[k].val_bool or x.results[k].val_str)) for k in x.results
-            )
-            for x in response.span_samples
-        ] == [
-            {"sentry.is_segment": True, "sentry.span_id": "123456781234567d"}
-            for _ in range(60)
-        ]
+        response = EndpointTraceItemTable().execute(message)
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="sentry.is_segment",
+                    results=[AttributeValue(val_bool=True) for _ in range(60)],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="sentry.span_id",
+                    results=[
+                        AttributeValue(val_str="123456781234567d") for _ in range(60)
+                    ],
+                ),
+            ],
+            page_token=PageToken(offset=60),
+        )
+        assert response == expected_response
 
+
+"""
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
