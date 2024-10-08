@@ -230,6 +230,22 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                     "--stale-threshold-seconds=900",
                 ],
             ),
+            (
+                "subscriptions-scheduler-executor-eap-spans",
+                [
+                    "snuba",
+                    "subscriptions-scheduler-executor",
+                    "--dataset=events_analytics_platform",
+                    "--entity=eap_spans",
+                    "--consumer-group=snuba-eap_spans-subscription-executor",
+                    "--followed-consumer-group=eap_spans_group",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                    "--schedule-ttl=10",
+                    "--stale-threshold-seconds=900",
+                ],
+            ),
         ]
 
     if settings.ENABLE_SENTRY_METRICS_DEV:
