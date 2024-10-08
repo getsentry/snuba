@@ -383,7 +383,7 @@ class SubscriptionSchedulerProcessingFactory(ProcessingStrategyFactory[Tick]):
         strategy: ProcessingStrategy[Tick] = TickBuffer(
             self.__mode,
             self.__partitions,
-            0,
+            self.__buffer_size,
             ProvideCommitStrategy(self.__partitions, schedule_step, self.__metrics),
             self.__metrics,
         )
