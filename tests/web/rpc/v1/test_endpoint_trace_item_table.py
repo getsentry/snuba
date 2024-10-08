@@ -376,18 +376,6 @@ class TestTraceItemTable(BaseApiTest):
             MessageToDict(expected_response),
         )
 
-        # assert [
-        #     dict((k, x.results[k].val_str) for k in x.results)
-        #     for x in response.span_samples
-        # ] == [
-        #     {
-        #         "sentry.project_name": "sentry",
-        #         "sentry.sdk.name": "sentry.python.django",
-        #         "sentry.release_version": "4.2.0.69",
-        #     }
-        #     for _ in range(60)
-        # ]
-
 
 """
     def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
