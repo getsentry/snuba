@@ -140,6 +140,10 @@ def _convert_results(
                 column.label or column.aggregation.label
             ] = lambda x: AttributeValue(val_float=float(x))
 
+    column_ordering = {
+        column.label or column.key.name: i for i, column in enumerate(request.columns)
+    }
+
     # map of attribute_name to results
     res = defaultdict(TraceItemColumnValues)
     for row in data:
@@ -147,7 +151,11 @@ def _convert_results(
             res[column_name].results.append(converters[column_name](value))
             res[column_name].attribute_name = column_name
 
-    return list(res.values())
+    return list(
+        sorted(
+            res.values(), key=lambda c: column_ordering.__getitem__(c.attribute_name)
+        )
+    )
 
 
 def _get_page_token(
@@ -156,7 +164,7 @@ def _get_page_token(
     if not response:
         return PageToken(offset=0)
     num_rows = len(response[0].results)
-    return PageToken(offset=num_rows)
+    return PageToken(offset=request.page_token.offset + num_rows)
 
 
 class EndpointTraceItemTable(

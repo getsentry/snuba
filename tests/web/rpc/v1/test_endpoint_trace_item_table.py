@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 import pytest
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -12,7 +13,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    VirtualColumnContext,
+)
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     ExistsFilter,
@@ -276,12 +281,11 @@ class TestTraceItemTable(BaseApiTest):
         )
         assert response == expected_response
 
-
-"""
     def test_with_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-        message = SpanSamplesRequestProto(
+        limit = 5
+        message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -297,21 +301,35 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 )
             ),
-            keys=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.project_name"),
-                AttributeKey(
-                    type=AttributeKey.TYPE_STRING, name="sentry.release_version"
-                ),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"),
-            ],
+            columns=(
+                [
+                    Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.project_name"
+                        )
+                    ),
+                    Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.release_version"
+                        )
+                    ),
+                    Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.sdk.name"
+                        )
+                    ),
+                ]
+            ),
             order_by=[
-                SpanSamplesRequestProto.OrderBy(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="project_name"
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="project_name"
+                        )
                     ),
                 )
             ],
-            limit=61,
+            limit=limit,
             virtual_column_contexts=[
                 VirtualColumnContext(
                     from_column_name="sentry.project_id",
@@ -325,19 +343,53 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
         )
-        response = SpanSamplesRequest().execute(message)
-        assert [
-            dict((k, x.results[k].val_str) for k in x.results)
-            for x in response.span_samples
-        ] == [
-            {
-                "sentry.project_name": "sentry",
-                "sentry.sdk.name": "sentry.python.django",
-                "sentry.release_version": "4.2.0.69",
-            }
-            for _ in range(60)
+        response = EndpointTraceItemTable().execute(message)
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="sentry.project_name",
+                    results=[AttributeValue(val_str="sentry") for _ in range(limit)],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="sentry.release_version",
+                    results=[AttributeValue(val_str="4.2.0.69") for _ in range(limit)],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="sentry.sdk.name",
+                    results=[
+                        AttributeValue(val_str="sentry.python.django")
+                        for _ in range(limit)
+                    ],
+                ),
+            ],
+            page_token=PageToken(offset=limit),
+        )
+        assert response.page_token == expected_response.page_token
+        # make sure columns are ordered in the order they are requested
+        assert [c.attribute_name for c in response.column_values] == [
+            "sentry.project_name",
+            "sentry.release_version",
+            "sentry.sdk.name",
         ]
+        assert response == expected_response, (
+            MessageToDict(response),
+            MessageToDict(expected_response),
+        )
 
+        # assert [
+        #     dict((k, x.results[k].val_str) for k in x.results)
+        #     for x in response.span_samples
+        # ] == [
+        #     {
+        #         "sentry.project_name": "sentry",
+        #         "sentry.sdk.name": "sentry.python.django",
+        #         "sentry.release_version": "4.2.0.69",
+        #     }
+        #     for _ in range(60)
+        # ]
+
+
+"""
     def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
