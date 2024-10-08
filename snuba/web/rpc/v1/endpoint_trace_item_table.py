@@ -1,11 +1,15 @@
 import uuid
-from typing import Iterable, Sequence
+from collections import defaultdict
+from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -17,8 +21,8 @@ from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
@@ -26,24 +30,29 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
+from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
 def _convert_order_by(
     order_by: Sequence[TraceItemTableRequest.OrderBy],
 ) -> Sequence[OrderBy]:
-    res: List[OrderBy] = []
+    res: list[OrderBy] = []
     for x in order_by:
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
-        res.append(
-            OrderBy(
-                direction=direction,
-                expression=attribute_key_to_expression(x.key),
+        if x.column.key:
+            res.append(
+                OrderBy(
+                    direction=direction,
+                    expression=attribute_key_to_expression(x.column.key),
+                )
             )
-        )
+        elif x.column.aggregation:
+            raise NotImplementedError()
     return res
 
 
 def _build_query(request: TraceItemTableRequest) -> Query:
+    # TODO: This is hardcoded still
     entity = Entity(
         key=EntityKey("eap_spans"),
         schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -52,9 +61,18 @@ def _build_query(request: TraceItemTableRequest) -> Query:
 
     selected_columns = []
 
-    for key in request.keys:
-        key_col = attribute_key_to_expression(key)
-        selected_columns.append(SelectedExpression(name=key.name, expression=key_col))
+    for column in request.columns:
+        if column.key:
+            key_col = attribute_key_to_expression(column.key)
+            selected_columns.append(
+                SelectedExpression(name=column.key.name, expression=key_col)
+            )
+        elif column.aggregation:
+            raise NotImplementedError("Havent implemented column aggregation yet")
+        else:
+            raise BadSnubaRPCRequestException(
+                "Column is neither an aggregate or an attribute"
+            )
 
     res = Query(
         from_clause=entity,
@@ -94,36 +112,71 @@ def _build_snuba_request(
 
 
 def _convert_results(
-    request_keys: Sequence[AttributeKey], data: Iterable[Dict[str, Any]]
-) -> Iterable[SpanSample]:
+    request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
+) -> Iterable[TraceItemColumnValues]:
+
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
-    for req_key in request_keys:
-        if req_key.type == AttributeKey.TYPE_BOOLEAN:
-            converters[req_key.name] = lambda x: AttributeValue(val_bool=bool(x))
-        elif req_key.type == AttributeKey.TYPE_STRING:
-            converters[req_key.name] = lambda x: AttributeValue(val_str=str(x))
-        elif req_key.type == AttributeKey.TYPE_INT:
-            converters[req_key.name] = lambda x: AttributeValue(val_int=int(x))
-        elif req_key.type == AttributeKey.TYPE_FLOAT:
-            converters[req_key.name] = lambda x: AttributeValue(val_float=float(x))
+    for column in request.columns:
+        if column.key:
+            if column.key.type == AttributeKey.TYPE_BOOLEAN:
+                converters[column.label or column.key.name] = lambda x: AttributeValue(
+                    val_bool=bool(x)
+                )
+            elif column.key.type == AttributeKey.TYPE_STRING:
+                converters[column.label or column.key.name] = lambda x: AttributeValue(
+                    val_str=str(x)
+                )
+            elif column.key.type == AttributeKey.TYPE_INT:
+                converters[column.label or column.key.name] = lambda x: AttributeValue(
+                    val_int=int(x)
+                )
+            elif column.key.type == AttributeKey.TYPE_FLOAT:
+                converters[column.label or column.key.name] = lambda x: AttributeValue(
+                    val_float=float(x)
+                )
+        elif column.aggregation:
+            converters[
+                column.label or column.aggregation.label
+            ] = lambda x: AttributeValue(val_float=float(x))
 
+    # map of attribute_name to results
+    res = defaultdict(TraceItemColumnValues)
     for row in data:
-        results = {}
-        for attr_name, attr_val in row.items():
-            results[attr_name] = converters[attr_name](attr_val)
-        yield SpanSample(results=results)
+        for column_name, value in row.items():
+            res[column_name].results.append(converters[column_name](value))
+            res[column_name].attribute_name = column_name
+
+    return list(res.values())
 
 
-def endpoint_trace_item_table(
-    request: TraceItemTableRequest, timer: Timer | None
-) -> TraceItemTableResponse:
-    timer = timer or Timer("endpoint_trace_item_table")
-    snuba_request = _build_snuba_request(request)
-    res = run_query(
-        # TODO: use trace_item_name
-        dataset=PluggableDataset(name="eap", all_entities=[]),
-        request=snuba_request,
-        timer=timer,
-    )
-    return TraceItemTableResponse()
+def _get_page_token(
+    request: TraceItemTableRequest, response: list[TraceItemColumnValues]
+) -> PageToken:
+    num_rows = len(response[0].results)
+    return PageToken(offset=num_rows)
+
+
+class EndpointTraceItemTable(
+    RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
+):
+    @classmethod
+    def version(cls) -> str:
+        return "v1"
+
+    @classmethod
+    def request_class(cls) -> Type[TraceItemTableRequest]:
+        return TraceItemTableRequest
+
+    def execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        snuba_request = _build_snuba_request(in_msg)
+        res = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
+        )
+        column_values = _convert_results(in_msg, res.result.get("data", []))
+        return TraceItemTableResponse(
+            column_values=column_values,
+            page_token=_get_page_token(in_msg, column_values),
+        )

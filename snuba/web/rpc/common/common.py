@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import (
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
 )
-from sentry_protos.snuba.v1alpha.trace_item_filter_pb2 import (
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
     TraceItemFilter,
 )
