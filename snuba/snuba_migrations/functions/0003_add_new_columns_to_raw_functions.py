@@ -20,7 +20,7 @@ new_columns: Sequence[NewColumn] = [
             "start_timestamp",
             DateTime64(
                 precision=6,
-                modifiers=Modifiers(codecs=["DoubleDelta"]),
+                modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
             ),
         ),
         after="timestamp",
@@ -30,14 +30,17 @@ new_columns: Sequence[NewColumn] = [
             "end_timestamp",
             DateTime64(
                 precision=6,
-                modifiers=Modifiers(codecs=["DoubleDelta"]),
+                modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
             ),
         ),
         after="timestamp",
     ),
     NewColumn(column=Column("thread_id", String(Modifiers(nullable=True))), after=None),
     NewColumn(
-        column=Column("profiling_type", String(Modifiers(low_cardinality=True))),
+        column=Column(
+            "profiling_type",
+            String(Modifiers(low_cardinality=True, default="transaction")),
+        ),
         after=None,
     ),
 ]
