@@ -1,10 +1,12 @@
 import itertools
 import time
-from typing import Any, Iterable, MutableMapping, Optional
+from typing import Any, Iterable, MutableMapping, Optional, Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
-    AggregateBucketRequest,
+    AggregateBucketRequest as AggregateBucketRequestProto,
+)
+from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketResponse,
 )
 
@@ -12,6 +14,7 @@ from snuba.query import SelectedExpression
 from snuba.query.dsl import and_cond
 from snuba.query.logical import Query
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     project_id_and_org_conditions,
     timestamp_in_range_condition,
@@ -26,7 +29,7 @@ ONE_HOUR_GRANULARITY = 60 * 60
 
 
 class TimeseriesQuerier:
-    def __init__(self, request: AggregateBucketRequest, timer: Timer):
+    def __init__(self, request: AggregateBucketRequestProto, timer: Timer):
         self.start_ts = request.meta.start_timestamp.seconds
         self.end_ts = request.meta.end_timestamp.seconds
         self.rounded_start_ts = self.start_ts - (
@@ -151,10 +154,18 @@ class TimeseriesQuerier:
         return AggregateBucketResponse(result=[float(r[0]) for r in merged_results])
 
 
-def timeseries_query(
-    request: AggregateBucketRequest, timer: Timer | None = None
-) -> AggregateBucketResponse:
-    timer = timer or Timer("timeseries_query")
-    querier = TimeseriesQuerier(request, timer)
-    resp: AggregateBucketResponse = querier.run()
-    return resp
+class AggregateBucketRequest(
+    RPCEndpoint[AggregateBucketRequestProto, AggregateBucketResponse]
+):
+    @classmethod
+    def version(cls) -> str:
+        return "v1alpha"
+
+    @classmethod
+    def request_class(cls) -> Type[AggregateBucketRequestProto]:
+        return AggregateBucketRequestProto
+
+    def _execute(self, in_msg: AggregateBucketRequestProto) -> AggregateBucketResponse:
+        querier = TimeseriesQuerier(in_msg, self._timer)
+        resp: AggregateBucketResponse = querier.run()
+        return resp

@@ -880,13 +880,6 @@ def _apply_allocation_policies_quota(
                 "successful_query",
                 tags={"storage_key": allocation_policies[0].storage_key.value},
             )
-        # Before allocation policies were a thing, the query pipeline would apply
-        # thread limits in a query processor. That is not necessary if there
-        # is an allocation_policy in place but nobody has removed that code yet.
-        # Therefore, the least permissive thread limit is taken
-        max_threads = min(
-            min(quota_allowances.values()).max_threads,
-            getattr(query_settings.get_resource_quota(), "max_threads", 10),
-        )
+        max_threads = min(quota_allowances.values()).max_threads
         span.set_data("max_threads", max_threads)
         query_settings.set_resource_quota(ResourceQuota(max_threads=max_threads))

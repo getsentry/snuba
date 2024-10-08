@@ -2,31 +2,60 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, MutableMapping, Optional, cast
 
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
-logger = logging.getLogger("snuba_init")
+logger = logging.getLogger("snuba.manual_jobs")
+
+
+class JobStatus(StrEnum):
+    RUNNING = "running"
+    FINISHED = "finished"
+    NOT_STARTED = "not_started"
+    FAILED = "failed"
+
+
+class JobLogger(ABC):
+    @abstractmethod
+    def debug(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def info(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def warning(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def warn(self, line: str) -> None:
+        pass
+
+    @abstractmethod
+    def error(self, line: str) -> None:
+        pass
 
 
 @dataclass
 class JobSpec:
     job_id: str
     job_type: str
-    params: Optional[MutableMapping[Any, Any]]
+    params: Optional[MutableMapping[Any, Any]] = None
 
 
 class Job(ABC, metaclass=RegisteredClass):
-    def __init__(self, job_spec: JobSpec, dry_run: bool) -> None:
+    def __init__(self, job_spec: JobSpec) -> None:
         self.job_spec = job_spec
-        self.dry_run = dry_run
         if job_spec.params:
             for k, v in job_spec.params.items():
                 setattr(self, k, v)
 
     @abstractmethod
-    def execute(self) -> None:
-        pass
+    def execute(self, logger: JobLogger) -> None:
+        raise NotImplementedError
 
     @classmethod
     def config_key(cls) -> str:
