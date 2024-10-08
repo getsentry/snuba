@@ -11,11 +11,10 @@ from snuba.migrations.operations import OperationTarget
 @dataclass(frozen=True)
 class NewColumn:
     column: Column[Modifiers]
-    after: str
+    after: str | None
 
 
 new_columns: Sequence[NewColumn] = [
-    # Column("timestamp", DateTime()),
     NewColumn(
         column=Column(
             "start_timestamp",
