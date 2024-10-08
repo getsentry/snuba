@@ -39,7 +39,7 @@ new_columns: Sequence[NewColumn] = [
     NewColumn(
         column=Column(
             "profiling_type",
-            String(Modifiers(low_cardinality=True, default="transaction")),
+            String(Modifiers(low_cardinality=True, default="'transaction'")),
         ),
         after=None,
     ),
