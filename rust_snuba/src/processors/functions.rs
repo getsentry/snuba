@@ -32,6 +32,9 @@ pub fn process_message(
                 retention_days: msg.retention_days,
                 timestamp: msg.timestamp,
                 transaction_name: &msg.transaction_name,
+                start_timestamp: msg.start_timestamp,
+                end_timestamp: msg.end_timestamp,
+                profiling_type: &msg.profiling_type,
 
                 // Function metadata
                 fingerprint: from.fingerprint,
@@ -39,6 +42,7 @@ pub fn process_message(
                 package: &from.package,
                 name: &from.function,
                 is_application: from.in_app as u8,
+                thread_id: from.thread_id.as_deref(),
 
                 ..Default::default()
             }
@@ -55,6 +59,7 @@ struct InputFunction {
     in_app: bool,
     package: String,
     self_times_ns: Vec<u64>,
+    thread_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -70,7 +75,10 @@ struct InputMessage {
     release: Option<String>,
     retention_days: u32,
     timestamp: u64,
+    start_timestamp: f64,
+    end_timestamp: f64,
     transaction_name: String,
+    profiling_type: String,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -88,7 +96,11 @@ struct Function<'a> {
     release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
+    start_timestamp: f64,
+    end_timestamp: f64,
     transaction_name: &'a str,
+    thread_id: Option<&'a str>,
+    profiling_type: &'a str,
 
     // Deprecated fields
     browser_name: &'a str,
@@ -118,6 +130,9 @@ mod tests {
             "profile_id": "7329158c39964fbb9ec57c20cf4a2bb8",
             "transaction_name": "vroom-vroom",
             "timestamp": 1694447692,
+            "start_timestamp": 1694447692.368978,
+            "end_timestamp": 1694447692.368978,
+            "profiling_type": "transaction",
             "received": 1694447692,
             "functions": [
                 {
