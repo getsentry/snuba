@@ -129,6 +129,7 @@ mandatory_condition_checkers:
 stream_loader:
   processor: EAPSpansMessageProcessor
   default_topic: snuba-spans
+  commit_log_topic: snuba-eap-spans-commit-log
   subscription_scheduler_mode: global
   subscription_synchronization_timestamp: orig_message_ts
   subscription_scheduled_topic: scheduled-subscriptions-eap-spans
