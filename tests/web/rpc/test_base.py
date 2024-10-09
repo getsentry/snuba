@@ -44,6 +44,16 @@ def test_endpoint_name_resolution() -> None:
     assert RPCEndpoint.get_from_name("MyRPC", "v1") is MyRPC
 
 
+def test_list_all_endpoint_names():
+    endpoint_names = RPCEndpoint.list_all_endpoint_names()
+
+    assert "MyRPC" in endpoint_names
+    assert "ErrorRPC" in endpoint_names
+
+    for name in endpoint_names:
+        assert "__" not in name
+
+
 def test_before_and_after_execute() -> None:
     before_called = False
     after_called = False
