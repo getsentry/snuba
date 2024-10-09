@@ -16,7 +16,7 @@ from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def truncate_request_meta_to_day(meta: RequestMeta) -> None:

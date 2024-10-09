@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
     AggregateBucketRequest as AggregateBucketRequestProto,
 )
@@ -141,6 +142,30 @@ class TestTimeSeriesApi(BaseApiTest):
             "/rpc/AggregateBucketRequest/v1alpha", data=message.SerializeToString()
         )
         assert response.status_code == 200
+
+    def test_bad_version(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = AggregateBucketRequestProto(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+            ),
+            key=AttributeKey(name="project_id", type=AttributeKey.TYPE_INT),
+            aggregate=AggregateBucketRequestProto.FUNCTION_SUM,
+            granularity_secs=60,
+        )
+        response = self.app.post(
+            "/rpc/AggregateBucketRequest/invalid", data=message.SerializeToString()
+        )
+        assert response.status_code == 404
+        err_proto = ErrorProto()
+        err_proto.ParseFromString(response.data)
+        assert "with version invalid" in err_proto.message
 
     def test_sum(self, setup_teardown: Any) -> None:
         message = AggregateBucketRequestProto(
