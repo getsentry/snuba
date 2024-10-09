@@ -10,8 +10,8 @@ from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
 from snuba.query.expressions import Expression
-from snuba.web.rpc.common.common import NORMALIZED_COLUMNS, attribute_key_to_expression
 from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1alpha.common import NORMALIZED_COLUMNS, attribute_key_to_expression
 
 
 class AggregateFunction:

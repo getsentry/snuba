@@ -21,12 +21,12 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1alpha.common import (
     base_conditions_and,
     treeify_or_and_conditions,
     truncate_request_meta_to_day,
 )
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
 
 
 def _build_query(request: AttributeValuesRequestProto) -> Query:

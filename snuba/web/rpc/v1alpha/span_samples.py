@@ -24,7 +24,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.v1alpha.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
     base_conditions_and,

@@ -95,7 +95,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         return out_msg
 
 
-_VERSIONS = ["v1alpha"]
+_VERSIONS = ["v1alpha", "v1"]
 _TO_IMPORT = {
     p: os.path.join(os.path.dirname(os.path.realpath(__file__)), p) for p in _VERSIONS
 }

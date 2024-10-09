@@ -1,4 +1,4 @@
-from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
