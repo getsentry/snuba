@@ -51,12 +51,8 @@ function DatabaseClusters(props: { api: Client }) {
                 header: 'Storage Name',
             },
             {
-                accessorFn: (row) => row.is_query_node ? 'Yes' : 'No',
-                header: 'Is Query Node',
-            },
-            {
-                accessorFn: (row) => row.is_distributed ? 'Yes' : 'No',
-                header: 'Is Distributed',
+                accessorFn: (row) => row.is_distributed ? 'Query Node' : 'Storage Node',
+                header: 'Node Type',
             },
             {
                 accessorKey: 'version',

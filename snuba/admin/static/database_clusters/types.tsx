@@ -7,7 +7,6 @@ type ClickhouseNodeInfo = {
     replica: number,
     version: string,
     storage_name: string,
-    is_query_node: boolean,
     is_distributed: boolean,
 };
 
