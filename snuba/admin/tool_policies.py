@@ -34,6 +34,7 @@ class AdminTools(Enum):
     DELETE_TOOL = "delete_tool"
     MANUAL_JOBS = "view-jobs"
     DATABASE_CLUSTERS = "database-clusters"
+    RPC_ENDPOINTS = "rpc-endpoints"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}
