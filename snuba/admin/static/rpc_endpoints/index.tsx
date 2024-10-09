@@ -27,6 +27,8 @@ function RpcEndpoints() {
 
     const handleEndpointSelect = (value: string | null) => {
         setSelectedEndpoint(value);
+        setRequestBody('');
+        setResponse(null);
     };
 
     const handleExecute = async () => {
