@@ -140,7 +140,7 @@ def _convert_results(
                 column.label or column.aggregation.label
             ] = lambda x: AttributeValue(val_float=float(x))
 
-    res = defaultdict(TraceItemColumnValues)
+    res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
         for column_name, value in row.items():
             res[column_name].results.append(converters[column_name](value))

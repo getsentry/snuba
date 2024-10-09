@@ -15,13 +15,13 @@ from snuba.query.dsl import and_cond
 from snuba.query.logical import Query
 from snuba.utils.metrics.timer import Timer
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.common.eap_execute import run_eap_query_async
+from snuba.web.rpc.v1alpha.common import (
     project_id_and_org_conditions,
     timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.eap_execute import run_eap_query_async
 from snuba.web.rpc.v1alpha.timeseries import aggregate_functions
 
 EIGHT_HOUR_GRANULARITY = 60 * 60 * 8
