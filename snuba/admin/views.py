@@ -48,6 +48,7 @@ from snuba.admin.migrations_policies import (
     get_migration_group_policies,
 )
 from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -1131,16 +1132,6 @@ def dlq_replay() -> Response:
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
 
 
-# @application.route("/rpc_endpoints", methods=["GET"])
-# @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
-# def list_rpc_endpoints() -> Response:
-#     return Response(
-#         json.dumps(list(RPCRegistry.get_all_endpoints().keys())),
-#         200,
-#         {"Content-Type": "application/json"},
-#     )
-
-
 @application.route("/rpc_endpoints", methods=["GET"])
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
 def list_rpc_endpoints() -> Response:
@@ -1166,9 +1157,9 @@ def execute_rpc_endpoint(endpoint_name: str) -> Response:
 
     try:
         request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
+        validate_request_meta(request_proto)
         endpoint_instance = endpoint_class()
         response = endpoint_instance.execute(request_proto)
-        print(response)
         return Response(
             json.dumps(MessageToDict(response)),
             200,
