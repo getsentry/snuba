@@ -16,7 +16,6 @@ class Node:
     replica: int
     version: str
     storage_name: str
-    is_query_node: bool
     is_distributed: bool
 
 
@@ -35,7 +34,6 @@ class HostInfo:
     host: str
     port: int
     storage_name: str
-    is_query_node: bool
     is_distributed: bool
 
 
@@ -49,7 +47,6 @@ def get_node_info() -> Sequence[Node]:
                     node["host"],
                     node["port"],
                     storage_info["storage_name"],
-                    storage_info["query_node"] == node,
                     True,
                 )
             )
@@ -60,7 +57,6 @@ def get_node_info() -> Sequence[Node]:
                     node["host"],
                     node["port"],
                     storage_info["storage_name"],
-                    storage_info["query_node"] == node,
                     False,
                 )
             )
@@ -82,7 +78,6 @@ def get_node_info() -> Sequence[Node]:
                 replica=result[5],
                 version=result[6],
                 storage_name=host_info.storage_name,
-                is_query_node=host_info.is_query_node,
                 is_distributed=host_info.is_distributed,
             )
             for result in connection.execute(
