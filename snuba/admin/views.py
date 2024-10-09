@@ -11,6 +11,7 @@ import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
+from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
@@ -94,6 +95,7 @@ from snuba.web.delete_query import (
     delete_from_storage,
     deletes_are_enabled,
 )
+from snuba.web.rpc import RPCEndpoint
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1127,6 +1129,57 @@ def dlq_replay() -> Response:
         return make_response(jsonify(None), 200)
 
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
+
+
+# @application.route("/rpc_endpoints", methods=["GET"])
+# @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+# def list_rpc_endpoints() -> Response:
+#     return Response(
+#         json.dumps(list(RPCRegistry.get_all_endpoints().keys())),
+#         200,
+#         {"Content-Type": "application/json"},
+#     )
+
+
+@application.route("/rpc_endpoints", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def list_rpc_endpoints() -> Response:
+    return Response(
+        json.dumps(RPCEndpoint.list_all_endpoint_names()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/rpc_execute/<endpoint_name>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def execute_rpc_endpoint(endpoint_name: str) -> Response:
+    endpoint_class = RPCEndpoint.get_from_name(endpoint_name, "v1alpha")
+    if not endpoint_class:
+        return Response(
+            json.dumps({"error": f"Unknown endpoint: {endpoint_name}"}),
+            404,
+            {"Content-Type": "application/json"},
+        )
+
+    body = request.json
+
+    try:
+        request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
+        endpoint_instance = endpoint_class()
+        response = endpoint_instance.execute(request_proto)
+        print(response)
+        return Response(
+            json.dumps(MessageToDict(response)),
+            200,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({"error": str(e)}),
+            400,
+            {"Content-Type": "application/json"},
+        )
 
 
 @application.route("/production_snql_query", methods=["POST"])
