@@ -58,6 +58,7 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
 )
 
 ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
+ADMIN_ALLOWED_ORG_IDS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
 
 # All available regions where region is:
