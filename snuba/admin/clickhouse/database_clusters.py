@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Sequence
+from typing import List, Sequence
 
 from snuba.admin.clickhouse.common import get_ro_node_connection
 from snuba.admin.clickhouse.nodes import get_storage_info
@@ -65,7 +65,7 @@ def fetch_node_info_from_host(host_info: HostInfo) -> Sequence[Node]:
 
 
 def get_node_info() -> Sequence[Node]:
-    node_info = []
+    node_info: List[Node] = []
     hosts = set()
     for storage_info in get_storage_info():
         for node in storage_info["dist_nodes"]:
