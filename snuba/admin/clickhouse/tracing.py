@@ -28,6 +28,7 @@ class TraceOutput:
     summarized_trace_output: TracingSummary
     cols: list[tuple[str, str]]
     num_rows_result: int
+    result: list[tuple[Any, ...]]
     profile_events_results: dict[str, Any]
     profile_events_meta: list[Any]
     profile_events_profile: dict[str, int]
@@ -47,7 +48,19 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
         summarized_trace_output=summarized_trace_output,
         cols=query_result.meta,  # type: ignore
         num_rows_result=len(query_result.results),
+        result=list(map(scrub_row, query_result.results)),
         profile_events_results={},
         profile_events_meta=[],
         profile_events_profile={},
     )
+
+
+def scrub_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
+    rv: list[Any] = []
+    for val in row:
+        if isinstance(val, (int, float)):
+            rv.append(val)
+        else:
+            rv.append(f"<scrubbed: {type(val).__name__}>")
+
+    return tuple(rv)

@@ -59,6 +59,7 @@ function QueryDisplay(props: {
           input_query: `${query.sql}`,
           timestamp: result.timestamp,
           num_rows_result: result.num_rows_result,
+          result: result.result,
           cols: result.cols,
           trace_output: result.trace_output,
           summarized_trace_output: result.summarized_trace_output,
@@ -146,6 +147,21 @@ function QueryDisplay(props: {
                   </Accordion.Control>
                   <Accordion.Panel>
                     <Code block>{queryResult.input_query}</Code>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+              <Accordion chevronPosition="left">
+                <Accordion.Item value="input-query" key="input-query">
+                  <Accordion.Control>
+                    <Title order={3}>Query Result</Title>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Table
+                      headerData={
+                        (queryResult.cols || []).map(([name, ty]) => <>{name} <small>({ty})</small></>)
+                      }
+                      rowData={queryResult.result || []}
+                    />
                   </Accordion.Panel>
                 </Accordion.Item>
               </Accordion>
