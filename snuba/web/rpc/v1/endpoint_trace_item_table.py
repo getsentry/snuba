@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    Column,
     TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -24,12 +25,12 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
+    aggregation_to_expression,
     apply_virtual_columns,
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
-    aggregation_to_expression
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
@@ -51,7 +52,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=aggregation_to_expression(x.column.aggregation)
+                    expression=aggregation_to_expression(x.column.aggregation),
                 )
             )
     return res
@@ -75,7 +76,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
             selected_columns.append(
-                SelectedExpression(name=column.label or column.aggregation.label, expression=function_expr)
+                SelectedExpression(name=column.label, expression=function_expr)
             )
         else:
             raise BadSnubaRPCRequestException(
@@ -90,7 +91,9 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             trace_item_filters_to_expression(request.filter),
         ),
         order_by=_convert_order_by(request.order_by),
-        groupby=[attribute_key_to_expression(attr_key) for attr_key in request.group_by],
+        groupby=[
+            attribute_key_to_expression(attr_key) for attr_key in request.group_by
+        ],
         limit=request.limit,
     )
     treeify_or_and_conditions(res)
@@ -129,32 +132,19 @@ def _convert_results(
     for column in request.columns:
         if column.HasField("key"):
             if column.key.type == AttributeKey.TYPE_BOOLEAN:
-                converters[column.label or column.key.name] = lambda x: AttributeValue(
-                    val_bool=bool(x)
-                )
+                converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
             elif column.key.type == AttributeKey.TYPE_STRING:
-                converters[column.label or column.key.name] = lambda x: AttributeValue(
-                    val_str=str(x)
-                )
+                converters[column.label] = lambda x: AttributeValue(val_str=str(x))
             elif column.key.type == AttributeKey.TYPE_INT:
-                converters[column.label or column.key.name] = lambda x: AttributeValue(
-                    val_int=int(x)
-                )
+                converters[column.label] = lambda x: AttributeValue(val_int=int(x))
             elif column.key.type == AttributeKey.TYPE_FLOAT:
-                converters[column.label or column.key.name] = lambda x: AttributeValue(
-                    val_float=float(x)
-                )
+                converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         elif column.HasField("aggregation"):
-            import pdb
-            pdb.set_trace()
-            converters[
-                column.label or column.aggregation.label
-            ] = lambda x: AttributeValue(val_float=float(x))
+            converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         else:
-            import pdb
-            pdb.set_trace()
-            print(column)
-
+            raise BadSnubaRPCRequestException(
+                "column is neither an attribute or aggregation"
+            )
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
@@ -162,9 +152,7 @@ def _convert_results(
             res[column_name].results.append(converters[column_name](value))
             res[column_name].attribute_name = column_name
 
-    column_ordering = {
-        column.label or column.key.name: i for i, column in enumerate(request.columns)
-    }
+    column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 
     return list(
         # we return the columns in the order they were requested
@@ -183,6 +171,26 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
+def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableRequest:
+    def _apply_label_to_column(column: Column) -> None:
+        if column.label:
+            return
+
+        if column.HasField("key"):
+            column.label = column.key.name
+
+        elif column.HasField("aggregation"):
+            column.label = column.aggregation.label
+
+    for column in in_msg.columns:
+        _apply_label_to_column(column)
+
+    for order_by in in_msg.order_by:
+        _apply_label_to_column(order_by.column)
+
+    return in_msg
+
+
 class EndpointTraceItemTable(
     RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
 ):
@@ -195,6 +203,7 @@ class EndpointTraceItemTable(
         return TraceItemTableRequest
 
     def execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        in_msg = _apply_labels_to_columns(in_msg)
         snuba_request = _build_snuba_request(in_msg)
         print(snuba_request.query)
         res = run_query(

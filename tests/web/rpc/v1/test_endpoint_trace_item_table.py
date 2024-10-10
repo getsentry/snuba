@@ -14,11 +14,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeAggregation,
     AttributeKey,
     AttributeValue,
-    AttributeAggregation,
-    VirtualColumnContext,
     Function,
+    VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -426,7 +426,6 @@ class TestTraceItemTable(BaseApiTest):
         result_colors = [c.val_str for c in response.column_values[0].results]
         assert sorted(result_colors) == result_colors
 
-
     def test_table_with_aggregates(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -447,21 +446,45 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ),
             columns=[
-                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")),
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
                 Column(
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_MAX,
-                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
                         label="max(my.float.field)",
                     )
                 ),
             ],
-            group_by=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                ),
             ],
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        import pdb
-        pdb.set_trace()
-        print(response)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="location",
+                results=[
+                    AttributeValue(val_str="backend"),
+                    AttributeValue(val_str="frontend"),
+                    AttributeValue(val_str="mobile"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="max(my.float.field)",
+                results=[
+                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_float=101.2),
+                ],
+            ),
+        ]
