@@ -13,7 +13,7 @@ from snuba.web import QueryException
 from snuba.web.rpc import RPCRequestException, run_rpc_handler
 
 
-def test_rpc_handler_bad_request():
+def test_rpc_handler_bad_request() -> None:
     resp = run_rpc_handler(
         "TraceItemAttributesRequest", "v1alpha", b"invalid-proto-data"
     )
@@ -24,7 +24,7 @@ def test_rpc_handler_bad_request():
     assert err.code == 400
 
 
-def test_rpc_handler_not_found():
+def test_rpc_handler_not_found() -> None:
     resp = run_rpc_handler("SomeWeirdRequest", "v1", b"invalid-proto-data")
     assert resp.status_code == 404
 
@@ -35,7 +35,7 @@ def test_rpc_handler_not_found():
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-def test_basic():
+def test_basic() -> None:
     message = TraceItemAttributesRequestProto(
         meta=RequestMeta(
             project_ids=[1, 2, 3],
@@ -72,7 +72,7 @@ def test_basic():
         ),
     ],
 )
-def test_internal_error(expected_status_code, error):
+def test_internal_error(expected_status_code, error) -> None:
     message = TraceItemAttributesRequestProto(
         meta=RequestMeta(
             project_ids=[1, 2, 3],
