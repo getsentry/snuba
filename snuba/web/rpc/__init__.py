@@ -140,8 +140,7 @@ def run_rpc_handler(
         )
 
     try:
-        res = endpoint.execute(deserialized_protobuf)
-        return res
+        return endpoint.execute(deserialized_protobuf)
     except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:

@@ -6,6 +6,9 @@ from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
     TraceItemAttributesRequest as TraceItemAttributesRequestProto,
 )
+from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
+    TraceItemAttributesResponse as TraceItemAttributesResponseProto,
+)
 from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
@@ -48,7 +51,7 @@ def test_basic() -> None:
     resp = run_rpc_handler(
         "TraceItemAttributesRequest", "v1alpha", message.SerializeToString()
     )
-    assert not isinstance(resp, ErrorProto)
+    assert isinstance(resp, TraceItemAttributesResponseProto)
 
 
 @pytest.mark.parametrize(
