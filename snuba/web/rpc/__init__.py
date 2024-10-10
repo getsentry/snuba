@@ -1,13 +1,24 @@
 import os
 from typing import Generic, Type, TypeVar, cast
 
+from flask import Response
+from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 
 from snuba import environment
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import (
+    InvalidConfigKeyError,
+    RegisteredClass,
+    import_submodules_in_directory,
+)
+from snuba.web import QueryException
+from snuba.web.rpc.common.exceptions import (
+    RPCRequestException,
+    convert_rpc_exception_to_proto,
+)
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
@@ -101,5 +112,44 @@ _TO_IMPORT = {
 }
 
 
-for version, module_path in _TO_IMPORT.items():
-    import_submodules_in_directory(module_path, f"snuba.web.rpc.{version}")
+for v, module_path in _TO_IMPORT.items():
+    import_submodules_in_directory(module_path, f"snuba.web.rpc.{v}")
+
+
+def run_rpc_handler(name: str, version: str, data: bytes) -> Response:
+    try:
+        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
+    except (AttributeError, InvalidConfigKeyError) as e:
+        err_proto = convert_rpc_exception_to_proto(
+            RPCRequestException(
+                status_code=404,
+                message=f"endpoint {name} with version {version} does not exist (did you use the correct version and capitalization?) {e}",
+            )
+        )
+        return Response(err_proto.SerializeToString(), status=404)
+
+    try:
+        deserialized_protobuf = endpoint.parse_from_string(data)
+    except DecodeError as e:
+        err_proto = convert_rpc_exception_to_proto(
+            RPCRequestException(
+                status_code=400,
+                message=f"protobuf gave a decode error {e} (are all fields set and the correct types?)",
+            )
+        )
+        return Response(err_proto.SerializeToString(), status=400)
+
+    try:
+        res = endpoint.execute(deserialized_protobuf)
+        return Response(res.SerializeToString())
+    except (RPCRequestException, QueryException) as e:
+        exc_proto = convert_rpc_exception_to_proto(e)
+        return Response(exc_proto.SerializeToString(), status=exc_proto.code)
+    except Exception as e:
+        err_proto = convert_rpc_exception_to_proto(
+            RPCRequestException(
+                status_code=500,
+                message=f"internal error occurred while executing this RPC call: {e}",
+            )
+        )
+        return Response(err_proto.SerializeToString(), status=500)

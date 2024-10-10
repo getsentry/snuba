@@ -79,8 +79,7 @@ from snuba.web.delete_query import (
     delete_from_storage,
 )
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc import run_rpc_handler
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -278,13 +277,7 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 
 @application.route("/rpc/<name>/<version>", methods=["POST"])
 def rpc(*, name: str, version: str) -> Response:
-    try:
-        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
-        deserialized_protobuf = endpoint.parse_from_string(http_request.data)
-        res = endpoint.execute(deserialized_protobuf)
-        return Response(res.SerializeToString())
-    except BadSnubaRPCRequestException as e:
-        return Response(str(e), status=400)
+    return run_rpc_handler(name, version, http_request.data)
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])

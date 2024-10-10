@@ -30,7 +30,7 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def _convert_order_by(
