@@ -18,20 +18,14 @@ def test_rpc_handler_bad_request() -> None:
     resp = run_rpc_handler(
         "TraceItemAttributesRequest", "v1alpha", b"invalid-proto-data"
     )
-    assert resp.status_code == 400
-
-    err = ErrorProto()
-    err.ParseFromString(resp.data)
-    assert err.code == 400
+    assert isinstance(resp, ErrorProto)
+    assert resp.code == 400
 
 
 def test_rpc_handler_not_found() -> None:
     resp = run_rpc_handler("SomeWeirdRequest", "v1", b"invalid-proto-data")
-    assert resp.status_code == 404
-
-    err = ErrorProto()
-    err.ParseFromString(resp.data)
-    assert err.code == 404
+    assert isinstance(resp, ErrorProto)
+    assert resp.code == 404
 
 
 @pytest.mark.clickhouse_db
@@ -54,7 +48,7 @@ def test_basic() -> None:
     resp = run_rpc_handler(
         "TraceItemAttributesRequest", "v1alpha", message.SerializeToString()
     )
-    assert resp.status_code == 200
+    assert not isinstance(resp, ErrorProto)
 
 
 @pytest.mark.parametrize(
@@ -95,4 +89,5 @@ def test_internal_error(expected_status_code: int, error: Exception) -> None:
         resp = run_rpc_handler(
             "TraceItemAttributesRequest", "v1alpha", message.SerializeToString()
         )
-        assert resp.status_code == expected_status_code
+        assert isinstance(resp, ErrorProto)
+        assert resp.code == expected_status_code
