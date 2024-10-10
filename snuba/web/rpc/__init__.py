@@ -9,7 +9,11 @@ from snuba import environment
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.wrapper import MetricsWrapper
-from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
+from snuba.utils.registered_class import (
+    InvalidConfigKeyError,
+    RegisteredClass,
+    import_submodules_in_directory,
+)
 from snuba.web import QueryException
 from snuba.web.rpc.common.exceptions import (
     RPCRequestException,
@@ -115,23 +119,25 @@ for v, module_path in _TO_IMPORT.items():
 def run_rpc_handler(name: str, version: str, data: bytes) -> Response:
     try:
         endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
-    except AttributeError:
-        return convert_rpc_exception_to_proto(
+    except (AttributeError, InvalidConfigKeyError):
+        err_proto = convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=404,
                 message=f"endpoint {name} with version {version} does not exist (did you use the correct version and capitalization?)",
             )
         )
+        return Response(err_proto.SerializeToString(), status=404)
 
     try:
         deserialized_protobuf = endpoint.parse_from_string(data)
     except DecodeError as e:
-        return convert_rpc_exception_to_proto(
+        err_proto = convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=400,
                 message=f"protobuf gave a decode error {e} (are all fields set and the correct types?)",
             )
         )
+        return Response(err_proto.SerializeToString(), status=400)
 
     try:
         res = endpoint.execute(deserialized_protobuf)
@@ -140,9 +146,10 @@ def run_rpc_handler(name: str, version: str, data: bytes) -> Response:
         exc_proto = convert_rpc_exception_to_proto(e)
         return Response(exc_proto.SerializeToString(), status=exc_proto.code)
     except Exception as e:
-        return convert_rpc_exception_to_proto(
+        err_proto = convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,
                 message=f"internal error occurred while executing this RPC call: {e}",
             )
         )
+        return Response(err_proto.SerializeToString(), status=500)

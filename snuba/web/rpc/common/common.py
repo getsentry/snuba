@@ -296,7 +296,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return f.greaterOrEquals(k_expression, v_expression)
 
         raise BadSnubaRPCRequestException(
-            "Invalid string comparison, unknown op: ", item_filter.comparison_filter
+            f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
     if item_filter.exists_filter:
