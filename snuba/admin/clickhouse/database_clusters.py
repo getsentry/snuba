@@ -1,3 +1,4 @@
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import List, Sequence
@@ -38,13 +39,18 @@ class HostInfo:
     is_distributed: bool
 
 
+# Create a lock for thread-safe access
+node_info_lock: threading.Lock = threading.Lock()
+
+
 def fetch_node_info_from_host(host_info: HostInfo) -> Sequence[Node]:
-    connection = get_ro_node_connection(
-        host_info.host,
-        host_info.port,
-        host_info.storage_name,
-        ClickhouseClientSettings.QUERY,
-    )
+    with node_info_lock:
+        connection = get_ro_node_connection(
+            host_info.host,
+            host_info.port,
+            host_info.storage_name,
+            ClickhouseClientSettings.QUERY,
+        )
 
     return [
         Node(
