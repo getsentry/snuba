@@ -61,6 +61,6 @@ def scrub_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
         if isinstance(val, (int, float)):
             rv.append(val)
         else:
-            rv.append(f"<scrubbed: {type(val)}>")
+            rv.append(f"<scrubbed: {type(val).__name__}>")
 
     return tuple(rv)
