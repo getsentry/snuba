@@ -10,7 +10,8 @@ from sentry_protos.snuba.v1alpha.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.web import QueryException
-from snuba.web.rpc import RPCRequestException, run_rpc_handler
+from snuba.web.rpc import run_rpc_handler
+from snuba.web.rpc.common.exceptions import RPCRequestException
 
 
 def test_rpc_handler_bad_request() -> None:
@@ -72,7 +73,7 @@ def test_basic() -> None:
         ),
     ],
 )
-def test_internal_error(expected_status_code, error) -> None:
+def test_internal_error(expected_status_code: int, error: Exception) -> None:
     message = TraceItemAttributesRequestProto(
         meta=RequestMeta(
             project_ids=[1, 2, 3],
