@@ -1,32 +1,40 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Select, TextInput, Button, Code, Space, Textarea, Accordion, createStyles } from '@mantine/core';
+import { Select, Button, Code, Space, Textarea, Accordion, createStyles } from '@mantine/core';
 import useApi from '../api_client';
 
 
 function RpcEndpoints() {
     const api = useApi();
-    const [endpoints, setEndpoints] = useState<string[]>([]);
+    const [endpoints, setEndpoints] = useState<Array<{ name: string, version: string }>>([]);
     const [selectedEndpoint, setSelectedEndpoint] = useState<string | null>(null);
+    const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
     const [requestBody, setRequestBody] = useState('');
     const [response, setResponse] = useState<any | null>(null);
     const exampleRequestTemplates = require('./exampleRequestTemplates.json');
     const [accordionOpened, setAccordionOpened] = useState(false);
 
     const fetchEndpoints = useCallback(async () => {
-        if (endpoints.length === 0) {
-            const fetchedEndpoints = await api.getRpcEndpoints();
-            setEndpoints(fetchedEndpoints);
+        try {
+            const fetchedEndpoints: [string, string][] = await api.getRpcEndpoints();
+            const formattedEndpoints
+                = fetchedEndpoints.map((endpoint: [string, string]) => ({
+                    name: endpoint[0],
+                    version: endpoint[1]
+                }));
+            setEndpoints(formattedEndpoints);
+        } catch (error) {
+            console.error("Error fetching endpoints:", error);
         }
-    }, [api, endpoints]);
+    }, []);
 
     useEffect(() => {
-        if (endpoints.length === 0) {
-            fetchEndpoints();
-        }
-    }, [endpoints, fetchEndpoints]);
+        fetchEndpoints();
+    }, []);
 
     const handleEndpointSelect = (value: string | null) => {
         setSelectedEndpoint(value);
+        const selectedEndpointData = endpoints.find(e => e.name === value);
+        setSelectedVersion(selectedEndpointData?.version || null);
         setRequestBody('');
         setResponse(null);
     };
@@ -72,20 +80,20 @@ function RpcEndpoints() {
         },
     }));
 
-
-
-
     return (
         <div>
             <h2>RPC Endpoints</h2>
             <Select
                 label="Select an endpoint"
                 placeholder="Choose an endpoint"
-                data={endpoints.map(endpoint => ({ value: endpoint, label: endpoint }))}
+                data={endpoints.map(endpoint => ({ value: endpoint.name, label: endpoint.name }))}
                 value={selectedEndpoint}
                 onChange={handleEndpointSelect}
                 style={{ width: '100%', marginBottom: '1rem' }}
             />
+            {selectedEndpoint && selectedVersion && (
+                <p style={{ fontSize: '12px' }}>Selected Version: {selectedVersion}</p>
+            )}
             <Space h="md" />
             <Accordion
                 classNames={{ item: useStyles().classes.accordion }}

@@ -96,7 +96,7 @@ from snuba.web.delete_query import (
     delete_from_storage,
     deletes_are_enabled,
 )
-from snuba.web.rpc import _VERSIONS, RPCEndpoint
+from snuba.web.rpc import _VERSIONS, RPCEndpoint, list_all_endpoint_names
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1136,7 +1136,7 @@ def dlq_replay() -> Response:
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
 def list_rpc_endpoints() -> Response:
     return Response(
-        json.dumps(RPCEndpoint.list_all_endpoint_names()),
+        json.dumps(list_all_endpoint_names()),
         200,
         {"Content-Type": "application/json"},
     )
