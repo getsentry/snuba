@@ -17,6 +17,7 @@ use crate::config;
 use crate::metrics::global_tags::set_global_tag;
 use crate::mutations::clickhouse::ClickhouseWriter;
 use crate::mutations::parser::{MutationBatch, MutationMessage, MutationParser};
+use crate::processors::eap_spans::PrimaryKey;
 
 pub struct MutConsumerStrategyFactory {
     pub storage_config: config::StorageConfig,
@@ -68,7 +69,8 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
             Arc::new(
                 move |mut batch: MutationBatch, message: Message<MutationMessage>| {
                     let message = message.into_payload();
-                    match batch.0.entry(message.filter) {
+                    let filter: PrimaryKey = message.filter.into();
+                    match batch.0.entry(filter) {
                         std::collections::btree_map::Entry::Occupied(mut entry) => {
                             entry.get_mut().merge(message.update);
                         }

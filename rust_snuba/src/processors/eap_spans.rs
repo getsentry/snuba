@@ -79,9 +79,7 @@ impl AttributeMap {
     }
 }
 
-#[derive(
-    Debug, Default, Deserialize, Serialize, JsonSchema, Ord, PartialOrd, Eq, PartialEq, Clone,
-)]
+#[derive(Debug, Default, Serialize, Ord, PartialOrd, Eq, PartialEq, Clone)]
 pub(crate) struct PrimaryKey {
     pub organization_id: u64,
     pub _sort_timestamp: u32,
@@ -131,15 +129,35 @@ fn fnv_1a(input: &[u8]) -> u32 {
     res
 }
 
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub(crate) struct FromPrimaryKey {
+    pub organization_id: u64,
+    pub start_timestamp: f64,
+    pub trace_id: Uuid,
+    pub span_id: String,
+}
+
+impl From<FromPrimaryKey> for PrimaryKey {
+    fn from(from: FromPrimaryKey) -> PrimaryKey {
+        PrimaryKey {
+            organization_id: from.organization_id,
+            _sort_timestamp: from.start_timestamp as u32,
+            trace_id: from.trace_id,
+            span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
+        }
+    }
+}
+
 impl From<FromSpanMessage> for EAPSpan {
     fn from(from: FromSpanMessage) -> EAPSpan {
         let mut res = Self {
-            primary_key: PrimaryKey {
+            primary_key: FromPrimaryKey {
                 organization_id: from.organization_id,
-                _sort_timestamp: (from.start_timestamp_ms / 1000) as u32,
+                start_timestamp: from.start_timestamp_ms as f64 / 1000.0,
                 trace_id: from.trace_id,
-                span_id: u64::from_str_radix(&from.span_id, 16).unwrap_or_default(),
-            },
+                span_id: from.span_id,
+            }
+            .into(),
             project_id: from.project_id,
             service: from.project_id.to_string(),
             parent_span_id: from
