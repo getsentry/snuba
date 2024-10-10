@@ -1,7 +1,7 @@
 from typing import List, Set
 
 from snuba import settings
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def _validate_projects_in_query(project_ids: List[int]) -> None:
