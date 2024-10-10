@@ -35,7 +35,7 @@ new_columns: Sequence[NewColumn] = [
         ),
         after="timestamp",
     ),
-    NewColumn(column=Column("thread_id", String(Modifiers(nullable=True))), after=None),
+    NewColumn(column=Column("thread_id", String()), after=None),
     NewColumn(
         column=Column(
             "profiling_type",
