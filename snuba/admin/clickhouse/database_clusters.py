@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -37,6 +38,32 @@ class HostInfo:
     is_distributed: bool
 
 
+def fetch_node_info_from_host(host_info: HostInfo) -> Sequence[Node]:
+    connection = get_ro_node_connection(
+        host_info.host,
+        host_info.port,
+        host_info.storage_name,
+        ClickhouseClientSettings.QUERY,
+    )
+
+    return [
+        Node(
+            cluster=result[0],
+            host_name=result[1],
+            host_address=result[2],
+            port=result[3],
+            shard=result[4],
+            replica=result[5],
+            version=result[6],
+            storage_name=host_info.storage_name,
+            is_distributed=host_info.is_distributed,
+        )
+        for result in connection.execute(
+            "SELECT cluster, host_name, host_address, port, shard_num, replica_num, version() FROM system.clusters WHERE is_local = 1;"
+        ).results
+    ]
+
+
 def get_node_info() -> Sequence[Node]:
     node_info = []
     hosts = set()
@@ -61,30 +88,9 @@ def get_node_info() -> Sequence[Node]:
                 )
             )
 
-    for host_info in hosts:
-        connection = get_ro_node_connection(
-            host_info.host,
-            host_info.port,
-            host_info.storage_name,
-            ClickhouseClientSettings.QUERY,
-        )
-        nodes = [
-            Node(
-                cluster=result[0],
-                host_name=result[1],
-                host_address=result[2],
-                port=result[3],
-                shard=result[4],
-                replica=result[5],
-                version=result[6],
-                storage_name=host_info.storage_name,
-                is_distributed=host_info.is_distributed,
-            )
-            for result in connection.execute(
-                "SELECT cluster, host_name, host_address, port, shard_num, replica_num, version() FROM system.clusters WHERE is_local = 1;"
-            ).results
-        ]
-        node_info.extend(nodes)
+    with ThreadPoolExecutor() as executor:
+        for result in executor.map(fetch_node_info_from_host, hosts):
+            node_info.extend(result)
 
     return node_info
 
