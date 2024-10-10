@@ -56,7 +56,7 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
 
 
 def scrub_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
-    rv = []
+    rv: list[Any] = []
     for val in row:
         if isinstance(val, (int, float)):
             rv.append(val)
