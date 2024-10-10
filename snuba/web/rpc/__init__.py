@@ -119,11 +119,11 @@ for v, module_path in _TO_IMPORT.items():
 def run_rpc_handler(name: str, version: str, data: bytes) -> Response:
     try:
         endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
-    except (AttributeError, InvalidConfigKeyError):
+    except (AttributeError, InvalidConfigKeyError) as e:
         err_proto = convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=404,
-                message=f"endpoint {name} with version {version} does not exist (did you use the correct version and capitalization?)",
+                message=f"endpoint {name} with version {version} does not exist (did you use the correct version and capitalization?) {e}",
             )
         )
         return Response(err_proto.SerializeToString(), status=404)
