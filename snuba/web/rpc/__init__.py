@@ -54,6 +54,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         )
 
     @classmethod
+    def list_all_endpoint_names(cls) -> list[str]:
+        return [
+            name.split("__")[0]
+            for name in getattr(cls, "_registry").all_names()
+            if name.count("__") == 1
+        ]
+
+    @classmethod
     def get_from_name(cls, name: str, version: str) -> Type["RPCEndpoint[Tin, Tout]"]:
         return cast(
             Type["RPCEndpoint[Tin, Tout]"],
