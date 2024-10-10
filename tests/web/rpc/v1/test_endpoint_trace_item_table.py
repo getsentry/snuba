@@ -16,7 +16,9 @@ from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
+    AttributeAggregation,
     VirtualColumnContext,
+    Function,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -423,3 +425,43 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         result_colors = [c.val_str for c in response.column_values[0].results]
         assert sorted(result_colors) == result_colors
+
+
+    def test_table_with_aggregates(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_MAX,
+                        key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.float.field"),
+                        label="max(my.float.field)",
+                    )
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.trace_id")
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        import pdb
+        pdb.set_trace()
+        print(response)

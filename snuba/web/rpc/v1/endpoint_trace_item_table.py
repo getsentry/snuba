@@ -29,6 +29,7 @@ from snuba.web.rpc.common.common import (
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
+    aggregation_to_expression
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
@@ -47,7 +48,12 @@ def _convert_order_by(
                 )
             )
         elif x.column.aggregation:
-            raise NotImplementedError()
+            res.append(
+                OrderBy(
+                    direction=direction,
+                    expression=aggregation_to_expression(x.column.aggregation)
+                )
+            )
     return res
 
 
@@ -60,15 +66,17 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     )
 
     selected_columns = []
-
     for column in request.columns:
-        if column.key:
+        if column.HasField("key"):
             key_col = attribute_key_to_expression(column.key)
             selected_columns.append(
                 SelectedExpression(name=column.key.name, expression=key_col)
             )
-        elif column.aggregation:
-            raise NotImplementedError("Havent implemented column aggregation yet")
+        elif column.HasField("aggregation"):
+            function_expr = aggregation_to_expression(column.aggregation)
+            selected_columns.append(
+                SelectedExpression(name=column.label or column.aggregation.label, expression=function_expr)
+            )
         else:
             raise BadSnubaRPCRequestException(
                 "Column is neither an aggregate or an attribute"
@@ -82,6 +90,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             trace_item_filters_to_expression(request.filter),
         ),
         order_by=_convert_order_by(request.order_by),
+        groupby=[attribute_key_to_expression(attr_key) for attr_key in request.group_by],
         limit=request.limit,
     )
     treeify_or_and_conditions(res)
@@ -118,7 +127,7 @@ def _convert_results(
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
     for column in request.columns:
-        if column.key:
+        if column.HasField("key"):
             if column.key.type == AttributeKey.TYPE_BOOLEAN:
                 converters[column.label or column.key.name] = lambda x: AttributeValue(
                     val_bool=bool(x)
@@ -135,10 +144,17 @@ def _convert_results(
                 converters[column.label or column.key.name] = lambda x: AttributeValue(
                     val_float=float(x)
                 )
-        elif column.aggregation:
+        elif column.HasField("aggregation"):
+            import pdb
+            pdb.set_trace()
             converters[
                 column.label or column.aggregation.label
             ] = lambda x: AttributeValue(val_float=float(x))
+        else:
+            import pdb
+            pdb.set_trace()
+            print(column)
+
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
@@ -180,6 +196,7 @@ class EndpointTraceItemTable(
 
     def execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
+        print(snuba_request.query)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
