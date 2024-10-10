@@ -96,7 +96,7 @@ from snuba.web.delete_query import (
     delete_from_storage,
     deletes_are_enabled,
 )
-from snuba.web.rpc import _VERSIONS, RPCEndpoint, list_all_endpoint_names
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1142,13 +1142,15 @@ def list_rpc_endpoints() -> Response:
     )
 
 
-@application.route("/rpc_execute/<endpoint_name>", methods=["POST"])
+@application.route("/rpc_execute/<endpoint_name>/<version>", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
-def execute_rpc_endpoint(endpoint_name: str) -> Response:
-    endpoint_class = RPCEndpoint.get_from_name(endpoint_name, _VERSIONS[0])
+def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
+    endpoint_class = RPCEndpoint.get_from_name(endpoint_name, version)
     if not endpoint_class:
         return Response(
-            json.dumps({"error": f"Unknown endpoint: {endpoint_name}"}),
+            json.dumps(
+                {"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}
+            ),
             404,
             {"Content-Type": "application/json"},
         )

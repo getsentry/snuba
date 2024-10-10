@@ -71,8 +71,8 @@ interface Client {
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
-getRpcEndpoints: () => Promise<Array<[string, string]>>;
-  executeRpcEndpoint: (endpointName: string, requestBody: any) => Promise<any>;
+  getRpcEndpoints: () => Promise<Array<[string, string]>>;
+  executeRpcEndpoint: (endpointName: string, version: string, requestBody: any) => Promise<any>;
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
@@ -335,9 +335,9 @@ function Client(): Client {
       }).then((resp) => resp.json()) as Promise<Array<[string, string]>>;
     },
 
-    executeRpcEndpoint: async (endpointName: string, requestBody: any) => {
+    executeRpcEndpoint: async (endpointName: string, version: string, requestBody: any) => {
       try {
-        const url = `${baseUrl}rpc_execute/${endpointName}`;
+        const url = `${baseUrl}rpc_execute/${endpointName}/${version}`;
         const response = await fetch(url, {
           method: "POST",
           headers: {

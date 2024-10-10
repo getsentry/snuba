@@ -16,11 +16,10 @@ function RpcEndpoints() {
     const fetchEndpoints = useCallback(async () => {
         try {
             const fetchedEndpoints: [string, string][] = await api.getRpcEndpoints();
-            const formattedEndpoints
-                = fetchedEndpoints.map((endpoint: [string, string]) => ({
-                    name: endpoint[0],
-                    version: endpoint[1]
-                }));
+            const formattedEndpoints = fetchedEndpoints.map((endpoint: [string, string]) => ({
+                name: endpoint[0],
+                version: endpoint[1]
+            }));
             setEndpoints(formattedEndpoints);
         } catch (error) {
             console.error("Error fetching endpoints:", error);
@@ -40,23 +39,19 @@ function RpcEndpoints() {
     };
 
     const handleExecute = async () => {
-        if (!selectedEndpoint) return;
+        if (!selectedEndpoint || !selectedVersion) return;
         try {
             const parsedBody = JSON.parse(requestBody);
-            const result = await api.executeRpcEndpoint(selectedEndpoint, parsedBody);
+            const result = await api.executeRpcEndpoint(selectedEndpoint, selectedVersion, parsedBody);
             setResponse(result);
         } catch (error: any) {
             console.error('Error details:', error.message);
-            setResponse({ tags: [] });
+            setResponse({ error: error.message });
         }
     };
 
     const useStyles = createStyles((theme) => ({
         accordion: {
-            '& .mantine-Accordion-item': {
-                padding: '2px',
-                margin: '0',
-            },
             '& .mantine-Accordion-control': {
                 backgroundColor: theme.colors.blue[1],
                 color: theme.colors.blue[7],
@@ -69,14 +64,6 @@ function RpcEndpoints() {
                     backgroundColor: theme.colors.blue[2],
                 },
             },
-            '& .mantine-Accordion-content': {
-                padding: '2px 4px',
-                fontSize: theme.fontSizes.xs,
-                lineHeight: 1.2,
-            },
-        },
-        code: {
-            fontSize: theme.fontSizes.xxs || '10px',
         },
     }));
 
@@ -86,14 +73,11 @@ function RpcEndpoints() {
             <Select
                 label="Select an endpoint"
                 placeholder="Choose an endpoint"
-                data={endpoints.map(endpoint => ({ value: endpoint.name, label: endpoint.name }))}
+                data={endpoints.map(endpoint => ({ value: endpoint.name, label: `${endpoint.name} (${endpoint.version})` }))}
                 value={selectedEndpoint}
                 onChange={handleEndpointSelect}
                 style={{ width: '100%', marginBottom: '1rem' }}
             />
-            {selectedEndpoint && selectedVersion && (
-                <p style={{ fontSize: '12px' }}>Selected Version: {selectedVersion}</p>
-            )}
             <Space h="md" />
             <Accordion
                 classNames={{ item: useStyles().classes.accordion }}
