@@ -15,6 +15,7 @@ from sentry_protos.snuba.v1alpha.trace_item_attribute_pb2 import AttributeKey
 from snuba.web import QueryException
 from snuba.web.rpc import run_rpc_handler
 from snuba.web.rpc.common.exceptions import RPCRequestException
+from tests.base import BaseApiTest
 
 
 def test_rpc_handler_bad_request() -> None:
@@ -94,3 +95,19 @@ def test_internal_error(expected_status_code: int, error: Exception) -> None:
         )
         assert isinstance(resp, ErrorProto)
         assert resp.code == expected_status_code
+
+
+class TestAPIFailures(BaseApiTest):
+    def test_unknown_rpc(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        response = self.app.post("/rpc/bloop/shmoop", data=b"asdasdasd")
+        assert response.status_code == 404
+
+    def test_bad_serialization(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        response = self.app.post(
+            "/rpc/EndpointTraceItemTable/v1", data=b"11111asdasdasd"
+        )
+        assert response.status_code == 400
