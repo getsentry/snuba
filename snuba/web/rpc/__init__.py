@@ -57,13 +57,10 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def get_from_name(
         cls, name: str, version: str
     ) -> Type["RPCEndpoint[Tin, Tout]"] | None:
-        try:
-            return cast(
-                Type["RPCEndpoint[Tin, Tout]"],
-                getattr(cls, "_registry").get_class_from_name(f"{name}__{version}"),
-            )
-        except InvalidConfigKeyError:
-            return None
+        return cast(
+            Type["RPCEndpoint[Tin, Tout]"],
+            getattr(cls, "_registry").get_class_from_name(f"{name}__{version}"),
+        )
 
     def parse_from_string(self, bytestring: bytes) -> Tin:
         res = self.request_class()()

@@ -91,12 +91,13 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.registered_class import InvalidConfigKeyError
 from snuba.web.delete_query import (
     DeletesNotEnabledError,
     delete_from_storage,
     deletes_are_enabled,
 )
-from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1145,8 +1146,9 @@ def list_rpc_endpoints() -> Response:
 @application.route("/rpc_execute/<endpoint_name>/<version>", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
 def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
-    endpoint_class = RPCEndpoint.get_from_name(endpoint_name, version)
-    if not endpoint_class:
+    try:
+        endpoint_class = RPCEndpoint.get_from_name(endpoint_name, version)
+    except InvalidConfigKeyError:
         return Response(
             json.dumps(
                 {"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}
@@ -1160,8 +1162,9 @@ def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
     try:
         request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
         validate_request_meta(request_proto)
-        endpoint_instance = endpoint_class()
-        response = endpoint_instance.execute(request_proto)
+        response = run_rpc_handler(
+            endpoint_name, version, request_proto.SerializeToString()
+        )
         return Response(
             json.dumps(MessageToDict(response)),
             200,
