@@ -108,6 +108,6 @@ class TestAPIFailures(BaseApiTest):
         ts = Timestamp()
         ts.GetCurrentTime()
         response = self.app.post(
-            "/rpc/EndpointTraceItemTable/v1", data=b"11111asdasdasd"
+            "/rpc/TraceItemTableRequest/v1", data=b"11111asdasdasd"
         )
         assert response.status_code == 400
