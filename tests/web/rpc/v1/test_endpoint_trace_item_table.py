@@ -152,7 +152,7 @@ class TestTraceItemTable(BaseApiTest):
             limit=10,
         )
         response = self.app.post(
-            "/rpc/EndpointTraceItemTable/v1", data=message.SerializeToString()
+            "/rpc/TraceItemTableRequest/v1", data=message.SerializeToString()
         )
         assert response.status_code == 200, response.text
 
