@@ -2,7 +2,6 @@ import time
 from typing import Type
 
 import pytest
-from google.protobuf.message import Message
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from snuba.web.rpc import RPCEndpoint
@@ -13,11 +12,7 @@ class RPCException(Exception):
     pass
 
 
-class RPCRequest(Message):
-    pass
-
-
-class MyRPC(RPCEndpoint[RPCRequest, Timestamp]):
+class MyRPC(RPCEndpoint[Timestamp, Timestamp]):
     duration_millis = 100
 
     @classmethod
@@ -25,20 +20,20 @@ class MyRPC(RPCEndpoint[RPCRequest, Timestamp]):
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[RPCRequest]:
-        return RPCRequest
+    def request_class(cls) -> Type[Timestamp]:
+        return Timestamp
 
-    def _execute(self, in_msg: RPCRequest) -> Timestamp:
+    def _execute(self, in_msg: Timestamp) -> Timestamp:
         time.sleep(self.duration_millis / 1000)
         return Timestamp()
 
 
-class ErrorRPC(RPCEndpoint[RPCRequest, Timestamp]):
+class ErrorRPC(RPCEndpoint[Timestamp, Timestamp]):
     duration_millis = 100
 
     @classmethod
-    def request_class(cls) -> Type[RPCRequest]:
-        return RPCRequest
+    def request_class(cls) -> Type[Timestamp]:
+        return Timestamp
 
     @classmethod
     def response_class(cls) -> Type[Timestamp]:
@@ -54,37 +49,37 @@ class ErrorRPC(RPCEndpoint[RPCRequest, Timestamp]):
 
 
 def test_endpoint_name_resolution() -> None:
-    assert RPCEndpoint.get_from_name("RPCRequest", "v1") is MyRPC
+    assert RPCEndpoint.get_from_name("Timestamp", "v1") is MyRPC
 
 
 def test_before_and_after_execute() -> None:
     before_called = False
     after_called = False
 
-    class BeforeAndAfter(RPCEndpoint[RPCRequest, Timestamp]):
+    class BeforeAndAfter(RPCEndpoint[Timestamp, Timestamp]):
         @classmethod
         def version(cls) -> str:
             return "beforeafter"
 
         @classmethod
-        def request_class(cls) -> Type[RPCRequest]:
-            return RPCRequest
+        def request_class(cls) -> Type[Timestamp]:
+            return Timestamp
 
-        def _before_execute(self, in_msg: RPCRequest) -> None:
+        def _before_execute(self, in_msg: Timestamp) -> None:
             nonlocal before_called
             before_called = True
 
-        def _execute(self, in_msg: RPCRequest) -> Timestamp:
-            return Timestamp()
+        def _execute(self, in_msg: Timestamp) -> Timestamp:
+            return in_msg
 
         def _after_execute(
-            self, in_msg: RPCRequest, out_msg: Timestamp, error: Exception | None
+            self, in_msg: Timestamp, out_msg: Timestamp, error: Exception | None
         ) -> Timestamp:
             nonlocal after_called
             after_called = True
             return out_msg
 
-    BeforeAndAfter().execute(RPCRequest())
+    BeforeAndAfter().execute(Timestamp())
     assert before_called
     assert after_called
 
@@ -92,7 +87,7 @@ def test_before_and_after_execute() -> None:
 def test_metrics() -> None:
     metrics_backend = TestingMetricsBackend()
     rpc_call = MyRPC(metrics_backend=metrics_backend)
-    rpc_call.execute(RPCRequest())
+    rpc_call.execute(Timestamp())
     metric_tags = [m.tags for m in metrics_backend.calls]
     assert metric_tags == [
         {"endpoint_name": "MyRPC", "version": "v1"}
