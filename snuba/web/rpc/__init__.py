@@ -43,7 +43,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @classmethod
     def config_key(cls) -> str:
-        return f"{cls.__name__}__{cls.version()}"
+        request_class = cls.request_class().__name__
+        request_version = cls.version()
+        return f"{request_class}__{request_version}"
 
     @property
     def metrics(self) -> MetricsWrapper:
