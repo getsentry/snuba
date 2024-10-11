@@ -995,7 +995,7 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
     factory = MessageFactory(pool)
     MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))  # type: ignore
 
-    class MyRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
+    class TestRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
         @classmethod
         def version(cls) -> str:
             return "v1"
@@ -1023,7 +1023,7 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
     )
 
     response = admin_api.post(
-        "/rpc_execute/MyRPC/v1",
+        "/rpc_execute/TestRPC/v1",
         data=payload,
         content_type="application/json",
     )
@@ -1046,7 +1046,7 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
 
     invalid_payload = json.dumps({"invalid": "data"})
     response = admin_api.post(
-        "/rpc_execute/MyRPC/v1",
+        "/rpc_execute/TestRPC/v1",
         data=invalid_payload,
         content_type="application/json",
     )
