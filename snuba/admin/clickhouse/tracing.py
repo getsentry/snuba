@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -58,7 +59,9 @@ def run_query_and_get_trace(storage_name: str, query: str) -> TraceOutput:
 def scrub_row(row: tuple[Any, ...]) -> tuple[Any, ...]:
     rv: list[Any] = []
     for val in row:
-        if isinstance(val, (int, float)):
+        if math.isnan(val):
+            rv.append(None)
+        elif isinstance(val, (int, float)):
             rv.append(val)
         else:
             rv.append(f"<scrubbed: {type(val).__name__}>")

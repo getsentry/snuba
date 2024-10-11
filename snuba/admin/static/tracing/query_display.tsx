@@ -151,7 +151,7 @@ function QueryDisplay(props: {
                 </Accordion.Item>
               </Accordion>
               <Accordion chevronPosition="left">
-                <Accordion.Item value="input-query" key="input-query">
+                <Accordion.Item value="query-result" key="query-result">
                   <Accordion.Control>
                     <Title order={3}>Query Result</Title>
                   </Accordion.Control>
