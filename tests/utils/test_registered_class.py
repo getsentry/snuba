@@ -101,14 +101,9 @@ def test_class_registry_all_names() -> None:
     class TestClass2(TestBase):
         pass
 
-    class TestClass3(TestBase):
-        pass
-
-    registry = TestBase._registry
-
-    expected_names = ["TestClass1", "TestClass2", "TestClass3"]
-    assert set(registry.all_names()) == set(expected_names)
-    assert isinstance(registry.all_names(), list)
+    expected_names = ["TestClass1", "TestClass2"]
+    assert set(TestBase.all_names()) == set(expected_names)
+    assert isinstance(TestBase.all_names(), list)
 
 
 class TypedFromName(metaclass=RegisteredClass):

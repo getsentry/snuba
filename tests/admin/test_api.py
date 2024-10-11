@@ -990,12 +990,12 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
         package="test",
         message_type=[request_meta_proto, my_request_proto],
     )
-    pool.Add(file_descriptor_proto)
+    pool.Add(file_descriptor_proto)  # type: ignore
 
     factory = MessageFactory(pool)
-    MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))
+    MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))  # type: ignore
 
-    class MyRPC(RPCEndpoint[MyRequest, Timestamp]):
+    class MyRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
         @classmethod
         def version(cls) -> str:
             return "v1"
@@ -1069,8 +1069,6 @@ def test_list_rpc_endpoints(admin_api: FlaskClient) -> None:
         assert isinstance(endpoint[0], str)
         assert isinstance(endpoint[1], str)
 
-    registered_endpoints = {
-        tuple(name.split("__")) for name in RPCEndpoint._registry.all_names()
-    }
+    registered_endpoints = {tuple(name.split("__")) for name in RPCEndpoint.all_names()}
     response_endpoints = set(tuple(endpoint) for endpoint in endpoint_names)
     assert response_endpoints == registered_endpoints

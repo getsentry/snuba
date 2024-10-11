@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import Any, List, Set
 
 from snuba import settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -20,7 +20,7 @@ def _validate_org_ids_in_query(org_id: int) -> None:
         raise BadSnubaRPCRequestException(f"Organization ID {org_id} is not allowed")
 
 
-def validate_request_meta(request_proto):
+def validate_request_meta(request_proto: Any) -> None:
     if not hasattr(request_proto, "meta"):
         raise BadSnubaRPCRequestException("Missing request meta")
     meta = request_proto.meta

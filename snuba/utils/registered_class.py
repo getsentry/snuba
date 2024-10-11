@@ -105,6 +105,9 @@ class RegisteredClass(ABCMeta):
             for rclass in getattr(self, "_registry").all_classes()
         ]
 
+    def all_names(self) -> Sequence[str]:
+        return list(getattr(self, "_registry").all_names())
+
 
 TModule = object
 

@@ -5,7 +5,7 @@ import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, Type, cast
 
 import sentry_sdk
 import simplejson as json
@@ -1147,7 +1147,9 @@ def list_rpc_endpoints() -> Response:
 @check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
 def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
     try:
-        endpoint_class = RPCEndpoint.get_from_name(endpoint_name, version)
+        endpoint_class: Type[RPCEndpoint[Any, Any]] = RPCEndpoint.get_from_name(
+            endpoint_name, version
+        )
     except InvalidConfigKeyError:
         return Response(
             json.dumps(
