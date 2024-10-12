@@ -154,7 +154,7 @@ def delete_from_tables(
     attribution_info: AttributionInfo,
 ) -> Result:
 
-    highest_rows_to_delete = 0
+    highest_rows_to_delete = 1  # FOR TESTING ONLY
     result: Result = {}
     for table in tables:
         query = construct_query(storage, table, _construct_condition(conditions))

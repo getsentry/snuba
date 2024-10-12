@@ -328,7 +328,7 @@ def storage_delete(
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
 
-        if body.get("use_bulk_delete"):
+        if http_request.args.get("use_bulk_delete"):
             delete_function = bulk_delete_from_storage
         else:
             delete_function = delete_from_storage

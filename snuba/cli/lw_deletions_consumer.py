@@ -35,12 +35,8 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.web.bulk_delete_query import (
-    construct_or_conditions,
-    construct_query,
-    execute_query,
-)
-from snuba.web.delete_query import TooManyOngoingMutationsError
+from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
+from snuba.web.delete_query import TooManyOngoingMutationsError, _execute_query
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +249,7 @@ class FormatQuery(ProcessingStrategy[KafkaPayload]):
             query = construct_query(
                 self.__storage, table, construct_or_conditions(conditions)
             )
-            execute_query(
+            _execute_query(
                 query=query,
                 storage=self.__storage,
                 table=table,
