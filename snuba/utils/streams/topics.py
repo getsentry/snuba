@@ -69,6 +69,8 @@ class Topic(Enum):
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
+    LW_DELETIONS = "snuba-lw-deletions"
+
 
 def get_topic_creation_config(topic: Topic) -> Mapping[str, str]:
     try:

@@ -125,6 +125,9 @@ query_processors:
 deletion_settings:
   is_enabled: 1
   max_rows_to_delete: 100000
+  allowed_columns:
+    - project_id
+    - group_id
   tables:
     - search_issues_local_v2
 

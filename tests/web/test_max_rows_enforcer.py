@@ -84,7 +84,10 @@ class TestMaxRowsEnforcer(SimpleAPITest, BaseApiTest, ConfigurationTest):
     @mock.patch(
         "snuba.datasets.storage.ReadableTableStorage.get_deletion_settings",
         return_value=DeletionSettings(
-            is_enabled=1, tables=["search_issues_local_v2"], max_rows_to_delete=0
+            is_enabled=1,
+            tables=["search_issues_local_v2"],
+            max_rows_to_delete=0,
+            allowed_columns=["project_id", "group_id"],
         ),
     )
     def test_max_row_enforcer_rejects(self, mock: mock.MagicMock) -> None:

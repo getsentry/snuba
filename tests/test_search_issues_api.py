@@ -183,6 +183,7 @@ class TestSearchIssuesSnQLApi(SimpleAPITest, BaseApiTest, ConfigurationTest):
         data = json.loads(response.data)
         assert response.status_code == 200, data
         assert data["data"] == []
+        assert False
 
     def test_bad_delete(self) -> None:
         res = self.app.delete(

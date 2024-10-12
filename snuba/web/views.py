@@ -71,6 +71,7 @@ from snuba.utils.health_info import (
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
+from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import (
@@ -327,10 +328,15 @@ def storage_delete(
         check_shutdown({"storage": storage.get_storage_key()})
         body = parse_request_body(http_request)
 
+        if body.get("use_bulk_delete"):
+            delete_function = bulk_delete_from_storage
+        else:
+            delete_function = delete_from_storage
+
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            payload = delete_from_storage(
+            payload = delete_function(
                 storage,
                 request_parts.query["query"]["columns"],
                 request_parts.attribution_info,

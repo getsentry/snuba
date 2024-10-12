@@ -263,6 +263,15 @@ class ConsumerBuilder:
 
         return strategy_factory
 
+    def build_consumer(
+        self, strategy_factory: ProcessingStrategyFactory[KafkaPayload]
+    ) -> StreamProcessor[KafkaPayload]:
+        return self.__build_consumer(
+            strategy_factory,
+            self.raw_topic,
+            self.__build_default_dlq_policy(),
+        )
+
     def build_dlq_strategy_factory(
         self, instruction: DlqInstruction
     ) -> ProcessingStrategyFactory[KafkaPayload]:
