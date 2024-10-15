@@ -41,7 +41,7 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
     pool = DescriptorPool()
     request_meta_proto = descriptor_pb2.DescriptorProto(
