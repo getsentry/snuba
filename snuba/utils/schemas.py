@@ -803,9 +803,9 @@ class ColumnValidator:
 
     def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
         expected_type = self._column_set[column_name].type
-        is_valid_func: Optional[
-            Callable[[AnyType], bool]
-        ] = self.type_validation_function(expected_type)
+        is_valid_func: Callable[[AnyType], bool] = self.type_validation_function(
+            expected_type
+        )
         for val in values:
             if is_valid_func(val):
                 continue
@@ -832,17 +832,17 @@ class ColumnValidator:
     def _valid_string(self, value: str) -> bool:
         return isinstance(value, str)
 
-    def _valid_tuple(self, column_type: ColumnType[TModifiers], value: tuple) -> bool:
+    def _valid_tuple(self, tuple_column: Tuple, value: tuple) -> bool:
         if not isinstance(value, tuple):
             return False
         assert len(value) == len(
-            column_type.types
+            tuple_column.types
         ), "number of tuple arg types and actual values don't match"
         for i, el in enumerate(value):
-            is_valid_func = self.type_validation_function(column_type.types[i])
+            is_valid_func = self.type_validation_function(tuple_column.types[i])
             if is_valid_func(el):
                 continue
             raise InvalidColumnType(
-                f"Invalid value {el} for column type {column_type.types[i]}"
+                f"Invalid value {el} for column type {tuple_column.types[i]}"
             )
         return True
