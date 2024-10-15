@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Sequence
+from typing import Any, Sequence, Tuple, Type
 from unittest import mock
 
 import pytest
@@ -42,7 +42,7 @@ def admin_api() -> FlaskClient:
 
 
 @pytest.fixture
-def rpc_test_setup():
+def rpc_test_setup() -> Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]]:
     pool = DescriptorPool()
     request_meta_proto = descriptor_pb2.DescriptorProto(
         name="RequestMeta",
@@ -1015,7 +1015,10 @@ def test_clickhouse_system_settings(
 
 
 @pytest.mark.redis_db
-def test_execute_rpc_endpoint_success(admin_api: FlaskClient, rpc_test_setup) -> None:
+def test_execute_rpc_endpoint_success(
+    admin_api: FlaskClient,
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
+) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
     payload = json.dumps(
@@ -1066,7 +1069,8 @@ def test_execute_rpc_endpoint_unknown_endpoint(admin_api: FlaskClient) -> None:
 
 @pytest.mark.redis_db
 def test_execute_rpc_endpoint_invalid_payload(
-    admin_api: FlaskClient, rpc_test_setup
+    admin_api: FlaskClient,
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
@@ -1082,7 +1086,8 @@ def test_execute_rpc_endpoint_invalid_payload(
 
 @pytest.mark.redis_db
 def test_execute_rpc_endpoint_org_id_not_allowed(
-    admin_api: FlaskClient, rpc_test_setup
+    admin_api: FlaskClient,
+    rpc_test_setup: Tuple[Type[Any], Type[RPCEndpoint[Any, Timestamp]]],
 ) -> None:
     MyRequest, TestRPC = rpc_test_setup
 
