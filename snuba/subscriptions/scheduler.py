@@ -1,6 +1,6 @@
 import math
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import (
     Iterator,
@@ -70,7 +70,8 @@ class ImmediateTaskBuilder(TaskBuilder):
         if timestamp % resolution == 0:
             self.__count += 1
             return ScheduledSubscriptionTask(
-                datetime.fromtimestamp(timestamp), subscription_with_metadata
+                datetime.fromtimestamp(timestamp, tz=timezone.utc),
+                subscription_with_metadata,
             )
         else:
             return None
@@ -120,7 +121,8 @@ class JitteredTaskBuilder(TaskBuilder):
                 self.__count += 1
                 self.__count_max_resolution += 1
                 return ScheduledSubscriptionTask(
-                    datetime.fromtimestamp(timestamp), subscription_with_metadata
+                    datetime.fromtimestamp(timestamp, tz=timezone.utc),
+                    subscription_with_metadata,
                 )
             else:
                 return None
@@ -129,7 +131,8 @@ class JitteredTaskBuilder(TaskBuilder):
         if timestamp % resolution == jitter:
             self.__count += 1
             return ScheduledSubscriptionTask(
-                datetime.fromtimestamp(timestamp - jitter), subscription_with_metadata
+                datetime.fromtimestamp(timestamp - jitter, tz=timezone.utc),
+                subscription_with_metadata,
             )
         else:
             return None
