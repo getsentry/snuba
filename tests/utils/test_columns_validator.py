@@ -24,7 +24,15 @@ COLUMNS = ColumnSet(
         Column("float_param", Float(64)),
         Column("uuid_param", UUID()),
         Column("date_param", Date()),
-        Column("tuple_param", Tuple((UUID(),))),
+        Column(
+            "tuple_param",
+            Tuple(
+                (
+                    UUID(),
+                    Int(32),
+                )
+            ),
+        ),
     ]
 )
 
@@ -38,14 +46,34 @@ COLUMNS = ColumnSet(
         pytest.param("int_param", [1, 2, 3, 4], True),
         pytest.param("float_param", [1.20, 2.0], True),
         pytest.param("uuid_param", ["06a910bc-7682-4c76-b818-666124cc8898"], True),
-        pytest.param("tuple_param", [(1, 2, 3)], True),
+        pytest.param(
+            "tuple_param",
+            [
+                (
+                    "06a910bc-7682-4c76-b818-666124cc8898",
+                    1,
+                )
+            ],
+            True,
+        ),
         # invalid column types
         pytest.param("uint_param", [-17], False),
         pytest.param("str_param", ["hi", 3], False),
         pytest.param("int_param", [1, 2, 3, 4.0], False),
         pytest.param("float_param", [1.20, 2], False),
         pytest.param("uuid_param", ["123456"], False),
-        pytest.param("tuple_param", ["string"], False),
+        pytest.param(
+            "tuple_param",
+            [
+                (
+                    "06a910bc-7682-4c76-b818-666124cc8898",
+                    "this_should_be_int",
+                )
+            ],
+            False,
+        ),
+        # wrong length
+        pytest.param("tuple_param", [("06a910bc-7682-4c76-b818-666124cc8898",)], False),
         # unsupported column types
         pytest.param("date_param", [datetime.now()], False),
     ],

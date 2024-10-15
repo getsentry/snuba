@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import partial
 from itertools import chain
 from typing import Any as AnyType
 from typing import (
@@ -783,24 +784,28 @@ class ColumnValidator:
     def __init__(self, column_set: ColumnSet):
         self._column_set = column_set
 
-    def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
-        expected_type = self._column_set[column_name].type
-        is_valid_func: Optional[Callable[[AnyType], bool]]
+    def type_validation_function(self, expected_type: ColumnType[TModifiers]):
         match expected_type:
             case UUID():
-                is_valid_func = self._valid_uuid
+                return self._valid_uuid
             case Int():
-                is_valid_func = self._valid_int
+                return self._valid_int
             case UInt():
-                is_valid_func = self._valid_uint
+                return self._valid_uint
             case Float():
-                is_valid_func = self._valid_float
+                return self._valid_float
             case String():
-                is_valid_func = self._valid_string
+                return self._valid_string
             case Tuple():
-                is_valid_func = self._valid_tuple
+                return partial(self._valid_tuple, expected_type)
             case _:
                 raise InvalidColumnType(f"No validator for type: {expected_type}")
+
+    def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
+        expected_type = self._column_set[column_name].type
+        is_valid_func: Optional[
+            Callable[[AnyType], bool]
+        ] = self.type_validation_function(expected_type)
         for val in values:
             if is_valid_func(val):
                 continue
@@ -827,5 +832,18 @@ class ColumnValidator:
     def _valid_string(self, value: str) -> bool:
         return isinstance(value, str)
 
-    def _valid_tuple(self, value: tuple) -> bool:
-        return isinstance(value, tuple)
+    def _valid_tuple(self, column_type: ColumnType[TModifiers], value: tuple) -> bool:
+        if not isinstance(value, tuple):
+            return False
+        assert len(value) == len(
+            column_type.types
+        ), "number of tuple arg types and actual values don't match"
+        for i, el in enumerate(value):
+            is_valid_func = self.type_validation_function(column_type.types[i])
+            print(is_valid_func, el)
+            if is_valid_func(el):
+                continue
+            raise InvalidColumnType(
+                f"Invalid value {el} for column type {column_type.types[i]}"
+            )
+        return True
