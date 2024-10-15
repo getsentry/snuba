@@ -784,7 +784,9 @@ class ColumnValidator:
     def __init__(self, column_set: ColumnSet):
         self._column_set = column_set
 
-    def type_validation_function(self, expected_type: ColumnType[TModifiers]):
+    def type_validation_function(
+        self, expected_type: ColumnType[TModifiers]
+    ) -> Callable[[AnyType], bool]:
         match expected_type:
             case UUID():
                 return self._valid_uuid
@@ -832,7 +834,7 @@ class ColumnValidator:
     def _valid_string(self, value: str) -> bool:
         return isinstance(value, str)
 
-    def _valid_tuple(self, tuple_column: Tuple, value: tuple) -> bool:
+    def _valid_tuple(self, tuple_column: Tuple[AnyType], value: tuple[Any]) -> bool:
         if not isinstance(value, tuple):
             return False
         assert len(value) == len(
