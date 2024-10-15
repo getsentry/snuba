@@ -746,6 +746,35 @@ class Enum(ColumnType[TModifiers]):
         return Enum(self.values)
 
 
+class Tuple(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        types: tuple[ColumnType, ...],
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.types = types
+
+    def _repr_content(self) -> str:
+        return ", ".join("{}".format(v) for v in self.types)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Tuple[TModifiers], other).get_modifiers()
+            and self.types == cast(Tuple[TModifiers], other).types
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Tuple({})".format(", ".join("{}".format(t) for t in self.types))
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
+        return Tuple(types=self.types, modifiers=modifiers)
+
+    def get_raw(self) -> Tuple[TModifiers]:
+        return Tuple(self.types)
+
+
 class InvalidColumnType(SerializableException):
     pass
 
