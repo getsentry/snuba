@@ -797,6 +797,8 @@ class ColumnValidator:
                 is_valid_func = self._valid_float
             case String():
                 is_valid_func = self._valid_string
+            case Tuple():
+                is_valid_func = self._valid_tuple
             case _:
                 raise InvalidColumnType(f"No validator for type: {expected_type}")
         for val in values:
@@ -824,3 +826,6 @@ class ColumnValidator:
 
     def _valid_string(self, value: str) -> bool:
         return isinstance(value, str)
+
+    def _valid_tuple(self, value: tuple) -> bool:
+        return isinstance(value, tuple)
