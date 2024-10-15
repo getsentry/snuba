@@ -17,7 +17,11 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
-from snuba.migrations.connect import get_column_states
+from snuba.migrations.connect import (
+    check_for_inactive_replicas,
+    get_clickhouse_clusters_for_migration_group,
+    get_column_states,
+)
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
@@ -226,6 +230,14 @@ class Runner:
                 if get_group_readiness_state(m.group) in readiness_states
             ]
 
+        if pending_migrations:
+            clusters = [
+                cluster
+                for m in pending_migrations
+                for cluster in get_clickhouse_clusters_for_migration_group(m.group)
+            ]
+            check_for_inactive_replicas(clusters)
+
         use_through = False if through == "all" else True
 
         def exact_migration_exists(through: str) -> bool:
@@ -278,6 +290,10 @@ class Runner:
         """
 
         migration_group, migration_id = migration_key
+
+        check_for_inactive_replicas(
+            get_clickhouse_clusters_for_migration_group(migration_group)
+        )
 
         group_migrations = get_group_loader(migration_group).get_migrations()
 
@@ -350,6 +366,10 @@ class Runner:
 
         migration_group, migration_id = migration_key
 
+        check_for_inactive_replicas(
+            get_clickhouse_clusters_for_migration_group(migration_group)
+        )
+
         group_migrations = get_group_loader(migration_group).get_migrations()
 
         if migration_id not in group_migrations:
@@ -403,6 +423,13 @@ class Runner:
             migration_groups: Sequence[MigrationGroup] = [group]
         else:
             migration_groups = get_active_migration_groups()
+
+        clusters = [
+            cluster
+            for g in migration_groups
+            for cluster in get_clickhouse_clusters_for_migration_group(g)
+        ]
+        check_for_inactive_replicas(clusters)
 
         def get_in_progress_migration(group: MigrationGroup) -> Optional[MigrationKey]:
             group_migrations = get_group_loader(group).get_migrations()
