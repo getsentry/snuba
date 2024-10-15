@@ -840,7 +840,6 @@ class ColumnValidator:
         ), "number of tuple arg types and actual values don't match"
         for i, el in enumerate(value):
             is_valid_func = self.type_validation_function(column_type.types[i])
-            print(is_valid_func, el)
             if is_valid_func(el):
                 continue
             raise InvalidColumnType(
