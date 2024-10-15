@@ -74,19 +74,52 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
-@dataclass(frozen=True)
-class SnQLSubscriptionData:
-    """
-    Represents the state of a subscription.
-    """
-
+@dataclass(frozen=True, kw_only=True)
+class _SubscriptionData:
     project_id: int
     resolution_sec: int
     time_window_sec: int
     entity: Entity
-    query: str
     metadata: Mapping[str, Any]
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
+
+
+class SubscriptionData(_SubscriptionData, ABC):
+    @abstractmethod
+    def validate(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def build_request(
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
+    ):
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def from_dict(
+        cls, data: Mapping[str, Any], entity_key: EntityKey
+    ) -> SubscriptionData:
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_dict(self) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True, kw_only=True)
+class SnQLSubscriptionData(SubscriptionData):
+    """
+    Represents the state of a subscription.
+    """
+
+    query: str
 
     def add_conditions(
         self,
