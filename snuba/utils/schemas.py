@@ -749,7 +749,7 @@ class Enum(ColumnType[TModifiers]):
 class Tuple(ColumnType[TModifiers]):
     def __init__(
         self,
-        types: tuple[ColumnType, ...],
+        types: tuple[ColumnType[TModifiers], ...],
         modifiers: Optional[TModifiers] = None,
     ) -> None:
         super().__init__(modifiers)
