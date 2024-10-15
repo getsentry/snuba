@@ -3,10 +3,10 @@ from typing import Final, Mapping, Sequence, Set
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeKey,
-    VirtualColumnContext,
     AttributeAggregation,
-    Function
+    AttributeKey,
+    Function,
+    VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     ComparisonFilter,
@@ -15,9 +15,18 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
-from snuba.query.dsl import Functions as f
 from snuba.query.dsl import CurriedFunctions as cf
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import (
+    _CurriedFunctionCall,
+    _FunctionCall,
+    and_cond,
+    column,
+    in_cond,
+    literal,
+    literals_array,
+    or_cond,
+)
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
@@ -68,7 +77,7 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 
 def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
-    function_map = {
+    function_map: dict[Function.ValueType, _CurriedFunctionCall | _FunctionCall] = {
         Function.FUNCTION_SUM: f.sum,
         Function.FUNCTION_AVERAGE: f.avg,
         Function.FUNCTION_COUNT: f.count,
@@ -76,7 +85,7 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_P90: cf.quantile(0.9),
         Function.FUNCTION_P95: cf.quantile(0.95),
         Function.FUNCTION_P99: cf.quantile(0.99),
-        Function.FUNCTION_AVG: f.avg ,
+        Function.FUNCTION_AVG: f.avg,
         Function.FUNCTION_MAX: f.max,
         Function.FUNCTION_MIN: f.min,
         Function.FUNCTION_UNIQ: f.uniq,
@@ -84,9 +93,13 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
 
     agg_func = function_map.get(aggregation.aggregate)
     if agg_func is None:
-        raise BadSnubaRPCRequestException(f"Aggregation not specified for {aggregation.key.name}")
+        raise BadSnubaRPCRequestException(
+            f"Aggregation not specified for {aggregation.key.name}"
+        )
     field = attribute_key_to_expression(aggregation.key)
-    return agg_func(field, alias=aggregation.label if aggregation.label else None)
+    alias = aggregation.label if aggregation.label else None
+    alias_dict = {"alias": alias} if alias else {}
+    return agg_func(field, **alias_dict)
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
