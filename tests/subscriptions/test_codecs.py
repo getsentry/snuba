@@ -20,8 +20,8 @@ from snuba.subscriptions.codecs import (
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
+    SnQLSubscriptionData,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
@@ -31,9 +31,9 @@ from snuba.utils.metrics.timer import Timer
 
 def build_snql_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
-) -> SubscriptionData:
+) -> SnQLSubscriptionData:
 
-    return SubscriptionData(
+    return SnQLSubscriptionData(
         project_id=5,
         time_window_sec=500 * 60,
         resolution_sec=60,
@@ -67,7 +67,7 @@ SNQL_CASES = [
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
 def test_basic(
-    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    builder: Callable[[EntityKey, Mapping[str, Any]], SnQLSubscriptionData],
     metadata: Mapping[str, Any],
     entity_key: EntityKey,
 ) -> None:
@@ -78,7 +78,7 @@ def test_basic(
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
 def test_encode_snql(
-    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    builder: Callable[[EntityKey, Mapping[str, Any]], SnQLSubscriptionData],
     metadata: Mapping[str, Any],
     entity_key: EntityKey,
 ) -> None:
@@ -96,7 +96,7 @@ def test_encode_snql(
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
 def test_decode_snql(
-    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
+    builder: Callable[[EntityKey, Mapping[str, Any]], SnQLSubscriptionData],
     metadata: Mapping[str, Any],
     entity_key: EntityKey,
 ) -> None:
@@ -120,7 +120,7 @@ def test_subscription_task_result_encoder() -> None:
     timestamp = datetime.now()
 
     entity = get_entity(EntityKey.EVENTS)
-    subscription_data = SubscriptionData(
+    subscription_data = SnQLSubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
@@ -193,7 +193,7 @@ def test_metrics_subscription_task_result_encoder(
     metadata = {"organization": 1}
     timestamp = datetime.now()
 
-    subscription_data = SubscriptionData(
+    subscription_data = SnQLSubscriptionData(
         project_id=1,
         query=(
             f"""
@@ -255,7 +255,7 @@ def test_metrics_subscription_task_result_encoder(
 def test_subscription_task_encoder() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
     entity = get_entity(EntityKey.EVENTS)
-    subscription_data = SubscriptionData(
+    subscription_data = SnQLSubscriptionData(
         project_id=1,
         query="MATCH events SELECT count()",
         time_window_sec=60,

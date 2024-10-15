@@ -75,7 +75,7 @@ class SubscriptionIdentifier:
 
 
 @dataclass(frozen=True)
-class SubscriptionData:
+class SnQLSubscriptionData:
     """
     Represents the state of a subscription.
     """
@@ -215,7 +215,7 @@ class SubscriptionData:
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
@@ -223,7 +223,7 @@ class SubscriptionData:
             if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
                 metadata[key] = data[key]
 
-        return SubscriptionData(
+        return SnQLSubscriptionData(
             project_id=data["project_id"],
             # Always cast to int in case any old subscriptions are stored as float
             time_window_sec=int(data["time_window"]),
@@ -251,7 +251,7 @@ class SubscriptionData:
 
 class Subscription(NamedTuple):
     identifier: SubscriptionIdentifier
-    data: SubscriptionData
+    data: SnQLSubscriptionData
 
 
 class SubscriptionWithMetadata(NamedTuple):
