@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Select, Button, Code, Space, Textarea, Accordion, createStyles } from '@mantine/core';
-import useApi from '../api_client';
+import useApi from 'SnubaAdmin/api_client';
 
 
 function RpcEndpoints() {

@@ -41,6 +41,71 @@ def admin_api() -> FlaskClient:
     return application.test_client()
 
 
+@pytest.fixture
+def rpc_test_setup():
+    pool = DescriptorPool()
+    request_meta_proto = descriptor_pb2.DescriptorProto(
+        name="RequestMeta",
+        field=[
+            descriptor_pb2.FieldDescriptorProto(
+                name="organization_id",
+                number=1,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="project_ids",
+                number=2,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
+                label=descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED,
+            ),
+        ],
+    )
+    my_request_proto = descriptor_pb2.DescriptorProto(
+        name="MyRequest",
+        field=[
+            descriptor_pb2.FieldDescriptorProto(
+                name="message",
+                number=1,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
+            ),
+            descriptor_pb2.FieldDescriptorProto(
+                name="meta",
+                number=2,
+                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
+                type_name="RequestMeta",
+            ),
+        ],
+    )
+    file_descriptor_proto = descriptor_pb2.FileDescriptorProto(
+        name="dynamic_messages.proto",
+        package="test",
+        message_type=[request_meta_proto, my_request_proto],
+    )
+    pool.Add(file_descriptor_proto)  # type: ignore
+
+    factory = MessageFactory(pool)
+    MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))  # type: ignore
+
+    class TestRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
+        @classmethod
+        def version(cls) -> str:
+            return "v1"
+
+        @classmethod
+        def request_class(cls) -> type[MyRequest]:  # type: ignore
+            return MyRequest
+
+        @classmethod
+        def response_class(cls) -> type[Timestamp]:
+            return Timestamp
+
+        def _execute(self, in_msg: MyRequest) -> Timestamp:  # type: ignore
+            current_time = time.time()
+            return Timestamp(seconds=int(current_time), nanos=0)
+
+    return MyRequest, TestRPC
+
+
 @pytest.mark.redis_db
 def test_get_configs(admin_api: FlaskClient) -> None:
     response = admin_api.get("/configs")
@@ -950,71 +1015,12 @@ def test_clickhouse_system_settings(
 
 
 @pytest.mark.redis_db
-def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
-    pool = DescriptorPool()
-    request_meta_proto = descriptor_pb2.DescriptorProto(
-        name="RequestMeta",
-        field=[
-            descriptor_pb2.FieldDescriptorProto(
-                name="organization_id",
-                number=1,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="project_ids",
-                number=2,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_UINT64,
-                label=descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED,
-            ),
-        ],
-    )
-    my_request_proto = descriptor_pb2.DescriptorProto(
-        name="MyRequest",
-        field=[
-            descriptor_pb2.FieldDescriptorProto(
-                name="message",
-                number=1,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_STRING,
-            ),
-            descriptor_pb2.FieldDescriptorProto(
-                name="meta",
-                number=2,
-                type=descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE,
-                type_name="RequestMeta",
-            ),
-        ],
-    )
-
-    file_descriptor_proto = descriptor_pb2.FileDescriptorProto(
-        name="dynamic_messages.proto",
-        package="test",
-        message_type=[request_meta_proto, my_request_proto],
-    )
-    pool.Add(file_descriptor_proto)  # type: ignore
-
-    factory = MessageFactory(pool)
-    MyRequest = factory.GetPrototype(pool.FindMessageTypeByName("test.MyRequest"))  # type: ignore
-
-    class TestRPC(RPCEndpoint[MyRequest, Timestamp]):  # type: ignore
-        @classmethod
-        def version(cls) -> str:
-            return "v1"
-
-        @classmethod
-        def request_class(cls) -> type[MyRequest]:  # type: ignore
-            return MyRequest
-
-        @classmethod
-        def response_class(cls) -> type[Timestamp]:
-            return Timestamp
-
-        def _execute(self, in_msg: MyRequest) -> Timestamp:  # type: ignore
-            current_time = time.time()
-            return Timestamp(seconds=int(current_time), nanos=0)
+def test_execute_rpc_endpoint_success(admin_api: FlaskClient, rpc_test_setup) -> None:
+    MyRequest, TestRPC = rpc_test_setup
 
     payload = json.dumps(
         {
-            "message": "Hello, World!",
+            "message": "test_execute_rpc_endpoint_success",
             "meta": {
                 "organization_id": 123,
                 "project_ids": [1],
@@ -1034,6 +1040,19 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
     timestamp.FromJsonString(response_data)
     assert timestamp.seconds != 0 or timestamp.nanos != 0
 
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_unknown_endpoint(admin_api: FlaskClient) -> None:
+    payload = json.dumps(
+        {
+            "message": "test_execute_rpc_endpoint_unknown_endpoint",
+            "meta": {
+                "organization_id": 123,
+                "project_ids": [1],
+            },
+        }
+    )
+
     response = admin_api.post(
         "/rpc_execute/UnknownRPC/v1",
         data=payload,
@@ -1044,6 +1063,13 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
         "error": "Unknown endpoint: UnknownRPC or version: v1"
     }
 
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_invalid_payload(
+    admin_api: FlaskClient, rpc_test_setup
+) -> None:
+    MyRequest, TestRPC = rpc_test_setup
+
     invalid_payload = json.dumps({"invalid": "data"})
     response = admin_api.post(
         "/rpc_execute/TestRPC/v1",
@@ -1052,6 +1078,34 @@ def test_execute_rpc_endpoint(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     assert "error" in json.loads(response.data)
+
+
+@pytest.mark.redis_db
+def test_execute_rpc_endpoint_org_id_not_allowed(
+    admin_api: FlaskClient, rpc_test_setup
+) -> None:
+    MyRequest, TestRPC = rpc_test_setup
+
+    payload = json.dumps(
+        {
+            "message": "test_execute_rpc_endpoint_org_id_not_allowed",
+            "meta": {
+                "organization_id": 999999,
+                "project_ids": [1],
+            },
+        }
+    )
+
+    response = admin_api.post(
+        "/rpc_execute/TestRPC/v1",
+        data=payload,
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    response_data = json.loads(response.data)
+    assert "error" in response_data
+    assert "Organization ID 999999 is not allowed" in response_data["error"]
 
 
 @pytest.mark.redis_db
