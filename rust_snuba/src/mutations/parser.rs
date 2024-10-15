@@ -13,7 +13,7 @@ use sentry::SentryFutureExt;
 use serde::Deserialize;
 
 use crate::arroyo_utils::invalid_message_err;
-use crate::processors::eap_spans::PrimaryKey;
+use crate::processors::eap_spans::{FromPrimaryKey, PrimaryKey};
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub(crate) struct Update {
@@ -32,7 +32,7 @@ impl Update {
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub(crate) struct MutationMessage {
     // primary key, the mutation only applies on the rows that match this filter
-    pub filter: PrimaryKey,
+    pub filter: FromPrimaryKey,
 
     // the span attributes to update
     pub update: Update,

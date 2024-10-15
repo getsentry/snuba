@@ -35,6 +35,7 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
+from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -79,8 +80,7 @@ from snuba.web.delete_query import (
     delete_from_storage,
 )
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc import run_rpc_handler
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -278,13 +278,11 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
 
 @application.route("/rpc/<name>/<version>", methods=["POST"])
 def rpc(*, name: str, version: str) -> Response:
-    try:
-        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
-        deserialized_protobuf = endpoint.parse_from_string(http_request.data)
-        res = endpoint.execute(deserialized_protobuf)
-        return Response(res.SerializeToString())
-    except BadSnubaRPCRequestException as e:
-        return Response(str(e), status=400)
+    result_proto = run_rpc_handler(name, version, http_request.data)
+    if isinstance(result_proto, ErrorProto):
+        return Response(result_proto.SerializeToString(), status=result_proto.code)
+    else:
+        return Response(result_proto.SerializeToString(), status=200)
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])

@@ -165,6 +165,10 @@ class AggregateBucketRequest(
     def request_class(cls) -> Type[AggregateBucketRequestProto]:
         return AggregateBucketRequestProto
 
+    @classmethod
+    def response_class(cls) -> Type[AggregateBucketResponse]:
+        return AggregateBucketResponse
+
     def _execute(self, in_msg: AggregateBucketRequestProto) -> AggregateBucketResponse:
         querier = TimeseriesQuerier(in_msg, self._timer)
         resp: AggregateBucketResponse = querier.run()

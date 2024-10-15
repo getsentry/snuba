@@ -16,7 +16,7 @@ from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def truncate_request_meta_to_day(meta: RequestMeta) -> None:
@@ -296,7 +296,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return f.greaterOrEquals(k_expression, v_expression)
 
         raise BadSnubaRPCRequestException(
-            "Invalid string comparison, unknown op: ", item_filter.comparison_filter
+            f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
     if item_filter.exists_filter:
