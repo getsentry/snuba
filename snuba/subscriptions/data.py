@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from functools import partial
 from typing import (
     Any,
+    Generic,
     Iterator,
     List,
     Mapping,
@@ -15,6 +16,7 @@ from typing import (
     NewType,
     Optional,
     Tuple,
+    TypeVar,
     Union,
 )
 from uuid import UUID
@@ -84,9 +86,12 @@ class _SubscriptionData:
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
 
-class SubscriptionData(_SubscriptionData, ABC):
+TRequest = TypeVar("TRequest")
+
+
+class SubscriptionData(_SubscriptionData, ABC, Generic[TRequest]):
     @abstractmethod
-    def validate(self):
+    def validate(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -98,14 +103,14 @@ class SubscriptionData(_SubscriptionData, ABC):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ):
+    ) -> TRequest:
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> SubscriptionData[TRequest]:
         raise NotImplementedError
 
     @abstractmethod
@@ -114,7 +119,7 @@ class SubscriptionData(_SubscriptionData, ABC):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData):
+class SnQLSubscriptionData(SubscriptionData[Request]):
     """
     Represents the state of a subscription.
     """
