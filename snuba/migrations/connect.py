@@ -176,7 +176,7 @@ def check_for_inactive_replicas(clusters: List[ClickhouseCluster]) -> None:
 
             for table, total_replicas, active_replicas in tables_with_inactive:
                 inactive_replica_info.append(
-                    f"Cluster {cluster.get_cluster_name()} has inactive replicas for table {table} "
+                    f"Cluster {cluster.get_clickhouse_cluster_name()} has inactive replicas for table {table} "
                     f"with {active_replicas} out of {total_replicas} replicas active."
                 )
 
