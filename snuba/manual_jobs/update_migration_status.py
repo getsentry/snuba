@@ -52,7 +52,7 @@ class UpdateMigrationStatus(Job):
     def _insert_query(self, table_name: str) -> str:
         return f"INSERT INTO {table_name} FORMAT JSONEachRow"
 
-    def execute(self, logger: JobLogger) -> None:
+    def _execute(self, logger: JobLogger) -> None:
         migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         table_name = (
             LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME

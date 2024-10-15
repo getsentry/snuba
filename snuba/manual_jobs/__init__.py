@@ -1,5 +1,7 @@
 import logging
+import multiprocessing
 import os
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
@@ -12,6 +14,7 @@ logger = logging.getLogger("snuba.manual_jobs")
 
 class JobStatus(StrEnum):
     RUNNING = "running"
+    ASYNC_RUNNING_BACKGROUND = "async_running_background"
     FINISHED = "finished"
     NOT_STARTED = "not_started"
     FAILED = "failed"
@@ -43,6 +46,7 @@ class JobLogger(ABC):
 class JobSpec:
     job_id: str
     job_type: str
+    is_async: Optional[bool] = False
     params: Optional[MutableMapping[Any, Any]] = None
 
 
@@ -54,8 +58,17 @@ class Job(ABC, metaclass=RegisteredClass):
                 setattr(self, k, v)
 
     @abstractmethod
-    def execute(self, logger: JobLogger) -> None:
+    def _execute(self, logger: JobLogger) -> None:
         raise NotImplementedError
+
+    def execute(self, logger: JobLogger, async_job_statuses: Any = None) -> None:
+        if self.job_spec.is_async:
+            assert async_job_statuses is not None, "Please pass the async_job_status in"
+
+        self._execute(logger)
+
+        if self.job_spec.is_async:
+            async_job_statuses[self.job_spec.job_id] = 1
 
     @classmethod
     def config_key(cls) -> str:

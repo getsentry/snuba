@@ -1,6 +1,8 @@
 import logging
+import multiprocessing
 import os
 import traceback
+from multiprocessing import Process
 from typing import Any, Mapping, Sequence, Union
 
 import simplejson
@@ -86,12 +88,17 @@ def list_job_specs_with_status(
     specs = list_job_specs(manifest_filename)
     job_ids = specs.keys()
     statuses = _get_job_status_multi(
-        [_build_job_status_key(job_id) for job_id in job_ids]
+        [_build_job_status_key(job_id) for job_id in job_ids], async_job_statuses
     )
     return {
         job_id: {"spec": specs[job_id], "status": statuses[i]}
         for i, job_id in enumerate(job_ids)
     }
+
+
+async_jobs_manager = multiprocessing.Manager()
+async_job_statuses = async_jobs_manager.dict()
+async_job_processes: dict = dict()
 
 
 def run_job(job_spec: JobSpec) -> JobStatus:
@@ -109,10 +116,22 @@ def run_job(job_spec: JobSpec) -> JobStatus:
     job_to_run = _JobLoader.get_job_instance(job_spec)
 
     try:
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
-        job_to_run.execute(job_logger)
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
-        job_logger.info("[runner] job execution finished")
+        if job_spec.is_async:
+            async_job_statuses[job_spec.job_id] = 0
+            current_job_status = _set_job_status(
+                job_spec.job_id, JobStatus.ASYNC_RUNNING_BACKGROUND
+            )
+            async_job_process = Process(
+                target=job_to_run.execute, args=(job_logger, async_job_statuses)
+            )
+            async_job_process.start()
+            async_job_processes[job_spec.job_id] = async_job_process
+
+        else:
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
+            job_to_run.execute(job_logger)
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
+            job_logger.info("[runner] job execution finished")
     except BaseException:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
         job_logger.error("[runner] job execution failed")

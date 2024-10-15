@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from snuba.manual_jobs import JobStatus
 from snuba.redis import RedisClientKey, get_redis_client
@@ -41,8 +41,19 @@ def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
     return status
 
 
-def _get_job_status_multi(job_ids: Sequence[str]) -> Sequence[JobStatus]:
-    return [
+def _get_job_status_multi(
+    job_ids: Sequence[str], async_job_statuses: dict[str, int]
+) -> Sequence[JobStatus]:
+    statuses = [
         redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
         for redis_status in _redis_client.mget(job_ids)
     ]
+
+    for i in range(len(job_ids)):
+        if (
+            job_ids[i] in async_job_statuses.keys()
+            and async_job_statuses[job_ids[i]] == 1
+        ):
+            statuses[i] = JobStatus.FINISHED
+
+    return statuses

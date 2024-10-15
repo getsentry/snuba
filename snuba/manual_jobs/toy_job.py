@@ -11,7 +11,7 @@ class ToyJob(Job):
     def _build_query(self) -> str:
         return "query"
 
-    def execute(self, logger: JobLogger) -> None:
+    def _execute(self, logger: JobLogger) -> None:
         logger.info(
             "executing job "
             + self.job_spec.job_id
