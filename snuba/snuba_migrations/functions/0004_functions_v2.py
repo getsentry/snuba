@@ -18,7 +18,7 @@ from snuba.migrations.operations import OperationTarget, SqlOperation
 
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
-    Column("transaction_name", String()),
+    Column("transaction_name", String(modifiers=Modifiers(nullable=True))),
     Column("timestamp", DateTime()),
     Column("fingerprint", UInt(64)),
     Column("name", String()),
@@ -49,11 +49,11 @@ columns: List[Column[Modifiers]] = [
                         String(),  # thread_id
                         DateTime64(  # start_timestamp
                             precision=6,
-                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                            modifiers=Modifiers(nullable=True),
                         ),
                         DateTime64(  # end_timestamp
                             precision=6,
-                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                            modifiers=Modifiers(nullable=True),
                         ),
                     )
                 ),  # end Tuple
@@ -72,11 +72,11 @@ columns: List[Column[Modifiers]] = [
                         String(),  # thread_id
                         DateTime64(
                             precision=6,
-                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                            modifiers=Modifiers(nullable=True),
                         ),  # start_timestamp
                         DateTime64(
                             precision=6,
-                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                            modifiers=Modifiers(nullable=True),
                         ),  # end_timestamp
                     )
                 ),  # end Tuple
@@ -94,7 +94,6 @@ class Migration(migration.ClickhouseNodeMigration):
     data_granularity = 60 * 60  # 1 hour buckets
 
     local_raw_table = "functions_raw_local"
-    dist_raw_table = "functions_raw_dist"
 
     local_functions_table = "functions_v2_local"
     dist_functions_table = "functions_v2_dist"
@@ -109,10 +108,10 @@ class Migration(migration.ClickhouseNodeMigration):
                 columns=columns,
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set,
-                    order_by="(project_id, timestamp, transaction_name, fingerprint, function, package, is_application, profiling_type, platform, environment, release, retention_days)",
+                    order_by="(project_id, timestamp, transaction_name, fingerprint, name, package, is_application, profiling_type, platform, environment, release, retention_days)",
                     primary_key="(project_id, timestamp, transaction_name, fingerprint)",
                     partition_by="(retention_days, toMonday(timestamp))",
-                    settings={"index_granularity": "2048"},
+                    settings={"index_granularity": "2048", "allow_nullable_key": 1},
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
                 target=OperationTarget.LOCAL,
@@ -185,7 +184,7 @@ class Migration(migration.ClickhouseNodeMigration):
             GROUP BY
                 project_id,
                 transaction_name,
-                function,
+                name,
                 package,
                 fingerprint,
                 is_application,
