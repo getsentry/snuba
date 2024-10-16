@@ -323,9 +323,11 @@ class Runner:
         check_dangerous: bool = False,
     ) -> None:
         migration_id = migration_key.migration_id
-        check_for_inactive_replicas(
-            get_clickhouse_clusters_for_migration_group(migration_key.group)
-        )
+
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
 
         context = Context(
             migration_id,
@@ -435,9 +437,11 @@ class Runner:
         self, migration_key: MigrationKey, *, dry_run: bool = False
     ) -> None:
         migration_id = migration_key.migration_id
-        check_for_inactive_replicas(
-            get_clickhouse_clusters_for_migration_group(migration_key.group)
-        )
+
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
 
         context = Context(
             migration_id,
