@@ -363,7 +363,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                             "subscriptions-scheduler",
                             "--entity=generic_metrics_counters",
                             "--consumer-group=snuba-generic-metrics-counters-subscriptions-schedulers",
-                            "--followed-consumer-group=snuba-gen-metrics-counters-consumerss",
+                            "--followed-consumer-group=snuba-gen-metrics-counters-consumers",
                             "--auto-offset-reset=latest",
                             "--log-level=debug",
                             "--schedule-ttl=10",
