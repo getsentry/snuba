@@ -129,6 +129,7 @@ class RPCSubscriptionData(SubscriptionData):
     table_request: str
 
     def validate(self) -> None:
+        # TODO: Validate data
         pass
 
     def build_request(
@@ -143,7 +144,7 @@ class RPCSubscriptionData(SubscriptionData):
 
         table_request = TraceItemTableRequest()
         table_request.ParseFromString(self.table_request.encode("utf-8"))
-        # Add time conditions etc ...
+        # TODO: Add time conditions etc
 
         snuba_request = _build_snuba_request(table_request)
 
