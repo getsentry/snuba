@@ -65,13 +65,23 @@ impl ClickhouseWriter {
         let session_id = Uuid::new_v4().to_string();
 
         for query in queries {
-            self.client
+            let response = self
+                .client
                 .post(&self.url)
                 .query(&[("session_id", &session_id)])
                 .body(query)
                 .send()
-                .await?
-                .error_for_status()?;
+                .await?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await;
+                anyhow::bail!(
+                    "bad response while inserting mutation, status: {}, response body: {:?}",
+                    status,
+                    body
+                );
+            }
         }
 
         Ok(())
