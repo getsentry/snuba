@@ -5,14 +5,17 @@ from typing import Any, Mapping, Sequence, Union
 
 import simplejson
 
-from snuba.manual_jobs import JobSpec, JobStatus
+from snuba.manual_jobs import Job, JobSpec
 from snuba.manual_jobs.job_loader import _JobLoader
 from snuba.manual_jobs.job_logging import get_job_logger
+from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.redis import (
     _acquire_job_lock,
+    _build_is_job_async_key,
     _build_job_log_key,
     _build_job_status_key,
     _get_job_status_multi,
+    _get_job_type,
     _redis_client,
     _release_job_lock,
     _set_job_status,
@@ -65,13 +68,24 @@ def _build_job_spec_from_entry(content: Any) -> JobSpec:
     return job_spec
 
 
+def _update_job_status_if_async(job_id: str, job_status: JobStatus) -> JobStatus:
+    if _redis_client.get(
+        name=_build_is_job_async_key(job_id)
+    ) is True and Job.get_from_name(_get_job_type(job_id)).async_finished_check(job_id):
+        job_status = JobStatus.FINISHED
+        _set_job_status(job_id, JobStatus.FINISHED)
+    return job_status
+
+
 def get_job_status(job_id: str) -> JobStatus:
     redis_status = _redis_client.get(name=_build_job_status_key(job_id))
-    return (
+    status = _update_job_status_if_async(
+        job_id,
         JobStatus(redis_status.decode("utf-8"))
         if redis_status
-        else JobStatus.NOT_STARTED
+        else JobStatus.NOT_STARTED,
     )
+    return status
 
 
 def list_job_specs(
@@ -84,10 +98,12 @@ def list_job_specs_with_status(
     manifest_filename: str = MANIFEST_FILENAME,
 ) -> Mapping[str, Mapping[str, Union[JobSpec, JobStatus]]]:
     specs = list_job_specs(manifest_filename)
-    job_ids = specs.keys()
+    job_ids = list(specs.keys())
     statuses = _get_job_status_multi(
         [_build_job_status_key(job_id) for job_id in job_ids]
     )
+    for i in range(len(job_ids)):
+        statuses[i] = _update_job_status_if_async(job_ids[i], statuses[i])
     return {
         job_id: {"spec": specs[job_id], "status": statuses[i]}
         for i, job_id in enumerate(job_ids)
@@ -109,10 +125,16 @@ def run_job(job_spec: JobSpec) -> JobStatus:
     job_to_run = _JobLoader.get_job_instance(job_spec)
 
     try:
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
-        job_to_run.execute(job_logger)
-        current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
-        job_logger.info("[runner] job execution finished")
+        if job_spec.is_async:
+            current_job_status = _set_job_status(
+                job_spec.job_id, JobStatus.ASYNC_RUNNING_BACKGROUND
+            )
+            job_to_run.execute(job_logger)
+        else:
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
+            job_to_run.execute(job_logger)
+            current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
+            job_logger.info("[runner] job execution finished")
     except BaseException:
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
         job_logger.error("[runner] job execution failed")
