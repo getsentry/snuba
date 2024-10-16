@@ -21,7 +21,7 @@ columns: List[Column[Modifiers]] = [
     Column("transaction_name", String()),
     Column("timestamp", DateTime()),
     Column("fingerprint", UInt(64)),
-    Column("function", String()),
+    Column("name", String()),
     Column("package", String()),
     Column("is_application", UInt(8)),
     Column("profiling_type", String(Modifiers(low_cardinality=True))),
@@ -162,7 +162,7 @@ class Migration(migration.ClickhouseNodeMigration):
             SELECT
                 project_id,
                 transaction_name,
-                function,
+                name,
                 package,
                 fingerprint,
                 is_application,
