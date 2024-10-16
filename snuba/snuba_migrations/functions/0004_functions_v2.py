@@ -188,7 +188,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 package,
                 fingerprint,
                 is_application,
-                profiling_type
+                profiling_type,
                 platform,
                 environment,
                 release,
