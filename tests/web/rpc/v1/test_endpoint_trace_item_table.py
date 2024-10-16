@@ -263,7 +263,7 @@ class TestTraceItemTable(BaseApiTest):
                 TraceItemTableRequest.OrderBy(
                     column=Column(
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="sentry.status"
+                            type=AttributeKey.TYPE_STRING, name="sentry.span_id"
                         )
                     )
                 )
@@ -331,7 +331,7 @@ class TestTraceItemTable(BaseApiTest):
                 TraceItemTableRequest.OrderBy(
                     column=Column(
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_STRING, name="project_name"
+                            type=AttributeKey.TYPE_STRING, name="sentry.project_name"
                         )
                     ),
                 )
@@ -532,3 +532,108 @@ class TestTraceItemTable(BaseApiTest):
         )
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
+
+    def test_order_by_non_selected(self) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
+                        ),
+                        label="avg(eap.measurment)",
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        aggregation=AttributeAggregation(
+                            aggregate=Function.FUNCTION_MAX,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            ),
+                            label="max(my.float.field)",
+                        )
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_order_by_aggregation(self) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
+                        ),
+                        label="avg(eap.measurment)",
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        aggregation=AttributeAggregation(
+                            aggregate=Function.FUNCTION_AVG,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
+                            ),
+                            label="avg(eap.measurment)",
+                        )
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        measurements = [v.val_float for v in response.column_values[1].results]
+        assert sorted(measurements) == measurements

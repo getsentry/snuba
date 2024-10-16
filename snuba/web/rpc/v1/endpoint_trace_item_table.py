@@ -41,14 +41,14 @@ def _convert_order_by(
     res: list[OrderBy] = []
     for x in order_by:
         direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
-        if x.column.key:
+        if x.column.HasField("key"):
             res.append(
                 OrderBy(
                     direction=direction,
                     expression=attribute_key_to_expression(x.column.key),
                 )
             )
-        elif x.column.aggregation:
+        elif x.column.HasField("aggregation"):
             res.append(
                 OrderBy(
                     direction=direction,
@@ -203,6 +203,15 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
         )
 
 
+def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
+    order_by_cols = set([ob.column.label for ob in in_msg.order_by])
+    selected_columns = set([c.label for c in in_msg.columns])
+    if not order_by_cols.issubset(selected_columns):
+        raise BadSnubaRPCRequestException(
+            f"Ordered by columns {order_by_cols} not selected: {selected_columns}"
+        )
+
+
 class EndpointTraceItemTable(
     RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
 ):
@@ -217,6 +226,7 @@ class EndpointTraceItemTable(
     def execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
+        _validate_order_by(in_msg)
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
