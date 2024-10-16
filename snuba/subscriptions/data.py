@@ -76,8 +76,11 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
+TRequest = TypeVar("TRequest")
+
+
 @dataclass(frozen=True, kw_only=True)
-class _SubscriptionData:
+class SubscriptionData(ABC, Generic[TRequest]):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -85,11 +88,6 @@ class _SubscriptionData:
     metadata: Mapping[str, Any]
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
-
-TRequest = TypeVar("TRequest")
-
-
-class SubscriptionData(_SubscriptionData, ABC, Generic[TRequest]):
     @abstractmethod
     def validate(self) -> None:
         raise NotImplementedError
