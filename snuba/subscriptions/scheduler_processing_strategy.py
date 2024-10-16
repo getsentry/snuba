@@ -27,7 +27,11 @@ from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import SubscriptionScheduler
+from snuba.subscriptions.data import (
+    RPCSubscriptionData,
+    SnQLSubscriptionData,
+    SubscriptionScheduler,
+)
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 
@@ -467,10 +471,18 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                 except InvalidQueryException:
                     entity = task.task.subscription.data.entity
                     if get_entity_name(entity) == EntityKey.GENERIC_METRICS_GAUGES:
-                        logger.warning(
-                            "Skipping malformed subscription query %r in scheduler",
-                            task.task.subscription.data.query,
-                        )
+                        if isinstance(
+                            task.task.subscription.data, SnQLSubscriptionData
+                        ):
+                            logger.warning(
+                                "Skipping malformed subscription query %r in scheduler",
+                                task.task.subscription.data.query,
+                            )
+                        if isinstance(task.task.subscription.data, RPCSubscriptionData):
+                            logger.warning(
+                                "Skipping malformed subscription query %r in scheduler",
+                                task.task.subscription.data.table_request,
+                            )
                         continue
 
         # Record the amount of time between the message timestamp and when scheduling

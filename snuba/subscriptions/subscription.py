@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Union
 from uuid import UUID, uuid1
 
 from snuba.datasets.dataset import Dataset
@@ -7,6 +8,7 @@ from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
+    RPCSubscriptionData,
     SnQLSubscriptionData,
     SubscriptionIdentifier,
 )
@@ -34,7 +36,7 @@ class SubscriptionCreator:
         )
 
     def create(
-        self, data: SnQLSubscriptionData, timer: Timer
+        self, data: Union[SnQLSubscriptionData, RPCSubscriptionData], timer: Timer
     ) -> SubscriptionIdentifier:
         data.validate()
 
@@ -52,7 +54,9 @@ class SubscriptionCreator:
         )
         return identifier
 
-    def _test_request(self, data: SnQLSubscriptionData, timer: Timer) -> None:
+    def _test_request(
+        self, data: Union[SnQLSubscriptionData, RPCSubscriptionData], timer: Timer
+    ) -> None:
         request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
         run_query(self.dataset, request, timer)
 

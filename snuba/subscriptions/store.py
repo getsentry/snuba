@@ -1,16 +1,22 @@
 import abc
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Union
 from uuid import UUID
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientType
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.data import (
+    PartitionId,
+    RPCSubscriptionData,
+    SnQLSubscriptionData,
+)
 
 
 class SubscriptionDataStore(abc.ABC):
     @abc.abstractmethod
-    def create(self, key: UUID, data: SnQLSubscriptionData) -> None:
+    def create(
+        self, key: UUID, data: Union[SnQLSubscriptionData, RPCSubscriptionData]
+    ) -> None:
         """
         Creates a `Subscription` in the store. Will overwrite any existing `Subscriptions`
         with the same id.
@@ -25,7 +31,9 @@ class SubscriptionDataStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def all(self) -> Iterable[Tuple[UUID, SnQLSubscriptionData]]:
+    def all(
+        self,
+    ) -> Iterable[Tuple[UUID, Union[SnQLSubscriptionData, RPCSubscriptionData]]]:
         """
         Fetches all `Subscriptions` from the store
         :return: An iterable of `Subscriptions`.
@@ -47,7 +55,9 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         self.codec = SubscriptionDataCodec(entity)
         self.__key = f"subscriptions:{entity.value}:{partition_id}"
 
-    def create(self, key: UUID, data: SnQLSubscriptionData) -> None:
+    def create(
+        self, key: UUID, data: Union[SnQLSubscriptionData, RPCSubscriptionData]
+    ) -> None:
         """
         Stores subscription data in Redis. Will overwrite any existing
         subscriptions with the same id.
@@ -60,7 +70,9 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         """
         self.client.hdel(self.__key, key.hex.encode("utf-8"))
 
-    def all(self) -> Iterable[Tuple[UUID, SnQLSubscriptionData]]:
+    def all(
+        self,
+    ) -> Iterable[Tuple[UUID, Union[SnQLSubscriptionData, RPCSubscriptionData]]]:
         """
         Fetches all subscriptions from the store.
         :return: An iterable of `Subscriptions`.
