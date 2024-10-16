@@ -69,7 +69,11 @@ from snuba.consumers.dlq import (
     store_instruction,
 )
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import (
+    get_all_storage_keys,
+    get_storage,
+    get_writable_storage,
+)
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs.runner import (
     list_job_specs,
@@ -77,8 +81,9 @@ from snuba.manual_jobs.runner import (
     run_job,
     view_job_logs,
 )
+from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
-from snuba.migrations.groups import MigrationGroup
+from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.query.allocation_policies import AllocationPolicy
@@ -278,6 +283,7 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     except ValueError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
+    readiness_state = get_group_readiness_state(migration_group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
@@ -299,6 +305,9 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                     else AuditLogAction.REVERSED_MIGRATION_STARTED
                 ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
+            )
+            check_for_inactive_replicas(
+                get_all_storage_keys(readiness_states=[readiness_state])
             )
 
         if action == "run":

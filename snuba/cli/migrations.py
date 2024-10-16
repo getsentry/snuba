@@ -8,9 +8,11 @@ import snuba.migrations.autogeneration as autogeneration
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
+from snuba.datasets.storages.factory import get_all_storage_keys
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
     check_clickhouse_connections,
+    check_for_inactive_replicas,
     get_clickhouse_clusters_for_migration_group,
     get_clusters_for_readiness_states,
 )
@@ -105,6 +107,7 @@ def migrate(
         else CLUSTERS
     )
     check_clickhouse_connections(clusters_to_check)
+    check_for_inactive_replicas(get_all_storage_keys(readiness_states=readiness_states))
     runner = Runner()
 
     try:
@@ -158,10 +161,14 @@ def run(
     """
     setup_logging(log_level)
     migration_group = MigrationGroup(group)
+    readiness_state = get_group_readiness_state(migration_group)
     if not dry_run:
         # just check the connection for the migration that's being run
         check_clickhouse_connections(
             get_clickhouse_clusters_for_migration_group(migration_group)
+        )
+        check_for_inactive_replicas(
+            get_all_storage_keys(readiness_states=[readiness_state])
         )
 
     runner = Runner()
@@ -214,10 +221,14 @@ def reverse(
     --fake marks a migration as reversed without doing anything.
     """
     migration_group = MigrationGroup(group)
+    readiness_state = get_group_readiness_state(migration_group)
     setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections(
             get_clickhouse_clusters_for_migration_group(migration_group)
+        )
+        check_for_inactive_replicas(
+            get_all_storage_keys(readiness_states=[readiness_state])
         )
     runner = Runner()
     migration_key = MigrationKey(migration_group, migration_id)
@@ -263,6 +274,9 @@ def reverse_in_progress(
     """
     setup_logging(log_level)
     migration_group = MigrationGroup(group) if group else None
+    readiness_state = (
+        get_group_readiness_state(migration_group) if migration_group else None
+    )
     if not dry_run:
         clusters_to_check = (
             CLUSTERS
@@ -270,6 +284,11 @@ def reverse_in_progress(
             else get_clickhouse_clusters_for_migration_group(migration_group)
         )
         check_clickhouse_connections(clusters_to_check)
+        check_for_inactive_replicas(
+            get_all_storage_keys(
+                readiness_states=[readiness_state] if readiness_state else None
+            )
+        )
     runner = Runner()
 
     if dry_run:

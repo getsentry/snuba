@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import snuba.migrations.connect
 from snuba import settings
 from snuba.clickhouse.native import ClickhouseResult
 from snuba.clusters.cluster import CLUSTERS, ClickhouseClientSettings, get_cluster
@@ -13,6 +14,7 @@ from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import factory
 from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.migrations.connect import check_for_inactive_replicas
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
 from snuba.migrations.groups import MigrationGroup, get_group_loader
@@ -503,29 +505,35 @@ def test_check_inactive_replica() -> None:
         ]
     )
 
-    mock_cluster = MagicMock()
-    mock_cluster.get_clickhouse_cluster_name.return_value = "test_cluster"
+    with patch.object(
+        snuba.migrations.connect, "get_all_storage_keys"
+    ) as mock_storage_keys:
+        storage_key = StorageKey.ERRORS
+        storage = get_storage(storage_key)
+        database = storage.get_cluster().get_database()
+        mock_storage_keys.return_value = [storage_key]
 
-    mock_node = MagicMock()
-    mock_cluster.get_local_nodes.return_value = [mock_node]
+        with patch("snuba.migrations.connect.get_storage") as MockGetStorage:
+            mock_cluster = MagicMock()
+            MockGetStorage.return_value.get_cluster.return_value = mock_cluster
 
-    mock_conn = mock_cluster.get_node_connection.return_value
-    mock_conn.database = "database"
-    mock_conn.execute.return_value = inactive_replica_query_result
+            mock_conn = mock_cluster.get_node_connection.return_value
+            mock_conn.database = database
+            mock_conn.execute.return_value = inactive_replica_query_result
 
-    with pytest.raises(InactiveClickhouseReplica) as exc:
-        check_for_inactive_replicas([mock_cluster])
+            with pytest.raises(InactiveClickhouseReplica) as exc:
+                check_for_inactive_replicas([storage_key])
 
-    assert exc.value.args[0] == (
-        "Cluster test_cluster has inactive replicas for table bad_table_1 "
-        "with 2 out of 3 replicas active.\n"
-        "Cluster test_cluster has inactive replicas for table bad_table_2 "
-        "with 1 out of 4 replicas active."
-    )
+            assert exc.value.args[0] == (
+                f"Storage {storage_key.value} has inactive replicas for table bad_table_1 "
+                f"with 2 out of 3 replicas active.\n"
+                f"Storage {storage_key.value} has inactive replicas for table bad_table_2 "
+                f"with 1 out of 4 replicas active."
+            )
 
-    assert mock_conn.execute.call_count == 1
-    query = (
-        "SELECT table, total_replicas, active_replicas FROM system.replicas "
-        "WHERE active_replicas < total_replicas AND database ='database'"
-    )
-    mock_conn.execute.assert_called_with(query)
+            assert mock_conn.execute.call_count == 1
+            query = (
+                "SELECT table, total_replicas, active_replicas FROM system.replicas "
+                f"WHERE active_replicas < total_replicas AND database ='{database}'"
+            )
+            mock_conn.execute.assert_called_with(query)
