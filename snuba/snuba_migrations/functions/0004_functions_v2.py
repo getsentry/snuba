@@ -129,7 +129,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=self.dist_functions_table,
                 columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name=self.dist_functions_table,
+                    local_table_name=self.local_functions_table,
                     sharding_key=None,
                 ),
                 target=OperationTarget.DISTRIBUTED,
