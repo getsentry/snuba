@@ -15,6 +15,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, migration_utilities, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.operations import OperationTarget, SqlOperation
 
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
@@ -87,7 +88,7 @@ columns: List[Column[Modifiers]] = [
 ]
 
 
-class Migration(migration.CodeMigration):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
     index_granularity = "2048"
     storage_set = StorageSetKey.FUNCTIONS
@@ -129,72 +130,48 @@ class Migration(migration.CodeMigration):
                 settings=table_settings,
                 ttl="timestamp + toIntervalDay(retention_days)",
             ),
-            target=operations.OperationTarget.LOCAL,
+            target=OperationTarget.LOCAL,
         )
 
-    def forwards_global(self) -> Sequence[operations.GenericOperation]:
-        return [*self._forwards_local(), *self._forwards_dist()]
-
-    def backwards_global(self) -> Sequence[operations.GenericOperation]:
-        return [*self._backwards_dist(), *self._backwards_local()]
-
-    def _forwards_local(self) -> Sequence[operations.GenericOperation]:
+    def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.RunSqlAsCode(self._create_functions_v2_table),
-            operations.RunSqlAsCode(
-                operations.CreateMaterializedView(
-                    storage_set=self.storage_set,
-                    view_name=self.local_mv_table,
-                    destination_table_name=self.local_functions_table,
-                    columns=columns,
-                    query=self.__MATVIEW_STATEMENT,
-                    target=operations.OperationTarget.LOCAL,
-                )
+            self._create_functions_v2_table,
+            operations.CreateMaterializedView(
+                storage_set=self.storage_set,
+                view_name=self.local_mv_table,
+                destination_table_name=self.local_functions_table,
+                columns=columns,
+                query=self.__MATVIEW_STATEMENT,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.CreateTable(
+                storage_set=self.storage_set,
+                table_name=self.dist_functions_table,
+                columns=columns,
+                engine=table_engines.Distributed(
+                    local_table_name=self.dist_functions_table,
+                    sharding_key=None,
+                ),
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
 
-    def _backwards_local(self) -> Sequence[operations.GenericOperation]:
+    def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            operations.RunSqlAsCode(
-                operations.DropTable(
-                    storage_set=self.storage_set,
-                    table_name=self.local_functions_table,
-                    target=operations.OperationTarget.LOCAL,
-                )
+            operations.DropTable(
+                storage_set=self.storage_set,
+                table_name=self.dist_functions_table,
+                target=OperationTarget.DISTRIBUTED,
             ),
-            operations.RunSqlAsCode(
-                operations.DropTable(
-                    storage_set=self.storage_set,
-                    table_name=self.local_mv_table,
-                    target=operations.OperationTarget.LOCAL,
-                )
+            operations.DropTable(
+                storage_set=self.storage_set,
+                table_name=self.local_functions_table,
+                target=OperationTarget.LOCAL,
             ),
-        ]
-
-    def _forwards_dist(self) -> Sequence[operations.GenericOperation]:
-        return [
-            operations.RunSqlAsCode(
-                operations.CreateTable(
-                    storage_set=self.storage_set,
-                    table_name=self.dist_functions_table,
-                    columns=columns,
-                    engine=table_engines.Distributed(
-                        local_table_name=self.dist_functions_table,
-                        sharding_key=None,
-                    ),
-                    target=operations.OperationTarget.DISTRIBUTED,
-                )
-            ),
-        ]
-
-    def _backwards_dist(self) -> Sequence[operations.GenericOperation]:
-        return [
-            operations.RunSqlAsCode(
-                operations.DropTable(
-                    storage_set=self.storage_set,
-                    table_name=self.dist_functions_table,
-                    target=operations.OperationTarget.DISTRIBUTED,
-                )
+            operations.DropTable(
+                storage_set=self.storage_set,
+                table_name=self.local_mv_table,
+                target=OperationTarget.LOCAL,
             ),
         ]
 
