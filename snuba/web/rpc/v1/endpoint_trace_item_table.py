@@ -191,6 +191,18 @@ def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableReq
     return in_msg
 
 
+def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
+    non_aggregted_columns = set(
+        [c.key.name for c in in_msg.columns if c.HasField("key")]
+    )
+    grouped_by_columns = set([c.name for c in in_msg.group_by])
+    aggregation_present = any([c for c in in_msg.columns if c.HasField("aggregation")])
+    if non_aggregted_columns != grouped_by_columns and aggregation_present:
+        raise BadSnubaRPCRequestException(
+            f"Non aggregated columns should be in group_by. non_aggregted_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
+        )
+
+
 class EndpointTraceItemTable(
     RPCEndpoint[TraceItemTableRequest, TraceItemTableResponse]
 ):
@@ -204,6 +216,7 @@ class EndpointTraceItemTable(
 
     def execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         in_msg = _apply_labels_to_columns(in_msg)
+        _validate_select_and_groupby(in_msg)
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
