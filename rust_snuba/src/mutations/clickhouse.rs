@@ -1,3 +1,4 @@
+use rust_arroyo::counter;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
@@ -117,6 +118,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
         .to_owned()
         .into_bytes();
 
+    counter!("eap_mutations.mutation_rows", batch.0.len() as u64);
     for (filter, update) in &batch.0 {
         let mut attributes = AttributeMap::default();
         for (k, v) in &update.attr_str {
