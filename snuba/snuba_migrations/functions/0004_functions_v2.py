@@ -46,14 +46,14 @@ columns: List[Column[Modifiers]] = [
                 Tuple(
                     UUID(),  # profile_id
                     String(),  # thread_id
-                    DateTime64(
+                    DateTime64(  # start_timestamp
                         precision=6,
                         modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
-                    ),  # start_timestamp
-                    DateTime64(
+                    ),
+                    DateTime64(  # end_timestamp
                         precision=6,
                         modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
-                    ),  # end_timestamp
+                    ),
                 ),  # end Tuple
                 Float(64),
             ],
