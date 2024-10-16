@@ -89,7 +89,6 @@ columns: List[Column[Modifiers]] = [
 
 class Migration(migration.ClickhouseNodeMigration):
     blocking = False
-    index_granularity = "2048"
     storage_set = StorageSetKey.FUNCTIONS
 
     data_granularity = 60 * 60  # 1 hour buckets
@@ -113,6 +112,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     order_by="(project_id, timestamp, transaction_name, fingerprint, function, package, is_application, profiling_type, platform, environment, release, retention_days)",
                     primary_key="(project_id, timestamp, transaction_name, fingerprint)",
                     partition_by="(retention_days, toMonday(timestamp))",
+                    settings={"index_granularity": "2048"},
                     ttl="timestamp + toIntervalDay(retention_days)",
                 ),
                 target=OperationTarget.LOCAL,
