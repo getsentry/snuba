@@ -131,7 +131,7 @@ impl BatchFactory {
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
                 // being added to the receiver stream from the sender
-                let res = client
+                let response = client
                     .post(&url)
                     .query(&[("query", &query)])
                     .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
