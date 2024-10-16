@@ -461,7 +461,16 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
-                    )
+                    ),
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
+                        label="avg(my.float.field)",
+                    ),
                 ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
@@ -486,6 +495,14 @@ class TestTraceItemTable(BaseApiTest):
             ),
             TraceItemColumnValues(
                 attribute_name="max(my.float.field)",
+                results=[
+                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_float=101.2),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="avg(my.float.field)",
                 results=[
                     AttributeValue(val_float=101.2),
                     AttributeValue(val_float=101.2),
