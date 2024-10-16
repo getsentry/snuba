@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from functools import partial
 from typing import (
     Any,
-    Generic,
     Iterator,
     List,
     Mapping,
@@ -16,7 +15,6 @@ from typing import (
     NewType,
     Optional,
     Tuple,
-    TypeVar,
     Union,
 )
 from uuid import UUID
@@ -76,11 +74,8 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
-TRequest = TypeVar("TRequest")
-
-
 @dataclass(frozen=True, kw_only=True)
-class SubscriptionData(ABC, Generic[TRequest]):
+class SubscriptionData(ABC):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -101,14 +96,14 @@ class SubscriptionData(ABC, Generic[TRequest]):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> TRequest:
+    ) -> Request:
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData[TRequest]:
+    ) -> SubscriptionData:
         raise NotImplementedError
 
     @abstractmethod
@@ -117,7 +112,7 @@ class SubscriptionData(ABC, Generic[TRequest]):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData[Request]):
+class SnQLSubscriptionData(SubscriptionData):
     """
     Represents the state of a subscription.
     """
