@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import partial
 from typing import (
     Any,
@@ -18,6 +19,8 @@ from typing import (
     Union,
 )
 from uuid import UUID
+
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -43,6 +46,7 @@ from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.web.rpc.v1.endpoint_trace_item_table import _build_snuba_request
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -58,6 +62,11 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
 logger = logging.getLogger("snuba.subscriptions")
 
 PartitionId = NewType("PartitionId", int)
+
+
+class SubscriptionType(Enum):
+    SNQL = "snql"
+    RPC = "rpc"
 
 
 @dataclass(frozen=True)
@@ -112,9 +121,75 @@ class SubscriptionData(ABC):
 
 
 @dataclass(frozen=True, kw_only=True)
+class RPCSubscriptionData(SubscriptionData):
+    """
+    Represents the state of an RPC subscription.
+    """
+
+    table_request: str
+
+    def validate(self) -> None:
+        pass
+
+    def build_request(
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
+    ) -> Request:
+
+        table_request = TraceItemTableRequest()
+        table_request.ParseFromString(self.table_request.encode("utf-8"))
+        # Add time conditions etc ...
+
+        snuba_request = _build_snuba_request(table_request)
+
+        return snuba_request
+
+    @classmethod
+    def from_dict(
+        cls, data: Mapping[str, Any], entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+
+        metadata = {}
+        for key in data.keys():
+            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+                metadata[key] = data[key]
+
+        return RPCSubscriptionData(
+            project_id=data["project_id"],
+            time_window_sec=int(data["time_window"]),
+            resolution_sec=int(data["resolution"]),
+            table_request=data["table_request"],
+            entity=entity,
+            metadata=metadata,
+            tenant_ids=data.get("tenant_ids", dict()),
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        subscription_data_dict = {
+            "project_id": self.project_id,
+            "time_window": self.time_window_sec,
+            "resolution": self.resolution_sec,
+            "table_request": self.table_request,
+            "subscription_type": SubscriptionType.RPC,
+        }
+
+        subscription_processors = self.entity.get_subscription_processors()
+        if subscription_processors:
+            for processor in subscription_processors:
+                subscription_data_dict.update(processor.to_dict(self.metadata))
+        return subscription_data_dict
+
+
+@dataclass(frozen=True, kw_only=True)
 class SnQLSubscriptionData(SubscriptionData):
     """
-    Represents the state of a subscription.
+    Represents the state of a SnQL subscription.
     """
 
     query: str
@@ -271,6 +346,7 @@ class SnQLSubscriptionData(SubscriptionData):
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
+            "subscription_type": SubscriptionType.SNQL,
         }
 
         subscription_processors = self.entity.get_subscription_processors()
@@ -282,7 +358,7 @@ class SnQLSubscriptionData(SubscriptionData):
 
 class Subscription(NamedTuple):
     identifier: SubscriptionIdentifier
-    data: SnQLSubscriptionData
+    data: Union[SnQLSubscriptionData, RPCSubscriptionData]
 
 
 class SubscriptionWithMetadata(NamedTuple):
