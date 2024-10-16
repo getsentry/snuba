@@ -1,3 +1,4 @@
+use rust_arroyo::counter;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
@@ -64,13 +65,23 @@ impl ClickhouseWriter {
         let session_id = Uuid::new_v4().to_string();
 
         for query in queries {
-            self.client
+            let response = self
+                .client
                 .post(&self.url)
                 .query(&[("session_id", &session_id)])
                 .body(query)
                 .send()
-                .await?
-                .error_for_status()?;
+                .await?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await;
+                anyhow::bail!(
+                    "bad response while inserting mutation, status: {}, response body: {:?}",
+                    status,
+                    body
+                );
+            }
         }
 
         Ok(())
@@ -117,6 +128,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
         .to_owned()
         .into_bytes();
 
+    counter!("eap_mutations.mutation_rows", batch.0.len() as u64);
     for (filter, update) in &batch.0 {
         let mut attributes = AttributeMap::default();
         for (k, v) in &update.attr_str {
