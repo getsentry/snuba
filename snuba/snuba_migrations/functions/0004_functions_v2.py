@@ -44,16 +44,18 @@ columns: List[Column[Modifiers]] = [
             "argMax",
             [
                 Tuple(
-                    UUID(),  # profile_id
-                    String(),  # thread_id
-                    DateTime64(  # start_timestamp
-                        precision=6,
-                        modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
-                    ),
-                    DateTime64(  # end_timestamp
-                        precision=6,
-                        modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
-                    ),
+                    (
+                        UUID(),  # profile_id
+                        String(),  # thread_id
+                        DateTime64(  # start_timestamp
+                            precision=6,
+                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                        ),
+                        DateTime64(  # end_timestamp
+                            precision=6,
+                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                        ),
+                    )
                 ),  # end Tuple
                 Float(64),
             ],
@@ -65,16 +67,18 @@ columns: List[Column[Modifiers]] = [
             "groupUniqArray(5)",
             [
                 Tuple(
-                    UUID(),  # profile_id
-                    String(),  # thread_id
-                    DateTime64(
-                        precision=6,
-                        modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
-                    ),  # start_timestamp
-                    DateTime64(
-                        precision=6,
-                        modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
-                    ),  # end_timestamp
+                    (
+                        UUID(),  # profile_id
+                        String(),  # thread_id
+                        DateTime64(
+                            precision=6,
+                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                        ),  # start_timestamp
+                        DateTime64(
+                            precision=6,
+                            modifiers=Modifiers(nullable=True, codecs=["DoubleDelta"]),
+                        ),  # end_timestamp
+                    )
                 ),  # end Tuple
             ],
         ),
