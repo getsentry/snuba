@@ -14,6 +14,7 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 
 class Migration(migration.ClickhouseNodeMigration):
+    # test
     blocking = False
     view_name = "generic_metric_distributions_aggregation_mv_v4"
     dest_table_columns: Sequence[Column[Modifiers]] = [
