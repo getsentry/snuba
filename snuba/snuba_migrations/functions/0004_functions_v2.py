@@ -18,7 +18,7 @@ from snuba.migrations.operations import OperationTarget, SqlOperation
 
 columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
-    Column("transaction_name", String(modifiers=Modifiers(nullable=True))),
+    Column("transaction_name", String()),
     Column("timestamp", DateTime()),
     Column("fingerprint", UInt(64)),
     Column("name", String()),
