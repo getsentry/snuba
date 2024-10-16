@@ -1,4 +1,4 @@
-from typing import List, MutableMapping, Optional, Sequence, Union
+from typing import List, Sequence
 
 from snuba.clickhouse.columns import (
     UUID,
@@ -11,9 +11,8 @@ from snuba.clickhouse.columns import (
     Tuple,
     UInt,
 )
-from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, migration_utilities, operations, table_engines
+from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 
@@ -103,39 +102,21 @@ class Migration(migration.ClickhouseNodeMigration):
 
     local_mv_table = "functions_mv_v2_local"
 
-    def _create_functions_v2_table(
-        self, clickhouse: Optional[ClickhousePool]
-    ) -> operations.SqlOperation:
-        table_settings: MutableMapping[str, Union[int, str]] = {
-            "index_granularity": self.index_granularity,
-        }
-
-        clickhouse_version = migration_utilities.get_clickhouse_version_for_storage_set(
-            self.storage_set, clickhouse
-        )
-        if migration_utilities.supports_setting(
-            clickhouse_version, "allow_nullable_key"
-        ):
-            table_settings["allow_nullable_key"] = 1
-
-        return operations.CreateTable(
-            storage_set=self.storage_set,
-            table_name=self.local_functions_table,
-            columns=columns,
-            engine=table_engines.AggregatingMergeTree(
-                storage_set=self.storage_set,
-                order_by="(project_id, timestamp, transaction_name, fingerprint, function, package, is_application, profiling_type, platform, environment, release, retention_days)",
-                primary_key="(project_id, timestamp, transaction_name, fingerprint)",
-                partition_by="(retention_days, toMonday(timestamp))",
-                settings=table_settings,
-                ttl="timestamp + toIntervalDay(retention_days)",
-            ),
-            target=OperationTarget.LOCAL,
-        )
-
     def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            self._create_functions_v2_table,
+            operations.CreateTable(
+                storage_set=self.storage_set,
+                table_name=self.local_functions_table,
+                columns=columns,
+                engine=table_engines.AggregatingMergeTree(
+                    storage_set=self.storage_set,
+                    order_by="(project_id, timestamp, transaction_name, fingerprint, function, package, is_application, profiling_type, platform, environment, release, retention_days)",
+                    primary_key="(project_id, timestamp, transaction_name, fingerprint)",
+                    partition_by="(retention_days, toMonday(timestamp))",
+                    ttl="timestamp + toIntervalDay(retention_days)",
+                ),
+                target=OperationTarget.LOCAL,
+            ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set,
                 view_name=self.local_mv_table,
