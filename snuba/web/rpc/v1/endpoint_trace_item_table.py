@@ -205,7 +205,6 @@ class EndpointTraceItemTable(
     def execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         in_msg = _apply_labels_to_columns(in_msg)
         snuba_request = _build_snuba_request(in_msg)
-        print(snuba_request.query)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
