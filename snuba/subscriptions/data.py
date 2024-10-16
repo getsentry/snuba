@@ -359,7 +359,7 @@ class SnQLSubscriptionData(SubscriptionData):
 
 class Subscription(NamedTuple):
     identifier: SubscriptionIdentifier
-    data: Union[SnQLSubscriptionData, RPCSubscriptionData]
+    data: SnQLSubscriptionData
 
 
 class SubscriptionWithMetadata(NamedTuple):
