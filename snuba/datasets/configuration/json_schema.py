@@ -231,6 +231,11 @@ _SIMPLE_ARRAY_INNER_TYPES = [
     del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
 ]
 
+# Tuple inner types are the same as normal column types except they don't have a name
+_SIMPLE_TUPLE_INNER_TYPES = [
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
+]
+
 # Up to one subarray is supported. Eg Array(Array(String())).
 _SUB_ARRAY_SCHEMA = make_column_schema(
     column_type={"const": "Array"},
@@ -264,11 +269,26 @@ MAP_SCHEMA = make_column_schema(
     },
 )
 
+TUPLE_SCHEMA = make_column_schema(
+    column_type={"const": "Tuple"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_TUPLE_INNER_TYPES},
+            }
+        },
+        "additionalProperties": False,
+    },
+)
+
 
 COLUMN_SCHEMAS = [
     *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
     MAP_SCHEMA,
+    TUPLE_SCHEMA,
 ]
 
 
@@ -282,6 +302,7 @@ NESTED_SCHEMA = make_column_schema(
         "additionalProperties": False,
     },
 )
+
 
 SCHEMA_COLUMNS = {
     "type": "array",
