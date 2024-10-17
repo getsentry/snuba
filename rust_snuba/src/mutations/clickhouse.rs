@@ -81,9 +81,10 @@ impl ClickhouseWriter {
                 ("wait_end_of_query", "1"),
             ]);
 
+            // ensure that we are in a session. if some load balancer drops the querystring, we
+            // want to know.
+            // on first query, run without session_check. after that, the session should exist.
             if session_check {
-                // ensure that we are in a session. if some load balancer drops the querystring, we
-                // want to know
                 request = request.query(&[("session_check", "1")]);
             }
 
