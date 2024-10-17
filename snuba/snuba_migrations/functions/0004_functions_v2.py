@@ -199,7 +199,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 sumState(duration) AS sum,
                 argMaxState(profile_id, duration) as worst,
                 argMaxState((profile_id, thread_id, start_timestamp, end_timestamp), duration) as worst_v2,
-                groupUniqArrayState(5)(profile_id) as examples
+                groupUniqArrayState(5)(profile_id) as examples,
                 groupUniqArrayState(5)((profile_id, thread_id, start_timestamp, end_timestamp)) as examples_v2
             FROM {self.local_raw_table}
             WHERE materialization_version = 1
