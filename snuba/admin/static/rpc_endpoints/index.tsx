@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Select, Button, Code, Space, Textarea, Accordion, createStyles } from '@mantine/core';
+import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
 
 
@@ -10,8 +10,9 @@ function RpcEndpoints() {
     const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
     const [requestBody, setRequestBody] = useState('');
     const [response, setResponse] = useState<any | null>(null);
-    const exampleRequestTemplates = require('./exampleRequestTemplates.json');
+    const exampleRequestTemplates: Record<string, Record<string, any>> = require('SnubaAdmin/rpc_endpoints/exampleRequestTemplates.json');
     const [accordionOpened, setAccordionOpened] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const fetchEndpoints = useCallback(async () => {
         try {
@@ -40,13 +41,16 @@ function RpcEndpoints() {
 
     const handleExecute = async () => {
         if (!selectedEndpoint || !selectedVersion) return;
+        setIsLoading(true);
         try {
             const parsedBody = JSON.parse(requestBody);
             const result = await api.executeRpcEndpoint(selectedEndpoint, selectedVersion, parsedBody);
             setResponse(result);
         } catch (error: any) {
-            console.error('Error details:', error.message);
+            alert(`Error: ${error.message}`);
             setResponse({ error: error.message });
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -92,7 +96,9 @@ function RpcEndpoints() {
                         <Code block style={{ color: 'green' }}>
                             <pre>
                                 {JSON.stringify(
-                                    exampleRequestTemplates[selectedEndpoint as keyof typeof exampleRequestTemplates] || exampleRequestTemplates.default,
+                                    selectedEndpoint && selectedVersion
+                                        ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
+                                        : exampleRequestTemplates.default,
                                     null,
                                     2
                                 )}
@@ -102,7 +108,9 @@ function RpcEndpoints() {
                             onClick={() => {
                                 setRequestBody(
                                     JSON.stringify(
-                                        exampleRequestTemplates[selectedEndpoint as keyof typeof exampleRequestTemplates] || exampleRequestTemplates.default,
+                                        selectedEndpoint && selectedVersion
+                                            ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
+                                            : exampleRequestTemplates.default,
                                         null,
                                         2
                                     )
@@ -127,8 +135,12 @@ function RpcEndpoints() {
                 minRows={5}
             />
             <Space h="md" />
-            <Button onClick={handleExecute} disabled={!selectedEndpoint || !requestBody}>
-                Execute
+            <Button
+                onClick={handleExecute}
+                disabled={!selectedEndpoint || !requestBody || isLoading}
+                leftIcon={isLoading ? <Loader size="xs" /> : null}
+            >
+                {isLoading ? 'Executing...' : 'Execute'}
             </Button>
             {response && (
                 <>
