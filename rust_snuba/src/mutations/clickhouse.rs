@@ -89,7 +89,17 @@ impl ClickhouseWriter {
 
             session_check = true;
 
-            request.body(query).send().await?.error_for_status()?;
+            let response = request.body(query).send().await?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await;
+                anyhow::bail!(
+                    "bad response while inserting mutation, status: {}, response body: {:?}",
+                    status,
+                    body
+                );
+            }
         }
 
         Ok(())
