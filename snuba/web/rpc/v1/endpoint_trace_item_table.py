@@ -19,7 +19,8 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
+from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
+from snuba.query.snql.parser import CustomProcessors, _post_process
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
@@ -53,7 +54,11 @@ def _convert_order_by(
     return res
 
 
-def _build_query(request: TraceItemTableRequest) -> Query:
+def _build_query(
+    request: TraceItemTableRequest,
+    custom_processors: CustomProcessors | None = None,
+    settings: QuerySettings | None = None,
+) -> Query:
     # TODO: This is hardcoded still
     entity = Entity(
         key=EntityKey("eap_spans"),
@@ -90,6 +95,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     )
     treeify_or_and_conditions(res)
     apply_virtual_columns(res, request.virtual_column_contexts)
+
+    if custom_processors is not None:
+        _post_process(res, custom_processors, settings)
+
     return res
 
 
