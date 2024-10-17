@@ -50,18 +50,18 @@ interface Client {
   createNewConfig: (
     key: ConfigKey,
     value: ConfigValue,
-    description: ConfigDescription
+    description: ConfigDescription,
   ) => Promise<Config>;
   deleteConfig: (key: ConfigKey, keepDescription: boolean) => Promise<void>;
   editConfig: (
     key: ConfigKey,
     value: ConfigValue,
-    description: ConfigDescription
+    description: ConfigDescription,
   ) => Promise<Config>;
   getDescriptions: () => Promise<ConfigDescriptions>;
   getAuditlog: () => Promise<ConfigChange[]>;
   getClickhouseNodes: () => Promise<[ClickhouseNodeData]>;
-  getClickhouseNodeInfo: () => Promise<[ClickhouseNodeInfo]>
+  getClickhouseNodeInfo: () => Promise<[ClickhouseNodeInfo]>;
   getSnubaDatasetNames: () => Promise<SnubaDatasetName[]>;
   getAllowedProjects: () => Promise<string[]>;
   executeSnQLQuery: (query: SnQLRequest) => Promise<any>;
@@ -71,12 +71,14 @@ interface Client {
   executeSystemQuery: (req: QueryRequest) => Promise<QueryResult>;
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
+  getRpcEndpoints: () => Promise<Array<[string, string]>>;
+  executeRpcEndpoint: (endpointName: string, version: string, requestBody: any) => Promise<any>;
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
   getPredefinedCardinalityQueryOptions: () => Promise<[PredefinedQuery]>;
   executeCardinalityQuery: (
-    req: CardinalityQueryRequest
+    req: CardinalityQueryRequest,
   ) => Promise<CardinalityQueryResult>;
   getAllMigrationGroups: () => Promise<MigrationGroupResult[]>;
   runMigration: (req: RunMigrationRequest) => Promise<RunMigrationResult>;
@@ -88,25 +90,25 @@ interface Client {
     policy: string,
     key: string,
     value: string,
-    params: object
+    params: object,
   ) => Promise<void>;
   deleteAllocationPolicyConfig: (
     storage: string,
     policy: string,
     key: string,
-    params: object
+    params: object,
   ) => Promise<void>;
   getDlqTopics: () => Promise<Topic[]>;
   getDlqInstruction: () => Promise<ReplayInstruction | null>;
   setDlqInstruction: (
     topic: Topic,
-    instruction: ReplayInstruction
+    instruction: ReplayInstruction,
   ) => Promise<ReplayInstruction | null>;
   clearDlqInstruction: () => Promise<ReplayInstruction | null>;
   getAdminRegions: () => Promise<string[]>;
   runLightweightDelete: (
     storage_name: string,
-    column_conditions: object
+    column_conditions: object,
   ) => Promise<Response>;
   listJobSpecs: () => Promise<JobSpecMap>;
   runJob(job_id: string): Promise<String>;
@@ -135,7 +137,7 @@ function Client(): Client {
     createNewConfig: (
       key: ConfigKey,
       value: ConfigValue,
-      description: ConfigDescription
+      description: ConfigDescription,
     ) => {
       const url = baseUrl + "configs";
       const params = { key, value, description };
@@ -175,7 +177,7 @@ function Client(): Client {
     editConfig: (
       key: ConfigKey,
       value: ConfigValue,
-      description: ConfigDescription
+      description: ConfigDescription,
     ) => {
       const url = baseUrl + "configs/" + encodeURIComponent(key);
       return fetch(url, {
@@ -207,7 +209,7 @@ function Client(): Client {
             (storage: any) =>
               storage.local_nodes.length > 0 ||
               storage.dist_nodes.length > 0 ||
-              storage.query_node
+              storage.query_node,
           );
         });
     },
@@ -326,6 +328,40 @@ function Client(): Client {
       }).then((resp) => resp.json());
     },
 
+    getRpcEndpoints: () => {
+      const url = baseUrl + "rpc_endpoints";
+      return fetch(url, {
+        headers: { "Content-Type": "application/json" },
+      }).then((resp) => resp.json()) as Promise<Array<[string, string]>>;
+    },
+
+    executeRpcEndpoint: async (endpointName: string, version: string, requestBody: any) => {
+      try {
+        const url = `${baseUrl}rpc_execute/${endpointName}/${version}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify(requestBody),
+        });
+        if (!response.ok) {
+          throw new Error(`Error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        return result;
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error('Error message:', error.message);
+          throw error;
+        } else {
+          console.error('Unexpected error:', error);
+          throw new Error('An unexpected error occurred');
+        }
+      }
+    },
+
     getPredefinedQuerylogOptions: () => {
       const url = baseUrl + "querylog_queries";
       return fetch(url).then((resp) => resp.json());
@@ -426,7 +462,7 @@ function Client(): Client {
       policy: string,
       key: string,
       value: string,
-      params: object
+      params: object,
     ) => {
       const url = baseUrl + "allocation_policy_config";
       return fetch(url, {
@@ -448,7 +484,7 @@ function Client(): Client {
       storage: string,
       policy: string,
       key: string,
-      params: object
+      params: object,
     ) => {
       const url = baseUrl + "allocation_policy_config";
       return fetch(url, {

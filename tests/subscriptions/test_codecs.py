@@ -22,6 +22,7 @@ from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
@@ -31,7 +32,7 @@ from snuba.utils.metrics.timer import Timer
 
 def build_snql_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
-) -> SnQLSubscriptionData:
+) -> SubscriptionData:
 
     return SnQLSubscriptionData(
         project_id=5,
@@ -67,7 +68,7 @@ SNQL_CASES = [
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
 def test_basic(
-    builder: Callable[[EntityKey, Mapping[str, Any]], SnQLSubscriptionData],
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
     metadata: Mapping[str, Any],
     entity_key: EntityKey,
 ) -> None:
@@ -78,12 +79,14 @@ def test_basic(
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
 def test_encode_snql(
-    builder: Callable[[EntityKey, Mapping[str, Any]], SnQLSubscriptionData],
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
     metadata: Mapping[str, Any],
     entity_key: EntityKey,
 ) -> None:
     codec = SubscriptionDataCodec(entity_key)
     subscription = builder(entity_key, metadata)
+
+    assert isinstance(subscription, SnQLSubscriptionData)
 
     payload = codec.encode(subscription)
     data = json.loads(payload.decode("utf-8"))
@@ -96,12 +99,14 @@ def test_encode_snql(
 
 @pytest.mark.parametrize("builder, metadata, entity_key", SNQL_CASES)
 def test_decode_snql(
-    builder: Callable[[EntityKey, Mapping[str, Any]], SnQLSubscriptionData],
+    builder: Callable[[EntityKey, Mapping[str, Any]], SubscriptionData],
     metadata: Mapping[str, Any],
     entity_key: EntityKey,
 ) -> None:
     codec = SubscriptionDataCodec(entity_key)
     subscription = builder(entity_key, metadata)
+
+    assert isinstance(subscription, SnQLSubscriptionData)
     data = {
         "project_id": subscription.project_id,
         "time_window": subscription.time_window_sec,

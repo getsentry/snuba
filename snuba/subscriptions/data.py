@@ -322,7 +322,7 @@ class SnQLSubscriptionData(SubscriptionData):
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SnQLSubscriptionData:
+    ) -> SubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
@@ -359,7 +359,7 @@ class SnQLSubscriptionData(SubscriptionData):
 
 class Subscription(NamedTuple):
     identifier: SubscriptionIdentifier
-    data: SnQLSubscriptionData
+    data: SubscriptionData
 
 
 class SubscriptionWithMetadata(NamedTuple):

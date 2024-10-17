@@ -7,7 +7,7 @@ from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
-    SnQLSubscriptionData,
+    SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
@@ -33,9 +33,7 @@ class SubscriptionCreator:
             enforce_table_writer(entity).get_stream_loader().get_default_topic_spec()
         )
 
-    def create(
-        self, data: SnQLSubscriptionData, timer: Timer
-    ) -> SubscriptionIdentifier:
+    def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
         data.validate()
 
         self._test_request(data, timer)
@@ -52,7 +50,7 @@ class SubscriptionCreator:
         )
         return identifier
 
-    def _test_request(self, data: SnQLSubscriptionData, timer: Timer) -> None:
+    def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
         request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
         run_query(self.dataset, request, timer)
 

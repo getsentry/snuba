@@ -10,7 +10,7 @@ from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.utils.metrics.timer import Timer
@@ -36,7 +36,7 @@ timer = Timer("test_entity_subscription_data")
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
 
-def subscription_data_builder() -> SnQLSubscriptionData:
+def subscription_data_builder() -> SubscriptionData:
     return SnQLSubscriptionData(
         project_id=project_id,
         resolution_sec=resolution_sec,
@@ -65,7 +65,7 @@ def test_entity_subscriptions_data() -> None:
     assert len([s for s in stores[0].all()]) == 1
 
     result = cast(
-        List[Tuple[UUID, SnQLSubscriptionData]],
+        List[Tuple[UUID, SubscriptionData]],
         RedisSubscriptionDataStore(
             redis_client,
             entity_key,
@@ -73,6 +73,7 @@ def test_entity_subscriptions_data() -> None:
         ).all(),
     )[0][1]
 
+    assert isinstance(result, SnQLSubscriptionData)
     assert result.project_id == project_id
     assert result.resolution_sec == resolution_sec
     assert result.time_window_sec == time_window_sec

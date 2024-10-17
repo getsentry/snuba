@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 from binascii import crc32
 
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
 class SubscriptionDataPartitioner(ABC):
     @abstractmethod
-    def build_partition_id(self, data: SnQLSubscriptionData) -> PartitionId:
+    def build_partition_id(self, data: SubscriptionData) -> PartitionId:
         pass
 
 
@@ -19,7 +19,7 @@ class TopicSubscriptionDataPartitioner(SubscriptionDataPartitioner):
     def __init__(self, topic: KafkaTopicSpec):
         self.__topic = topic
 
-    def build_partition_id(self, data: SnQLSubscriptionData) -> PartitionId:
+    def build_partition_id(self, data: SubscriptionData) -> PartitionId:
         return PartitionId(
             crc32(str(data.project_id).encode("utf-8")) % self.__topic.partitions_number
         )

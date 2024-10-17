@@ -17,6 +17,7 @@ import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
 import ViewCustomJobs from "SnubaAdmin/manual_jobs";
 import DatabaseClusters from "./database_clusters";
+import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -55,6 +56,11 @@ const NAV_ITEMS = [
     id: "tracing",
     display: "🔎 ClickHouse Tracing",
     component: TracingQueries,
+  },
+  {
+    id: "rpc-endpoints",
+    display: "🔌 RPC Endpoints",
+    component: RpcEndpoints,
   },
   {
     id: "querylog",
