@@ -62,16 +62,35 @@ impl ClickhouseWriter {
 
     async fn process_message(&self, message: &Message<MutationBatch>) -> anyhow::Result<()> {
         let queries = format_query(&self.table, message.payload());
+        self.run_queries(queries).await
+    }
+
+    async fn run_queries(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
         let session_id = Uuid::new_v4().to_string();
 
+        let mut session_check = false;
+
         for query in queries {
-            let response = self
-                .client
-                .post(&self.url)
-                .query(&[("session_id", &session_id)])
-                .body(query)
-                .send()
-                .await?;
+            let mut request = self.client.post(&self.url).query(&[
+                // ensure that the tables from CREATE TEMPORARY TABLE exist in subsequent
+                // queries
+                ("session_id", session_id.as_str()),
+                // ensure that HTTP status code is correct
+                // https://clickhouse.com/docs/en/interfaces/http#http_response_codes_caveats
+                // TODO: port to main consumer
+                ("wait_end_of_query", "1"),
+            ]);
+
+            // ensure that we are in a session. if some load balancer drops the querystring, we
+            // want to know.
+            // on first query, run without session_check. after that, the session should exist.
+            if session_check {
+                request = request.query(&[("session_check", "1")]);
+            }
+
+            session_check = true;
+
+            let response = request.body(query).send().await?;
 
             if !response.status().is_success() {
                 let status = response.status();
@@ -229,17 +248,13 @@ mod tests {
         }
 
         pub async fn run_mutation(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
-            let session_id = Uuid::new_v4().to_string();
+            let writer = ClickhouseWriter {
+                url: self.url.clone(),
+                table: self.table.clone(),
+                client: self.client.clone(),
+            };
 
-            for query in queries {
-                self.client
-                    .post(&self.url)
-                    .query(&[("session_id", &session_id)])
-                    .body(query)
-                    .send()
-                    .await?;
-            }
-            Ok(())
+            writer.run_queries(queries).await
         }
 
         pub async fn select_final(&self) -> anyhow::Result<String> {
