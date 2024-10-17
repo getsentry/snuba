@@ -22,6 +22,7 @@ from typing import (
 from uuid import UUID
 
 from google.protobuf.json_format import MessageToDict
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
 from snuba.attribution.appid import AppID
@@ -161,7 +162,14 @@ class RPCSubscriptionData(SubscriptionData):
 
         table_request = TraceItemTableRequest()
         table_request.ParseFromString(self.table_request.encode("utf-8"))
-        # TODO: Add time conditions etc
+
+        start_time_proto = Timestamp()
+        start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
+        end_time_proto = Timestamp()
+        end_time_proto.FromDatetime(timestamp)
+
+        table_request.meta.start_timestamp.CopyFrom(start_time_proto)
+        table_request.meta.end_timestamp.CopyFrom(end_time_proto)
 
         tenant_ids = {**self.tenant_ids}
         tenant_ids["referrer"] = referrer
