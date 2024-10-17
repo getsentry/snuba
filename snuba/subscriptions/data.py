@@ -180,7 +180,11 @@ class RPCSubscriptionData(SubscriptionData):
         snuba_request = Request(
             id=str(uuid.uuid4()),
             original_body=MessageToDict(table_request),
-            query=_build_query(table_request),
+            query=_build_query(
+                table_request,
+                custom_processors=custom_processing,
+                settings=SubscriptionQuerySettings(),
+            ),
             query_settings=SubscriptionQuerySettings(),
             attribution_info=AttributionInfo(
                 referrer=table_request.meta.referrer,
