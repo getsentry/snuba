@@ -11,8 +11,8 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
+    SnQLSubscriptionData,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionWithMetadata,
 )
@@ -34,7 +34,7 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SubscriptionData(
+            SnQLSubscriptionData(
                 project_id=1,
                 query="MATCH (events) SELECT count() AS count",
                 time_window_sec=60,
@@ -232,7 +232,7 @@ class TestSubscriptionScheduler:
         state.set_config("subscription_primary_task_builder", "immediate")
         subscription = Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SubscriptionData(
+            SnQLSubscriptionData(
                 project_id=1,
                 query="MATCH (generic_metrics_gauges) SELECT max(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
                 time_window_sec=60,
