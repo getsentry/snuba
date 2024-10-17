@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::TimeDelta;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
 use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
 use rust_arroyo::processing::strategies::reduce::Reduce;
+use rust_arroyo::processing::strategies::run_task::RunTask;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
@@ -18,6 +20,8 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::mutations::clickhouse::ClickhouseWriter;
 use crate::mutations::parser::{MutationBatch, MutationMessage, MutationParser};
 use crate::processors::eap_spans::PrimaryKey;
+
+use crate::mutations::synchronize::Synchronizer;
 
 pub struct MutConsumerStrategyFactory {
     pub storage_config: config::StorageConfig,
@@ -96,6 +100,12 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
             &self.processing_concurrency,
             Some("parse"),
         );
+
+        let mut synchronizer = Synchronizer {
+            min_delay: TimeDelta::days(1),
+        };
+
+        let next_step = RunTask::new(move |m| synchronizer.process_message(m), next_step);
 
         if let Some(path) = &self.health_check_file {
             Box::new(HealthCheck::new(next_step, path))
