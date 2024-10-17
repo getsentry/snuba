@@ -154,23 +154,26 @@ class RPCSubscriptionData(SubscriptionData):
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
 
+        # Make our table request
         table_request = TraceItemTableRequest()
         table_request.ParseFromString(self.table_request.encode("utf-8"))
 
+        # Add our time conditions
         start_time_proto = Timestamp()
         start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
         end_time_proto = Timestamp()
         end_time_proto.FromDatetime(timestamp)
-
         table_request.meta.start_timestamp.CopyFrom(start_time_proto)
         table_request.meta.end_timestamp.CopyFrom(end_time_proto)
 
+        # Fetch custom validators
         custom_processing = []
         subscription_validators = self.entity.get_subscription_validators()
         if subscription_validators:
             for validator in subscription_validators:
                 custom_processing.append(validator.validate)
 
+        # Apply custom validators as a part of _build_query
         query = _build_query(
             table_request,
             custom_processors=custom_processing,
