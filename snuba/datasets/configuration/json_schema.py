@@ -579,6 +579,11 @@ DELETION_SETTINGS_SCHEMA = {
             "items": {"type": "string"},
             "description": "Names of the tables to delete from.",
         },
+        "allowed_columns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Columns allowed in WHERE clause.",
+        },
         "max_rows_to_delete": {
             "type": "integer",
         },

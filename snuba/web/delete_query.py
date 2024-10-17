@@ -200,7 +200,7 @@ def _get_rows_to_delete(
     return typing.cast(int, select_query_results["data"][0]["count"])
 
 
-def _enforce_max_rows(delete_query: Query) -> None:
+def _enforce_max_rows(delete_query: Query) -> int:
     """
     The cost of a lightweight delete operation depends on the number of matching rows in the WHERE clause and the current number of data parts.
     This operation will be most efficient when matching a small number of rows, **and on wide parts** (where the `_row_exists` column is stored
@@ -250,6 +250,8 @@ def _enforce_max_rows(delete_query: Query) -> None:
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
         )
+
+    return rows_to_delete
 
 
 def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInfo:
