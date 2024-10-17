@@ -10,7 +10,7 @@ function RpcEndpoints() {
     const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
     const [requestBody, setRequestBody] = useState('');
     const [response, setResponse] = useState<any | null>(null);
-    const exampleRequestTemplates: Record<string, Record<string, any>> = require('./exampleRequestTemplates.json');
+    const exampleRequestTemplates: Record<string, Record<string, any>> = require('SnubaAdmin/rpc_endpoints/exampleRequestTemplates.json');
     const [accordionOpened, setAccordionOpened] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
