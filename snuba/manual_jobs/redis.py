@@ -19,10 +19,6 @@ def _build_job_log_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:log"
 
 
-def _build_is_job_async_key(job_id: str) -> str:
-    return f"snuba:manual_jobs:{job_id}:is_async"
-
-
 def _build_job_type_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:job_type"
 
@@ -41,10 +37,6 @@ def _push_job_log_line(job_id: str, line: str) -> bool:
 
 def _release_job_lock(job_id: str) -> None:
     _redis_client.delete(_build_job_lock_key(job_id))
-
-
-def _set_job_is_async(job_id: str, is_async: bool) -> None:
-    _redis_client.set(name=_build_is_job_async_key(job_id), value=int(is_async))
 
 
 def _set_job_status(job_id: str, status: JobStatus) -> str:

@@ -11,7 +11,6 @@ from snuba.manual_jobs.job_logging import get_job_logger
 from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.redis import (
     _acquire_job_lock,
-    _build_is_job_async_key,
     _build_job_log_key,
     _build_job_status_key,
     _get_job_status_multi,
@@ -69,9 +68,9 @@ def _build_job_spec_from_entry(content: Any) -> JobSpec:
 
 
 def _update_job_status_if_async(job_id: str, job_status: JobStatus) -> JobStatus:
-    if _redis_client.get(
-        name=_build_is_job_async_key(job_id)
-    ) is True and Job.get_from_name(_get_job_type(job_id)).async_finished_check(job_id):
+    if job_status is JobStatus.ASYNC_RUNNING_BACKGROUND and Job.get_from_name(
+        _get_job_type(job_id)
+    ).async_finished_check(job_id):
         job_status = JobStatus.FINISHED
         _set_job_status(job_id, JobStatus.FINISHED)
     return job_status
