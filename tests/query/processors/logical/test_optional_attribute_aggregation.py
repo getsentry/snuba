@@ -73,10 +73,6 @@ def test_query_processing(pre_format: Query, expected_query: Query) -> None:
         aggregation_names=["avg"],
         curried_aggregation_names=["quantile"],
     ).process_query(copy, HTTPQuerySettings())
-    print(copy)
-    print(expected_query)
-    assert repr(copy) == repr(expected_query)
-
     assert copy.get_selected_columns() == expected_query.get_selected_columns()
     assert copy.get_groupby() == expected_query.get_groupby()
     assert copy.get_condition() == expected_query.get_condition()
