@@ -30,7 +30,7 @@ from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(
     r"""
-    type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map
+    type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map / tuple
     # datetime64 needs to be before basic_type to not be parsed as DateTime
     primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
@@ -65,6 +65,7 @@ grammar = Grammar(
     datetime64              = "DateTime64" (open_paren datetime64_precision (comma space* quote datetime64_timezone quote)? close_paren)?
     datetime64_precision    = "3" / "6" / "9"
     datetime64_timezone     = ~r"[a-zA-Z0-9_/]+"
+    tuple            = "Tuple" open_paren space* (primitive / lowcardinality / nullable) (comma space* (primitive / lowcardinality / nullable))* space* close_paren
     """
 )
 

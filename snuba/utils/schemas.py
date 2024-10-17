@@ -767,7 +767,9 @@ class Tuple(ColumnType[TModifiers]):
         )
 
     def _for_schema_impl(self) -> str:
-        return "Tuple({})".format(", ".join("{}".format(t) for t in self.types))
+        return "Tuple({})".format(
+            ", ".join("{}".format(t.for_schema()) for t in self.types)
+        )
 
     def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
         return Tuple(types=self.types, modifiers=modifiers)
