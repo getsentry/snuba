@@ -154,12 +154,6 @@ class RPCSubscriptionData(SubscriptionData):
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
 
-        custom_processing = []
-        subscription_validators = self.entity.get_subscription_validators()
-        if subscription_validators:
-            for validator in subscription_validators:
-                custom_processing.append(validator.validate)
-
         table_request = TraceItemTableRequest()
         table_request.ParseFromString(self.table_request.encode("utf-8"))
 
@@ -171,20 +165,22 @@ class RPCSubscriptionData(SubscriptionData):
         table_request.meta.start_timestamp.CopyFrom(start_time_proto)
         table_request.meta.end_timestamp.CopyFrom(end_time_proto)
 
-        tenant_ids = {**self.tenant_ids}
-        tenant_ids["referrer"] = referrer
-        if "organization_id" not in tenant_ids:
-            # TODO: Subscriptions queries should have an org ID
-            tenant_ids["organization_id"] = 1
+        custom_processing = []
+        subscription_validators = self.entity.get_subscription_validators()
+        if subscription_validators:
+            for validator in subscription_validators:
+                custom_processing.append(validator.validate)
+
+        query = _build_query(
+            table_request,
+            custom_processors=custom_processing,
+            settings=SubscriptionQuerySettings(),
+        )
 
         snuba_request = Request(
             id=str(uuid.uuid4()),
             original_body=MessageToDict(table_request),
-            query=_build_query(
-                table_request,
-                custom_processors=custom_processing,
-                settings=SubscriptionQuerySettings(),
-            ),
+            query=query,
             query_settings=SubscriptionQuerySettings(),
             attribution_info=AttributionInfo(
                 referrer=table_request.meta.referrer,
