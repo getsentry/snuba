@@ -1,3 +1,3 @@
-pub mod clickhouse;
+mod clickhouse;
 pub mod factory;
-pub mod parser;
+mod parser;
