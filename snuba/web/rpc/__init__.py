@@ -1,5 +1,5 @@
 import os
-from typing import Generic, Type, TypeVar, cast
+from typing import Generic, List, Tuple, Type, TypeVar, cast
 
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
@@ -104,6 +104,14 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     ) -> Tout:
         """Override this for any post-processing/logging after the _execute method"""
         return out_msg
+
+
+def list_all_endpoint_names() -> List[Tuple[str, str]]:
+    return [
+        (name.split("__")[0], name.split("__")[1])
+        for name in RPCEndpoint.all_names()
+        if name.count("__") == 1
+    ]
 
 
 _VERSIONS = ["v1alpha", "v1"]

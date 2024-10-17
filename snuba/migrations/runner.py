@@ -17,7 +17,11 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
-from snuba.migrations.connect import get_column_states
+from snuba.migrations.connect import (
+    check_for_inactive_replicas,
+    get_clickhouse_clusters_for_migration_group,
+    get_column_states,
+)
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
@@ -320,6 +324,11 @@ class Runner:
     ) -> None:
         migration_id = migration_key.migration_id
 
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
+
         context = Context(
             migration_id,
             logger,
@@ -428,6 +437,11 @@ class Runner:
         self, migration_key: MigrationKey, *, dry_run: bool = False
     ) -> None:
         migration_id = migration_key.migration_id
+
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
 
         context = Context(
             migration_id,

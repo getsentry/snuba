@@ -4,7 +4,7 @@ from typing import Type
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names
 from tests.backends.metrics import TestingMetricsBackend
 
 
@@ -100,3 +100,10 @@ def test_error_metrics() -> None:
 
     metric_names_to_metric = {m.name: m for m in metrics_backend.calls}  # type: ignore
     assert metric_names_to_metric["rpc.request_error"].value == 1  # type: ignore
+
+
+def test_list_all_endpoint_names() -> None:
+    endpoint_names = list_all_endpoint_names()
+    assert isinstance(endpoint_names, list)
+    assert ("MyRPC", "v1") in endpoint_names
+    assert ("ErrorRPC", "v1") in endpoint_names
