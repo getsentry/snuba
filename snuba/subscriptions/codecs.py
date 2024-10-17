@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import cast
+from typing import Union, cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -9,28 +9,36 @@ from sentry_kafka_schemas.schema_types import events_subscription_results_v1
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
+    RPCSubscriptionData,
     ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
+    SubscriptionType,
     SubscriptionWithMetadata,
 )
 from snuba.utils.codecs import Codec, Encoder
 
 
-class SubscriptionDataCodec(Codec[bytes, SnQLSubscriptionData]):
+class SubscriptionDataCodec(
+    Codec[bytes, Union[SnQLSubscriptionData | RPCSubscriptionData]]
+):
     def __init__(self, entity_key: EntityKey):
         self.entity_key = entity_key
 
-    def encode(self, value: SnQLSubscriptionData) -> bytes:
+    def encode(self, value: Union[SnQLSubscriptionData | RPCSubscriptionData]) -> bytes:
         return json.dumps(value.to_dict()).encode("utf-8")
 
-    def decode(self, value: bytes) -> SnQLSubscriptionData:
+    def decode(self, value: bytes) -> Union[SnQLSubscriptionData | RPCSubscriptionData]:
         try:
             data = json.loads(value.decode("utf-8"))
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
+
+        subscription_type = data.get("subscription_type", SubscriptionType.SNQL)
+        if subscription_type == SubscriptionType.RPC:
+            return RPCSubscriptionData.from_dict(data, self.entity_key)
 
         return SnQLSubscriptionData.from_dict(data, self.entity_key)
 
@@ -94,8 +102,21 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
         subscription_identifier = value.key.decode("utf-8")
 
         scheduled_subscription_dict = rapidjson.loads(payload_value.decode("utf-8"))
+        subscription_type = scheduled_subscription_dict["task"]["data"].get(
+            "subscription_type", SubscriptionType.SNQL
+        )
 
         entity_key = EntityKey(scheduled_subscription_dict["entity"])
+
+        subscription_data: RPCSubscriptionData | SnQLSubscriptionData
+        if subscription_type == SubscriptionType.RPC:
+            subscription_data = RPCSubscriptionData.from_dict(
+                scheduled_subscription_dict["task"]["data"], entity_key
+            )
+        else:
+            subscription_data = SnQLSubscriptionData.from_dict(
+                scheduled_subscription_dict["task"]["data"], entity_key
+            )
 
         return ScheduledSubscriptionTask(
             datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
@@ -103,9 +124,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                 entity_key,
                 Subscription(
                     SubscriptionIdentifier.from_string(subscription_identifier),
-                    SnQLSubscriptionData.from_dict(
-                        scheduled_subscription_dict["task"]["data"], entity_key
-                    ),
+                    subscription_data,
                 ),
                 scheduled_subscription_dict["tick_upper_offset"],
             ),
