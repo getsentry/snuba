@@ -12,6 +12,7 @@ from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionWithMetadata,
@@ -19,14 +20,14 @@ from snuba.subscriptions.data import (
 from snuba.utils.codecs import Codec, Encoder
 
 
-class SubscriptionDataCodec(Codec[bytes, SnQLSubscriptionData]):
+class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
     def __init__(self, entity_key: EntityKey):
         self.entity_key = entity_key
 
-    def encode(self, value: SnQLSubscriptionData) -> bytes:
+    def encode(self, value: SubscriptionData) -> bytes:
         return json.dumps(value.to_dict()).encode("utf-8")
 
-    def decode(self, value: bytes) -> SnQLSubscriptionData:
+    def decode(self, value: bytes) -> SubscriptionData:
         try:
             data = json.loads(value.decode("utf-8"))
         except json.JSONDecodeError:

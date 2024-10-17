@@ -11,7 +11,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.validation.validators import ColumnValidationMode
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.subscriptions.data import SnQLSubscriptionData
+from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -64,12 +64,12 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     @pytest.mark.parametrize("subscription", TESTS_CREATE)
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    def test(self, subscription: SnQLSubscriptionData) -> None:
+    def test(self, subscription: SubscriptionData) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
-                List[Tuple[UUID, SnQLSubscriptionData]],
+                List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     self.entity_key,
@@ -82,7 +82,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     @pytest.mark.parametrize("subscription", TESTS_INVALID)
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    def test_invalid_condition_column(self, subscription: SnQLSubscriptionData) -> None:
+    def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(ValidationException):
@@ -257,12 +257,12 @@ class TestMetricsCountersSubscriptionCreator:
     @pytest.mark.parametrize("subscription, entity_key", TESTS_CREATE_METRICS)
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
-    def test(self, subscription: SnQLSubscriptionData, entity_key: EntityKey) -> None:
+    def test(self, subscription: SubscriptionData, entity_key: EntityKey) -> None:
         creator = SubscriptionCreator(self.dataset, entity_key)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
-                List[Tuple[UUID, SnQLSubscriptionData]],
+                List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     entity_key,
@@ -275,7 +275,7 @@ class TestMetricsCountersSubscriptionCreator:
     @pytest.mark.parametrize("subscription", TESTS_INVALID_METRICS)
     @pytest.mark.clickhouse_db
     def test_missing_conditions_for_groupby_clause(
-        self, subscription: SnQLSubscriptionData
+        self, subscription: SubscriptionData
     ) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.METRICS_COUNTERS)
         with raises(InvalidQueryException):
@@ -301,7 +301,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
         identifier = creator.create(subscription, Timer("test"))
         assert (
             cast(
-                List[Tuple[UUID, SnQLSubscriptionData]],
+                List[Tuple[UUID, SubscriptionData]],
                 RedisSubscriptionDataStore(
                     get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
                     self.entity_key,

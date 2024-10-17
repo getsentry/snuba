@@ -6,7 +6,7 @@ import pytest
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -15,7 +15,7 @@ from tests.subscriptions import BaseSubscriptionTest
 @pytest.mark.clickhouse_db
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
-    def subscription(self) -> Sequence[SnQLSubscriptionData]:
+    def subscription(self) -> Sequence[SubscriptionData]:
         return [
             SnQLSubscriptionData(
                 project_id=self.project_id,

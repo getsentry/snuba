@@ -5,12 +5,12 @@ from uuid import UUID
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientType
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
 class SubscriptionDataStore(abc.ABC):
     @abc.abstractmethod
-    def create(self, key: UUID, data: SnQLSubscriptionData) -> None:
+    def create(self, key: UUID, data: SubscriptionData) -> None:
         """
         Creates a `Subscription` in the store. Will overwrite any existing `Subscriptions`
         with the same id.
@@ -25,7 +25,7 @@ class SubscriptionDataStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def all(self) -> Iterable[Tuple[UUID, SnQLSubscriptionData]]:
+    def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """
         Fetches all `Subscriptions` from the store
         :return: An iterable of `Subscriptions`.
@@ -47,7 +47,7 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         self.codec = SubscriptionDataCodec(entity)
         self.__key = f"subscriptions:{entity.value}:{partition_id}"
 
-    def create(self, key: UUID, data: SnQLSubscriptionData) -> None:
+    def create(self, key: UUID, data: SubscriptionData) -> None:
         """
         Stores subscription data in Redis. Will overwrite any existing
         subscriptions with the same id.
@@ -60,7 +60,7 @@ class RedisSubscriptionDataStore(SubscriptionDataStore):
         """
         self.client.hdel(self.__key, key.hex.encode("utf-8"))
 
-    def all(self) -> Iterable[Tuple[UUID, SnQLSubscriptionData]]:
+    def all(self) -> Iterable[Tuple[UUID, SubscriptionData]]:
         """
         Fetches all subscriptions from the store.
         :return: An iterable of `Subscriptions`.
