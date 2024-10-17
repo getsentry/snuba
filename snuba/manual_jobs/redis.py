@@ -1,3 +1,4 @@
+import typing
 from typing import List, Sequence
 
 from snuba.manual_jobs.job_status import JobStatus
@@ -17,10 +18,6 @@ def _build_job_status_key(job_id: str) -> str:
 
 def _build_job_log_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:log"
-
-
-def _build_is_job_async_key(job_id: str) -> str:
-    return f"snuba:manual_jobs:{job_id}:is_async"
 
 
 def _build_job_type_key(job_id: str) -> str:
@@ -43,11 +40,7 @@ def _release_job_lock(job_id: str) -> None:
     _redis_client.delete(_build_job_lock_key(job_id))
 
 
-def _set_job_is_async(job_id: str, is_async: bool) -> None:
-    _redis_client.set(name=_build_is_job_async_key(job_id), value=int(is_async))
-
-
-def _set_job_status(job_id: str, status: JobStatus) -> str:
+def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
     if not _redis_client.set(name=_build_job_status_key(job_id), value=status.value):
         raise SerializableException(f"Failed to set job status {status} on {job_id}")
     return status
@@ -58,7 +51,9 @@ def _set_job_type(job_id: str, job_type: str) -> None:
 
 
 def _get_job_type(job_id: str) -> str:
-    return _redis_client.get(name=_build_job_type_key(job_id)).decode()
+    return typing.cast(
+        str, _redis_client.get(name=_build_job_type_key(job_id)).decode()
+    )
 
 
 def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:

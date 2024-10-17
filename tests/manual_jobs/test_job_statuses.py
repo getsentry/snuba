@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from snuba.manual_jobs import Job, JobLogger, JobSpec
@@ -25,3 +27,12 @@ def test_job_status_changes_to_async_running_background() -> None:
     assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
     run_job(async_job_spec)
     assert get_job_status(JOB_ID) == JobStatus.ASYNC_RUNNING_BACKGROUND
+
+
+@pytest.mark.redis_db
+def test_job_status_changes_from_async_running_background_to_finished() -> None:
+    assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
+    run_job(async_job_spec)
+    assert get_job_status(JOB_ID) == JobStatus.ASYNC_RUNNING_BACKGROUND
+    with patch.object(AsyncJob, "async_finished_check", return_value=True):
+        assert get_job_status(JOB_ID) == JobStatus.FINISHED

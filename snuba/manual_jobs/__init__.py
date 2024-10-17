@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, MutableMapping, Optional, cast
 
-from snuba.manual_jobs.redis import _set_job_is_async, _set_job_type
+from snuba.manual_jobs.redis import _set_job_type
 from snuba.utils.registered_class import RegisteredClass, import_submodules_in_directory
 
 logger = logging.getLogger("snuba.manual_jobs")
@@ -44,10 +44,6 @@ class Job(ABC, metaclass=RegisteredClass):
     def __init__(self, job_spec: JobSpec) -> None:
         self.job_spec = job_spec
         self.is_async = job_spec.is_async
-        _set_job_is_async(
-            job_spec.job_id,
-            job_spec.is_async if job_spec.is_async is not None else False,
-        )
         _set_job_type(job_spec.job_id, job_spec.job_type)
         if job_spec.params:
             for k, v in job_spec.params.items():
@@ -67,7 +63,7 @@ class Job(ABC, metaclass=RegisteredClass):
 
     @classmethod
     def async_finished_check(cls, job_id: str) -> bool:
-        return True
+        raise NotImplementedError
 
 
 import_submodules_in_directory(
