@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
@@ -20,8 +21,11 @@ from typing import (
 )
 from uuid import UUID
 
+from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
@@ -46,7 +50,7 @@ from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.web.rpc.v1.endpoint_trace_item_table import _build_snuba_request
+from snuba.web.rpc.v1.endpoint_trace_item_table import _build_query
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -92,9 +96,20 @@ class SubscriptionData(ABC):
     metadata: Mapping[str, Any]
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
-    @abstractmethod
     def validate(self) -> None:
-        raise NotImplementedError
+        if self.time_window_sec < 60:
+            raise InvalidSubscriptionError(
+                "Time window must be greater than or equal to 1 minute"
+            )
+        elif self.time_window_sec > 60 * 60 * 24:
+            raise InvalidSubscriptionError(
+                "Time window must be less than or equal to 24 hours"
+            )
+
+        if self.resolution_sec < 60:
+            raise InvalidSubscriptionError(
+                "Resolution must be greater than or equal to 1 minute"
+            )
 
     @abstractmethod
     def build_request(
@@ -128,10 +143,6 @@ class RPCSubscriptionData(SubscriptionData):
 
     table_request: str
 
-    def validate(self) -> None:
-        # TODO: Validate data
-        pass
-
     def build_request(
         self,
         dataset: Dataset,
@@ -142,12 +153,38 @@ class RPCSubscriptionData(SubscriptionData):
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> Request:
 
+        custom_processing = []
+        subscription_validators = self.entity.get_subscription_validators()
+        if subscription_validators:
+            for validator in subscription_validators:
+                custom_processing.append(validator.validate)
+
         table_request = TraceItemTableRequest()
         table_request.ParseFromString(self.table_request.encode("utf-8"))
         # TODO: Add time conditions etc
 
-        snuba_request = _build_snuba_request(table_request)
+        tenant_ids = {**self.tenant_ids}
+        tenant_ids["referrer"] = referrer
+        if "organization_id" not in tenant_ids:
+            # TODO: Subscriptions queries should have an org ID
+            tenant_ids["organization_id"] = 1
 
+        snuba_request = Request(
+            id=str(uuid.uuid4()),
+            original_body=MessageToDict(table_request),
+            query=_build_query(table_request),
+            query_settings=SubscriptionQuerySettings(),
+            attribution_info=AttributionInfo(
+                referrer=table_request.meta.referrer,
+                team="eap",
+                feature="eap",
+                tenant_ids={
+                    "organization_id": table_request.meta.organization_id,
+                    "referrer": table_request.meta.referrer,
+                },
+                app_id=AppID("eap"),
+            ),
+        )
         return snuba_request
 
     @classmethod
@@ -261,21 +298,6 @@ class SnQLSubscriptionData(SubscriptionData):
         if not added_timestamp_column:
             raise InvalidSubscriptionError(
                 "At least one Entity must have a timestamp column for subscriptions"
-            )
-
-    def validate(self) -> None:
-        if self.time_window_sec < 60:
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
-        elif self.time_window_sec > 60 * 60 * 24:
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
-
-        if self.resolution_sec < 60:
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
             )
 
     def build_request(
