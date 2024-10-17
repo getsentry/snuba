@@ -39,7 +39,13 @@ _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
 
 
-def gen_message(dt: datetime) -> Mapping[str, Any]:
+def gen_message(
+    dt: datetime,
+    measurements: dict[str, dict[str, float]] | None = None,
+    tags: dict[str, str] | None = None,
+) -> Mapping[str, Any]:
+    measurements = measurements or {}
+    tags = tags or {}
     return {
         "description": "/api/0/relays/projectconfigs/",
         "duration_ms": 152,
@@ -64,6 +70,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
         "measurements": {
             "num_of_spans": {"value": 50.0},
             "eap.measurement": {"value": random.choice([1, 100, 1000])},
+            **measurements,
         },
         "organization_id": 1,
         "origin": "auto.http.django",
@@ -102,6 +109,7 @@ def gen_message(dt: datetime) -> Mapping[str, Any]:
             "spans_over_limit": "False",
             "color": random.choice(["red", "green", "blue"]),
             "location": random.choice(["mobile", "frontend", "backend"]),
+            **tags,
         },
         "trace_id": uuid.uuid4().hex,
         "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
@@ -654,3 +662,49 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurements = [v.val_float for v in response.column_values[1].results]
         assert sorted(measurements) == measurements
+
+    def test_aggregation_on_attribute_column(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        measurement_val = 420.0
+        measurement = {"custom_measurement": {"value": measurement_val}}
+        tags = {"custom_tag": "blah"}
+        messages_w_measurement = [
+            gen_message(
+                start - timedelta(minutes=i), measurements=measurement, tags=tags
+            )
+            for i in range(120)
+        ]
+        messages_no_measurement = [
+            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
+        ]
+        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        measurement_avg = [v.val_float for v in response.column_values[0].results][0]
+        assert measurement_avg == 420
