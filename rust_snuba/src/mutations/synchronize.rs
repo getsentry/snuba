@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use chrono::{TimeDelta, Utc};
 use rust_arroyo::{
     processing::strategies::{MessageRejected, SubmitError},
@@ -21,6 +23,7 @@ impl Synchronizer {
     ) -> Result<Message<T>, SubmitError<T>> {
         if let Some(ts) = message.timestamp() {
             if Utc::now() - ts < self.min_delay {
+                sleep(Duration::from_secs(10));
                 return Err(MessageRejected { message }.into());
             }
         }
