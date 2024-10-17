@@ -12,13 +12,17 @@ function ExecuteButton(props: {
   let label = props.label || "Execute Query";
 
   const defaultError = (err: any) => {
-    console.log("ERROR", err);
-    try {
-      window.alert("An error occurred: " + JSON.stringify(err));
+    console.log("ERROR ", err);
+    let errmsg = err.toString();
+    if (typeof err === 'object' &&
+      err !== null &&
+      err.hasOwnProperty("error") &&
+      err.error.hasOwnProperty("message")) {
+      errmsg = err.error.message;
+      console.log("inside")
     }
-    catch {
-      window.alert("An error occurred: " + err);
-    }
+    window.alert("An error occurred: " + errmsg)
+
   };
   let errorCallback = props.onError || defaultError;
 
