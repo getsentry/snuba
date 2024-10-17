@@ -19,7 +19,6 @@ function ExecuteButton(props: {
       err.hasOwnProperty("error") &&
       err.error.hasOwnProperty("message")) {
       errmsg = err.error.message;
-      console.log("inside")
     }
     window.alert("An error occurred: " + errmsg)
 
