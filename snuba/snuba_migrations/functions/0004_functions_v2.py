@@ -159,6 +159,12 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def backwards_ops(self) -> Sequence[operations.SqlOperation]:
         return [
+            operations.DropTable(
+                storage_set=self.storage_set,
+                table_name=self.local_view_table,
+                target=operations.OperationTarget.LOCAL,
+            )
+        ] + [
             operations.DropColumn(
                 storage_set=self.storage_set,
                 table_name=table_name,
@@ -170,12 +176,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 (self.local_raw_table, OperationTarget.LOCAL),
             ]
             for new_column in new_columns
-        ] + [
-            operations.DropTable(
-                storage_set=self.storage_set,
-                table_name=self.local_view_table,
-                target=operations.OperationTarget.LOCAL,
-            )
         ]
 
     @property
