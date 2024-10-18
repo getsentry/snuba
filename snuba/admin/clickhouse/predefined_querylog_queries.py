@@ -371,3 +371,25 @@ class TotalBytesScannedByReferrerAndProject(QuerylogQuery):
        total_bytes DESC
     LIMIT 10
 """
+
+
+class StoragesAndPoliciesOfRejectedQueries(QuerylogQuery):
+    """
+    Returns the storage(s) and polic(ies) of rejected queries, so we know which CapMan threshold to increase
+    """
+
+    sql = """
+        SELECT
+        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.rejection_storage_key')
+            AS rejection_storage,
+        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.rejected_by.policy')
+            AS rejecting_policy,
+        referrer,
+        projects,
+        COUNT(*)
+        FROM querylog_dist
+        WHERE toDateTime('{{start_timestamp}}', 'Universal') < timestamp
+        AND timestamp < toDateTime('{{end_timestamp}}', 'Universal')
+        AND organization={{org_id}}
+        GROUP BY rejection_policy, rejection_storage
+    """
