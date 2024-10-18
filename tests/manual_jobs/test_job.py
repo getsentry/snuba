@@ -4,8 +4,9 @@ from unittest.mock import patch
 
 import pytest
 
-from snuba.manual_jobs import Job, JobLogger, JobSpec, JobStatus
+from snuba.manual_jobs import Job, JobLogger, JobSpec
 from snuba.manual_jobs.job_loader import _JobLoader
+from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.redis import _acquire_job_lock
 from snuba.manual_jobs.runner import (
     JobLockedException,
