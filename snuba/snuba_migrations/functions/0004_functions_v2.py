@@ -107,6 +107,13 @@ new_columns: Sequence[NewColumn] = [
         ),
         after="examples",
     ),
+    NewColumn(
+        column=Column(
+            "profiling_type",
+            String(Modifiers(low_cardinality=True, default="'transaction'")),
+        ),
+        after="is_application",
+    ),
 ]
 
 all_columns = columns + [col.column for col in new_columns]
@@ -184,6 +191,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 parent_fingerprint,
                 depth,
                 is_application,
+                profiling_type,
                 platform,
                 environment,
                 release,
@@ -213,6 +221,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 parent_fingerprint,
                 depth,
                 is_application,
+                profiling_type,
                 platform,
                 environment,
                 release,
