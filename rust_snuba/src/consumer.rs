@@ -21,7 +21,7 @@ use crate::factory::ConsumerStrategyFactory;
 use crate::logging::{setup_logging, setup_sentry};
 use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
-use crate::mutations_factory::MutConsumerStrategyFactory;
+use crate::mutations::factory::MutConsumerStrategyFactory;
 use crate::processors;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
