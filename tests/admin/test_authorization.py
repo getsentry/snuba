@@ -43,4 +43,5 @@ def test_product_tools_role(
     assert "snuba-explain" in data["tools"]
     assert "querylog" in data["tools"]
     assert "database-clusters" in data["tools"]
+    assert "rpc-endpoints" in data["tools"]
     assert "all" not in data["tools"]

@@ -347,16 +347,15 @@ function Client(): Client {
           body: JSON.stringify(requestBody),
         });
         if (!response.ok) {
-          throw new Error(`Error! status: ${response.status}`);
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Error! status: ${response.status}`);
         }
         const result = await response.json();
         return result;
       } catch (error) {
         if (error instanceof Error) {
-          console.error('Error message:', error.message);
           throw error;
         } else {
-          console.error('Unexpected error:', error);
           throw new Error('An unexpected error occurred');
         }
       }

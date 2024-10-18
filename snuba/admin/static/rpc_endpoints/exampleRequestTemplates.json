@@ -1,32 +1,37 @@
 {
     "default": {},
     "TraceItemAttributesRequest": {
-        "meta": {
-            "project_ids": [1, 2, 3],
-            "organization_id": 1,
-            "cogs_category": "something",
-            "referrer": "something",
-            "start_timestamp": "2024-10-03T00:00:00Z",
-            "end_timestamp": "2024-10-06T00:00:00Z"
-        },
-        "limit": 10,
-        "offset": 0,
-        "type": "TYPE_STRING"
+      "v1alpha": {
+          "meta": {
+              "project_ids": [1],
+              "organization_id": 1,
+              "cogs_category": "something",
+              "referrer": "something",
+              "start_timestamp": "2024-10-03T00:00:00Z",
+              "end_timestamp": "2024-10-06T00:00:00Z"
+          },
+          "limit": 10,
+          "offset": 0,
+          "type": "TYPE_STRING"
+      }
     },
     "AttributeValuesRequest": {
-        "meta": {
-            "project_ids": [1, 2, 3],
-            "organization_id": 1,
-            "cogs_category": "something",
-            "referrer": "something",
-            "start_timestamp": "2024-10-03T00:00:00Z",
-            "end_timestamp": "2024-10-06T00:00:00Z"
-        },
-        "name": "http.status_code",
-        "limit": 5,
-        "offset": 0
+      "v1alpha": {
+          "meta": {
+              "project_ids": [1],
+              "organization_id": 1,
+              "cogs_category": "something",
+              "referrer": "something",
+              "start_timestamp": "2024-10-03T00:00:00Z",
+              "end_timestamp": "2024-10-06T00:00:00Z"
+          },
+          "name": "http.status_code",
+          "limit": 5,
+          "offset": 0
+      }
     },
     "EndpointTraceItemTable": {
+      "v1": {
       "meta": {
         "project_ids": [1],
         "organization_id": 1,
@@ -53,9 +58,11 @@
           }
         }
       ],
-    "limit": 100
-  },
-  "AggregateBucketRequest": {
+        "limit": 100
+      }
+    },
+    "AggregateBucketRequest": {
+      "v1alpha": {
       "meta": {
        "project_ids": [1],
         "organization_id": 1,
@@ -68,5 +75,6 @@
       },
       "aggregate": "FUNCTION_P99",
       "granularity_secs": 900
+    }
   }
 }
