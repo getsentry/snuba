@@ -6,7 +6,7 @@ import pytest
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.subscriptions.data import PartitionId, SubscriptionData
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -17,7 +17,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> Sequence[SubscriptionData]:
         return [
-            SubscriptionData(
+            SnQLSubscriptionData(
                 project_id=self.project_id,
                 query="MATCH (events) SELECT count() WHERE in(platform, 'a')",
                 time_window_sec=500 * 60,
@@ -25,7 +25,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
                 entity=get_entity(EntityKey.EVENTS),
                 metadata={},
             ),
-            SubscriptionData(
+            SnQLSubscriptionData(
                 project_id=self.project_id,
                 time_window_sec=500 * 60,
                 resolution_sec=60,

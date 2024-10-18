@@ -20,6 +20,7 @@ from snuba.subscriptions.codecs import (
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
+    SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
@@ -33,7 +34,7 @@ def build_snql_subscription_data(
     entity_key: EntityKey, metadata: Mapping[str, Any]
 ) -> SubscriptionData:
 
-    return SubscriptionData(
+    return SnQLSubscriptionData(
         project_id=5,
         time_window_sec=500 * 60,
         resolution_sec=60,
@@ -85,6 +86,8 @@ def test_encode_snql(
     codec = SubscriptionDataCodec(entity_key)
     subscription = builder(entity_key, metadata)
 
+    assert isinstance(subscription, SnQLSubscriptionData)
+
     payload = codec.encode(subscription)
     data = json.loads(payload.decode("utf-8"))
     assert data["project_id"] == subscription.project_id
@@ -102,6 +105,8 @@ def test_decode_snql(
 ) -> None:
     codec = SubscriptionDataCodec(entity_key)
     subscription = builder(entity_key, metadata)
+
+    assert isinstance(subscription, SnQLSubscriptionData)
     data = {
         "project_id": subscription.project_id,
         "time_window": subscription.time_window_sec,
@@ -120,7 +125,7 @@ def test_subscription_task_result_encoder() -> None:
     timestamp = datetime.now()
 
     entity = get_entity(EntityKey.EVENTS)
-    subscription_data = SubscriptionData(
+    subscription_data = SnQLSubscriptionData(
         project_id=1,
         query="MATCH (events) SELECT count() AS count",
         time_window_sec=60,
@@ -193,7 +198,7 @@ def test_metrics_subscription_task_result_encoder(
     metadata = {"organization": 1}
     timestamp = datetime.now()
 
-    subscription_data = SubscriptionData(
+    subscription_data = SnQLSubscriptionData(
         project_id=1,
         query=(
             f"""
@@ -255,7 +260,7 @@ def test_metrics_subscription_task_result_encoder(
 def test_subscription_task_encoder() -> None:
     encoder = SubscriptionScheduledTaskEncoder()
     entity = get_entity(EntityKey.EVENTS)
-    subscription_data = SubscriptionData(
+    subscription_data = SnQLSubscriptionData(
         project_id=1,
         query="MATCH events SELECT count()",
         time_window_sec=60,
