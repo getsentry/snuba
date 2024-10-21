@@ -202,7 +202,6 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 )
             ],
-            limit=61,
         )
         response = EndpointTraceItemTable().execute(message)
 

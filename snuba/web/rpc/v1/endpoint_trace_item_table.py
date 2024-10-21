@@ -34,6 +34,8 @@ from snuba.web.rpc.common.common import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
+_DEFAULT_ROW_LIMIT = 10_000
+
 
 def _convert_order_by(
     order_by: Sequence[TraceItemTableRequest.OrderBy],
@@ -94,7 +96,9 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         groupby=[
             attribute_key_to_expression(attr_key) for attr_key in request.group_by
         ],
-        limit=request.limit,
+        # protobuf sets limit to 0 by default if it is not set,
+        # give it a default value that will actually return data
+        limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
     )
     treeify_or_and_conditions(res)
     apply_virtual_columns(res, request.virtual_column_contexts)

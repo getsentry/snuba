@@ -5,12 +5,13 @@ import sys
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, List, Mapping, Optional, Sequence, Tuple, Type, cast
 
 import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
+from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
@@ -47,6 +48,7 @@ from snuba.admin.migrations_policies import (
     get_migration_group_policies,
 )
 from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -89,11 +91,13 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.registered_class import InvalidConfigKeyError
 from snuba.web.delete_query import (
     DeletesNotEnabledError,
     delete_from_storage,
     deletes_are_enabled,
 )
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -1127,6 +1131,53 @@ def dlq_replay() -> Response:
         return make_response(jsonify(None), 200)
 
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
+
+
+@application.route("/rpc_endpoints", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def list_rpc_endpoints() -> Response:
+    return Response(
+        json.dumps(list_all_endpoint_names()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/rpc_execute/<endpoint_name>/<version>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
+    try:
+        endpoint_class: Type[RPCEndpoint[Any, Any]] = RPCEndpoint.get_from_name(
+            endpoint_name, version
+        )
+    except InvalidConfigKeyError:
+        return Response(
+            json.dumps(
+                {"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}
+            ),
+            404,
+            {"Content-Type": "application/json"},
+        )
+
+    body = request.json
+
+    try:
+        request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
+        validate_request_meta(request_proto)
+        response = run_rpc_handler(
+            endpoint_name, version, request_proto.SerializeToString()
+        )
+        return Response(
+            json.dumps(MessageToDict(response)),
+            200,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({"error": str(e)}),
+            400,
+            {"Content-Type": "application/json"},
+        )
 
 
 @application.route("/production_snql_query", methods=["POST"])
