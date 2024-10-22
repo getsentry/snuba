@@ -1,5 +1,5 @@
 import os
-from typing import Generic, List, Tuple, Type, TypeVar, cast
+from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
@@ -65,6 +65,7 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
         res.ParseFromString(bytestring)
         return res
 
+    @final
     def execute(self, in_msg: Tin) -> Tout:
         self.__before_execute(in_msg)
         error = None

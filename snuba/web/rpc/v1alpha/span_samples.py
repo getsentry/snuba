@@ -133,7 +133,7 @@ class SpanSamplesRequest(RPCEndpoint[SpanSamplesRequestProto, SpanSamplesRespons
     def response_class(cls) -> Type[SpanSamplesResponse]:
         return SpanSamplesResponse
 
-    def execute(self, in_msg: SpanSamplesRequestProto) -> SpanSamplesResponse:
+    def _execute(self, in_msg: SpanSamplesRequestProto) -> SpanSamplesResponse:
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
