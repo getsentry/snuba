@@ -19,8 +19,8 @@ def extract_response_meta(
 
     if debug:
         for query_result, timer in zip(query_results, timers):
-            stats = query_result.extra.get("stats", {})
-            profile = query_result.result.get("profile", {})
+            stats = query_result.extra.get("stats", {}) or {}
+            profile = query_result.result.get("profile", {}) or {}
 
             timer_data = timer.for_json()
             timing_marks = TimingMarks(

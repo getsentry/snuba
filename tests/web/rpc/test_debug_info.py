@@ -49,7 +49,7 @@ class TestDebugInfo:
             limit=1,
         )
 
-    def test_debug_info_present_when_requested(self):
+    def test_debug_info_present_when_requested(self) -> None:
         debug_request = self._create_trace_item_table_request(debug=True)
         debug_response = EndpointTraceItemTable().execute(debug_request)
 
@@ -59,7 +59,7 @@ class TestDebugInfo:
             assert query_info.stats is not None
             assert query_info.metadata is not None
 
-    def test_debug_info_absent_when_not_requested(self):
+    def test_debug_info_absent_when_not_requested(self) -> None:
         non_debug_request = self._create_trace_item_table_request(debug=False)
         non_debug_response = EndpointTraceItemTable().execute(non_debug_request)
 
