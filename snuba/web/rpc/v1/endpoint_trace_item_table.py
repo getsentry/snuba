@@ -227,6 +227,10 @@ class EndpointTraceItemTable(
     def request_class(cls) -> Type[TraceItemTableRequest]:
         return TraceItemTableRequest
 
+    @classmethod
+    def response_class(cls) -> Type[TraceItemTableResponse]:
+        return TraceItemTableResponse
+
     def _execute(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
