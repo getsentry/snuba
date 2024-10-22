@@ -33,7 +33,6 @@ columns: List[Column[Modifiers]] = [
         "duration_ms",
         UInt(32, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
     ),
-    Column("exclusive_time_ms", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column(
         "retention_days",
         UInt(16, modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
