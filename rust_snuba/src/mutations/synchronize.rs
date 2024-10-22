@@ -23,6 +23,9 @@ impl Synchronizer {
     ) -> Result<Message<T>, SubmitError<T>> {
         if let Some(ts) = message.timestamp() {
             if Utc::now() - ts < self.min_delay {
+                // constant backpressure causes arroyo to consumer 100% CPU. work around it with
+                // 10s delay. doing that unconditionally in arroyo is not appropriate for every
+                // usecase IMO.
                 sleep(Duration::from_secs(10));
                 return Err(MessageRejected { message }.into());
             }
