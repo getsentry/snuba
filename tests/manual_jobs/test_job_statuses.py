@@ -23,14 +23,7 @@ class AsyncJob(Job):
 
 
 @pytest.mark.redis_db
-def test_job_status_changes_to_async_running_background() -> None:
-    assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
-    run_job(async_job_spec)
-    assert get_job_status(JOB_ID) == JobStatus.ASYNC_RUNNING_BACKGROUND
-
-
-@pytest.mark.redis_db
-def test_job_status_changes_from_async_running_background_to_finished() -> None:
+def test_async_job_status_changes_correctly() -> None:
     assert get_job_status(JOB_ID) == JobStatus.NOT_STARTED
     run_job(async_job_spec)
     assert get_job_status(JOB_ID) == JobStatus.ASYNC_RUNNING_BACKGROUND
