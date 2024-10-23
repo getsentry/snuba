@@ -24,13 +24,14 @@ from snuba.clickhouse.columns import (
     Map,
     SimpleAggregateFunction,
     String,
-    UInt,
 )
+from snuba.clickhouse.columns import Tuple as TupleCol
+from snuba.clickhouse.columns import UInt
 from snuba.migrations.columns import MigrationModifiers
 
 grammar = Grammar(
     r"""
-    type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map
+    type             = primitive / lowcardinality / agg / simple_agg / nullable / array / map / tuple
     # datetime64 needs to be before basic_type to not be parsed as DateTime
     primitive        = datetime64 / basic_type / uint / int / float / fixedstring / enum
     # DateTime must come before Date
@@ -65,6 +66,7 @@ grammar = Grammar(
     datetime64              = "DateTime64" (open_paren datetime64_precision (comma space* quote datetime64_timezone quote)? close_paren)?
     datetime64_precision    = "3" / "6" / "9"
     datetime64_timezone     = ~r"[a-zA-Z0-9_/]+"
+    tuple            = "Tuple" open_paren space* (primitive / lowcardinality / nullable) (comma space* (primitive / lowcardinality / nullable))* space* close_paren
     """
 )
 
@@ -249,6 +251,29 @@ class Visitor(NodeVisitor):  # type: ignore
         else:
             timezone = None
         return DateTime64(precision=int(precision.text), timezone=timezone)
+
+    def visit_tuple(
+        self, node: Node, visited_children: Iterable[Any]
+    ) -> TupleCol[MigrationModifiers]:
+        (
+            _tup,
+            _paren,
+            _sp,
+            _type,
+            _additional_types,
+            _sp,
+            _paren,
+        ) = visited_children
+        types = [_type]
+        if isinstance(_additional_types, list):
+            for typ in _additional_types:
+                if isinstance(typ, list):
+                    types.append(typ[2])
+                elif isinstance(typ, ColumnType):
+                    types.append(typ)
+                else:
+                    continue
+        return TupleCol(types=tuple(types))
 
     def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
         if isinstance(visited_children, list) and len(visited_children) == 1:

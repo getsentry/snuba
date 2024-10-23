@@ -14,6 +14,13 @@ expression: diff
         path: "",
         change: PropertyAdd {
             lhs_additional_properties: true,
+            added: "materialization_version",
+        },
+    },
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
             added: "profiling_type",
         },
     },
