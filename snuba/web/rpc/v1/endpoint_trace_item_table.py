@@ -106,12 +106,9 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     return res
 
 
-def _build_snuba_request(
-    request: TraceItemTableRequest,
-    request_id: str,
-) -> SnubaRequest:
+def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     return SnubaRequest(
-        id=request_id,
+        id=request.meta.request_id,
         original_body=MessageToDict(request),
         query=_build_query(request),
         query_settings=HTTPQuerySettings(),
@@ -237,8 +234,10 @@ class EndpointTraceItemTable(
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
-        request_id = in_msg.meta.request_id or str(uuid.uuid4())
-        snuba_request = _build_snuba_request(in_msg, request_id)
+        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
+            uuid.uuid4()
+        )
+        snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
@@ -246,7 +245,7 @@ class EndpointTraceItemTable(
         )
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
-            request_id, in_msg.meta.debug, [res], [self._timer]
+            in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
         )
         return TraceItemTableResponse(
             column_values=column_values,

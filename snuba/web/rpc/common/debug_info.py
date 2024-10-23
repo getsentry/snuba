@@ -19,8 +19,10 @@ def extract_response_meta(
 
     if debug:
         for query_result, timer in zip(query_results, timers):
-            stats = query_result.extra.get("stats", {}) or {}
-            profile = query_result.result.get("profile", {}) or {}
+            extra = getattr(query_result, "extra", None) or {}
+            stats = extra.get("stats", {}) if isinstance(extra, dict) else {}
+            result = getattr(query_result, "result", None) or {}
+            profile = result.get("profile", {}) if isinstance(result, dict) else {}
 
             timer_data = timer.for_json()
             timing_marks = TimingMarks(
@@ -42,7 +44,7 @@ def extract_response_meta(
             )
 
             query_metadata = QueryMetadata(
-                sql=query_result.extra.get("sql", ""),
+                sql=extra.get("sql", ""),
                 status=(
                     "success"
                     if stats.get("quota_allowance", {})
