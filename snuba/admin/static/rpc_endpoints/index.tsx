@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader } from '@mantine/core';
+import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
-
 
 function RpcEndpoints() {
     const api = useApi();
@@ -13,6 +12,7 @@ function RpcEndpoints() {
     const exampleRequestTemplates: Record<string, Record<string, any>> = require('SnubaAdmin/rpc_endpoints/exampleRequestTemplates.json');
     const [accordionOpened, setAccordionOpened] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [debugMode, setDebugMode] = useState(false);
 
     const fetchEndpoints = useCallback(async () => {
         try {
@@ -44,6 +44,10 @@ function RpcEndpoints() {
         setIsLoading(true);
         try {
             const parsedBody = JSON.parse(requestBody);
+            if (debugMode && selectedVersion === 'v1') {
+                parsedBody.meta = parsedBody.meta || {};
+                parsedBody.meta.debug = true;
+            }
             const result = await api.executeRpcEndpoint(selectedEndpoint, selectedVersion, parsedBody);
             setResponse(result);
         } catch (error: any) {
@@ -135,6 +139,14 @@ function RpcEndpoints() {
                 minRows={5}
             />
             <Space h="md" />
+            {selectedVersion === 'v1' && (
+                <Checkbox
+                    label="Enable Debug Mode"
+                    checked={debugMode}
+                    onChange={(event) => setDebugMode(event.currentTarget.checked)}
+                    style={{ marginBottom: '1rem' }}
+                />
+            )}
             <Button
                 onClick={handleExecute}
                 disabled={!selectedEndpoint || !requestBody || isLoading}
@@ -146,11 +158,28 @@ function RpcEndpoints() {
                 <>
                     <Space h="md" />
                     <h3>Response:</h3>
+                    {response.meta && (
+                        <>
+                            <h4>Response Metadata:</h4>
+                            <Accordion>
+                                <Accordion.Item value="meta">
+                                    <Accordion.Control>Query Info</Accordion.Control>
+                                    <Accordion.Panel>
+                                        <Code block>
+                                            <pre>{JSON.stringify(response.meta.query_info, null, 2)}</pre>
+                                        </Code>
+                                    </Accordion.Panel>
+                                </Accordion.Item>
+                            </Accordion>
+                        </>
+                    )}
+                    <Space h="md" />
+                    <h4>Response Data:</h4>
                     <Code block>
                         {Object.keys(response).length === 0 ? (
                             <div>Empty response</div>
                         ) : (
-                            <pre>{JSON.stringify(response, null, 2)}</pre>
+                            <pre>{JSON.stringify(response.data || response, null, 2)}</pre>
                         )}
                     </Code>
                 </>
