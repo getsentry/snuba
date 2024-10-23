@@ -86,8 +86,8 @@ schema:
               { type: Tuple,
                 args: {
                   inner_types: [
-                    {type: String},
                     {type: UUID},
+                    {type: String},
                     {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }},
                     {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }}
                   ]
@@ -107,8 +107,8 @@ schema:
               { type: Tuple,
                 args: {
                   inner_types: [
-                    {type: String},
                     {type: UUID},
+                    {type: String},
                     {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }},
                     {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }}
                   ]
