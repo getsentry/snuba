@@ -102,7 +102,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
         );
 
         let mut synchronizer = Synchronizer {
-            min_delay: TimeDelta::days(1),
+            min_delay: TimeDelta::hours(12),
         };
 
         let next_step = RunTask::new(move |m| synchronizer.process_message(m), next_step);
