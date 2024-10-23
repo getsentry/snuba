@@ -117,6 +117,11 @@ schema:
             ]
           },
       },
+      {
+        name: profiling_type,
+        type: String,
+        args: { schema_modifiers: [ low_cardinality ] }
+      }
     ]
   local_table_name: functions_mv_local
   dist_table_name: functions_mv_dist
