@@ -169,6 +169,21 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     },
 )
 
+SIMPLE_AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
+    column_type={"const": "SimpleAggregateFunction"},
+    args={
+        "type": "object",
+        "properties": {
+            "func": TYPE_STRING,
+            "arg_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
+            },
+        },
+        "additionalProperties": False,
+    },
+)
+
 ENUM_SCHEMA = make_column_schema(
     column_type={"const": "Enum"},
     args={
@@ -206,12 +221,18 @@ SIMPLE_COLUMN_SCHEMAS = [
     FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
+    SIMPLE_AGGREGATE_FUNCTION_SCHEMA,
     ENUM_SCHEMA,
     DATETIME64_SCHEMA,
 ]
 
 # Array inner types are the same as normal column types except they don't have a name
 _SIMPLE_ARRAY_INNER_TYPES = [
+    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
+]
+
+# Tuple inner types are the same as normal column types except they don't have a name
+_SIMPLE_TUPLE_INNER_TYPES = [
     del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
 ]
 
@@ -248,11 +269,26 @@ MAP_SCHEMA = make_column_schema(
     },
 )
 
+TUPLE_SCHEMA = make_column_schema(
+    column_type={"const": "Tuple"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_TUPLE_INNER_TYPES},
+            }
+        },
+        "additionalProperties": False,
+    },
+)
+
 
 COLUMN_SCHEMAS = [
     *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
     MAP_SCHEMA,
+    TUPLE_SCHEMA,
 ]
 
 
@@ -266,6 +302,7 @@ NESTED_SCHEMA = make_column_schema(
         "additionalProperties": False,
     },
 )
+
 
 SCHEMA_COLUMNS = {
     "type": "array",

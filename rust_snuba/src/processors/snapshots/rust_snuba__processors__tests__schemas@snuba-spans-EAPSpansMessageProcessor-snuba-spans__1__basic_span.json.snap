@@ -10,36 +10,36 @@ expression: snapshot_payload
       "http.response_content_length": 100.0
     },
     "attr_str_0": {
-      "group": "deadbeefdeadbeef",
-      "tag3": "True",
-      "transaction.op": "navigation"
+      "tag3": "True"
+    },
+    "attr_str_11": {
+      "sentry.http.method": "GET",
+      "sentry.transaction.method": "GET"
+    },
+    "attr_str_12": {
+      "sentry.domain": "targetdomain.tld:targetport"
+    },
+    "attr_str_13": {
+      "sentry.system": "python"
+    },
+    "attr_str_14": {
+      "sentry.status": "ok"
     },
     "attr_str_18": {
+      "sentry.action": "GET",
+      "sentry.status_code": "200",
       "tag1": "value1"
     },
     "attr_str_19": {
-      "status": "ok",
+      "sentry.group": "deadbeefdeadbeef",
+      "sentry.op": "http.client",
       "tag2": "123"
     },
-    "attr_str_2": {
-      "transaction.method": "GET"
-    },
-    "attr_str_4": {
-      "http.method": "GET",
-      "system": "python"
-    },
     "attr_str_5": {
-      "domain": "targetdomain.tld:targetport",
-      "module": "http"
+      "sentry.transaction.op": "navigation"
     },
-    "attr_str_6": {
-      "op": "http.client"
-    },
-    "attr_str_7": {
-      "action": "GET"
-    },
-    "attr_str_9": {
-      "status_code": "200"
+    "attr_str_8": {
+      "sentry.module": "http"
     },
     "duration_ms": 1000,
     "end_timestamp": 1715868486370551,
@@ -52,6 +52,7 @@ expression: snapshot_payload
     "retention_days": 90,
     "sampling_factor": 1.0,
     "sampling_weight": 1.0,
+    "sampling_weight_2": 1,
     "segment_id": 16045690984833335023,
     "segment_name": "/organizations/:orgId/issues/",
     "service": "1",

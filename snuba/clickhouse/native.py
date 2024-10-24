@@ -225,9 +225,11 @@ class ClickhousePool(object):
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment(
-                        "connection_error"
-                        if not fallback_mode
-                        else "fallback_connection_error",
+                        (
+                            "connection_error"
+                            if not fallback_mode
+                            else "fallback_connection_error"
+                        ),
                         tags={
                             "host": self.host,
                             "port": str(self.port),

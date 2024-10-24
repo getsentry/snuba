@@ -89,6 +89,23 @@ def test_custom_key() -> None:
     assert CustomKey.class_from_name("subclass_key") is SubclassCustom
 
 
+def test_class_registry_all_names() -> None:
+    class TestBase(metaclass=RegisteredClass):
+        @classmethod
+        def config_key(cls) -> str:
+            return cls.__name__
+
+    class TestClass1(TestBase):
+        pass
+
+    class TestClass2(TestBase):
+        pass
+
+    expected_names = ["TestClass1", "TestClass2"]
+    assert set(TestBase.all_names()) == set(expected_names)
+    assert isinstance(TestBase.all_names(), list)
+
+
 class TypedFromName(metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:

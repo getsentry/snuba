@@ -110,7 +110,7 @@ def check_clickhouse(clickhouse: ClickhousePool) -> None:
     Checks that the clickhouse version is at least the min version and at most the max version
     """
     ver = clickhouse.execute("SELECT version()").results[0][0]
-    ver = re.search("(\d+.\d+.\d+.\d+)", ver)
+    ver = re.search(r"(\d+.\d+.\d+.\d+)", ver)
     if ver is None or version.parse(ver.group()) < version.parse(
         CLICKHOUSE_SERVER_MIN_VERSION
     ):
@@ -157,27 +157,17 @@ def _get_all_nodes_for_storage(
     return (local_nodes, distributed_nodes, query_node)
 
 
-def check_for_inactive_replicas(storage_keys: List[StorageKey]) -> None:
+def check_for_inactive_replicas(clusters: List[ClickhouseCluster]) -> None:
     """
     Checks for inactive replicas and raise InactiveClickhouseReplica if any are found.
     """
     checked_nodes = set()
     inactive_replica_info = []
-    for storage_key in storage_keys:
-        try:
-            local_nodes, distributed_nodes, query_node = _get_all_nodes_for_storage(
-                storage_key
-            )
-            storage = get_storage(storage_key)
-            cluster = storage.get_cluster()
-        except UndefinedClickhouseCluster:
-            continue
-
-        for node in (*local_nodes, *distributed_nodes, query_node):
+    for cluster in clusters:
+        for node in cluster.get_local_nodes():
             if (node.host_name, node.port) in checked_nodes:
                 continue
             checked_nodes.add((node.host_name, node.port))
-
             conn = cluster.get_node_connection(ClickhouseClientSettings.MIGRATE, node)
             tables_with_inactive = conn.execute(
                 f"SELECT table, total_replicas, active_replicas FROM system.replicas "
@@ -186,7 +176,7 @@ def check_for_inactive_replicas(storage_keys: List[StorageKey]) -> None:
 
             for table, total_replicas, active_replicas in tables_with_inactive:
                 inactive_replica_info.append(
-                    f"Storage {storage_key.value} has inactive replicas for table {table} "
+                    f"Cluster {cluster.get_clickhouse_cluster_name()} has inactive replicas for table {table} "
                     f"with {active_replicas} out of {total_replicas} replicas active."
                 )
 

@@ -99,7 +99,6 @@ delete_allocation_policies:
         is_enforced: 0
 
 query_processors:
-  - processor: TableRateLimit
   - processor: MappingOptimizer
     args:
       column_name: tags
@@ -125,7 +124,7 @@ query_processors:
 
 deletion_settings:
   is_enabled: 1
-  max_rows_to_delete: 1000
+  max_rows_to_delete: 100000
   tables:
     - search_issues_local_v2
 
@@ -143,4 +142,4 @@ deletion_processors:
     args:
       column_filters:
         - project_id
-        - occurrence_id
+        - group_id

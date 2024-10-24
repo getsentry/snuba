@@ -35,11 +35,7 @@ from flask import (
     render_template,
 )
 from flask import request as http_request
-from google.protobuf.message import Message as ProtobufMessage
-from sentry_protos.snuba.v1alpha.endpoint_aggregate_bucket_pb2 import (
-    AggregateBucketRequest,
-)
-from sentry_protos.snuba.v1alpha.endpoint_span_samples_pb2 import SpanSamplesRequest
+from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -62,7 +58,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.state.rate_limit import RateLimitExceeded, RateLimitParameters, rate_limit
+from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
@@ -78,11 +74,13 @@ from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
-from snuba.web.delete_query import DeletesNotEnabledError, delete_from_storage
+from snuba.web.delete_query import (
+    DeletesNotEnabledError,
+    TooManyOngoingMutationsError,
+    delete_from_storage,
+)
 from snuba.web.query import parse_and_run_query
-from snuba.web.rpc.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.span_samples import span_samples_query as span_samples_query
-from snuba.web.rpc.timeseries import timeseries_query as timeseries_query
+from snuba.web.rpc import run_rpc_handler
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -278,24 +276,13 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
-@application.route("/rpc/<name>", methods=["POST"])
-@util.time_request("timeseries")
-def rpc(*, name: str, timer: Timer) -> Response:
-    rpcs: Mapping[
-        str, Tuple[Callable[[Any, Timer], ProtobufMessage], type[ProtobufMessage]]
-    ] = {
-        "AggregateBucketRequest": (timeseries_query, AggregateBucketRequest),
-        "SpanSamplesRequest": (span_samples_query, SpanSamplesRequest),
-    }
-    try:
-        endpoint, req_class = rpcs[name]
-
-        req = req_class()
-        req.ParseFromString(http_request.data)
-        res = endpoint(req, timer)
-        return Response(res.SerializeToString())
-    except BadSnubaRPCRequestException as e:
-        return Response(str(e), status=400)
+@application.route("/rpc/<name>/<version>", methods=["POST"])
+def rpc(*, name: str, version: str) -> Response:
+    result_proto = run_rpc_handler(name, version, http_request.data)
+    if isinstance(result_proto, ErrorProto):
+        return Response(result_proto.SerializeToString(), status=result_proto.code)
+    else:
+        return Response(result_proto.SerializeToString(), status=200)
 
 
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
@@ -328,9 +315,8 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<storage:storage>/", methods=["DELETE"])
+@application.route("/<storage:storage>", methods=["DELETE"])
 @util.time_request("delete_query")
-@rate_limit(RateLimitParameters("delete", "bucket", None, 1))
 def storage_delete(
     *, storage: WritableTableStorage, timer: Timer
 ) -> Union[Response, str]:
@@ -358,6 +344,15 @@ def storage_delete(
             return make_response(
                 jsonify({"error": details}),
                 400,
+            )
+        except TooManyOngoingMutationsError as e:
+            details = {
+                "type": "too_many_ongoing_mutations",
+                "message": str(e),
+            }
+            return make_response(
+                jsonify({"error": details}),
+                503,
             )
         except Exception as error:
             logger.warning("Failed query", exc_info=error)

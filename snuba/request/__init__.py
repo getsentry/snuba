@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Union
 
@@ -13,7 +14,7 @@ from snuba.query.query_settings import QuerySettings
 
 @dataclass(frozen=True)
 class Request:
-    id: str
+    id: uuid.UUID
     original_body: Dict[str, Any]
     query: Union[Query, CompositeQuery[LogicalDataSource]]
     query_settings: QuerySettings

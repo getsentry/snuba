@@ -1,5 +1,67 @@
 # Changelog
 
+## 24.10.0
+
+### Various fixes & improvements
+
+- ref(functions): refactor functions processor and storage (#6411) by @viglia
+- fix(eap): remove flask stuff from rpc (#6410) by @volokluev
+- fix(admin): Handle NaN in admin results (#6412) by @evanh
+- fix(database-clusters): Use a lock when creating connection (#6407) by @davidtsuk
+- feat(rpc): handle exceptions by returning a proto and non-200 (#6402) by @colin-sentry
+- ref(eap): Clean up the mutations interface (#6344) by @untitaker
+- feat(admin): Show data in clickhouse tracing tool (#6406) by @untitaker
+- feat(database-clusters): Use a ThreadPoolExecutor to speed up node fetching (#6405) by @davidtsuk
+- feat(profiling): add new columns to the raw_functions table (#6398) by @viglia
+- fix(database-clusters): Remove Query Node column (#6404) by @davidtsuk
+- feat(eap): Port TraceItemTable endpoint to v1 (#6401) by @volokluev
+- feat: Add EAP span subscriptions for devserver (#6399) by @shruthilayaj
+- ref(deletes): increase max rows to 100000 (#6400) by @MeredithAnya
+- Revert "feat: Add EAP span subscriptions for devserver (#6396)" (ff049323) by @getsentry-bot
+- feat: Add EAP span subscriptions for devserver (#6396) by @shruthilayaj
+- feat(eap): record rpc endpoint success and timing (#6392) by @volokluev
+- feat(job-runner) view logs in custom jobs admin page (#6394) by @onewland
+- feat(job-runner): persist logs in Redis for easier viewing in snuba admin (#6387) by @onewland
+- fix(devservices): Fixing devservices config (#6393) by @IanWoodard
+- fix(database-clusters): Use host name instead of address when fetching system settings (#6391) by @davidtsuk
+- fix: better error message in admin system query (#6390) by @kylemumma
+- feat(database-clusters): Add server settings for each node and additional data (#6386) by @davidtsuk
+- feat(job-runner): run job from snuba admin (#6385) by @onewland
+- feat(capman): remove legacy cap on threads (#6389) by @volokluev
+
+_Plus 73 more_
+
+## 24.9.0
+
+### Various fixes & improvements
+
+- Update migrations list command to show migrations that no longer exist in the codebase (#6299) by @davidtsuk
+- metric(consumer): Add a metric to track the size of individual spans (#6300) by @ayirr7
+- feat(rpc): Update tags list rpc (#6301) by @Zylphrex
+- feat(eap): add virtual column support (#6292) by @volokluev
+- tweak(eap): Allow more memory usage for eap spans (#6298) by @volokluev
+- ref(doc): add documentation for the ReadinessState enum (#6295) by @viglia
+- feat(eap): Start ingesting data into sample_weight_2 column (#6290) by @colin-sentry
+- Update docker entrypoint to run heaptrack  (#6273) by @ayirr7
+- fix(eap): Switch to sampling_weight_2 in entity (#6287) by @colin-sentry
+- bug(query): Run entity validators in composite query pipeline (#6285) by @enochtangg
+- feat(eap): make mapContains work with EAP dataset (#6284) by @colin-sentry
+- feat(job-runner): create a new `snuba jobs` command (#6281) by @xurui-c
+- feat(eap): Shard meta tables by trace ID (#6286) by @colin-sentry
+- fix(eap): Make span_id be returned as a string correctly (#6283) by @colin-sentry
+- feat(job-runner): scaffolding for job manifest testing (#6282) by @onewland
+- bug(admin): Fix invalid query error alerting in snuba admin (#6280) by @enochtangg
+- Fixing Snuba Admin trace UI error. (#6278) by @nachivrn
+- feat(eap): Add a processor that allows you to do mapKeys on attr_str (#6277) by @colin-sentry
+- cleanup(capman): remove legacy table rate limits (#6274) by @volokluev
+- Fixing Snuba Admin trace UI error. (#6276) by @nachivrn
+- hackweek(snuba-admin): MQL query tool (#6235) by @enochtangg
+- feat(eap): Endpoint to get the tags available for a project (#6270) by @colin-sentry
+- feat(sudo): issue slack notifications when sudo mode is used (#6271) by @volokluev
+- chore(eap): Add entities and storages for EAP span meta tables (#6269) by @colin-sentry
+
+_Plus 60 more_
+
 ## 24.8.0
 
 ### Various fixes & improvements

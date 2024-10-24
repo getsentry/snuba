@@ -11,9 +11,13 @@ import CapacityManagement from "SnubaAdmin/capacity_management";
 import DeadLetterQueue from "SnubaAdmin/dead_letter_queue";
 import CardinalityAnalyzer from "SnubaAdmin/cardinality_analyzer";
 import ProductionQueries from "SnubaAdmin/production_queries";
+import MQLQueries from "SnubaAdmin/mql_queries";
 import SnubaExplain from "SnubaAdmin/snuba_explain";
 import Welcome from "SnubaAdmin/welcome";
 import DeleteTool from "SnubaAdmin/delete_tool";
+import ViewCustomJobs from "SnubaAdmin/manual_jobs";
+import DatabaseClusters from "./database_clusters";
+import RpcEndpoints from "SnubaAdmin/rpc_endpoints";
 
 const NAV_ITEMS = [
   { id: "overview", display: "🤿 Snuba Admin", component: Welcome },
@@ -54,6 +58,11 @@ const NAV_ITEMS = [
     component: TracingQueries,
   },
   {
+    id: "rpc-endpoints",
+    display: "🔌 RPC Endpoints",
+    component: RpcEndpoints,
+  },
+  {
     id: "querylog",
     display: "🔍 ClickHouse Querylog",
     component: QuerylogQueries,
@@ -84,9 +93,24 @@ const NAV_ITEMS = [
     component: ProductionQueries,
   },
   {
+    id: "mql-queries",
+    display: "🎨 MQL Queries",
+    component: MQLQueries,
+  },
+  {
     id: "delete-tool",
     display: "🗑️ Delete Tool",
     component: DeleteTool,
+  },
+  {
+    id: "run-custom-jobs",
+    display: "▶️ View/Run Custom Jobs",
+    component: ViewCustomJobs,
+  },
+  {
+    id: "database-clusters",
+    display: "🗂️ Database Clusters",
+    component: DatabaseClusters,
   },
 ];
 

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
@@ -16,7 +17,11 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
-from snuba.migrations.connect import get_column_states
+from snuba.migrations.connect import (
+    check_for_inactive_replicas,
+    get_clickhouse_clusters_for_migration_group,
+    get_column_states,
+)
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
@@ -64,6 +69,7 @@ class MigrationDetails(NamedTuple):
     migration_id: str
     status: Status
     blocking: bool
+    exists: bool
 
 
 class Runner:
@@ -133,7 +139,7 @@ class Runner:
         )
 
     def show_all(
-        self, groups: Optional[Sequence[str]] = None
+        self, groups: Optional[Sequence[str]] = None, include_nonexistent: bool = False
     ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
@@ -148,6 +154,9 @@ class Runner:
             migration_groups = get_active_migration_groups()
 
         migration_status = self._get_migration_status(migration_groups)
+        clickhouse_group_migrations = defaultdict(set)
+        for group, migration_id in migration_status.keys():
+            clickhouse_group_migrations[group].add(migration_id)
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
@@ -156,14 +165,30 @@ class Runner:
             group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
-            for migration_id in group_loader.get_migrations():
+            migration_ids = group_loader.get_migrations()
+            for migration_id in migration_ids:
                 migration_key = MigrationKey(group, migration_id)
                 migration = group_loader.load_migration(migration_id)
                 group_migrations.append(
                     MigrationDetails(
-                        migration_id, get_status(migration_key), migration.blocking
+                        migration_id,
+                        get_status(migration_key),
+                        migration.blocking,
+                        True,
                     )
                 )
+
+            if include_nonexistent:
+                non_existing_migrations = clickhouse_group_migrations.get(
+                    group, set()
+                ).difference(set(migration_ids))
+                for migration_id in non_existing_migrations:
+                    migration_key = MigrationKey(group, migration_id)
+                    group_migrations.append(
+                        MigrationDetails(
+                            migration_id, get_status(migration_key), False, False
+                        )
+                    )
 
             migrations.append((group, group_migrations))
 
@@ -299,6 +324,11 @@ class Runner:
     ) -> None:
         migration_id = migration_key.migration_id
 
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
+
         context = Context(
             migration_id,
             logger,
@@ -407,6 +437,11 @@ class Runner:
         self, migration_key: MigrationKey, *, dry_run: bool = False
     ) -> None:
         migration_id = migration_key.migration_id
+
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
 
         context = Context(
             migration_id,

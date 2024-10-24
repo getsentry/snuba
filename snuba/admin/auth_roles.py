@@ -85,6 +85,9 @@ TOOL_RESOURCES = {
     "sudo-system-queries": ToolResource("system-queries"),
     "clickhouse-migrations": ToolResource("clickhouse-migrations"),
     "snuba-explain": ToolResource("snuba-explain"),
+    "querylog": ToolResource("querylog"),
+    "database-clusters": ToolResource("database-clusters"),
+    "rpc-endpoints": ToolResource("rpc-endpoints"),
     "all": ToolResource("all"),
 }
 
@@ -170,6 +173,9 @@ ROLES = {
                     TOOL_RESOURCES["system-queries"],
                     TOOL_RESOURCES["clickhouse-migrations"],
                     TOOL_RESOURCES["snuba-explain"],
+                    TOOL_RESOURCES["querylog"],
+                    TOOL_RESOURCES["database-clusters"],
+                    TOOL_RESOURCES["rpc-endpoints"],
                 ]
             )
         },

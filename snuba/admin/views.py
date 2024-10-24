@@ -7,12 +7,13 @@ import time
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Type, cast
 
 import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
+from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
@@ -24,6 +25,7 @@ from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -47,7 +49,8 @@ from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_snql_query
+from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -68,15 +71,16 @@ from snuba.consumers.dlq import (
     store_instruction,
 )
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import (
-    get_all_storage_keys,
-    get_storage,
-    get_writable_storage,
-)
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.migrations.connect import check_for_inactive_replicas
+from snuba.manual_jobs.runner import (
+    list_job_specs,
+    list_job_specs_with_status,
+    run_job,
+    view_job_logs,
+)
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
-from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
 from snuba.migrations.status import Status
 from snuba.query.allocation_policies import AllocationPolicy
@@ -89,11 +93,13 @@ from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.registered_class import InvalidConfigKeyError
 from snuba.web.delete_query import (
     DeletesNotEnabledError,
     delete_from_storage,
     deletes_are_enabled,
 )
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -209,7 +215,7 @@ def migrations_groups_list(group: str) -> Response:
                             "status": status.value,
                             "blocking": blocking,
                         }
-                        for migration_id, status, blocking in runner_group_migrations
+                        for migration_id, status, blocking, _ in runner_group_migrations
                     ]
                 ),
                 200,
@@ -274,7 +280,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     except ValueError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
-    readiness_state = get_group_readiness_state(migration_group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
@@ -296,9 +301,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                     else AuditLogAction.REVERSED_MIGRATION_STARTED
                 ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
-            )
-            check_for_inactive_replicas(
-                get_all_storage_keys(readiness_states=[readiness_state])
             )
 
         if action == "run":
@@ -977,14 +979,6 @@ def get_allocation_policy_configs(storage_key: str) -> Response:
     add_policy_data(policies, "select")
     add_policy_data(delete_policies, "delete")
 
-    data = [
-        {
-            "policy_name": policy.config_key(),
-            "configs": policy.get_current_configs(),
-            "optional_config_definitions": policy.get_optional_config_definitions_json(),
-        }
-        for policy in policies
-    ]
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
@@ -1178,6 +1172,53 @@ def dlq_replay() -> Response:
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
 
 
+@application.route("/rpc_endpoints", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def list_rpc_endpoints() -> Response:
+    return Response(
+        json.dumps(list_all_endpoint_names()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/rpc_execute/<endpoint_name>/<version>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
+    try:
+        endpoint_class: Type[RPCEndpoint[Any, Any]] = RPCEndpoint.get_from_name(
+            endpoint_name, version
+        )
+    except InvalidConfigKeyError:
+        return Response(
+            json.dumps(
+                {"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}
+            ),
+            404,
+            {"Content-Type": "application/json"},
+        )
+
+    body = request.json
+
+    try:
+        request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
+        validate_request_meta(request_proto)
+        response = run_rpc_handler(
+            endpoint_name, version, request_proto.SerializeToString()
+        )
+        return Response(
+            json.dumps(MessageToDict(response)),
+            200,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({"error": str(e)}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
 @application.route("/production_snql_query", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def production_snql_query() -> Response:
@@ -1185,6 +1226,27 @@ def production_snql_query() -> Response:
     body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
         return run_snql_query(body, g.user.email)
+    except InvalidQueryException as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/production_mql_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_mql_query() -> Response:
+    body = json.loads(request.data)
+    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
+    try:
+        return run_mql_query(body, g.user.email)
     except InvalidQueryException as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
@@ -1282,3 +1344,47 @@ def delete() -> Response:
 @check_tool_perms(tools=[AdminTools.DELETE_TOOL])
 def deletes_enabled() -> Response:
     return make_response(jsonify(deletes_are_enabled()), 200)
+
+
+@application.route("/job-specs", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_specs() -> Response:
+    return make_response(jsonify(list_job_specs_with_status()), 200)
+
+
+@application.route("/job-specs/<job_id>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def execute_job(job_id: str) -> Response:
+    job_specs = list_job_specs()
+    return make_response(run_job(job_specs[job_id]), 200)
+
+
+@application.route("/job-specs/<job_id>/logs", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_logs(job_id: str) -> Response:
+    return make_response(jsonify(view_job_logs(job_id)), 200)
+
+
+@application.route("/clickhouse_node_info")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_node_info() -> Response:
+    return make_response(jsonify(get_node_info()), 200)
+
+
+@application.route("/clickhouse_system_settings")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_system_settings() -> Response:
+    host = request.args.get("host")
+    port = request.args.get("port")
+    storage = request.args.get("storage")
+    if not all([host, port, storage]):
+        return make_response(
+            jsonify({"error": "Host, port, and storage are required"}), 400
+        )
+    try:
+        # conversions for typing
+        settings = get_system_settings(str(host), int(str(port)), str(storage))
+        return make_response(jsonify(settings), 200)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        return make_response(jsonify({"error": str(e)}), 500)

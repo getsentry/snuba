@@ -34,7 +34,7 @@ class DirectoryLoader(GroupLoader, ABC):
     represents the migration ID.
 
     Migrations must be named: xxxx_migration_name.py where xxxx is 4 digit,
-    0 padded migration number. As regex: [0-9][0-9][0-9][0-9]_.*\.py
+    0 padded migration number. As regex: [0-9][0-9][0-9][0-9]_.*.py
     Within a dir, migration number are strictly increasing by 1 beginning at
     0001
     """

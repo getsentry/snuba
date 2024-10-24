@@ -110,7 +110,7 @@ ALTER_QUERY_RE = re.compile(
         ^
         (ALTER|CREATE)
         \s
-        [\w\s,=()*+<>'%"\-\/:]+
+        [\w\s,=()*+<>'%"\-\/:\.`]+
         ;? # Optional semicolon
         $
     """,
@@ -216,6 +216,7 @@ def run_system_query_on_host_with_sql(
                     "storage_name": storage_name,
                     "sudo_mode": sudo_mode,
                 },
+                notify=sudo_mode,
             )
 
 

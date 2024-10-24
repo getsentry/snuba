@@ -10,6 +10,7 @@ type TracingResult = {
   summarized_trace_output?: TracingSummary;
   cols?: Array<Array<string>>;
   num_rows_result?: number;
+  result?: Array<Array<any>>,
   profile_events_results?: Map<Map<string, string>, Object>;
   profile_events_meta?: Array<Object>;
   profile_events_profile?: {};
