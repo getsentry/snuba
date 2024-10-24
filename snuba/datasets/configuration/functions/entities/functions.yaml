@@ -67,6 +67,52 @@ schema:
       type: AggregateFunction,
       args: { func: groupUniqArray(5), arg_types: [{ type: UUID }] },
     },
+    {
+      name: worst_v2,
+      type: AggregateFunction,
+      args:
+        {
+          func: argMax,
+          arg_types: [
+            { type: Tuple,
+              args: {
+                inner_types: [
+                  {type: UUID},
+                  {type: String},
+                  {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }},
+                  {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }}
+                ]
+              }
+            },
+            { type: Float, args: { size: 64 } }
+          ],
+        },
+    },
+    {
+      name: examples_v2,
+      type: AggregateFunction,
+      args:
+        {
+          func: groupUniqArray(5),
+          arg_types: [
+            { type: Tuple,
+              args: {
+                inner_types: [
+                  {type: UUID},
+                  {type: String},
+                  {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }},
+                  {type: DateTime64, args: { precision: 6, schema_modifiers: [nullable] }}
+                ]
+              }
+            }
+          ]
+        },
+    },
+    {
+      name: profiling_type,
+      type: String,
+      args: { schema_modifiers: [ low_cardinality ] }
+    }
   ]
 required_time_column: timestamp
 
