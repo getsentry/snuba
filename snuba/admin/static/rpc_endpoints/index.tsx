@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader } from '@mantine/core';
+import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox, Text, Table } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
 
+const DEBUG_SUPPORTED_VERSIONS = ['v1'];
 
 function RpcEndpoints() {
     const api = useApi();
@@ -13,6 +14,7 @@ function RpcEndpoints() {
     const exampleRequestTemplates: Record<string, Record<string, any>> = require('SnubaAdmin/rpc_endpoints/exampleRequestTemplates.json');
     const [accordionOpened, setAccordionOpened] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [debugMode, setDebugMode] = useState(false);
 
     const fetchEndpoints = useCallback(async () => {
         try {
@@ -44,6 +46,10 @@ function RpcEndpoints() {
         setIsLoading(true);
         try {
             const parsedBody = JSON.parse(requestBody);
+            if (debugMode && DEBUG_SUPPORTED_VERSIONS.includes(selectedVersion)) {
+                parsedBody.meta = parsedBody.meta || {};
+                parsedBody.meta.debug = true;
+            }
             const result = await api.executeRpcEndpoint(selectedEndpoint, selectedVersion, parsedBody);
             setResponse(result);
         } catch (error: any) {
@@ -69,7 +75,30 @@ function RpcEndpoints() {
                 },
             },
         },
+        table: {
+            border: `1px solid ${theme.colors.gray[3]}`,
+            '& th, & td': {
+                border: `1px solid ${theme.colors.gray[3]}`,
+                padding: theme.spacing.xs,
+            },
+            '& th': {
+                backgroundColor: theme.colors.gray[1],
+                fontWeight: 'bold',
+            },
+            '& td:first-of-type': {
+                width: '20%',
+                fontWeight: 'bold',
+            },
+            '& td:last-of-type': {
+                width: '80%',
+            },
+        },
+        debugCheckbox: {
+            marginBottom: theme.spacing.md,
+        },
     }));
+
+    const { classes } = useStyles();
 
     return (
         <div>
@@ -84,7 +113,7 @@ function RpcEndpoints() {
             />
             <Space h="md" />
             <Accordion
-                classNames={{ item: useStyles().classes.accordion }}
+                classNames={{ item: classes.accordion }}
                 variant="filled"
                 radius="sm"
                 value={accordionOpened ? 'example' : null}
@@ -135,6 +164,13 @@ function RpcEndpoints() {
                 minRows={5}
             />
             <Space h="md" />
+            <Checkbox
+                label="Enable Debug Mode"
+                checked={debugMode}
+                onChange={(event) => setDebugMode(event.currentTarget.checked)}
+                disabled={!DEBUG_SUPPORTED_VERSIONS.includes(selectedVersion || '')}
+                className={classes.debugCheckbox}
+            />
             <Button
                 onClick={handleExecute}
                 disabled={!selectedEndpoint || !requestBody || isLoading}
@@ -146,12 +182,54 @@ function RpcEndpoints() {
                 <>
                     <Space h="md" />
                     <h3>Response:</h3>
+                    <Accordion classNames={{ item: classes.accordion }}>
+                        <Accordion.Item value="query-info">
+                            <Accordion.Control>Query Metadata</Accordion.Control>
+                            <Accordion.Panel>
+                                {response.meta?.queryInfo ? (
+                                    response.meta.queryInfo.map((queryInfo: any, index: number) => (
+                                        <div key={index}>
+                                            <h4>Query {index + 1}</h4>
+                                            <Table className={classes.table}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Attribute</th>
+                                                        <th>Value</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {Object.entries({ ...queryInfo.stats, ...queryInfo.metadata }).map(([key, value]) => (
+                                                        <tr key={key}>
+                                                            <td>{key}</td>
+                                                            <td>
+                                                                {typeof value === 'object' ? (
+                                                                    <Code block>{JSON.stringify(value, null, 2)}</Code>
+                                                                ) : (
+                                                                    String(value)
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </Table>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <Text>No query info available</Text>
+                                )}
+                            </Accordion.Panel>
+                        </Accordion.Item>
+                    </Accordion>
+                    <Space h="md" />
+                    <h4>Response Data:</h4>
                     <Code block>
-                        {Object.keys(response).length === 0 ? (
-                            <div>Empty response</div>
-                        ) : (
-                            <pre>{JSON.stringify(response, null, 2)}</pre>
-                        )}
+                        <pre>
+                            {JSON.stringify(
+                                (({ meta, ...rest }) => rest)(response),
+                                null,
+                                2
+                            )}
+                        </pre>
                     </Code>
                 </>
             )}
