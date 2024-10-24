@@ -124,7 +124,7 @@ def build_request(
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
             record_invalid_request(
-                request_id=str(uuid.uuid4),
+                request_id=uuid.uuid4(),
                 body=body,
                 dataset=get_dataset_name(dataset),
                 organization=body.get("tenant_ids", {}).get("organization_id", 0),
@@ -137,7 +137,7 @@ def build_request(
         except Exception as exception:
             request_status = get_request_status(exception)
             record_error_building_request(
-                request_id=str(uuid.uuid4),
+                request_id=uuid.uuid4(),
                 body=body,
                 dataset=get_dataset_name(dataset),
                 organization=body.get("tenant_ids", {}).get("organization_id", 0),
@@ -247,7 +247,7 @@ def _build_request(
     attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
 
     return Request(
-        id=uuid.uuid4().hex,
+        id=uuid.uuid4(),
         original_body=original_body,
         query=query,
         attribution_info=attribution_info,

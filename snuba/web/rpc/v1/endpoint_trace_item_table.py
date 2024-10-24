@@ -108,7 +108,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
 
 def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     return SnubaRequest(
-        id=request.meta.request_id,
+        id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
         query=_build_query(request),
         query_settings=HTTPQuerySettings(),

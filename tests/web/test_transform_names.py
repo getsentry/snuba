@@ -86,7 +86,7 @@ def test_transform_column_names() -> None:
     result = run_query(
         dataset,
         Request(
-            id="asd",
+            id=uuid.uuid4(),
             original_body={},
             query=query,
             query_settings=query_settings,

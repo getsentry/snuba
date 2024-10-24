@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from snuba import settings as snubasettings
@@ -68,7 +70,7 @@ class MockAllocationPolicy(AllocationPolicy):
 def get_fake_metadata() -> SnubaQueryMetadata:
     return SnubaQueryMetadata(
         Request(
-            "",
+            uuid.uuid4(),
             {},
             LogicalQuery(
                 from_clause=Entity(key=EntityKey.TRANSACTIONS, schema=ColumnSet([]))
