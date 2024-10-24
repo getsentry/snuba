@@ -4,7 +4,17 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import AddIndicesData, OperationTarget, SqlOperation
-from snuba.utils.schemas import UUID, Column, DateTime64, Float, Int, Map, String, UInt
+from snuba.utils.schemas import (
+    UUID,
+    Column,
+    DateTime,
+    DateTime64,
+    Float,
+    Int,
+    Map,
+    String,
+    UInt,
+)
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_spans_2_local"
@@ -21,6 +31,7 @@ columns: List[Column[Modifiers]] = [
     Column("segment_id", UInt(64, Modifiers(codecs=["ZSTD(1)"]))),
     Column("segment_name", String(Modifiers(codecs=["ZSTD(1)"]))),
     Column("is_segment", UInt(8, Modifiers(codecs=["LZ4"]))),
+    Column("_sort_timestamp", DateTime(Modifiers(codecs=["DoubleDelta", "ZSTD(1)"]))),
     Column(
         "start_timestamp",
         DateTime64(6, modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
@@ -47,7 +58,7 @@ columns.extend(
     [
         Column(
             f"attr_str_{i}",
-            Map(String(), String(), modifiers=Modifiers(codecs=["ZSTD(3)"])),
+            Map(String(), String(), modifiers=Modifiers(codecs=["ZSTD(1)"])),
         )
         for i in range(num_attr_buckets)
     ]
@@ -56,7 +67,7 @@ columns.extend(
     [
         Column(
             f"attr_num_{i}",
-            Map(String(), Float(64), modifiers=Modifiers(codecs=["ZSTD(3)"])),
+            Map(String(), Float(64), modifiers=Modifiers(codecs=["ZSTD(1)"])),
         )
         for i in range(num_attr_buckets)
     ]
@@ -83,13 +94,13 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.CollapsingMergeTree(
-                    primary_key="(organization_id, start_timestamp, trace_id)",
-                    order_by="(organization_id, start_timestamp, trace_id, span_id)",
-                    sign_column="sign",
-                    partition_by="(retention_days, toMonday(toDateTime(start_timestamp)))",
+                    order_by="(organization_id, _sort_timestamp, trace_id, span_id)",
+                    partition_by="(retention_days, toMonday(_sort_timestamp))",
+                    primary_key="(organization_id, _sort_timestamp, trace_id)",
                     settings={"index_granularity": "8192"},
+                    sign_column="sign",
                     storage_set=storage_set_name,
-                    ttl="toDateTime(start_timestamp) + toIntervalDay(retention_days)",
+                    ttl="_sort_timestamp + toIntervalDay(retention_days)",
                 ),
                 target=OperationTarget.LOCAL,
             ),
