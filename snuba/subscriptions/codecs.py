@@ -10,6 +10,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
+    SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
@@ -32,7 +33,7 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
 
-        return SubscriptionData.from_dict(data, self.entity_key)
+        return SnQLSubscriptionData.from_dict(data, self.entity_key)
 
 
 class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
@@ -103,7 +104,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
                 entity_key,
                 Subscription(
                     SubscriptionIdentifier.from_string(subscription_identifier),
-                    SubscriptionData.from_dict(
+                    SnQLSubscriptionData.from_dict(
                         scheduled_subscription_dict["task"]["data"], entity_key
                     ),
                 ),

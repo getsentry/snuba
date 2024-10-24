@@ -12,8 +12,8 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.subscriptions import scheduler
 from snuba.subscriptions.data import (
     PartitionId,
+    SnQLSubscriptionData,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.scheduler import filter_subscriptions
@@ -23,7 +23,7 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 def build_subscription(resolution: timedelta, org_id: int) -> Subscription:
     return Subscription(
         SubscriptionIdentifier(PartitionId(1), uuid.uuid4()),
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=60,

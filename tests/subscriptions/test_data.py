@@ -7,14 +7,14 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from tests.subscriptions import BaseSubscriptionTest
 
 TESTS = [
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events) "
@@ -31,7 +31,7 @@ TESTS = [
         id="SnQL subscription",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events: events) -[attributes]-> (ga: group_attributes) "
@@ -47,7 +47,7 @@ TESTS = [
         id="SnQL subscription",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events) "
@@ -64,7 +64,7 @@ TESTS = [
         id="SnQL subscription with 2 many aggregates",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             query=(
                 "MATCH (events) "
