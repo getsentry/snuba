@@ -41,7 +41,7 @@ def test_simple() -> None:
     )
 
     request = Request(
-        id=uuid.UUID("a" * 32).hex,
+        id=uuid.UUID("a" * 32),
         original_body=request_body,
         query=query,
         query_settings=HTTPQuerySettings(referrer="search"),
