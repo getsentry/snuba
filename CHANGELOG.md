@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.10.0
+
+### Various fixes & improvements
+
+- ref(functions): refactor functions processor and storage (#6411) by @viglia
+- fix(eap): remove flask stuff from rpc (#6410) by @volokluev
+- fix(admin): Handle NaN in admin results (#6412) by @evanh
+- fix(database-clusters): Use a lock when creating connection (#6407) by @davidtsuk
+- feat(rpc): handle exceptions by returning a proto and non-200 (#6402) by @colin-sentry
+- ref(eap): Clean up the mutations interface (#6344) by @untitaker
+- feat(admin): Show data in clickhouse tracing tool (#6406) by @untitaker
+- feat(database-clusters): Use a ThreadPoolExecutor to speed up node fetching (#6405) by @davidtsuk
+- feat(profiling): add new columns to the raw_functions table (#6398) by @viglia
+- fix(database-clusters): Remove Query Node column (#6404) by @davidtsuk
+- feat(eap): Port TraceItemTable endpoint to v1 (#6401) by @volokluev
+- feat: Add EAP span subscriptions for devserver (#6399) by @shruthilayaj
+- ref(deletes): increase max rows to 100000 (#6400) by @MeredithAnya
+- Revert "feat: Add EAP span subscriptions for devserver (#6396)" (ff049323) by @getsentry-bot
+- feat: Add EAP span subscriptions for devserver (#6396) by @shruthilayaj
+- feat(eap): record rpc endpoint success and timing (#6392) by @volokluev
+- feat(job-runner) view logs in custom jobs admin page (#6394) by @onewland
+- feat(job-runner): persist logs in Redis for easier viewing in snuba admin (#6387) by @onewland
+- fix(devservices): Fixing devservices config (#6393) by @IanWoodard
+- fix(database-clusters): Use host name instead of address when fetching system settings (#6391) by @davidtsuk
+- fix: better error message in admin system query (#6390) by @kylemumma
+- feat(database-clusters): Add server settings for each node and additional data (#6386) by @davidtsuk
+- feat(job-runner): run job from snuba admin (#6385) by @onewland
+- feat(capman): remove legacy cap on threads (#6389) by @volokluev
+
+_Plus 73 more_
+
 ## 24.9.0
 
 ### Various fixes & improvements

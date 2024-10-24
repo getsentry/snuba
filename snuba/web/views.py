@@ -58,7 +58,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.state.rate_limit import RateLimitExceeded, RateLimitParameters, rate_limit
+from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
@@ -317,7 +317,6 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
 
 @application.route("/<storage:storage>", methods=["DELETE"])
 @util.time_request("delete_query")
-@rate_limit(RateLimitParameters("delete", "bucket", None, 1))
 def storage_delete(
     *, storage: WritableTableStorage, timer: Timer
 ) -> Union[Response, str]:

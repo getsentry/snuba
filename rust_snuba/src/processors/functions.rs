@@ -35,6 +35,7 @@ pub fn process_message(
                 start_timestamp: msg.start_timestamp,
                 end_timestamp: msg.end_timestamp,
                 profiling_type: msg.profiling_type.as_deref(),
+                materialization_version: msg.materialization_version.unwrap_or_default(),
 
                 // Function metadata
                 fingerprint: from.fingerprint,
@@ -83,6 +84,8 @@ struct InputMessage {
     transaction_name: String,
     #[serde(default)]
     profiling_type: Option<String>,
+    #[serde(default)]
+    materialization_version: Option<u8>,
 }
 
 #[derive(Default, Debug, Serialize)]
