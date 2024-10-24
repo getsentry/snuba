@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox } from '@mantine/core';
+import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox, Text, Table } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
+
+const DEBUG_SUPPORTED_VERSIONS = ['v1'];
 
 function RpcEndpoints() {
     const api = useApi();
@@ -44,7 +46,7 @@ function RpcEndpoints() {
         setIsLoading(true);
         try {
             const parsedBody = JSON.parse(requestBody);
-            if (debugMode && selectedVersion === 'v1') {
+            if (debugMode && DEBUG_SUPPORTED_VERSIONS.includes(selectedVersion)) {
                 parsedBody.meta = parsedBody.meta || {};
                 parsedBody.meta.debug = true;
             }
@@ -73,7 +75,30 @@ function RpcEndpoints() {
                 },
             },
         },
+        table: {
+            border: `1px solid ${theme.colors.gray[3]}`,
+            '& th, & td': {
+                border: `1px solid ${theme.colors.gray[3]}`,
+                padding: theme.spacing.xs,
+            },
+            '& th': {
+                backgroundColor: theme.colors.gray[1],
+                fontWeight: 'bold',
+            },
+            '& td:first-of-type': {
+                width: '20%',
+                fontWeight: 'bold',
+            },
+            '& td:last-of-type': {
+                width: '80%',
+            },
+        },
+        debugCheckbox: {
+            marginBottom: theme.spacing.md,
+        },
     }));
+
+    const { classes } = useStyles();
 
     return (
         <div>
@@ -88,7 +113,7 @@ function RpcEndpoints() {
             />
             <Space h="md" />
             <Accordion
-                classNames={{ item: useStyles().classes.accordion }}
+                classNames={{ item: classes.accordion }}
                 variant="filled"
                 radius="sm"
                 value={accordionOpened ? 'example' : null}
@@ -139,14 +164,13 @@ function RpcEndpoints() {
                 minRows={5}
             />
             <Space h="md" />
-            {selectedVersion === 'v1' && (
-                <Checkbox
-                    label="Enable Debug Mode"
-                    checked={debugMode}
-                    onChange={(event) => setDebugMode(event.currentTarget.checked)}
-                    style={{ marginBottom: '1rem' }}
-                />
-            )}
+            <Checkbox
+                label="Enable Debug Mode"
+                checked={debugMode}
+                onChange={(event) => setDebugMode(event.currentTarget.checked)}
+                disabled={!DEBUG_SUPPORTED_VERSIONS.includes(selectedVersion || '')}
+                className={classes.debugCheckbox}
+            />
             <Button
                 onClick={handleExecute}
                 disabled={!selectedEndpoint || !requestBody || isLoading}
@@ -158,29 +182,54 @@ function RpcEndpoints() {
                 <>
                     <Space h="md" />
                     <h3>Response:</h3>
-                    {response.meta && (
-                        <>
-                            <h4>Response Metadata:</h4>
-                            <Accordion>
-                                <Accordion.Item value="meta">
-                                    <Accordion.Control>Query Info</Accordion.Control>
-                                    <Accordion.Panel>
-                                        <Code block>
-                                            <pre>{JSON.stringify(response.meta.query_info, null, 2)}</pre>
-                                        </Code>
-                                    </Accordion.Panel>
-                                </Accordion.Item>
-                            </Accordion>
-                        </>
-                    )}
+                    <Accordion classNames={{ item: classes.accordion }}>
+                        <Accordion.Item value="query-info">
+                            <Accordion.Control>Query Metadata</Accordion.Control>
+                            <Accordion.Panel>
+                                {response.meta?.queryInfo ? (
+                                    response.meta.queryInfo.map((queryInfo: any, index: number) => (
+                                        <div key={index}>
+                                            <h4>Query {index + 1}</h4>
+                                            <Table className={classes.table}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Attribute</th>
+                                                        <th>Value</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {Object.entries({ ...queryInfo.stats, ...queryInfo.metadata }).map(([key, value]) => (
+                                                        <tr key={key}>
+                                                            <td>{key}</td>
+                                                            <td>
+                                                                {typeof value === 'object' ? (
+                                                                    <Code block>{JSON.stringify(value, null, 2)}</Code>
+                                                                ) : (
+                                                                    String(value)
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </Table>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <Text>No query info available</Text>
+                                )}
+                            </Accordion.Panel>
+                        </Accordion.Item>
+                    </Accordion>
                     <Space h="md" />
                     <h4>Response Data:</h4>
                     <Code block>
-                        {Object.keys(response).length === 0 ? (
-                            <div>Empty response</div>
-                        ) : (
-                            <pre>{JSON.stringify(response.data || response, null, 2)}</pre>
-                        )}
+                        <pre>
+                            {JSON.stringify(
+                                (({ meta, ...rest }) => rest)(response),
+                                null,
+                                2
+                            )}
+                        </pre>
                     </Code>
                 </>
             )}
