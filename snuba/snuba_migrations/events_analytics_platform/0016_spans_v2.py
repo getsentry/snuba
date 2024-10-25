@@ -41,12 +41,16 @@ columns: List[Column[Modifiers]] = [
         DateTime64(6, modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
     ),
     Column(
-        "duration_ms",
-        UInt(32, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
+        "duration_micro",
+        UInt(64, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
+    ),
+    Column(
+        "exclusive_time_micro",
+        UInt(64, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
     ),
     Column(
         "retention_days",
-        UInt(16, modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
+        UInt(16, modifiers=Modifiers(codecs=["T64", "ZSTD(1)"])),
     ),
     Column("name", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
     Column("sampling_factor", Float(64, modifiers=Modifiers(codecs=["ZSTD(1)"]))),
