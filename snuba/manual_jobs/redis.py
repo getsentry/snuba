@@ -1,6 +1,7 @@
-from typing import Sequence
+import typing
+from typing import List, Sequence
 
-from snuba.manual_jobs import JobStatus
+from snuba.manual_jobs.job_status import JobStatus
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.utils.serializable_exception import SerializableException
 
@@ -17,6 +18,10 @@ def _build_job_status_key(job_id: str) -> str:
 
 def _build_job_log_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:log"
+
+
+def _build_job_type_key(job_id: str) -> str:
+    return f"snuba:manual_jobs:{job_id}:job_type"
 
 
 def _acquire_job_lock(job_id: str) -> bool:
@@ -41,8 +46,22 @@ def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
     return status
 
 
-def _get_job_status_multi(job_ids: Sequence[str]) -> Sequence[JobStatus]:
+def _set_job_type(job_id: str, job_type: str) -> None:
+    _redis_client.set(name=_build_job_type_key(job_id), value=job_type)
+
+
+def _get_job_type(job_id: str) -> str:
+    return typing.cast(
+        str, _redis_client.get(name=_build_job_type_key(job_id)).decode()
+    )
+
+
+def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
+    return [job_type.decode() for job_type in _redis_client.mget(job_ids_keys)]
+
+
+def _get_job_status_multi(job_ids_keys: Sequence[str]) -> List[JobStatus]:
     return [
         redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
-        for redis_status in _redis_client.mget(job_ids)
+        for redis_status in _redis_client.mget(job_ids_keys)
     ]

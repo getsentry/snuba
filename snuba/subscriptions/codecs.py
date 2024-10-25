@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Union, cast
+from typing import cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
@@ -13,6 +13,7 @@ from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
     SnQLSubscriptionData,
     Subscription,
+    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
     SubscriptionType,
@@ -21,16 +22,14 @@ from snuba.subscriptions.data import (
 from snuba.utils.codecs import Codec, Encoder
 
 
-class SubscriptionDataCodec(
-    Codec[bytes, Union[SnQLSubscriptionData | RPCSubscriptionData]]
-):
+class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
     def __init__(self, entity_key: EntityKey):
         self.entity_key = entity_key
 
-    def encode(self, value: Union[SnQLSubscriptionData | RPCSubscriptionData]) -> bytes:
+    def encode(self, value: SubscriptionData) -> bytes:
         return json.dumps(value.to_dict()).encode("utf-8")
 
-    def decode(self, value: bytes) -> Union[SnQLSubscriptionData | RPCSubscriptionData]:
+    def decode(self, value: bytes) -> SubscriptionData:
         try:
             data = json.loads(value.decode("utf-8"))
         except json.JSONDecodeError:

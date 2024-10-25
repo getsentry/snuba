@@ -7,7 +7,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.subscriptions.data import SnQLSubscriptionData
+from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
 from tests.subscriptions import BaseSubscriptionTest
@@ -88,7 +88,7 @@ class TestBuildRequestBase:
 
     def compare_conditions(
         self,
-        subscription: SnQLSubscriptionData,
+        subscription: SubscriptionData,
         exception: Optional[Type[Exception]],
         aggregate: str,
         value: Union[int, float],
@@ -121,6 +121,6 @@ class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_conditions(
-        self, subscription: SnQLSubscriptionData, exception: Optional[Type[Exception]]
+        self, subscription: SubscriptionData, exception: Optional[Type[Exception]]
     ) -> None:
         self.compare_conditions(subscription, exception, "count", 10)

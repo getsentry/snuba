@@ -1,3 +1,4 @@
+use rust_arroyo::counter;
 use rust_arroyo::processing::strategies::run_task_in_threads::{
     RunTaskError, RunTaskFunc, TaskRunner,
 };
@@ -61,16 +62,45 @@ impl ClickhouseWriter {
 
     async fn process_message(&self, message: &Message<MutationBatch>) -> anyhow::Result<()> {
         let queries = format_query(&self.table, message.payload());
+        self.run_queries(queries).await
+    }
+
+    async fn run_queries(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
         let session_id = Uuid::new_v4().to_string();
 
+        let mut session_check = false;
+
         for query in queries {
-            self.client
-                .post(&self.url)
-                .query(&[("session_id", &session_id)])
-                .body(query)
-                .send()
-                .await?
-                .error_for_status()?;
+            let mut request = self.client.post(&self.url).query(&[
+                // ensure that the tables from CREATE TEMPORARY TABLE exist in subsequent
+                // queries
+                ("session_id", session_id.as_str()),
+                // ensure that HTTP status code is correct
+                // https://clickhouse.com/docs/en/interfaces/http#http_response_codes_caveats
+                // TODO: port to main consumer
+                ("wait_end_of_query", "1"),
+            ]);
+
+            // ensure that we are in a session. if some load balancer drops the querystring, we
+            // want to know.
+            // on first query, run without session_check. after that, the session should exist.
+            if session_check {
+                request = request.query(&[("session_check", "1")]);
+            }
+
+            session_check = true;
+
+            let response = request.body(query).send().await?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await;
+                anyhow::bail!(
+                    "bad response while inserting mutation, status: {}, response body: {:?}",
+                    status,
+                    body
+                );
+            }
         }
 
         Ok(())
@@ -117,6 +147,7 @@ fn format_query(table: &str, batch: &MutationBatch) -> Vec<Vec<u8>> {
         .to_owned()
         .into_bytes();
 
+    counter!("eap_mutations.mutation_rows", batch.0.len() as u64);
     for (filter, update) in &batch.0 {
         let mut attributes = AttributeMap::default();
         for (k, v) in &update.attr_str {
@@ -217,17 +248,13 @@ mod tests {
         }
 
         pub async fn run_mutation(&self, queries: Vec<Vec<u8>>) -> anyhow::Result<()> {
-            let session_id = Uuid::new_v4().to_string();
+            let writer = ClickhouseWriter {
+                url: self.url.clone(),
+                table: self.table.clone(),
+                client: self.client.clone(),
+            };
 
-            for query in queries {
-                self.client
-                    .post(&self.url)
-                    .query(&[("session_id", &session_id)])
-                    .body(query)
-                    .send()
-                    .await?;
-            }
-            Ok(())
+            writer.run_queries(queries).await
         }
 
         pub async fn select_final(&self) -> anyhow::Result<String> {
