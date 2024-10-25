@@ -46,4 +46,4 @@ sqlparse==0.4.2
 google-api-python-client==2.88.0
 sentry-usage-accountant==0.0.10
 freezegun==1.2.2
-sentry-protos==0.1.29
+sentry-protos==0.1.30
