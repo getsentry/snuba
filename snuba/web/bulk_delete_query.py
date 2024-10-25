@@ -46,7 +46,7 @@ class DeleteQueryMessage(TypedDict):
 delete_kfk: Producer | None = None
 
 
-def _delete_kafka_producer() -> Producer:
+def _get_kafka_producer() -> Producer:
     global delete_kfk
     if delete_kfk is None:
         delete_kfk = Producer(
@@ -71,7 +71,7 @@ def _record_query_delivery_callback(
 
 def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
     try:
-        producer = _delete_kafka_producer()
+        producer = _get_kafka_producer()
         data = rapidjson.dumps(delete_query)
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
@@ -80,7 +80,6 @@ def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
             ),
             data.encode("utf-8"),
             on_delivery=_record_query_delivery_callback,
-            # TODO(should we add headers? or key)
         )
     except Exception as ex:
         logger.exception("Could not produce delete query due to error: %r", ex)
@@ -104,7 +103,8 @@ def delete_from_storage(
             f"Deletes not enabled for {storage.get_storage_key().value}"
         )
 
-    if list(conditions.keys()).sort() != list(delete_settings.allowed_columns).sort():
+    columns_diff = set(conditions.keys()) - set(delete_settings.allowed_columns)
+    if columns_diff != set():
         raise InvalidQueryException(
             f"Invalid Columns to filter by, must be in {delete_settings.allowed_columns}"
         )
