@@ -166,7 +166,7 @@ class ClickhousePool(object):
                     conn = self._create_conn(fallback_mode)
 
                 try:
-                    settings = settings or {}
+                    settings = dict(settings or {})
                     capture_trace = (
                         capture_trace or settings.get("send_logs_level") == "trace"
                     )

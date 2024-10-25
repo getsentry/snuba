@@ -19,7 +19,7 @@ def extract_response_meta(
     query_results: List[QueryResult],
     timers: List[Timer],
 ) -> ResponseMeta:
-    query_info = []
+    query_info: List[QueryInfo] = []
 
     if not debug:
         return ResponseMeta(request_id=request_id, query_info=query_info)
