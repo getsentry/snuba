@@ -305,8 +305,8 @@ function TracingQueries(props: { api: Client }) {
                       <Table>
                         <thead>
                           <tr>
-                            <th>Events</th>
-                            <th>Number of Occurrences</th>
+                            <th>Event</th>
+                            <th>Number of Events</th>
                           </tr>
                         </thead>
                         <tbody>
