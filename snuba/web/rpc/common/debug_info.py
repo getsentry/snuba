@@ -13,17 +13,24 @@ from snuba.web import QueryResult
 
 
 def extract_response_meta(
-    request_id: str, debug: bool, query_results: List[QueryResult], timers: List[Timer]
+    request_id: str,
+    debug: bool,
+    enable_trace_logs: bool,
+    query_results: List[QueryResult],
+    timers: List[Timer],
 ) -> ResponseMeta:
     query_info = []
 
-    if debug:
-        for query_result, timer in zip(query_results, timers):
-            extra = getattr(query_result, "extra", None) or {}
-            stats = extra.get("stats", {}) if isinstance(extra, dict) else {}
-            result = getattr(query_result, "result", None) or {}
-            profile = result.get("profile", {}) if isinstance(result, dict) else {}
+    if not debug and not enable_trace_logs:
+        return ResponseMeta(request_id=request_id, query_info=query_info)
 
+    for query_result, timer in zip(query_results, timers):
+        extra = getattr(query_result, "extra", None) or {}
+        stats = extra.get("stats", {}) if isinstance(extra, dict) else {}
+        result = getattr(query_result, "result", None) or {}
+        profile = result.get("profile", {}) if isinstance(result, dict) else {}
+
+        if debug:
             timer_data = timer.for_json()
             timing_marks = TimingMarks(
                 marks_ms=timer_data.get("marks_ms", {}),
@@ -31,7 +38,6 @@ def extract_response_meta(
                 timestamp=int(timer_data.get("timestamp", 0)),
                 tags=timer_data.get("tags", {}),
             )
-
             query_stats = QueryStats(
                 rows_read=stats.get("result_rows", 0),
                 columns_read=stats.get("result_cols", 0),
@@ -59,7 +65,13 @@ def extract_response_meta(
                 cache_hit=stats.get("cache_hit", False),
                 cluster_name=stats.get("cluster_name", ""),
             )
+        else:
+            query_stats = None
+            query_metadata = None
 
-            query_info.append(QueryInfo(stats=query_stats, metadata=query_metadata))
+        trace_logs = result.get("trace_output", "") if enable_trace_logs else ""
+        query_info.append(
+            QueryInfo(stats=query_stats, metadata=query_metadata, trace_logs=trace_logs)
+        )
 
     return ResponseMeta(request_id=request_id, query_info=query_info)

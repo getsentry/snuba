@@ -107,11 +107,18 @@ def _build_query(request: TraceItemTableRequest) -> Query:
 
 
 def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
+    query_settings = HTTPQuerySettings()
+
+    if request.meta.enable_trace_logs:
+        query_settings.set_clickhouse_settings(
+            {"send_logs_level": "trace", "log_profile_events": 1}
+        )
+
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
         query=_build_query(request),
-        query_settings=HTTPQuerySettings(),
+        query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
@@ -245,7 +252,11 @@ class EndpointTraceItemTable(
         )
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
-            in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
+            in_msg.meta.request_id,
+            in_msg.meta.debug,
+            in_msg.meta.enable_trace_logs,
+            [res],
+            [self._timer],
         )
         return TraceItemTableResponse(
             column_values=column_values,
