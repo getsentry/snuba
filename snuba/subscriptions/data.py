@@ -9,6 +9,7 @@ from enum import Enum
 from functools import partial
 from typing import (
     Any,
+    Generic,
     Iterator,
     List,
     Mapping,
@@ -16,10 +17,12 @@ from typing import (
     NewType,
     Optional,
     Tuple,
+    TypeVar,
     Union,
 )
 from uuid import UUID
 
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
 from snuba.datasets.dataset import Dataset
@@ -46,7 +49,6 @@ from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.web.rpc.v1.endpoint_trace_item_table import _build_snuba_request
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -83,8 +85,11 @@ class SubscriptionIdentifier:
         return cls(PartitionId(int(partition)), UUID(uuid))
 
 
+TRequest = TypeVar("TRequest")
+
+
 @dataclass(frozen=True, kw_only=True)
-class SubscriptionData(ABC):
+class SubscriptionData(ABC, Generic[TRequest]):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -105,7 +110,7 @@ class SubscriptionData(ABC):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
+    ) -> TRequest:
         raise NotImplementedError
 
     @classmethod
@@ -121,7 +126,7 @@ class SubscriptionData(ABC):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RPCSubscriptionData(SubscriptionData):
+class RPCSubscriptionData(SubscriptionData[TraceItemTableRequest]):
     """
     Represents the state of an RPC subscription.
     """
@@ -140,15 +145,22 @@ class RPCSubscriptionData(SubscriptionData):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
+    ) -> TraceItemTableRequest:
 
+        # Make table request
         table_request = TraceItemTableRequest()
         table_request.ParseFromString(self.table_request.encode("utf-8"))
         # TODO: Add time conditions etc
 
-        snuba_request = _build_snuba_request(table_request)
+        # Add time conditions
+        start_time_proto = Timestamp()
+        start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
+        end_time_proto = Timestamp()
+        end_time_proto.FromDatetime(timestamp)
+        table_request.meta.start_timestamp.CopyFrom(start_time_proto)
+        table_request.meta.end_timestamp.CopyFrom(end_time_proto)
 
-        return snuba_request
+        return table_request
 
     @classmethod
     def from_dict(
@@ -188,7 +200,7 @@ class RPCSubscriptionData(SubscriptionData):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData):
+class SnQLSubscriptionData(SubscriptionData[Request]):
     """
     Represents the state of a SnQL subscription.
     """
@@ -359,7 +371,7 @@ class SnQLSubscriptionData(SubscriptionData):
 
 class Subscription(NamedTuple):
     identifier: SubscriptionIdentifier
-    data: Union[SnQLSubscriptionData, RPCSubscriptionData]
+    data: SubscriptionData
 
 
 class SubscriptionWithMetadata(NamedTuple):
