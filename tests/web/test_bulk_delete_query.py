@@ -10,14 +10,11 @@ from confluent_kafka import Consumer
 from snuba import settings
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.query.exceptions import InvalidQueryException
 from snuba.state import set_config
 from snuba.utils.streams.topics import Topic
-from snuba.web.bulk_delete_query import (
-    DeletesNotEnabledError,
-    InvalidQueryException,
-    _get_kafka_producer,
-    delete_from_storage,
-)
+from snuba.web.bulk_delete_query import _get_kafka_producer, delete_from_storage
+from snuba.web.delete_query import DeletesNotEnabledError
 
 CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
@@ -91,7 +88,10 @@ def test_deletes_not_enabled_runtime_config() -> None:
 @pytest.mark.redis_db
 def test_delete_invalid_column_type() -> None:
     storage = get_writable_storage(StorageKey("search_issues"))
-    conditions = {"project_id": ["invalid_project"], "group_id": [1, 2, 3, 4]}
+    conditions: dict[str, list[int | str]] = {
+        "project_id": ["invalid_project"],
+        "group_id": [1, 2, 3, 4],
+    }
     attr_info = get_attribution_info()
 
     with pytest.raises(InvalidQueryException):
