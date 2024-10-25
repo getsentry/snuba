@@ -302,7 +302,7 @@ class SnubaQueryMetadata:
         end = int(self.end_timestamp.timestamp()) if self.end_timestamp else None
         request_dict: snuba_queries_v1.Querylog = {
             "request": {
-                "id": self.request.id,
+                "id": self.request.id.hex,
                 "body": self.request.original_body,
                 "referrer": self.request.referrer,
                 "team": self.request.attribution_info.team,

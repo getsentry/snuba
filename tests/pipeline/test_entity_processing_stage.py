@@ -1,3 +1,5 @@
+import uuid
+
 from snuba.attribution import get_app_id
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.query import Query
@@ -27,7 +29,7 @@ def _create_pipe_input_from_snql(snql_query: str) -> QueryPipelineData[Request]:
     query_settings = HTTPQuerySettings()
     timer = Timer("test")
     request = Request(
-        id="",
+        id=uuid.uuid4(),
         original_body=query_body,
         query=logical_query,
         query_settings=query_settings,

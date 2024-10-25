@@ -41,7 +41,7 @@ def run_eap_query(
     query.set_from_clause(entity)
 
     request = Request(
-        id=str(uuid.uuid4()),
+        id=uuid.uuid4(),
         original_body=original_body,
         query=query,
         query_settings=query_settings,

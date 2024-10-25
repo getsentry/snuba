@@ -13,7 +13,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import (
+    PageToken,
+    RequestMeta,
+    ResponseMeta,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -182,6 +186,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -213,6 +218,7 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=60),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response
 
@@ -227,6 +233,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filter=TraceItemFilter(
                 or_filter=OrFilter(
@@ -292,6 +299,7 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=60),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response
 
@@ -307,6 +315,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -377,6 +386,7 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=limit),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response.page_token == expected_response.page_token
         # make sure columns are ordered in the order they are requested

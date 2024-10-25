@@ -371,3 +371,51 @@ class TotalBytesScannedByReferrerAndProject(QuerylogQuery):
        total_bytes DESC
     LIMIT 10
 """
+
+
+class StoragesAndPoliciesOfRejectedQueries(QuerylogQuery):
+    """
+    Returns the storage(s) and polic(ies) of rejected queries, so we know which CapMan threshold to increase
+    """
+
+    sql = """
+        SELECT
+        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.rejection_storage_key')
+            AS rejection_storage,
+        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.rejected_by.policy')
+            AS rejection_policy,
+        referrer,
+        projects,
+        COUNT(*) AS count
+        FROM querylog_dist
+        WHERE toDateTime('{{start_timestamp}}', 'Universal') <= timestamp
+        AND timestamp <= toDateTime('{{end_timestamp}}', 'Universal')
+        AND organization={{org_id}}
+        AND JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.is_rejected') = '[true]'
+        GROUP BY rejection_policy, rejection_storage, referrer, projects
+        ORDER BY count DESC
+    """
+
+
+class StoragesAndPoliciesOfThrottledQueries(QuerylogQuery):
+    """
+    Returns the storage(s) and polic(ies) of throttled queries, so we know which CapMan threshold to increase
+    """
+
+    sql = """
+        SELECT
+        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.throttle_storage_key')
+            AS throttle_storage,
+        JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.throttled_by.policy')
+            AS throttle_policy,
+        referrer,
+        projects,
+        COUNT(*) AS count
+        FROM querylog_dist
+        WHERE toDateTime('{{start_timestamp}}', 'Universal') <= timestamp
+        AND timestamp <= toDateTime('{{end_timestamp}}', 'Universal')
+        AND organization={{org_id}}
+        AND JSON_QUERY(arrayJoin(clickhouse_queries.stats), '$.quota_allowance.summary.is_throttled') = '[true]'
+        GROUP BY throttle_policy, throttle_storage, referrer, projects
+        ORDER BY count DESC
+    """

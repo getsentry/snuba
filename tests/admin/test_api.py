@@ -336,6 +336,7 @@ def test_query_trace(admin_api: FlaskClient) -> None:
     data = json.loads(response.data)
     assert "<Debug> executeQuery" in data["trace_output"]
     assert "summarized_trace_output" in data
+    assert "profile_events_results" in data
 
 
 @pytest.mark.redis_db
