@@ -11,6 +11,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 
+from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
@@ -52,16 +53,23 @@ class TestDebugInfo:
     def test_debug_info_present_when_requested(self) -> None:
         debug_request = self._create_trace_item_table_request(debug=True)
         debug_response = EndpointTraceItemTable().execute(debug_request)
-
         assert debug_response.meta.request_id == debug_request.meta.request_id
         assert len(debug_response.meta.query_info) > 0
         for query_info in debug_response.meta.query_info:
             assert query_info.stats is not None
             assert query_info.metadata is not None
+            assert hasattr(query_info, "trace_logs")
+            assert isinstance(query_info.trace_logs, str)
 
     def test_debug_info_absent_when_not_requested(self) -> None:
         non_debug_request = self._create_trace_item_table_request(debug=False)
         non_debug_response = EndpointTraceItemTable().execute(non_debug_request)
-
         assert non_debug_response.meta.request_id == non_debug_request.meta.request_id
         assert len(non_debug_response.meta.query_info) == 0
+
+    def test_trace_query_settings(self) -> None:
+        settings = setup_trace_query_settings()
+        assert settings.get_clickhouse_settings() == {
+            "send_logs_level": "trace",
+            "log_profile_events": 1,
+        }

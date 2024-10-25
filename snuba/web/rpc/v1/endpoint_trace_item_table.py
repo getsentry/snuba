@@ -20,6 +20,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
@@ -31,9 +32,11 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.debug_info import extract_response_meta
+from snuba.web.rpc.common.debug_info import (
+    extract_response_meta,
+    setup_trace_query_settings,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.common.trace_settings import setup_trace_query_settings
 
 _DEFAULT_ROW_LIMIT = 10_000
 
@@ -107,7 +110,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
 
 
 def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
-    query_settings = setup_trace_query_settings(request.meta.enable_trace_logs)
+    query_settings = (
+        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    )
+
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
@@ -248,7 +254,6 @@ class EndpointTraceItemTable(
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
-            in_msg.meta.enable_trace_logs,
             [res],
             [self._timer],
         )
