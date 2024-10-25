@@ -52,7 +52,7 @@ class MigrationModifiers(TypeModifiers):
             ttl=self.ttl if other.ttl is None else other.ttl,
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, SchemaModifiers):
             return self.nullable == other.nullable
         elif isinstance(other, MigrationModifiers):
