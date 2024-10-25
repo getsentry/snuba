@@ -58,7 +58,7 @@ class TestDebugInfo:
         for query_info in debug_response.meta.query_info:
             assert query_info.stats is not None
             assert query_info.metadata is not None
-            assert hasattr(query_info, "trace_logs")
+            assert query_info.trace_logs is not None
             assert isinstance(query_info.trace_logs, str)
 
     def test_debug_info_absent_when_not_requested(self) -> None:
