@@ -226,6 +226,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         password: str,
         database: str,
         http_port: int,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
         storage_sets: Set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
@@ -246,6 +249,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
         self.__password = password
         self.__database = database
         self.__http_port = http_port
+        self.__secure = secure
+        self.__ca_certs = ca_certs
+        self.__verify = verify
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
@@ -290,6 +296,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             self.__user,
             self.__password,
             self.__database,
+            self.__secure,
+            self.__ca_certs,
+            self.__verify,
         )
 
     def get_deleter(self) -> Reader:
@@ -331,6 +340,9 @@ class ClickhouseCluster(Cluster[ClickhouseWriterOptions]):
             block_connections=self.__block_connections,
             user=self.__user,
             password=self.__password,
+            secure=self.__secure,
+            ca_certs=self.__ca_certs,
+            verify=self.__verify,
             metrics=metrics,
             statement=insert_statement.with_database(self.__database),
             encoding=encoding,
@@ -413,6 +425,9 @@ CLUSTERS = [
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
+        secure=cluster["secure"],
+        ca_certs=cluster["ca_certs"],
+        verify=cluster["verify"],
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
@@ -459,6 +474,9 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
+        secure=cluster["secure"],
+        ca_certs=cluster["ca_certs"],
+        verify=cluster["verify"],
         storage_sets={
             storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
         },

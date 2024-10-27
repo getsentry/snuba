@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 import rapidjson
 import sentry_sdk
-from urllib3.connectionpool import HTTPConnectionPool
+from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.exceptions import HTTPError
 
 from snuba import settings, state
@@ -293,6 +293,9 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         port: int,
         user: str,
         password: str,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
         metrics: MetricsBackend,
         statement: InsertStatement,
         encoding: Optional[str],
@@ -302,9 +305,10 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         max_connections: int = 1,
         block_connections: bool = False,
     ):
-        self.__pool = HTTPConnectionPool(
-            host, port, maxsize=max_connections, block=block_connections
-        )
+        if secure:
+            self.__pool = HTTPSConnectionPool(host, port, ca_certs=ca_certs, verify=verify)
+        else:
+            self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()
         self.__metrics = metrics
 

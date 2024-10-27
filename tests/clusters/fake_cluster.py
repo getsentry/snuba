@@ -69,6 +69,9 @@ class FakeClickhouseCluster(ClickhouseCluster):
         password: str,
         database: str,
         http_port: int,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
         storage_sets: Set[str],
         single_node: bool,
         # The cluster name and distributed cluster name only apply if single_node is set to False
