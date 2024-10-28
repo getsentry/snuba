@@ -105,6 +105,17 @@ SYSTEM_COMMAND_RE = re.compile(
     re.IGNORECASE + re.VERBOSE,
 )
 
+OPTIMIZE_QUERY_RE = re.compile(
+    r"""^
+        (OPTIMIZE\sTABLE)
+        \s
+        [\w\s]+
+        ;? # Optional semicolon
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 ALTER_QUERY_RE = re.compile(
     r"""
         ^
@@ -154,6 +165,15 @@ def is_system_command(sql_query: str) -> bool:
     return True if match else False
 
 
+def is_query_optimize(sql_query: str) -> bool:
+    """
+    Validates whether we are running something like OPTIMIZE TABLE ...
+    """
+    sql_query = " ".join(sql_query.split())
+    match = OPTIMIZE_QUERY_RE.match(sql_query)
+    return True if match else False
+
+
 def is_query_alter(sql_query: str) -> bool:
     """
     Validates whether we are running something like ALTER TABLE ...
@@ -187,7 +207,9 @@ def run_system_query_on_host_with_sql(
     elif is_query_show(system_query_sql):
         pass
     elif sudo_mode and (
-        is_system_command(system_query_sql) or is_query_alter(system_query_sql)
+        is_system_command(system_query_sql)
+        or is_query_alter(system_query_sql)
+        or is_query_optimize(system_query_sql)
     ):
         pass
     else:
