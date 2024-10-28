@@ -7,6 +7,7 @@ from sql_metadata import Parser, QueryType  # type: ignore
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clusters.cluster import ClickhouseClientSettings, ClickhouseCluster
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.serializable_exception import SerializableException
@@ -36,6 +37,31 @@ def is_valid_node(
     return any(node.host_name == host and node.port == port for node in nodes)
 
 
+def _get_storage(storage_name: str) -> ReadableTableStorage:
+    storage_key = None
+    try:
+        storage_key = StorageKey(storage_name)
+    except ValueError:
+        raise InvalidStorageError(
+            f"storage {storage_name} is not a valid storage name",
+            extra_data={"storage_name": storage_name},
+        )
+    return get_storage(storage_key)
+
+
+def _validate_node(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    cluster: ClickhouseCluster,
+    storage_name: str,
+) -> None:
+    if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
+        raise InvalidNodeError(
+            f"host {clickhouse_host} and port {clickhouse_port} are not valid",
+            extra_data={"host": clickhouse_host, "port": clickhouse_port},
+        )
+
+
 NODE_CONNECTIONS: MutableMapping[str, ClickhousePool] = {}
 
 
@@ -45,29 +71,15 @@ def get_ro_node_connection(
     storage_name: str,
     client_settings: ClickhouseClientSettings,
 ) -> ClickhousePool:
-    storage_key = None
-    try:
-        storage_key = StorageKey(storage_name)
-    except ValueError:
-        raise InvalidStorageError(
-            f"storage {storage_name} is not a valid storage name",
-            extra_data={"storage_name": storage_name},
-        )
+    storage = _get_storage(storage_name)
 
-    key = f"{storage_key}-{clickhouse_host}"
+    key = f"{storage.get_storage_key()}-{clickhouse_host}"
     if key in NODE_CONNECTIONS:
         return NODE_CONNECTIONS[key]
 
-    storage = get_storage(storage_key)
     cluster = storage.get_cluster()
-
-    if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
-        raise InvalidNodeError(
-            f"host {clickhouse_host} and port {clickhouse_port} are not valid",
-            extra_data={"host": clickhouse_host, "port": clickhouse_port},
-        )
-
     database = cluster.get_database()
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
 
     assert client_settings in {
         ClickhouseClientSettings.QUERY,
@@ -111,15 +123,7 @@ def get_ro_query_node_connection(
     if storage_name in CLUSTER_CONNECTIONS:
         return CLUSTER_CONNECTIONS[storage_name]
 
-    try:
-        storage_key = StorageKey(storage_name)
-    except ValueError:
-        raise InvalidStorageError(
-            f"storage {storage_name} is not a valid storage name",
-            extra_data={"storage_name": storage_name},
-        )
-
-    storage = get_storage(storage_key)
+    storage = _get_storage(storage_name)
     cluster = storage.get_cluster()
     connection_id = cluster.get_connection_id()
     connection = get_ro_node_connection(
@@ -127,6 +131,36 @@ def get_ro_query_node_connection(
     )
 
     CLUSTER_CONNECTIONS[storage_name] = connection
+    return connection
+
+
+def get_sudo_node_connection(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    client_settings: ClickhouseClientSettings,
+) -> ClickhousePool:
+    storage = _get_storage(storage_name)
+
+    key = f"{storage.get_storage_key()}-{clickhouse_host}-sudo"
+    if key in NODE_CONNECTIONS:
+        return NODE_CONNECTIONS[key]
+
+    cluster = storage.get_cluster()
+    database = cluster.get_database()
+    _validate_node(clickhouse_host, clickhouse_port, cluster, storage_name)
+
+    (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
+    connection = ClickhousePool(
+        clickhouse_host,
+        clickhouse_port,
+        clickhouse_user,
+        clickhouse_password,
+        database,
+        max_pool_size=2,
+        client_settings=client_settings.value.settings,
+    )
+    NODE_CONNECTIONS[key] = connection
     return connection
 
 
@@ -159,10 +193,11 @@ def validate_ro_query(sql_query: str, allowed_tables: set[str] | None = None) ->
     # Confusingly it will also sometimes lower case ARRAY, so check for both.
     tables_set = set(parsed.tables)
     array_join = None
-    if "ARRAY" in parsed.tables_aliases:
-        array_join = "ARRAY"
-    elif "array" in parsed.tables_aliases:
-        array_join = "array"
+    array_join_keys = ["ARRAY", "array", "LEFT", "left"]
+    for ak in array_join_keys:
+        if ak in parsed.tables_aliases:
+            array_join = ak
+            break
 
     if array_join:
         for v in parsed.tables_aliases.values():

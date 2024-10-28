@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from snuba import settings as snubasettings
@@ -11,6 +13,9 @@ from snuba.pipeline.query_pipeline import QueryPipelineResult
 from snuba.pipeline.stages.query_execution import ExecutionStage
 from snuba.query import SelectedExpression
 from snuba.query.allocation_policies import (
+    MAX_THRESHOLD,
+    NO_SUGGESTION,
+    NO_UNITS,
     AllocationPolicy,
     AllocationPolicyConfig,
     QueryResultOrError,
@@ -41,7 +46,17 @@ class MockAllocationPolicy(AllocationPolicy):
     def _get_quota_allowance(
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
-        return QuotaAllowance(can_run=True, max_threads=1, explanation={})
+        return QuotaAllowance(
+            can_run=True,
+            max_threads=1,
+            explanation={},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
+        )
 
     def _update_quota_balance(
         self,
@@ -55,7 +70,7 @@ class MockAllocationPolicy(AllocationPolicy):
 def get_fake_metadata() -> SnubaQueryMetadata:
     return SnubaQueryMetadata(
         Request(
-            "",
+            uuid.uuid4(),
             {},
             LogicalQuery(
                 from_clause=Entity(key=EntityKey.TRANSACTIONS, schema=ColumnSet([]))

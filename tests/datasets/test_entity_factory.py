@@ -14,6 +14,9 @@ initialize_entity_factory()
 ENTITY_KEYS = [
     EntityKey.DISCOVER,
     EntityKey.EVENTS,
+    EntityKey.EAP_SPANS,
+    EntityKey.SPANS_NUM_ATTRS,
+    EntityKey.SPANS_STR_ATTRS,
     EntityKey.GROUPASSIGNEE,
     EntityKey.GROUPEDMESSAGE,
     EntityKey.OUTCOMES,
@@ -29,6 +32,7 @@ ENTITY_KEYS = [
     EntityKey.PROFILES,
     EntityKey.FUNCTIONS,
     EntityKey.REPLAYS,
+    EntityKey.REPLAYS_AGGREGATED,
     EntityKey.GENERIC_METRICS_SETS,
     EntityKey.GENERIC_METRICS_DISTRIBUTIONS,
     EntityKey.GENERIC_METRICS_COUNTERS,

@@ -80,7 +80,7 @@ TEST_CASES = [
             "has",
             (
                 column("_tags_hash_map", True),
-                FunctionCall(None, "cityHash64", (Literal(None, "my\=t\\\\ag=a"),)),
+                FunctionCall(None, "cityHash64", (Literal(None, "my\\=t\\\\ag=a"),)),
             ),
         ),
         id="Optimizable simple escaped condition",

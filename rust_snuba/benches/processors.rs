@@ -82,6 +82,7 @@ fn create_factory(
         clickhouse_concurrency,
         commitlog_concurrency,
         replacements_concurrency,
+        async_inserts: false,
         python_max_queue_depth: None,
         use_rust_processor: true,
         health_check_file: None,
@@ -96,6 +97,8 @@ fn create_factory(
             broker_config: BrokerConfig::default(),
         },
         stop_at_timestamp: None,
+        batch_write_timeout: None,
+        max_bytes_before_external_group_by: None,
     };
     Box::new(factory)
 }

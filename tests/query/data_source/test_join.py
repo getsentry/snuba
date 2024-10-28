@@ -1,5 +1,3 @@
-import pytest
-
 from snuba.clickhouse.columns import UUID, Any, ColumnSet, String, UInt
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query import SelectedExpression
@@ -58,19 +56,6 @@ def test_simple_join() -> None:
     assert "err.event_id" in joined_cols
     assert "groups.id" in joined_cols
     assert "groups.message" in joined_cols
-
-    with pytest.raises(AssertionError):
-        JoinClause(
-            left_node=node_err,
-            right_node=node_group,
-            keys=[
-                JoinCondition(
-                    left=JoinConditionExpression("err", "missing_col"),
-                    right=JoinConditionExpression("groups", "another_missing_col"),
-                )
-            ],
-            join_type=JoinType.INNER,
-        )
 
 
 def test_complex_joins() -> None:

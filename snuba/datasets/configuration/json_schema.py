@@ -118,7 +118,7 @@ def del_name_field(column_schema: dict[str, Any]) -> dict[str, Any]:
 
 
 NUMBER_SCHEMA = make_column_schema(
-    column_type={"enum": ["UInt", "Float"]},
+    column_type={"enum": ["UInt", "Float", "Int"]},
     args={
         "type": "object",
         "properties": {
@@ -149,10 +149,42 @@ NO_ARG_SCHEMA = make_column_schema(
     },
 )
 
+DATETIME64_SCHEMA = make_column_schema(
+    column_type={"const": "DateTime64"},
+    args={
+        "type": "object",
+        "properties": {
+            "precision": {"type": "integer"},
+            "timezone": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
+)
+
 # Get just the type
 _SIMPLE_COLUMN_TYPES = [
     del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
 ]
+
+# Tuple inner types are the same as normal column types except they don't have a name
+_SIMPLE_TUPLE_INNER_TYPES = [
+    del_name_field(col_type)
+    for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA, DATETIME64_SCHEMA]
+]
+
+TUPLE_SCHEMA = make_column_schema(
+    column_type={"const": "Tuple"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_TUPLE_INNER_TYPES},
+            }
+        },
+        "additionalProperties": False,
+    },
+)
 
 AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
@@ -162,7 +194,22 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
+                "items": {"anyOf": [*_SIMPLE_COLUMN_TYPES, TUPLE_SCHEMA]},
+            },
+        },
+        "additionalProperties": False,
+    },
+)
+
+SIMPLE_AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
+    column_type={"const": "SimpleAggregateFunction"},
+    args={
+        "type": "object",
+        "properties": {
+            "func": TYPE_STRING,
+            "arg_types": {
+                "type": "array",
+                "items": {"anyOf": [*_SIMPLE_COLUMN_TYPES, TUPLE_SCHEMA]},
             },
         },
         "additionalProperties": False,
@@ -189,23 +236,12 @@ ENUM_SCHEMA = make_column_schema(
     },
 )
 
-DATETIME64_SCHEMA = make_column_schema(
-    column_type={"const": "DateTime64"},
-    args={
-        "type": "object",
-        "properties": {
-            "precision": {"type": "integer"},
-            "timezone": {"type": "string"},
-        },
-        "additionalProperties": False,
-    },
-)
-
 SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     FIXED_STRING_SCHEMA,
     NO_ARG_SCHEMA,
     AGGREGATE_FUNCTION_SCHEMA,
+    SIMPLE_AGGREGATE_FUNCTION_SCHEMA,
     ENUM_SCHEMA,
     DATETIME64_SCHEMA,
 ]
@@ -236,9 +272,24 @@ ARRAY_SCHEMA = make_column_schema(
     },
 )
 
+MAP_SCHEMA = make_column_schema(
+    column_type={"const": "Map"},
+    args={
+        "type": "object",
+        "properties": {
+            "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+            "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
+        },
+        "additionalProperties": False,
+    },
+)
+
+
 COLUMN_SCHEMAS = [
     *SIMPLE_COLUMN_SCHEMAS,
     ARRAY_SCHEMA,
+    MAP_SCHEMA,
+    TUPLE_SCHEMA,
 ]
 
 
@@ -252,6 +303,7 @@ NESTED_SCHEMA = make_column_schema(
         "additionalProperties": False,
     },
 )
+
 
 SCHEMA_COLUMNS = {
     "type": "array",
@@ -538,6 +590,30 @@ ENTITY_JOIN_RELATIONSHIPS = {
     },
 }
 
+DELETION_SETTINGS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_enabled": {
+            "type": "integer",
+        },
+        "tables": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Names of the tables to delete from.",
+        },
+        "max_rows_to_delete": {
+            "type": "integer",
+        },
+    },
+    "required": ["is_enabled", "tables"],
+    "additionalProperties": False,
+}
+DELETION_PROCESSORS_SCHEMA = registered_class_array_schema(
+    "processor",
+    "DeletionProcessor",
+    "This processor should validate the query against the storage",
+)
+
 # Full schemas:
 
 V1_READABLE_STORAGE_SCHEMA = {
@@ -551,8 +627,11 @@ V1_READABLE_STORAGE_SCHEMA = {
         "readiness_state": READINESS_STATE_SCHEMA,
         "schema": SCHEMA_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
+        "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "required_time_column": {
             "type": ["string", "null"],
             "description": "The name of the required time column specifed in schema",
@@ -581,8 +660,11 @@ V1_WRITABLE_STORAGE_SCHEMA = {
         "schema": SCHEMA_SCHEMA,
         "stream_loader": STREAM_LOADER_SCHEMA,
         "query_processors": STORAGE_QUERY_PROCESSORS_SCHEMA,
+        "deletion_settings": DELETION_SETTINGS_SCHEMA,
+        "deletion_processors": DELETION_PROCESSORS_SCHEMA,
         "mandatory_condition_checkers": STORAGE_MANDATORY_CONDITION_CHECKERS_SCHEMA,
         "allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
+        "delete_allocation_policies": STORAGE_ALLOCATION_POLICIES_SCHEMA,
         "replacer_processor": STORAGE_REPLACER_PROCESSOR_SCHEMA,
         "writer_options": {
             "type": "object",

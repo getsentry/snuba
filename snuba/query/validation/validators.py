@@ -25,7 +25,6 @@ from snuba.query.conditions import (
     build_match,
     get_first_level_and_conditions,
 )
-from snuba.query.data_source.simple import Entity as SimpleEntity
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
@@ -169,25 +168,16 @@ class EntityContainsColumnsValidator(QueryValidator):
             return
 
         query_columns = query.get_all_ast_referenced_columns()
-
-        missing = set()
-        for column in query_columns:
-            if (
-                column.table_name == alias
-                and column.column_name not in self.entity_data_model
-                and column.column_name not in self.mapped_columns
-            ):
-                missing.add(column.column_name)
+        missing = {
+            column.column_name
+            for column in query_columns
+            if column.table_name == alias
+            and column.column_name not in self.entity_data_model
+            and column.column_name not in self.mapped_columns
+        }
 
         if missing:
-            prefix = ""
-            if isinstance(entity := query.get_from_clause(), SimpleEntity):
-                prefix = f"Entity {entity.key.value}: "
-            error_message = (
-                f"{prefix}query columns ({', '.join(missing)}) do not exist"
-                if len(missing) > 1
-                else f"{prefix}Query column '{missing.pop()}' does not exist"
-            )
+            error_message = f"Tag keys ({', '.join(missing)}) not resolved"
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
             elif self.validation_mode == ColumnValidationMode.WARN:

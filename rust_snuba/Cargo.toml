@@ -25,7 +25,7 @@ crate-type = ["cdylib", "rlib"]
 anyhow = { version = "1.0.69", features = ["backtrace"] }
 cadence = "0.29.1"
 chrono = { version = "0.4.26", features = ["serde"] }
-ctrlc = "3.2.5"
+ctrlc = { version = "3.2.5", features = ["termination"] }
 futures = "0.3.21"
 md5 = "0.7.0"
 procspawn = { version = "1.0.0", features = ["json"] }
@@ -33,7 +33,7 @@ pyo3 = { version = "0.18.1", features = ["chrono"] }
 reqwest = { version = "0.11.11", features = ["stream"] }
 rust_arroyo = { version = "*", git = "https://github.com/getsentry/arroyo" }
 sentry = { version = "0.32.0", features = ["anyhow", "tracing"] }
-sentry-kafka-schemas = "0.1.81"
+sentry-kafka-schemas = "0.1.113"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 thiserror = "1.0"
@@ -52,6 +52,8 @@ hyper = "1.2.0"
 tokio-stream = "0.1.15"
 data-encoding = "2.5.0"
 zstd = "0.12.3"
+serde_with = "3.8.1"
+seq-macro = "0.3"
 
 
 [patch.crates-io]

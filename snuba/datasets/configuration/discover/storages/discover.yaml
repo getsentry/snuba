@@ -135,7 +135,6 @@ query_processors:
       merge_table_sources:
         - transactions
         - errors
-  - processor: TableRateLimit
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:

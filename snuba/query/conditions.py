@@ -12,8 +12,6 @@ from snuba.query.matchers import Integer
 from snuba.query.matchers import Literal as LiteralPattern
 from snuba.query.matchers import Or, Param, Pattern, String
 from snuba.query.matchers import SubscriptableReference as SubscriptableReferencePattern
-from snuba.settings import USE_NEW_COMBINE_CONDITIONS
-from snuba.state import get_float_config
 
 
 class ConditionFunctions:
@@ -285,18 +283,14 @@ def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
 
 
 def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
-    flag = get_float_config(
-        "use_new_combine_conditions", default=USE_NEW_COMBINE_CONDITIONS
-    )
-    if flag:
-        return _combine_conditions_new(conditions, function)
-    else:
-        return _combine_conditions_old(conditions, function)
+    """
+    Input:
+        conditions - a sequence of conditions (i.e. something that can go in AND/OR)
+        function - BooleanFunctions.AND or BooleanFunctions.OR
 
-
-def _combine_conditions_new(
-    conditions: Sequence[Expression], function: str
-) -> Expression:
+    Combines all condition in conditions into a single AND/OR condition and returns it.
+    ex: given input ([a=1, b=2, c=3], AND) returns (a=1 AND (b=2 AND c=3))
+    """
     assert function in (BooleanFunctions.AND, BooleanFunctions.OR)
     assert len(conditions) > 0
     if len(conditions) == 1:
@@ -311,27 +305,7 @@ def _combine_conditions_new(
     for i in range(start, len(conditions) - 1, 2):
         new_conds.append(binary_condition(function, conditions[i], conditions[i + 1]))
 
-    return _combine_conditions_new(new_conds, function)
-
-
-def _combine_conditions_old(
-    conditions: Sequence[Expression], function: str
-) -> Expression:
-    """
-    Combine multiple independent conditions in a single function
-    representing an AND or an OR.
-    This is the inverse of get_first_level_conditions.
-    """
-
-    # TODO: Make BooleanFunctions an enum for stricter typing.
-    assert function in (BooleanFunctions.AND, BooleanFunctions.OR)
-    assert len(conditions) > 0
-    if len(conditions) == 1:
-        return conditions[0]
-
-    return binary_condition(
-        function, conditions[0], _combine_conditions(conditions[1:], function)
-    )
+    return _combine_conditions(new_conds, function)
 
 
 CONDITION_MATCH = Or(
