@@ -62,7 +62,7 @@ def _record_query_delivery_callback(
 ) -> None:
     metrics.increment(
         "record_query.delivery_callback",
-        tags={"status": "success" if error is None else "failure"},
+        tags={"status": "failure" if error else "success"},
     )
 
     if error is not None:
@@ -92,7 +92,14 @@ def delete_from_storage(
     attribution_info: Mapping[str, Any],
 ) -> dict[str, Result]:
     """
-    Copied over from delete_query.py with some modifications
+    This method does a series of validation checks (outline below),
+    before `delete_from_tables` produces the delete query messages
+    to the appropriate topic.
+
+    * runtime flag validation `storage_deletes_enabled` (done by region)
+    * storage validation that deletes are enabled
+    * column names are valid (allowed_columns storage setting)
+    * column types are valid
     """
     if not deletes_are_enabled():
         raise DeletesNotEnabledError("Deletes not enabled in this region")
@@ -176,8 +183,4 @@ def construct_or_conditions(conditions: Sequence[Dict[str, Any]]) -> Expression:
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
     into OR conditions for a bulk delete
     """
-    or_conditions = []
-    for cond in conditions:
-        and_condition = _construct_condition(cond)
-        or_conditions.append(and_condition)
-    return combine_or_conditions(or_conditions)
+    return combine_or_conditions([_construct_condition(cond) for cond in conditions])
