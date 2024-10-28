@@ -88,6 +88,8 @@ def test_is_query_select() -> None:
         ("ALTER TABLE eap_spans_local_merge DROP PARTITION '1970-01-01'", True),
         ("CREATE TABLE eap_spans_local_merge (all my fieds)", True),
         ("OPTIMIZE TABLE eap_spans_local", True),
+        ("optimize table eap_spans_local", True),
+        ("optimize   TABLE eap_spans_local", True),
     ],
 )
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
