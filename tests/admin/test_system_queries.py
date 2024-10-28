@@ -8,6 +8,7 @@ from snuba.admin.clickhouse.common import InvalidCustomQuery
 from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
     is_query_alter,
+    is_query_optimize,
     is_query_select,
     is_system_command,
     run_system_query_on_host_with_sql,
@@ -86,10 +87,15 @@ def test_is_query_select() -> None:
         ("system KILL", False),
         ("ALTER TABLE eap_spans_local_merge DROP PARTITION '1970-01-01'", True),
         ("CREATE TABLE eap_spans_local_merge (all my fieds)", True),
+        ("OPTIMIZE TABLE eap_spans_local", True),
     ],
 )
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
-    assert (is_system_command(sudo_query) or is_query_alter(sudo_query)) == expected
+    assert (
+        is_system_command(sudo_query)
+        or is_query_alter(sudo_query)
+        or is_query_optimize(sudo_query)
+    ) == expected
     with pytest.raises(InvalidCustomQuery):
         validate_system_query(sudo_query)
 
