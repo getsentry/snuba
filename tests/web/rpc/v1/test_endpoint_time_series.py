@@ -144,10 +144,6 @@ class TestTimeSeriesApi(BaseApiTest):
                 ),
             ],
             granularity_secs=60,
-            group_by=[
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="endpoint_name"),
-                AttributeKey(type=AttributeKey.TYPE_STRING, name="consumer_group"),
-            ],
         )
         response = self.app.post(
             "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
@@ -175,7 +171,7 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="my.int.field"),
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -187,12 +183,14 @@ class TestTimeSeriesApi(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, 60 * 30, 300)
         ]
-
         assert response.result_timeseries == [
             TimeSeries(
                 label="sum",
                 buckets=expected_buckets,
-                data_points=[DataPoint(data=300, data_present=True)],
+                data_points=[
+                    DataPoint(data=300, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
             )
         ]
 
