@@ -166,13 +166,12 @@ class ClickhousePool(object):
                     conn = self._create_conn(fallback_mode)
 
                 try:
-                    settings = dict(settings or {})
-                    capture_trace = (
-                        capture_trace or settings.get("send_logs_level") == "trace"
-                    )
-
                     if capture_trace:
-                        settings["send_logs_level"] = "trace"
+                        settings = (
+                            {**settings, "send_logs_level": "trace"}
+                            if settings
+                            else {"send_logs_level": "trace"}
+                        )
 
                     def query_execute() -> Any:
                         with sentry_sdk.start_span(
@@ -193,7 +192,7 @@ class ClickhousePool(object):
 
                     result_data: Sequence[Any]
                     trace_output = ""
-                    if capture_trace:
+                    if settings and settings.get("send_logs_level") == "trace":
                         with capture_logging() as buffer:
                             result_data = query_execute()
                             trace_output = buffer.getvalue()
