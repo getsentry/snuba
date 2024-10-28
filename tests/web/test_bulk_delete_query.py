@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Mapping, Optional
 from unittest.mock import Mock, patch
 
@@ -20,7 +21,8 @@ CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
     "group.id": "lwd-search-issues",
     "enable.auto.commit": True,
-    "auto.offset.reset": "latest",
+    # helps diagnose failures
+    "debug": "broker,topic,msg",
 }
 
 
@@ -44,6 +46,8 @@ def test_delete_success(mock_enforce_max_row: Mock) -> None:
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
     attr_info = get_attribution_info()
 
+    # just give in second before subscribing
+    time.sleep(2.0)
     consumer.subscribe([Topic.LW_DELETIONS.value])
 
     result = delete_from_storage(storage, conditions, attr_info)
