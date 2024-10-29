@@ -112,8 +112,8 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
     "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_INT,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_INT,
+    "sentry.duration_ms": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
     "sentry.retention_days": AttributeKey.Type.TYPE_INT,
     "sentry.name": AttributeKey.Type.TYPE_STRING,
     "sentry.sample_weight": AttributeKey.Type.TYPE_FLOAT,

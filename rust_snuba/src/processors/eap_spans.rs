@@ -36,12 +36,11 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
-    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-
     if !ORGANIZATIONS_ALLOWED_INSERTIONS.contains(&msg.organization_id) {
         return Ok(InsertBatch::skip());
     }
 
+    let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: EAPSpan = msg.try_into()?;
 
     span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
