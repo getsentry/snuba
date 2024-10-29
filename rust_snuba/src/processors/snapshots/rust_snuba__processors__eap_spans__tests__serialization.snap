@@ -82,9 +82,9 @@ expression: span
   "attr_str_9": {
     "sentry.environment": "development"
   },
-  "duration_ms": 152,
+  "duration_micro": 152158,
   "end_timestamp": 1721319572768806,
-  "exclusive_time_ms": 0.228,
+  "exclusive_time_micro": 228,
   "is_segment": true,
   "name": "/api/0/relays/projectconfigs/",
   "organization_id": 1,
@@ -92,8 +92,7 @@ expression: span
   "project_id": 1,
   "retention_days": 90,
   "sampling_factor": 0.02,
-  "sampling_weight": 50.0,
-  "sampling_weight_2": 50,
+  "sampling_weight": 50,
   "segment_id": 9832388815107059821,
   "segment_name": "/api/0/relays/projectconfigs/",
   "service": "1",
