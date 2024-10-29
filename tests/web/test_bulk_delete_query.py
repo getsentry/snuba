@@ -24,6 +24,7 @@ CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
     "group.id": "lwd-search-issues",
     "enable.auto.commit": True,
+    "enable.auto.offset.store": False,
     # helps diagnose failures
     "debug": "broker,topic,msg",
 }
