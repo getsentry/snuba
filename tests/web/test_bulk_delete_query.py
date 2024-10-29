@@ -7,12 +7,15 @@ from unittest.mock import Mock, patch
 import pytest
 import rapidjson
 from confluent_kafka import Consumer
+from confluent_kafka.admin import AdminClient
 
 from snuba import settings
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.exceptions import InvalidQueryException
 from snuba.state import set_config
+from snuba.utils.manage_topics import create_topics
+from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
 from snuba.web.bulk_delete_query import _get_kafka_producer, delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
@@ -41,6 +44,9 @@ def get_attribution_info(
 
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
 def test_delete_success(mock_enforce_max_row: Mock) -> None:
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [Topic.LW_DELETIONS_SEARCH_ISSUES])
+
     consumer = Consumer(CONSUMER_CONFIG)
     storage = get_writable_storage(StorageKey("search_issues"))
     conditions = {"project_id": [1], "group_id": [1, 2, 3, 4]}
@@ -48,13 +54,13 @@ def test_delete_success(mock_enforce_max_row: Mock) -> None:
 
     # just give in second before subscribing
     time.sleep(2.0)
-    consumer.subscribe([Topic.LW_DELETIONS.value])
+    consumer.subscribe([Topic.LW_DELETIONS_SEARCH_ISSUES.value])
 
     result = delete_from_storage(storage, conditions, attr_info)
     assert result["search_issues_local_v2"]["data"] == [{"rows_to_delete": 10}]
 
     # make sure message got delivered
-    p = _get_kafka_producer()
+    p = _get_kafka_producer(Topic.LW_DELETIONS_SEARCH_ISSUES)
     p.flush()
 
     kafka_msg = consumer.poll(10.0)

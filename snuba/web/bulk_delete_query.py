@@ -10,7 +10,7 @@ from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storage import StorageKey, WritableTableStorage
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -43,18 +43,27 @@ class DeleteQueryMessage(TypedDict):
     tenant_ids: Mapping[str, str | int]
 
 
-delete_kfk: Producer | None = None
+PRODUCER_MAP: Mapping[str, Producer] = {}
+STORAGE_TOPIC: Mapping[str, Topic] = {
+    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_SEARCH_ISSUES
+}
 
 
-def _get_kafka_producer() -> Producer:
-    global delete_kfk
-    if delete_kfk is None:
-        delete_kfk = Producer(
+class InvalidStorageTopic(Exception):
+    pass
+
+
+def _get_kafka_producer(topic: Topic) -> Producer:
+    producer = PRODUCER_MAP.get(topic.value)
+    if not producer:
+
+        producer = Producer(
             build_kafka_producer_configuration(
-                topic=Topic.LW_DELETIONS,
+                topic=topic,
             )
         )
-    return delete_kfk
+        PRODUCER_MAP[topic.value] = producer
+    return producer
 
 
 def _record_query_delivery_callback(
@@ -70,14 +79,16 @@ def _record_query_delivery_callback(
 
 
 def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
+    storage_name = delete_query["storage_name"]
+    topic = STORAGE_TOPIC.get(storage_name)
+    if not topic:
+        raise InvalidStorageTopic(f"No topic found for {storage_name}")
     try:
-        producer = _get_kafka_producer()
+        producer = _get_kafka_producer(topic)
         data = rapidjson.dumps(delete_query)
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
-            settings.KAFKA_TOPIC_MAP.get(
-                Topic.LW_DELETIONS.value, Topic.LW_DELETIONS.value
-            ),
+            settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value),
             data.encode("utf-8"),
             on_delivery=_record_query_delivery_callback,
         )
