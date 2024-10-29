@@ -44,8 +44,8 @@ schema:
           },
       },
     ]
-  local_table_name: spans_num_attrs_2_local
-  dist_table_name: spans_num_attrs_2_dist
+  local_table_name: spans_num_attrs_3_local
+  dist_table_name: spans_num_attrs_3_dist
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
