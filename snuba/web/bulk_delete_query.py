@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Mapping, Optional, Sequence, TypedDict
+from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 import rapidjson
 from confluent_kafka import KafkaError
@@ -10,7 +10,8 @@ from snuba import environment, settings
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query
-from snuba.datasets.storage import StorageKey, WritableTableStorage
+from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query.conditions import combine_or_conditions
 from snuba.query.data_source.simple import Table
 from snuba.query.dsl import literal
@@ -43,7 +44,7 @@ class DeleteQueryMessage(TypedDict):
     tenant_ids: Mapping[str, str | int]
 
 
-PRODUCER_MAP: Mapping[str, Producer] = {}
+PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
     StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_SEARCH_ISSUES
 }
