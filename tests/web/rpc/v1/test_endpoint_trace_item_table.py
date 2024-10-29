@@ -13,15 +13,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
-from sentry_protos.snuba.v1.request_common_pb2 import (
-    PageToken,
-    RequestMeta,
-    ResponseMeta,
-)
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
     AttributeValue,
+    ExtrapolationMode,
     Function,
     VirtualColumnContext,
 )
@@ -186,7 +183,6 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -207,6 +203,7 @@ class TestTraceItemTable(BaseApiTest):
                     )
                 )
             ],
+            limit=61,
         )
         response = EndpointTraceItemTable().execute(message)
 
@@ -218,7 +215,6 @@ class TestTraceItemTable(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=60),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response
 
@@ -233,7 +229,6 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filter=TraceItemFilter(
                 or_filter=OrFilter(
@@ -299,7 +294,6 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=60),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response
 
@@ -315,7 +309,6 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -386,7 +379,6 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             page_token=PageToken(offset=limit),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response.page_token == expected_response.page_token
         # make sure columns are ordered in the order they are requested
@@ -478,6 +470,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
                 Column(
@@ -487,6 +480,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="avg(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
             ],
@@ -551,6 +545,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -597,6 +592,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -649,6 +645,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -662,6 +659,7 @@ class TestTraceItemTable(BaseApiTest):
                                 type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                             ),
                             label="avg(eap.measurment)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         )
                     )
                 ),
@@ -708,6 +706,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
                         ),
                         label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
