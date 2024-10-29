@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations
+from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
 from snuba.utils.constants import ATTRIBUTE_BUCKETS
@@ -18,11 +18,21 @@ from snuba.utils.schemas import (
 
 
 class Migration(migration.ClickhouseNodeMigration):
+    """
+    This migration creates a table meant to store just the attributes seen in a particular org.
+    The table is populated by a separate materialized view for each type of attribute.
+    """
+
     blocking = False
     storage_set_key = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
+    granularity = "8192"
 
-    str_mv = "spans_str_attrs_3_mv"
-    str_local_table = "spans_str_attrs_3_local"
+    old_str_mv = "spans_str_attrs_2_mv"
+    old_str_local_table = "spans_str_attrs_2_local"
+    old_str_dist_table = "spans_str_attrs_2_dist"
+    new_str_mv = "spans_str_attrs_3_mv"
+    new_str_local_table = "spans_str_attrs_3_local"
+    new_str_dist_table = "spans_str_attrs_3_dist"
     str_columns: Sequence[Column[Modifiers]] = [
         Column("organization_id", UInt(64)),
         Column("project_id", UInt(64)),
@@ -33,8 +43,12 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("count", SimpleAggregateFunction("sum", [UInt(64)])),
     ]
 
-    num_mv = "spans_num_attrs_3_mv"
-    num_local_table = "spans_num_attrs_3_local"
+    old_num_mv = "spans_num_attrs_2_mv"
+    old_num_local_table = "spans_num_attrs_2_local"
+    old_num_dist_table = "spans_num_attrs_2_dist"
+    new_num_mv = "spans_num_attrs_3_mv"
+    new_num_local_table = "spans_num_attrs_3_local"
+    new_num_dist_table = "spans_num_attrs_3_dist"
     num_columns: Sequence[Column[Modifiers]] = [
         Column("organization_id", UInt(64)),
         Column("project_id", UInt(64)),
@@ -48,21 +62,70 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
+            # first, drop the old MVs
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.str_mv,
+                table_name=self.old_str_mv,
                 target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.num_mv,
+                table_name=self.old_num_mv,
                 target=OperationTarget.LOCAL,
+            ),
+            # next, drop the old dist tables
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.old_str_dist_table,
+                target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.old_num_dist_table,
+                target=OperationTarget.DISTRIBUTED,
+            ),
+            # next, drop the old local tables
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.old_str_local_table,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.old_num_local_table,
+                target=OperationTarget.LOCAL,
+            ),
+            # now, create new versions of the tables & MVs
+            operations.CreateTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_str_local_table,
+                engine=table_engines.AggregatingMergeTree(
+                    storage_set=self.storage_set_key,
+                    primary_key="(organization_id, attr_key)",
+                    order_by="(organization_id, attr_key, attr_value, project_id, timestamp, retention_days)",
+                    partition_by="(retention_days, toMonday(timestamp))",
+                    settings={
+                        "index_granularity": self.granularity,
+                    },
+                    ttl="timestamp + toIntervalDay(retention_days)",
+                ),
+                columns=self.str_columns,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.CreateTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_str_dist_table,
+                engine=table_engines.Distributed(
+                    local_table_name=self.new_str_local_table, sharding_key=None
+                ),
+                columns=self.str_columns,
+                target=OperationTarget.DISTRIBUTED,
             ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set_key,
-                view_name=self.str_mv,
+                view_name=self.new_str_mv,
                 columns=self.str_columns,
-                destination_table_name=self.str_local_table,
+                destination_table_name=self.new_str_local_table,
                 target=OperationTarget.LOCAL,
                 query=f"""
 SELECT
@@ -92,11 +155,36 @@ GROUP BY
     retention_days
 """,
             ),
+            operations.CreateTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_num_local_table,
+                engine=table_engines.AggregatingMergeTree(
+                    storage_set=self.storage_set_key,
+                    primary_key="(organization_id, attr_key)",
+                    order_by="(organization_id, attr_key, attr_min_value, attr_max_value, timestamp, project_id, retention_days)",
+                    partition_by="(retention_days, toMonday(timestamp))",
+                    settings={
+                        "index_granularity": self.granularity,
+                    },
+                    ttl="timestamp + toIntervalDay(retention_days)",
+                ),
+                columns=self.num_columns,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.CreateTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_num_dist_table,
+                engine=table_engines.Distributed(
+                    local_table_name=self.new_num_local_table, sharding_key=None
+                ),
+                columns=self.num_columns,
+                target=OperationTarget.DISTRIBUTED,
+            ),
             operations.CreateMaterializedView(
                 storage_set=self.storage_set_key,
-                view_name=self.num_mv,
+                view_name=self.new_num_mv,
                 columns=self.num_columns,
-                destination_table_name=self.num_local_table,
+                destination_table_name=self.new_num_local_table,
                 target=OperationTarget.LOCAL,
                 query=f"""
 SELECT
@@ -113,7 +201,7 @@ LEFT ARRAY JOIN
     arrayConcat(
         {",".join(f"CAST(attr_num_{n}, 'Array(Tuple(String, Float64))')" for n in range(ATTRIBUTE_BUCKETS))},
         array(
-            tuple('sentry.duration_ms', `duration_ms`::Float64)
+            tuple('sentry.duration_ms', (duration_micro / 1000)::Float64)
         )
     ) AS attrs
 GROUP BY
@@ -131,12 +219,32 @@ GROUP BY
         return [
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.str_mv,
+                table_name=self.new_str_mv,
                 target=OperationTarget.LOCAL,
             ),
             operations.DropTable(
                 storage_set=self.storage_set_key,
-                table_name=self.num_mv,
+                table_name=self.new_str_local_table,
                 target=OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_str_dist_table,
+                target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_num_mv,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_num_local_table,
+                target=OperationTarget.LOCAL,
+            ),
+            operations.DropTable(
+                storage_set=self.storage_set_key,
+                table_name=self.new_num_dist_table,
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
