@@ -9,6 +9,7 @@ from enum import Enum
 from functools import partial
 from typing import (
     Any,
+    Dict,
     Generic,
     Iterator,
     List,
@@ -22,8 +23,12 @@ from typing import (
 )
 from uuid import UUID
 
+from google.protobuf.json_format import ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    CreateSubscriptionsRequest,
+    TraceItemTableRequest,
+)
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -131,7 +136,7 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     Represents the state of an RPC subscription.
     """
 
-    trace_item_table_request: str
+    trace_item_table_request: Dict[str, Any]
 
     def validate(self) -> None:
         # TODO: Validate data
@@ -148,10 +153,9 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     ) -> TraceItemTableRequest:
 
         # Make table request
-        table_request = TraceItemTableRequest()
-        table_request.ParseFromString(self.table_request.encode("utf-8"))
-        # TODO: Add time conditions etc
-
+        table_request = ParseDict(
+            self.trace_item_table_request, TraceItemTableRequest()
+        )
         # Add time conditions
         start_time_proto = Timestamp()
         start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
@@ -183,13 +187,28 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
             tenant_ids=data.get("tenant_ids", dict()),
         )
 
+    @classmethod
+    def from_proto(
+        cls, item: CreateSubscriptionsRequest, entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+        return RPCSubscriptionData(
+            project_id=item.project_id,
+            time_window_sec=item.time_window,
+            resolution_sec=item.resolution,
+            trace_item_table_request=item.table_request,
+            entity=entity,
+            metadata={},
+            tenant_ids={},
+        )
+
     def to_dict(self) -> Mapping[str, Any]:
         subscription_data_dict = {
             "project_id": self.project_id,
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "trace_item_table_request": self.trace_item_table_request,
-            "subscription_type": SubscriptionType.RPC,
+            "subscription_type": SubscriptionType.RPC.value,
         }
 
         subscription_processors = self.entity.get_subscription_processors()
@@ -359,7 +378,7 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
-            "subscription_type": SubscriptionType.SNQL,
+            "subscription_type": SubscriptionType.SNQL.value,
         }
 
         subscription_processors = self.entity.get_subscription_processors()

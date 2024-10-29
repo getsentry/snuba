@@ -4,6 +4,7 @@ from typing import cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
+from google.protobuf.json_format import MessageToDict
 from sentry_kafka_schemas.schema_types import events_subscription_results_v1
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
@@ -49,7 +50,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         request, result = value.result
 
         if isinstance(request, TraceItemTableRequest):
-            original_body = {"serialized_request": request.SerializeToString()}
+            original_body = {"serialized_request": MessageToDict(request)}
         else:
             original_body = {**request.original_body}
 
