@@ -51,6 +51,13 @@ def _convert_result_timeseries(
 
     # create a mapping for each timeseries of timestamp: row to fill data points not returned in the query
     result_timeseries_timestamp_to_row = defaultdict(dict)
+    query_duration = (
+        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
+    )
+    time_buckets = [
+        Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
+        for secs in range(0, query_duration, request.granularity_secs)
+    ]
 
     for row in data:
         group_by_map = {}
@@ -63,7 +70,9 @@ def _convert_result_timeseries(
         for col_name in aggregation_labels:
             if not result_timeseries.get((group_by_key, col_name), None):
                 result_timeseries[(group_by_key, col_name)] = TimeSeries(
-                    group_by_attributes=group_by_map, label=col_name
+                    group_by_attributes=group_by_map,
+                    label=col_name,
+                    buckets=time_buckets,
                 )
             result_timeseries_timestamp_to_row[(group_by_key, col_name)][
                 int(datetime.fromisoformat(row["time"]).timestamp())
@@ -71,13 +80,7 @@ def _convert_result_timeseries(
 
     # Go through every possible time bucket in the query, if there's row data for it, fill in its data
     # otherwise put a dummy datapoint in
-    query_duration = (
-        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
-    )
-    time_buckets = [
-        Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
-        for secs in range(0, query_duration, request.granularity_secs)
-    ]
+
     for bucket in time_buckets:
         for timeseries_key, timeseries in result_timeseries.items():
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
@@ -89,7 +92,6 @@ def _convert_result_timeseries(
                 timeseries.data_points.append(
                     DataPoint(data=row_data[timeseries.label], data_present=True)
                 )
-            timeseries.buckets.append(bucket)
     return result_timeseries.values()
 
 

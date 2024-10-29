@@ -14,8 +14,13 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    AttributeValue,
     ExtrapolationMode,
     Function,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
 )
 
 from snuba.datasets.storages.factory import get_storage
@@ -369,3 +374,82 @@ class TestTimeSeriesApi(BaseApiTest):
             ),
         ]
         pass
+
+    def test_with_filters(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            tags={"customer": "bob"},
+        )
+
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 999)],
+            tags={"customer": "alice"},
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+                debug=True,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="bob"),
+                )
+            ),
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="avg",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=1, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
