@@ -1,8 +1,9 @@
 use anyhow::Context;
 use chrono::DateTime;
+use once_cell::sync::Lazy;
 use seq_macro::seq;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -15,6 +16,9 @@ use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub const ATTRS_SHARD_FACTOR: usize = 20;
+
+static ORGANIZATIONS_ALLOWED_INSERTIONS: Lazy<BTreeSet<u64>> =
+    Lazy::new(|| BTreeSet::from([1, 69]));
 
 macro_rules! seq_attrs {
     ($($tt:tt)*) => {
@@ -33,6 +37,11 @@ pub fn process_message(
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
+
+    if !ORGANIZATIONS_ALLOWED_INSERTIONS.contains(&msg.organization_id) {
+        return Ok(InsertBatch::skip());
+    }
+
     let mut span: EAPSpan = msg.try_into()?;
 
     span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
@@ -210,7 +219,7 @@ impl From<FromSpanMessage> for EAPSpan {
 
             // lower precision to compensate floating point errors
             res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
-            res.sampling_weight *= (1.0 / res.sampling_factor) as u64;
+            res.sampling_weight = (1.0 / res.sampling_factor) as u64;
 
             if let Some(data) = from.data {
                 for (k, v) in data {
