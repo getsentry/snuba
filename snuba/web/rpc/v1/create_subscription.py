@@ -1,7 +1,9 @@
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    CreateSubscriptionsRequest,
+    CreateSubscriptionsRequest as CreateSubscriptionsRequestProto,
+)
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     CreateSubscriptionsResponse,
 )
 
@@ -10,28 +12,29 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query.data_source.simple import Entity
 from snuba.subscriptions.data import RPCSubscriptionData
-from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.web.rpc import RPCEndpoint
 
 
-class EndpointCreateSubscriptions(
-    RPCEndpoint[CreateSubscriptionsRequest, CreateSubscriptionsResponse]
+class CreateSubscriptionsRequest(
+    RPCEndpoint[CreateSubscriptionsRequestProto, CreateSubscriptionsResponse]
 ):
     @classmethod
     def version(cls) -> str:
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[CreateSubscriptionsRequest]:
-        return CreateSubscriptionsRequest
+    def request_class(cls) -> Type[CreateSubscriptionsRequestProto]:
+        return CreateSubscriptionsRequestProto
 
     @classmethod
     def response_class(cls) -> Type[CreateSubscriptionsResponse]:
         return CreateSubscriptionsResponse
 
     def _execute(
-        self, in_msg: CreateSubscriptionsRequest
+        self, in_msg: CreateSubscriptionsRequestProto
     ) -> CreateSubscriptionsResponse:
+        from snuba.subscriptions.subscription import SubscriptionCreator
+
         # TODO: This is hardcoded still
         entity = Entity(
             key=EntityKey("eap_spans"),

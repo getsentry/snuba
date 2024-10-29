@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
@@ -9,7 +10,6 @@ from enum import Enum
 from functools import partial
 from typing import (
     Any,
-    Dict,
     Generic,
     Iterator,
     List,
@@ -23,7 +23,6 @@ from typing import (
 )
 from uuid import UUID
 
-from google.protobuf.json_format import ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     CreateSubscriptionsRequest,
@@ -136,7 +135,7 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     Represents the state of an RPC subscription.
     """
 
-    trace_item_table_request: Dict[str, Any]
+    trace_item_table_request: str
 
     def validate(self) -> None:
         # TODO: Validate data
@@ -153,9 +152,8 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     ) -> TraceItemTableRequest:
 
         # Make table request
-        table_request = ParseDict(
-            self.trace_item_table_request, TraceItemTableRequest()
-        )
+        table_request = TraceItemTableRequest()
+        table_request.ParseFromString(base64.b64decode(self.trace_item_table_request))
         # Add time conditions
         start_time_proto = Timestamp()
         start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
@@ -196,7 +194,9 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
             project_id=item.project_id,
             time_window_sec=item.time_window,
             resolution_sec=item.resolution,
-            trace_item_table_request=item.table_request,
+            trace_item_table_request=base64.b64encode(
+                item.table_request.SerializeToString()
+            ).decode("utf-8"),
             entity=entity,
             metadata={},
             tenant_ids={},

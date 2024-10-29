@@ -50,7 +50,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         request, result = value.result
 
         if isinstance(request, TraceItemTableRequest):
-            original_body = {"serialized_request": MessageToDict(request)}
+            original_body = {**MessageToDict(request)}
         else:
             original_body = {**request.original_body}
 
