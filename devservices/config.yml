@@ -35,7 +35,7 @@ services:
       - "9009:9009"
       - "8123:8123"
     volumes:
-      - "clickhouse:/var/lib/clickhouse"
+      - "clickhouse-data:/var/lib/clickhouse"
       - "./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml"
     extra_hosts:
       host.docker.internal: host-gateway
@@ -71,7 +71,7 @@ services:
       - sentry
 
 volumes:
-  clickhouse:
+  clickhouse-data:
 
 networks:
   sentry:
