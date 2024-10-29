@@ -36,7 +36,7 @@ simplejson==3.17.6
 snuba-sdk==3.0.39
 structlog==22.3.0
 structlog-sentry==2.0.0
-sql-metadata==2.6.0
+sql-metadata==2.14.0
 typing-extensions==4.8.0
 urllib3==1.26.12
 pyuwsgi==2.0.23
