@@ -394,13 +394,14 @@ class ColumnToMilliseconds(ColumnToFunction):
         self,
         from_table_name: Optional[str],
         from_col_name: str,
+        to_col_name: str,
     ) -> None:
         super().__init__(
             from_table_name,
             from_col_name,
             "divide",
             (
-                ColumnExpr(None, None, from_col_name),
+                ColumnExpr(None, None, to_col_name),
                 LiteralExpr(alias=None, value=1000),
             ),
         )

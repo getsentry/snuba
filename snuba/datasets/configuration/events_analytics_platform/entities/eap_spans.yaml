@@ -38,12 +38,14 @@ storages:
             from_col_name: timestamp
             to_table_name: null
             to_col_name: _sort_timestamp
-        - mapper: ColumnToMicroseconds
+        - mapper: ColumnToMilliseconds
           args:
             from_col_name: duration_ms
-        - mapper: ColumnToMicroseconds
+            to_col_name: duration_micro
+        - mapper: ColumnToMilliseconds
           args:
             from_col_name: exclusive_time_ms
+            to_col_name: exclusive_time_micro
 
       subscriptables:
         - mapper: SubscriptableHashBucketMapper
