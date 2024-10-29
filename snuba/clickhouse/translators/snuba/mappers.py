@@ -392,12 +392,11 @@ class FunctionNameMapper(FunctionCallMapper):
 class ColumnToMilliseconds(ColumnToFunction):
     def __init__(
         self,
-        from_table_name: Optional[str],
         from_col_name: str,
         to_col_name: str,
     ) -> None:
         super().__init__(
-            from_table_name,
+            None,
             from_col_name,
             "divide",
             (
