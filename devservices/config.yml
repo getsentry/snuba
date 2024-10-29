@@ -37,6 +37,8 @@ services:
     volumes:
       - "clickhouse:/var/lib/clickhouse"
       - "./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml"
+    extra_hosts:
+      host.docker.internal: host-gateway
     networks:
       - sentry
   snuba:
