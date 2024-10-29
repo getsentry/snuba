@@ -89,7 +89,7 @@ TRequest = TypeVar("TRequest")
 
 
 @dataclass(frozen=True, kw_only=True)
-class SubscriptionData(ABC, Generic[TRequest]):
+class _SubscriptionData(ABC, Generic[TRequest]):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -117,7 +117,7 @@ class SubscriptionData(ABC, Generic[TRequest]):
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> _SubscriptionData[TRequest]:
         raise NotImplementedError
 
     @abstractmethod
@@ -126,12 +126,12 @@ class SubscriptionData(ABC, Generic[TRequest]):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RPCSubscriptionData(SubscriptionData[TraceItemTableRequest]):
+class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     """
     Represents the state of an RPC subscription.
     """
 
-    table_request: str
+    trace_item_table_request: str
 
     def validate(self) -> None:
         # TODO: Validate data
@@ -177,7 +177,7 @@ class RPCSubscriptionData(SubscriptionData[TraceItemTableRequest]):
             project_id=data["project_id"],
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
-            table_request=data["table_request"],
+            trace_item_table_request=data["trace_item_table_request"],
             entity=entity,
             metadata=metadata,
             tenant_ids=data.get("tenant_ids", dict()),
@@ -188,7 +188,7 @@ class RPCSubscriptionData(SubscriptionData[TraceItemTableRequest]):
             "project_id": self.project_id,
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
-            "table_request": self.table_request,
+            "trace_item_table_request": self.trace_item_table_request,
             "subscription_type": SubscriptionType.RPC,
         }
 
@@ -200,7 +200,7 @@ class RPCSubscriptionData(SubscriptionData[TraceItemTableRequest]):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData[Request]):
+class SnQLSubscriptionData(_SubscriptionData[Request]):
     """
     Represents the state of a SnQL subscription.
     """
@@ -334,7 +334,7 @@ class SnQLSubscriptionData(SubscriptionData[Request]):
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
@@ -367,6 +367,9 @@ class SnQLSubscriptionData(SubscriptionData[Request]):
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
         return subscription_data_dict
+
+
+SubscriptionData = Union[RPCSubscriptionData, SnQLSubscriptionData]
 
 
 class Subscription(NamedTuple):
@@ -412,11 +415,15 @@ class SubscriptionScheduler(ABC):
         raise NotImplementedError
 
 
+SubscriptionRequest = Union[Request, TraceItemTableRequest]
+SubscriptionResult = Result
+
+
 class SubscriptionTaskResultFuture(NamedTuple):
     task: ScheduledSubscriptionTask
-    future: Future[Tuple[Request, Result]]
+    future: Future[Tuple[SubscriptionRequest, SubscriptionResult]]
 
 
 class SubscriptionTaskResult(NamedTuple):
     task: ScheduledSubscriptionTask
-    result: Tuple[Request, Result]
+    result: Tuple[SubscriptionRequest, SubscriptionResult]

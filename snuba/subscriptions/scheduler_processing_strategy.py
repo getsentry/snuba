@@ -481,7 +481,7 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
                         if isinstance(task.task.subscription.data, RPCSubscriptionData):
                             logger.warning(
                                 "Skipping malformed subscription query %r in scheduler",
-                                task.task.subscription.data.table_request,
+                                task.task.subscription.data.trace_item_table_request,
                             )
                         continue
 

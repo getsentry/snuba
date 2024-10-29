@@ -5,6 +5,7 @@ from typing import cast
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
 from sentry_kafka_schemas.schema_types import events_subscription_results_v1
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.exceptions import InvalidQueryException
@@ -16,7 +17,6 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
-    SubscriptionType,
     SubscriptionWithMetadata,
 )
 from snuba.utils.codecs import Codec, Encoder
@@ -35,8 +35,8 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
 
-        subscription_type = data.get("subscription_type", SubscriptionType.SNQL)
-        if subscription_type == SubscriptionType.RPC:
+        is_rpc_subscription = data.get("trace_item_table_request") is not None
+        if is_rpc_subscription:
             return RPCSubscriptionData.from_dict(data, self.entity_key)
 
         return SnQLSubscriptionData.from_dict(data, self.entity_key)
@@ -48,11 +48,16 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         subscription_id = str(subscription.identifier)
         request, result = value.result
 
+        if isinstance(request, TraceItemTableRequest):
+            original_body = {"serialized_request": request.SerializeToString()}
+        else:
+            original_body = {**request.original_body}
+
         data: events_subscription_results_v1.SubscriptionResult = {
             "version": 3,
             "payload": {
                 "subscription_id": subscription_id,
-                "request": {**request.original_body},
+                "request": original_body,
                 "result": {
                     "data": result["data"],
                     "meta": result["meta"],
@@ -101,14 +106,15 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
         subscription_identifier = value.key.decode("utf-8")
 
         scheduled_subscription_dict = rapidjson.loads(payload_value.decode("utf-8"))
-        subscription_type = scheduled_subscription_dict["task"]["data"].get(
-            "subscription_type", SubscriptionType.SNQL
+        is_rpc_subscription = (
+            scheduled_subscription_dict["task"]["data"].get("trace_item_table_request")
+            is not None
         )
 
         entity_key = EntityKey(scheduled_subscription_dict["entity"])
 
         subscription_data: RPCSubscriptionData | SnQLSubscriptionData
-        if subscription_type == SubscriptionType.RPC:
+        if is_rpc_subscription:
             subscription_data = RPCSubscriptionData.from_dict(
                 scheduled_subscription_dict["task"]["data"], entity_key
             )

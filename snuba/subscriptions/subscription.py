@@ -5,6 +5,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import enforce_table_writer, get_entity
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.request import Request
 from snuba.subscriptions.data import (
     PartitionId,
     SubscriptionData,
@@ -14,6 +15,7 @@ from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import run_query
+from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 
 redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
 
@@ -52,7 +54,10 @@ class SubscriptionCreator:
 
     def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
         request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
-        run_query(self.dataset, request, timer)
+        if isinstance(request, Request):
+            run_query(self.dataset, request, timer)
+        else:
+            EndpointTraceItemTable().execute(request)
 
 
 class SubscriptionDeleter:
