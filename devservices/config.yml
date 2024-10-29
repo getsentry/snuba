@@ -18,7 +18,7 @@ x-sentry-service-config:
         branch: main
         repo_link: git@github.com:getsentry/sentry-shared-kafka.git
     snuba:
-      description: "snuba"
+      description: "Service that provides a rich data model on top of Clickhouse together with a fast ingestion consumer and a query optimizer"
   modes:
     default: [redis, kafka, clickhouse]
     containerized: [clickhouse, redis, kafka, snuba]
