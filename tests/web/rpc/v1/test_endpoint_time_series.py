@@ -151,12 +151,88 @@ class TestTimeSeriesApi(BaseApiTest):
         assert response.status_code == 200
 
     def test_sum(self) -> None:
-        # store a a test metric with a value of 10, every second of one hour
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 60 * 30
         store_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="avg",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=1, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
+    def test_with_group_by(self) -> None:
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            tags={"consumer_group": "a", "environment": "prod"},
+        )
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 10)],
+            tags={"consumer_group": "z", "environment": "prod"},
+        )
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 100)],
+            tags={"consumer_group": "z", "environment": "dev"},
         )
 
         message = TimeSeriesRequest(
@@ -176,13 +252,103 @@ class TestTimeSeriesApi(BaseApiTest):
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
             ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="consumer_group"),
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="environment"),
+            ],
             granularity_secs=300,
         )
+
         response = EndpointTimeSeries().execute(message)
         expected_buckets = [
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, 60 * 30, 300)
         ]
+
+        def sort_key(t: TimeSeries) -> tuple[str, str]:
+            return (
+                t.group_by_attributes["consumer_group"],
+                t.group_by_attributes["environment"],
+            )
+
+        assert sorted(response.result_timeseries, key=sort_key) == sorted(
+            [
+                TimeSeries(
+                    label="sum",
+                    buckets=expected_buckets,
+                    group_by_attributes={"consumer_group": "a", "environment": "prod"},
+                    data_points=[
+                        DataPoint(data=300, data_present=True)
+                        for _ in range(len(expected_buckets))
+                    ],
+                ),
+                TimeSeries(
+                    label="sum",
+                    buckets=expected_buckets,
+                    group_by_attributes={"consumer_group": "z", "environment": "prod"},
+                    data_points=[
+                        DataPoint(data=3000, data_present=True)
+                        for _ in range(len(expected_buckets))
+                    ],
+                ),
+                TimeSeries(
+                    label="sum",
+                    buckets=expected_buckets,
+                    group_by_attributes={"consumer_group": "z", "environment": "dev"},
+                    data_points=[
+                        DataPoint(data=30000, data_present=True)
+                        for _ in range(len(expected_buckets))
+                    ],
+                ),
+            ],
+            key=sort_key,
+        )
+
+    def test_with_no_data_present(self) -> None:
+        granularity_secs = 300
+        query_duration = 60 * 30
+        store_timeseries(
+            BASE_TIME,
+            1800,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        import pdb
+
+        pdb.set_trace()
         assert response.result_timeseries == [
             TimeSeries(
                 label="sum",
@@ -191,14 +357,14 @@ class TestTimeSeriesApi(BaseApiTest):
                     DataPoint(data=300, data_present=True)
                     for _ in range(len(expected_buckets))
                 ],
-            )
+            ),
+            TimeSeries(
+                label="avg",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=1, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
         ]
-
-    def test_with_multiple_aggregations(self) -> None:
-        pass
-
-    def test_with_group_by(self) -> None:
-        pass
-
-    def test_with_no_data_present(self) -> None:
         pass
