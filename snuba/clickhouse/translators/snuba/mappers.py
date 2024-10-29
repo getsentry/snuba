@@ -386,3 +386,21 @@ class FunctionNameMapper(FunctionCallMapper):
                 exp.accept(children_translator) for exp in expression.parameters
             ),
         )
+
+
+@dataclass(frozen=True)
+class ColumnToMilliseconds(ColumnToFunction):
+    def __init__(
+        self,
+        from_table_name: Optional[str],
+        from_col_name: str,
+    ) -> None:
+        super().__init__(
+            from_table_name,
+            from_col_name,
+            "divide",
+            (
+                ColumnExpr(None, None, from_col_name),
+                LiteralExpr(alias=None, value=1000),
+            ),
+        )
