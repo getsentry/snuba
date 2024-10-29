@@ -50,7 +50,9 @@ def _convert_result_timeseries(
     result_timeseries: dict[tuple[str, str], TimeSeries] = {}
 
     # create a mapping for each timeseries of timestamp: row to fill data points not returned in the query
-    result_timeseries_timestamp_to_row = defaultdict(dict)
+    result_timeseries_timestamp_to_row: defaultdict[
+        tuple[str, str], dict[int, Dict[str, Any]]
+    ] = defaultdict(dict)
     query_duration = (
         request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     )
@@ -164,7 +166,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
 
 class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     @classmethod
-    def version(cls):
+    def version(cls) -> str:
         return "v1"
 
     @classmethod
@@ -195,7 +197,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
 
         return TimeSeriesResponse(
             result_timeseries=list(
-                _convert_result_timeseries(in_msg, res.result.get("data", {}))
+                _convert_result_timeseries(in_msg, res.result.get("data", []))
             ),
             meta=response_meta,
         )
