@@ -193,20 +193,20 @@ class TestTimeSeriesApi(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        assert response.result_timeseries == [
-            TimeSeries(
-                label="sum",
-                buckets=expected_buckets,
-                data_points=[
-                    DataPoint(data=300, data_present=True)
-                    for _ in range(len(expected_buckets))
-                ],
-            ),
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
                 label="avg",
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(data=1, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True)
                     for _ in range(len(expected_buckets))
                 ],
             ),
@@ -311,7 +311,7 @@ class TestTimeSeriesApi(BaseApiTest):
             BASE_TIME,
             1800,
             3600,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            metrics=[DummyMetric("sparse_metric", get_value=lambda x: 1)],
         )
 
         message = TimeSeriesRequest(
@@ -328,13 +328,17 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="sparse_metric"
+                    ),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="sparse_metric"
+                    ),
                     label="avg",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
@@ -346,24 +350,21 @@ class TestTimeSeriesApi(BaseApiTest):
             Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
             for secs in range(0, query_duration, granularity_secs)
         ]
-        import pdb
-
-        pdb.set_trace()
-        assert response.result_timeseries == [
-            TimeSeries(
-                label="sum",
-                buckets=expected_buckets,
-                data_points=[
-                    DataPoint(data=300, data_present=True)
-                    for _ in range(len(expected_buckets))
-                ],
-            ),
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
                 label="avg",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=1, data_present=True)
-                    for _ in range(len(expected_buckets))
+                    DataPoint(data=1, data_present=True),
+                    *[DataPoint() for _ in range(len(expected_buckets) - 1)],
+                ],
+            ),
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=1, data_present=True),
+                    *[DataPoint() for _ in range(len(expected_buckets) - 1)],
                 ],
             ),
         ]

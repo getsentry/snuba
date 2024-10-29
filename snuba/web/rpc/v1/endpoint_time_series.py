@@ -39,15 +39,18 @@ from snuba.web.rpc.common.debug_info import (
 
 
 def _convert_result_timeseries(
-    request: TimeSeriesRequest, data: Iterable[Dict[str, Any]]
+    request: TimeSeriesRequest, data: list[Dict[str, Any]]
 ) -> Iterable[TimeSeries]:
-    # to convert the results, I need to know which were the groupby columns and which ones
+    # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
     aggregation_labels = set([agg.label for agg in request.aggregations])
     group_by_labels = set([attr.name for attr in request.group_by])
 
-    result_timeseries = defaultdict(TimeSeries)
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
+    result_timeseries: dict[tuple[str, str], TimeSeries] = {}
+
+    # create a mapping for each timeseries of timestamp: row to fill data points not returned in the query
+    result_timeseries_timestamp_to_row = defaultdict(dict)
 
     for row in data:
         group_by_map = {}
@@ -56,20 +59,38 @@ def _convert_result_timeseries(
             if col_name in group_by_labels:
                 group_by_map[col_name] = col_value
 
-        group_by_key = "|".join(str(group_by_map.items()))
-
+        group_by_key = "|".join([f"{k},{v}" for k, v in group_by_map.items()])
         for col_name in aggregation_labels:
-            time_series = result_timeseries[(group_by_key, col_name)]
-            time_series.label = col_name
-            time_series.buckets.append(
-                Timestamp(seconds=int(datetime.fromisoformat(row["time"]).timestamp()))
-            )
-            time_series.data_points.append(
-                DataPoint(data=float(row[col_name]), data_present=True)
-            )  # TODO: data not always present
-            if not time_series.group_by_attributes and group_by_map:
-                time_series.group_by_attributes.update(group_by_map)
+            if not result_timeseries.get((group_by_key, col_name), None):
+                result_timeseries[(group_by_key, col_name)] = TimeSeries(
+                    group_by_attributes=group_by_map, label=col_name
+                )
+                # TODO: convert row time to timestamp
+            result_timeseries_timestamp_to_row[(group_by_key, col_name)][
+                int(datetime.fromisoformat(row["time"]).timestamp())
+            ] = row
 
+    # Go through every possible time bucket in the query, if there's row data for it, fill in its data
+    # otherwise put a dummy datapoint in
+    query_duration = (
+        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
+    )
+    time_buckets = [
+        Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
+        for secs in range(0, query_duration, request.granularity_secs)
+    ]
+    for bucket in time_buckets:
+        for timeseries_key, timeseries in result_timeseries.items():
+            row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
+                bucket.seconds
+            )
+            if not row_data:
+                timeseries.data_points.append(DataPoint(data=0, data_present=False))
+            else:
+                timeseries.data_points.append(
+                    DataPoint(data=row_data[timeseries.label], data_present=True)
+                )
+            timeseries.buckets.append(bucket)
     return result_timeseries.values()
 
 
