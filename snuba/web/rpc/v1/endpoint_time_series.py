@@ -65,7 +65,6 @@ def _convert_result_timeseries(
                 result_timeseries[(group_by_key, col_name)] = TimeSeries(
                     group_by_attributes=group_by_map, label=col_name
                 )
-                # TODO: convert row time to timestamp
             result_timeseries_timestamp_to_row[(group_by_key, col_name)][
                 int(datetime.fromisoformat(row["time"]).timestamp())
             ] = row
