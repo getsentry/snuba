@@ -75,7 +75,7 @@ def flush_producers() -> None:
     producers to make sure the delivery callbacks are called.
     """
 
-    def _flush_producers():
+    def _flush_producers() -> None:
         while True:
             for storage, producer in PRODUCER_MAP.items():
                 messages_remaining = producer.flush(5.0)
