@@ -42,18 +42,66 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 def _convert_result_timeseries(
     request: TimeSeriesRequest, data: list[Dict[str, Any]]
 ) -> Iterable[TimeSeries]:
+    """This function takes the results of the clickhouse query and converts it to a list of TimeSeries objects. It also handles
+    zerofilling data points where data was not present for a specific bucket.
+
+    Example:
+    data is a list of dictionaries that look like this:
+
+    >>> [
+    >>>     {"time": "2024-4-20 16:20:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g1", "group_by_attr_2": "a1"}
+    >>>     {"time": "2024-4-20 16:20:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g1", "group_by_attr_2": "a2"}
+    >>>     {"time": "2024-4-20 16:20:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g2", "group_by_attr_2": "a1"}
+    >>>     {"time": "2024-4-20 16:20:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g2", "group_by_attr_2": "a2"}
+    >>>     # next time bucket starts below
+
+    >>>     {"time": "2024-4-20 16:21:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g1", "group_by_attr_2": "a1"}
+    >>>     # here you can see that not every timeseries had data in every time bucket
+    >>>     {"time": "2024-4-20 16:22:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g1", "group_by_attr_2": "a2"}
+    >>>     {"time": "2024-4-20 16:23:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g2", "group_by_attr_2": "a1"}
+    >>>     {"time": "2024-4-20 16:24:00", "sum(sentry.duration)": 1235, "p95(sentry.duration)": 123456, "group_by_attr_1": "g2", "group_by_attr_2": "a2"}
+
+    >>>     ...
+    >>> ]
+
+    In this example we have 8 different timeseries and they are all sparse:
+
+        sum(sentry.duration), group_by_attributes = {"group_by_attr_1": "g1", "group_by_attr_2": "a1"}
+        sum(sentry.duration), group_by_attributes = {"group_by_attr_1": "g1", "group_by_attr_2": "a2"}
+        sum(sentry.duration), group_by_attributes = {"group_by_attr_1": "g2", "group_by_attr_2": "a1"}
+        sum(sentry.duration), group_by_attributes = {"group_by_attr_1": "g2", "group_by_attr_2": "a2"}
+
+
+        p95(sentry.duration), group_by_attributes = {"group_by_attr_1": "g1", "group_by_attr_2": "a1"}
+        p95(sentry.duration), group_by_attributes = {"group_by_attr_1": "g1", "group_by_attr_2": "a2"}
+        p95(sentry.duration), group_by_attributes = {"group_by_attr_1": "g2", "group_by_attr_2": "a1"}
+        p95(sentry.duration), group_by_attributes = {"group_by_attr_1": "g2", "group_by_attr_2": "a2"}
+
+    Returns:
+        an Iterable of TimeSeries objects where each possible bucket has a DataPoint with `data_present` set correctly
+
+    """
+
     # to convert the results, need to know which were the groupby columns and which ones
     # were aggregations
     aggregation_labels = set([agg.label for agg in request.aggregations])
     group_by_labels = set([attr.name for attr in request.group_by])
 
     # create a mapping with (all the group by attribute key,val pairs as strs, label name)
+    # In the example in the docstring it would look like:
+    # { ("group_by_attr_1,g1|group_by_attr_2,g2", "sum(sentry.duration"): TimeSeries()}
     result_timeseries: dict[tuple[str, str], TimeSeries] = {}
 
     # create a mapping for each timeseries of timestamp: row to fill data points not returned in the query
+    # {
+    #   ("group_by_attr_1,g1|group_by_attr_2,g2", "sum(sentry.duration"): {
+    #       time_converted_to_integer_timestamp: row_data_for_that_time_bucket
+    #   }
+    # }
     result_timeseries_timestamp_to_row: defaultdict[
         tuple[str, str], dict[int, Dict[str, Any]]
     ] = defaultdict(dict)
+
     query_duration = (
         request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     )
@@ -62,6 +110,7 @@ def _convert_result_timeseries(
         for secs in range(0, query_duration, request.granularity_secs)
     ]
 
+    # this loop fill in our pre-computed dictionaries so that we can zerofill later
     for row in data:
         group_by_map = {}
 
