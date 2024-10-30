@@ -183,7 +183,7 @@ def _get_page_token(
 
 def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableRequest:
     def _apply_label_to_column(column: Column) -> None:
-        if column.label:
+        if column.label != "":
             return
 
         if column.HasField("key"):

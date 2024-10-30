@@ -22,6 +22,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
     AttributeValue,
+    ExtrapolationMode,
     Function,
     VirtualColumnContext,
 )
@@ -35,7 +36,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
+from snuba.web.rpc.v1.endpoint_trace_item_table import (
+    EndpointTraceItemTable,
+    _apply_labels_to_columns,
+)
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -127,7 +131,7 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     start = BASE_TIME
@@ -241,7 +245,7 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING,
+                                    type=AttributeKey.TYPE_FLOAT,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
@@ -251,7 +255,7 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING,
+                                    type=AttributeKey.TYPE_FLOAT,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_GREATER_THAN,
@@ -478,6 +482,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
                 Column(
@@ -487,6 +492,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="avg(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
             ],
@@ -551,6 +557,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -597,6 +604,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -610,6 +618,7 @@ class TestTraceItemTable(BaseApiTest):
                                 type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                             ),
                             label="max(my.float.field)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         )
                     )
                 ),
@@ -619,7 +628,7 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_order_by_aggregation(self) -> None:
+    def test_order_by_aggregation(self, setup_teardown) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -649,6 +658,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -662,6 +672,7 @@ class TestTraceItemTable(BaseApiTest):
                                 type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                             ),
                             label="avg(eap.measurment)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         )
                     )
                 ),
@@ -708,6 +719,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
                         ),
                         label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -717,3 +729,25 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
+
+
+class TestUtils:
+    def test_apply_labels_to_columns(self) -> None:
+        message = TraceItemTableRequest(
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        _apply_labels_to_columns(message)
+        assert message.columns[0].label == "avg(custom_measurement)"
