@@ -1,9 +1,8 @@
 use anyhow::Context;
 use chrono::DateTime;
-use once_cell::sync::Lazy;
 use seq_macro::seq;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -16,9 +15,6 @@ use crate::processors::utils::enforce_retention;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub const ATTRS_SHARD_FACTOR: usize = 20;
-
-static ORGANIZATIONS_ALLOWED_INSERTIONS: Lazy<BTreeSet<u64>> =
-    Lazy::new(|| BTreeSet::from([1, 69]));
 
 macro_rules! seq_attrs {
     ($($tt:tt)*) => {
@@ -35,10 +31,6 @@ pub fn process_message(
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
-
-    if !ORGANIZATIONS_ALLOWED_INSERTIONS.contains(&msg.organization_id) {
-        return Ok(InsertBatch::skip());
-    }
 
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: EAPSpan = msg.try_into()?;

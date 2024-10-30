@@ -54,7 +54,6 @@ data-encoding = "2.5.0"
 zstd = "0.12.3"
 serde_with = "3.8.1"
 seq-macro = "0.3"
-once_cell = "1.18.0"
 
 
 [patch.crates-io]
