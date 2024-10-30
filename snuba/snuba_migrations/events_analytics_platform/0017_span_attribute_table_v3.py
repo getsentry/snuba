@@ -62,40 +62,6 @@ class Migration(migration.ClickhouseNodeMigration):
 
     def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
-            # first, drop the old MVs
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.old_str_mv,
-                target=OperationTarget.LOCAL,
-            ),
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.old_num_mv,
-                target=OperationTarget.LOCAL,
-            ),
-            # next, drop the old dist tables
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.old_str_dist_table,
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.old_num_dist_table,
-                target=OperationTarget.DISTRIBUTED,
-            ),
-            # next, drop the old local tables
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.old_str_local_table,
-                target=OperationTarget.LOCAL,
-            ),
-            operations.DropTable(
-                storage_set=self.storage_set_key,
-                table_name=self.old_num_local_table,
-                target=OperationTarget.LOCAL,
-            ),
-            # now, create new versions of the tables & MVs
             operations.CreateTable(
                 storage_set=self.storage_set_key,
                 table_name=self.new_str_local_table,
