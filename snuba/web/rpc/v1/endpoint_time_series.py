@@ -214,7 +214,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     )
 
 
-def _enforce_no_duplicate_labels(request: TimeSeriesRequest):
+def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
     labels = set()
 
     for agg in request.aggregations:
