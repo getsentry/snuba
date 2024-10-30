@@ -26,7 +26,8 @@ BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timed
 
 def populate_eap_spans_storage(num_rows: int) -> None:
     """
-    Fills the eap_spans storage with num_rows rows of data
+    Fills the eap_spans storage with data for num_rows spans.
+    Each span will have at least 10 unique tags.
     """
 
     def generate_span_event_message(id: int) -> Mapping[str, Any]:
@@ -119,4 +120,39 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 name="sentry.service", type=AttributeKey.Type.TYPE_STRING
             ),
         ]
+        assert res == TraceItemAttributeNamesResponse(attributes=expected)
+
+    def test_simple_float(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=1000,
+            offset=0,
+            type=AttributeKey.Type.TYPE_FLOAT,
+            value_substring_match="",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        expected = []
+        for i in range(30):
+            expected.append(
+                TraceItemAttributeNamesResponse.Attribute(
+                    name=f"b_measurement_{str(i).zfill(3)}",
+                    type=AttributeKey.Type.TYPE_FLOAT,
+                )
+            )
+        expected.append(
+            TraceItemAttributeNamesResponse.Attribute(
+                name="sentry.duration_ms", type=AttributeKey.Type.TYPE_FLOAT
+            )
+        )
         assert res == TraceItemAttributeNamesResponse(attributes=expected)

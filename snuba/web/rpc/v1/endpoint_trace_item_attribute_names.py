@@ -95,7 +95,9 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
     )
 
 
-def convert_to_response(query_res: QueryResult) -> TraceItemAttributeNamesResponse:
+def convert_to_response(
+    query_res: QueryResult, attribute_type: AttributeKey.Type.ValueType
+) -> TraceItemAttributeNamesResponse:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
         # our query to snuba only selected 1 column, attr_key
         # so the result should only have 1 item per row
@@ -103,7 +105,7 @@ def convert_to_response(query_res: QueryResult) -> TraceItemAttributeNamesRespon
         assert len(vals) == 1
         attr_name = list(vals)[0]
         return TraceItemAttributeNamesResponse.Attribute(
-            name=attr_name, type=AttributeKey.Type.TYPE_STRING
+            name=attr_name, type=attribute_type
         )
 
     attributes = map(t, query_res.result["data"])
@@ -134,4 +136,4 @@ class EndpointTraceItemAttributeNames(
             request=snuba_request,
             timer=self._timer,
         )
-        return convert_to_response(res)
+        return convert_to_response(res, req.type)
