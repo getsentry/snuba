@@ -242,7 +242,7 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING,
+                                    type=AttributeKey.TYPE_FLOAT,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
@@ -252,7 +252,7 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING,
+                                    type=AttributeKey.TYPE_FLOAT,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_GREATER_THAN,
