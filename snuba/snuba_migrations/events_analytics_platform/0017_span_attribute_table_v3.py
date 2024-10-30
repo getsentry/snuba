@@ -133,7 +133,7 @@ GROUP BY
                 engine=table_engines.AggregatingMergeTree(
                     storage_set=self.storage_set_key,
                     primary_key="(organization_id, attr_key)",
-                    order_by="(organization_id, attr_key, attr_min_value, attr_max_value, timestamp, project_id, retention_days)",
+                    order_by="(organization_id, attr_key, timestamp, project_id, retention_days)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={
                         "index_granularity": self.granularity,
@@ -173,7 +173,7 @@ LEFT ARRAY JOIN
     arrayConcat(
         {",".join(f"CAST(attr_num_{n}, 'Array(Tuple(String, Float64))')" for n in range(ATTRIBUTE_BUCKETS))},
         array(
-            tuple('sentry.duration_ms', (duration_micro / 1000)::Float64)
+            tuple('sentry.duration_ms', duration_micro / 1000)
         )
     ) AS attrs
 GROUP BY
