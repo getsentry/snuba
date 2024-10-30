@@ -1,4 +1,6 @@
 import logging
+import time
+from threading import Thread
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, TypedDict
 
 import rapidjson
@@ -66,11 +68,31 @@ def _get_kafka_producer(topic: Topic) -> Producer:
     return producer
 
 
-def _record_query_delivery_callback(
+def flush_producers() -> None:
+    """
+    It's not guaranteed that there will be a steady stream of
+    DELETE requests so we can call producer.flush() for any active
+    producers to make sure the delivery callbacks are called.
+    """
+
+    def _flush_producers():
+        while True:
+            for storage, producer in PRODUCER_MAP.items():
+                messages_remaining = producer.flush(5.0)
+                if messages_remaining:
+                    logger.debug(
+                        f"{messages_remaining} {storage} messages pending delivery"
+                    )
+            time.sleep(1)
+
+    Thread(target=_flush_producers, name="flush_producers", daemon=True).start()
+
+
+def _delete_query_delivery_callback(
     error: Optional[KafkaError], message: KafkaMessage
 ) -> None:
     metrics.increment(
-        "record_query.delivery_callback",
+        "delete_query.delivery_callback",
         tags={"status": "failure" if error else "success"},
     )
 
@@ -78,19 +100,27 @@ def _record_query_delivery_callback(
         logger.warning("Could not produce delete query due to error: %r", error)
 
 
+FLUSH_PRODUCERS_THREAD_STARTED = False
+
+
 def produce_delete_query(delete_query: DeleteQueryMessage) -> None:
+    global FLUSH_PRODUCERS_THREAD_STARTED
+    if not FLUSH_PRODUCERS_THREAD_STARTED:
+        FLUSH_PRODUCERS_THREAD_STARTED = True
+        flush_producers()
+
     storage_name = delete_query["storage_name"]
     topic = STORAGE_TOPIC.get(storage_name)
     if not topic:
         raise InvalidStorageTopic(f"No topic found for {storage_name}")
     try:
         producer = _get_kafka_producer(topic)
-        data = rapidjson.dumps(delete_query)
+        data = rapidjson.dumps(delete_query).encode("utf-8")
         producer.poll(0)  # trigger queued delivery callbacks
         producer.produce(
             settings.KAFKA_TOPIC_MAP.get(topic.value, topic.value),
-            data.encode("utf-8"),
-            on_delivery=_record_query_delivery_callback,
+            data,
+            on_delivery=_delete_query_delivery_callback,
         )
     except Exception as ex:
         logger.exception("Could not produce delete query due to error: %r", ex)

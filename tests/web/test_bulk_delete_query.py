@@ -17,7 +17,7 @@ from snuba.state import set_config
 from snuba.utils.manage_topics import create_topics
 from snuba.utils.streams.configuration_builder import get_default_kafka_configuration
 from snuba.utils.streams.topics import Topic
-from snuba.web.bulk_delete_query import _get_kafka_producer, delete_from_storage
+from snuba.web.bulk_delete_query import delete_from_storage
 from snuba.web.delete_query import DeletesNotEnabledError
 
 CONSUMER_CONFIG = {
@@ -61,11 +61,7 @@ def test_delete_success(mock_enforce_max_row: Mock) -> None:
     result = delete_from_storage(storage, conditions, attr_info)
     assert result["search_issues_local_v2"]["data"] == [{"rows_to_delete": 10}]
 
-    # make sure message got delivered
-    p = _get_kafka_producer(Topic.LW_DELETIONS_SEARCH_ISSUES)
-    p.flush()
-
-    attempts = 11
+    attempts = 12
     kafka_msg = None
     while attempts > 0 and not kafka_msg:
         kafka_msg = consumer.poll(1.0)
