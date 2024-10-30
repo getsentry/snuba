@@ -745,9 +745,21 @@ class TestUtils:
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement_2)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label=None,  # type: ignore
+                ),
             ],
             order_by=[],
             limit=5,
         )
         _apply_labels_to_columns(message)
         assert message.columns[0].label == "avg(custom_measurement)"
+        assert message.columns[1].label == "avg(custom_measurement_2)"
