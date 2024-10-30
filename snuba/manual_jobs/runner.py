@@ -15,6 +15,7 @@ from snuba.manual_jobs.redis import (
     _build_job_status_key,
     _get_job_status_multi,
     _get_job_type,
+    _record_start_time,
     _redis_client,
     _release_job_lock,
     _set_job_status,
@@ -123,15 +124,14 @@ def run_job(job_spec: JobSpec) -> JobStatus:
 
     job_to_run = _JobLoader.get_job_instance(job_spec)
 
+    running_status_type = (
+        JobStatus.ASYNC_RUNNING_BACKGROUND if job_spec.is_async else JobStatus.RUNNING
+    )
     try:
-        if job_spec.is_async:
-            current_job_status = _set_job_status(
-                job_spec.job_id, JobStatus.ASYNC_RUNNING_BACKGROUND
-            )
-            job_to_run.execute(job_logger)
-        else:
-            current_job_status = _set_job_status(job_spec.job_id, JobStatus.RUNNING)
-            job_to_run.execute(job_logger)
+        current_job_status = _set_job_status(job_spec.job_id, running_status_type)
+        _record_start_time(job_spec.job_id)
+        job_to_run.execute(job_logger)
+        if not job_spec.is_async:
             current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
             job_logger.info("[runner] job execution finished")
     except BaseException:

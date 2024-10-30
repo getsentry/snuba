@@ -1,4 +1,5 @@
 import typing
+from datetime import datetime
 from typing import List, Sequence
 
 from snuba.manual_jobs.job_status import JobStatus
@@ -10,6 +11,10 @@ _redis_client = get_redis_client(RedisClientKey.MANUAL_JOBS)
 
 def _build_job_lock_key(job_id: str) -> str:
     return f"snuba:manual_jobs:{job_id}:lock"
+
+
+def _build_start_time_key(job_id: str) -> str:
+    return f"snuba:manual_jobs:{job_id}:start_time"
 
 
 def _build_job_status_key(job_id: str) -> str:
@@ -38,6 +43,12 @@ def _push_job_log_line(job_id: str, line: str) -> bool:
 
 def _release_job_lock(job_id: str) -> None:
     _redis_client.delete(_build_job_lock_key(job_id))
+
+
+def _record_start_time(job_id: str) -> None:
+    _redis_client.set(
+        name=_build_start_time_key(job_id), value=datetime.utcnow().isoformat()
+    )
 
 
 def _set_job_status(job_id: str, status: JobStatus) -> JobStatus:
