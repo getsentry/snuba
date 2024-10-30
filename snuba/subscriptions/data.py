@@ -46,13 +46,16 @@ from snuba.query.data_source.simple import Entity as EntityDS
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import SubscriptionQuerySettings
-from snuba.reader import Result
+from snuba.reader import Result, Row
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
+from snuba.web.query import run_query
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -128,6 +131,17 @@ class _SubscriptionData(ABC, Generic[TRequest]):
     def to_dict(self) -> Mapping[str, Any]:
         raise NotImplementedError
 
+    @abstractmethod
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True, kw_only=True)
 class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
@@ -136,6 +150,9 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     """
 
     trace_item_table_request: str
+    # TODO: store item name and version here
+    # version: str
+    # item_name: str
 
     def validate(self) -> None:
         # TODO: Validate data
@@ -216,6 +233,34 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
         return subscription_data_dict
+
+    def run_query(
+        self, dataset, request, timer, robust=False, concurrent_queries_gauge=None
+    ):
+        from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
+
+        # TODO: use RPCEndpoint.get_from_name(name, version)() with name and version
+        response = EndpointTraceItemTable().execute(request)
+        column_values = response.column_values
+        num_rows = len(column_values[0].results)
+        data = []
+        for i in range(num_rows):
+            data_row: Row = {}
+            for column in column_values:
+                value_key = column.results[i].WhichOneof("value")
+                if value_key:
+                    value = getattr(column.results[i], value_key)
+                else:
+                    value = None
+
+                data_row[column.attribute_name] = value
+
+            data.append(data_row)
+
+        result: Result = {"meta": [], "data": data, "trace_output": ""}
+        return QueryResult(
+            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -349,6 +394,17 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
             custom_processing,  # type: ignore
         )
         return request
+
+    def run_query(
+        self, dataset, request, timer, robust=False, concurrent_queries_gauge=None
+    ):
+        return run_query(
+            dataset,
+            request,
+            timer,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
+        )
 
     @classmethod
     def from_dict(

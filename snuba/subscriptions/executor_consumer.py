@@ -29,7 +29,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
-from snuba.reader import Result, Row
+from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.codecs import (
     SubscriptionScheduledTaskEncoder,
@@ -47,31 +47,8 @@ from snuba.utils.streams.configuration_builder import build_kafka_consumer_confi
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web import QueryException
 from snuba.web.constants import NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
-from snuba.web.query import run_query
-from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 
 logger = logging.getLogger(__name__)
-
-
-def run_rpc_query_and_convert_to_result(request: TraceItemTableRequest) -> Result:
-    response = EndpointTraceItemTable().execute(request)
-    column_values = response.column_values
-    num_rows = len(column_values[0].results)
-    data = []
-    for i in range(num_rows):
-        data_row: Row = {}
-        for column in column_values:
-            value_key = column.results[i].WhichOneof("value")
-            if value_key:
-                value = getattr(column.results[i], value_key)
-            else:
-                value = None
-
-            data_row[column.attribute_name] = value
-
-        data.append(data_row)
-
-    return {"meta": [], "data": data, "trace_output": ""}
 
 
 def calculate_max_concurrent_queries(
@@ -288,7 +265,8 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
         timer = Timer("query")
 
         with self.__concurrent_gauge:
-            request = task.task.subscription.data.build_request(
+            subscription_data = task.task.subscription.data
+            request = subscription_data.build_request(
                 self.__dataset,
                 task.timestamp,
                 tick_upper_offset,
@@ -297,16 +275,13 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 "subscriptions_executor",
             )
 
-            if isinstance(request, Request):
-                result = run_query(
-                    self.__dataset,
-                    request,
-                    timer,
-                    robust=True,
-                    concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
-                ).result
-            else:
-                result = run_rpc_query_and_convert_to_result(request)
+            result = subscription_data.run_query(
+                self.__dataset,
+                request,
+                timer,
+                robust=True,
+                concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,
+            ).result
 
             return (request, result)
 
