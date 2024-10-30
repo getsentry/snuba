@@ -25,6 +25,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
@@ -453,3 +454,36 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
         ]
+
+
+class TestBadRequests:
+    def test_no_duplicate_labels(self) -> None:
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                debug=True,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=1,
+        )
+
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTimeSeries().execute(message)

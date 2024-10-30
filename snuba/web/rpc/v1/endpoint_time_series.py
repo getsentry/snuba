@@ -36,6 +36,7 @@ from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def _convert_result_timeseries(
@@ -164,6 +165,15 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     )
 
 
+def _enforce_no_duplicate_labels(request: TimeSeriesRequest):
+    labels = set()
+
+    for agg in request.aggregations:
+        if agg.label in labels:
+            raise BadSnubaRPCRequestException(f"duplicate label {agg.label} in request")
+        labels.add(agg.label)
+
+
 class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -182,6 +192,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
+        _enforce_no_duplicate_labels(in_msg)
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
