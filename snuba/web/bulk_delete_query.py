@@ -57,7 +57,6 @@ class InvalidStorageTopic(Exception):
 def _get_kafka_producer(topic: Topic) -> Producer:
     producer = PRODUCER_MAP.get(topic.value)
     if not producer:
-
         producer = Producer(
             build_kafka_producer_configuration(
                 topic=topic,

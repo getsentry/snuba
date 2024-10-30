@@ -23,6 +23,7 @@ from snuba.web.delete_query import DeletesNotEnabledError
 CONSUMER_CONFIG = {
     "bootstrap.servers": settings.BROKER_CONFIG["bootstrap.servers"],
     "group.id": "lwd-search-issues",
+    "auto.offset.reset": "earliest",
     "enable.auto.commit": True,
     "enable.auto.offset.store": False,
     # helps diagnose failures
@@ -64,7 +65,16 @@ def test_delete_success(mock_enforce_max_row: Mock) -> None:
     p = _get_kafka_producer(Topic.LW_DELETIONS_SEARCH_ISSUES)
     p.flush()
 
-    kafka_msg = consumer.poll(10.0)
+    attempts = 11
+    kafka_msg = None
+    while attempts > 0 and not kafka_msg:
+        kafka_msg = consumer.poll(1.0)
+        attempts -= 1
+
+    # assumes that we didn't get the message because the
+    # partition wasn't assigned quickly enough
+    assert kafka_msg, "No message after 11 poll attempts"
+
     message = rapidjson.loads(kafka_msg.value())
     assert message["rows_to_delete"] == 10
     assert message == {
