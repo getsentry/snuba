@@ -38,7 +38,10 @@ class Migration(migration.ClickhouseNodeMigration):
         Column("project_id", UInt(64)),
         Column("attr_key", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("attr_value", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
-        Column("timestamp", DateTime(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
+        Column(
+            "timestamp",
+            DateTime(modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
+        ),
         Column("retention_days", UInt(16)),
         Column("count", SimpleAggregateFunction("sum", [UInt(64)])),
     ]
@@ -52,10 +55,13 @@ class Migration(migration.ClickhouseNodeMigration):
     num_columns: Sequence[Column[Modifiers]] = [
         Column("organization_id", UInt(64)),
         Column("project_id", UInt(64)),
-        Column("attr_key", String()),
+        Column("attr_key", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
         Column("attr_min_value", SimpleAggregateFunction("min", [Float(64)])),
         Column("attr_max_value", SimpleAggregateFunction("max", [Float(64)])),
-        Column("timestamp", DateTime(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
+        Column(
+            "timestamp",
+            DateTime(modifiers=Modifiers(codecs=["DoubleDelta", "ZSTD(1)"])),
+        ),
         Column("retention_days", UInt(16)),
         Column("count", SimpleAggregateFunction("sum", [UInt(64)])),
     ]
