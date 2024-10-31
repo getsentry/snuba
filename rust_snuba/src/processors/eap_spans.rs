@@ -32,6 +32,10 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
+    if !msg.ingest_in_eap.unwrap_or_default() {
+        return Ok(InsertBatch::skip());
+    }
+
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: EAPSpan = msg.try_into()?;
 

@@ -59,6 +59,7 @@ pub(crate) struct FromSpanMessage {
     pub(crate) start_timestamp_ms: u64,
     pub(crate) tags: Option<BTreeMap<String, String>>,
     pub(crate) trace_id: Uuid,
+    pub(crate) ingest_in_eap: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
