@@ -50,7 +50,7 @@ def merge_t_digests_states(states: Iterable[str], level: float) -> float:
             if not (byt & 0x80):
                 break
 
-        for (mean, count) in struct.iter_unpack("<ff", state_bytes):
+        for mean, count in struct.iter_unpack("<ff", state_bytes):
             centroids.append((mean, count))
             total_count += count
 
@@ -115,7 +115,7 @@ def get_aggregate_func(
             exists_condition = f.mapContains(
                 column("attr_num"), literal(request.key.name)
             )
-    sampling_weight_expr = column("sampling_weight_2")
+    sampling_weight_expr = column("sampling_weight")
     sign_expr = column("sign")
     sampling_weight_times_sign = f.multiply(sampling_weight_expr, sign_expr)
 

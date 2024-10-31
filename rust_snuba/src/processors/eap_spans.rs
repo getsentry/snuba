@@ -102,15 +102,14 @@ struct EAPSpan {
     is_segment: bool,     //aka "is transaction"
     start_timestamp: u64,
     end_timestamp: u64,
-    duration_ms: u32,
-    exclusive_time_ms: f64,
+    duration_micro: u64,
+    exclusive_time_micro: u64,
     retention_days: Option<u16>,
     name: String, //aka description
 
     sampling_factor: f64,
-    sampling_weight: f64, //remove eventually
-    sampling_weight_2: u64,
-    sign: u8, //1 for additions, -1 for deletions - for this worker it should be 1
+    sampling_weight: u64, //remove eventually
+    sign: u8,             // 1 for additions, -1 for deletions - for this worker it should be 1
 
     #[serde(flatten)]
     attributes: AttributeMap,
@@ -169,13 +168,13 @@ impl From<FromSpanMessage> for EAPSpan {
             is_segment: from.is_segment,
             start_timestamp: (from.start_timestamp_precise * 1e6) as u64,
             end_timestamp: (from.end_timestamp_precise * 1e6) as u64,
-            duration_ms: from.duration_ms,
-            exclusive_time_ms: from.exclusive_time_ms,
+            duration_micro: ((from.end_timestamp_precise - from.start_timestamp_precise) * 1e6)
+                as u64,
+            exclusive_time_micro: (from.exclusive_time_ms * 1e3) as u64,
             retention_days: from.retention_days,
             name: from.description.unwrap_or_default(),
 
-            sampling_weight: 1., //remove eventually
-            sampling_weight_2: 1,
+            sampling_weight: 1,
             sampling_factor: 1.,
             sign: 1,
 
@@ -211,8 +210,7 @@ impl From<FromSpanMessage> for EAPSpan {
 
             // lower precision to compensate floating point errors
             res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
-            res.sampling_weight *= 1.0 / res.sampling_factor;
-            res.sampling_weight_2 = res.sampling_weight.round() as u64;
+            res.sampling_weight = (1.0 / res.sampling_factor) as u64;
 
             if let Some(data) = from.data {
                 for (k, v) in data {

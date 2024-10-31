@@ -23,13 +23,12 @@ schema:
       { name: _sort_timestamp, type: DateTime },
       { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
       { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
-      { name: duration_ms, type: UInt, args: { size: 32 } },
-      { name: exclusive_time_ms, type: Float, args: { size: 64 } },
+      { name: duration_micro, type: UInt, args: { size: 64 } },
+      { name: exclusive_time_micro, type: UInt, args: { size: 64 } },
       { name: retention_days, type: UInt, args: { size: 16 } },
       { name: name, type: String },
       { name: sampling_factor, type: Float, args: { size: 64 } },
-      { name: sampling_weight, type: Float, args: { size: 64 } },
-      { name: sampling_weight_2, type: UInt, args: { size: 64 } },
+      { name: sampling_weight, type: UInt, args: { size: 64 } },
       { name: sign, type: Int, args: { size: 8 } },
       { name: attr_str_0, type: Map, args: { key: { type: String }, value: { type: String } } },
       { name: attr_str_1, type: Map, args: { key: { type: String }, value: { type: String } } },
@@ -72,8 +71,8 @@ schema:
       { name: attr_num_18, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
       { name: attr_num_19, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
     ]
-  local_table_name: eap_spans_local
-  dist_table_name: eap_spans_dist
+  local_table_name: eap_spans_2_local
+  dist_table_name: eap_spans_2_dist
   partition_format: [date]
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
