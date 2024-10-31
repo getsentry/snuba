@@ -18,7 +18,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import PartitionId, SubscriptionData
+from snuba.subscriptions.data import PartitionId, SnQLSubscriptionData
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.scheduler_processing_strategy import (
     CommittableTick,
@@ -560,7 +560,7 @@ def test_produce_scheduled_subscription_message() -> None:
     # Subscription 1
     store.create(
         uuid.uuid4(),
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             time_window_sec=60,
             resolution_sec=60,
@@ -573,7 +573,7 @@ def test_produce_scheduled_subscription_message() -> None:
     # Subscription 2
     store.create(
         uuid.uuid4(),
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=2,
             time_window_sec=2 * 60,
             resolution_sec=2 * 60,
@@ -679,7 +679,7 @@ def test_produce_stale_message() -> None:
     # Create subscription
     store.create(
         uuid.uuid4(),
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=1,
             time_window_sec=60,
             resolution_sec=60,
