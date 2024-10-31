@@ -45,10 +45,10 @@ DEFAULT_OVERRIDE_LIMIT = -1
 PETABYTE = 10**12
 DEFAULT_BYTES_SCANNED_LIMIT = int(1.28 * PETABYTE)
 DEFAULT_TIMEOUT_PENALIZATION = DEFAULT_BYTES_SCANNED_LIMIT // 40
-DEFAULT_BYTES_THROTTLE_DIVIDER = 2
+DEFAULT_BYTES_THROTTLE_DIVIDER = 1.5
 DEFAULT_THREADS_THROTTLE_DIVIDER = 2
 QUOTA_UNIT = "bytes"
-SUGGESTION = "scan less bytes"
+SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
 class BytesScannedRejectingPolicy(AllocationPolicy):
@@ -102,14 +102,14 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             AllocationPolicyConfig(
                 "bytes_throttle_divider",
                 "Divide the scan limit by this number gives the throttling threshold",
-                int,
+                float,
                 DEFAULT_BYTES_THROTTLE_DIVIDER,
             ),
             AllocationPolicyConfig(
                 "threads_throttle_divider",
                 "max threads divided by this number is the number of threads we use to execute queries for a throttled (project_id|organization_id, referrer)",
                 int,
-                DEFAULT_BYTES_THROTTLE_DIVIDER,
+                DEFAULT_THREADS_THROTTLE_DIVIDER,
             ),
         ]
 
@@ -204,7 +204,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             customer_tenant_key, customer_tenant_value, referrer
         )
         throttle_threshold = max(
-            1, scan_limit // self.get_config_value("bytes_throttle_divider")
+            1, int(scan_limit // self.get_config_value("bytes_throttle_divider"))
         )
         timestamp, granted_quotas = _RATE_LIMITER.check_within_quotas(
             [

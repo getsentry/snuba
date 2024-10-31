@@ -1010,7 +1010,6 @@ def _qualify_columns(
     from_clause = query.get_from_clause()
     if not isinstance(from_clause, JoinClause):
         return  # We don't qualify columns that have a single source
-
     aliases = set(from_clause.get_alias_node_map().keys())
 
     def transform(exp: Expression) -> Expression:

@@ -30,6 +30,8 @@ RUN set -ex; \
     runtimeDeps=' \
         curl \
         libjemalloc2 \
+        gdb \
+        heaptrack \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps $runtimeDeps --no-install-recommends; \

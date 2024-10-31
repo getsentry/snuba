@@ -30,13 +30,15 @@ def run_snql_query(body: Dict[str, Any], user: str) -> Response:
             return response
 
         body["dry_run"] = False
-        _validate_projects_in_query(body, dataset)
+        _validate_projects_in_query(body, dataset, False)
         return dataset_query(dataset_name, body, Timer("admin"))
 
     return run_query_with_audit(body["query"], user)
 
 
-def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
+def _validate_projects_in_query(
+    body: Dict[str, Any], dataset: Dataset, is_mql: bool
+) -> None:
     """
     Validates that the projects accessed by the query are allowed to be accessed.
     """
@@ -44,9 +46,17 @@ def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
     if settings.DEBUG and len(settings.ADMIN_ALLOWED_PROD_PROJECTS) == 0:
         return
 
-    request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
-    query = parse_snql_query(request_parts.query["query"], dataset)
-    project_ids = ProjectsFinder().visit(query)
+    if not is_mql:
+        request_parts = RequestSchema.build(HTTPQuerySettings).validate(body)
+        query = parse_snql_query(request_parts.query["query"], dataset)
+        project_ids = ProjectsFinder().visit(query)
+    else:
+        request_parts = RequestSchema.build(
+            settings_class=HTTPQuerySettings, is_mql=True
+        ).validate(body)
+        mql_context = request_parts.query["mql_context"]
+        project_ids = set(mql_context["scope"]["project_ids"])
+
     if project_ids == set():
         raise InvalidQueryException("Missing project ID")
 
@@ -57,3 +67,25 @@ def _validate_projects_in_query(body: Dict[str, Any], dataset: Dataset) -> None:
         raise InvalidQueryException(
             f"Cannot access the following project ids: {disallowed_project_ids}"
         )
+
+
+def run_mql_query(body: Dict[str, Any], user: str) -> Response:
+    """
+    Validates, audit logs, and executes given query.
+    """
+
+    @audit_log
+    def run_query_with_audit(query: str, user: str) -> Response:
+        is_mql = True
+        dataset_name = body.pop("dataset")
+        dataset = get_dataset(dataset_name)
+        body["dry_run"] = True
+        response = dataset_query(dataset_name, body, Timer("admin"), is_mql)
+        if response.status_code != 200:
+            return response
+
+        body["dry_run"] = False
+        _validate_projects_in_query(body, dataset, True)
+        return dataset_query(dataset_name, body, Timer("admin"), is_mql)
+
+    return run_query_with_audit(body["query"], user)

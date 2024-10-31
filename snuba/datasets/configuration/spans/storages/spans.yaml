@@ -169,7 +169,6 @@ query_processors:
     args:
       prewhere_candidates:
         [span_id, trace_id, segment_name]
-  - processor: TableRateLimit
   - processor: TupleUnaliaser
 
 mandatory_condition_checkers:

@@ -134,6 +134,15 @@ schema:
               [{ name: key, type: String }, { name: value, type: String }],
           },
       },
+      {
+        name: _tags_hash_map,
+        type: Array,
+        args:
+          {
+            schema_modifiers: [readonly],
+            inner_type: { type: UInt, args: { size: 64 } },
+          },
+      },
       { name: click_node_id, type: UInt, args: { size: 32 } },
       {
         name: click_tag,
@@ -168,19 +177,31 @@ schema:
     ]
   local_table_name: replays_local
   dist_table_name: replays_dist
+
 query_processors:
-  - processor: TableRateLimit
   - processor: ClickhouseSettingsOverride
     args:
       settings:
         max_rows_to_group_by: 1000000
         group_by_overflow_mode: any
+  - processor: MappingOptimizer
+    args:
+      column_name: tags
+      hash_map_name: _tags_hash_map
+      killswitch: tags_hash_map_enabled
+  - processor: EmptyTagConditionProcessor
+  - processor: ArrayJoinKeyValueOptimizer
+    args:
+      column_name: tags
+
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
+
 stream_loader:
   processor: ReplaysProcessor
   default_topic: ingest-replay-events
   dlq_topic: snuba-dead-letter-replays
+
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:

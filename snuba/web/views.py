@@ -25,8 +25,17 @@ import sentry_sdk
 import simplejson as json
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from flask import Flask, Request, Response, redirect, render_template
+from flask import (
+    Flask,
+    Request,
+    Response,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+)
 from flask import request as http_request
+from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from werkzeug import Response as WerkzeugResponse
 from werkzeug.exceptions import InternalServerError
 
@@ -42,7 +51,7 @@ from snuba.datasets.entity import Entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import InvalidDatasetError, get_dataset_name
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.datasets.storage import StorageNotAvailable
+from snuba.datasets.storage import StorageNotAvailable, WritableTableStorage
 from snuba.query.allocation_policies import AllocationPolicyViolations
 from snuba.query.exceptions import InvalidQueryException, QueryPlanException
 from snuba.query.query_settings import HTTPQuerySettings
@@ -64,8 +73,14 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
 from snuba.web.constants import get_http_status_for_clickhouse_error
-from snuba.web.converters import DatasetConverter, EntityConverter
+from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
+from snuba.web.delete_query import (
+    DeletesNotEnabledError,
+    TooManyOngoingMutationsError,
+    delete_from_storage,
+)
 from snuba.web.query import parse_and_run_query
+from snuba.web.rpc import run_rpc_handler
 from snuba.writer import BatchWriterEncoderWrapper, WriterTableRow
 
 logger = logging.getLogger("snuba.api")
@@ -101,6 +116,7 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 application.url_map.converters["entity"] = EntityConverter
+application.url_map.converters["storage"] = StorageConverter
 atexit.register(close_cogs_recorder)
 
 
@@ -260,6 +276,15 @@ def unqualified_query_view(*, timer: Timer) -> Union[Response, str, WerkzeugResp
         assert False, "unexpected fallthrough"
 
 
+@application.route("/rpc/<name>/<version>", methods=["POST"])
+def rpc(*, name: str, version: str) -> Response:
+    result_proto = run_rpc_handler(name, version, http_request.data)
+    if isinstance(result_proto, ErrorProto):
+        return Response(result_proto.SerializeToString(), status=result_proto.code)
+    else:
+        return Response(result_proto.SerializeToString(), status=200)
+
+
 @application.route("/<dataset:dataset>/snql", methods=["GET", "POST"])
 @util.time_request("query")
 def snql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response, str]:
@@ -286,6 +311,62 @@ def mql_dataset_query_view(*, dataset: Dataset, timer: Timer) -> Union[Response,
         body = parse_request_body(http_request)
         _trace_transaction(dataset_name)
         return dataset_query(dataset_name, body, timer, is_mql=True)
+    else:
+        assert False, "unexpected fallthrough"
+
+
+@application.route("/<storage:storage>", methods=["DELETE"])
+@util.time_request("delete_query")
+def storage_delete(
+    *, storage: WritableTableStorage, timer: Timer
+) -> Union[Response, str]:
+    if http_request.method == "DELETE":
+        check_shutdown({"storage": storage.get_storage_key()})
+        body = parse_request_body(http_request)
+
+        try:
+            schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+            request_parts = schema.validate(body)
+            payload = delete_from_storage(
+                storage,
+                request_parts.query["query"]["columns"],
+                request_parts.attribution_info,
+            )
+        except (
+            InvalidJsonRequestException,
+            DeletesNotEnabledError,
+            InvalidQueryException,
+        ) as error:
+            details = {
+                "type": "invalid_query",
+                "message": str(error),
+            }
+            return make_response(
+                jsonify({"error": details}),
+                400,
+            )
+        except TooManyOngoingMutationsError as e:
+            details = {
+                "type": "too_many_ongoing_mutations",
+                "message": str(e),
+            }
+            return make_response(
+                jsonify({"error": details}),
+                503,
+            )
+        except Exception as error:
+            logger.warning("Failed query", exc_info=error)
+            details = details = {
+                "type": "unknown",
+                "message": str(error),
+            }
+            return make_response(jsonify({"error": details}), 500)
+
+        # i put the result inside "data" bc thats how sentry utils/snuba.py expects the result
+        return Response(
+            dump_payload({"data": payload}), 200, {"Content-Type": "application/json"}
+        )
+
     else:
         assert False, "unexpected fallthrough"
 
@@ -333,13 +414,7 @@ def dump_payload(payload: MutableMapping[str, Any]) -> str:
         return json.dumps(sanitized_payload, default=str)
 
 
-@with_span()
-def dataset_query(
-    dataset_name: str, body: Dict[str, Any], timer: Timer, is_mql: bool = False
-) -> Response:
-    assert http_request.method == "POST"
-    referrer = http_request.referrer or "<unknown>"  # mypy
-
+def check_shutdown(tags: Dict[str, Any]) -> None:
     # Try to detect if new requests are being sent to the api
     # after the shutdown command has been issued, and if so
     # how long after. I don't want to do a disk check for
@@ -347,10 +422,20 @@ def dataset_query(
     # is detected, and then log everything
     if get_shutdown() or random.random() < 0.05:
         if get_shutdown() or check_down_file_exists():
-            tags = {"dataset": dataset_name}
             metrics.increment("post.shutdown.query", tags=tags)
             diff = time.time() - (shutdown_time() or 0.0)  # this should never be None
             metrics.timing("post.shutdown.query.delay", diff, tags=tags)
+
+
+@with_span()
+def dataset_query(
+    dataset_name: str, body: Dict[str, Any], timer: Timer, is_mql: bool = False
+) -> Response:
+    assert http_request.method == "POST"
+    referrer = http_request.referrer or "<unknown>"  # mypy
+
+    check_shutdown({"dataset": dataset_name})
+
     try:
         request, result = parse_and_run_query(
             body, timer, is_mql, dataset_name, referrer

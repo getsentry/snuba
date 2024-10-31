@@ -131,15 +131,21 @@ impl BatchFactory {
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
                 // being added to the receiver stream from the sender
-                let res = client
+                let response = client
                     .post(&url)
                     .query(&[("query", &query)])
                     .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
                     .send()
                     .await?;
 
-                if res.status() != reqwest::StatusCode::OK {
-                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                if !response.status().is_success() {
+                    let status = response.status();
+                    let body = response.text().await;
+                    anyhow::bail!(
+                        "bad response while inserting rows, status: {}, response body: {:?}",
+                        status,
+                        body
+                    );
                 }
             }
 

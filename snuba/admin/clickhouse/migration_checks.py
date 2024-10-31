@@ -100,7 +100,7 @@ class StatusChecker(Checker):
         ).get_migrations()
 
         migration_statuses = {}
-        for migration_id, status, _ in migrations:
+        for migration_id, status, _, _ in migrations:
             migration_statuses[migration_id] = {
                 "migration_id": migration_id,
                 "status": status,

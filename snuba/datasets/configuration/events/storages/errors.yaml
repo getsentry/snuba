@@ -338,7 +338,6 @@ query_processors:
         - message
         - environment
         - project_id
-  - processor: TableRateLimit
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 replacer_processor:

@@ -87,7 +87,7 @@ _RATE_LIMITER = RedisSlidingWindowRateLimiter(
 DEFAULT_OVERRIDE_LIMIT = -1
 DEFAULT_BYTES_SCANNED_LIMIT = 10000000
 QUOTA_UNIT = "bytes"
-SUGGESTION = "scan less bytes"
+SUGGESTION = "The feature, organization/project is scanning too many bytes, this usually means they are abusing that API"
 
 
 class BytesScannedWindowAllocationPolicy(AllocationPolicy):

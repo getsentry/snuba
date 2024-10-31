@@ -1,0 +1,41 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "end_timestamp",
+        },
+    },
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "materialization_version",
+        },
+    },
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "profiling_type",
+        },
+    },
+    Change {
+        path: "",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "start_timestamp",
+        },
+    },
+    Change {
+        path: ".functions.?",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "thread_id",
+        },
+    },
+]

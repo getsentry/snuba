@@ -135,14 +135,16 @@ class ReadableTableStorage(ReadableStorage):
         deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
+        delete_allocation_policies: Optional[list[AllocationPolicy]] = None,
         required_time_column: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
-        self.__deletion_settings = deletion_settings or DeletionSettings(0, [], 0)
+        self.__deletion_settings = deletion_settings or DeletionSettings(0, [], [], 0)
         self.__deletion_processors = deletion_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
+        self.__delete_allocation_policies = delete_allocation_policies or []
         super().__init__(
             storage_set_key,
             schema,
@@ -162,6 +164,9 @@ class ReadableTableStorage(ReadableStorage):
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return self.__allocation_policies or super().get_allocation_policies()
 
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return self.__delete_allocation_policies
+
     def get_deletion_settings(self) -> DeletionSettings:
         return self.__deletion_settings
 
@@ -180,6 +185,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         stream_loader: KafkaStreamLoader,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
+        delete_allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
         deletion_settings: Optional[DeletionSettings] = None,
         deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
@@ -199,6 +205,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             deletion_processors,
             mandatory_condition_checkers,
             allocation_policies,
+            delete_allocation_policies,
             required_time_column=required_time_column,
         )
         assert isinstance(schema, WritableTableSchema)

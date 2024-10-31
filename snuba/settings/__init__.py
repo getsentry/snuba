@@ -58,6 +58,7 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
 )
 
 ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
+ADMIN_ALLOWED_ORG_IDS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
 
 # All available regions where region is:
@@ -111,6 +112,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
+            "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
             "metrics_summaries",
@@ -174,6 +176,7 @@ class RedisClusters(TypedDict):
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
     admin_auth: RedisClusterConfig | None
+    manual_jobs: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -185,6 +188,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "dlq": None,
     "optimize": None,
     "admin_auth": None,
+    "manual_jobs": None,
 }
 
 # Query Recording Options
@@ -241,6 +245,7 @@ DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DISCARD_OLD_EVENTS = True
 CLICKHOUSE_HTTP_CHUNK_SIZE = 8192
 HTTP_WRITER_BUFFER_SIZE = 1
+BATCH_JOIN_TIMEOUT = os.environ.get("BATCH_JOIN_TIMEOUT", 10)
 
 # Retention related settings
 ENFORCE_RETENTION: bool = False
@@ -360,8 +365,6 @@ OPTIMIZE_MAX_SLEEP_TIME = 2 * 60 * 60  # 2 hours
 OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
-# Maximum jitter to add to the scheduling of threads of an optimize job
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
@@ -434,7 +437,7 @@ SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
 # we save ~2s on startup time
 VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
-RUN_NEW_MQL_PARSER_SAMPLE_RATE = 0.0
+MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

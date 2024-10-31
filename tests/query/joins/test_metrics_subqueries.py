@@ -193,7 +193,12 @@ def test_subquery_generator_metrics() -> None:
     expected_outer_query_orderby = [
         OrderBy(
             direction=OrderByDirection.ASC,
-            expression=column("_snuba_d0.time", "d0", "_snuba_d0.time"),
+            expression=f.toStartOfInterval(
+                column("timestamp", "d0", "_snuba_timestamp"),
+                f.toIntervalSecond(literal(60)),
+                literal("Universal"),
+                alias="_snuba_d0.time",
+            ),
         )
     ]
     assert original_query.get_orderby() == expected_outer_query_orderby

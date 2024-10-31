@@ -65,6 +65,7 @@ struct FromGenericMetricsMessage {
     #[serde(flatten)]
     value: MetricValue,
     retention_days: u16,
+    sampling_weight: Option<f64>,
     aggregation_option: Option<String>,
 }
 
@@ -240,6 +241,8 @@ struct CommonMetricFields {
     timeseries_id: u32,
     granularities: Vec<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    sampling_weight: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     decasecond_retention_days: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     min_retention_days: Option<u8>,
@@ -316,7 +319,10 @@ impl Parse for CountersRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: 2,
+            materialization_version: 3,
+            sampling_weight: from
+                .sampling_weight
+                .map(|sampling_weight| sampling_weight as u64),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -338,21 +344,13 @@ fn should_use_killswitch(config: Result<Option<String>, Error>, use_case: &Messa
     false
 }
 
-fn parse_dist_materialization_version(
-    config: Result<Option<String>, Error>,
-    metric_type: String,
-) -> u8 {
-    if metric_type == *"distribution" {
-        if let Some(mat_version) = config.ok().flatten() {
-            if !mat_version.trim().is_empty() {
-                let mat_version_int = mat_version.parse::<u8>().unwrap();
-                return mat_version_int;
-            }
-        }
-    }
-
-    // return the currently used materialization version if runtime config is not set
-    2u8
+#[allow(dead_code)]
+fn parse_matview_ver_from_runtime_opt(metric_type: &str) -> Option<u8> {
+    get_str_config(&format!("gen_metrics_{}_matview_version", metric_type))
+        .ok()
+        .flatten()?
+        .parse::<u8>()
+        .ok()
 }
 
 fn process_message<T>(
@@ -595,10 +593,10 @@ impl Parse for DistributionsRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: parse_dist_materialization_version(
-                get_str_config("gen_metrics_dist_mat_version"),
-                "distribution".to_string(),
-            ),
+            materialization_version: 4,
+            sampling_weight: from
+                .sampling_weight
+                .map(|sampling_weight| sampling_weight as u64),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -700,7 +698,10 @@ impl Parse for GaugesRawRow {
             tags_key: tag_keys.iter().map(|k| k.parse::<u64>().unwrap()).collect(),
             tags_indexed_value: vec![0; tag_keys.len()],
             tags_raw_value: tag_values,
-            materialization_version: 2,
+            materialization_version: 3,
+            sampling_weight: from
+                .sampling_weight
+                .map(|sampling_weight| sampling_weight as u64),
             timeseries_id,
             granularities,
             min_retention_days: Some(retention_days as u8),
@@ -753,6 +754,22 @@ mod tests {
         "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65689":"metric_e2e_spans_counter_k_VUW93LMS"},"d":{"65561":"c:spans/spans@none"}},
         "type": "c",
         "value": 1
+    }"#;
+
+    const DUMMY_COUNTER_MESSAGE_WITH_SAMPLING_WEIGHT: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65561,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010": "production", "9223372036854776017": "init", "65689": "metric_e2e_spans_counter_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65689":"metric_e2e_spans_counter_k_VUW93LMS"},"d":{"65561":"c:spans/spans@none"}},
+        "type": "c",
+        "value": 1,
+        "sampling_weight": 100.1
     }"#;
 
     const DUMMY_SET_MESSAGE: &str = r#"{
@@ -862,6 +879,22 @@ mod tests {
         "value": {"count": 10, "last": 10.0, "max": 10.0, "min": 1.0, "sum": 20.0}
     }"#;
 
+    const DUMMY_GAUGE_MESSAGE_WITH_SAMPLING_WEIGHT: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65564,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940.123,
+        "tags": {"9223372036854776010": "production", "9223372036854776017": "init", "65690": "metric_e2e_spans_gauge_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65689":"metric_e2e_spans_gauge_k_VUW93LMS"},"d":{"65564":"g:spans/spans@none"}},
+        "type": "g",
+        "value": {"count": 10, "last": 10.0, "max": 10.0, "min": 1.0, "sum": 20.0},
+        "sampling_weight": 100
+    }"#;
+
     const DUMMY_GAUGE_MESSAGE_WITH_TEN_SECOND_AGGREGATE_OPTION: &str = r#"{
         "version": 2,
         "use_case_id": "spans",
@@ -938,6 +971,22 @@ mod tests {
         "value": {"format": "zstd", "data": "KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw"}
     }"#;
 
+    const DUMMY_ZSTD_ENCODED_DISTRIBUTION_MESSAGE_WITH_SAMPLING_WEIGHT: &str = r#"{
+        "version": 2,
+        "use_case_id": "spans",
+        "org_id": 1,
+        "project_id": 3,
+        "metric_id": 65563,
+        "timestamp": 1704614940,
+        "sentry_received_timestamp": 1704614940,
+        "tags": {"9223372036854776010":"production","9223372036854776017":"healthy","65690":"metric_e2e_spans_dist_v_VUW93LMS"},
+        "retention_days": 90,
+        "mapping_meta":{"d":{"65560":"d:spans/duration@second"},"h":{"9223372036854776017":"session.status","9223372036854776010":"environment"},"f":{"65691":"metric_e2e_spans_dist_k_VUW93LMS"}},
+        "type": "d",
+        "value": {"format": "zstd", "data": "KLUv/QBYrQAAcAAA8D8AQAAAAAAAAAhAAgBgRgCw"},
+        "sampling_weight": 100
+    }"#;
+
     #[test]
     fn test_base64_decode_f64() {
         assert!(
@@ -992,7 +1041,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1004,6 +1053,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             distribution_values: vec![3f64, 1f64, 2f64],
             enable_histogram: None,
@@ -1050,7 +1100,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1062,6 +1112,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             distribution_values: vec![1f64, 2f64, 3f64],
             enable_histogram: None,
@@ -1075,6 +1126,65 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 681)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_distribution_processor_with_weighted_distribution_message() {
+        let result = test_processor_with_payload(
+            &(process_distribution_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_ZSTD_ENCODED_DISTRIBUTION_MESSAGE_WITH_SAMPLING_WEIGHT,
+        );
+        let expected_row = DistributionsRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65563,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_dist_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "healthy".to_string(),
+                ],
+                metric_type: "distribution".to_string(),
+                materialization_version: 4,
+                timeseries_id: 1436359714,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+                sampling_weight: Some(100),
+            },
+            distribution_values: vec![1f64, 2f64, 3f64],
+            enable_histogram: None,
+            disable_percentiles: None,
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 713)])
                 })
             }
         );
@@ -1155,6 +1265,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             set_values: vec![1u32, 7u32],
         };
@@ -1211,6 +1322,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             set_values: vec![1u32, 7u32],
         };
@@ -1288,72 +1400,6 @@ mod tests {
     }
 
     #[test]
-    fn test_dont_use_new_matview_dist() {
-        let fake_config: Result<Option<String>, _> = Ok(Some("2".to_string()));
-        let metric_type = "distribution".to_string();
-
-        assert_eq!(
-            parse_dist_materialization_version(fake_config, metric_type),
-            2
-        )
-    }
-
-    #[test]
-    fn test_dont_use_new_matview_dist_space() {
-        let fake_config: Result<Option<String>, _> = Ok(Some(" ".to_string()));
-        let metric_type = "distribution".to_string();
-
-        assert_eq!(
-            parse_dist_materialization_version(fake_config, metric_type),
-            2
-        )
-    }
-
-    #[test]
-    fn test_dont_use_new_matview_dist_empty() {
-        let fake_config: Result<Option<String>, _> = Ok(Some("".to_string()));
-        let metric_type = "distribution".to_string();
-
-        assert_eq!(
-            parse_dist_materialization_version(fake_config, metric_type),
-            2
-        )
-    }
-
-    #[test]
-    fn test_use_new_matview_dist() {
-        let fake_config: Result<Option<String>, _> = Ok(Some("3".to_string()));
-        let metric_type = "distribution".to_string();
-
-        assert_eq!(
-            parse_dist_materialization_version(fake_config, metric_type),
-            3
-        )
-    }
-
-    #[test]
-    fn test_dont_use_new_matview_non_dist() {
-        let fake_config: Result<Option<String>, _> = Ok(Some("3".to_string()));
-        let metric_type = "counter".to_string();
-
-        assert_eq!(
-            parse_dist_materialization_version(fake_config, metric_type),
-            2
-        )
-    }
-
-    #[test]
-    fn test_dont_use_new_matview() {
-        let fake_config: Result<Option<String>, _> = Ok(None);
-        let metric_type = "distribution".to_string();
-
-        assert_eq!(
-            parse_dist_materialization_version(fake_config, metric_type),
-            2
-        )
-    }
-
-    #[test]
     fn test_should_record_meta_yes() {
         let use_case_invalid = "escalating_issues";
         assert_eq!(should_record_meta(use_case_invalid), Some(0));
@@ -1423,7 +1469,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "counter".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 1979522105,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1435,6 +1481,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             count_value: 1.0,
         };
@@ -1446,6 +1493,63 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 615)])
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn test_counter_processor_with_counter_message_with_sampling_weight() {
+        let result = test_processor_with_payload(
+            &(process_counter_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_COUNTER_MESSAGE_WITH_SAMPLING_WEIGHT,
+        );
+        let expected_row = CountersRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65561,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65689, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_counter_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "init".to_string(),
+                ],
+                metric_type: "counter".to_string(),
+                materialization_version: 3,
+                timeseries_id: 1979522105,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+                sampling_weight: Some(100),
+            },
+            count_value: 1.0,
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 649)])
                 }),
             }
         );
@@ -1506,6 +1610,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
         };
@@ -1565,7 +1670,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1577,6 +1682,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1623,7 +1729,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1635,6 +1741,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1681,7 +1788,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1693,6 +1800,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: Some(1),
@@ -1739,7 +1847,7 @@ mod tests {
                     "healthy".to_string(),
                 ],
                 metric_type: "distribution".to_string(),
-                materialization_version: 2,
+                materialization_version: 4,
                 timeseries_id: 1436359714,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1751,6 +1859,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             distribution_values: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             enable_histogram: None,
@@ -1812,7 +1921,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "gauge".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 569776957,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1824,6 +1933,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
@@ -1839,6 +1949,67 @@ mod tests {
                 sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
                 cogs_data: Some(CogsData {
                     data: BTreeMap::from([("genericmetrics_spans".to_string(), 679)])
+                })
+            }
+        );
+    }
+
+    #[test]
+    fn test_gauge_processor_with_gauge_message_with_sampling_weight() {
+        let result = test_processor_with_payload(
+            &(process_gauge_message
+                as fn(
+                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    crate::types::KafkaMessageMetadata,
+                    &crate::ProcessorConfig,
+                )
+                    -> std::result::Result<crate::types::InsertBatch, anyhow::Error>),
+            DUMMY_GAUGE_MESSAGE_WITH_SAMPLING_WEIGHT,
+        );
+        let expected_row = GaugesRawRow {
+            common_fields: CommonMetricFields {
+                use_case_id: "spans".to_string(),
+                org_id: 1,
+                project_id: 3,
+                metric_id: 65564,
+                timestamp: 1704614940,
+                retention_days: 90,
+                tags_key: vec![65690, 9223372036854776010, 9223372036854776017],
+                tags_indexed_value: vec![0; 3],
+                tags_raw_value: vec![
+                    "metric_e2e_spans_gauge_v_VUW93LMS".to_string(),
+                    "production".to_string(),
+                    "init".to_string(),
+                ],
+                metric_type: "gauge".to_string(),
+                materialization_version: 3,
+                timeseries_id: 569776957,
+                granularities: vec![
+                    GRANULARITY_ONE_MINUTE,
+                    GRANULARITY_ONE_HOUR,
+                    GRANULARITY_ONE_DAY,
+                ],
+                decasecond_retention_days: None,
+                min_retention_days: Some(90),
+                hr_retention_days: None,
+                day_retention_days: None,
+                record_meta: Some(1),
+                sampling_weight: Some(100),
+            },
+            gauges_values_last: vec![10.0],
+            gauges_values_count: vec![10],
+            gauges_values_max: vec![10.0],
+            gauges_values_min: vec![1.0],
+            gauges_values_sum: vec![20.0],
+        };
+        assert_eq!(
+            result.unwrap(),
+            InsertBatch {
+                rows: RowData::from_rows([expected_row]).unwrap(),
+                origin_timestamp: None,
+                sentry_received_timestamp: DateTime::from_timestamp(1704614940, 0),
+                cogs_data: Some(CogsData {
+                    data: BTreeMap::from([("genericmetrics_spans".to_string(), 711)])
                 })
             }
         );
@@ -1872,7 +2043,7 @@ mod tests {
                     "init".to_string(),
                 ],
                 metric_type: "gauge".to_string(),
-                materialization_version: 2,
+                materialization_version: 3,
                 timeseries_id: 569776957,
                 granularities: vec![
                     GRANULARITY_ONE_MINUTE,
@@ -1885,6 +2056,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             gauges_values_last: vec![10.0],
             gauges_values_count: vec![10],
@@ -1960,6 +2132,7 @@ mod tests {
                 hr_retention_days: None,
                 day_retention_days: None,
                 record_meta: Some(1),
+                sampling_weight: None,
             },
             set_values: vec![0, 1, 2, 3, 4, 5],
         };

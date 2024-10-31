@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import io
+import socket
 import sys
+import time
 from contextlib import redirect_stdout
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Mapping, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Type, cast
 
 import sentry_sdk
 import simplejson as json
 import structlog
 from flask import Flask, Response, g, jsonify, make_response, request
+from google.protobuf.json_format import MessageToDict, Parse
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from snuba import settings, state
@@ -22,6 +25,7 @@ from snuba.admin.clickhouse.capacity_management import (
     get_storages_with_allocation_policies,
 )
 from snuba.admin.clickhouse.common import InvalidCustomQuery
+from snuba.admin.clickhouse.database_clusters import get_node_info, get_system_settings
 from snuba.admin.clickhouse.migration_checks import run_migration_checks_and_policies
 from snuba.admin.clickhouse.nodes import get_storage_info
 from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
@@ -30,15 +34,23 @@ from snuba.admin.clickhouse.predefined_cardinality_analyzer_queries import (
 from snuba.admin.clickhouse.predefined_querylog_queries import QuerylogQuery
 from snuba.admin.clickhouse.predefined_system_queries import SystemQuery
 from snuba.admin.clickhouse.querylog import describe_querylog_schema, run_querylog_query
-from snuba.admin.clickhouse.system_queries import run_system_query_on_host_with_sql
-from snuba.admin.clickhouse.tracing import run_query_and_get_trace
+from snuba.admin.clickhouse.system_queries import (
+    UnauthorizedForSudo,
+    run_system_query_on_host_with_sql,
+)
+from snuba.admin.clickhouse.tracing import (
+    QueryTraceData,
+    TraceOutput,
+    run_query_and_get_trace,
+)
 from snuba.admin.dead_letter_queue import get_dlq_topics
 from snuba.admin.kafka.topics import get_broker_data
 from snuba.admin.migrations_policies import (
     check_migration_perms,
     get_migration_group_policies,
 )
-from snuba.admin.production_queries.prod_queries import run_snql_query
+from snuba.admin.production_queries.prod_queries import run_mql_query, run_snql_query
+from snuba.admin.rpc.rpc_queries import validate_request_meta
 from snuba.admin.runtime_config import (
     ConfigChange,
     ConfigType,
@@ -59,18 +71,35 @@ from snuba.consumers.dlq import (
     store_instruction,
 )
 from snuba.datasets.factory import InvalidDatasetError, get_enabled_dataset_names
-from snuba.datasets.storages.factory import get_all_storage_keys, get_storage
+from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.migrations.connect import check_for_inactive_replicas
+from snuba.manual_jobs.runner import (
+    list_job_specs,
+    list_job_specs_with_status,
+    run_job,
+    view_job_logs,
+)
 from snuba.migrations.errors import InactiveClickhouseReplica, MigrationError
-from snuba.migrations.groups import MigrationGroup, get_group_readiness_state
+from snuba.migrations.groups import MigrationGroup
 from snuba.migrations.runner import MigrationKey, Runner
+from snuba.migrations.status import Status
+from snuba.query.allocation_policies import AllocationPolicy
 from snuba.query.exceptions import InvalidQueryException
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.replacers.replacements_and_expiry import (
     get_config_auto_replacements_bypass_projects,
 )
+from snuba.request.exceptions import InvalidJsonRequestException
+from snuba.request.schema import RequestSchema
 from snuba.state.explain_meta import explain_cleanup, get_explain_meta
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.registered_class import InvalidConfigKeyError
+from snuba.web.delete_query import (
+    DeletesNotEnabledError,
+    delete_from_storage,
+    deletes_are_enabled,
+)
+from snuba.web.rpc import RPCEndpoint, list_all_endpoint_names, run_rpc_handler
 from snuba.web.views import dataset_query
 
 logger = structlog.get_logger().bind(module=__name__)
@@ -186,7 +215,7 @@ def migrations_groups_list(group: str) -> Response:
                             "status": status.value,
                             "blocking": blocking,
                         }
-                        for migration_id, status, blocking in runner_group_migrations
+                        for migration_id, status, blocking, _ in runner_group_migrations
                     ]
                 ),
                 200,
@@ -216,6 +245,34 @@ def reverse_migration(group: str, migration_id: str) -> Response:
     )
 
 
+@application.route(
+    "/migrations/<group>/overwrite/<migration_id>/status/<new_status>",
+    methods=["POST"],
+)
+@check_tool_perms(tools=[AdminTools.MIGRATIONS])
+def force_overwrite_migration_status(
+    group: str, migration_id: str, new_status: str
+) -> Response:
+    try:
+        migration_group = MigrationGroup(group)
+    except ValueError as err:
+        logger.error(err, exc_info=True)
+        return make_response(jsonify({"error": "Group not found"}), 400)
+
+    runner.force_overwrite_status(migration_group, migration_id, Status(new_status))
+    user = request.headers.get(USER_HEADER_KEY)
+
+    audit_log.record(
+        user or "",
+        AuditLogAction.FORCE_MIGRATION_OVERWRITE,
+        {"group": group, "migration": migration_id, "new_status": new_status},
+        notify=True,
+    )
+
+    res = {"status": "OK"}
+    return make_response(jsonify(res), 200)
+
+
 @check_migration_perms
 def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Response:
     try:
@@ -223,7 +280,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
     except ValueError as err:
         logger.error(err, exc_info=True)
         return make_response(jsonify({"error": "Group not found"}), 400)
-    readiness_state = get_group_readiness_state(migration_group)
     migration_key = MigrationKey(migration_group, migration_id)
 
     def str_to_bool(s: str) -> bool:
@@ -245,9 +301,6 @@ def run_or_reverse_migration(group: str, action: str, migration_id: str) -> Resp
                     else AuditLogAction.REVERSED_MIGRATION_STARTED
                 ),
                 {"migration": str(migration_key), "force": force, "fake": fake},
-            )
-            check_for_inactive_replicas(
-                get_all_storage_keys(readiness_states=[readiness_state])
             )
 
         if action == "run":
@@ -363,7 +416,7 @@ def auto_replacements_bypass_projects() -> Response:
 # Sample cURL command:
 #
 # curl -X POST \
-#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors"}' \
+#  -d '{"host": "127.0.0.1", "port": 9000, "sql": "select count() from system.parts;", storage: "errors", sudo: false}' \
 #  -H 'Content-Type: application/json' \
 #  http://127.0.0.1:1219/run_clickhouse_system_query
 @application.route("/run_clickhouse_system_query", methods=["POST"])
@@ -378,20 +431,26 @@ def clickhouse_system_query() -> Response:
         port = req["port"]
         storage = req["storage"]
         raw_sql = req["sql"]
+        sudo_mode = req.get("sudo", False)
     except KeyError:
         return make_response(jsonify({"error": "Invalid request"}), 400)
 
     try:
-        result = run_system_query_on_host_with_sql(host, port, storage, raw_sql)
+        result = run_system_query_on_host_with_sql(
+            host, port, storage, raw_sql, sudo_mode, g.user
+        )
         rows = []
         rows, columns = cast(List[List[str]], result.results), result.meta
 
-        if columns:
+        if columns is not None:
             res = {}
             res["column_names"] = [name for name, _ in columns]
             res["rows"] = [[str(col) for col in row] for row in rows]
 
             return make_response(jsonify(res), 200)
+    except UnauthorizedForSudo as err:
+        return make_response(jsonify({"error": err.message or "Cannot sudo"}), 400)
+
     except InvalidCustomQuery as err:
         return make_response(jsonify({"error": err.message or "Invalid query"}), 400)
 
@@ -429,8 +488,61 @@ def clickhouse_trace_query() -> Response:
         )
 
     try:
-        result = run_query_and_get_trace(storage, raw_sql)
-        return make_response(jsonify(asdict(result)), 200)
+        # Append 'log_profile_events=1' with/without the SETTINGS clause to the incoming query.
+        settings_index = raw_sql.lower().find("settings")
+        if settings_index != -1:
+            start_index = settings_index + len("settings")
+            remaining = raw_sql[start_index:].strip()
+            if "log_profile_events=1" not in remaining:
+                raw_sql += ", log_profile_events=1"
+        else:
+            raw_sql += " SETTINGS log_profile_events=1"
+
+        query_trace = run_query_and_get_trace(storage, raw_sql)
+
+        profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+
+        for query_trace_data in parse_trace_for_query_ids(query_trace):
+            sql = profile_events_raw_sql.format(query_trace_data.query_id)
+            logger.info(
+                "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
+                    query_trace_data.host, query_trace_data.port, storage, sql, g.user
+                )
+            )
+            system_query_result, counter = None, 0
+            while counter < 30:
+                # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
+                # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
+                system_query_result = run_system_query_on_host_with_sql(
+                    query_trace_data.host,
+                    int(query_trace_data.port),
+                    storage,
+                    sql,
+                    False,
+                    g.user,
+                )
+                if not system_query_result.results:
+                    time.sleep(1)
+                    counter += 1
+                else:
+                    break
+
+            if system_query_result is not None and len(system_query_result.results) > 0:
+                query_trace.profile_events_meta.append(system_query_result.meta)
+                query_trace.profile_events_profile = cast(
+                    Dict[str, int], system_query_result.profile
+                )
+                columns = system_query_result.meta
+                if columns:
+                    res = {}
+                    res["column_names"] = [name for name, _ in columns]
+                    res["rows"] = []
+                    for query_result in system_query_result.results:
+                        if query_result[0]:
+                            res["rows"].append(json.dumps(query_result[0]))
+                    query_trace.profile_events_results[query_trace_data.node_name] = res
+
+        return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -444,6 +556,7 @@ def clickhouse_trace_query() -> Response:
             400,
         )
     except ClickhouseError as err:
+        logger.error(err, exc_info=True)
         details = {
             "type": "clickhouse",
             "message": str(err),
@@ -451,10 +564,38 @@ def clickhouse_trace_query() -> Response:
         }
         return make_response(jsonify({"error": details}), 400)
     except Exception as err:
+        logger.error(err, exc_info=True)
         return make_response(
             jsonify({"error": {"type": "unknown", "message": str(err)}}),
             500,
         )
+
+
+def hostname_resolves(hostname: str) -> bool:
+    try:
+        socket.gethostbyname(hostname)
+    except socket.error:
+        return False
+    else:
+        return True
+
+
+def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]:
+    summarized_trace_output = trace_output.summarized_trace_output
+    node_name_to_query_id = {
+        node_name: query_summary.query_id
+        for node_name, query_summary in summarized_trace_output.query_summaries.items()
+    }
+    logger.info("node to query id mapping: {}".format(node_name_to_query_id))
+    return [
+        QueryTraceData(
+            host=node_name if hostname_resolves(node_name) else "127.0.0.1",
+            port=9000,
+            query_id=query_id,
+            node_name=node_name,
+        )
+        for node_name, query_id in node_name_to_query_id.items()
+    ]
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
@@ -818,14 +959,26 @@ def storages_with_allocation_policies() -> Response:
 def get_allocation_policy_configs(storage_key: str) -> Response:
 
     policies = get_storage(StorageKey(storage_key)).get_allocation_policies()
-    data = [
-        {
-            "policy_name": policy.config_key(),
-            "configs": policy.get_current_configs(),
-            "optional_config_definitions": policy.get_optional_config_definitions_json(),
-        }
-        for policy in policies
-    ]
+    delete_policies = get_storage(
+        StorageKey(storage_key)
+    ).get_delete_allocation_policies()
+
+    data = []
+
+    def add_policy_data(policies: Sequence[AllocationPolicy], query_type: str) -> None:
+        for policy in policies:
+            data.append(
+                {
+                    "policy_name": policy.config_key(),
+                    "configs": policy.get_current_configs(),
+                    "optional_config_definitions": policy.get_optional_config_definitions_json(),
+                    "query_type": query_type,
+                }
+            )
+
+    add_policy_data(policies, "select")
+    add_policy_data(delete_policies, "delete")
+
     return Response(json.dumps(data), 200, {"Content-Type": "application/json"})
 
 
@@ -846,7 +999,10 @@ def set_allocation_policy_config() -> Response:
         assert key != "", "Key cannot be empty string"
         assert isinstance(policy_name, str), "Invalid policy name"
 
-        policies = get_storage(StorageKey(storage)).get_allocation_policies()
+        policies = (
+            get_storage(StorageKey(storage)).get_allocation_policies()
+            + get_storage(StorageKey(storage)).get_delete_allocation_policies()
+        )
         policy = next(
             (p for p in policies if p.config_key() == policy_name),
             None,
@@ -1016,6 +1172,53 @@ def dlq_replay() -> Response:
     return make_response(loaded_instruction.to_bytes().decode("utf-8"), 200)
 
 
+@application.route("/rpc_endpoints", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def list_rpc_endpoints() -> Response:
+    return Response(
+        json.dumps(list_all_endpoint_names()),
+        200,
+        {"Content-Type": "application/json"},
+    )
+
+
+@application.route("/rpc_execute/<endpoint_name>/<version>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.RPC_ENDPOINTS])
+def execute_rpc_endpoint(endpoint_name: str, version: str) -> Response:
+    try:
+        endpoint_class: Type[RPCEndpoint[Any, Any]] = RPCEndpoint.get_from_name(
+            endpoint_name, version
+        )
+    except InvalidConfigKeyError:
+        return Response(
+            json.dumps(
+                {"error": f"Unknown endpoint: {endpoint_name} or version: {version}"}
+            ),
+            404,
+            {"Content-Type": "application/json"},
+        )
+
+    body = request.json
+
+    try:
+        request_proto = Parse(json.dumps(body), endpoint_class.request_class()())
+        validate_request_meta(request_proto)
+        response = run_rpc_handler(
+            endpoint_name, version, request_proto.SerializeToString()
+        )
+        return Response(
+            json.dumps(MessageToDict(response)),
+            200,
+            {"Content-Type": "application/json"},
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({"error": str(e)}),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
 @application.route("/production_snql_query", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
 def production_snql_query() -> Response:
@@ -1023,6 +1226,27 @@ def production_snql_query() -> Response:
     body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
     try:
         return run_snql_query(body, g.user.email)
+    except InvalidQueryException as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+    except InvalidDatasetError as exception:
+        return Response(
+            json.dumps({"error": {"message": str(exception)}}, indent=4),
+            400,
+            {"Content-Type": "application/json"},
+        )
+
+
+@application.route("/production_mql_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.PRODUCTION_QUERIES])
+def production_mql_query() -> Response:
+    body = json.loads(request.data)
+    body["tenant_ids"] = {"referrer": request.referrer, "organization_id": ORG_ID}
+    try:
+        return run_mql_query(body, g.user.email)
     except InvalidQueryException as exception:
         return Response(
             json.dumps({"error": {"message": str(exception)}}, indent=4),
@@ -1046,3 +1270,121 @@ def get_allowed_projects() -> Response:
 @application.route("/admin_regions", methods=["GET"])
 def get_admin_regions() -> Response:
     return make_response(jsonify(settings.ADMIN_REGIONS), 200)
+
+
+@application.route(
+    "/delete",
+    methods=["DELETE"],
+)
+@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
+def delete() -> Response:
+    """
+    Given a storage name and columns object, parses the input and calls
+    delete_from_storage with them.
+
+    Input:
+        an http DELETE request with a json body containing elements "storage" and "columns"
+        see delete_from_storage for definition of these inputs.
+    """
+    body = request.get_json()
+    assert isinstance(body, dict)
+    storage = body.pop("storage", None)
+    if storage is None:
+        return make_response(
+            jsonify(
+                {
+                    "error",
+                    "all required input 'storage' is not present in the request body",
+                }
+            ),
+            400,
+        )
+    try:
+        storage = get_writable_storage(StorageKey(storage))
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": str(e),
+                }
+            ),
+            400,
+        )
+    try:
+        schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
+        request_parts = schema.validate(body)
+        delete_results = delete_from_storage(
+            storage,
+            request_parts.query["query"]["columns"],
+            request_parts.attribution_info,
+        )
+    except (InvalidJsonRequestException, DeletesNotEnabledError) as schema_error:
+        return make_response(
+            jsonify({"error": str(schema_error)}),
+            400,
+        )
+    except Exception as e:
+        if application.debug:
+            from traceback import format_exception
+
+            return make_response(jsonify({"error": format_exception(e)}), 500)
+        else:
+            sentry_sdk.capture_exception(e)
+            return make_response(jsonify({"error": "unexpected internal error"}), 500)
+
+    return Response(
+        json.dumps(delete_results), 200, {"Content-Type": "application/json"}
+    )
+
+
+@application.route(
+    "/deletes-enabled",
+    methods=["GET"],
+)
+@check_tool_perms(tools=[AdminTools.DELETE_TOOL])
+def deletes_enabled() -> Response:
+    return make_response(jsonify(deletes_are_enabled()), 200)
+
+
+@application.route("/job-specs", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_specs() -> Response:
+    return make_response(jsonify(list_job_specs_with_status()), 200)
+
+
+@application.route("/job-specs/<job_id>", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def execute_job(job_id: str) -> Response:
+    job_specs = list_job_specs()
+    return make_response(run_job(job_specs[job_id]), 200)
+
+
+@application.route("/job-specs/<job_id>/logs", methods=["GET"])
+@check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
+def get_job_logs(job_id: str) -> Response:
+    return make_response(jsonify(view_job_logs(job_id)), 200)
+
+
+@application.route("/clickhouse_node_info")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_node_info() -> Response:
+    return make_response(jsonify(get_node_info()), 200)
+
+
+@application.route("/clickhouse_system_settings")
+@check_tool_perms(tools=[AdminTools.DATABASE_CLUSTERS])
+def clickhouse_system_settings() -> Response:
+    host = request.args.get("host")
+    port = request.args.get("port")
+    storage = request.args.get("storage")
+    if not all([host, port, storage]):
+        return make_response(
+            jsonify({"error": "Host, port, and storage are required"}), 400
+        )
+    try:
+        # conversions for typing
+        settings = get_system_settings(str(host), int(str(port)), str(storage))
+        return make_response(jsonify(settings), 200)
+    except Exception as e:
+        sentry_sdk.capture_exception(e)
+        return make_response(jsonify({"error": str(e)}), 500)

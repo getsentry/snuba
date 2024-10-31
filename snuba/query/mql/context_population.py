@@ -132,6 +132,7 @@ def rollup_expressions(
     with_totals = rollup.with_totals == "True"
     selected_time = None
     orderby = None
+
     if rollup.interval:
         # If an interval is specified, then we need to group the time by that interval,
         # return the time in the select, and order the results by that time.

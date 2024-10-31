@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
-from snuba.clickhouse.columns import Nullable, TypeModifier, TypeModifiers
+from snuba.clickhouse.columns import (
+    Nullable,
+    SchemaModifiers,
+    TypeModifier,
+    TypeModifiers,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +51,20 @@ class MigrationModifiers(TypeModifiers):
             codecs=self.codecs if other.codecs is None else other.codecs,
             ttl=self.ttl if other.ttl is None else other.ttl,
         )
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, SchemaModifiers):
+            return self.nullable == other.nullable
+        elif isinstance(other, MigrationModifiers):
+            return (
+                self.nullable == other.nullable
+                and self.low_cardinality == other.low_cardinality
+                and self.default == other.default
+                and self.materialized == other.materialized
+                and self.codecs == other.codecs
+                and self.ttl == other.ttl
+            )
+        return False
 
 
 @dataclass(frozen=True)

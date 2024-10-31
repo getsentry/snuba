@@ -34,7 +34,7 @@ class DirectoryLoader(GroupLoader, ABC):
     represents the migration ID.
 
     Migrations must be named: xxxx_migration_name.py where xxxx is 4 digit,
-    0 padded migration number. As regex: [0-9][0-9][0-9][0-9]_.*\.py
+    0 padded migration number. As regex: [0-9][0-9][0-9][0-9]_.*.py
     Within a dir, migration number are strictly increasing by 1 beginning at
     0001
     """
@@ -62,6 +62,11 @@ class DirectoryLoader(GroupLoader, ABC):
         last = None
         for fname in migration_filenames:
             if last is not None and fname[:4] == last[:4]:
+                """
+                if this is failing in CI when u think the files dont exist
+                i think its a github cache or something u might have to
+                remake the PR or branch or something
+                """
                 raise ValueError(
                     f"""Duplicate migration number for the following files:
     {os.path.join(migration_folder,last)}.py
@@ -156,6 +161,11 @@ class SearchIssuesLoader(DirectoryLoader):
 class SpansLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.spans")
+
+
+class EventsAnalyticsPlatformLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.events_analytics_platform")
 
 
 class GroupAttributesLoader(DirectoryLoader):

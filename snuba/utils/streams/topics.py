@@ -64,7 +64,13 @@ class Topic(Enum):
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
 
     SPANS = "snuba-spans"
+    EAP_SPANS_COMMIT_LOG = "snuba-eap-spans-commit-log"
+    SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-spans"
+    SUBSCRIPTION_RESULTS_EAP_SPANS = "eap-spans-subscription-results"
     METRICS_SUMMARIES = "snuba-metrics-summaries"
+    EAP_MUTATIONS = "snuba-eap-mutations"
+
+    LW_DELETIONS_SEARCH_ISSUES = "snuba-lw-deletions-search-issues"
 
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
