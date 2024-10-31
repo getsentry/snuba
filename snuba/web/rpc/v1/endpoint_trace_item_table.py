@@ -209,7 +209,7 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     aggregation_present = any([c for c in in_msg.columns if c.HasField("aggregation")])
     if non_aggregted_columns != grouped_by_columns and aggregation_present:
         raise BadSnubaRPCRequestException(
-            f"Non aggregated columns should be in group_by. non_aggregted_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
+            f"Non aggregated columns should be in group_by. non_aggregated_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
         )
 
 
