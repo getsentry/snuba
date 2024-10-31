@@ -8,8 +8,9 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -90,7 +91,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 ),
             ),
             limit=1000,
-            offset=0,
             type=AttributeKey.Type.TYPE_STRING,
             value_substring_match="",
         )
@@ -120,7 +120,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 name="sentry.service", type=AttributeKey.Type.TYPE_STRING
             ),
         ]
-        assert res == TraceItemAttributeNamesResponse(attributes=expected)
+        assert res.attributes == expected
 
     def test_simple_float(self) -> None:
         req = TraceItemAttributeNamesRequest(
@@ -137,7 +137,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 ),
             ),
             limit=1000,
-            offset=0,
             type=AttributeKey.Type.TYPE_FLOAT,
             value_substring_match="",
         )
@@ -155,4 +154,189 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 name="sentry.duration_ms", type=AttributeKey.Type.TYPE_FLOAT
             )
         )
-        assert res == TraceItemAttributeNamesResponse(attributes=expected)
+        assert res.attributes == expected
+
+    def test_with_filter(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="28",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+
+        expected = [
+            TraceItemAttributeNamesResponse.Attribute(
+                name="a_tag_028", type=AttributeKey.Type.TYPE_STRING
+            )
+        ]
+        assert res.attributes == expected
+
+    def test_with_page_token(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+
+        # this is all the expected attributes
+        expected_attributes = []
+        for i in range(30):
+            expected_attributes.append(
+                TraceItemAttributeNamesResponse.Attribute(
+                    name=f"a_tag_{str(i).zfill(3)}",
+                    type=AttributeKey.Type.TYPE_STRING,
+                )
+            )
+        expected_attributes += [
+            TraceItemAttributeNamesResponse.Attribute(
+                name="http.status_code", type=AttributeKey.Type.TYPE_STRING
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="sentry.category", type=AttributeKey.Type.TYPE_STRING
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="sentry.name", type=AttributeKey.Type.TYPE_STRING
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="sentry.segment_name", type=AttributeKey.Type.TYPE_STRING
+            ),
+            TraceItemAttributeNamesResponse.Attribute(
+                name="sentry.service", type=AttributeKey.Type.TYPE_STRING
+            ),
+        ]
+        # since we limited by 10 in the req, we only expect to see the first 10
+        assert res.attributes == expected_attributes[:10]
+
+        # now we use the page token given in the response to get the next 10
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="",
+            page_token=res.page_token,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert res.attributes == expected_attributes[10:20]
+
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="",
+            page_token=res.page_token,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert res.attributes == expected_attributes[20:30]
+
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="",
+            page_token=res.page_token,
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert res.attributes == expected_attributes[30:]
+
+    def test_page_token_offset_filter(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            limit=10,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="",
+            page_token=PageToken(filter_offset=TraceItemFilter()),
+        )
+        with pytest.raises(NotImplementedError):
+            EndpointTraceItemAttributeNames().execute(req)
+
+    def test_response_metadata(self) -> None:
+        # debug must be true in RequestMeta for it to return query_info in the response
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+                debug=True,
+            ),
+            limit=1000,
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert res.meta.query_info != []

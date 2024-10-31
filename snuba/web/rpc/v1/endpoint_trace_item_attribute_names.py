@@ -6,6 +6,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesRequest,
     TraceItemAttributeNamesResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.attribution.appid import AppID
@@ -15,6 +16,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -24,6 +26,7 @@ from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
+from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -51,7 +54,6 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
         raise BadSnubaRPCRequestException(f"Unknown attribute type: {req.type}")
 
     # truncate_request_meta_to_day(request.meta)
-    # TODO: value substring filter
     query = Query(
         from_clause=entity,
         selected_columns=[
@@ -60,7 +62,9 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
                 expression=column("attr_key"),
             ),
         ],
-        condition=base_conditions_and(req.meta),
+        condition=base_conditions_and(
+            req.meta, f.like(column("attr_key"), f"%{req.value_substring_match}%")
+        ),
         order_by=[
             OrderBy(
                 direction=OrderByDirection.ASC, expression=column("organization_id")
@@ -72,12 +76,12 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
             column("attr_key", alias="attr_key"),
         ],
         limit=req.limit,
-        offset=req.offset,
+        offset=req.page_token.offset,
     )
     treeify_or_and_conditions(query)
 
     return SnubaRequest(
-        id=uuid.uuid4(),
+        id=uuid.UUID(req.meta.request_id),
         original_body=MessageToDict(req),
         query=query,
         query_settings=HTTPQuerySettings(),
@@ -95,9 +99,9 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
     )
 
 
-def convert_to_response(
+def convert_to_attributes(
     query_res: QueryResult, attribute_type: AttributeKey.Type.ValueType
-) -> TraceItemAttributeNamesResponse:
+) -> list[TraceItemAttributeNamesResponse.Attribute]:
     def t(row: Row) -> TraceItemAttributeNamesResponse.Attribute:
         # our query to snuba only selected 1 column, attr_key
         # so the result should only have 1 item per row
@@ -108,8 +112,7 @@ def convert_to_response(
             name=attr_name, type=attribute_type
         )
 
-    attributes = map(t, query_res.result["data"])
-    return TraceItemAttributeNamesResponse(attributes=attributes)
+    return list(map(t, query_res.result["data"]))
 
 
 class EndpointTraceItemAttributeNames(
@@ -127,13 +130,36 @@ class EndpointTraceItemAttributeNames(
     def response_class(cls) -> Type[TraceItemAttributeNamesResponse]:
         return TraceItemAttributeNamesResponse
 
+    def _build_response(
+        self,
+        req: TraceItemAttributeNamesRequest,
+        res: QueryResult,
+    ) -> TraceItemAttributeNamesResponse:
+        attributes = convert_to_attributes(res, req.type)
+        return TraceItemAttributeNamesResponse(
+            attributes=attributes,
+            page_token=PageToken(offset=req.page_token.offset + len(attributes)),
+            meta=extract_response_meta(
+                req.meta.request_id, req.meta.debug, [res], [self._timer]
+            ),
+        )
+
     def _execute(
         self, req: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
+        if not req.HasField("page_token"):
+            req.page_token.offset = 0
+        if req.page_token.HasField("filter_offset"):
+            raise NotImplementedError(
+                "EndpointTraceItemAttributeNames does not currently support page_token.filter_offset, please use page_token.offset instead."
+            )
+        if not req.meta.request_id:
+            req.meta.request_id = str(uuid.uuid4())
+
         snuba_request = convert_to_snuba_request(req)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
-        return convert_to_response(res, req.type)
+        return self._build_response(req, res)
