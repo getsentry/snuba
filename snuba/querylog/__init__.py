@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from random import random
 from typing import Any, Mapping, Optional, Union
+from uuid import UUID
 
 import sentry_sdk
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
@@ -204,7 +205,7 @@ def _add_tags(
 
 
 def _build_failed_request_dict(
-    request_id: str,
+    request_id: UUID,
     body: dict[str, Any],
     dataset: str,
     organization: int,
@@ -214,7 +215,7 @@ def _build_failed_request_dict(
 ) -> snuba_queries_v1.Querylog:
     return {
         "request": {
-            "id": request_id,
+            "id": request_id.hex,
             "body": body,
             "referrer": str(referrer),
             "team": None,
@@ -237,7 +238,7 @@ def _build_failed_request_dict(
 
 
 def record_invalid_request(
-    request_id: str,
+    request_id: UUID,
     body: dict[str, Any],
     dataset: str,
     organization: int,
@@ -268,7 +269,7 @@ def record_invalid_request(
 
 
 def record_error_building_request(
-    request_id: str,
+    request_id: UUID,
     body: dict[str, Any],
     dataset: str,
     organization: int,

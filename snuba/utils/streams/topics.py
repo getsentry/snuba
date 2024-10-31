@@ -70,6 +70,8 @@ class Topic(Enum):
     METRICS_SUMMARIES = "snuba-metrics-summaries"
     EAP_MUTATIONS = "snuba-eap-mutations"
 
+    LW_DELETIONS_SEARCH_ISSUES = "snuba-lw-deletions-search-issues"
+
     COGS_SHARED_RESOURCES_USAGE = "shared-resources-usage"
 
 

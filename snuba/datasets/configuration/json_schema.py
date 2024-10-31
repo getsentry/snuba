@@ -149,10 +149,42 @@ NO_ARG_SCHEMA = make_column_schema(
     },
 )
 
+DATETIME64_SCHEMA = make_column_schema(
+    column_type={"const": "DateTime64"},
+    args={
+        "type": "object",
+        "properties": {
+            "precision": {"type": "integer"},
+            "timezone": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
+)
+
 # Get just the type
 _SIMPLE_COLUMN_TYPES = [
     del_name_field(col_type) for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA]
 ]
+
+# Tuple inner types are the same as normal column types except they don't have a name
+_SIMPLE_TUPLE_INNER_TYPES = [
+    del_name_field(col_type)
+    for col_type in [NUMBER_SCHEMA, NO_ARG_SCHEMA, DATETIME64_SCHEMA]
+]
+
+TUPLE_SCHEMA = make_column_schema(
+    column_type={"const": "Tuple"},
+    args={
+        "type": "object",
+        "properties": {
+            "inner_types": {
+                "type": "array",
+                "items": {"anyOf": _SIMPLE_TUPLE_INNER_TYPES},
+            }
+        },
+        "additionalProperties": False,
+    },
+)
 
 AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
     column_type={"const": "AggregateFunction"},
@@ -162,7 +194,7 @@ AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
+                "items": {"anyOf": [*_SIMPLE_COLUMN_TYPES, TUPLE_SCHEMA]},
             },
         },
         "additionalProperties": False,
@@ -177,7 +209,7 @@ SIMPLE_AGGREGATE_FUNCTION_SCHEMA = make_column_schema(
             "func": TYPE_STRING,
             "arg_types": {
                 "type": "array",
-                "items": {"anyOf": _SIMPLE_COLUMN_TYPES},
+                "items": {"anyOf": [*_SIMPLE_COLUMN_TYPES, TUPLE_SCHEMA]},
             },
         },
         "additionalProperties": False,
@@ -204,18 +236,6 @@ ENUM_SCHEMA = make_column_schema(
     },
 )
 
-DATETIME64_SCHEMA = make_column_schema(
-    column_type={"const": "DateTime64"},
-    args={
-        "type": "object",
-        "properties": {
-            "precision": {"type": "integer"},
-            "timezone": {"type": "string"},
-        },
-        "additionalProperties": False,
-    },
-)
-
 SIMPLE_COLUMN_SCHEMAS = [
     NUMBER_SCHEMA,
     FIXED_STRING_SCHEMA,
@@ -228,11 +248,6 @@ SIMPLE_COLUMN_SCHEMAS = [
 
 # Array inner types are the same as normal column types except they don't have a name
 _SIMPLE_ARRAY_INNER_TYPES = [
-    del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
-]
-
-# Tuple inner types are the same as normal column types except they don't have a name
-_SIMPLE_TUPLE_INNER_TYPES = [
     del_name_field(col_type) for col_type in SIMPLE_COLUMN_SCHEMAS
 ]
 
@@ -264,20 +279,6 @@ MAP_SCHEMA = make_column_schema(
         "properties": {
             "key": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
             "value": {"anyOf": _SIMPLE_ARRAY_INNER_TYPES},
-        },
-        "additionalProperties": False,
-    },
-)
-
-TUPLE_SCHEMA = make_column_schema(
-    column_type={"const": "Tuple"},
-    args={
-        "type": "object",
-        "properties": {
-            "inner_types": {
-                "type": "array",
-                "items": {"anyOf": _SIMPLE_TUPLE_INNER_TYPES},
-            }
         },
         "additionalProperties": False,
     },
@@ -599,6 +600,11 @@ DELETION_SETTINGS_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": "Names of the tables to delete from.",
+        },
+        "allowed_columns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Columns allowed in WHERE clause.",
         },
         "max_rows_to_delete": {
             "type": "integer",

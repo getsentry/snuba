@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Accordion, Stack, Title, Text, Group } from "@mantine/core";
+import { Accordion, Stack, Title, Text, Group, Table } from "@mantine/core";
 
 import Client from "SnubaAdmin/api_client";
 import QueryDisplay from "SnubaAdmin/tracing/query_display";
@@ -98,7 +98,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {summarizedTraceDisplay(value.summarized_trace_output)}
+                  {summarizedTraceDisplay(value.summarized_trace_output, value.profile_events_results)}
                 </div>
               );
             } else {
@@ -137,7 +137,7 @@ function TracingQueries(props: { api: Client }) {
             </li>
           );
         })}
-        <br/>
+        <br />
         <Title order={4}>Trace Output</Title>
         {parsedLines.map((line, index) => {
           return (
@@ -267,7 +267,8 @@ function TracingQueries(props: { api: Client }) {
   }
 
   function summarizedTraceDisplay(
-    value: TracingSummary
+    value: TracingSummary,
+    profileEventResults: ProfileEvent
   ): JSX.Element | undefined {
     let dist_node;
     let nodes = [];
@@ -287,6 +288,42 @@ function TracingQueries(props: { api: Client }) {
           {nodes
             .filter((q: QuerySummary) => !q.is_distributed)
             .map((q: QuerySummary) => querySummary(q))}
+        </Accordion>
+        <Accordion chevronPosition="left">
+          <Accordion.Item value="profile-events" key="profile-events">
+            <Accordion.Control>
+              <Title order={4}>Profile Events Output</Title>
+            </Accordion.Control>
+            <Accordion.Panel>
+              {Object.entries(profileEventResults).map(([host, event]) => (
+                <Accordion chevronPosition="left" key={host}>
+                  <Accordion.Item value={host}>
+                    <Accordion.Control>
+                      <Title order={5}>{host}</Title>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Table>
+                        <thead>
+                          <tr>
+                            <th>Event</th>
+                            <th>Number of Events</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {event.rows.length > 0 && Object.entries(JSON.parse(event.rows[0]) as Record<string, number>).map(([key, value], rowIndex) => (
+                            <tr key={rowIndex}>
+                              <td>{key}</td>
+                              <td>{value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
+              ))}
+            </Accordion.Panel>
+          </Accordion.Item>
         </Accordion>
       </Stack>
     );

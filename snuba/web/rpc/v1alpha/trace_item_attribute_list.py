@@ -108,7 +108,7 @@ def _build_snuba_request(
     request: TraceItemAttributesRequestProto,
 ) -> SnubaRequest:
     return SnubaRequest(
-        id=str(uuid.uuid4()),
+        id=uuid.uuid4(),
         original_body=MessageToDict(request),
         query=_build_query(request),
         query_settings=HTTPQuerySettings(),

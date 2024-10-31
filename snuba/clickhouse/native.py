@@ -192,7 +192,7 @@ class ClickhousePool(object):
 
                     result_data: Sequence[Any]
                     trace_output = ""
-                    if capture_trace:
+                    if settings and settings.get("send_logs_level") == "trace":
                         with capture_logging() as buffer:
                             result_data = query_execute()
                             trace_output = buffer.getvalue()

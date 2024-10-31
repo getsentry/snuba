@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import cast
 
@@ -436,7 +437,7 @@ def test_composite(
     expected: CompositeQuery[Table],
 ) -> None:
     request = Request(
-        id="",
+        id=uuid.uuid4(),
         original_body={"query": "placeholder"},
         query=cast(LogicalQuery, logical_query),
         query_settings=HTTPQuerySettings(),
@@ -528,7 +529,7 @@ def test_invalid_composite(
     expected_error: Exception,
 ) -> None:
     request = Request(
-        id="",
+        id=uuid.uuid4(),
         original_body={"query": "placeholder"},
         query=cast(LogicalQuery, logical_query),
         query_settings=HTTPQuerySettings(),
