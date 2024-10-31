@@ -1,3 +1,4 @@
+import math
 import uuid
 from collections import defaultdict
 from datetime import datetime
@@ -37,6 +38,24 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+
+_VALID_GRANULARITY_SECS = set(
+    [
+        15,
+        30,
+        60,  # seconds
+        2 * 60,
+        5 * 60,
+        10 * 60,
+        30 * 60,  # minutes
+        1 * 3600,
+        3 * 3600,
+        12 * 3600,
+        24 * 3600,  # hours
+    ]
+)
+
+_MAX_BUCKETS_IN_REQUEST = 1000
 
 
 def _convert_result_timeseries(
@@ -223,6 +242,37 @@ def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
         labels.add(agg.label)
 
 
+def _validate_time_buckets(request: TimeSeriesRequest) -> None:
+    if request.meta.start_timestamp.seconds > request.meta.end_timestamp.seconds:
+        raise BadSnubaRPCRequestException("start timestamp is after end timestamp")
+    if request.granularity_secs == 0:
+        raise BadSnubaRPCRequestException("granularity of 0 is invalid")
+
+    if request.granularity_secs not in _VALID_GRANULARITY_SECS:
+        raise BadSnubaRPCRequestException(
+            f"Granularity of {request.granularity_secs} is not valid, valid granularity_secs: {sorted(_VALID_GRANULARITY_SECS)}"
+        )
+    request_duration = (
+        request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
+    )
+    num_buckets = request_duration / request.granularity_secs
+    if num_buckets > _MAX_BUCKETS_IN_REQUEST:
+        raise BadSnubaRPCRequestException(
+            f"This request is asking for too many datapoints ({num_buckets}, please raise your granularity_secs or shorten your time window"
+        )
+    if num_buckets < 1:
+        raise BadSnubaRPCRequestException(
+            "This request will return no datapoints lower your granularity or lengthen your time window"
+        )
+
+    ceil_num_buckets = math.ceil(num_buckets)
+    # if the granularity and time windoes don't match up evenly, adjust the window to include another data point
+    if num_buckets != ceil_num_buckets:
+        request.meta.end_timestamp.seconds = request.meta.start_timestamp.seconds + (
+            ceil_num_buckets * request.granularity_secs
+        )
+
+
 class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -242,6 +292,7 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
             uuid.uuid4()
         )
         _enforce_no_duplicate_labels(in_msg)
+        _validate_time_buckets(in_msg)
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
