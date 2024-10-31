@@ -10,7 +10,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    Function,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -150,7 +154,10 @@ def _convert_results(
             elif column.key.type == AttributeKey.TYPE_FLOAT:
                 converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         elif column.HasField("aggregation"):
-            converters[column.label] = lambda x: AttributeValue(val_float=float(x))
+            if column.aggregation.aggregate == Function.FUNCTION_COUNT:
+                converters[column.label] = lambda x: AttributeValue(val_int=x)
+            else:
+                converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         else:
             raise BadSnubaRPCRequestException(
                 "column is neither an attribute or aggregation"

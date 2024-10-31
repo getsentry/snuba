@@ -495,6 +495,16 @@ class TestTraceItemTable(BaseApiTest):
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
+                        label="count(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
             order_by=[
@@ -507,6 +517,11 @@ class TestTraceItemTable(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
+
+        class AnyInt(int):
+            def __eq__(self, _: int) -> bool:
+                return True
+
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="location",
@@ -530,6 +545,14 @@ class TestTraceItemTable(BaseApiTest):
                     AttributeValue(val_float=101.2),
                     AttributeValue(val_float=101.2),
                     AttributeValue(val_float=101.2),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="count(my.float.field)",
+                results=[
+                    AttributeValue(val_int=AnyInt()),
+                    AttributeValue(val_int=AnyInt()),
+                    AttributeValue(val_int=AnyInt()),
                 ],
             ),
         ]
