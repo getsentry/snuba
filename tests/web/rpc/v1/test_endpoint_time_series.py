@@ -127,13 +127,14 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_basic(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
+        tstart = Timestamp(seconds=ts.seconds - 3600)
         message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=ts,
+                start_timestamp=tstart,
                 end_timestamp=ts,
             ),
             aggregations=[
