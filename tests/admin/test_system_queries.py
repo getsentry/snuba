@@ -51,6 +51,7 @@ from snuba.admin.user import AdminUser
         """,
     ],
 )
+@pytest.mark.clickhouse_db
 def test_is_valid_system_query(sql_query: str) -> None:
     assert is_valid_system_query(
         settings.CLUSTERS[0]["host"],
@@ -92,6 +93,7 @@ def test_is_valid_system_query(sql_query: str) -> None:
         """,
     ],
 )
+@pytest.mark.clickhouse_db
 def test_invalid_system_query(sql_query: str) -> None:
     with pytest.raises(Exception):
         is_valid_system_query(
