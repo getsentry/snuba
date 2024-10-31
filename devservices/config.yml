@@ -40,7 +40,7 @@ services:
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
-      - sentry
+      - devservices
 
   snuba:
     image: ghcr.io/getsentry/snuba:latest
@@ -69,11 +69,11 @@ services:
     extra_hosts:
       host.docker.internal: host-gateway
     networks:
-      - sentry
+      - devservices
 
 volumes:
   clickhouse-data:
 
 networks:
-  sentry:
-    name: sentry
+  devservices:
+    name: devservices
