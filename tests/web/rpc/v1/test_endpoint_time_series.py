@@ -10,6 +10,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeries,
     TimeSeriesRequest,
 )
+from sentry_protos.snuba.v1.error_pb2 import Error
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -158,7 +159,10 @@ class TestTimeSeriesApi(BaseApiTest):
         response = self.app.post(
             "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
         )
-        assert response.status_code == 200
+        if response.status_code != 200:
+            error = Error()
+            error.ParseFromString(response.data)
+            assert response.status_code == 200, (error.message, error.details)
 
     def test_sum(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
