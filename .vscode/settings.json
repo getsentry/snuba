@@ -26,21 +26,25 @@
   },
 
   "[javascript]": {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
   },
 
   "[javascriptreact]": {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
   },
 
   "[typescript]": {
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2
   },
 
   "[typescriptreact]": {
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "vscode.typescript-language-features"
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.tabSize": 2
   },
 
   "[less]": {
