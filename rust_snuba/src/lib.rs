@@ -1,8 +1,10 @@
+mod arroyo_utils;
 mod config;
 mod consumer;
 mod factory;
 mod logging;
 mod metrics;
+mod mutations;
 mod processors;
 mod runtime_config;
 mod strategies;

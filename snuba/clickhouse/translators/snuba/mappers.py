@@ -1,4 +1,3 @@
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -26,7 +25,8 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.utils.registered_class import import_submodules_in_directory
+from snuba.utils.constants import ATTRIBUTE_BUCKETS
+from snuba.utils.hashes import fnv_1a
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -230,6 +230,41 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
 
 
 @dataclass(frozen=True)
+class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
+    """
+    Maps a key into the appropriate bucket by hashing the key. For example, hello[test] might go to attr_str_22['test']
+    """
+
+    from_column_table: Optional[str]
+    from_column_name: str
+    to_col_table: Optional[str]
+    to_col_name: str
+
+    def attempt_map(
+        self,
+        expression: SubscriptableReference,
+        children_translator: SnubaClickhouseStrictTranslator,
+    ) -> Optional[FunctionCallExpr]:
+        if (
+            expression.column.table_name != self.from_column_table
+            or expression.column.column_name != self.from_column_name
+        ):
+            return None
+        key = expression.key.accept(children_translator)
+        if not isinstance(key, LiteralExpr):
+            return None
+        if not isinstance(key.value, str):
+            return None
+
+        bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
+        return arrayElement(
+            expression.alias,
+            ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
+            key,
+        )
+
+
+@dataclass(frozen=True)
 class ColumnToMapping(ColumnToExpression):
     """
     Maps a column into a mapping expression thus into a Clickhouse
@@ -353,11 +388,19 @@ class FunctionNameMapper(FunctionCallMapper):
         )
 
 
-# TODO: build more of these mappers.
-
-import_submodules_in_directory(
-    os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "legacy_mappers_we_cant_delete"
-    ),
-    "snuba.clickhouse.translators.snuba.legacy_mappers_we_cant_delete",
-)
+@dataclass(frozen=True)
+class ColumnToMilliseconds(ColumnToFunction):
+    def __init__(
+        self,
+        from_col_name: str,
+        to_col_name: str,
+    ) -> None:
+        super().__init__(
+            None,
+            from_col_name,
+            "divide",
+            (
+                ColumnExpr(None, None, to_col_name),
+                LiteralExpr(alias=None, value=1000),
+            ),
+        )

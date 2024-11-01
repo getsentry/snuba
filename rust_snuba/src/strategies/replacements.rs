@@ -105,11 +105,6 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> for Prod
         }
     }
 
-    fn close(&mut self) {
-        self.inner.close();
-        self.next_step.close();
-    }
-
     fn terminate(&mut self) {
         self.inner.terminate();
         self.next_step.terminate();
@@ -178,7 +173,6 @@ mod tests {
             .unwrap();
 
         strategy.poll().unwrap();
-        strategy.close();
         strategy.join(None).unwrap();
 
         assert_eq!(produced_payloads.lock().unwrap().len(), 1);

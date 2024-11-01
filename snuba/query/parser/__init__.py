@@ -3,7 +3,7 @@ from typing import Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 from snuba import environment
 from snuba.query.composite import CompositeQuery
-from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -23,7 +23,7 @@ from snuba.utils.metrics.wrapper import MetricsWrapper
 metrics = MetricsWrapper(environment.metrics, "parser")
 
 
-def validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def validate_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
     """
     Ensures that no alias has been defined multiple times for different
     expressions in the query. Thus rejecting queries with shadowing.
@@ -51,7 +51,9 @@ def validate_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
                 all_declared_aliases[exp.alias] = exp
 
 
-def parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def parse_subscriptables(
+    query: Union[CompositeQuery[LogicalDataSource], Query]
+) -> None:
     """
     Turns columns formatted as tags[asd] into SubscriptableReference.
     """
@@ -68,14 +70,16 @@ def parse_subscriptables(query: Union[CompositeQuery[QueryEntity], Query]) -> No
         key_name = match[2]
         return SubscriptableReference(
             alias=exp.column_name,
-            column=Column(None, None, col_name),
+            column=Column(None, exp.table_name, col_name),
             key=Literal(None, key_name),
         )
 
     query.transform_expressions(transform)
 
 
-def apply_column_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def apply_column_aliases(
+    query: Union[CompositeQuery[LogicalDataSource], Query]
+) -> None:
     """
     Applies an alias to all the columns in the query equal to the column
     name unless a column already has one or the alias is already defined.
@@ -100,7 +104,7 @@ def apply_column_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> No
     query.transform_expressions(apply_aliases)
 
 
-def expand_aliases(query: Union[CompositeQuery[QueryEntity], Query]) -> None:
+def expand_aliases(query: Union[CompositeQuery[LogicalDataSource], Query]) -> None:
     """
     Recursively expand all the references to aliases in the query. This
     makes life easy to query processors and translators that only have to

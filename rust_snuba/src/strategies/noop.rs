@@ -16,8 +16,6 @@ impl<T> ProcessingStrategy<T> for Noop {
         Ok(())
     }
 
-    fn close(&mut self) {}
-
     fn terminate(&mut self) {}
 
     fn join(&mut self, _timeout: Option<Duration>) -> Result<Option<CommitRequest>, StrategyError> {

@@ -11,8 +11,8 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import (
     PartitionId,
     ScheduledSubscriptionTask,
+    SnQLSubscriptionData,
     Subscription,
-    SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionWithMetadata,
 )
@@ -34,7 +34,7 @@ class TestSubscriptionScheduler:
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
             SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
-            SubscriptionData(
+            SnQLSubscriptionData(
                 project_id=1,
                 query="MATCH (events) SELECT count() AS count",
                 time_window_sec=60,
@@ -66,19 +66,20 @@ class TestSubscriptionScheduler:
         sort_key: Optional[
             Callable[[ScheduledSubscriptionTask], Tuple[datetime, uuid.UUID]]
         ] = None,
+        entity_key: EntityKey = EntityKey.EVENTS,
     ) -> None:
         tick = self.build_tick(start, end)
 
         store = RedisSubscriptionDataStore(
             redis_client,
-            self.entity_key,
+            entity_key,
             self.partition_id,
         )
         for subscription in subscriptions:
             store.create(subscription.identifier.uuid, subscription.data)
 
         scheduler = SubscriptionScheduler(
-            EntityKey.EVENTS,
+            entity_key,
             store,
             self.partition_id,
             timedelta(minutes=1),
@@ -224,4 +225,38 @@ class TestSubscriptionScheduler:
             end=end,
             expected=expected,
             sort_key=self.sort_key,
+        )
+
+    @pytest.mark.redis_db
+    def test_generic_metrics_gauges_does_not_error(self) -> None:
+        state.set_config("subscription_primary_task_builder", "immediate")
+        subscription = Subscription(
+            SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
+            SnQLSubscriptionData(
+                project_id=1,
+                query="MATCH (generic_metrics_gauges) SELECT max(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
+                time_window_sec=60,
+                resolution_sec=int(timedelta(minutes=1).total_seconds()),
+                entity=get_entity(EntityKey.GENERIC_METRICS_GAUGES),
+                metadata={"organization": 1},
+            ),
+        )
+        start = timedelta(minutes=-10)
+        end = timedelta(minutes=0)
+        self.run_test(
+            [subscription],
+            start=start,
+            end=end,
+            expected=[
+                ScheduledSubscriptionTask(
+                    self.now + timedelta(minutes=-10 + i),
+                    SubscriptionWithMetadata(
+                        EntityKey.GENERIC_METRICS_GAUGES,
+                        subscription,
+                        self.build_tick(start, end).offsets.upper,
+                    ),
+                )
+                for i in range(10)
+            ],
+            entity_key=EntityKey.GENERIC_METRICS_GAUGES,
         )

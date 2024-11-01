@@ -309,6 +309,7 @@ storages:
               - group_ids
               - app_start_type
               - profile_id
+              - profiler_id
         - mapper: ColumnToFunctionOnColumn
           args:
             from_table_name: null
@@ -465,6 +466,7 @@ storages:
               - group_ids
               - app_start_type
               - profile_id
+              - profiler_id
       subscriptables:
         - mapper: SubscriptableMapper
           args:

@@ -113,6 +113,15 @@ schema:
             [{ name: key, type: String }, { name: value, type: String }],
         },
     },
+    {
+      name: _tags_hash_map,
+      type: Array,
+      args:
+        {
+          schema_modifiers: [readonly],
+          inner_type: { type: UInt, args: { size: 64 } },
+        },
+    },
     { name: click_node_id, type: UInt, args: { size: 32 } },
     { name: click_tag, type: String, args: {} },
     { name: click_id, type: String, args: {} },
@@ -138,6 +147,20 @@ required_time_column: timestamp
 storages:
   - storage: replays
     is_writable: true
+    translation_mappers:
+      columns:
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_key
+            to_function_name: arrayJoin
+            to_function_column: tags.key
+        - mapper: ColumnToFunctionOnColumn
+          args:
+            from_table_name: null
+            from_col_name: tags_value
+            to_function_name: arrayJoin
+            to_function_column: tags.value
 
 storage_selector:
   selector: DefaultQueryStorageSelector

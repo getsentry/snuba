@@ -307,3 +307,27 @@ class BranchCutter(ExpressionVisitor[SubExpression]):
                 exp.alias, exp.parameters, transformed.main_expression
             ),
         )
+
+
+class AggregateBranchCutter(BranchCutter):
+    """
+    Metrics JOIN queries do push down the group by columns, and so they don't need to avoid pushing down aggregate
+    functions. In fact the opposite is true, the query will fail if the aggregate functions are not pushed down.
+    """
+
+    def __init__(self, alias_generator: AliasGenerator) -> None:
+        self.__alias_generator = alias_generator
+        super().__init__(alias_generator)
+
+    def visit_function_call(self, exp: FunctionCall) -> SubExpression:
+        def builder(
+            alias: Optional[str], func_name: str, params: Sequence[Expression]
+        ) -> FunctionCall:
+            return FunctionCall(alias, func_name, tuple(params))
+
+        visited_params = [p.accept(self) for p in exp.parameters]
+        return _merge_subexpressions(
+            builder=partial(builder, exp.alias, exp.function_name),
+            sub_expressions=visited_params,
+            alias_generator=self.__alias_generator,
+        )

@@ -126,15 +126,6 @@ def main(
     if _head_commit_pr_has_skip_label(workdir):
         return
 
-    migrations_changes = _get_migration_changes(workdir, to)
-    has_migrations = len(migrations_changes.splitlines()) > 0
-    if has_migrations:
-        all_changes = _get_changes(["*"], workdir, to)
-        if all_changes != migrations_changes:
-            raise CoupledMigrations(
-                f"Migration changes are coupled with other changes.\n\nMigrations changes: \n{migrations_changes}\n\nAll changes: \n{all_changes}"
-            )
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

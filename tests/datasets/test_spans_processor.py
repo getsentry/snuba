@@ -47,9 +47,12 @@ class SpanEventExample:
                 "description": "SELECT `sentry_tagkey`.* FROM `sentry_tagkey`",
                 "duration_ms": self.duration_ms,
                 "exclusive_time_ms": self.exclusive_time_ms,
+                "end_timestamp_precise": (self.start_timestamp_ms + self.duration_ms)
+                * 1e-3,
                 "is_segment": False,
                 "parent_span_id": self.parent_span_id,
                 "project_id": self.project_id,
+                "organization_id": 1,
                 "received": self.received,
                 "retention_days": self.retention_days,
                 "segment_id": self.segment_id,
@@ -69,6 +72,7 @@ class SpanEventExample:
                 },
                 "span_id": self.span_id,
                 "start_timestamp_ms": self.start_timestamp_ms,
+                "start_timestamp_precise": self.start_timestamp_ms * 1e-3,
                 "tags": {
                     "tag1": "value1",
                     "tag2": "123",
@@ -101,12 +105,16 @@ class SpanEventExample:
                         tz=timezone.utc,
                     ).timestamp()
                 ),
+                "start_timestamp_precise": int(self.start_timestamp_ms * 1e3),
                 "start_ms": self.start_timestamp_ms % 1000,
                 "end_timestamp": int(
                     datetime.fromtimestamp(
                         (self.start_timestamp_ms + self.duration_ms) / 1000,
                         tz=timezone.utc,
                     ).timestamp()
+                ),
+                "end_timestamp_precise": int(
+                    (self.start_timestamp_ms + self.duration_ms) * 1e3
                 ),
                 "end_ms": (self.start_timestamp_ms + self.duration_ms) % 1000,
                 "duration": self.duration_ms,

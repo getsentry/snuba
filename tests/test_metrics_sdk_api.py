@@ -331,7 +331,6 @@ class TestGenericMetricsSdkApiCounters(BaseApiTest):
         }
 
     def test_raw_mql_string(self, test_dataset: str, tag_column: str) -> None:
-        print(self.indexer_mappings)
         query = MetricsQuery(
             query=f"((sum({COUNTERS_MRI}{{transaction:t1}}) / sum({COUNTERS_MRI})){{transaction:t2}} + sum({COUNTERS_MRI}){{transaction:t3}}) by transaction",
             start=self.start_time,

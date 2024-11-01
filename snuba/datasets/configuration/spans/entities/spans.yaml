@@ -28,8 +28,10 @@ schema:
     { name: segment_name, type: String },
     { name: time, type: DateTime },
     { name: start_timestamp, type: DateTime },
+    { name: start_timestamp_precise, type: DateTime64, args: { precision: 6 } },
     { name: start_ms, type: UInt, args: { size: 16 } },
     { name: end_timestamp, type: DateTime },
+    { name: end_timestamp_precise, type: DateTime64, args: { precision: 6 } },
     { name: end_ms, type: UInt, args: { size: 16 } },
     { name: duration, type: UInt, args: { size: 32 } },
     { name: exclusive_time, type: Float, args: { size: 64 } },
@@ -153,6 +155,10 @@ query_processors:
         - end_timestamp
         - timestamp
   - processor: BasicFunctionsProcessor
+  - processor: LowCardinalityProcessor
+    args:
+      columns:
+        - op
 
 validate_data_model: error
 validators:

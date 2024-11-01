@@ -89,6 +89,7 @@ generate-config-docs:
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
+	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
 		cd rust_snuba/ && cargo watch -s 'maturin develop'
 .PHONY: watch-rust-snuba

@@ -45,8 +45,28 @@ class TransactionEvent:
     app_start_type: str = "warm"
     has_app_ctx: bool = True
     profile_id: Optional[str] = None
+    profiler_id: Optional[str] = None
+    thread_id: Optional[int | str] = None
     replay_id: Optional[str] = None
     received: Optional[float] = None
+
+    def get_trace_context(self) -> Optional[Mapping[str, Any]]:
+        context = {
+            "sampled": True,
+            "trace_id": self.trace_id,
+            "op": self.op,
+            "type": "trace",
+            "span_id": self.span_id,
+            "status": self.status,
+            "hash": "a" * 16,
+            "exclusive_time": 1.2345,
+        }
+
+        if self.thread_id is not None:
+            data = context.setdefault("data", {})
+            data["thread.id"] = self.thread_id
+
+        return context
 
     def get_app_context(self) -> Optional[Mapping[str, str]]:
         if self.has_app_ctx:
@@ -55,9 +75,18 @@ class TransactionEvent:
             return None
 
     def get_profile_context(self) -> Optional[Mapping[str, str]]:
-        if self.profile_id is None:
-            return None
-        return {"profile_id": self.profile_id}
+        context = {}
+
+        if self.profile_id is not None:
+            context["profile_id"] = self.profile_id
+
+        if self.profiler_id is not None:
+            context["profiler_id"] = self.profiler_id
+
+        if context:
+            return context
+
+        return None
 
     def get_replay_context(self) -> Optional[Mapping[str, str]]:
         if self.replay_id is None:
@@ -151,16 +180,7 @@ class TransactionEvent:
                         }
                     },
                     "contexts": {
-                        "trace": {
-                            "sampled": True,
-                            "trace_id": self.trace_id,
-                            "op": self.op,
-                            "type": "trace",
-                            "span_id": self.span_id,
-                            "status": self.status,
-                            "hash": "a" * 16,
-                            "exclusive_time": 1.2345,
-                        },
+                        "trace": self.get_trace_context(),
                         "app": self.get_app_context(),
                         "experiments": {"test1": 1, "test2": 2},
                         "profile": self.get_profile_context(),
@@ -278,8 +298,14 @@ class TransactionEvent:
         else:
             ret["ip_address_v6"] = self.ipv6
 
+        if self.thread_id is not None:
+            i = ret["contexts.key"].index("geo.country_code")
+            ret["contexts.key"].insert(i, "trace.thread_id")
+            ret["contexts.value"].insert(i, str(self.thread_id))
         if self.profile_id is not None:
             ret["profile_id"] = str(uuid.UUID(self.profile_id))
+        if self.profiler_id is not None:
+            ret["profiler_id"] = str(uuid.UUID(self.profiler_id))
         if self.replay_id is not None:
             ret["replay_id"] = str(uuid.UUID(self.replay_id))
             ret["tags.key"].append("replayId")
@@ -332,6 +358,8 @@ class TestTransactionsProcessor:
             },
             transaction_source="url",
             profile_id="046852d24483455c8c44f0c8fbf496f9",
+            profiler_id="822301ff8bdb4daca920ddf2f993b1ff",
+            thread_id=123,
             replay_id="d2731f8ed8934c6fa5253e450915aa12",
         )
 
@@ -527,3 +555,22 @@ class TestTransactionsProcessor:
         assert TransactionsMessageProcessor().process_message(
             payload, meta
         ) == InsertBatch([result], ANY)
+
+    def test_trace_data_is_none(self) -> None:
+        """
+        If the trace data key is present but is None, we should handle it gracefully.
+        """
+        message = self.__get_transaction_event()
+        message.thread_id = None
+        payload = message.serialize()
+        # Force an invalid event
+        payload[2]["data"]["contexts"]["trace"]["data"] = None
+
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
+
+        result = message.build_result(meta)
+
+        processor = TransactionsMessageProcessor()
+        assert processor.process_message(payload, meta) == InsertBatch([result], ANY)

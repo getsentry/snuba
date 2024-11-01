@@ -9,6 +9,8 @@ schema:
 
     { name: group_status, type: UInt, args: { size: 8 } },
     { name: group_substatus, type: UInt, args: { size: 8, schema_modifiers: [ nullable ] } },
+    { name: group_priority, type: UInt, args: { size: 8, schema_modifiers: [ nullable ] } },
+    { name: group_first_release, type: UInt, args: { size: 64, schema_modifiers: [ nullable ] } },
     { name: group_first_seen, type: DateTime },
     { name: group_num_comments, type: UInt, args: { size: 64 } },
 

@@ -5,7 +5,16 @@ import time
 from collections import deque
 from concurrent.futures import Future
 from datetime import datetime
-from typing import Deque, Mapping, MutableMapping, NamedTuple, Optional, Tuple, cast
+from typing import (
+    Deque,
+    List,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    cast,
+)
 
 from arroyo import Message, Topic
 from arroyo.backends.abstract import Producer
@@ -13,9 +22,12 @@ from arroyo.backends.kafka import KafkaPayload
 from arroyo.processing.strategies import MessageRejected, ProcessingStrategy
 from arroyo.types import BrokerValue, Commit
 
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity_name
 from snuba.datasets.table_storage import KafkaTopicSpec
+from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.codecs import SubscriptionScheduledTaskEncoder
-from snuba.subscriptions.data import SubscriptionScheduler
+from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionScheduler
 from snuba.subscriptions.utils import SchedulingWatermarkMode, Tick
 from snuba.utils.metrics import MetricsBackend
 
@@ -443,11 +455,26 @@ class ProduceScheduledSubscriptionMessage(ProcessingStrategy[CommittableTick]):
             self.__stale_threshold_seconds is not None
             and time.time() - tick.timestamps.lower > self.__stale_threshold_seconds
         ):
-            encoded_tasks = []
+            encoded_tasks: List[KafkaPayload] = []
         else:
             tasks = [task for task in self.__schedulers[tick.partition].find(tick)]
+            encoded_tasks = []
 
-            encoded_tasks = [self.__encoder.encode(task) for task in tasks]
+            for task in tasks:
+                try:
+                    encoded_task = self.__encoder.encode(task)
+                    encoded_tasks.append(encoded_task)
+                except InvalidQueryException:
+                    entity = task.task.subscription.data.entity
+                    if get_entity_name(entity) == EntityKey.GENERIC_METRICS_GAUGES:
+                        if isinstance(
+                            task.task.subscription.data, SnQLSubscriptionData
+                        ):
+                            logger.warning(
+                                "Skipping malformed subscription query %r in scheduler",
+                                task.task.subscription.data.query,
+                            )
+                        continue
 
         # Record the amount of time between the message timestamp and when scheduling
         # for that timestamp occurs

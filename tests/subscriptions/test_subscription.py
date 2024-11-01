@@ -8,11 +8,10 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
-from snuba.query.exceptions import InvalidQueryException
-from snuba.query.parser.exceptions import ParsingException
+from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.validation.validators import ColumnValidationMode
 from snuba.redis import RedisClientKey, get_redis_client
-from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
@@ -22,7 +21,7 @@ from tests.subscriptions import BaseSubscriptionTest
 
 TESTS_CREATE = [
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query=(
                 "MATCH (events) "
@@ -41,7 +40,7 @@ TESTS_CREATE = [
 
 TESTS_INVALID = [
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query=(
                 "MATCH (events) "
@@ -86,7 +85,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
     def test_invalid_condition_column(self, subscription: SubscriptionData) -> None:
         override_entity_column_validator(EntityKey.EVENTS, ColumnValidationMode.ERROR)
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
-        with raises(ParsingException):
+        with raises(ValidationException):
             creator.create(
                 subscription,
                 self.timer,
@@ -98,7 +97,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(QueryException):
             creator.create(
-                SubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     time_window_sec=10 * 60,
                     resolution_sec=60,
@@ -114,7 +113,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     time_window_sec=0,
                     resolution_sec=60,
@@ -127,7 +126,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     query=(
                         "MATCH (events) "
@@ -145,7 +144,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     time_window_sec=48 * 60 * 60,
                     resolution_sec=60,
@@ -161,7 +160,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
         with raises(InvalidSubscriptionError):
             creator.create(
-                SubscriptionData(
+                SnQLSubscriptionData(
                     project_id=123,
                     time_window_sec=0,
                     resolution_sec=60,
@@ -175,7 +174,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
 TESTS_CREATE_METRICS = [
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
@@ -187,7 +186,7 @@ TESTS_CREATE_METRICS = [
         id="Metrics Counters Snql subscription",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
@@ -203,7 +202,7 @@ TESTS_CREATE_METRICS = [
 
 TESTS_INVALID_METRICS = [
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             time_window_sec=10 * 60,
@@ -214,7 +213,7 @@ TESTS_INVALID_METRICS = [
         id="Metrics Counters subscription missing tags[3] condition",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query="MATCH (metrics_counters) SELECT sum(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
@@ -225,7 +224,7 @@ TESTS_INVALID_METRICS = [
         id="Metrics Counters subscription missing project_id condition",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND project_id IN array(1) AND metric_id = 7",
             time_window_sec=10 * 60,
@@ -236,7 +235,7 @@ TESTS_INVALID_METRICS = [
         id="Metrics Sets subscription missing tags[3] condition",
     ),
     pytest.param(
-        SubscriptionData(
+        SnQLSubscriptionData(
             project_id=123,
             query="MATCH (metrics_sets) SELECT uniq(value) AS value BY project_id, tags[3] WHERE org_id = 1 AND metric_id = 7 AND tags[3] IN array(6,7)",
             time_window_sec=10 * 60,
@@ -291,7 +290,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
     @pytest.mark.redis_db
     def test(self) -> None:
         creator = SubscriptionCreator(self.dataset, EntityKey.EVENTS)
-        subscription = SubscriptionData(
+        subscription = SnQLSubscriptionData(
             project_id=1,
             query="MATCH (events) SELECT count() AS count",
             time_window_sec=10 * 60,

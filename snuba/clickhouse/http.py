@@ -353,7 +353,9 @@ class HTTPBatchWriter(BatchWriter[bytes]):
             batch.append(value)
 
         batch.close()
-        batch_join_timeout = state.get_config("http_batch_join_timeout", 10)
+        batch_join_timeout = state.get_config(
+            "http_batch_join_timeout", settings.BATCH_JOIN_TIMEOUT
+        )
         # IMPORTANT: Please read the docstring of this method if you ever decide to remove the
         # timeout argument from the join method.
         batch.join(timeout=batch_join_timeout)
