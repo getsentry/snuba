@@ -730,7 +730,7 @@ class TestTraceItemTable(BaseApiTest):
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
-    def test_different_column_label_and_attr_name(self, setup_teardown: Any):
+    def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         message = TraceItemTableRequest(
