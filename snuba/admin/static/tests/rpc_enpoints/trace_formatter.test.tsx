@@ -5,19 +5,19 @@ import { TraceLog } from 'SnubaAdmin/rpc_endpoints/trace_formatter';
 
 describe('TraceLog', () => {
   it('renders empty state message when log is empty', () => {
-    const { getByText } = render(React.createElement(TraceLog, { log: "" }));
-    expect(getByText('No trace logs available')).toBeInTheDocument();
+    const { queryByText } = render(React.createElement(TraceLog, { log: "" }));
+    expect(queryByText('No trace logs available')).toBeTruthy();
   });
 
   it('renders formatted log lines correctly', () => {
     const sampleLog = '[ host1 ] [ 1087365 ] {2a1a1deb-fa59-4b07-918d-1b7558e50fd5} <Trace> component: Test message';
-    const { getByText } = render(React.createElement(TraceLog, { log: sampleLog }));
+    const { queryByText } = render(React.createElement(TraceLog, { log: sampleLog }));
 
-    expect(getByText(/host1/)).toBeInTheDocument();
-    expect(getByText(/1087365/)).toBeInTheDocument();
-    expect(getByText(/2a1a1deb-fa59-4b07-918d-1b7558e50fd5/)).toBeInTheDocument();
-    expect(getByText(/component/)).toBeInTheDocument();
-    expect(getByText(/Test message/)).toBeInTheDocument();
+    expect(queryByText(/host1/)).toBeTruthy();
+    expect(queryByText(/1087365/)).toBeTruthy();
+    expect(queryByText(/2a1a1deb-fa59-4b07-918d-1b7558e50fd5/)).toBeTruthy();
+    expect(queryByText(/component/)).toBeTruthy();
+    expect(queryByText(/Test message/)).toBeTruthy();
   });
 
   it('handles multiple log lines', () => {
@@ -26,21 +26,21 @@ describe('TraceLog', () => {
       '[ host2 ] [ 2222 ] {id-2} <Debug> second component: Second message'
     ].join('\n');
 
-    const { getByText } = render(React.createElement(TraceLog, { log: multipleLines }));
+    const { queryByText } = render(React.createElement(TraceLog, { log: multipleLines }));
 
-    expect(getByText(/First message/)).toBeInTheDocument();
-    expect(getByText(/Second message/)).toBeInTheDocument();
-    expect(getByText(/first component/)).toBeInTheDocument();
-    expect(getByText(/second component/)).toBeInTheDocument();
-    expect(getByText(/host1/)).toBeInTheDocument();
-    expect(getByText(/host2/)).toBeInTheDocument();
+    expect(queryByText(/First message/)).toBeTruthy();
+    expect(queryByText(/Second message/)).toBeTruthy();
+    expect(queryByText(/first component/)).toBeTruthy();
+    expect(queryByText(/second component/)).toBeTruthy();
+    expect(queryByText(/host1/)).toBeTruthy();
+    expect(queryByText(/host2/)).toBeTruthy();
   });
 
   it('handles invalid log lines', () => {
     const invalidLog = 'Invalid log line format\n[ host1 ] [ 1111 ] {id-1} <Trace> component: Valid message';
-    const { getByText, queryByText } = render(React.createElement(TraceLog, { log: invalidLog }));
+    const { queryByText } = render(React.createElement(TraceLog, { log: invalidLog }));
 
-    expect(queryByText(/Invalid log line format/)).not.toBeInTheDocument();
-    expect(getByText(/Valid message/)).toBeInTheDocument();
+    expect(queryByText(/Invalid log line format/)).toBeFalsy();
+    expect(queryByText(/Valid message/)).toBeTruthy();
   });
 });
