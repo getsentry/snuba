@@ -2,9 +2,65 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox, Text, Table, Switch } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
 import { format_trace_log } from 'SnubaAdmin/rpc_endpoints/trace_formatter';
-import { QueryInfo } from 'SnubaAdmin/rpc_endpoints/types';
+import { ExampleRequestAccordionProps, QueryInfo } from 'SnubaAdmin/rpc_endpoints/types';
+import { useStyles } from 'SnubaAdmin/rpc_endpoints/styles';
+import { fetchEndpointsList, executeEndpoint, getEndpointData } from 'SnubaAdmin/rpc_endpoints/utils';
 
 const DEBUG_SUPPORTED_VERSIONS = ['v1'];
+
+function ExampleRequestAccordion({
+  selectedEndpoint,
+  selectedVersion,
+  exampleRequestTemplates,
+  setRequestBody,
+  classes,
+}: ExampleRequestAccordionProps) {
+  const [isOpened, setIsOpened] = useState(false);
+
+  return (
+    <Accordion
+      classNames={{ item: classes.accordion }}
+      variant="filled"
+      radius="sm"
+      value={isOpened ? 'example' : null}
+      onChange={(value) => setIsOpened(value === 'example')}
+    >
+      <Accordion.Item value="example">
+        <Accordion.Control>Example Request Payload</Accordion.Control>
+        <Accordion.Panel>
+          <Code block style={{ color: 'green' }}>
+            <pre>
+              {JSON.stringify(
+                selectedEndpoint && selectedVersion
+                  ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
+                  : exampleRequestTemplates.default,
+                null,
+                2
+              )}
+            </pre>
+          </Code>
+          <Button
+            onClick={() => {
+              setRequestBody(
+                JSON.stringify(
+                  selectedEndpoint && selectedVersion
+                    ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
+                    : exampleRequestTemplates.default,
+                  null,
+                  2
+                )
+              );
+              setIsOpened(false);
+            }}
+            style={{ marginTop: '1rem' }}
+          >
+            Copy to Request Body
+          </Button>
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
+}
 
 function RpcEndpoints() {
   const api = useApi();
@@ -14,22 +70,15 @@ function RpcEndpoints() {
   const [requestBody, setRequestBody] = useState('');
   const [response, setResponse] = useState<any | null>(null);
   const exampleRequestTemplates: Record<string, Record<string, any>> = require('SnubaAdmin/rpc_endpoints/exampleRequestTemplates.json');
-  const [accordionOpened, setAccordionOpened] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [showTraceLogs, setShowTraceLogs] = useState(false);
 
+  const { classes } = useStyles();
+
   const fetchEndpoints = useCallback(async () => {
-    try {
-      const fetchedEndpoints: [string, string][] = await api.getRpcEndpoints();
-      const formattedEndpoints = fetchedEndpoints.map((endpoint: [string, string]) => ({
-        name: endpoint[0],
-        version: endpoint[1]
-      }));
-      setEndpoints(formattedEndpoints);
-    } catch (error) {
-      console.error("Error fetching endpoints:", error);
-    }
+    const formattedEndpoints = await fetchEndpointsList(api);
+    setEndpoints(formattedEndpoints);
   }, []);
 
   useEffect(() => {
@@ -38,7 +87,7 @@ function RpcEndpoints() {
 
   const handleEndpointSelect = (value: string | null) => {
     setSelectedEndpoint(value);
-    const selectedEndpointData = endpoints.find(e => e.name === value);
+    const selectedEndpointData = getEndpointData(endpoints, value || '');
     setSelectedVersion(selectedEndpointData?.version || null);
     setRequestBody('');
     setResponse(null);
@@ -46,15 +95,15 @@ function RpcEndpoints() {
   };
 
   const handleExecute = async () => {
-    if (!selectedEndpoint || !selectedVersion) return;
     setIsLoading(true);
     try {
-      const parsedBody = JSON.parse(requestBody);
-      if (debugMode && DEBUG_SUPPORTED_VERSIONS.includes(selectedVersion)) {
-        parsedBody.meta = parsedBody.meta || {};
-        parsedBody.meta.debug = true;
-      }
-      const result = await api.executeRpcEndpoint(selectedEndpoint, selectedVersion, parsedBody);
+      const result = await executeEndpoint(
+        api,
+        selectedEndpoint,
+        selectedVersion,
+        requestBody,
+        debugMode
+      );
       setResponse(result);
     } catch (error: any) {
       alert(`Error: ${error.message}`);
@@ -63,75 +112,6 @@ function RpcEndpoints() {
       setIsLoading(false);
     }
   };
-
-  const useStyles = createStyles((theme) => ({
-    accordion: {
-      '& .mantine-Accordion-control': {
-        backgroundColor: theme.colors.blue[1],
-        color: theme.colors.blue[7],
-        fontSize: theme.fontSizes.xs,
-        padding: '2px 4px',
-        lineHeight: 1.2,
-        borderBottom: `1px solid ${theme.colors.gray[3]}`,
-        cursor: 'pointer',
-        fontWeight: 'bold',
-        '&:hover': {
-          backgroundColor: theme.colors.blue[2],
-        },
-      },
-    },
-    table: {
-      border: `1px solid ${theme.colors.gray[3]}`,
-      '& th, & td': {
-        border: `1px solid ${theme.colors.gray[3]}`,
-        padding: theme.spacing.xs,
-      },
-      '& th': {
-        backgroundColor: theme.colors.gray[1],
-        fontWeight: 'bold',
-      },
-      '& td:first-of-type': {
-        width: '20%',
-        fontWeight: 'bold',
-      },
-      '& td:last-of-type': {
-        width: '80%',
-      },
-    },
-    debugCheckbox: {
-      marginBottom: theme.spacing.md,
-    },
-    traceLogsContainer: {
-      maxHeight: '500px',
-      overflowY: 'auto',
-      backgroundColor: theme.colors.dark[9],
-      padding: theme.spacing.md,
-      borderRadius: theme.radius.sm,
-      fontFamily: '"JetBrains Mono", "Fira Code", "Source Code Pro", "IBM Plex Mono", "Roboto Mono", "Cascadia Code", Consolas, Monaco, "Courier New", monospace',
-      whiteSpace: 'pre-wrap',
-      fontSize: '16px',
-      '& span': {
-        display: 'inline'
-      },
-      '& .trace-message': {
-        fontWeight: 'bold',
-        color: '#ffffff',
-      }
-    },
-    viewToggle: {
-      marginBottom: theme.spacing.sm,
-    },
-    responseDataContainer: {
-      maxHeight: '500px',
-      overflowY: 'auto',
-      backgroundColor: 'white',
-      padding: theme.spacing.sm,
-      borderRadius: theme.radius.sm,
-      border: `1px solid ${theme.colors.gray[3]}`,
-    },
-  }));
-
-  const { classes } = useStyles();
 
   return (
     <div>
@@ -145,47 +125,13 @@ function RpcEndpoints() {
         style={{ width: '100%', marginBottom: '1rem' }}
       />
       <Space h="md" />
-      <Accordion
-        classNames={{ item: classes.accordion }}
-        variant="filled"
-        radius="sm"
-        value={accordionOpened ? 'example' : null}
-        onChange={(value) => setAccordionOpened(value === 'example')}
-      >
-        <Accordion.Item value="example">
-          <Accordion.Control>Example Request Payload</Accordion.Control>
-          <Accordion.Panel>
-            <Code block style={{ color: 'green' }}>
-              <pre>
-                {JSON.stringify(
-                  selectedEndpoint && selectedVersion
-                    ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
-                    : exampleRequestTemplates.default,
-                  null,
-                  2
-                )}
-              </pre>
-            </Code>
-            <Button
-              onClick={() => {
-                setRequestBody(
-                  JSON.stringify(
-                    selectedEndpoint && selectedVersion
-                      ? exampleRequestTemplates[selectedEndpoint]?.[selectedVersion] || exampleRequestTemplates.default
-                      : exampleRequestTemplates.default,
-                    null,
-                    2
-                  )
-                );
-                setAccordionOpened(false);
-              }}
-              style={{ marginTop: '1rem' }}
-            >
-              Copy to Request Body
-            </Button>
-          </Accordion.Panel>
-        </Accordion.Item>
-      </Accordion>
+      <ExampleRequestAccordion
+        selectedEndpoint={selectedEndpoint}
+        selectedVersion={selectedVersion}
+        exampleRequestTemplates={exampleRequestTemplates}
+        setRequestBody={setRequestBody}
+        classes={classes}
+      />
       <Space h="md" />
       <Textarea
         label="Request Body (JSON)"

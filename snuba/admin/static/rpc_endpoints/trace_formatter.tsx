@@ -7,7 +7,7 @@ const COLOR_DEBUG = '#ffff00';
 const COLOR_TRACE = '#ff6666';
 const COLOR_MESSAGE = '#ffffff';
 
-export function format_trace_log(log: string, width: number = 140): string {
+function format_trace_log(log: string, width: number = 140): string {
     if (!log?.trim()) {
         return '<span class="text-muted">No trace logs available</span>';
     }
@@ -84,3 +84,5 @@ function escapeHtml(text: string): string {
 
     return text.replace(/[&<>"']/g, char => htmlEntities[char]);
 }
+
+export { format_trace_log, stripHtml, escapeHtml, wrapText };

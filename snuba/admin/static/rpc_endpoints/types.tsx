@@ -31,4 +31,17 @@ type QueryInfo = {
     traceLogs: string;
 };
 
-export type { QueryInfo, QueryStats, QueryMetadata, TimingMarks };
+interface EndpointData {
+    name: string;
+    version: string;
+}
+
+interface ExampleRequestAccordionProps {
+    selectedEndpoint: string | null;
+    selectedVersion: string | null;
+    exampleRequestTemplates: Record<string, Record<string, any>>;
+    setRequestBody: (value: string) => void;
+    classes: Record<string, string>;
+}
+
+export type { QueryInfo, QueryStats, QueryMetadata, TimingMarks, EndpointData, ExampleRequestAccordionProps };
