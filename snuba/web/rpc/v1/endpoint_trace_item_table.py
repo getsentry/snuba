@@ -77,7 +77,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         if column.HasField("key"):
             key_col = attribute_key_to_expression(column.key)
             selected_columns.append(
-                SelectedExpression(name=column.key.name, expression=key_col)
+                SelectedExpression(name=column.label, expression=key_col)
             )
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
