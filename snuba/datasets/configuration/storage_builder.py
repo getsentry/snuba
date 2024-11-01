@@ -13,6 +13,7 @@ from snuba.datasets.configuration.utils import (
     get_query_processors,
     parse_columns,
 )
+from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.processors import DatasetMessageProcessor
 from snuba.datasets.readiness_state import ReadinessState
@@ -42,12 +43,15 @@ SCHEMA = "schema"
 STREAM_LOADER = "stream_loader"
 PRE_FILTER = "pre_filter"
 QUERY_PROCESSORS = "query_processors"
+DELETION_SETTINGS = "deletion_settings"
+DELETION_PROCESSORS = "deletion_processors"
 MANDATORY_CONDITION_CHECKERS = "mandatory_condition_checkers"
 WRITER_OPTIONS = "writer_options"
 SUBCRIPTION_SCHEDULER_MODE = "subscription_scheduler_mode"
 DLQ_POLICY = "dlq_policy"
 REPLACER_PROCESSOR = "replacer_processor"
 ALLOCATION_POLICIES = "allocation_policies"
+DELETE_ALLOCATION_POLICIES = "delete_allocation_policies"
 REQUIRED_TIME_COLUMN = "required_time_column"
 
 
@@ -78,22 +82,45 @@ def __build_readable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
         QUERY_PROCESSORS: get_query_processors(
             config[QUERY_PROCESSORS] if QUERY_PROCESSORS in config else []
         ),
+        DELETION_SETTINGS: (
+            DeletionSettings(**config[DELETION_SETTINGS])
+            if DELETION_SETTINGS in config
+            else {}
+        ),
+        DELETION_PROCESSORS: get_query_processors(
+            config[DELETION_PROCESSORS] if DELETION_PROCESSORS in config else []
+        ),
         MANDATORY_CONDITION_CHECKERS: get_mandatory_condition_checkers(
             config[MANDATORY_CONDITION_CHECKERS]
             if MANDATORY_CONDITION_CHECKERS in config
             else []
         ),
-        ALLOCATION_POLICIES: [
-            AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
-                **{
-                    **policy.get("args", {}),
-                    "storage_key": storage_key.value,
-                }
-            )
-            for policy in config[ALLOCATION_POLICIES]
-        ]
-        if ALLOCATION_POLICIES in config
-        else [],
+        ALLOCATION_POLICIES: (
+            [
+                AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
+                    **{
+                        **policy.get("args", {}),
+                        "storage_key": storage_key.value,
+                    }
+                )
+                for policy in config[ALLOCATION_POLICIES]
+            ]
+            if ALLOCATION_POLICIES in config
+            else []
+        ),
+        DELETE_ALLOCATION_POLICIES: (
+            [
+                AllocationPolicy.get_from_name(policy["name"]).from_kwargs(
+                    **{
+                        **policy.get("args", {}),
+                        "storage_key": storage_key.value,
+                    }
+                )
+                for policy in config[DELETE_ALLOCATION_POLICIES]
+            ]
+            if DELETE_ALLOCATION_POLICIES in config
+            else []
+        ),
         REQUIRED_TIME_COLUMN: config.get(REQUIRED_TIME_COLUMN, None),
     }
 
@@ -102,11 +129,13 @@ def __build_writable_storage_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         STREAM_LOADER: build_stream_loader(config[STREAM_LOADER]),
         WRITER_OPTIONS: config[WRITER_OPTIONS] if WRITER_OPTIONS in config else {},
-        REPLACER_PROCESSOR: ReplacerProcessor.get_from_name(
-            config[REPLACER_PROCESSOR]["processor"]
-        ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
-        if REPLACER_PROCESSOR in config
-        else {},
+        REPLACER_PROCESSOR: (
+            ReplacerProcessor.get_from_name(
+                config[REPLACER_PROCESSOR]["processor"]
+            ).from_kwargs(**config[REPLACER_PROCESSOR].get("args", {}))
+            if REPLACER_PROCESSOR in config
+            else {}
+        ),
         # TODO: Rest of writable storage optional args
     }
 

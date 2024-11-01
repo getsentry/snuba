@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from snuba.query.allocation_policies import (
+    NO_SUGGESTION,
     AllocationPolicyConfig,
     QueryResultOrError,
     QuotaAllowance,
@@ -22,8 +23,11 @@ _DEFAULT_MAX_THREADS = 10
 _DEFAULT_CONCURRENT_REQUEST_PER_REFERRER = 100
 _REFERRER_CONCURRENT_OVERRIDE = -1
 _REFERRER_MAX_THREADS_OVERRIDE = -1
-_REQUESTS_THROTTLE_DIVIDER = 2
+_REQUESTS_THROTTLE_DIVIDER = 1.5
 _THREADS_THROTTLE_DIVIDER = 2
+
+QUOTA_UNIT = "concurrent_queries"
+SUGGESTION = "This feature is doing too many concurrent queries. Customers are being affected arbitrarily. Either means the feature is not being appropriately rate limited on the sentry side or that the queries are inefficient"
 
 
 class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -73,7 +77,7 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             AllocationPolicyConfig(
                 name="requests_throttle_divider",
                 description="default_concurrent_request_per_referrer divided by this value will be the threshold at which we will decrease the number of threads (THROTTLED_THREADS) used to execute queries",
-                value_type=int,
+                value_type=float,
                 default=_REQUESTS_THROTTLE_DIVIDER,
             ),
             AllocationPolicyConfig(
@@ -125,9 +129,13 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
         num_threads = self._get_max_threads(referrer)
         requests_throttle_threshold = max(
             1,
-            self.get_config_value("default_concurrent_request_per_referrer")
-            // self.get_config_value("requests_throttle_divider"),
+            int(
+                self.get_config_value("default_concurrent_request_per_referrer")
+                // self.get_config_value("requests_throttle_divider")
+            ),
         )
+
+        is_throttled = False
         if rate_limit_stats.concurrent > requests_throttle_threshold:
             num_threads = max(
                 1, num_threads // self.get_config_value("threads_throttle_divider")
@@ -135,6 +143,8 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             self.metrics.increment(
                 "concurrent_queries_throttled", tags={"referrer": referrer}
             )
+            is_throttled = True
+
         self.metrics.timing(
             "concurrent_queries_referrer",
             rate_limit_stats.concurrent,
@@ -145,10 +155,21 @@ class ReferrerGuardRailPolicy(BaseConcurrentRateLimitAllocationPolicy):
             "policy": self.rate_limit_name,
             "referrer": referrer,
         }
+
+        if can_run:
+            suggestion = NO_SUGGESTION
+        else:
+            suggestion = SUGGESTION
         return QuotaAllowance(
             can_run=can_run,
             max_threads=num_threads,
             explanation=decision_explanation,
+            is_throttled=is_throttled,
+            throttle_threshold=requests_throttle_threshold,
+            rejection_threshold=rate_limit_params.concurrent_limit,
+            quota_used=rate_limit_stats.concurrent,
+            quota_unit=QUOTA_UNIT,
+            suggestion=suggestion,
         )
 
     def _update_quota_balance(

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import partial
 from itertools import chain
+from typing import Any as AnyType
 from typing import (
+    Callable,
     Generic,
     Iterator,
     List,
@@ -18,6 +22,7 @@ from typing import (
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.utils.constants import NESTED_COL_EXPR_RE
+from snuba.utils.serializable_exception import SerializableException
 
 
 class TypeModifier(ABC):
@@ -86,7 +91,16 @@ class ColumnType(Generic[TModifiers]):
         self.__modifiers = modifiers
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+        # return f"{self.__class__.__name__}({self._repr_content()})[{self.__modifiers}]"
+        repr_content = self._repr_content()
+        if repr_content:
+            return "schemas.{}({}, modifiers={})".format(
+                self.__class__.__name__, repr_content, repr(self.__modifiers)
+            )
+        else:
+            return "schemas.{}(modifiers={})".format(
+                self.__class__.__name__, repr(self.__modifiers)
+            )
 
     def _repr_content(self) -> str:
         """
@@ -376,6 +390,38 @@ class Array(ColumnType[TModifiers]):
         return Array(inner_type=self.inner_type.get_raw())
 
 
+class Map(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        key: ColumnType[TModifiers],
+        value: ColumnType[TModifiers],
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.key = key
+        self.value = value
+
+    def _repr_content(self) -> str:
+        return repr(self.key) + ", " + repr(self.value)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.key == cast(Map[TModifiers], other).key
+            and self.value == cast(Map[TModifiers], other).value
+            and self.get_modifiers() == cast(Map[TModifiers], other).get_modifiers()
+        )
+
+    def _for_schema_impl(self) -> str:
+        return f"Map({self.key.for_schema()}, {self.value.for_schema()})"
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Map[TModifiers]:
+        return Map(key=self.key, value=self.value, modifiers=modifiers)
+
+    def get_raw(self) -> Map[TModifiers]:
+        return Map(key=self.key.get_raw(), value=self.value.get_raw())
+
+
 class Nested(ColumnType[TModifiers]):
     def __init__(
         self,
@@ -453,6 +499,44 @@ class AggregateFunction(ColumnType[TModifiers]):
         return AggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
 
 
+class SimpleAggregateFunction(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        func: str,
+        arg_types: Sequence[ColumnType[TModifiers]],
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.func = func
+        self.arg_types = arg_types
+
+    def _repr_content(self) -> str:
+        return ", ".join(repr(x) for x in chain([self.func], self.arg_types))
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers()
+            == cast(SimpleAggregateFunction[TModifiers], other).get_modifiers()
+            and self.func == cast(SimpleAggregateFunction[TModifiers], other).func
+            and self.arg_types
+            == cast(SimpleAggregateFunction[TModifiers], other).arg_types
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "SimpleAggregateFunction({})".format(
+            ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
+        )
+
+    def set_modifiers(
+        self, modifiers: Optional[TModifiers]
+    ) -> SimpleAggregateFunction[TModifiers]:
+        return SimpleAggregateFunction(self.func, self.arg_types, modifiers)
+
+    def get_raw(self) -> SimpleAggregateFunction[TModifiers]:
+        return SimpleAggregateFunction(self.func, [t.get_raw() for t in self.arg_types])
+
+
 class String(ColumnType[TModifiers]):
     pass
 
@@ -519,6 +603,32 @@ class UInt(ColumnType[TModifiers]):
 
     def get_raw(self) -> UInt[TModifiers]:
         return UInt(self.size)
+
+
+class Int(ColumnType[TModifiers]):
+    def __init__(self, size: int, modifiers: Optional[TModifiers] = None) -> None:
+        super().__init__(modifiers)
+        assert size in (8, 16, 32, 64)
+        self.size = size
+
+    def _repr_content(self) -> str:
+        return str(self.size)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Int[TModifiers], other).get_modifiers()
+            and self.size == cast(Int[TModifiers], other).size
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Int{}".format(self.size)
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Int[TModifiers]:
+        return Int(size=self.size, modifiers=modifiers)
+
+    def get_raw(self) -> Int[TModifiers]:
+        return Int(self.size)
 
 
 class Float(ColumnType[TModifiers]):
@@ -635,3 +745,108 @@ class Enum(ColumnType[TModifiers]):
 
     def get_raw(self) -> Enum[TModifiers]:
         return Enum(self.values)
+
+
+class Tuple(ColumnType[TModifiers]):
+    def __init__(
+        self,
+        types: tuple[ColumnType[TModifiers], ...],
+        modifiers: Optional[TModifiers] = None,
+    ) -> None:
+        super().__init__(modifiers)
+        self.types = types
+
+    def _repr_content(self) -> str:
+        return ", ".join("{}".format(v) for v in self.types)
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.get_modifiers() == cast(Tuple[TModifiers], other).get_modifiers()
+            and self.types == cast(Tuple[TModifiers], other).types
+        )
+
+    def _for_schema_impl(self) -> str:
+        return "Tuple({})".format(
+            ", ".join("{}".format(t.for_schema()) for t in self.types)
+        )
+
+    def set_modifiers(self, modifiers: Optional[TModifiers]) -> Tuple[TModifiers]:
+        return Tuple(types=self.types, modifiers=modifiers)
+
+    def get_raw(self) -> Tuple[TModifiers]:
+        return Tuple(self.types)
+
+
+class InvalidColumnType(SerializableException):
+    pass
+
+
+class ColumnValidator:
+    def __init__(self, column_set: ColumnSet):
+        self._column_set = column_set
+
+    def type_validation_function(
+        self, expected_type: ColumnType[TModifiers]
+    ) -> Callable[[AnyType], bool]:
+        match expected_type:
+            case UUID():
+                return self._valid_uuid
+            case Int():
+                return self._valid_int
+            case UInt():
+                return self._valid_uint
+            case Float():
+                return self._valid_float
+            case String():
+                return self._valid_string
+            case Tuple():
+                return partial(self._valid_tuple, expected_type)
+            case _:
+                raise InvalidColumnType(f"No validator for type: {expected_type}")
+
+    def validate(self, column_name: str, values: Sequence[AnyType]) -> None:
+        expected_type = self._column_set[column_name].type
+        is_valid_func: Callable[[AnyType], bool] = self.type_validation_function(
+            expected_type
+        )
+        for val in values:
+            if is_valid_func(val):
+                continue
+            raise InvalidColumnType(
+                f"Invalid value {val} for column type {expected_type}"
+            )
+
+    def _valid_uuid(self, value: str) -> bool:
+        try:
+            uuid.UUID(str(value))
+            return True
+        except ValueError:
+            return False
+
+    def _valid_int(self, value: int) -> bool:
+        return isinstance(value, int)
+
+    def _valid_uint(self, value: int) -> bool:
+        return isinstance(value, int) and value > 0
+
+    def _valid_float(self, value: float) -> bool:
+        return isinstance(value, float)
+
+    def _valid_string(self, value: str) -> bool:
+        return isinstance(value, str)
+
+    def _valid_tuple(self, tuple_column: Tuple[AnyType], value: tuple[Any]) -> bool:
+        if not isinstance(value, tuple):
+            return False
+        assert len(value) == len(
+            tuple_column.types
+        ), "number of tuple arg types and actual values don't match"
+        for i, el in enumerate(value):
+            is_valid_func = self.type_validation_function(tuple_column.types[i])
+            if is_valid_func(el):
+                continue
+            raise InvalidColumnType(
+                f"Invalid value {el} for column type {tuple_column.types[i]}"
+            )
+        return True

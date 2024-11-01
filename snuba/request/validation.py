@@ -18,7 +18,6 @@ from snuba.query.data_source.simple import LogicalDataSource
 from snuba.query.exceptions import InvalidQueryException
 from snuba.query.logical import Query
 from snuba.query.mql.parser import parse_mql_query as _parse_mql_query
-from snuba.query.parser.exceptions import PostProcessingError
 from snuba.query.query_settings import (
     HTTPQuerySettings,
     QuerySettings,
@@ -27,7 +26,7 @@ from snuba.query.query_settings import (
 from snuba.query.snql.parser import CustomProcessors
 from snuba.query.snql.parser import parse_snql_query as _parse_snql_query
 from snuba.querylog import record_error_building_request, record_invalid_request
-from snuba.querylog.query_metadata import SnubaQueryMetadata, get_request_status
+from snuba.querylog.query_metadata import get_request_status
 from snuba.request import Request
 from snuba.request.exceptions import InvalidJsonRequestException
 from snuba.request.schema import RequestParts, RequestSchema
@@ -120,30 +119,32 @@ def build_request(
             request_parts = schema.validate(body)
             referrer = _get_referrer(request_parts, referrer)
             settings_obj = _get_settings_object(settings_class, request_parts, referrer)
-            try:
-                query = parser(request_parts, settings_obj, dataset, custom_processing)
-            except PostProcessingError as exception:
-                query = exception.query
-                request = _build_request(
-                    body, request_parts, referrer, settings_obj, query
-                )
-                query_metadata = SnubaQueryMetadata(
-                    request, get_dataset_name(dataset), timer
-                )
-                state.record_query(query_metadata.to_dict())
-                raise
-
+            query = parser(request_parts, settings_obj, dataset, custom_processing)
             request = _build_request(body, request_parts, referrer, settings_obj, query)
         except (InvalidJsonRequestException, InvalidQueryException) as exception:
             request_status = get_request_status(exception)
             record_invalid_request(
-                timer, request_status, referrer, str(type(exception).__name__)
+                request_id=uuid.uuid4(),
+                body=body,
+                dataset=get_dataset_name(dataset),
+                organization=body.get("tenant_ids", {}).get("organization_id", 0),
+                timer=timer,
+                request_status=request_status,
+                referrer=referrer,
+                exception_name=str(type(exception).__name__),
             )
             raise exception
         except Exception as exception:
             request_status = get_request_status(exception)
             record_error_building_request(
-                timer, request_status, referrer, str(type(exception).__name__)
+                request_id=uuid.uuid4(),
+                body=body,
+                dataset=get_dataset_name(dataset),
+                organization=body.get("tenant_ids", {}).get("organization_id", 0),
+                timer=timer,
+                request_status=request_status,
+                referrer=referrer,
+                exception_name=str(type(exception).__name__),
             )
             raise exception
 
@@ -246,7 +247,7 @@ def _build_request(
     attribution_info = _get_attribution_info(request_parts, referrer, query_project_id)
 
     return Request(
-        id=uuid.uuid4().hex,
+        id=uuid.uuid4(),
         original_body=original_body,
         query=query,
         attribution_info=attribution_info,
