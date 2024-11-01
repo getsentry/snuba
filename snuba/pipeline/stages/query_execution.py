@@ -147,6 +147,7 @@ def _run_and_apply_column_names(
         concurrent_queries_gauge,
         cluster_name,
     )
+
     alias_name_mapping: MutableMapping[str, list[str]] = {}
     for select_col in clickhouse_query.get_selected_columns():
         alias = select_col.expression.alias

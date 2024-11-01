@@ -730,7 +730,7 @@ class TestTraceItemTable(BaseApiTest):
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
-    def test_failing_query(self, setup_teardown: Any):
+    def test_different_column_label_and_attr_name(self, setup_teardown: Any):
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         message = TraceItemTableRequest(
@@ -759,7 +759,9 @@ class TestTraceItemTable(BaseApiTest):
             ],
             group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name")],
         )
-        EndpointTraceItemTable().execute(message)
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].attribute_name == "description"
+        assert response.column_values[1].attribute_name == "count()"
 
 
 class TestUtils:
