@@ -1,7 +1,8 @@
 exclude: >
     (?x)(
         ^snuba/admin/dist/|
-        ^snuba/admin/static/
+        ^snuba/admin/static/|
+        ^snuba/protobufs/
     )
 
 repos:
@@ -40,7 +41,7 @@ repos:
     hooks:
       - id: validate-configs-syntax
         name: validate-configs-syntax
-        entry: python3 -m snuba.validate_configs
+        entry: env SNUBA_SETTINGS=test python3 -m snuba.validate_configs
         language: python
         additional_dependencies: [ 'fastjsonschema', 'pyyaml', 'sentry_sdk' ]
         pass_filenames: false

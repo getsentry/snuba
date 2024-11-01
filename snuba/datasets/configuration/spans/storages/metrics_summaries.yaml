@@ -94,13 +94,7 @@ query_processors:
     args:
       prewhere_candidates:
         [project_id, metric_mri]
-  - processor: TableRateLimit
   - processor: TupleUnaliaser
-
-query_splitters:
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: end_timestamp
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

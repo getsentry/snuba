@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { selectStyle } from "./styles";
-import AllocationPolicyConfigs from "./allocation_policy";
-import { AllocationPolicy } from "./types";
+import Client from "SnubaAdmin/api_client";
+import { AllocationPolicyConfigs } from "SnubaAdmin/capacity_management/allocation_policy";
+import { AllocationPolicy } from "SnubaAdmin/capacity_management/types";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { COLORS } from "SnubaAdmin/theme";
 
 function CapacityManagement(props: { api: Client }) {
   const { api } = props;
 
   const [storages, setStorages] = useState<string[]>([]);
-  const [selectedStorage, setStorage] = useState<string>();
+  const [selectedStorage, setStorage] = useState<string | undefined>();
   const [allocationPolicies, setAllocationPolicies] = useState<
     AllocationPolicy[]
   >([]);
@@ -16,6 +17,10 @@ function CapacityManagement(props: { api: Client }) {
   useEffect(() => {
     api.getStoragesWithAllocationPolicies().then((res) => {
       setStorages(res);
+      const previousStorage = getParamFromStorage("storage");
+      if (previousStorage) {
+        selectStorage(previousStorage);
+      }
     });
   }, []);
 
@@ -35,40 +40,60 @@ function CapacityManagement(props: { api: Client }) {
       });
   }
 
-  return (
-    <div>
-      <p>
-        Storage:
-        <select
-          value={selectedStorage || ""}
-          onChange={(evt) => selectStorage(evt.target.value)}
-          style={selectStyle}
-        >
-          <option disabled value="">
-            Select a storage
-          </option>
-          {storages.map((storage_name) => (
-            <option key={storage_name} value={storage_name}>
-              {storage_name}
-            </option>
-          ))}
-        </select>
-      </p>
-
-      {selectedStorage && allocationPolicies ? (
-        allocationPolicies.map((policy: AllocationPolicy) => (
+  function renderPolicies(policies: AllocationPolicy[]) {
+    if (!selectedStorage) {
+      return <p>Storage not selected.</p>;
+    }
+    if (policies.length == 0) {
+      return null;
+    }
+    return (
+      <div>
+        <p style={policyTypeStyle}>
+          Policy Type: {policies[0].query_type.toUpperCase()}
+        </p>
+        {policies.map((policy: AllocationPolicy) => (
           <AllocationPolicyConfigs
             api={api}
             storage={selectedStorage}
             policy={policy}
             key={selectedStorage + policy.policy_name}
           />
-        ))
-      ) : (
-        <p>Storage not selected.</p>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p>
+        Storage:
+        <CustomSelect
+          value={selectedStorage || ""}
+          onChange={selectStorage}
+          name="storage"
+          options={storages}
+        />
+      </p>
+
+      {renderPolicies(
+        allocationPolicies.filter((policy) => policy.query_type == "select")
+      )}
+      {renderPolicies(
+        allocationPolicies.filter((policy) => policy.query_type == "delete")
       )}
     </div>
   );
 }
+
+const policyTypeStyle = {
+  fontSize: 18,
+  fontWeight: 600,
+  color: COLORS.HEADER_TEXT,
+  backgroundColor: COLORS.TEXT_LIGHTER,
+  maxWidth: "100%",
+  margin: "10px 0px",
+  padding: "5px",
+};
 
 export default CapacityManagement;

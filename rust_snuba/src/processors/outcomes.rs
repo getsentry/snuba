@@ -1,5 +1,5 @@
 use crate::config::ProcessorConfig;
-use crate::processors::utils::ensure_valid_datetime;
+use crate::processors::utils::StringToIntDatetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
 use rust_arroyo::backends::kafka::types::KafkaPayload;
@@ -73,8 +73,8 @@ struct Outcome {
     #[serde(default)]
     project_id: Option<u64>,
     key_id: Option<u64>,
-    #[serde(default, deserialize_with = "ensure_valid_datetime")]
-    timestamp: u32,
+    #[serde(default)]
+    timestamp: StringToIntDatetime,
     outcome: u8,
     category: Option<u8>,
     quantity: Option<u32>,

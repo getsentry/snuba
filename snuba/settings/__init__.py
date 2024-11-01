@@ -58,6 +58,7 @@ ADMIN_REPLAYS_SAMPLE_RATE_ON_ERROR = float(
 )
 
 ADMIN_ALLOWED_PROD_PROJECTS: Sequence[int] = []
+ADMIN_ALLOWED_ORG_IDS: Sequence[int] = []
 ADMIN_ROLES_REDIS_TTL = 600
 
 # All available regions where region is:
@@ -111,9 +112,11 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
             "search_issues",
             "generic_metrics_counters",
             "spans",
+            "events_analytics_platform",
             "group_attributes",
             "generic_metrics_gauges",
             "metrics_summaries",
+            "profile_chunks",
         },
         "single_node": True,
     },
@@ -129,10 +132,10 @@ DOGSTATSD_SAMPLING_RATES = {
 DDM_METRICS_SAMPLE_RATE = float(os.environ.get("SNUBA_DDM_METRICS_SAMPLE_RATE", 0.01))
 
 CLICKHOUSE_READONLY_USER = os.environ.get("CLICKHOUSE_READONLY_USER", "default")
-CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASS", "")
+CLICKHOUSE_READONLY_PASSWORD = os.environ.get("CLICKHOUSE_READONLY_PASSWORD", "")
 
 CLICKHOUSE_TRACE_USER = os.environ.get("CLICKHOUSE_TRACE_USER", "default")
-CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASS", "")
+CLICKHOUSE_TRACE_PASSWORD = os.environ.get("CLICKHOUSE_TRACE_PASSWORD", "")
 
 # Redis Options
 
@@ -173,6 +176,7 @@ class RedisClusters(TypedDict):
     dlq: RedisClusterConfig | None
     optimize: RedisClusterConfig | None
     admin_auth: RedisClusterConfig | None
+    manual_jobs: RedisClusterConfig | None
 
 
 REDIS_CLUSTERS: RedisClusters = {
@@ -184,6 +188,7 @@ REDIS_CLUSTERS: RedisClusters = {
     "dlq": None,
     "optimize": None,
     "admin_auth": None,
+    "manual_jobs": None,
 }
 
 # Query Recording Options
@@ -211,7 +216,6 @@ SNAPSHOT_LOAD_PRODUCT = "snuba"
 
 BULK_CLICKHOUSE_BUFFER = 10000
 BULK_BINARY_LOAD_CHUNK = 2**22  # 4 MB
-
 
 # Processor/Writer Options
 
@@ -241,6 +245,7 @@ DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DISCARD_OLD_EVENTS = True
 CLICKHOUSE_HTTP_CHUNK_SIZE = 8192
 HTTP_WRITER_BUFFER_SIZE = 1
+BATCH_JOIN_TIMEOUT = os.environ.get("BATCH_JOIN_TIMEOUT", 10)
 
 # Retention related settings
 ENFORCE_RETENTION: bool = False
@@ -269,12 +274,6 @@ TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 PRETTY_FORMAT_EXPRESSIONS = os.environ.get("PRETTY_FORMAT_EXPRESSIONS", "1") == "1"
-
-# Capacity Management
-# HACK: This is necessary because single tenant does not have snuba-admin deployed / accessible
-# so we can't change policy configs ourselves. This should be removed once we have snuba-admin
-# available for single tenant since we can enable/disable policies at runtime there.
-ENFORCE_BYTES_SCANNED_WINDOW_POLICY = True
 
 # By default, allocation policies won't block requests from going through in a production
 # environment to not cause incidents unnecessarily. If something goes wrong with allocation
@@ -366,8 +365,6 @@ OPTIMIZE_MAX_SLEEP_TIME = 2 * 60 * 60  # 2 hours
 OPTIMIZE_MERGE_MIN_ELAPSED_CUTTOFF_TIME = 10 * 60  # 10 mins
 # merges larger than this will be considered large and will be waited on
 OPTIMIZE_MERGE_SIZE_CUTOFF = 50_000_000_000  # 50GB
-# Maximum jitter to add to the scheduling of threads of an optimize job
-OPTIMIZE_PARALLEL_MAX_JITTER_MINUTES = 0
 
 # Start time in hours from UTC 00:00:00 after which we are allowed to run
 # optimize jobs in parallel.
@@ -388,9 +385,6 @@ STORAGE_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/storages/*.yaml"
 ENTITY_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/entities/*.yaml"
 DATASET_CONFIG_FILES_GLOB = f"{CONFIG_FILES_PATH}/**/dataset.yaml"
 
-# Counter utility class window size in minutes
-COUNTER_WINDOW_SIZE_MINUTES = 10
-
 
 # Slicing Configuration
 
@@ -401,6 +395,9 @@ SLICED_STORAGE_SETS: Mapping[str, int] = {}
 # Mapping storage set key to a mapping of logical partition
 # to slice id
 LOGICAL_PARTITION_MAPPING: Mapping[str, Mapping[int, int]] = {}
+
+# From testing, the max query size that can be sent to clickhouse is 131535 bytes (~128.452 KiB)
+MAX_QUERY_SIZE_BYTES = 128 * 1024  # 128 KiB
 
 # The slice configs below are the "SLICED" versions to the equivalent default
 # settings above. For example, "SLICED_KAFKA_TOPIC_MAP" is the "SLICED"
@@ -432,6 +429,15 @@ SLICED_KAFKA_TOPIC_MAP: Mapping[Tuple[str, int], str] = {}
 # Mapping of (logical topic names, slice id) pairs to broker config
 # This is only for sliced Kafka topics
 SLICED_KAFKA_BROKER_CONFIG: Mapping[Tuple[str, int], Mapping[str, Any]] = {}
+
+# When dataset yamls (i.e. dataset, storages, entities) are loaded into memory, should we validate
+# the jsonschema or not? In production we shouldn't need to do it, in CI we should. This is for performance
+# reasons. The json schemas take around a second to compile and they add time to the load of every
+# yaml file as well because we validate them. By skipping these steps in production environments
+# we save ~2s on startup time
+VALIDATE_DATASET_YAMLS_ON_STARTUP = False
+
+MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:

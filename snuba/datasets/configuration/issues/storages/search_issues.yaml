@@ -89,8 +89,16 @@ allocation_policies:
         is_enforced: 0
         is_active: 0
 
+delete_allocation_policies:
+  - name: DeleteConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+        - project_id
+      default_config_overrides:
+        is_enforced: 0
+
 query_processors:
-  - processor: TableRateLimit
   - processor: MappingOptimizer
     args:
       column_name: tags
@@ -114,6 +122,15 @@ query_processors:
         contexts:
           trace.trace_id: trace_id
 
+deletion_settings:
+  is_enabled: 1
+  max_rows_to_delete: 100000
+  tables:
+    - search_issues_local_v2
+  allowed_columns:
+    - project_id
+    - group_id
+
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
@@ -122,3 +139,10 @@ stream_loader:
   default_topic: generic-events
   commit_log_topic: snuba-generic-events-commit-log
   dlq_topic: snuba-dead-letter-generic-events
+
+deletion_processors:
+  - processor: ColumnFilterProcessor
+    args:
+      column_filters:
+        - project_id
+        - group_id

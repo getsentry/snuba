@@ -35,16 +35,17 @@ from snuba.redis import RedisClientKey, get_redis_client
 @click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--parallel",
+    "default_parallel_threads",
     type=click.IntRange(1, 2),
     default=1,
-    help="Run parallel optimizations",
+    help="Default parallel threads",
 )
 def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
     storage_name: str,
-    parallel: int,
+    default_parallel_threads: int,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
@@ -119,7 +120,7 @@ def optimize(
         clickhouse=connection,
         storage=storage,
         database=database,
-        parallel=parallel,
+        default_parallel_threads=default_parallel_threads,
         clickhouse_host=clickhouse_host,
         tracker=tracker,
         before=today,

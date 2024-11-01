@@ -155,7 +155,10 @@ def is_not_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern
 def binary_condition(
     function_name: str, lhs: Expression, rhs: Expression
 ) -> FunctionCall:
-    return FunctionCall(None, function_name, (lhs, rhs))
+    """This function is deprecated please use snuba.query.dsl.binary_condition"""
+    from snuba.query.dsl import binary_condition as dsl_binary_condition
+
+    return dsl_binary_condition(function_name, lhs, rhs)
 
 
 binary_condition_patterns = {
@@ -281,20 +284,28 @@ def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
 
 def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
     """
-    Combine multiple independent conditions in a single function
-    representing an AND or an OR.
-    This is the inverse of get_first_level_conditions.
-    """
+    Input:
+        conditions - a sequence of conditions (i.e. something that can go in AND/OR)
+        function - BooleanFunctions.AND or BooleanFunctions.OR
 
-    # TODO: Make BooleanFunctions an enum for stricter typing.
+    Combines all condition in conditions into a single AND/OR condition and returns it.
+    ex: given input ([a=1, b=2, c=3], AND) returns (a=1 AND (b=2 AND c=3))
+    """
     assert function in (BooleanFunctions.AND, BooleanFunctions.OR)
     assert len(conditions) > 0
     if len(conditions) == 1:
         return conditions[0]
 
-    return binary_condition(
-        function, conditions[0], _combine_conditions(conditions[1:], function)
-    )
+    new_conds: list[Expression] = []
+    if len(conditions) % 2 == 0:
+        start = 0
+    else:
+        new_conds.append(conditions[0])
+        start = 1
+    for i in range(start, len(conditions) - 1, 2):
+        new_conds.append(binary_condition(function, conditions[i], conditions[i + 1]))
+
+    return _combine_conditions(new_conds, function)
 
 
 CONDITION_MATCH = Or(

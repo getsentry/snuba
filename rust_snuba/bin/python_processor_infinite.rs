@@ -20,9 +20,9 @@ fn main() {
     let output2 = output.clone();
 
     let step = RunTask::new(
-        move |_| {
+        move |message| {
             output2.fetch_add(1, Ordering::Relaxed);
-            Ok(())
+            Ok(message)
         },
         step,
     );
@@ -51,7 +51,6 @@ fn main() {
 
     println!("join");
 
-    step.close();
     step.join(None).unwrap();
 
     println!("{}", output.load(Ordering::Relaxed))

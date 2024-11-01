@@ -1,9 +1,9 @@
 import React, { ReactNode, useState } from "react";
 
-import Client from "../api_client";
-import { containerStyle, paragraphStyle } from "./styles";
-import { Table } from "../table";
-import { ConfigChange, ConfigType, ConfigValue } from "./types";
+import Client from "SnubaAdmin/api_client";
+import { containerStyle, paragraphStyle } from "SnubaAdmin/runtime_config/styles";
+import { Table } from "SnubaAdmin/table";
+import { ConfigChange, ConfigType, ConfigValue } from "SnubaAdmin/runtime_config/types";
 
 function AuditLog(props: { api: Client }) {
   const { api } = props;

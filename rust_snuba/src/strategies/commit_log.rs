@@ -92,11 +92,11 @@ impl ProduceMessage {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMessage {
+impl TaskRunner<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error> for ProduceMessage {
     fn get_task(
         &self,
-        message: Message<BytesInsertBatch>,
-    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+        message: Message<BytesInsertBatch<()>>,
+    ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
         let topic = self.topic;
@@ -140,7 +140,7 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMe
 }
 
 pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
+    inner: RunTaskInThreads<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error>,
 }
 
 impl ProduceCommitLog {
@@ -154,7 +154,7 @@ impl ProduceCommitLog {
         skip_produce: bool,
     ) -> Self
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
     {
         let inner = RunTaskInThreads::new(
             next_step,
@@ -173,20 +173,16 @@ impl ProduceCommitLog {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
+impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+        message: Message<BytesInsertBatch<()>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<()>>> {
         self.inner.submit(message)
-    }
-
-    fn close(&mut self) {
-        self.inner.close();
     }
 
     fn terminate(&mut self) {
@@ -200,11 +196,10 @@ impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets, RowData};
+    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets};
 
     use super::*;
     use crate::testutils::TestStrategy;
-    use chrono::NaiveDateTime;
     use rust_arroyo::backends::ProducerError;
     use rust_arroyo::types::Topic;
     use std::collections::BTreeMap;
@@ -230,10 +225,8 @@ mod tests {
 
             let time_millis = (d.orig_message_ts * 1000.0) as i64;
 
-            let orig_message_ts = DateTime::from_naive_utc_and_offset(
-                NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
-                Utc,
-            );
+            let orig_message_ts =
+                DateTime::<Utc>::from_timestamp_millis(time_millis).unwrap_or_default();
 
             Ok(Commit {
                 topic,
@@ -291,8 +284,8 @@ mod tests {
 
         let payloads = vec![
             BytesInsertBatch::new(
-                RowData::default(),
-                Utc::now(),
+                (),
+                Some(Utc::now()),
                 None,
                 None,
                 CommitLogOffsets(BTreeMap::from([(
@@ -306,8 +299,8 @@ mod tests {
                 CogsData::default(),
             ),
             BytesInsertBatch::new(
-                RowData::default(),
-                Utc::now(),
+                (),
+                Some(Utc::now()),
                 None,
                 None,
                 CommitLogOffsets(BTreeMap::from([
@@ -356,7 +349,6 @@ mod tests {
             strategy.poll().unwrap();
         }
 
-        strategy.close();
         strategy.join(None).unwrap();
 
         let produced = produced_payloads.lock().unwrap();

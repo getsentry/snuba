@@ -4,6 +4,26 @@ from enum import Enum
 
 
 class ReadinessState(Enum):
+    """
+    Readiness states are essentially feature flags for snuba datasets.
+    The readiness state defines whether or not a dataset is made available
+    in specific sentry environments.
+    Currently, sentry environments include the following:
+    * local/CI
+    * SaaS
+    * S4S
+    * Self-Hosted
+    * Single-Tenant
+
+    The following is a list of readiness states and the environments
+    they map to:
+    * limited -> local/CI
+    * experimental -> local/CI, S4S
+    * partial -> local/CI, SaaS, S4S
+    * deprecate -> local/CI, Self-Hosted
+    * complete ->  local/CI, SaaS, S4S, Self-Hosted, Single-Tenant
+    """
+
     LIMITED = "limited"
     DEPRECATE = "deprecate"
     PARTIAL = "partial"

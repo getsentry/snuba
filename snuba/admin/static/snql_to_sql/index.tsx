@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import { Table } from "../table";
+import Client from "SnubaAdmin/api_client";
+import { Table } from "SnubaAdmin/table";
 
-import { executeActionsStyle, selectStyle, executeButtonStyle } from "./styles";
-import { TextArea } from "./utils";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { executeActionsStyle } from "SnubaAdmin/snql_to_sql/styles";
+import { TextArea } from "SnubaAdmin/snql_to_sql/utils";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import {
   SnQLRequest,
   SnQLResult,
@@ -11,13 +14,13 @@ import {
   SnQLQueryState,
 } from "./types";
 
+const HISTORY_KEY = "snql_to_sql";
 function SnQLToSQL(props: { api: Client }) {
   const [datasets, setDatasets] = useState<SnubaDatasetName[]>([]);
-  const [snql_query, setQuery] = useState<SnQLQueryState>({});
+  const [snql_query, setQuery] = useState<SnQLQueryState>({dataset: getParamFromStorage("dataset")});
   const [queryResultHistory, setQueryResultHistory] = useState<SnQLResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   useEffect(() => {
     props.api.getSnubaDatasetNames().then((res) => {
@@ -44,25 +47,15 @@ function SnQLToSQL(props: { api: Client }) {
   }
 
   function convertQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
+    return props.api
       .debugSnQLQuery(snql_query as SnQLRequest)
       .then((result) => {
         const query_result = {
           input_query: snql_query.query,
           sql: result.sql,
         };
+        setRecentHistory(HISTORY_KEY, query_result);
         setQueryResultHistory((prevHistory) => [query_result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
       });
   }
 
@@ -75,33 +68,21 @@ function SnQLToSQL(props: { api: Client }) {
         </div>
         <div style={executeActionsStyle}>
           <div>
-            <select
+            <CustomSelect
               value={snql_query.dataset || ""}
-              onChange={(evt) => selectDataset(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a dataset
-              </option>
-              {datasets.map((dataset) => (
-                <option key={dataset} value={dataset}>
-                  {dataset}
-                </option>
-              ))}
-            </select>
+              onChange={selectDataset}
+              options={datasets}
+              name="dataset"
+            />
           </div>
           <div>
-            <button
-              onClick={(_) => convertQuery()}
-              style={executeButtonStyle}
+            <ExecuteButton
+              onClick={convertQuery}
               disabled={
-                isExecuting ||
-                snql_query.dataset == undefined ||
-                snql_query.query == undefined
+                snql_query.dataset == undefined || snql_query.query == undefined
               }
-            >
-              Convert Query
-            </button>
+              label="Convert Query"
+            />
           </div>
         </div>
       </form>

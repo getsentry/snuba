@@ -43,7 +43,7 @@ expression: snapshot_payload
     "os_name": "",
     "os_version": "",
     "partition": 0,
-    "platform": "javascript",
+    "platform": "",
     "project_id": 1,
     "release": "",
     "replay_id": "834f314c-aae5-4030-a1b0-dc52b202f24a",
@@ -64,6 +64,7 @@ expression: snapshot_payload
     "user_email": "",
     "user_id": "",
     "user_name": "",
+    "viewed_by_id": 0,
     "warning_id": "00000000-0000-0000-0000-000000000000"
   }
 ]

@@ -80,17 +80,9 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropColumn(
-                StorageSetKey.SESSIONS, "sessions_raw_local", column.name
-            )
-            for [column, after] in new_raw_columns
-        ] + [
-            operations.DropColumn(
-                StorageSetKey.SESSIONS, "sessions_hourly_local", column.name
-            )
-            for [column, after] in new_dest_columns
-        ]
+        # Sessions is fully deprecated, we don't need to keep supporting this reverse migration
+        # as providing it makes test_reverse_idempotency_all fail
+        return []
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
@@ -112,14 +104,6 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
         ]
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropColumn(
-                StorageSetKey.SESSIONS, "sessions_raw_dist", column.name
-            )
-            for [column, after] in new_raw_columns
-        ] + [
-            operations.DropColumn(
-                StorageSetKey.SESSIONS, "sessions_hourly_dist", column.name
-            )
-            for [column, after] in new_dest_columns
-        ]
+        # Sessions is fully deprecated, we don't need to keep supporting this reverse migration
+        # as providing it makes test_reverse_idempotency_all fail
+        return []

@@ -17,6 +17,9 @@ expression: snapshot_payload
     "clickhouse_queries.array_join_columns": [
       []
     ],
+    "clickhouse_queries.bytes": [
+      0
+    ],
     "clickhouse_queries.bytes_scanned": [
       0
     ],

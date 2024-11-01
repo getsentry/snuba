@@ -1,6 +1,6 @@
-import TracingQueries from "../../tracing";
-import { TracingResult } from "../../tracing/types";
-import Client from "../../api_client";
+import TracingQueries from "SnubaAdmin/tracing";
+import { TracingResult } from "SnubaAdmin/tracing/types";
+import Client from "SnubaAdmin/api_client";
 import React from "react";
 import { it, expect, jest } from "@jest/globals";
 import {
@@ -14,6 +14,8 @@ import selectEvent from "react-select-event";
 import { ClickhouseNodeData } from "../../clickhouse_queries/types";
 
 import default_response from "./fixture";
+
+jest.mock("SnubaAdmin/common/components/sql_editor");
 
 it("select executor rows should appear", async () => {
   global.ResizeObserver = require("resize-observer-polyfill");
@@ -36,7 +38,7 @@ it("select executor rows should appear", async () => {
   };
 
   let { getByText, getByRole, queryByText } = render(
-    <TracingQueries api={mockClient} />
+    <TracingQueries api={mockClient} />,
   );
   await waitFor(() => expect(mockClient.getClickhouseNodes).toBeCalledTimes(1));
 
@@ -46,7 +48,7 @@ it("select executor rows should appear", async () => {
     target: { value: "Foo" },
   });
 
-  const submitButton = screen.getByText("Execute query");
+  const submitButton = screen.getByText("Execute Query");
   expect(submitButton.getAttribute("disabled")).toBeFalsy();
 
   fireEvent.click(submitButton);

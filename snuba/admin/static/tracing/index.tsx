@@ -1,17 +1,29 @@
-import React, { useEffect, useState } from "react";
-import Client from "../api_client";
-import QueryDisplay from "./query_display";
+import React, { useState } from "react";
+import { Accordion, Stack, Title, Text, Group, Table } from "@mantine/core";
+
+import Client from "SnubaAdmin/api_client";
+import QueryDisplay from "SnubaAdmin/tracing/query_display";
 import {
   LogLine,
-  TracingRequest,
   TracingResult,
-  PredefinedQuery,
-} from "./types";
-import { parseLogLine } from "./util";
+  TracingSummary,
+  QuerySummary,
+  ExecuteSummary,
+  SelectSummary,
+  IndexSummary,
+  StreamSummary,
+  AggregationSummary,
+  SortingSummary,
+} from "SnubaAdmin/tracing/types";
 
-type QueryState = Partial<TracingRequest>;
+type ProfileEventValue = {
+  column_names: string[];
+  rows: string[];
+};
 
-type BucketedLogs = Map<String, Map<MessageCategory, LogLine[]>>;
+type ProfileEvent = {
+  [host_name: string]: ProfileEventValue;
+};
 
 enum MessageCategory {
   housekeeping,
@@ -50,125 +62,7 @@ function getMessageCategory(logLine: LogLine): MessageCategory {
   }
 }
 
-function NodalDisplay(props: {
-  host: string;
-  category: MessageCategory;
-  title?: string;
-  logsBucketed: BucketedLogs;
-}) {
-  const [visible, setVisible] = useState<boolean>(false);
-
-  const nodeKey = props.host + "-" + props.category;
-  return (
-    <li key={nodeKey}>
-      <span onClick={() => setVisible(!visible)}>
-        {visible ? "[-]" : "[+]"} {props.title}
-      </span>
-
-      <ol key={nodeKey + "-child"} style={collapsibleStyle}>
-        {visible &&
-          props.logsBucketed
-            .get(props.host)
-            ?.get(props.category)
-            ?.map((line, index) => {
-              return (
-                <li key={nodeKey + index}>
-                  [{line?.log_level}] {line?.component}: {line?.message}
-                </li>
-              );
-            })}
-      </ol>
-    </li>
-  );
-}
-
-function FormattedNodalDisplay(props: {
-  header: string;
-  data: string[] | string | number;
-}) {
-  const [visible, setVisible] = useState<boolean>(false);
-
-  return (
-    <li>
-      <span onClick={() => setVisible(!visible)}>
-        {visible ? "[-]" : "[+]"} {props.header.split("_").join(" ")}
-      </span>
-
-      <ol style={collapsibleStyle}>
-        {visible &&
-          Array.isArray(props.data) &&
-          props.data.map((log: string, log_idx: number) => {
-            return <li>{log}</li>;
-          })}
-        {visible &&
-          (typeof props.data === "string" ||
-            typeof props.data === "number") && <li>{props.data}</li>}
-      </ol>
-    </li>
-  );
-}
-
 function TracingQueries(props: { api: Client }) {
-  const [query, setQuery] = useState<QueryState>({});
-  const [queryResultHistory, setQueryResultHistory] = useState<TracingResult[]>(
-    []
-  );
-  const [isExecuting, setIsExecuting] = useState<boolean>(false);
-  const [predefinedQueryOptions, setPredefinedQueryOptions] = useState<
-    PredefinedQuery[]
-  >([]);
-
-  const endpoint = "clickhouse_trace_query";
-  const hidden_formatted_trace_fields = new Set<string>([
-    "thread_ids",
-    "node_name",
-    "node_type",
-    "storage_nodes_accessed",
-  ]);
-
-  function formatSQL(sql: string) {
-    const formatted = sql
-      .split("\n")
-      .map((line) => line.substring(4, line.length))
-      .join("\n");
-    return formatted.trim();
-  }
-
-  function executeQuery() {
-    if (isExecuting) {
-      window.alert("A query is already running");
-    }
-    setIsExecuting(true);
-    props.api
-      .executeTracingQuery(query as TracingRequest)
-      .then((result) => {
-        const tracing_result = {
-          input_query: `${query.sql}`,
-          timestamp: result.timestamp,
-          num_rows_result: result.num_rows_result,
-          cols: result.cols,
-          trace_output: result.trace_output,
-          formatted_trace_output: result.formatted_trace_output,
-          error: result.error,
-        };
-        setQueryResultHistory((prevHistory) => [
-          tracing_result,
-          ...prevHistory,
-        ]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error.message);
-      })
-      .finally(() => {
-        setIsExecuting(false);
-      });
-  }
-
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
-  }
-
   function tablePopulator(queryResult: TracingResult, showFormatted: boolean) {
     var elements = {};
     if (queryResult.error) {
@@ -198,13 +92,13 @@ function TracingQueries(props: { api: Client }) {
               </div>
             );
           } else if (title === "Trace") {
-            if (!showFormatted) {
+            if (showFormatted) {
               return (
                 <div>
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {heirarchicalRawTraceDisplay(title, value.trace_output)}
+                  {summarizedTraceDisplay(value.summarized_trace_output, value.profile_events_results)}
                 </div>
               );
             } else {
@@ -213,7 +107,7 @@ function TracingQueries(props: { api: Client }) {
                   <br />
                   <b>Number of rows in result set:</b> {value.num_rows_result}
                   <br />
-                  {formattedTraceDisplay(title, value.formatted_trace_output)}
+                  {rawTraceDisplay(title, value.trace_output, value.profile_events_results)}
                 </div>
               );
             }
@@ -223,171 +117,215 @@ function TracingQueries(props: { api: Client }) {
     );
   }
 
-  function heirarchicalRawTraceDisplay(
-    title: string,
-    value: any
-  ): JSX.Element | undefined {
-    /*
-    query execution flow:
-    [high-level query node]
-      [housekeeping] (access control, parsing)
-      [propagation step]
-      [for each storage node]
-        [housekeeping]
-        [select executor + MergeTreeSelectProcessor]
-        [aggregating transform]
-        [memory tracker]
-      [aggregating transform]
-      [memory tracker]
-    */
-    const parsedLines: Array<LogLine> = value
-      .split(/\n/)
-      .map(parseLogLine)
-      .filter((x: LogLine | null) => x != null);
+  function rawTraceDisplay(title: string, value: any, profileEventResults: ProfileEvent): JSX.Element | undefined {
+    const parsedLines: Array<string> = value.split(/\n/);
 
-    // logsBucketed maps host -> (category -> logs)
-    const logsBucketed: BucketedLogs = new Map();
-
-    const orderedHosts: string[] = [];
-    parsedLines.forEach((line) => {
-      if (!orderedHosts.includes(line.host)) {
-        orderedHosts.push(line.host);
-      }
-      if (logsBucketed.has(line.host)) {
-        const hostLogs = logsBucketed.get(line.host);
-        if (hostLogs?.has(getMessageCategory(line))) {
-          hostLogs.get(getMessageCategory(line))?.push(line);
-        } else {
-          hostLogs?.set(getMessageCategory(line), [line]);
-        }
-      } else {
-        logsBucketed.set(
-          line.host,
-          new Map<MessageCategory, LogLine[]>([
-            [getMessageCategory(line), [line]],
-          ])
-        );
-      }
-    });
-
-    let rootHost = orderedHosts[0];
-
-    const CATEGORIES_ORDERED = [
-      MessageCategory.housekeeping,
-      MessageCategory.select_execution,
-      MessageCategory.aggregation,
-      MessageCategory.memory_tracker,
-    ];
-    const CATEGORY_HEADERS = new Map<MessageCategory, string>([
-      [MessageCategory.housekeeping, "Housekeeping"],
-      [MessageCategory.select_execution, "Select execution"],
-      [MessageCategory.aggregation, "Aggregation"],
-      [MessageCategory.memory_tracker, "Memory Tracking"],
-    ]);
+    const profileEventRows: Array<string> = [];
+    for (const [k, v] of Object.entries(profileEventResults)) {
+      profileEventRows.push(k + '=>' + v.rows[0]);
+    }
 
     return (
       <ol style={collapsibleStyle} key={title + "-root"}>
-        <li key="header-root">Query node - {rootHost}</li>
-        <li key="root-storages">
-          <ol style={collapsibleStyle}>
-            <NodalDisplay
-              host={rootHost}
-              title={CATEGORY_HEADERS.get(MessageCategory.housekeeping)}
-              category={MessageCategory.housekeeping}
-              logsBucketed={logsBucketed}
-            />
-            <li>
-              <span>Storage nodes</span>
-              <ol style={collapsibleStyle}>
-                {orderedHosts.slice(1).map((host) => {
-                  return (
-                    <li key={"top-" + host}>
-                      <span>Storage node - {host}</span>
-                      {CATEGORIES_ORDERED.map((category) => {
-                        return (
-                          <ol
-                            key={"section-" + category + "-" + host}
-                            style={collapsibleStyle}
-                          >
-                            <NodalDisplay
-                              host={host}
-                              title={CATEGORY_HEADERS.get(category)}
-                              category={category}
-                              logsBucketed={logsBucketed}
-                            />
-                          </ol>
-                        );
-                      })}
-                    </li>
-                  );
-                })}
-              </ol>
+        <Title order={4}>Profile Events Output</Title>
+        {profileEventRows.map((line, index) => {
+          const node_name = line.split("=>")[0];
+          const row = line.split("=>")[1];
+          return (
+            <li key={title + index}>
+              <Text>[ {node_name} ] {row}</Text>
             </li>
-            <NodalDisplay
-              host={rootHost}
-              title={CATEGORY_HEADERS.get(MessageCategory.aggregation)}
-              category={MessageCategory.aggregation}
-              logsBucketed={logsBucketed}
-            />
-            <NodalDisplay
-              host={rootHost}
-              title={CATEGORY_HEADERS.get(MessageCategory.memory_tracker)}
-              category={MessageCategory.memory_tracker}
-              logsBucketed={logsBucketed}
-            />
-          </ol>
-        </li>
+          );
+        })}
+        <br />
+        <Title order={4}>Trace Output</Title>
+        {parsedLines.map((line, index) => {
+          return (
+            <li key={title + index}>
+              <Text>{line}</Text>
+            </li>
+          );
+        })}
       </ol>
     );
   }
 
-  function formattedTraceDisplay(
-    title: string,
-    value: any
+  function indexSummary(value: IndexSummary): JSX.Element {
+    return (
+      <Group>
+        <Text fw={600}>{value.table_name}: </Text>
+        <Text>
+          Index `{value.index_name}` has dropped {value.dropped_granules}/
+          {value.total_granules} granules.
+        </Text>
+      </Group>
+    );
+  }
+
+  function selectSummary(value: SelectSummary): JSX.Element {
+    return (
+      <Stack>
+        <Group>
+          <Text fw={600}>{value.table_name}:</Text>
+          <Text>
+            Selected {value.parts_selected_by_partition_key}/{value.total_parts}{" "}
+            parts by partition key
+          </Text>
+        </Group>
+        <Group>
+          <Text fw={600}>{value.table_name}:</Text>
+          <Text>
+            Primary Key selected {value.parts_selected_by_primary_key} parts,{" "}
+            {value.marks_selected_by_primary_key}/{value.total_marks} marks,{" "}
+            {value.marks_to_read_from_ranges} total marks to process
+          </Text>
+        </Group>
+      </Stack>
+    );
+  }
+
+  function streamSummary(value: StreamSummary): JSX.Element {
+    return (
+      <Group>
+        <Text fw={600}>{value.table_name}:</Text>
+        <Text>Processing granules using {value.streams} threads</Text>
+      </Group>
+    );
+  }
+
+  function aggregationSummary(value: AggregationSummary): JSX.Element {
+    return (
+      <Text>
+        Aggregated {value.before_row_count} to {value.after_row_count} rows
+        (from {value.memory_size}) in {value.seconds} sec.
+      </Text>
+    );
+  }
+
+  function sortingSummary(value: SortingSummary): JSX.Element {
+    return (
+      <Text>
+        Merge sorted {value.sorted_blocks} blocks, {value.rows} rows in{" "}
+        {value.seconds} sec.
+      </Text>
+    );
+  }
+
+  function executeSummary(value: ExecuteSummary): JSX.Element {
+    return (
+      <Text>
+        Read {value.rows_read} rows, {value.memory_size} in {value.seconds}{" "}
+        sec., {value.rows_per_second} rows/sec., {value.bytes_per_second}/sec.
+      </Text>
+    );
+  }
+
+  function querySummary(value: QuerySummary): JSX.Element {
+    const execute = value.execute_summaries ?
+      value.execute_summaries[0] : null;
+    const dist = value.is_distributed ? " (Distributed)" : "";
+    const index_summaries = value.index_summaries
+      ? value.index_summaries.map((s) => indexSummary(s))
+      : null;
+    const select_summaries = value.select_summaries
+      ? value.select_summaries.map((s) => selectSummary(s))
+      : null;
+    const stream_summaries = value.stream_summaries
+      ? value.stream_summaries.map((s) => streamSummary(s))
+      : null;
+    const show_filtering =
+      index_summaries || select_summaries || stream_summaries;
+    const aggregation_summaries = value.aggregation_summaries
+      ? value.aggregation_summaries.map((s) => aggregationSummary(s))
+      : null;
+    const sorting_summaries = value.sorting_summaries
+      ? value.sorting_summaries.map((s) => sortingSummary(s))
+      : null;
+    const show_aggregating = aggregation_summaries || sorting_summaries;
+    return (
+      <Accordion.Item key={value.node_name} value={value.node_name}>
+        <Accordion.Control>
+          <Title order={4}>
+            {value.node_name} {dist}: {execute ? execute.seconds : "N/A"} sec.
+          </Title>
+        </Accordion.Control>
+        <Accordion.Panel>
+          <Stack>
+            {show_filtering ? <Title order={4}>Filtering</Title> : null}
+            {index_summaries}
+            {select_summaries}
+            {stream_summaries}
+            {show_aggregating ? <Title order={4}>Aggregating</Title> : null}
+            {aggregation_summaries}
+            {sorting_summaries}
+            <Title order={4}>Total</Title>
+            {value.execute_summaries && value.execute_summaries.map((e) => executeSummary(e))}
+          </Stack>
+        </Accordion.Panel>
+      </Accordion.Item>
+    );
+  }
+
+  function summarizedTraceDisplay(
+    value: TracingSummary,
+    profileEventResults: ProfileEvent
   ): JSX.Element | undefined {
-    let node_names = Object.keys(value);
-    let query_node_name = "";
-    for (const node_name of node_names) {
-      if (value[node_name]["node_type"] == "query") {
-        query_node_name = node_name;
+    let dist_node;
+    let nodes = [];
+    for (const [host, summary] of Object.entries(value.query_summaries)) {
+      if (summary.is_distributed) {
+        dist_node = summary;
+      } else {
+        nodes.push(summary);
       }
     }
     return (
-      <ol style={collapsibleStyle}>
-        <li>Query node - {query_node_name}</li>
-        <ol style={collapsibleStyle}>
-          {Object.keys(value[query_node_name]).map(
-            (header: string, idx: number) => {
-              if (!hidden_formatted_trace_fields.has(header)) {
-                const data = value[query_node_name][header];
-                return <FormattedNodalDisplay header={header} data={data} />;
-              }
-            }
-          )}
-        </ol>
-        {node_names.map((node_name, idx) => {
-          if (node_name != query_node_name) {
-            return (
-              <ol style={collapsibleStyle}>
-                <br />
-                <li>Storage node - {node_name}</li>
-                <ol style={collapsibleStyle}>
-                  {Object.keys(value[node_name]).map(
-                    (header: string, idx: number) => {
-                      if (!hidden_formatted_trace_fields.has(header)) {
-                        const data = value[node_name][header];
-                        return (
-                          <FormattedNodalDisplay header={header} data={data} />
-                        );
-                      }
-                    }
-                  )}
-                </ol>
-              </ol>
-            );
-          }
-        })}
-      </ol>
+      <Stack>
+        <Accordion chevronPosition="left">
+          {querySummary(dist_node as QuerySummary)}
+        </Accordion>
+        <Accordion chevronPosition="left">
+          {nodes
+            .filter((q: QuerySummary) => !q.is_distributed)
+            .map((q: QuerySummary) => querySummary(q))}
+        </Accordion>
+        <Accordion chevronPosition="left">
+          <Accordion.Item value="profile-events" key="profile-events">
+            <Accordion.Control>
+              <Title order={4}>Profile Events Output</Title>
+            </Accordion.Control>
+            <Accordion.Panel>
+              {Object.entries(profileEventResults).map(([host, event]) => (
+                <Accordion chevronPosition="left" key={host}>
+                  <Accordion.Item value={host}>
+                    <Accordion.Control>
+                      <Title order={5}>{host}</Title>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Table>
+                        <thead>
+                          <tr>
+                            <th>Event</th>
+                            <th>Number of Events</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {event.rows.length > 0 && Object.entries(JSON.parse(event.rows[0]) as Record<string, number>).map(([key, value], rowIndex) => (
+                            <tr key={rowIndex}>
+                              <td>{key}</td>
+                              <td>{value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
+              ))}
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
+      </Stack>
     );
   }
 
@@ -399,39 +337,6 @@ function TracingQueries(props: { api: Client }) {
         predefinedQueryOptions: [],
       })}
     </div>
-  );
-}
-
-const executeActionsStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  marginTop: 8,
-};
-
-const executeButtonStyle = {
-  height: 30,
-  border: 0,
-  padding: "4px 20px",
-};
-
-const selectStyle = {
-  marginRight: 8,
-  height: 30,
-};
-
-function TextArea(props: {
-  value: string;
-  onChange: (nextValue: string) => void;
-}) {
-  const { value, onChange } = props;
-  return (
-    <textarea
-      spellCheck={false}
-      value={value}
-      onChange={(evt) => onChange(evt.target.value)}
-      style={{ width: "100%", height: 100 }}
-      placeholder={"Write your query here"}
-    />
   );
 }
 

@@ -6,7 +6,7 @@ storage:
   key: spans
   set_key: spans
 
-readiness_state: partial
+readiness_state: complete
 
 schema:
   columns:
@@ -22,8 +22,10 @@ schema:
       { name: is_segment, type: UInt, args: { size: 8 } },
       { name: segment_name, type: String },
       { name: start_timestamp, type: DateTime },
+      { name: start_timestamp_precise, type: DateTime64, args: { precision: 6 } },
       { name: start_ms, type: UInt, args: { size: 16 } },
       { name: end_timestamp, type: DateTime },
+      { name: end_timestamp_precise, type: DateTime64, args: { precision: 6 } },
       { name: end_ms, type: UInt, args: { size: 16 } },
       { name: duration, type: UInt, args: { size: 32 } },
       { name: exclusive_time, type: Float, args: { size: 64 } },
@@ -113,15 +115,6 @@ allocation_policies:
         - project_id
       default_config_overrides:
         is_enforced: 0
-  - name: BytesScannedWindowAllocationPolicy
-    args:
-      required_tenant_types:
-        - organization_id
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-        throttled_thread_number: 1
-        org_limit_bytes_scanned: 100000
   - name: ReferrerGuardRailPolicy
     args:
       required_tenant_types:
@@ -129,6 +122,16 @@ allocation_policies:
       default_config_overrides:
         is_enforced: 0
         is_active: 0
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_active: 0
+        is_enforced: 0
+
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: UUIDColumnProcessor
@@ -165,14 +168,8 @@ query_processors:
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
-        [transaction_id, trace_id, span_id, segment_name]
-  - processor: TableRateLimit
+        [span_id, trace_id, segment_name]
   - processor: TupleUnaliaser
-
-query_splitters:
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: end_timestamp
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer

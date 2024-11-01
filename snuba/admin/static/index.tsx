@@ -2,11 +2,11 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 
 import * as Sentry from "@sentry/react";
-import Header from "./header";
-import Nav from "./nav";
-import Body from "./body";
-import { NAV_ITEMS } from "./data";
-import Client from "./api_client";
+import Header from "SnubaAdmin/header";
+import Nav from "SnubaAdmin/nav";
+import Body from "SnubaAdmin/body";
+import { NAV_ITEMS } from "SnubaAdmin/data";
+import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
 
 const containerStyle = {
@@ -34,7 +34,7 @@ client.getSettings().then((settings) => {
       tracesSampleRate: settings.tracesSampleRate,
       // Profiles
       profilesSampleRate: settings.profilesSampleRate,
-      tracePropagationTargets: settings.tracePropagationTargets,
+      tracePropagationTargets: settings.tracePropagationTargets ?? undefined,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
       replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,

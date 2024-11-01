@@ -6,15 +6,16 @@ use schemars::{gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::de;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::serde_as;
+use serde_with::DefaultOnError;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
 use rust_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
-use crate::processors::utils::{enforce_retention, ensure_valid_datetime};
+use crate::processors::utils::{enforce_retention, StringToIntDatetime};
 use crate::types::{
     InsertBatch, InsertOrReplacement, KafkaMessageMetadata, ReplacementData, RowData,
 };
@@ -107,8 +108,8 @@ struct ReplacementEvent {
 #[derive(Debug, Deserialize, JsonSchema)]
 struct ErrorMessage {
     data: ErrorData,
-    #[serde(default, deserialize_with = "ensure_valid_datetime")]
-    datetime: u32,
+    #[serde(default)]
+    datetime: StringToIntDatetime,
     event_id: Uuid,
     group_id: u64,
     message: String,
@@ -135,7 +136,7 @@ struct ErrorData {
     #[serde(default)]
     location: Option<String>,
     #[serde(default)]
-    modules: Option<HashMap<String, Option<String>>>,
+    modules: Option<BTreeMap<String, Option<String>>>,
     #[serde(default)]
     received: Option<f64>,
     #[serde(default)]
@@ -224,6 +225,7 @@ struct StackTrace {
     frames: Option<Vec<Option<StackFrame>>>,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize, JsonSchema)]
 struct StackFrame {
     #[serde(default)]
@@ -240,6 +242,7 @@ struct StackFrame {
     in_app: Option<bool>,
     #[serde(default)]
     colno: Option<u32>,
+    #[serde_as(deserialize_as = "DefaultOnError")]
     #[serde(default)]
     lineno: Option<u32>,
 }
@@ -692,7 +695,7 @@ impl ErrorRow {
             span_id,
             tags_key,
             tags_value,
-            timestamp: from.datetime,
+            timestamp: from.datetime.0,
             title: from.data.title.0.unwrap_or_default(),
             trace_id: from_trace_context.trace_id,
             trace_sampled: from_trace_context.sampled.map(|v| v as u8),
@@ -837,9 +840,44 @@ mod tests {
     use crate::processors::tests::run_schema_type_test;
 
     #[test]
-    fn schema_insert_event() {
+    fn schema() {
         // run schema validation only for a subset of the payload, json-schema-diff gets too
         // confused by our untagged enum/anyOf wrapper
-        run_schema_type_test::<ErrorData>("events", Some("Event"));
+        run_schema_type_test::<Message>("events", None);
+    }
+
+    #[test]
+    fn deserialize_invalid_lineno() {
+        const SERIALIZED: &str = r#"
+        {
+            "function": "foo",
+            "module": "app.hello",
+            "filename": "hello",
+            "abs_path": "hello",
+            "lineno": 90052021220,
+            "colno": 86472,
+            "in_app": true,
+            "context_line": null,
+            "data": null,
+            "errors": null,
+            "raw_function": null,
+            "image_addr": null,
+            "instruction_addr": null,
+            "addr_mode": null,
+            "package": null,
+            "platform": null,
+            "post_context": null,
+            "pre_context": null,
+            "source_link": null,
+            "symbol": null,
+            "symbol_addr": null,
+            "trust": null,
+            "vars": null,
+            "snapshot": null,
+            "lock": null
+        }
+        "#;
+        let deserialized: StackFrame = serde_json::from_str(SERIALIZED).unwrap();
+        assert_eq!(deserialized.lineno, None);
     }
 }

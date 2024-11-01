@@ -1,6 +1,7 @@
 use crate::config::EnvConfig;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use serde::{Deserialize, Deserializer};
+use schemars::JsonSchema;
+use serde::{Deserialize, Deserializer, Serialize};
 
 // Equivalent to "%Y-%m-%dT%H:%M:%S.%fZ" in python
 pub const PAYLOAD_DATETIME_FORMAT: &str = "%Y-%m-%dT%H:%M:%S.%fZ";
@@ -19,7 +20,7 @@ pub fn enforce_retention(value: Option<u16>, config: &EnvConfig) -> u16 {
     retention_days
 }
 
-pub fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
+fn ensure_valid_datetime<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -31,3 +32,10 @@ where
     };
     Ok(seconds_since_epoch.timestamp() as u32)
 }
+
+#[derive(Debug, Deserialize, JsonSchema, Default, Serialize)]
+pub struct StringToIntDatetime(
+    #[serde(deserialize_with = "ensure_valid_datetime")]
+    #[schemars(with = "String")]
+    pub u32,
+);

@@ -1,0 +1,20 @@
+---
+source: src/processors/mod.rs
+expression: diff
+---
+[
+    Change {
+        path: ".<anyOf:1>.0",
+        change: TypeRemove {
+            removed: Number,
+        },
+    },
+    Change {
+        path: ".<anyOf:1>.0",
+        change: RangeAdd {
+            added: Minimum(
+                0.0,
+            ),
+        },
+    },
+]

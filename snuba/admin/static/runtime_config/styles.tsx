@@ -1,4 +1,4 @@
-import { COLORS } from "../theme";
+import { COLORS } from "SnubaAdmin/theme";
 
 const containerStyle = {
   width: 1200,
