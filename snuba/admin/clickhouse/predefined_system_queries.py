@@ -23,6 +23,17 @@ class CurrentMerges(SystemQuery):
     """
 
 
+class CurrentMutations(SystemQuery):
+    """Currently executing merges"""
+
+    sql = """
+    SELECT
+        command
+    FROM system.mutations
+    WHERE is_done = 0
+    """
+
+
 class CreateTableQuery(SystemQuery):
     """Show the current state of the schema by looking at the create_table_query"""
 
@@ -30,7 +41,7 @@ class CreateTableQuery(SystemQuery):
     SELECT
         create_table_query
     FROM system.tables
-    WHERE database not in ('system')
+    WHERE database in ('default')
     """
 
 

@@ -42,6 +42,8 @@ impl BatchFactory {
         clickhouse_user: &str,
         clickhouse_password: &str,
         async_inserts: bool,
+        batch_write_timeout: Option<Duration>,
+        max_bytes_before_external_group_by: Option<usize>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -69,13 +71,27 @@ impl BatchFactory {
             }
         }
 
+        if let Some(max_bytes_before_external_group_by) = max_bytes_before_external_group_by {
+            let mut query_segment: String = "&max_bytes_before_external_group_by=".to_owned();
+            query_segment.push_str(&max_bytes_before_external_group_by.to_string());
+            query_params.push_str(&query_segment)
+        }
+
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
 
-        let client = ClientBuilder::new()
-            .default_headers(headers)
-            .build()
-            .unwrap();
+        let client = if let Some(timeout_duration) = batch_write_timeout {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .timeout(timeout_duration)
+                .build()
+                .unwrap()
+        } else {
+            ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap()
+        };
 
         BatchFactory {
             client,
@@ -115,15 +131,21 @@ impl BatchFactory {
             if !receiver.is_empty() {
                 // only make the request to clickhouse if there is data
                 // being added to the receiver stream from the sender
-                let res = client
+                let response = client
                     .post(&url)
                     .query(&[("query", &query)])
                     .body(reqwest::Body::wrap_stream(ReceiverStream::new(receiver)))
                     .send()
                     .await?;
 
-                if res.status() != reqwest::StatusCode::OK {
-                    anyhow::bail!("error writing to clickhouse: {}", res.text().await?);
+                if !response.status().is_success() {
+                    let status = response.status();
+                    let body = response.text().await;
+                    anyhow::bail!(
+                        "bad response while inserting rows, status: {}, response body: {:?}",
+                        status,
+                        body
+                    );
                 }
             }
 
@@ -252,6 +274,8 @@ mod tests {
             "default",
             "",
             false,
+            None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -286,6 +310,44 @@ mod tests {
             "default",
             "",
             true,
+            None,
+            None,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
+    }
+
+    #[test]
+    fn test_write_with_external_groupby() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            None,
+            Some(500_000),
         );
 
         let mut batch = factory.new_batch();
@@ -319,6 +381,8 @@ mod tests {
             "default",
             "",
             false,
+            None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -350,6 +414,8 @@ mod tests {
             "default",
             "",
             false,
+            None,
+            None,
         );
 
         let mut batch = factory.new_batch();
@@ -365,5 +431,75 @@ mod tests {
 
         // ensure there has not been any HTTP request
         mock.assert_hits(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_write_no_time() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            // pass in an unreasonably short timeout
+            // which prevents the client request from reaching Clickhouse
+            Some(Duration::from_millis(0)),
+            None,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+    }
+
+    #[test]
+    fn test_write_enough_time() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST).path("/").body("{\"hello\": \"world\"}\n");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            // pass in a reasonable timeout
+            Some(Duration::from_millis(1000)),
+            None,
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
     }
 }

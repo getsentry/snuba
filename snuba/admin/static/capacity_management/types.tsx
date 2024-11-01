@@ -4,6 +4,7 @@ type AllocationPolicy = {
   policy_name: string;
   configs: AllocationPolicyConfig[];
   optional_config_definitions: AllocationPolicyOptionalConfigDefinition[];
+  query_type: string;
 };
 
 type AllocationPolicyConfig = {

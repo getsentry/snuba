@@ -343,6 +343,8 @@ jobs:
               tests/sentry/sentry_metrics/querying \
               tests/snuba/test_snql_snuba.py \
               tests/snuba/test_metrics_layer.py \
+              tests/sentry/api/endpoints/test_organization_spans_fields.py \
+              tests/snuba/api/endpoints/test_organization_events_span_indexed.py \
               -vv --cov . --cov-report="xml:.artifacts/snuba.coverage.xml"
 
       - name: Run CI module tests

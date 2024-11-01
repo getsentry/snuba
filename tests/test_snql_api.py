@@ -303,7 +303,7 @@ class TestSnQLApi(BaseApiTest):
             ),
         )
         assert response.status_code == 200
-        allocation_policies = response.json["quota_allowance"]
+        allocation_policies = response.json["quota_allowance"]["details"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
 
         response = self.post(
@@ -320,7 +320,7 @@ class TestSnQLApi(BaseApiTest):
                 }
             ),
         )
-        allocation_policies = response.json["quota_allowance"]
+        allocation_policies = response.json["quota_allowance"]["details"]
         assert allocation_policies["ConcurrentRateLimitAllocationPolicy"]
         assert not allocation_policies["ConcurrentRateLimitAllocationPolicy"]["can_run"]
         assert response.status_code == 429
@@ -815,6 +815,39 @@ class TestSnQLApi(BaseApiTest):
         assert len(data) == 1
         assert data[0]["profile_id"] == "046852d24483455c8c44f0c8fbf496f9"
 
+    @pytest.mark.parametrize(
+        "url, entity",
+        [
+            pytest.param("/transactions/snql", "transactions", id="transactions"),
+            pytest.param(
+                "/discover/snql", "discover_transactions", id="discover_transactions"
+            ),
+        ],
+    )
+    def test_profiler_id(self, url: str, entity: str) -> None:
+        response = self.post(
+            url,
+            data=json.dumps(
+                {
+                    "query": f"""
+                    MATCH ({entity})
+                    SELECT profiler_id AS profiler_id
+                    WHERE
+                        finish_ts >= toDateTime('{self.base_time.isoformat()}') AND
+                        finish_ts < toDateTime('{self.next_time.isoformat()}') AND
+                        project_id IN tuple({self.project_id})
+                    LIMIT 10
+                    """,
+                    "tenant_ids": {"referrer": "r", "organization_id": 123},
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)["data"]
+        assert len(data) == 1
+        assert data[0]["profiler_id"] == "ab90d5a803914b35bd7869d8f8e57469"
+
     def test_attribution_tags(self) -> None:
         response = self.post(
             "/events/snql",
@@ -950,7 +983,7 @@ class TestSnQLApi(BaseApiTest):
         assert response.status_code == 400
         assert (
             json.loads(response.data)["error"]["message"]
-            == "validation failed for entity outcomes: Entity outcomes: Query column 'fake_column' does not exist"
+            == "Validation failed for entity outcomes: Tag keys (fake_column) not resolved"
         )
 
     def test_valid_columns_composite_query(self) -> None:
@@ -1176,7 +1209,7 @@ class TestSnQLApi(BaseApiTest):
             assert data["error"]["type"] == "invalid_query"
             assert (
                 data["error"]["message"]
-                == "validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
+                == "Validation failed for entity discover: invalid tag condition on 'tags[count]': 419 must be a string"
             )
 
             response = self.post(
@@ -1207,7 +1240,7 @@ class TestSnQLApi(BaseApiTest):
             assert data["error"]["type"] == "invalid_query"
             assert (
                 data["error"]["message"]
-                == "validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
+                == "Validation failed for entity discover: invalid tag condition on 'tags[count]': array literal 419 must be a string"
             )
             assert record_failure_metric_mock.call_count == 2
 
@@ -1296,25 +1329,48 @@ class TestSnQLApi(BaseApiTest):
                 ),
             )
             assert response.status_code == 429
-            details = {
-                "RejectAllocationPolicy123": {
-                    "can_run": False,
-                    "max_threads": 0,
-                    "explanation": {
-                        "reason": "policy rejects all queries",
-                        "storage_key": "StorageKey.DOESNTMATTER",
+            info = {
+                "details": {
+                    "RejectAllocationPolicy123": {
+                        "can_run": False,
+                        "max_threads": 0,
+                        "explanation": {
+                            "reason": "policy rejects all queries",
+                            "storage_key": "StorageKey.DOESNTMATTER",
+                        },
+                        "is_throttled": False,
+                        "throttle_threshold": MAX_THRESHOLD,
+                        "rejection_threshold": MAX_THRESHOLD,
+                        "quota_used": 0,
+                        "quota_unit": NO_UNITS,
+                        "suggestion": NO_SUGGESTION,
                     },
+                },
+                "summary": {
+                    "threads_used": 0,
+                    "is_successful": False,
+                    "is_rejected": True,
                     "is_throttled": False,
-                    "throttle_threshold": MAX_THRESHOLD,
-                    "rejection_threshold": MAX_THRESHOLD,
-                    "quota_used": 0,
-                    "quota_unit": NO_UNITS,
-                    "suggestion": NO_SUGGESTION,
-                }
+                    "rejection_storage_key": "StorageKey.DOESNTMATTER",
+                    "throttle_storage_key": None,
+                    "rejected_by": {
+                        "policy": "RejectAllocationPolicy123",
+                        "quota_used": 0,
+                        "quota_unit": "no_units",
+                        "suggestion": "no_suggestion",
+                        "storage_key": "StorageKey.DOESNTMATTER",
+                        "rejection_threshold": 1000000000000,
+                    },
+                    "throttled_by": {},
+                },
             }
+
+            print("info")
+            print(info)
+
             assert (
                 response.json["error"]["message"]
-                == f"Query on could not be run due to allocation policies, details: {details}"
+                == f"Query on could not be run due to allocation policies, info: {info}"
             )
 
     def test_tags_key_column(self) -> None:

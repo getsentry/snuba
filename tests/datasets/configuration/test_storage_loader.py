@@ -68,6 +68,22 @@ allocation_policies:
     name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types: ["some_other_tenant"]
+
+deletion_settings:
+  is_enabled: 0
+  tables: ["some_table", "another_table"]
+
+deletion_processors:
+  -
+    processor: ColumnFilterProcessor
+    args:
+      column_filters: ["some_column"]
+
+delete_allocation_policies:
+  -
+    name: DeleteConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types: ["some_tenant"]
 """
         with tempfile.TemporaryDirectory() as tmpdirname:
             filename = os.path.join(tmpdirname, "file.yaml")
@@ -114,6 +130,23 @@ allocation_policies:
             )
             assert passthru.runtime_config_prefix == "test-storage.PassthroughPolicy"
             assert passthru._required_tenant_types == {"some_tenant"}
+
+            assert storage.get_deletion_settings().is_enabled == 0
+            assert storage.get_deletion_settings().tables == [
+                "some_table",
+                "another_table",
+            ]
+
+            assert len(storage.get_deletion_processors()) == 1
+            column_filter_processor = storage.get_deletion_processors()[0]
+            assert getattr(
+                column_filter_processor, "_ColumnFilterProcessor__column_filters"
+            ) == {"some_column"}
+
+            assert len(delete_policies := storage.get_delete_allocation_policies()) == 1
+            assert set([p.config_key() for p in delete_policies]) == {
+                "DeleteConcurrentRateLimitAllocationPolicy",
+            }
 
     def test_column_parser(self) -> None:
         serialized_columns: list[dict[str, Any]] = [

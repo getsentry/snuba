@@ -28,13 +28,17 @@ logger = logging.getLogger("snuba.query.allocation_policy_rate_limit")
 
 _PASS_THROUGH_REFERRERS = set(
     [
+        # these referrers are tied to ingest and are better limited by the ReferrerGuardRailPolicy
         "subscriptions_executor",
+        "tsdb-modelid:4.batch_alert_event_frequency",
+        "tsdb-modelid:4.batch_alert_event_uniq_user_frequency",
+        "tsdb-modelid:4.batch_alert_event_frequency_percent",
     ]
 )
 from snuba.query.allocation_policies import MAX_THRESHOLD, NO_SUGGESTION
 
 QUOTA_UNIT = "concurrent_queries"
-SUGGESTION = "scan less concurrent queries"
+SUGGESTION = "A customer is sending too many queries to snuba. The customer may be abusing an API or the queries may be innefficient"
 import typing
 
 
@@ -282,3 +286,9 @@ class ConcurrentRateLimitAllocationPolicy(BaseConcurrentRateLimitAllocationPolic
             return
         rate_limit_params, _ = self._get_rate_limit_params(tenant_ids)
         self._end_query(query_id, rate_limit_params, result_or_error)
+
+
+class DeleteConcurrentRateLimitAllocationPolicy(ConcurrentRateLimitAllocationPolicy):
+    @property
+    def rate_limit_name(self) -> str:
+        return "delete_concurrent_rate_limit_policy"

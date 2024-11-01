@@ -47,14 +47,14 @@ pub fn process_message(
         end_timestamp: from.end_timestamp as u64,
         group,
         is_segment: if from.is_segment { 1 } else { 0 },
-        max: from.max,
+        max: from.max.unwrap_or_default(),
         metric_mri: from.mri,
-        min: from.min,
+        min: from.min.unwrap_or_default(),
         project_id: from.project_id,
         retention_days: enforce_retention(from.retention_days, &config.env_config),
         segment_id,
         span_id,
-        sum: from.sum,
+        sum: from.sum.unwrap_or_default(),
         tag_keys,
         tag_values,
         trace_id: from.trace_id,
@@ -65,16 +65,15 @@ pub fn process_message(
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FromMetricsSummariesMessage<'a> {
-    #[serde(default)]
     count: u64,
     duration_ms: u32,
     end_timestamp: f64,
     group: &'a str,
     is_segment: bool,
     #[serde(default)]
-    max: f64,
+    max: Option<f64>,
     #[serde(default)]
-    min: f64,
+    min: Option<f64>,
     mri: &'a str,
     project_id: u64,
     received: f64,
@@ -82,7 +81,7 @@ struct FromMetricsSummariesMessage<'a> {
     segment_id: &'a str,
     span_id: &'a str,
     #[serde(default)]
-    sum: f64,
+    sum: Option<f64>,
     #[serde(default)]
     tags: BTreeMap<String, String>,
     trace_id: &'a str,
@@ -137,6 +136,42 @@ mod tests {
           "max": 1.0,
           "min": 1.0,
           "sum": 1.0,
+          "tags": {
+            "category": "error",
+            "environment": "unknown",
+            "event_type": "error",
+            "outcome": "accepted",
+            "release": "backend@2af74c237fbd61489a1ccc46650f4f85befaf8b8",
+            "topic": "outcomes-billing",
+            "transaction": "sentry.tasks.store.save_event"
+          }
+        }"#;
+
+        let payload = KafkaPayload::new(None, None, Some(summary.to_vec()));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
+    }
+
+    #[test]
+    fn test_summary_with_only_count() {
+        let summary = br#"{
+          "duration_ms": 1000,
+          "end_timestamp": 1691105878.72,
+          "group": "deadbeefdeadbeef",
+          "is_segment": false,
+          "mri": "c:sentry.events.outcomes@none",
+          "project_id": 1,
+          "received": 169110587919.123,
+          "retention_days": 90,
+          "segment_id": "deadbeefdeadbeef",
+          "span_id": "deadbeefdeadbeef",
+          "trace_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+          "count": 1,
           "tags": {
             "category": "error",
             "environment": "unknown",

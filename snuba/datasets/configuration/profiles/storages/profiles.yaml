@@ -54,7 +54,6 @@ query_processors:
         trace_id: null
         transaction_id: null
         profile_id: null
-  - processor: TableRateLimit
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy
     args:
