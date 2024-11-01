@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
@@ -81,6 +82,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             )
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
+            function_expr = replace(function_expr, alias=column.label)
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=function_expr)
             )
