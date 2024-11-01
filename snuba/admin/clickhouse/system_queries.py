@@ -122,7 +122,7 @@ def is_query_using_only_system_tables(
     Run the EXPLAIN QUERY TREE on the given sql_query and check that the only tables
     in the query are system tables.
     """
-    sql_query = sql_query[:-1] if sql_query.endswith(";") else sql_query
+    sql_query = sql_query.strip().rstrip(";") if sql_query.endswith(";") else sql_query
     explain_query_tree_query = (
         f"EXPLAIN QUERY TREE {sql_query} SETTINGS allow_experimental_analyzer = 1"
     )
