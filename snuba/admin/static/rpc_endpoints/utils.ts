@@ -36,7 +36,10 @@ export async function executeEndpoint(
     }
     return await api.executeRpcEndpoint(selectedEndpoint, selectedVersion, parsedBody);
   } catch (error: any) {
-    throw new Error(error.message);
+    if (error instanceof SyntaxError) {
+      throw new Error('Invalid JSON format in request body');
+    }
+    throw new Error(`Failed to execute endpoint: ${error.message}`);
   }
 }
 
