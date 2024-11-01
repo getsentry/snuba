@@ -157,8 +157,6 @@ def is_valid_system_query(
         clickhouse_host, clickhouse_port, storage_name, explain_ast_query, False
     )
 
-    print(explain_ast_result.results)
-
     for node in disallowed_ast_nodes:
         if any(
             line[0].lstrip().startswith(node) for line in explain_ast_result.results
@@ -232,31 +230,35 @@ def run_system_query_on_host_with_sql(
         if not can_sudo:
             raise UnauthorizedForSudo()
 
-    def is_valid_query(
+    def validate_query(
         clickhouse_host: str,
         clickhouse_port: int,
         storage_name: str,
         system_query_sql: str,
         sudo_mode: bool,
-    ) -> bool:
-        if not sudo_mode and is_valid_system_query(
+    ) -> None:
+        if is_valid_system_query(
             clickhouse_host, clickhouse_port, storage_name, system_query_sql
         ):
-            return True
+            if sudo_mode:
+                raise InvalidCustomQuery("Query is valid but sudo is not allowed")
+            return
+
         if is_query_describe(system_query_sql) or is_query_show(system_query_sql):
-            return True
+            return
+
         if sudo_mode and (
             is_system_command(system_query_sql)
             or is_query_alter(system_query_sql)
             or is_query_optimize(system_query_sql)
         ):
-            return True
-        return False
+            return
 
-    if not is_valid_query(
-        clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
-    ):
         raise InvalidCustomQuery("Query is invalid")
+
+    validate_query(
+        clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
+    )
 
     try:
         return _run_sql_query_on_host(
