@@ -1,6 +1,5 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import '@testing-library/jest-dom';
 import { TraceLog } from 'SnubaAdmin/rpc_endpoints/trace_formatter';
 
 describe('TraceLog', () => {
