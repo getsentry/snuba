@@ -24,6 +24,13 @@ BASE_TIME = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) - timed
     hours=3
 )
 
+# the number of spans generated as test data to be used by the tests
+TOTAL_GENERATED_SPANS = 3
+# number of attributes that are generated on each span, for each type
+NUM_ATTR_PER_SPAN_PER_TYPE = 10
+
+TOTAL_GENERATED_ATTR_PER_TYPE = TOTAL_GENERATED_SPANS * NUM_ATTR_PER_SPAN_PER_TYPE
+
 
 def populate_eap_spans_storage(num_rows: int) -> None:
     """
@@ -58,7 +65,10 @@ def populate_eap_spans_storage(num_rows: int) -> None:
             "start_timestamp_precise": BASE_TIME.timestamp(),
             "end_timestamp_precise": BASE_TIME.timestamp() + 1,
         }
-        for i in range(id * 10, id * 10 + 10):
+        for i in range(
+            id * NUM_ATTR_PER_SPAN_PER_TYPE,
+            id * NUM_ATTR_PER_SPAN_PER_TYPE + NUM_ATTR_PER_SPAN_PER_TYPE,
+        ):
             res["tags"][f"a_tag_{i:03}"] = "blah"  # type: ignore
             res["measurements"][f"b_measurement_{i:03}"] = {"value": 10}  # type: ignore
         return res
@@ -70,7 +80,7 @@ def populate_eap_spans_storage(num_rows: int) -> None:
 
 @pytest.fixture(autouse=True)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
-    populate_eap_spans_storage(num_rows=3)
+    populate_eap_spans_storage(num_rows=TOTAL_GENERATED_SPANS)
 
 
 @pytest.mark.clickhouse_db
@@ -97,7 +107,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
         res = EndpointTraceItemAttributeNames().execute(req)
 
         expected = []
-        for i in range(30):
+        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
             expected.append(
                 TraceItemAttributeNamesResponse.Attribute(
                     name=f"a_tag_{str(i).zfill(3)}", type=AttributeKey.Type.TYPE_STRING
@@ -142,7 +152,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
         )
         res = EndpointTraceItemAttributeNames().execute(req)
         expected = []
-        for i in range(30):
+        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
             expected.append(
                 TraceItemAttributeNamesResponse.Attribute(
                     name=f"b_measurement_{str(i).zfill(3)}",
@@ -184,28 +194,9 @@ class TestTraceItemAttributeNames(BaseApiTest):
         assert res.attributes == expected
 
     def test_with_page_token(self) -> None:
-        req = TraceItemAttributeNamesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
-            ),
-            limit=10,
-            type=AttributeKey.Type.TYPE_STRING,
-            value_substring_match="",
-        )
-        res = EndpointTraceItemAttributeNames().execute(req)
-
         # this is all the expected attributes
         expected_attributes = []
-        for i in range(30):
+        for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
             expected_attributes.append(
                 TraceItemAttributeNamesResponse.Attribute(
                     name=f"a_tag_{str(i).zfill(3)}",
@@ -229,72 +220,39 @@ class TestTraceItemAttributeNames(BaseApiTest):
                 name="sentry.service", type=AttributeKey.Type.TYPE_STRING
             ),
         ]
-        # since we limited by 10 in the req, we only expect to see the first 10
-        assert res.attributes == expected_attributes[:10]
-
-        # now we use the page token given in the response to get the next 10
-        req = TraceItemAttributeNamesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+        # we just get the first 10
+        limit = 10
+        page_token = None
+        while True:
+            # and grab `limit` at a time until we get them all
+            req = TraceItemAttributeNamesRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                    start_timestamp=Timestamp(
+                        seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                    ),
+                    end_timestamp=Timestamp(
+                        seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                    ),
                 ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
-            ),
-            limit=10,
-            type=AttributeKey.Type.TYPE_STRING,
-            value_substring_match="",
-            page_token=res.page_token,
-        )
-        res = EndpointTraceItemAttributeNames().execute(req)
-        assert res.attributes == expected_attributes[10:20]
-
-        req = TraceItemAttributeNamesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
-            ),
-            limit=10,
-            type=AttributeKey.Type.TYPE_STRING,
-            value_substring_match="",
-            page_token=res.page_token,
-        )
-        res = EndpointTraceItemAttributeNames().execute(req)
-        assert res.attributes == expected_attributes[20:30]
-
-        req = TraceItemAttributeNamesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(
-                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
-                ),
-                end_timestamp=Timestamp(
-                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
-                ),
-            ),
-            limit=10,
-            type=AttributeKey.Type.TYPE_STRING,
-            value_substring_match="",
-            page_token=res.page_token,
-        )
-        res = EndpointTraceItemAttributeNames().execute(req)
-        assert res.attributes == expected_attributes[30:]
+                limit=limit,
+                type=AttributeKey.Type.TYPE_STRING,
+                value_substring_match="",
+                page_token=page_token,
+            )
+            res = EndpointTraceItemAttributeNames().execute(req)
+            page_token = res.page_token
+            reslen = len(res.attributes)
+            if reslen == 0:
+                # we are done, we got everything
+                break
+            else:
+                assert res.attributes == expected_attributes[:reslen]
+                expected_attributes = expected_attributes[reslen:]
+        assert expected_attributes == []
 
     def test_page_token_offset_filter(self) -> None:
         req = TraceItemAttributeNamesRequest(

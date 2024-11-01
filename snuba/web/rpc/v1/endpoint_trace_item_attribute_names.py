@@ -29,10 +29,15 @@ from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_cond
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
+# max value the user can provide for 'limit' in their request
+MAX_REQUEST_LIMIT = 1000
+
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
-    if req.limit > 1000:
-        raise BadSnubaRPCRequestException("Limit can be at most 1000")
+    if req.limit > MAX_REQUEST_LIMIT:
+        raise BadSnubaRPCRequestException(
+            f"Limit can be at most {MAX_REQUEST_LIMIT}, but was {req.limit}. For larger limits please utilize pagination via the page_token variable in your request."
+        )
 
     if req.type == AttributeKey.Type.TYPE_STRING:
         entity = Entity(
@@ -51,9 +56,10 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
             sample=None,
         )
     else:
-        raise BadSnubaRPCRequestException(f"Unknown attribute type: {req.type}")
+        raise BadSnubaRPCRequestException(
+            f"Attribute type '{req.type}' is not supported. Supported types are: TYPE_STRING, TYPE_FLOAT, TYPE_INT, TYPE_BOOLEAN"
+        )
 
-    # truncate_request_meta_to_day(request.meta)
     query = Query(
         from_clause=entity,
         selected_columns=[
@@ -66,13 +72,9 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
             req.meta, f.like(column("attr_key"), f"%{req.value_substring_match}%")
         ),
         order_by=[
-            OrderBy(
-                direction=OrderByDirection.ASC, expression=column("organization_id")
-            ),
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
         ],
         groupby=[
-            column("organization_id", alias="organization_id"),
             column("attr_key", alias="attr_key"),
         ],
         limit=req.limit,
