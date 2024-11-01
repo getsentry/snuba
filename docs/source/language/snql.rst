@@ -45,11 +45,18 @@ MATCH clause that are currently supported:
 
 ``MATCH (<entity> [SAMPLE n])``
 
-This is equivalent to all of our current queries. This is querying data from
-a single entity (Events, Transactions etc.) It is possible to add an optional
+Or for datasets without entities:
+
+``MATCH (STORAGE(<storage>) [SAMPLE n])``
+
+This is equivalent to all of our current queries. This either queries data from
+a single entity or a single storage directly. It is possible to add an optional
 sample to the query by adding it with the entity.
 
-Example ``MATCH (events)``.
+Example::
+
+    MATCH (events) # for entity queries
+    MATCH (STORAGE(profile_chunks)) # for storage queries.
 
 **Subquery:**
 

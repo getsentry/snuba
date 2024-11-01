@@ -28,7 +28,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )
@@ -102,14 +102,13 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default="info",
 )
 @click.option(
-    "--skip-write/--no-skip-write",
-    "skip_write",
-    help="Skip the write to clickhouse",
-    default=True,
-)
-@click.option(
     "--concurrency",
     type=int,
+)
+@click.option(
+    "--clickhouse-concurrency",
+    type=int,
+    help="Number of concurrent clickhouse batches at one time.",
 )
 @click.option(
     "--use-rust-processor/--use-python-processor",
@@ -136,6 +135,20 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=30000,
 )
 @click.option(
+    "--async-inserts",
+    is_flag=True,
+    default=False,
+    help="Enable async inserts for ClickHouse",
+)
+@click.option(
+    "--mutations-mode",
+    is_flag=True,
+    default=False,
+    help="""
+    This is only to be used for the mutability consumer
+    """,
+)
+@click.option(
     "--health-check-file",
     default=None,
     type=str,
@@ -147,6 +160,27 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     is_flag=True,
     default=False,
     help="Enforce schema on the raw events topic.",
+)
+@click.option(
+    "--stop-at-timestamp",
+    type=int,
+    help="Unix timestamp after which to stop processing messages",
+)
+@click.option(
+    "--batch-write-timeout-ms",
+    type=int,
+    default=None,
+    help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
+)
+@click.option(
+    "--max-bytes-before-external-group-by",
+    type=int,
+    default=None,
+    help="""
+    Allow batching on disk for GROUP BY queries. This is a test mitigation for whether a
+    materialized view is causing OOM on inserts. If successful, this should be set in storage config.
+    If not successful, this option should be removed.
+    """,
 )
 def rust_consumer(
     *,
@@ -166,14 +200,19 @@ def rust_consumer(
     max_batch_size: int,
     max_batch_time_ms: int,
     log_level: str,
-    skip_write: bool,
     concurrency: Optional[int],
+    clickhouse_concurrency: Optional[int],
     use_rust_processor: bool,
     group_instance_id: Optional[str],
     max_poll_interval_ms: int,
+    async_inserts: bool,
     python_max_queue_depth: Optional[int],
     health_check_file: Optional[str],
     enforce_schema: bool,
+    stop_at_timestamp: Optional[int],
+    batch_write_timeout_ms: Optional[int],
+    max_bytes_before_external_group_by: Optional[int],
+    mutations_mode: bool
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -203,18 +242,29 @@ def rust_consumer(
 
     os.environ["RUST_LOG"] = log_level.lower()
 
+    if not async_inserts:
+        # we don't want to allow increasing this if
+        # we aren't using async inserts since that will increase
+        # the number of inserts/sec on clickhouse
+        clickhouse_concurrency = 2
+
     exitcode = rust_snuba.consumer(  # type: ignore
         consumer_group,
         auto_offset_reset,
         no_strict_offset_reset,
         consumer_config_raw,
-        skip_write,
         concurrency or 1,
+        clickhouse_concurrency or 2,
         use_rust_processor,
         enforce_schema,
         max_poll_interval_ms,
+        async_inserts,
+        mutations_mode,
         python_max_queue_depth,
         health_check_file,
+        stop_at_timestamp,
+        batch_write_timeout_ms,
+        max_bytes_before_external_group_by,
     )
 
     sys.exit(exitcode)

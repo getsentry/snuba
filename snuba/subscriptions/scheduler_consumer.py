@@ -210,6 +210,10 @@ class CommitLogTickConsumer(Consumer[Tick]):
     def closed(self) -> bool:
         return self.__consumer.closed
 
+    @property
+    def member_id(self) -> str:
+        return self.__consumer.member_id
+
 
 class SchedulerBuilder:
     def __init__(

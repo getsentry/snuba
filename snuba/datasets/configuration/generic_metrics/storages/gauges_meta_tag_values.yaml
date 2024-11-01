@@ -1,0 +1,61 @@
+version: v1
+# This table stores meta data about metrics, specifically the unique tag values for a given metric and tag key.
+
+kind: readable_storage
+name: generic_metrics_gauges_meta_tag_values
+storage:
+  key: generic_metrics_gauges_meta_tag_values
+  set_key: generic_metrics_gauges
+readiness_state: complete
+schema:
+  columns:
+    [
+      { name: project_id, type: UInt, args: { size: 64 } },
+      { name: metric_id, type: UInt, args: { size: 64 } },
+      { name: tag_key, type: UInt, args: { size: 64 } },
+      { name: tag_value, type: String},
+      { name: timestamp, type: DateTime },
+      { name: retention_days, type: UInt, args: { size: 16 } },
+      {
+        name: count,
+        type: AggregateFunction,
+        args:
+          {
+            func: sum,
+            arg_types: [{ type: Float, args: { size: 64 } }],
+          },
+      },
+    ]
+  local_table_name: generic_metric_gauges_meta_tag_values_local
+  dist_table_name: generic_metric_gauges_meta_tag_values_dist
+required_time_column: timestamp
+
+
+allocation_policies:
+  - name: ConcurrentRateLimitAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+        - organization_id
+        - project_id
+      default_config_overrides:
+        is_enforced: 1
+  - name: BytesScannedWindowAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+        - organization_id
+      default_config_overrides:
+        is_enforced: 1
+        throttled_thread_number: 1
+        org_limit_bytes_scanned: 10000000
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        is_active: 1
+
+query_processors:
+  - processor: TupleUnaliaser

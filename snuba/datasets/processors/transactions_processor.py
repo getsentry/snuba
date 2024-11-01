@@ -272,6 +272,10 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
             if profile_id is not None:
                 processed["profile_id"] = str(uuid.UUID(profile_id))
 
+            profiler_id = profile_context.get("profiler_id")
+            if profiler_id is not None:
+                processed["profiler_id"] = str(uuid.UUID(profiler_id))
+
         replay_context = contexts.get("replay")
         if replay_context is not None:
             replay_id = replay_context.get("replay_id")
@@ -417,6 +421,13 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         transaction_ctx.pop("trace_id", None)
         transaction_ctx.pop("span_id", None)
 
+        # Only top level scalar values within a context are written to the table. `data` is
+        # always a dict, so pop it from the context and move some values into the top level.
+        transaction_data = transaction_ctx.pop("data", None) or {}
+        if isinstance(transaction_data, dict) and "thread.id" in transaction_data:
+            # The thread.id can be either a str/int. Make sure to always convert to a str.
+            transaction_ctx["thread_id"] = str(transaction_data["thread.id"])
+
         # The hash and exclusive_time is being stored in the spans columns
         # so there is no need to store it again in the context array.
         transaction_ctx.pop("hash", None)
@@ -428,10 +439,11 @@ class TransactionsMessageProcessor(DatasetMessageProcessor):
         if app_ctx is not None:
             app_ctx.pop("start_type", None)
 
-        # The profile_id and replay_id are promoted as columns, so no need to store them
+        # The profile_id, profiler_id and replay_id are promoted as columns, so no need to store them
         # again in the context array
         profile_ctx = sanitized_context.get("profile", {})
         profile_ctx.pop("profile_id", None)
+        profile_ctx.pop("profiler_id", None)
         replay_ctx = sanitized_context.get("replay", {})
         replay_ctx.pop("replay_id", None)
 

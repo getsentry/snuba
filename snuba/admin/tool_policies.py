@@ -19,6 +19,7 @@ class AdminTools(Enum):
 
     ALL = "all"
     CONFIGURATION = "configuration"
+    AUTO_REPLACEMENTS_BYPASS_PROJECTS = "auto-replacements-bypass-projects"
     SNQL_TO_SQL = "snql-to-sql"
     SYSTEM_QUERIES = "system-queries"
     MIGRATIONS = "clickhouse-migrations"
@@ -30,6 +31,10 @@ class AdminTools(Enum):
     PRODUCTION_QUERIES = "production-queries"
     CARDINALITY_ANALYZER = "cardinality-analyzer"
     SNUBA_EXPLAIN = "snuba-explain"
+    DELETE_TOOL = "delete_tool"
+    MANUAL_JOBS = "view-jobs"
+    DATABASE_CLUSTERS = "database-clusters"
+    RPC_ENDPOINTS = "rpc-endpoints"
 
 
 DEVELOPER_TOOLS: set[AdminTools] = {AdminTools.SNQL_TO_SQL, AdminTools.QUERY_TRACING}

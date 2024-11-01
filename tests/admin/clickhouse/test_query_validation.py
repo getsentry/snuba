@@ -24,3 +24,27 @@ def test_allowed_tables() -> None:
             "SELECT * FROM my_table, other_table",
             allowed_tables={"my_table"},
         )
+
+
+def test_allowed_tables_with_array_join() -> None:
+    validate_ro_query(
+        "SELECT * FROM my_table ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
+        allowed_tables={"my_table"},
+    )
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table, other_table ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
+            allowed_tables={"my_table"},
+        )
+
+
+def test_allowed_tables_with_left_array_join() -> None:
+    validate_ro_query(
+        "SELECT * FROM my_table LEFT ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
+        allowed_tables={"my_table"},
+    )
+    with pytest.raises(InvalidCustomQuery):
+        validate_ro_query(
+            "SELECT * FROM my_table, other_table LEFT ARRAY JOIN tags.key AS tag_key, tags.raw_value AS tag_value",
+            allowed_tables={"my_table"},
+        )

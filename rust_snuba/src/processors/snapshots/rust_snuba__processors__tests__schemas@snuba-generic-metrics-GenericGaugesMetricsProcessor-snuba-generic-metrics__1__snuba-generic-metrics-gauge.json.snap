@@ -25,12 +25,13 @@ expression: snapshot_payload
       2,
       3
     ],
-    "materialization_version": 2,
+    "materialization_version": 3,
     "metric_id": 1,
     "metric_type": "gauge",
     "min_retention_days": 90,
     "org_id": 1,
     "project_id": 3,
+    "record_meta": 1,
     "retention_days": 90,
     "tags.indexed_value": [
       0,

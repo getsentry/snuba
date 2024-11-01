@@ -18,6 +18,8 @@ from snuba.query.data_source.join import (
     JoinType,
 )
 from snuba.query.data_source.simple import Entity as QueryEntity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import and_cond, column, literal, or_cond
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -37,26 +39,27 @@ def build_cond(tn: str) -> str:
 
 
 added_condition = build_cond("")
-required_condition = binary_condition(
-    "and",
+required_conditions = [
     binary_condition(
         "equals",
         Column("_snuba_project_id", None, "project_id"),
         Literal(None, 1),
     ),
     binary_condition(
-        "and",
-        binary_condition(
-            "greaterOrEquals",
-            Column("_snuba_timestamp", None, "timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-        ),
-        binary_condition(
-            "less",
-            Column("_snuba_timestamp", None, "timestamp"),
-            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-        ),
+        "greaterOrEquals",
+        Column("_snuba_timestamp", None, "timestamp"),
+        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
     ),
+    binary_condition(
+        "less",
+        Column("_snuba_timestamp", None, "timestamp"),
+        Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+    ),
+]
+required_condition = binary_condition(
+    "and",
+    required_conditions[0],
+    binary_condition("and", required_conditions[1], required_conditions[2]),
 )
 
 
@@ -329,10 +332,16 @@ test_cases = [
                 ),
                 binary_condition(
                     "and",
-                    unary_condition(
-                        "isNull", Column("_snuba_message", None, "message")
+                    binary_condition(
+                        "and",
+                        unary_condition(
+                            "isNull", Column("_snuba_message", None, "message")
+                        ),
+                        required_conditions[0],
                     ),
-                    required_condition,
+                    binary_condition(
+                        "and", required_conditions[1], required_conditions[2]
+                    ),
                 ),
             ),
             limit=1000,
@@ -383,15 +392,19 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "greater",
-                    SubscriptableReference(
-                        "_snuba_contexts[lcp.elementSize]",
-                        Column("_snuba_contexts", None, "contexts"),
-                        Literal(None, "lcp.elementSize"),
+                    "and",
+                    binary_condition(
+                        "greater",
+                        SubscriptableReference(
+                            "_snuba_contexts[lcp.elementSize]",
+                            Column("_snuba_contexts", None, "contexts"),
+                            Literal(None, "lcp.elementSize"),
+                        ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             limit=1000,
             offset=0,
@@ -577,36 +590,26 @@ test_cases = [
                     "event_id", Column("_snuba_event_id", None, "event_id")
                 )
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "less",
-                    Column("_snuba_partition", None, "partition"),
-                    Literal(None, 3),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "equals",
-                        Column("_snuba_offset", None, "offset"),
-                        Literal(None, 2),
+            condition=and_cond(
+                and_cond(
+                    f.less(column("partition", None, "_snuba_partition"), literal(3)),
+                    and_cond(
+                        f.equals(column("offset", None, "_snuba_offset"), literal(2)),
+                        f.equals(
+                            column("project_id", None, "_snuba_project_id"), literal(2)
+                        ),
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "equals",
-                            Column("_snuba_project_id", None, "project_id"),
-                            Literal(None, 2),
+                ),
+                and_cond(
+                    and_cond(
+                        f.equals(
+                            column("group_id", None, "_snuba_group_id"), literal(3)
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_group_id", None, "group_id"),
-                                Literal(None, 3),
-                            ),
-                            required_condition,
-                        ),
+                        required_conditions[0],
+                    ),
+                    and_cond(
+                        required_conditions[1],
+                        required_conditions[2],
                     ),
                 ),
             ),
@@ -626,30 +629,30 @@ test_cases = [
                     "event_id", Column("_snuba_event_id", None, "event_id")
                 )
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "or",
-                    binary_condition(
-                        "or",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_partition", None, "partition"),
-                            Literal(None, 3),
+            condition=and_cond(
+                and_cond(
+                    or_cond(
+                        or_cond(
+                            f.less(
+                                column("partition", None, "_snuba_partition"),
+                                literal(3),
+                            ),
+                            f.equals(
+                                column("offset", None, "_snuba_offset"),
+                                column("retention_days", None, "_snuba_retention_days"),
+                            ),
                         ),
-                        binary_condition(
-                            "equals",
-                            Column("_snuba_offset", None, "offset"),
-                            Column("_snuba_retention_days", None, "retention_days"),
+                        f.equals(
+                            column("title", None, "_snuba_title"),
+                            column("platform", None, "_snuba_platform"),
                         ),
                     ),
-                    binary_condition(
-                        "equals",
-                        Column("_snuba_title", None, "title"),
-                        Column("_snuba_platform", None, "platform"),
-                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                and_cond(
+                    required_conditions[1],
+                    required_conditions[2],
+                ),
             ),
             limit=1000,
             offset=0,
@@ -667,46 +670,37 @@ test_cases = [
                     "event_id", Column("_snuba_event_id", None, "event_id")
                 )
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "or",
-                    binary_condition(
-                        "notEquals",
-                        Column("_snuba_title", None, "title"),
-                        Column("_snuba_platform", None, "platform"),
-                    ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_partition", None, "partition"),
-                            Column("_snuba_offset", None, "offset"),
+            condition=and_cond(
+                and_cond(
+                    or_cond(
+                        f.notEquals(
+                            column("title", None, "_snuba_title"),
+                            column("platform", None, "_snuba_platform"),
                         ),
-                        binary_condition(
-                            "or",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_location", None, "location"),
-                                FunctionCall(
-                                    None,
-                                    "gps",
-                                    (
-                                        Column("_snuba_user_id", None, "user_id"),
-                                        Column("_snuba_user_name", None, "user_name"),
-                                        Column("_snuba_user_email", None, "user_email"),
+                        and_cond(
+                            f.less(
+                                column("partition", None, "_snuba_partition"),
+                                column("offset", None, "_snuba_offset"),
+                            ),
+                            or_cond(
+                                f.equals(
+                                    column("location", None, "_snuba_location"),
+                                    f.gps(
+                                        column("user_id", None, "_snuba_user_id"),
+                                        column("user_name", None, "_snuba_user_name"),
+                                        column("user_email", None, "_snuba_user_email"),
                                     ),
                                 ),
-                            ),
-                            binary_condition(
-                                "greater",
-                                Column("_snuba_group_id", None, "group_id"),
-                                Literal(None, 0),
+                                f.greater(
+                                    column("group_id", None, "_snuba_group_id"),
+                                    literal(0),
+                                ),
                             ),
                         ),
                     ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                and_cond(required_conditions[1], required_conditions[2]),
             ),
             limit=1000,
             offset=0,
@@ -836,73 +830,77 @@ test_cases = [
                     "event_id", Column("_snuba_event_id", None, "event_id")
                 ),
             ],
-            condition=binary_condition(
-                "and",
+            condition=and_cond(
                 binary_condition(
-                    "equals",
+                    "and",
                     binary_condition(
-                        "or",
+                        "equals",
                         binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "arrayExists",
-                                (
-                                    Lambda(
-                                        None,
-                                        ("x",),
-                                        FunctionCall(
+                            "or",
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "arrayExists",
+                                    (
+                                        Lambda(
                                             None,
-                                            "assumeNotNull",
-                                            (
-                                                FunctionCall(
-                                                    None,
-                                                    "equals",
-                                                    (
-                                                        Argument(None, "x"),
-                                                        Literal(
-                                                            None, "RuntimeException"
+                                            ("x",),
+                                            FunctionCall(
+                                                None,
+                                                "assumeNotNull",
+                                                (
+                                                    FunctionCall(
+                                                        None,
+                                                        "equals",
+                                                        (
+                                                            Argument(None, "x"),
+                                                            Literal(
+                                                                None, "RuntimeException"
+                                                            ),
                                                         ),
                                                     ),
                                                 ),
                                             ),
                                         ),
-                                    ),
-                                    Column(
-                                        "_snuba_exception_stacks.type",
-                                        None,
-                                        "exception_stacks.type",
+                                        Column(
+                                            "_snuba_exception_stacks.type",
+                                            None,
+                                            "exception_stacks.type",
+                                        ),
                                     ),
                                 ),
+                                Literal(None, 1),
                             ),
-                            Literal(None, 1),
-                        ),
-                        binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "arrayAll",
-                                (
-                                    Lambda(
-                                        None,
-                                        ("x",),
-                                        FunctionCall(
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "arrayAll",
+                                    (
+                                        Lambda(
                                             None,
-                                            "assumeNotNull",
-                                            (
-                                                FunctionCall(
-                                                    None,
-                                                    "notIn",
-                                                    (
-                                                        Argument(None, "x"),
-                                                        FunctionCall(
-                                                            None,
-                                                            "tuple",
-                                                            (
-                                                                Literal(None, "Stack"),
-                                                                Literal(
-                                                                    None,
-                                                                    "Arithmetic",
+                                            ("x",),
+                                            FunctionCall(
+                                                None,
+                                                "assumeNotNull",
+                                                (
+                                                    FunctionCall(
+                                                        None,
+                                                        "notIn",
+                                                        (
+                                                            Argument(None, "x"),
+                                                            FunctionCall(
+                                                                None,
+                                                                "tuple",
+                                                                (
+                                                                    Literal(
+                                                                        None, "Stack"
+                                                                    ),
+                                                                    Literal(
+                                                                        None,
+                                                                        "Arithmetic",
+                                                                    ),
                                                                 ),
                                                             ),
                                                         ),
@@ -910,16 +908,19 @@ test_cases = [
                                                 ),
                                             ),
                                         ),
+                                        Column(
+                                            "_snuba_modules.name", None, "modules.name"
+                                        ),
                                     ),
-                                    Column("_snuba_modules.name", None, "modules.name"),
                                 ),
+                                Literal(None, 1),
                             ),
-                            Literal(None, 1),
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    required_conditions[0],
                 ),
-                required_condition,
+                and_cond(required_conditions[1], required_conditions[2]),
             ),
             limit=1000,
             offset=0,
@@ -964,47 +965,34 @@ test_cases = [
                     "e.event_id", Column("_snuba_e.event_id", "e", "event_id")
                 ),
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                 ),
@@ -1053,51 +1041,39 @@ test_cases = [
                     "t.event_id", Column("_snuba_t.event_id", "t", "event_id")
                 ),
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                 ),
             ),
+            groupby=None,
             limit=1000,
             offset=0,
         ),
@@ -1160,51 +1136,39 @@ test_cases = [
                     "ga.offset", Column("_snuba_ga.offset", "ga", "offset")
                 ),
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        f.less(
+                            column("timestamp", "e", "_snuba_e.timestamp"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
-                            ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "less",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                                ),
-                            ),
+                        f.equals(
+                            column("project_id", "t", "_snuba_t.project_id"), literal(1)
+                        ),
+                    ),
+                    and_cond(
+                        f.greaterOrEquals(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                        ),
+                        f.less(
+                            column("finish_ts", "t", "_snuba_t.finish_ts"),
+                            literal(datetime.datetime(2021, 1, 2, 0, 0)),
                         ),
                     ),
                 ),
             ),
+            groupby=None,
             limit=1000,
             offset=0,
         ),
@@ -1315,102 +1279,57 @@ test_cases = [
                     "se.metric_id", Column("_snuba_se.metric_id", "se", "metric_id")
                 ),
             ],
-            condition=binary_condition(
-                "and",
-                binary_condition(
-                    "equals",
-                    Column("_snuba_e.project_id", "e", "project_id"),
-                    Literal(None, 1),
-                ),
-                binary_condition(
-                    "and",
-                    binary_condition(
-                        "greaterOrEquals",
-                        Column("_snuba_e.timestamp", "e", "timestamp"),
-                        Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
+            condition=and_cond(
+                and_cond(
+                    f.equals(
+                        column("project_id", "e", "_snuba_e.project_id"), literal(1)
                     ),
-                    binary_condition(
-                        "and",
-                        binary_condition(
-                            "less",
-                            Column("_snuba_e.timestamp", "e", "timestamp"),
-                            Literal(None, datetime.datetime(2021, 1, 2, 0, 0)),
-                        ),
-                        binary_condition(
-                            "and",
-                            binary_condition(
-                                "equals",
-                                Column("_snuba_t.project_id", "t", "project_id"),
-                                Literal(None, 1),
+                    f.greaterOrEquals(
+                        column("timestamp", "e", "_snuba_e.timestamp"),
+                        literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                    ),
+                ),
+                and_cond(
+                    and_cond(
+                        and_cond(
+                            f.less(
+                                column("timestamp", "e", "_snuba_e.timestamp"),
+                                literal(datetime.datetime(2021, 1, 2, 0, 0)),
                             ),
-                            binary_condition(
-                                "and",
-                                binary_condition(
-                                    "greaterOrEquals",
-                                    Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                    Literal(None, datetime.datetime(2021, 1, 1, 0, 0)),
-                                ),
-                                binary_condition(
-                                    "and",
-                                    binary_condition(
-                                        "less",
-                                        Column("_snuba_t.finish_ts", "t", "finish_ts"),
-                                        Literal(
-                                            None, datetime.datetime(2021, 1, 2, 0, 0)
-                                        ),
-                                    ),
-                                    binary_condition(
-                                        "and",
-                                        binary_condition(
-                                            "equals",
-                                            Column("_snuba_se.org_id", "se", "org_id"),
-                                            Literal(None, 1),
-                                        ),
-                                        binary_condition(
-                                            "and",
-                                            binary_condition(
-                                                "equals",
-                                                Column(
-                                                    "_snuba_se.project_id",
-                                                    "se",
-                                                    "project_id",
-                                                ),
-                                                Literal(None, 1),
-                                            ),
-                                            binary_condition(
-                                                "and",
-                                                binary_condition(
-                                                    "greaterOrEquals",
-                                                    Column(
-                                                        "_snuba_se.timestamp",
-                                                        "se",
-                                                        "timestamp",
-                                                    ),
-                                                    Literal(
-                                                        None,
-                                                        datetime.datetime(
-                                                            2021, 1, 1, 0, 0
-                                                        ),
-                                                    ),
-                                                ),
-                                                binary_condition(
-                                                    "less",
-                                                    Column(
-                                                        "_snuba_se.timestamp",
-                                                        "se",
-                                                        "timestamp",
-                                                    ),
-                                                    Literal(
-                                                        None,
-                                                        datetime.datetime(
-                                                            2021, 1, 2, 0, 0
-                                                        ),
-                                                    ),
-                                                ),
-                                            ),
-                                        ),
-                                    ),
-                                ),
+                            f.equals(
+                                column("project_id", "t", "_snuba_t.project_id"),
+                                literal(1),
+                            ),
+                        ),
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("finish_ts", "t", "_snuba_t.finish_ts"),
+                                literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                            ),
+                            f.less(
+                                column("finish_ts", "t", "_snuba_t.finish_ts"),
+                                literal(datetime.datetime(2021, 1, 2, 0, 0)),
+                            ),
+                        ),
+                    ),
+                    and_cond(
+                        and_cond(
+                            f.equals(
+                                column("org_id", "se", "_snuba_se.org_id"), literal(1)
+                            ),
+                            f.equals(
+                                column("project_id", "se", "_snuba_se.project_id"),
+                                literal(1),
+                            ),
+                        ),
+                        and_cond(
+                            f.greaterOrEquals(
+                                column("timestamp", "se", "_snuba_se.timestamp"),
+                                literal(datetime.datetime(2021, 1, 1, 0, 0)),
+                            ),
+                            f.less(
+                                column("timestamp", "se", "_snuba_se.timestamp"),
+                                literal(datetime.datetime(2021, 1, 2, 0, 0)),
                             ),
                         ),
                     ),
@@ -1498,7 +1417,7 @@ test_cases = [
                     FunctionCall(
                         "_snuba_min_count",
                         "min",
-                        (Column("_snuba_max_count", None, "max_count"),),
+                        (Column("_snuba_max_count", None, "_snuba_max_count"),),
                     ),
                 ),
             ],
@@ -1549,11 +1468,17 @@ test_cases = [
                 binary_condition(
                     "and",
                     binary_condition(
-                        "equals",
-                        Column("_snuba_culprit", None, "culprit"),
-                        Literal(None, """"💩\\" \t ''"""),
+                        "and",
+                        binary_condition(
+                            "equals",
+                            Column("_snuba_culprit", None, "culprit"),
+                            Literal(None, """"💩\\" \t ''"""),
+                        ),
+                        required_conditions[0],
                     ),
-                    required_condition,
+                    binary_condition(
+                        "and", required_conditions[1], required_conditions[2]
+                    ),
                 ),
             ),
             limit=1000,
@@ -1596,45 +1521,49 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
+                    "and",
                     binary_condition(
-                        "or",
+                        "equals",
                         binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "ifNull",
-                                (
-                                    SubscriptableReference(
-                                        "_snuba_tags[foo]",
-                                        Column("_snuba_tags", None, "tags"),
-                                        Literal(None, "foo"),
+                            "or",
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "ifNull",
+                                    (
+                                        SubscriptableReference(
+                                            "_snuba_tags[foo]",
+                                            Column("_snuba_tags", None, "tags"),
+                                            Literal(None, "foo"),
+                                        ),
+                                        Literal(None, ""),
                                     ),
-                                    Literal(None, ""),
                                 ),
+                                Literal(None, "baz"),
                             ),
-                            Literal(None, "baz"),
-                        ),
-                        binary_condition(
-                            "equals",
-                            FunctionCall(
-                                None,
-                                "ifNull",
-                                (
-                                    SubscriptableReference(
-                                        "_snuba_tags[foo.bar]",
-                                        Column("_snuba_tags", None, "tags"),
-                                        Literal(None, "foo.bar"),
+                            binary_condition(
+                                "equals",
+                                FunctionCall(
+                                    None,
+                                    "ifNull",
+                                    (
+                                        SubscriptableReference(
+                                            "_snuba_tags[foo.bar]",
+                                            Column("_snuba_tags", None, "tags"),
+                                            Literal(None, "foo.bar"),
+                                        ),
+                                        Literal(None, ""),
                                     ),
-                                    Literal(None, ""),
                                 ),
+                                Literal(None, "qux"),
                             ),
-                            Literal(None, "qux"),
                         ),
+                        Literal(None, 1),
                     ),
-                    Literal(None, 1),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1661,11 +1590,15 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
-                    Column("_snuba_environment", None, "environment"),
-                    Literal(None, "\\' \n \\n \\\\n \\\\\n \\"),
+                    "and",
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_environment", None, "environment"),
+                        Literal(None, "\\' \n \\n \\\\n \\\\\n \\"),
+                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1692,11 +1625,15 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
-                    Column("_snuba_environment", None, "environment"),
-                    Literal(None, "\\\\\n"),
+                    "and",
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_environment", None, "environment"),
+                        Literal(None, "\\\\\n"),
+                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -1723,11 +1660,15 @@ test_cases = [
             condition=binary_condition(
                 "and",
                 binary_condition(
-                    "equals",
-                    Column("_snuba_environment", None, "environment"),
-                    Literal(None, """stuff \\" ' \\' stuff\\"""),
+                    "and",
+                    binary_condition(
+                        "equals",
+                        Column("_snuba_environment", None, "environment"),
+                        Literal(None, """stuff \\" ' \\' stuff\\"""),
+                    ),
+                    required_conditions[0],
                 ),
-                required_condition,
+                binary_condition("and", required_conditions[1], required_conditions[2]),
             ),
             offset=0,
         ),
@@ -2066,7 +2007,7 @@ def test_format_expressions(query_body: str, expected_query: LogicalQuery) -> No
     events_entity = get_entity(EntityKey.EVENTS)
 
     with mock.patch.object(events_entity, "get_join_relationship", events_mock):
-        query, _ = parse_snql_query(query_body, events)
+        query = parse_snql_query(query_body, events)
 
     eq, reason = query.equals(expected_query)
     assert eq, reason

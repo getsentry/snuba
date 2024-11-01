@@ -1,7 +1,9 @@
 import React, { useEffect, useState, ReactElement } from "react";
 
-import { Prism } from "@mantine/prism";
-import { Textarea } from "@mantine/core";
+import { Box } from "@mantine/core";
+import { SQLEditor } from "SnubaAdmin/common/components/sql_editor";
+import { useLocalStorage } from "@mantine/hooks";
+import { CustomSelect } from "SnubaAdmin/select";
 
 type PredefinedQuery = {
   name: string;
@@ -47,7 +49,14 @@ function QueryEditor(props: {
   predefinedQueryOptions?: Array<PredefinedQuery>;
 }) {
   const [query, setQuery] = useState<string>("");
-  const [queryTemplate, setQueryTemplate] = useState<string>("");
+  const hash = window.location.hash;
+
+  // Namespace the storage by the hash, which corresponds to the screen
+  const [queryTemplate, setQueryTemplate] = useLocalStorage<string>({
+    key: `${hash}-query-editor-query`,
+    defaultValue: "",
+  });
+
   const [queryParamValues, setQueryParamValues] = useState<QueryParamValues>(
     {}
   );
@@ -82,30 +91,26 @@ function QueryEditor(props: {
     return (
       <div>
         <label>Predefined query: </label>
-        <select
-          value={selectedPredefinedQuery?.name ?? "undefined"}
-          onChange={(evt) => {
-            let selectedPredefinedQuery = props?.predefinedQueryOptions?.find(
-              (predefinedQuery) => predefinedQuery.name == evt.target.value
-            );
-            setSelectedPredefinedQuery(selectedPredefinedQuery);
-            setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
-          }}
-          data-testid="select"
-        >
-          <option value={"undefined"} data-testid="select-option">
-            Custom query
-          </option>
-          {props.predefinedQueryOptions?.map((predefinedQuery) => (
-            <option
-              key={predefinedQuery.name}
-              value={predefinedQuery.name}
-              data-testid="select-option"
-            >
-              {predefinedQuery.name}
-            </option>
-          ))}
-        </select>
+        <div style={predefinedQueryStyle}>
+          <CustomSelect
+            value={selectedPredefinedQuery?.name ?? "undefined"}
+            onChange={(value) => {
+              let selectedPredefinedQuery = props?.predefinedQueryOptions?.find(
+                (predefinedQuery) => predefinedQuery.name == value
+              );
+              setSelectedPredefinedQuery(selectedPredefinedQuery);
+              setQueryTemplate(selectedPredefinedQuery?.sql ?? "");
+            }}
+            name="predefined query"
+            options={
+              props.predefinedQueryOptions
+                ? props.predefinedQueryOptions.map(
+                    (predefinedQuery) => predefinedQuery.name
+                  )
+                : []
+            }
+          />
+        </div>
       </div>
     );
   }
@@ -142,24 +147,24 @@ function QueryEditor(props: {
       {selectedPredefinedQuery?.description ? (
         <p>{selectedPredefinedQuery?.description}</p>
       ) : null}
-      <Textarea
-        value={queryTemplate || ""}
-        onChange={(evt) => {
-          setSelectedPredefinedQuery(undefined);
-          setQueryTemplate(evt.target.value);
-        }}
-        placeholder="Write your query here. To add variables, use '{{ }}' around substrings you wish to replace, e.g. {{ label }}"
-        autosize
-        minRows={2}
-        maxRows={8}
-        data-testid="text-area-input"
-      />
+
+      <Box my="md">
+        <SQLEditor
+          value={queryTemplate}
+          onChange={(newValue) => {
+            setSelectedPredefinedQuery(undefined);
+            setQueryTemplate(newValue);
+          }}
+        />
+      </Box>
+
       {renderParameterSetters()}
-      <Prism withLineNumbers language="sql">
-        {query || ""}
-      </Prism>
     </form>
   );
 }
+
+const predefinedQueryStyle = {
+  display: "inline-block",
+};
 
 export default QueryEditor;

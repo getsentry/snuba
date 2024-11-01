@@ -192,7 +192,7 @@ class ClickhousePool(object):
 
                     result_data: Sequence[Any]
                     trace_output = ""
-                    if capture_trace:
+                    if settings and settings.get("send_logs_level") == "trace":
                         with capture_logging() as buffer:
                             result_data = query_execute()
                             trace_output = buffer.getvalue()
@@ -225,9 +225,11 @@ class ClickhousePool(object):
                     return result
                 except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     metrics.increment(
-                        "connection_error"
-                        if not fallback_mode
-                        else "fallback_connection_error",
+                        (
+                            "connection_error"
+                            if not fallback_mode
+                            else "fallback_connection_error"
+                        ),
                         tags={
                             "host": self.host,
                             "port": str(self.port),

@@ -9,14 +9,16 @@ from snuba.clickhouse.columns import (
     ColumnType,
     Date,
     DateTime,
+    DateTime64,
     Enum,
     FixedString,
     Float,
     IPv4,
     IPv6,
     String,
-    UInt,
 )
+from snuba.clickhouse.columns import Tuple as TupleCol
+from snuba.clickhouse.columns import UInt
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.parse_schema import _get_column
 
@@ -90,6 +92,38 @@ test_data = [
     (
         ("DateTime", "", "", "DoubleDelta, LZ4"),
         (DateTime(Modifiers(codecs=["DoubleDelta", "LZ4"]))),
+    ),
+    # DateTime64
+    (
+        ("DateTime64", "", "", ""),
+        DateTime64(3),
+    ),
+    (
+        ("DateTime64(6)", "", "", ""),
+        DateTime64(6),
+    ),
+    (
+        ("DateTime64(9, 'America/New_York')", "", "", ""),
+        DateTime64(9, "America/New_York"),
+    ),
+    (
+        ("Tuple(String, UUID, String, String)", "", "", ""),
+        TupleCol(types=((String(), UUID(), String(), String()))),
+    ),
+    (
+        ("Tuple(String)", "", "", ""),
+        TupleCol(types=((String(),))),
+    ),
+    (
+        ("Tuple(UInt64, String)", "", "", ""),
+        TupleCol(
+            types=(
+                (
+                    UInt(64),
+                    String(),
+                )
+            )
+        ),
     ),
 ]
 

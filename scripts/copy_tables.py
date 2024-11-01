@@ -21,7 +21,7 @@ def _get_client(
 
 
 def get_regex_match(curr_create_table_statement: str) -> str:
-    match = re.search("\/clickhouse([a-z\/\-{}_]*)", curr_create_table_statement)
+    match = re.search(r"\/clickhouse([a-z\/\-{}_]*)", curr_create_table_statement)
     assert match is not None
     return match.group(0)
 
@@ -77,8 +77,8 @@ def verify_local_tables_exist_from_mv(
 
     """
     print(f"...checking table statement: {table}")
-    to_search = re.search("TO(.[.\w]*)", curr_create_table_statement)
-    from_search = re.search("FROM(.[.\w]*)", curr_create_table_statement)
+    to_search = re.search(r"TO(.[.\w]*)", curr_create_table_statement)
+    from_search = re.search(r"FROM(.[.\w]*)", curr_create_table_statement)
 
     assert to_search is not None
     assert from_search is not None

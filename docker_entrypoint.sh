@@ -18,4 +18,8 @@ else
   printf "\n${help_result}"
 fi
 
+if [ -n "${ENABLE_HEAPTRACK:-}" ]; then
+  set -- heaptrack "$@"
+fi
+
 exec "$@"

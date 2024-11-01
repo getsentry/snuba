@@ -1,20 +1,19 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Callable, Mapping
+from unittest.mock import Mock, patch
 
 import pytest
 import time_machine
 
 from snuba import settings
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import (
     _get_metrics_tags,
     optimize_partition_runner,
 )
-from snuba.clickhouse.optimize.optimize_scheduler import (
-    OptimizedSchedulerTimeout,
-    OptimizeScheduler,
-)
+from snuba.clickhouse.optimize.optimize_scheduler import OptimizedSchedulerTimeout
 from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storages.factory import get_writable_storage
@@ -189,8 +188,6 @@ class TestOptimize:
             )
         ] == [(a_month_earlier_monday, 90)]
 
-        scheduler = OptimizeScheduler(2)
-
         tracker = OptimizedPartitionTracker(
             redis_client=redis_client,
             host="some-hostname.domain.com",
@@ -207,7 +204,7 @@ class TestOptimize:
                 database=database,
                 table=table,
                 partitions=[part.name for part in partitions],
-                scheduler=scheduler,
+                default_parallel_threads=2,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
             )
@@ -244,6 +241,112 @@ class TestOptimize:
         assert _get_metrics_tags(table, host) == expected
 
 
+test_data = [
+    pytest.param(
+        StorageKey.ERRORS,
+        last_midnight
+        + timedelta(hours=settings.PARALLEL_OPTIMIZE_JOB_START_TIME)
+        + timedelta(minutes=30),
+        id="errors parallel",
+    )
+]
+
+
+class TestOptimizeError:
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "storage_key, current_time",
+        test_data,
+    )
+    def test_optimize_partition_runner_errors(
+        self,
+        storage_key: StorageKey,
+        current_time: datetime,
+    ) -> None:
+        storage = get_writable_storage(storage_key)
+        cluster = storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+        table = storage.get_table_writer().get_schema().get_local_table_name()
+        database = cluster.get_database()
+
+        tracker = OptimizedPartitionTracker(
+            redis_client=redis_client,
+            host="some-hostname.domain.com",
+            port=9000,
+            database=database,
+            table=table,
+            expire_time=datetime.now() + timedelta(minutes=10),
+        )
+
+        with time_machine.travel(current_time, tick=False):
+            with patch(
+                "snuba.clickhouse.optimize.optimize.optimize_partitions",
+                side_effect=ClickhouseError(),
+            ):
+                with pytest.raises(ClickhouseError):
+                    optimize.optimize_partition_runner(
+                        clickhouse=clickhouse,
+                        database=database,
+                        table=table,
+                        partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+                        default_parallel_threads=3,
+                        tracker=tracker,
+                        clickhouse_host="some-hostname.domain.com",
+                    )
+
+        # For ClickHouse 23.3 and 23.8 parts from previous test runs
+        # interfere with following tests, so best to drop the tables
+        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
+
+
+class TestOptimizeFrequency:
+    @pytest.mark.clickhouse_db
+    @pytest.mark.redis_db
+    @pytest.mark.parametrize(
+        "storage_key, current_time",
+        test_data,
+    )
+    @patch("snuba.clickhouse.optimize.optimize.optimize_partitions")
+    def test_optimize_partitions_is_called_the_same_number_of_times_as_number_of_partitions(
+        self,
+        mock_optimize_partitions: Mock,
+        storage_key: StorageKey,
+        current_time: datetime,
+    ) -> None:
+
+        storage = get_writable_storage(storage_key)
+        cluster = storage.get_cluster()
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.OPTIMIZE)
+        table = storage.get_table_writer().get_schema().get_local_table_name()
+        database = cluster.get_database()
+
+        tracker = OptimizedPartitionTracker(
+            redis_client=redis_client,
+            host="some-hostname.domain.com",
+            port=9000,
+            database=database,
+            table=table,
+            expire_time=datetime.now() + timedelta(minutes=10),
+        )
+
+        with time_machine.travel(current_time, tick=False):
+            optimize.optimize_partition_runner(
+                clickhouse=clickhouse,
+                database=database,
+                table=table,
+                partitions=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+                default_parallel_threads=3,
+                tracker=tracker,
+                clickhouse_host="some-hostname.domain.com",
+            )
+        assert mock_optimize_partitions.call_count == 10
+
+        # For ClickHouse 23.3 and 23.8 parts from previous test runs
+        # interfere with following tests, so best to drop the tables
+        clickhouse.execute(f"DROP TABLE IF EXISTS {database}.{table} SYNC")
+
+
 @pytest.mark.clickhouse_db
 def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
     """
@@ -275,14 +378,13 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
         + timedelta(minutes=15),
         tick=False,
     ):
-        scheduler = OptimizeScheduler(2)
         with pytest.raises(OptimizedSchedulerTimeout):
             optimize_partition_runner(
                 clickhouse=clickhouse_pool,
                 database=database,
                 table=table,
                 partitions=[dummy_partition],
-                scheduler=scheduler,
+                default_parallel_threads=2,
                 tracker=tracker,
                 clickhouse_host="some-hostname.domain.com",
             )

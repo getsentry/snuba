@@ -237,12 +237,35 @@ schema:
   dist_table_name: errors_dist_ro
   not_deleted_mandatory_condition: deleted
 allocation_policies:
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
   - name: ConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
         - referrer
         - project_id
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+  - name: CrossOrgQueryAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        is_active: 1
+      cross_org_referrer_limits:
+        getsentry.tasks.backfill_grouping_records:
+          max_threads: 7
+          concurrent_limit: 30
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -252,13 +275,6 @@ allocation_policies:
         is_enforced: 1
         throttled_thread_number: 1
         org_limit_bytes_scanned: 10000000
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 1
-
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
@@ -282,10 +298,7 @@ query_processors:
   - processor: UserColumnProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: !!set
-        primary_hash: null
-        event_id: null
-        trace_id: null
+      columns: [event_id, primary_hash, trace_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
@@ -321,4 +334,3 @@ query_processors:
         - message
         - environment
         - project_id
-  - processor: TableRateLimit

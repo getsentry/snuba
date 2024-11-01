@@ -22,12 +22,15 @@ start_time_ms = 4111111111111
 received = 1234567890
 duration_ms = 1234560123
 project_id = 1234567890123456
+start_timestamp_precise = start_time_ms * 1e-3
+end_timestamp_precise = (start_time_ms + duration_ms) * 1e-3
 
 required_fields = {
     "duration_ms": duration_ms,
     "exclusive_time_ms": 1234567890123,
     "is_segment": True,
     "project_id": project_id,
+    "organization_id": 1,
     "received": received,
     "retention_days": 90,
     "segment_id": "1234567890123456",
@@ -35,13 +38,15 @@ required_fields = {
     "span_id": "1234567890123456",
     "start_timestamp_ms": start_time_ms,
     "trace_id": "12345678901234567890123456789012",
+    "start_timestamp_precise": start_timestamp_precise,
+    "end_timestamp_precise": end_timestamp_precise,
 }
 
 expected_for_required_fields = {
     "action": "",
     "deleted": 0,
     "description": "",
-    "domain": "",
+    "domain": None,
     "duration": 1234560123,
     "end_ms": 234,
     "end_timestamp": int(
@@ -49,6 +54,7 @@ expected_for_required_fields = {
             (start_time_ms + duration_ms) / 1000.0
         ).timestamp()
     ),
+    "end_timestamp_precise": int(end_timestamp_precise * 1e6),
     "exclusive_time": 1234567890123.0,
     "group": 0,
     "group_raw": 0,
@@ -75,6 +81,7 @@ expected_for_required_fields = {
     "start_timestamp": int(
         datetime.datetime.fromtimestamp(start_time_ms / 1000.0).timestamp()
     ),
+    "start_timestamp_precise": int(start_timestamp_precise * 1e6),
     "status": 2,
     "tags.key": [],
     "tags.value": [],
