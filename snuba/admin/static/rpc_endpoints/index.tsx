@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Select, Button, Code, Space, Textarea, Accordion, createStyles, Loader, Checkbox, Text, Table, Switch } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
-import { format_trace_log } from 'SnubaAdmin/rpc_endpoints/trace_formatter';
+import { TraceLog } from 'SnubaAdmin/rpc_endpoints/trace_formatter';
 import { ExampleRequestAccordionProps, QueryInfo } from 'SnubaAdmin/rpc_endpoints/types';
 import { useStyles } from 'SnubaAdmin/rpc_endpoints/styles';
 import { fetchEndpointsList, executeEndpoint, getEndpointData } from 'SnubaAdmin/rpc_endpoints/utils';
@@ -183,12 +183,7 @@ function RpcEndpoints() {
                         <>
                           <h4>Trace Logs</h4>
                           {queryInfo.traceLogs ? (
-                            <div
-                              className={classes.traceLogsContainer}
-                              dangerouslySetInnerHTML={{
-                                __html: format_trace_log(queryInfo.traceLogs)
-                              }}
-                            />
+                            <TraceLog log={queryInfo.traceLogs} />
                           ) : (
                             <Text>No trace logs available</Text>
                           )}

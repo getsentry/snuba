@@ -44,4 +44,16 @@ interface ExampleRequestAccordionProps {
     classes: Record<string, string>;
 }
 
-export type { QueryInfo, QueryStats, QueryMetadata, TimingMarks, EndpointData, ExampleRequestAccordionProps };
+interface TraceLogProps {
+    log: string;
+    width?: number;
+}
+
+interface StyledSpanProps {
+    color: string;
+    children: React.ReactNode;
+    className?: string;
+    style?: React.CSSProperties;
+}
+
+export type { QueryInfo, QueryStats, QueryMetadata, TimingMarks, EndpointData, ExampleRequestAccordionProps, TraceLogProps, StyledSpanProps };
