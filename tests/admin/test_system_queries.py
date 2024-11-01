@@ -11,6 +11,7 @@ from snuba.admin.clickhouse.system_queries import (
     is_system_command,
     is_valid_system_query,
     run_system_query_on_host_with_sql,
+    validate_query,
 )
 from snuba.admin.user import AdminUser
 
@@ -119,12 +120,22 @@ def test_invalid_system_query(sql_query: str) -> None:
         ("optimize   TABLE eap_spans_local", True),
     ],
 )
+@pytest.mark.clickhouse_db
 def test_sudo_queries(sudo_query: str, expected: bool) -> None:
     assert (
         is_system_command(sudo_query)
         or is_query_alter(sudo_query)
         or is_query_optimize(sudo_query)
     ) == expected
+    if not expected:
+        with pytest.raises(Exception):
+            validate_query(
+                settings.CLUSTERS[0]["host"],
+                int(settings.CLUSTERS[0]["port"]),
+                "errors",
+                sudo_query,
+                True,
+            )
 
 
 @pytest.mark.parametrize(

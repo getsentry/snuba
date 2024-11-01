@@ -213,6 +213,33 @@ def is_query_alter(sql_query: str) -> bool:
     return True if match else False
 
 
+def validate_query(
+    clickhouse_host: str,
+    clickhouse_port: int,
+    storage_name: str,
+    system_query_sql: str,
+    sudo_mode: bool,
+) -> None:
+    if is_query_describe(system_query_sql) or is_query_show(system_query_sql):
+        return
+
+    if sudo_mode and (
+        is_system_command(system_query_sql)
+        or is_query_alter(system_query_sql)
+        or is_query_optimize(system_query_sql)
+    ):
+        return
+
+    if is_valid_system_query(
+        clickhouse_host, clickhouse_port, storage_name, system_query_sql
+    ):
+        if sudo_mode:
+            raise InvalidCustomQuery("Query is valid but sudo is not allowed")
+        return
+
+    raise InvalidCustomQuery("Query is invalid")
+
+
 def run_system_query_on_host_with_sql(
     clickhouse_host: str,
     clickhouse_port: int,
@@ -229,32 +256,6 @@ def run_system_query_on_host_with_sql(
         )
         if not can_sudo:
             raise UnauthorizedForSudo()
-
-    def validate_query(
-        clickhouse_host: str,
-        clickhouse_port: int,
-        storage_name: str,
-        system_query_sql: str,
-        sudo_mode: bool,
-    ) -> None:
-        if is_valid_system_query(
-            clickhouse_host, clickhouse_port, storage_name, system_query_sql
-        ):
-            if sudo_mode:
-                raise InvalidCustomQuery("Query is valid but sudo is not allowed")
-            return
-
-        if is_query_describe(system_query_sql) or is_query_show(system_query_sql):
-            return
-
-        if sudo_mode and (
-            is_system_command(system_query_sql)
-            or is_query_alter(system_query_sql)
-            or is_query_optimize(system_query_sql)
-        ):
-            return
-
-        raise InvalidCustomQuery("Query is invalid")
 
     validate_query(
         clickhouse_host, clickhouse_port, storage_name, system_query_sql, sudo_mode
