@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Space } from '@mantine/core';
 import useApi from 'SnubaAdmin/api_client';
 import { EndpointSelector } from 'SnubaAdmin/rpc_endpoints/endpoint_selector';
@@ -23,6 +23,7 @@ function RpcEndpoints() {
   const [showProfileEvents, setShowProfileEvents] = useState(false);
   const [summarizedTraceOutput, setSummarizedTraceOutput] = useState<TracingSummary | null>(null);
   const [profileEvents, setProfileEvents] = useState<HostProfileEvents[] | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const { classes } = useStyles();
 
@@ -36,6 +37,11 @@ function RpcEndpoints() {
   }, []);
 
   const handleEndpointSelect = (value: string | null) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
     setSelectedEndpoint(value);
     const selectedEndpointData = getEndpointData(endpoints, value || '');
     setSelectedVersion(selectedEndpointData?.version || null);
@@ -45,6 +51,13 @@ function RpcEndpoints() {
   };
 
   const handleExecute = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setShowTraceLogs(false);
     setShowSummarizedView(false);
@@ -52,23 +65,45 @@ function RpcEndpoints() {
     setResponse(null);
     setSummarizedTraceOutput(null);
     setProfileEvents(null);
+
     try {
       const result = await executeEndpoint(
         api,
         selectedEndpoint,
         selectedVersion,
         requestBody,
-        debugMode
+        debugMode,
+        controller.signal
       );
-      setResponse(result);
-      setIsLoading(false);
-      await processTraceResults(result, api, setProfileEvents, setSummarizedTraceOutput);
+
+      if (!controller.signal.aborted) {
+        setResponse(result);
+        setIsLoading(false);
+        await processTraceResults(
+          result,
+          api,
+          setProfileEvents,
+          setSummarizedTraceOutput,
+          controller.signal
+        );
+      }
     } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return;
+      }
       alert(`Error: ${error.message}`);
       setResponse({ error: error.message });
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <div>

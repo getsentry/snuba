@@ -72,7 +72,7 @@ interface Client {
   executeTracingQuery: (req: TracingRequest) => Promise<TracingResult>;
   getKafkaData: () => Promise<KafkaTopicData[]>;
   getRpcEndpoints: () => Promise<Array<[string, string]>>;
-  executeRpcEndpoint: (endpointName: string, version: string, requestBody: any) => Promise<any>;
+  executeRpcEndpoint: (endpointName: string, version: string, requestBody: any, signal?: AbortSignal) => Promise<any>;
   getPredefinedQuerylogOptions: () => Promise<[PredefinedQuery]>;
   getQuerylogSchema: () => Promise<QuerylogResult>;
   executeQuerylogQuery: (req: QuerylogRequest) => Promise<QuerylogResult>;
@@ -114,7 +114,7 @@ interface Client {
   runJob(job_id: string): Promise<String>;
   getJobLogs(job_id: string): Promise<string[]>;
   getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
-  summarizeTraceWithProfile: (traceLogs: string, storage: string) => Promise<any>;
+  summarizeTraceWithProfile: (traceLogs: string, spanType: string, signal?: AbortSignal) => Promise<any>;
 }
 
 function Client(): Client {
@@ -336,7 +336,7 @@ function Client(): Client {
       }).then((resp) => resp.json()) as Promise<Array<[string, string]>>;
     },
 
-    executeRpcEndpoint: async (endpointName: string, version: string, requestBody: any) => {
+    executeRpcEndpoint: async (endpointName: string, version: string, requestBody: any, signal?: AbortSignal) => {
       try {
         const url = `${baseUrl}rpc_execute/${endpointName}/${version}`;
         const response = await fetch(url, {
@@ -346,6 +346,7 @@ function Client(): Client {
             Accept: "application/json"
           },
           body: JSON.stringify(requestBody),
+          signal,
         });
         if (!response.ok) {
           const errorData = await response.json();
@@ -595,7 +596,7 @@ function Client(): Client {
         }
       });
     },
-    summarizeTraceWithProfile: (traceLogs: string, storage: string) => {
+    summarizeTraceWithProfile: (traceLogs: string, storage: string, signal?: AbortSignal) => {
       const url = baseUrl + "rpc_summarize_trace_with_profile";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
@@ -604,6 +605,7 @@ function Client(): Client {
           trace_logs: traceLogs,
           storage: storage
         }),
+        signal,
       }).then((resp) => {
         if (resp.ok) {
           return resp.json();
