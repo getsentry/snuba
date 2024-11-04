@@ -608,9 +608,9 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]
     ]
 
 
-@application.route("/rpc_trace_query", methods=["POST"])
+@application.route("/rpc_summarize_trace_with_profile", methods=["POST"])
 @check_tool_perms(tools=[AdminTools.QUERY_TRACING])
-def rpc_trace_query() -> Response:
+def summarize_trace_with_profile() -> Response:
     try:
         req = json.loads(request.data)
         trace_logs = req.get("trace_logs")

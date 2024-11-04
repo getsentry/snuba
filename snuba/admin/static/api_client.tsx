@@ -114,7 +114,7 @@ interface Client {
   runJob(job_id: string): Promise<String>;
   getJobLogs(job_id: string): Promise<string[]>;
   getClickhouseSystemSettings: (host: string, port: number, storage: string) => Promise<ClickhouseSystemSetting[]>;
-  executeRpcTraceQuery: (traceLogs: string, storage: string) => Promise<any>;
+  summarizeTraceWithProfile: (traceLogs: string, storage: string) => Promise<any>;
 }
 
 function Client(): Client {
@@ -595,8 +595,8 @@ function Client(): Client {
         }
       });
     },
-    executeRpcTraceQuery: (traceLogs: string, storage: string) => {
-      const url = baseUrl + "rpc_trace_query";
+    summarizeTraceWithProfile: (traceLogs: string, storage: string) => {
+      const url = baseUrl + "rpc_summarize_trace_with_profile";
       return fetch(url, {
         headers: { "Content-Type": "application/json" },
         method: "POST",

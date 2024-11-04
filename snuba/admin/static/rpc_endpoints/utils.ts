@@ -66,7 +66,7 @@ export const processTraceResults = async (
   setSummarizedTraceOutput: (output: TracingSummary | null) => void
 ) => {
   if (result.meta?.queryInfo?.[0]?.traceLogs) {
-    const traceResult = await api.executeRpcTraceQuery(
+    const traceResult = await api.summarizeTraceWithProfile(
       result.meta.queryInfo[0].traceLogs,
       "eap_spans"
     );
