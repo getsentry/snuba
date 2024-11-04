@@ -18,7 +18,7 @@ function querySummary(value: QuerySummary): JSX.Element {
   return (
     <Accordion.Item key={value.node_name} value={value.node_name}>
       <Accordion.Control>
-        <Title order={4}>
+        <Title order={6}>
           {value.node_name} {dist}: {execute ? execute.seconds : "N/A"} sec.
         </Title>
       </Accordion.Control>
@@ -26,7 +26,7 @@ function querySummary(value: QuerySummary): JSX.Element {
         <Stack>
           {value.index_summaries && (
             <>
-              <Title order={4}>Filtering</Title>
+              <Title order={6}>Filtering</Title>
               {value.index_summaries.map((s, idx) => (
                 <Group key={idx}>
                   <Text fw={600}>{s.table_name}: </Text>
@@ -38,7 +38,7 @@ function querySummary(value: QuerySummary): JSX.Element {
               ))}
             </>
           )}
-          <Title order={4}>Total</Title>
+          <Title order={6}>Total</Title>
           {value.execute_summaries?.map((e, idx) => (
             <div key={idx}>{executeSummary(e)}</div>
           ))}
@@ -69,13 +69,6 @@ function SummarizedTraceDisplay({ value, classes }: { value: TracingSummary, cla
         classNames={{ item: classes.traceAccordion }}
       >
         {dist_node && querySummary(dist_node)}
-      </Accordion>
-      <Accordion
-        chevronPosition="left"
-        variant="contained"
-        radius="sm"
-        classNames={{ item: classes.traceAccordion }}
-      >
         {nodes
           .filter((q) => !q.is_distributed)
           .map((q) => querySummary(q))}

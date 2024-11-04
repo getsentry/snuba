@@ -24,7 +24,6 @@ export const useStyles = createStyles((theme) => ({
   },
   traceAccordion: {
     '& .mantine-Accordion-control': {
-      backgroundColor: theme.colors.green[1],
       color: theme.colors.green[7],
       fontSize: '6px',
       padding: '1px 2px',

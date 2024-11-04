@@ -82,8 +82,12 @@ export const ResponseDisplay = ({
                       <ToggleOption active={showSummarizedView}>Summarized</ToggleOption>
                     </Group>
                     {queryInfo.traceLogs ? (
-                      showSummarizedView && summarizedTraceOutput ? (
-                        <SummarizedTraceDisplay value={summarizedTraceOutput} classes={classes} />
+                      showSummarizedView ? (
+                        summarizedTraceOutput ? (
+                          <SummarizedTraceDisplay value={summarizedTraceOutput} classes={classes} />
+                        ) : (
+                          <Text>Retrieving summarized trace data...</Text>
+                        )
                       ) : (
                         <TraceLog log={queryInfo.traceLogs} />
                       )
@@ -106,7 +110,7 @@ export const ResponseDisplay = ({
                       profileEvents ? (
                         <ProfileEventsTable profileEvents={profileEvents} classes={classes} />
                       ) : (
-                        <Text>No profile events available</Text>
+                        <Text>Either retrieving or no profile events available</Text>
                       )
                     ) : (
                       <MetadataTable queryInfo={queryInfo} classes={classes} />
