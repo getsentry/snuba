@@ -7,25 +7,7 @@ expression: diff
         path: "",
         change: PropertyAdd {
             lhs_additional_properties: true,
-            added: "data",
-        },
-    },
-    Change {
-        path: "",
-        change: RequiredAdd {
-            property: "end_timestamp_precise",
-        },
-    },
-    Change {
-        path: "",
-        change: RequiredAdd {
-            property: "organization_id",
-        },
-    },
-    Change {
-        path: "",
-        change: RequiredAdd {
-            property: "start_timestamp_precise",
+            added: "ingest_in_eap",
         },
     },
 ]
