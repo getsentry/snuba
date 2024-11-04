@@ -48,7 +48,7 @@ class DeleteQueryMessage(TypedDict):
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
-    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_SEARCH_ISSUES
+    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS
 }
 
 

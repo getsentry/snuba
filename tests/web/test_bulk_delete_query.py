@@ -47,7 +47,7 @@ def get_attribution_info(
 @patch("snuba.web.bulk_delete_query._enforce_max_rows", return_value=10)
 def test_delete_success(mock_enforce_max_row: Mock) -> None:
     admin_client = AdminClient(get_default_kafka_configuration())
-    create_topics(admin_client, [Topic.LW_DELETIONS_SEARCH_ISSUES])
+    create_topics(admin_client, [Topic.LW_DELETIONS_GENERIC_EVENTS])
 
     consumer = Consumer(CONSUMER_CONFIG)
     storage = get_writable_storage(StorageKey("search_issues"))
@@ -56,7 +56,7 @@ def test_delete_success(mock_enforce_max_row: Mock) -> None:
 
     # just give in second before subscribing
     time.sleep(2.0)
-    consumer.subscribe([Topic.LW_DELETIONS_SEARCH_ISSUES.value])
+    consumer.subscribe([Topic.LW_DELETIONS_GENERIC_EVENTS.value])
 
     result = delete_from_storage(storage, conditions, attr_info)
     assert result["search_issues_local_v2"]["data"] == [{"rows_to_delete": 10}]
