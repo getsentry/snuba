@@ -271,7 +271,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
     :param item_filter:
     :return:
     """
-    if item_filter.and_filter:
+    if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
@@ -279,7 +279,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return trace_item_filters_to_expression(filters[0])
         return and_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
-    if item_filter.or_filter:
+    if item_filter.HasField("or_filter"):
         filters = item_filter.or_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException(
@@ -289,7 +289,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return trace_item_filters_to_expression(filters[0])
         return or_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
-    if item_filter.comparison_filter:
+    if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
         k_expression = attribute_key_to_expression(k)
         op = item_filter.comparison_filter.op
@@ -337,7 +337,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
-    if item_filter.exists_filter:
+    if item_filter.HasField("exists_filter"):
         k = item_filter.exists_filter.key
         if k.name in NORMALIZED_COLUMNS.keys():
             return f.isNotNull(column(k.name))
@@ -346,7 +346,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
         else:
             return f.mapContains(column("attr_num"), literal(k.name))
 
-    raise Exception("Unknown filter: ", item_filter)
+    return literal(True)
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:

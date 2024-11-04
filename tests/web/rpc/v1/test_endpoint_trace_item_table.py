@@ -730,6 +730,39 @@ class TestTraceItemTable(BaseApiTest):
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
+    def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                organization_id=1,
+                project_ids=[1],
+                start_timestamp=hour_ago,
+                end_timestamp=ts,
+                referrer="something",
+                cogs_category="something",
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(name="sentry.name", type=AttributeKey.TYPE_STRING),
+                    label="description",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                        ),
+                    ),
+                    label="count()",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name")],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].attribute_name == "description"
+        assert response.column_values[1].attribute_name == "count()"
+
 
 class TestUtils:
     def test_apply_labels_to_columns(self) -> None:

@@ -76,7 +76,7 @@ jobs:
       # If working tree is dirty, commit and update if we have a token
       - name: Apply any pre-commit fixed files
         if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
-        uses: getsentry/action-github-commit@v1.0.0
+        uses: getsentry/action-github-commit@v2.1.0
         with:
           github-token: ${{ steps.token.outputs.token }}
 
@@ -153,7 +153,7 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Build snuba docker image for CI
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         if: github.repository_owner == 'getsentry'
         with:
           context: .
