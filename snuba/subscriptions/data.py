@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import base64
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import partial
 from typing import (
     Any,
+    Generic,
     Iterator,
     List,
     Mapping,
@@ -15,9 +18,19 @@ from typing import (
     NewType,
     Optional,
     Tuple,
+    TypeVar,
     Union,
 )
 from uuid import UUID
+
+from google.protobuf.timestamp_pb2 import Timestamp
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    TraceItemTableRequest,
+    TraceItemTableResponse,
+)
+from sentry_protos.snuba.v1.endpoint_trace_item_table_subscription_pb2 import (
+    CreateTraceItemTableSubscriptionRequest,
+)
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -36,13 +49,15 @@ from snuba.query.data_source.simple import Entity as EntityDS
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import SubscriptionQuerySettings
-from snuba.reader import Result
+from snuba.reader import Result, Row
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
+from snuba.web.rpc import RPCEndpoint
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -55,9 +70,17 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
     "tenant_ids",
 }
 
+
+class SubscriptionType(Enum):
+    SNQL = "snql"
+    RPC = "rpc"
+
+
 logger = logging.getLogger("snuba.subscriptions")
 
 PartitionId = NewType("PartitionId", int)
+
+TRequest = TypeVar("TRequest")
 
 
 @dataclass(frozen=True)
@@ -75,7 +98,7 @@ class SubscriptionIdentifier:
 
 
 @dataclass(frozen=True, kw_only=True)
-class SubscriptionData(ABC):
+class _SubscriptionData(ABC, Generic[TRequest]):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -83,9 +106,20 @@ class SubscriptionData(ABC):
     metadata: Mapping[str, Any]
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
-    @abstractmethod
     def validate(self) -> None:
-        raise NotImplementedError
+        if self.time_window_sec < 60:
+            raise InvalidSubscriptionError(
+                "Time window must be greater than or equal to 1 minute"
+            )
+        elif self.time_window_sec > 60 * 60 * 24:
+            raise InvalidSubscriptionError(
+                "Time window must be less than or equal to 24 hours"
+            )
+
+        if self.resolution_sec < 60:
+            raise InvalidSubscriptionError(
+                "Resolution must be greater than or equal to 1 minute"
+            )
 
     @abstractmethod
     def build_request(
@@ -96,14 +130,14 @@ class SubscriptionData(ABC):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
+    ) -> TRequest:
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> _SubscriptionData:
         raise NotImplementedError
 
     @abstractmethod
@@ -112,7 +146,7 @@ class SubscriptionData(ABC):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData):
+class SnQLSubscriptionData(_SubscriptionData[Request]):
     """
     Represents the state of a subscription.
     """
@@ -187,21 +221,6 @@ class SnQLSubscriptionData(SubscriptionData):
                 "At least one Entity must have a timestamp column for subscriptions"
             )
 
-    def validate(self) -> None:
-        if self.time_window_sec < 60:
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
-        elif self.time_window_sec > 60 * 60 * 24:
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
-
-        if self.resolution_sec < 60:
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
-            )
-
     def build_request(
         self,
         dataset: Dataset,
@@ -246,7 +265,7 @@ class SnQLSubscriptionData(SubscriptionData):
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
@@ -271,6 +290,7 @@ class SnQLSubscriptionData(SubscriptionData):
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
+            "subscription_type": SubscriptionType.SNQL.value,
         }
 
         subscription_processors = self.entity.get_subscription_processors()
@@ -278,6 +298,133 @@ class SnQLSubscriptionData(SubscriptionData):
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
         return subscription_data_dict
+
+
+@dataclass(frozen=True, kw_only=True)
+class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
+    """
+    Represents the state of an RPC subscription.
+    """
+
+    trace_item_table_request: str
+    proto_name: str
+    proto_version: str
+
+    def validate(self):
+        super().validate()
+        # TODO: Validate no group by, having, order by etc
+
+    def build_request(
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
+    ) -> TraceItemTableRequest:
+
+        table_request = TraceItemTableRequest()
+        table_request.ParseFromString(base64.b64decode(self.trace_item_table_request))
+        start_time_proto = Timestamp()
+        start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
+        end_time_proto = Timestamp()
+        end_time_proto.FromDatetime(timestamp)
+        table_request.meta.start_timestamp.CopyFrom(start_time_proto)
+        table_request.meta.end_timestamp.CopyFrom(end_time_proto)
+
+        return table_request
+
+    def run_query(
+        self,
+        request,
+    ):
+        enpdoint = RPCEndpoint.get_from_name(self.proto_name, self.proto_version)()
+        response: TraceItemTableResponse = enpdoint.execute(request)
+
+        column_values = response.column_values
+        num_rows = len(column_values[0].results)
+        data = []
+        for i in range(num_rows):
+            data_row: Row = {}
+            for column in column_values:
+                value_key = column.results[i].WhichOneof("value")
+                if value_key:
+                    value = getattr(column.results[i], value_key)
+                else:
+                    value = None
+
+                data_row[column.attribute_name] = value
+
+            data.append(data_row)
+
+        result: Result = {"meta": [], "data": data, "trace_output": ""}
+        return QueryResult(
+            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+        )
+
+    @classmethod
+    def from_dict(
+        cls, data: Mapping[str, Any], entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+
+        metadata = {}
+        for key in data.keys():
+            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+                metadata[key] = data[key]
+
+        return RPCSubscriptionData(
+            project_id=data["project_id"],
+            time_window_sec=int(data["time_window"]),
+            resolution_sec=int(data["resolution"]),
+            trace_item_table_request=data["trace_item_table_request"],
+            proto_version=data["proto_version"],
+            proto_name=data["proto_name"],
+            entity=entity,
+            metadata=metadata,
+            tenant_ids=data.get("tenant_ids", dict()),
+        )
+
+    @classmethod
+    def from_proto(
+        cls, item: CreateTraceItemTableSubscriptionRequest, entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+        cls = item.table_request.__class__
+        class_name = cls.__name__
+        class_version = cls.__module__.split(".", 3)[2]
+
+        return RPCSubscriptionData(
+            project_id=item.project_id,
+            time_window_sec=item.time_window,
+            resolution_sec=item.resolution,
+            trace_item_table_request=base64.b64encode(
+                item.table_request.SerializeToString()
+            ).decode("utf-8"),
+            entity=entity,
+            metadata={},
+            tenant_ids={},
+            proto_version=class_version,
+            proto_name=class_name,
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        subscription_data_dict = {
+            "project_id": self.project_id,
+            "time_window": self.time_window_sec,
+            "resolution": self.resolution_sec,
+            "trace_item_table_request": self.trace_item_table_request,
+            "proto_version": self.proto_version,
+            "proto_name": self.proto_name,
+            "subscription_type": SubscriptionType.RPC.value,
+        }
+
+        return subscription_data_dict
+
+
+SubscriptionData = Union[RPCSubscriptionData, SnQLSubscriptionData]
+SubscriptionRequest = Union[Request, TraceItemTableRequest]
 
 
 class Subscription(NamedTuple):
@@ -325,9 +472,9 @@ class SubscriptionScheduler(ABC):
 
 class SubscriptionTaskResultFuture(NamedTuple):
     task: ScheduledSubscriptionTask
-    future: Future[Tuple[Request, Result]]
+    future: Future[Tuple[SubscriptionRequest, Result]]
 
 
 class SubscriptionTaskResult(NamedTuple):
     task: ScheduledSubscriptionTask
-    result: Tuple[Request, Result]
+    result: Tuple[SubscriptionRequest, Result]

@@ -51,7 +51,9 @@ class SubscriptionCreator:
         return identifier
 
     def _test_request(self, data: SubscriptionData, timer: Timer) -> None:
-        request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
+        request = data.build_request_and_run_query(
+            self.dataset, datetime.utcnow(), None, timer
+        )
         run_query(self.dataset, request, timer)
 
 
