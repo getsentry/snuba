@@ -16,7 +16,7 @@ from arroyo.errors import ConsumerError
 from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
-from py._path.local import LocalPath
+from py._path.local import LocalPath  # type: ignore
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
