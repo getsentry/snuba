@@ -1,7 +1,7 @@
 import { createStyles } from '@mantine/core';
 
 export const useStyles = createStyles((theme) => ({
-  accordion: {
+  mainAccordion: {
     '& .mantine-Accordion-control': {
       backgroundColor: theme.colors.blue[1],
       color: theme.colors.blue[7],
@@ -14,6 +14,36 @@ export const useStyles = createStyles((theme) => ({
       '&:hover': {
         backgroundColor: theme.colors.blue[2],
       },
+    },
+    '& .mantine-Accordion-item': {
+      borderBottom: `1px solid ${theme.colors.gray[3]}`,
+      '&[data-active]': {
+        backgroundColor: theme.colors.blue[0],
+      },
+    },
+  },
+  traceAccordion: {
+    '& .mantine-Accordion-control': {
+      backgroundColor: theme.colors.green[1],
+      color: theme.colors.green[7],
+      fontSize: theme.fontSizes.sm,
+      padding: '8px 12px',
+      lineHeight: 1.4,
+      borderBottom: `1px solid ${theme.colors.gray[3]}`,
+      cursor: 'pointer',
+      fontWeight: 'bold',
+      '&:hover': {
+        backgroundColor: theme.colors.green[2],
+      },
+    },
+    '& .mantine-Accordion-item': {
+      borderBottom: `1px solid ${theme.colors.gray[3]}`,
+      '&[data-active]': {
+        backgroundColor: theme.colors.green[0],
+      },
+    },
+    '& .mantine-Accordion-chevron': {
+      color: theme.colors.green[6],
     },
   },
   table: {
@@ -50,14 +80,13 @@ export const useStyles = createStyles((theme) => ({
       display: 'inline'
     },
     '& .trace-message': {
-      fontWeight: 'bold',
       color: '#ffffff',
     }
   },
   viewToggle: {
     marginBottom: theme.spacing.sm,
   },
-  responseDataContainer: {
+  scrollableDataContainer: {
     maxHeight: '500px',
     overflowY: 'auto',
     backgroundColor: 'white',
@@ -65,4 +94,18 @@ export const useStyles = createStyles((theme) => ({
     borderRadius: theme.radius.sm,
     border: `1px solid ${theme.colors.gray[3]}`,
   },
+  toggleOption: {
+    fontSize: theme.fontSizes.sm,
+    transition: 'all 0.2s ease',
+
+    '&[data-active="true"]': {
+      fontWeight: 700,
+      color: theme.colors.blue[6]
+    },
+
+    '&[data-active="false"]': {
+      fontWeight: 700,
+      color: theme.colors.gray[6]
+    }
+  }
 }));

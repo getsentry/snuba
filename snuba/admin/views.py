@@ -38,6 +38,7 @@ from snuba.admin.clickhouse.system_queries import (
     UnauthorizedForSudo,
     run_system_query_on_host_with_sql,
 )
+from snuba.admin.clickhouse.trace_log_parsing import summarize_trace_output
 from snuba.admin.clickhouse.tracing import (
     QueryTraceData,
     TraceOutput,
@@ -500,48 +501,7 @@ def clickhouse_trace_query() -> Response:
 
         query_trace = run_query_and_get_trace(storage, raw_sql)
 
-        profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
-
-        for query_trace_data in parse_trace_for_query_ids(query_trace):
-            sql = profile_events_raw_sql.format(query_trace_data.query_id)
-            logger.info(
-                "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
-                    query_trace_data.host, query_trace_data.port, storage, sql, g.user
-                )
-            )
-            system_query_result, counter = None, 0
-            while counter < 30:
-                # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
-                # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
-                system_query_result = run_system_query_on_host_with_sql(
-                    query_trace_data.host,
-                    int(query_trace_data.port),
-                    storage,
-                    sql,
-                    False,
-                    g.user,
-                )
-                if not system_query_result.results:
-                    time.sleep(1)
-                    counter += 1
-                else:
-                    break
-
-            if system_query_result is not None and len(system_query_result.results) > 0:
-                query_trace.profile_events_meta.append(system_query_result.meta)
-                query_trace.profile_events_profile = cast(
-                    Dict[str, int], system_query_result.profile
-                )
-                columns = system_query_result.meta
-                if columns:
-                    res = {}
-                    res["column_names"] = [name for name, _ in columns]
-                    res["rows"] = []
-                    for query_result in system_query_result.results:
-                        if query_result[0]:
-                            res["rows"].append(json.dumps(query_result[0]))
-                    query_trace.profile_events_results[query_trace_data.node_name] = res
-
+        gather_profile_events(query_trace, storage)
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
@@ -571,6 +531,56 @@ def clickhouse_trace_query() -> Response:
         )
 
 
+def gather_profile_events(query_trace: TraceOutput, storage: str) -> None:
+    """
+    Gathers profile events for each query trace and updates the query_trace object with results.
+
+    Args:
+        query_trace: TraceOutput object to update with profile events
+        storage: Storage identifier
+    """
+    profile_events_raw_sql = "SELECT ProfileEvents FROM system.query_log WHERE query_id = '{}' AND type = 'QueryFinish'"
+    for query_trace_data in parse_trace_for_query_ids(query_trace):
+        sql = profile_events_raw_sql.format(query_trace_data.query_id)
+        logger.info(
+            "Gathering profile event using host: {}, port = {}, storage = {}, sql = {}, g.user = {}".format(
+                query_trace_data.host, query_trace_data.port, storage, sql, g.user
+            )
+        )
+        system_query_result, counter = None, 0
+        while counter < 30:
+            # There is a race between the trace query and the 'SELECT ProfileEvents...' query. ClickHouse does not immediately
+            # return the rows for 'SELECT ProfileEvents...' query. To make it return rows, sleep between the query executions.
+            system_query_result = run_system_query_on_host_with_sql(
+                query_trace_data.host,
+                int(query_trace_data.port),
+                storage,
+                sql,
+                False,
+                g.user,
+            )
+            if not system_query_result.results:
+                time.sleep(1)
+                counter += 1
+            else:
+                break
+
+        if system_query_result is not None and len(system_query_result.results) > 0:
+            query_trace.profile_events_meta.append(system_query_result.meta)
+            query_trace.profile_events_profile = cast(
+                Dict[str, int], system_query_result.profile
+            )
+            columns = system_query_result.meta
+            if columns:
+                res = {}
+                res["column_names"] = [name for name, _ in columns]
+                res["rows"] = []
+                for query_result in system_query_result.results:
+                    if query_result[0]:
+                        res["rows"].append(json.dumps(query_result[0]))
+                query_trace.profile_events_results[query_trace_data.node_name] = res
+
+
 def hostname_resolves(hostname: str) -> bool:
     try:
         socket.gethostbyname(hostname)
@@ -596,6 +606,68 @@ def parse_trace_for_query_ids(trace_output: TraceOutput) -> List[QueryTraceData]
         )
         for node_name, query_id in node_name_to_query_id.items()
     ]
+
+
+@application.route("/rpc_trace_query", methods=["POST"])
+@check_tool_perms(tools=[AdminTools.QUERY_TRACING])
+def rpc_trace_query() -> Response:
+    try:
+        req = json.loads(request.data)
+        trace_logs = req.get("trace_logs")
+
+        if trace_logs:
+            summarized_trace_output = summarize_trace_output(trace_logs)
+            trace_output = TraceOutput(
+                trace_output=trace_logs,
+                summarized_trace_output=summarized_trace_output,
+                cols=[],
+                num_rows_result=0,
+                result=[],
+                profile_events_results={},
+                profile_events_meta=[],
+                profile_events_profile={},
+            )
+            storage = req.get("storage", "default")
+            gather_profile_events(trace_output, storage)
+            return make_response(jsonify(asdict(trace_output)), 200)
+        else:
+            return make_response(
+                jsonify(
+                    {
+                        "error": {
+                            "type": "request",
+                            "message": "Invalid request. Must provide either (trace_logs) or (storage, sql)",
+                        }
+                    }
+                ),
+                400,
+            )
+    except InvalidCustomQuery as err:
+        return make_response(
+            jsonify(
+                {
+                    "error": {
+                        "type": "validation",
+                        "message": err.message or "Invalid query",
+                    }
+                }
+            ),
+            400,
+        )
+    except ClickhouseError as err:
+        logger.error(err, exc_info=True)
+        details = {
+            "type": "clickhouse",
+            "message": str(err),
+            "code": err.code,
+        }
+        return make_response(jsonify({"error": details}), 400)
+    except Exception as err:
+        logger.error(err, exc_info=True)
+        return make_response(
+            jsonify({"error": {"type": "unknown", "message": str(err)}}),
+            500,
+        )
 
 
 @application.route("/clickhouse_querylog_query", methods=["POST"])
@@ -643,10 +715,9 @@ def clickhouse_querylog_query() -> Response:
         }
         return make_response(jsonify({"error": details}), 400)
     except InvalidCustomQuery as err:
-        return Response(
-            json.dumps({"error": {"message": str(err)}}, indent=4),
+        return make_response(
+            jsonify({"error": {"message": str(err)}}),
             400,
-            {"Content-Type": "application/json"},
         )
     except Exception as err:
         return make_response(

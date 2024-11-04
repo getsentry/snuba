@@ -1,4 +1,5 @@
-import { EndpointData } from 'SnubaAdmin/rpc_endpoints/types';
+import { EndpointData, HostProfileEvents, ProfileEventsResults, TracingSummary } from 'SnubaAdmin/rpc_endpoints/types';
+import Client from 'SnubaAdmin/api_client';
 
 export const DEBUG_SUPPORTED_VERSIONS = ['v1'];
 
@@ -49,3 +50,45 @@ export function getEndpointData(
 ): EndpointData | undefined {
   return endpoints.find(e => e.name === endpointName);
 }
+
+type ExecuteResponse = {
+  meta?: {
+    queryInfo?: Array<{
+      traceLogs?: string;
+    }>;
+  };
+};
+
+export const processTraceResults = async (
+  result: ExecuteResponse,
+  api: Client,
+  setProfileEvents: (events: HostProfileEvents[] | null) => void,
+  setSummarizedTraceOutput: (output: TracingSummary | null) => void
+) => {
+  if (result.meta?.queryInfo?.[0]?.traceLogs) {
+    const traceResult = await api.executeRpcTraceQuery(
+      result.meta.queryInfo[0].traceLogs,
+      "eap_spans"
+    );
+
+    if (traceResult?.profile_events_results) {
+      const hostProfiles = Object.entries(traceResult.profile_events_results as ProfileEventsResults)
+        .map(([hostName, profileData]) => {
+          if (profileData.rows[0]) {
+            const parsedEvents = JSON.parse(profileData.rows[0]);
+            const events = Object.entries(parsedEvents).map(([name, count]) => ({
+              name,
+              count: count as number,
+            }));
+            return { hostName, events };
+          }
+          return { hostName, events: [] };
+        });
+      setProfileEvents(hostProfiles);
+    }
+
+    if (traceResult?.summarized_trace_output) {
+      setSummarizedTraceOutput(traceResult.summarized_trace_output);
+    }
+  }
+};
