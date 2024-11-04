@@ -79,13 +79,17 @@ function RpcEndpoints() {
       if (!controller.signal.aborted) {
         setResponse(result);
         setIsLoading(false);
-        await processTraceResults(
-          result,
-          api,
-          setProfileEvents,
-          setSummarizedTraceOutput,
-          controller.signal
-        );
+        try {
+          await processTraceResults(
+            result,
+            api,
+            setProfileEvents,
+            setSummarizedTraceOutput,
+            controller.signal
+          );
+        } catch (traceError: any) {
+          console.error('Error processing trace results:', traceError);
+        }
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -101,6 +105,9 @@ function RpcEndpoints() {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        setResponse(null);
+        setSummarizedTraceOutput(null);
+        setProfileEvents(null);
       }
     };
   }, []);
