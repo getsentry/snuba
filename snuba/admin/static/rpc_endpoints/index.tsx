@@ -49,6 +49,9 @@ function RpcEndpoints() {
     setShowTraceLogs(false);
     setShowSummarizedView(false);
     setShowProfileEvents(false);
+    setResponse(null);
+    setSummarizedTraceOutput(null);
+    setProfileEvents(null);
     try {
       const result = await executeEndpoint(
         api,
@@ -58,8 +61,8 @@ function RpcEndpoints() {
         debugMode
       );
       setResponse(result);
-      await processTraceResults(result, api, setProfileEvents, setSummarizedTraceOutput);
       setIsLoading(false);
+      await processTraceResults(result, api, setProfileEvents, setSummarizedTraceOutput);
     } catch (error: any) {
       alert(`Error: ${error.message}`);
       setResponse({ error: error.message });

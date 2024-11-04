@@ -1,6 +1,6 @@
 import React from 'react';
 import { Accordion, Text, Title, Stack, Group } from '@mantine/core';
-import { ExecuteSummary, QuerySummary, TracingSummary } from './types';
+import { ExecuteSummary, QuerySummary, TracingSummary } from 'SnubaAdmin/rpc_endpoints/types';
 
 function executeSummary(value: ExecuteSummary): JSX.Element {
   return (
@@ -61,11 +61,11 @@ function SummarizedTraceDisplay({ value, classes }: { value: TracingSummary, cla
   }
 
   return (
-    <Stack>
+    <Stack spacing="xs">
       <Accordion
         chevronPosition="left"
         variant="contained"
-        radius="md"
+        radius="sm"
         classNames={{ item: classes.traceAccordion }}
       >
         {dist_node && querySummary(dist_node)}
@@ -73,7 +73,7 @@ function SummarizedTraceDisplay({ value, classes }: { value: TracingSummary, cla
       <Accordion
         chevronPosition="left"
         variant="contained"
-        radius="md"
+        radius="sm"
         classNames={{ item: classes.traceAccordion }}
       >
         {nodes

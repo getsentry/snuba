@@ -61,7 +61,9 @@ export const ResponseDisplay = ({
     <Accordion classNames={{ item: classes.mainAccordion }}>
       <Accordion.Item value="query-info">
         <Accordion.Control>
-          <Text fw={700}>Query Information</Text>
+          <Text fw={700}>
+            {showTraceLogs ? "Trace Information" : "Query Information"}
+          </Text>
         </Accordion.Control>
         <Accordion.Panel>
           {response.meta?.queryInfo ? (
@@ -98,7 +100,7 @@ export const ResponseDisplay = ({
                         checked={showProfileEvents}
                         onChange={(event) => setShowProfileEvents(event.currentTarget.checked)}
                       />
-                      <ToggleOption active={showProfileEvents}>Profile Events</ToggleOption>
+                      <ToggleOption active={showProfileEvents}>ClickHouse Profile Events</ToggleOption>
                     </Group>
                     {showProfileEvents ? (
                       profileEvents ? (

@@ -26,12 +26,11 @@ export const useStyles = createStyles((theme) => ({
     '& .mantine-Accordion-control': {
       backgroundColor: theme.colors.green[1],
       color: theme.colors.green[7],
-      fontSize: theme.fontSizes.sm,
-      padding: '8px 12px',
-      lineHeight: 1.4,
+      fontSize: '6px',
+      padding: '1px 2px',
+      lineHeight: 1,
       borderBottom: `1px solid ${theme.colors.gray[3]}`,
       cursor: 'pointer',
-      fontWeight: 'bold',
       '&:hover': {
         backgroundColor: theme.colors.green[2],
       },
