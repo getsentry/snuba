@@ -1,11 +1,6 @@
 import React from 'react';
 import { Table, Code } from '@mantine/core';
-import { QueryInfo } from './types';
-
-interface MetadataTableProps {
-  queryInfo: QueryInfo;
-  classes: any;
-}
+import { MetadataTableProps } from 'SnubaAdmin/rpc_endpoints/types';
 
 export const MetadataTable = ({ queryInfo, classes }: MetadataTableProps) => (
   <Table className={classes.table}>

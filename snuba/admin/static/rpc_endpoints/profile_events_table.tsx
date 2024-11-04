@@ -1,11 +1,6 @@
 import React from 'react';
 import { Stack, Title, Table } from '@mantine/core';
-import { HostProfileEvents } from './types';
-
-interface ProfileEventsTableProps {
-  profileEvents: HostProfileEvents[];
-  classes: any;
-}
+import { ProfileEventsTableProps } from 'SnubaAdmin/rpc_endpoints/types';
 
 export const ProfileEventsTable = ({ profileEvents, classes }: ProfileEventsTableProps) => (
   <div className={classes.scrollableDataContainer}>

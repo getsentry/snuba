@@ -1,20 +1,7 @@
 import React from 'react';
 import { Space, Textarea, Checkbox, Button, Loader } from '@mantine/core';
 import { ExampleRequestAccordion } from 'SnubaAdmin/rpc_endpoints/example_request_accordion';
-
-interface RequestInputProps {
-  selectedEndpoint: string | null;
-  selectedVersion: string | null;
-  exampleRequestTemplates: Record<string, Record<string, any>>;
-  requestBody: string;
-  setRequestBody: (value: string) => void;
-  debugMode: boolean;
-  setDebugMode: (value: boolean) => void;
-  isLoading: boolean;
-  handleExecute: () => void;
-  classes: any;
-}
-
+import { RequestInputProps } from 'SnubaAdmin/rpc_endpoints/types';
 const DEBUG_SUPPORTED_VERSIONS = ['v1'];
 
 export const RequestInput = ({

@@ -6,19 +6,7 @@ import { ProfileEventsTable } from 'SnubaAdmin/rpc_endpoints/profile_events_tabl
 import { MetadataTable } from 'SnubaAdmin/rpc_endpoints/metadata_table';
 import { QueryInfo, TracingSummary, HostProfileEvents } from 'SnubaAdmin/rpc_endpoints/types';
 import { useStyles } from 'SnubaAdmin/rpc_endpoints/styles';
-
-interface ResponseDisplayProps {
-  response: any;
-  showTraceLogs: boolean;
-  setShowTraceLogs: (value: boolean) => void;
-  showSummarizedView: boolean;
-  setShowSummarizedView: (value: boolean) => void;
-  summarizedTraceOutput: TracingSummary | null;
-  showProfileEvents: boolean;
-  setShowProfileEvents: (value: boolean) => void;
-  profileEvents: HostProfileEvents[] | null;
-  classes: any;
-}
+import { ResponseDisplayProps } from 'SnubaAdmin/rpc_endpoints/types';
 
 const ToggleOption = ({ active, children }: { active: boolean; children: React.ReactNode }) => {
   const { classes } = useStyles();

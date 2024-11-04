@@ -1,11 +1,6 @@
 import React from 'react';
 import { Select } from '@mantine/core';
-
-interface EndpointSelectorProps {
-  endpoints: Array<{ name: string; version: string }>;
-  selectedEndpoint: string | null;
-  handleEndpointSelect: (value: string | null) => void;
-}
+import { EndpointSelectorProps } from 'SnubaAdmin/rpc_endpoints/types';
 
 export const EndpointSelector = ({
   endpoints,
