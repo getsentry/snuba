@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
@@ -76,11 +77,16 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     for column in request.columns:
         if column.HasField("key"):
             key_col = attribute_key_to_expression(column.key)
+            # The key_col expression alias may differ from the column label. That is okay
+            # the attribute key name is used in the groupby, the column label is just the name of
+            # the returned attribute value
             selected_columns.append(
-                SelectedExpression(name=column.key.name, expression=key_col)
+                SelectedExpression(name=column.label, expression=key_col)
             )
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
+            # aggregation label may not be set and the column label takes priority anyways.
+            function_expr = replace(function_expr, alias=column.label)
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=function_expr)
             )
