@@ -13,7 +13,6 @@ import rapidjson
 import sentry_sdk
 from clickhouse_driver.errors import ErrorCodes
 from sentry_kafka_schemas.schema_types import snuba_queries_v1
-from sentry_sdk import Hub
 from sentry_sdk.api import configure_scope
 
 from snuba import environment, settings, state
@@ -294,7 +293,7 @@ def execute_query_with_readthrough_caching(
     query_id: str,
     referrer: str,
 ) -> Result:
-    span = Hub.current.scope.span
+    span = sentry_sdk.get_current_span()
 
     if referrer in settings.BYPASS_CACHE_REFERRERS and state.get_config(
         "enable_bypass_cache_referrers"
