@@ -24,12 +24,12 @@ from typing import (
 from uuid import UUID
 
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    TraceItemTableRequest,
-    TraceItemTableResponse,
+from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
+    CreateSubscriptionRequest,
 )
-from sentry_protos.snuba.v1.endpoint_trace_item_table_subscription_pb2 import (
-    CreateTraceItemTableSubscriptionRequest,
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
+    TimeSeriesRequest,
+    TimeSeriesResponse,
 )
 
 from snuba.datasets.dataset import Dataset
@@ -49,14 +49,16 @@ from snuba.query.data_source.simple import Entity as EntityDS
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import SubscriptionQuerySettings
-from snuba.reader import Result, Row
+from snuba.reader import Result
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
+from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -69,6 +71,9 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
     "query",
     "tenant_ids",
 }
+
+PROTOBUF_ALLOWLIST = ["TimeSeriesRequest"]
+PROTOBUF_VERSION_ALLOWLIST = ["v1"]
 
 
 class SubscriptionType(Enum):
@@ -133,11 +138,22 @@ class _SubscriptionData(ABC, Generic[TRequest]):
     ) -> TRequest:
         raise NotImplementedError
 
+    @abstractmethod
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        raise NotImplementedError
+
     @classmethod
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> _SubscriptionData:
+    ) -> _SubscriptionData[TRequest]:
         raise NotImplementedError
 
     @abstractmethod
@@ -262,6 +278,22 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         )
         return request
 
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: Request,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        return run_query(
+            dataset,
+            request,
+            timer,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
+        )
+
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
@@ -301,17 +333,33 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
+class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     """
     Represents the state of an RPC subscription.
     """
 
-    trace_item_table_request: str
+    time_series_request: str
     proto_name: str
     proto_version: str
 
-    def validate(self):
+    @property
+    def endpoint(self) -> RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]:
+        return RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse].get_from_name(
+            self.proto_name, self.proto_version
+        )()
+
+    def validate(self) -> None:
         super().validate()
+        if self.proto_name not in PROTOBUF_ALLOWLIST:
+            raise InvalidSubscriptionError(
+                f"{self.proto_name} is not supported. Supported request types are: {PROTOBUF_ALLOWLIST}"
+            )
+
+        if self.proto_version not in PROTOBUF_VERSION_ALLOWLIST:
+            raise InvalidSubscriptionError(
+                f"{self.proto_version} version not supported. Supported versions are: {PROTOBUF_VERSION_ALLOWLIST}"
+            )
+
         # TODO: Validate no group by, having, order by etc
 
     def build_request(
@@ -322,41 +370,32 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> TraceItemTableRequest:
+    ) -> TimeSeriesRequest:
 
-        table_request = TraceItemTableRequest()
-        table_request.ParseFromString(base64.b64decode(self.trace_item_table_request))
+        request_class = self.endpoint.request_class()()
+
+        request_class.ParseFromString(base64.b64decode(self.time_series_request))
         start_time_proto = Timestamp()
         start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
         end_time_proto = Timestamp()
         end_time_proto.FromDatetime(timestamp)
-        table_request.meta.start_timestamp.CopyFrom(start_time_proto)
-        table_request.meta.end_timestamp.CopyFrom(end_time_proto)
+        request_class.meta.start_timestamp.CopyFrom(start_time_proto)
+        request_class.meta.end_timestamp.CopyFrom(end_time_proto)
 
-        return table_request
+        return request_class
 
     def run_query(
         self,
-        request,
-    ):
-        enpdoint = RPCEndpoint.get_from_name(self.proto_name, self.proto_version)()
-        response: TraceItemTableResponse = enpdoint.execute(request)
+        dataset: Dataset,
+        request: TimeSeriesRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        response = self.endpoint.execute(request)
 
-        column_values = response.column_values
-        num_rows = len(column_values[0].results)
-        data = []
-        for i in range(num_rows):
-            data_row: Row = {}
-            for column in column_values:
-                value_key = column.results[i].WhichOneof("value")
-                if value_key:
-                    value = getattr(column.results[i], value_key)
-                else:
-                    value = None
-
-                data_row[column.attribute_name] = value
-
-            data.append(data_row)
+        timeseries = response.result_timeseries[0]
+        data = [{timeseries.label: timeseries.data_points[0].data}]
 
         result: Result = {"meta": [], "data": data, "trace_output": ""}
         return QueryResult(
@@ -369,38 +408,33 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
     ) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
-        metadata = {}
-        for key in data.keys():
-            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
-                metadata[key] = data[key]
-
         return RPCSubscriptionData(
             project_id=data["project_id"],
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
-            trace_item_table_request=data["trace_item_table_request"],
+            time_series_request=data["time_series_request"],
             proto_version=data["proto_version"],
             proto_name=data["proto_name"],
             entity=entity,
-            metadata=metadata,
+            metadata={},
             tenant_ids=data.get("tenant_ids", dict()),
         )
 
     @classmethod
     def from_proto(
-        cls, item: CreateTraceItemTableSubscriptionRequest, entity_key: EntityKey
+        cls, item: CreateSubscriptionRequest, entity_key: EntityKey
     ) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
-        cls = item.table_request.__class__
-        class_name = cls.__name__
-        class_version = cls.__module__.split(".", 3)[2]
+        request_class = item.time_series_request.__class__
+        class_name = request_class.__name__
+        class_version = request_class.__module__.split(".", 3)[2]
 
         return RPCSubscriptionData(
             project_id=item.project_id,
-            time_window_sec=item.time_window,
-            resolution_sec=item.resolution,
-            trace_item_table_request=base64.b64encode(
-                item.table_request.SerializeToString()
+            time_window_sec=item.time_window_secs,
+            resolution_sec=item.resolution_secs,
+            time_series_request=base64.b64encode(
+                item.time_series_request.SerializeToString()
             ).decode("utf-8"),
             entity=entity,
             metadata={},
@@ -414,7 +448,7 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
             "project_id": self.project_id,
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
-            "trace_item_table_request": self.trace_item_table_request,
+            "time_series_request": self.time_series_request,
             "proto_version": self.proto_version,
             "proto_name": self.proto_name,
             "subscription_type": SubscriptionType.RPC.value,
@@ -424,7 +458,7 @@ class RPCSubscriptionData(_SubscriptionData[TraceItemTableRequest]):
 
 
 SubscriptionData = Union[RPCSubscriptionData, SnQLSubscriptionData]
-SubscriptionRequest = Union[Request, TraceItemTableRequest]
+SubscriptionRequest = Union[Request, TimeSeriesRequest]
 
 
 class Subscription(NamedTuple):

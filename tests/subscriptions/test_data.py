@@ -9,7 +9,6 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import run_query
 from tests.subscriptions import BaseSubscriptionTest
 
 TESTS = [
@@ -102,7 +101,7 @@ class TestBuildRequestBase:
                     100,
                     timer,
                 )
-                run_query(self.dataset, request, timer)
+                subscription.run_query(self.dataset, request, timer)  # type: ignore
             return
 
         request = subscription.build_request(
@@ -111,7 +110,7 @@ class TestBuildRequestBase:
             100,
             timer,
         )
-        result = run_query(self.dataset, request, timer)
+        result = subscription.run_query(self.dataset, request, timer)  # type: ignore
 
         assert result.result["data"][0][aggregate] == value
 

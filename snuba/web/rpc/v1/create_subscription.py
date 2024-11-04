@@ -1,10 +1,10 @@
 from typing import Type
 
-from sentry_protos.snuba.v1.endpoint_trace_item_table_subscription_pb2 import (
-    CreateTraceItemTableSubscriptionRequest as CreateSubscriptionRequestProto,
+from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
+    CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
-from sentry_protos.snuba.v1.endpoint_trace_item_table_subscription_pb2 import (
-    CreateTraceItemTableSubscriptionResponse,
+from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
+    CreateSubscriptionResponse,
 )
 
 from snuba.datasets.entities.entity_key import EntityKey
@@ -13,10 +13,8 @@ from snuba.subscriptions.data import RPCSubscriptionData
 from snuba.web.rpc import RPCEndpoint
 
 
-class CreateTraceItemTableSubscriptionRequest(
-    RPCEndpoint[
-        CreateSubscriptionRequestProto, CreateTraceItemTableSubscriptionResponse
-    ]
+class CreateSubscriptionRequest(
+    RPCEndpoint[CreateSubscriptionRequestProto, CreateSubscriptionResponse]
 ):
     @classmethod
     def version(cls) -> str:
@@ -27,12 +25,12 @@ class CreateTraceItemTableSubscriptionRequest(
         return CreateSubscriptionRequestProto
 
     @classmethod
-    def response_class(cls) -> Type[CreateTraceItemTableSubscriptionResponse]:
-        return CreateTraceItemTableSubscriptionResponse
+    def response_class(cls) -> Type[CreateSubscriptionResponse]:
+        return CreateSubscriptionResponse
 
     def _execute(
         self, in_msg: CreateSubscriptionRequestProto
-    ) -> CreateTraceItemTableSubscriptionResponse:
+    ) -> CreateSubscriptionResponse:
         from snuba.subscriptions.subscription import SubscriptionCreator
 
         dataset = PluggableDataset(name="eap", all_entities=[])
@@ -43,4 +41,4 @@ class CreateTraceItemTableSubscriptionRequest(
             subscription, self._timer
         )
 
-        return CreateTraceItemTableSubscriptionResponse(subscription_id=str(identifier))
+        return CreateSubscriptionResponse(subscription_id=str(identifier))
