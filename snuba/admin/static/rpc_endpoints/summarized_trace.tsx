@@ -52,7 +52,7 @@ function SummarizedTraceDisplay({ value, classes }: { value: TracingSummary, cla
   let dist_node;
   let nodes = [];
 
-  for (const [host, summary] of Object.entries(value.query_summaries)) {
+  for (const [_, summary] of Object.entries(value.query_summaries)) {
     if (summary.is_distributed) {
       dist_node = summary;
     } else {
