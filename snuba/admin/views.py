@@ -738,9 +738,10 @@ def clickhouse_querylog_query() -> Response:
         }
         return make_response(jsonify({"error": details}), 400)
     except InvalidCustomQuery as err:
-        return make_response(
-            jsonify({"error": {"message": str(err)}}),
+        return Response(
+            json.dumps({"error": {"message": str(err)}}, indent=4),
             400,
+            {"Content-Type": "application/json"},
         )
     except Exception as err:
         return make_response(
