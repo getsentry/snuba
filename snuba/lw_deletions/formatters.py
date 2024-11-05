@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import MutableMapping, Sequence
+from typing import Mapping, MutableMapping, Sequence, Type
 
 from attr import dataclass
 
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.bulk_delete_query import ConditionsType, DeleteQueryMessage
 
 
@@ -51,3 +52,8 @@ class SearchIssuesFormatter(Formatter):
                 }
             )
         return and_conditions
+
+
+STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
+    StorageKey.SEARCH_ISSUES.value: SearchIssuesFormatter
+}

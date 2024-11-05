@@ -18,7 +18,7 @@ from snuba.consumers.consumer_config import resolve_consumer_config
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
-from snuba.lw_deletions.formatters import SearchIssuesFormatter
+from snuba.lw_deletions.formatters import STORAGE_FORMATTER
 from snuba.lw_deletions.strategy import ConsumerStrategyFactory
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
@@ -143,11 +143,12 @@ def lw_deletions_consumer(
         )
 
         storage = get_writable_storage(StorageKey(storage_name))
+        formatter = STORAGE_FORMATTER[storage_name]()
         strategy_factory = ConsumerStrategyFactory(
             max_batch_size=max_batch_size,
             max_batch_time_ms=max_batch_time_ms,
             storage=storage,
-            formatter=SearchIssuesFormatter(),
+            formatter=formatter,
         )
 
         consumer = consumer_builder.build_lw_deletions_consumer(strategy_factory)
