@@ -177,20 +177,20 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.type == AttributeKey.Type.TYPE_INT:
         return f.CAST(
             SubscriptableReference(
-                alias=alias,
-                column=column("attr_num"),
-                key=literal(attr_key.name),
+                column=column("attr_num"), key=literal(attr_key.name), alias=None
             ),
             "Int64",
+            alias=alias,
         )
     if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
         return f.CAST(
             SubscriptableReference(
-                alias=alias,
+                alias=None,
                 column=column("attr_num"),
                 key=literal(attr_key.name),
             ),
             "Boolean",
+            alias=alias,
         )
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
