@@ -177,7 +177,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.type == AttributeKey.Type.TYPE_INT:
         return f.CAST(
             SubscriptableReference(
-                column=column("attr_num"), key=literal(attr_key.name), alias=None
+                alias=None, column=column("attr_num"), key=literal(attr_key.name)
             ),
             "Int64",
             alias=alias,
