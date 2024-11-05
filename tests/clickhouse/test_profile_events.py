@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
 from flask import g, json
 
 from snuba.admin.clickhouse.profile_events import (
@@ -11,12 +10,12 @@ from snuba.admin.clickhouse.profile_events import (
 from snuba.admin.clickhouse.tracing import QueryTraceData
 
 
-def test_hostname_resolves():
+def test_hostname_resolves() -> None:
     assert hostname_resolves("localhost") == True
     assert hostname_resolves("invalid-hostname-that-doesnt-exist-123.local") == False
 
 
-def test_parse_trace_for_query_ids():
+def test_parse_trace_for_query_ids() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
@@ -49,8 +48,7 @@ def test_parse_trace_for_query_ids():
         )
 
 
-@pytest.mark.clickhouse_db
-def test_gather_profile_events():
+def test_gather_profile_events() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
@@ -99,8 +97,7 @@ def test_gather_profile_events():
                 }
 
 
-@pytest.mark.clickhouse_db
-def test_gather_profile_events_retry_logic():
+def test_gather_profile_events_retry_logic() -> None:
     trace_output = MagicMock()
     trace_output.summarized_trace_output.query_summaries = {
         "host1": MagicMock(query_id="query1"),
