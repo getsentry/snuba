@@ -46,6 +46,9 @@ class TooManyOngoingMutationsError(Exception):
     pass
 
 
+ConditionsType = Mapping[str, Sequence[str | int | float]]
+
+
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
