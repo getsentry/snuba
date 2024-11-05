@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -35,6 +35,8 @@ from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
 
+ConditionsType = Mapping[str, Sequence[str | int | float]]
+
 
 class DeletesNotEnabledError(Exception):
     pass
@@ -47,7 +49,7 @@ class TooManyOngoingMutationsError(Exception):
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
-    columns: Dict[str, list[Any]],
+    columns: ConditionsType,
     attribution_info: Mapping[str, Any],
 ) -> dict[str, Result]:
     """
@@ -108,7 +110,7 @@ def delete_from_storage(
 def _delete_from_table(
     storage: WritableTableStorage,
     table: str,
-    conditions: Dict[str, Any],
+    conditions: ConditionsType,
     attribution_info: AttributionInfo,
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
@@ -345,7 +347,7 @@ def _execute_query(
         )
 
 
-def _construct_condition(columns: Dict[str, Any]) -> Expression:
+def _construct_condition(columns: ConditionsType) -> Expression:
     and_conditions = []
     for col, values in columns.items():
         if len(values) == 1:
