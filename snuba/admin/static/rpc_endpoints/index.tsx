@@ -39,7 +39,6 @@ function RpcEndpoints() {
   const handleEndpointSelect = (value: string | null) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      abortControllerRef.current = null;
     }
 
     setSelectedEndpoint(value);
@@ -98,6 +97,11 @@ function RpcEndpoints() {
       alert(`Error: ${error.message}`);
       setResponse({ error: error.message });
       setIsLoading(false);
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setIsLoading(false);
     }
   };
 
@@ -105,10 +109,11 @@ function RpcEndpoints() {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
-        setResponse(null);
-        setSummarizedTraceOutput(null);
-        setProfileEvents(null);
+        abortControllerRef.current = null;
       }
+      setResponse(null);
+      setSummarizedTraceOutput(null);
+      setProfileEvents(null);
     };
   }, []);
 

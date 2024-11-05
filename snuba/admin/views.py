@@ -614,34 +614,58 @@ def summarize_trace_with_profile() -> Response:
     try:
         req = json.loads(request.data)
         trace_logs = req.get("trace_logs")
+        storage = req.get("storage", "default")
 
-        if trace_logs:
-            summarized_trace_output = summarize_trace_output(trace_logs)
-            trace_output = TraceOutput(
-                trace_output=trace_logs,
-                summarized_trace_output=summarized_trace_output,
-                cols=[],
-                num_rows_result=0,
-                result=[],
-                profile_events_results={},
-                profile_events_meta=[],
-                profile_events_profile={},
-            )
-            storage = req.get("storage", "default")
-            gather_profile_events(trace_output, storage)
-            return make_response(jsonify(asdict(trace_output)), 200)
-        else:
+        if trace_logs is None:
             return make_response(
                 jsonify(
                     {
                         "error": {
-                            "type": "request",
-                            "message": "Invalid request. Must provide either (trace_logs) or (storage, sql)",
+                            "type": "validation",
+                            "message": "Missing required field: trace_logs",
                         }
                     }
                 ),
                 400,
             )
+        if not isinstance(trace_logs, str):
+            return make_response(
+                jsonify(
+                    {
+                        "error": {
+                            "type": "validation",
+                            "message": "trace_logs must be a string",
+                        }
+                    }
+                ),
+                400,
+            )
+        if not trace_logs.strip():
+            return make_response(
+                jsonify(
+                    {
+                        "error": {
+                            "type": "validation",
+                            "message": "trace_logs cannot be empty",
+                        }
+                    }
+                ),
+                400,
+            )
+
+        summarized_trace_output = summarize_trace_output(trace_logs)
+        trace_output = TraceOutput(
+            trace_output=trace_logs,
+            summarized_trace_output=summarized_trace_output,
+            cols=[],
+            num_rows_result=0,
+            result=[],
+            profile_events_results={},
+            profile_events_meta=[],
+            profile_events_profile={},
+        )
+        gather_profile_events(trace_output, storage)
+        return make_response(jsonify(asdict(trace_output)), 200)
     except InvalidCustomQuery as err:
         return make_response(
             jsonify(
@@ -656,17 +680,16 @@ def summarize_trace_with_profile() -> Response:
         )
     except ClickhouseError as err:
         logger.error(err, exc_info=True)
-        details = {
-            "type": "clickhouse",
-            "message": str(err),
-            "code": err.code,
-        }
-        return make_response(jsonify({"error": details}), 400)
+        return make_response(
+            jsonify(
+                {"error": {"type": "clickhouse", "message": str(err), "code": err.code}}
+            ),
+            400,
+        )
     except Exception as err:
         logger.error(err, exc_info=True)
         return make_response(
-            jsonify({"error": {"type": "unknown", "message": str(err)}}),
-            500,
+            jsonify({"error": {"type": "unknown", "message": str(err)}}), 500
         )
 
 
