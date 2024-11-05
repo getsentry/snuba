@@ -1,5 +1,6 @@
 from devenv import constants
-from devenv.lib import brew, config, colima, limactl, proc
+from devenv.lib import brew, colima, config, limactl, proc
+
 
 def main(context: dict[str, str]) -> int:
     reporoot = context["reporoot"]
