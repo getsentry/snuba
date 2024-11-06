@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
     required=True,
 )
 @click.option(
-    "--bootstrap-servers",
+    "--bootstrap-server",
     multiple=True,
     help="Kafka bootstrap server to use for consuming.",
 )
@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 def lw_deletions_consumer(
     *,
     consumer_group: str,
-    bootstrap_servers: Sequence[str],
+    bootstrap_server: Sequence[str],
     storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -112,7 +112,7 @@ def lw_deletions_consumer(
             raw_topic=topic.value,
             commit_log_topic=None,
             replacements_topic=None,
-            bootstrap_servers=bootstrap_servers,
+            bootstrap_servers=bootstrap_server,
             commit_log_bootstrap_servers=[],
             replacement_bootstrap_servers=[],
             slice_id=None,

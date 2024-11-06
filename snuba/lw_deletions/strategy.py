@@ -19,12 +19,9 @@ from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import get_int_config
-from snuba.web.bulk_delete_query import (
-    ConditionsType,
-    construct_or_conditions,
-    construct_query,
-)
+from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
 from snuba.web.delete_query import (
+    ConditionsType,
     TooManyOngoingMutationsError,
     _execute_query,
     _num_ongoing_mutations,

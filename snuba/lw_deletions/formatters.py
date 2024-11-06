@@ -4,7 +4,8 @@ from typing import Mapping, MutableMapping, Sequence, Type
 from attr import dataclass
 
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.bulk_delete_query import ConditionsType, DeleteQueryMessage
+from snuba.web.bulk_delete_query import DeleteQueryMessage
+from snuba.web.delete_query import ConditionsType
 
 
 class Formatter(ABC):

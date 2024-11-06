@@ -15,7 +15,8 @@ from snuba.lw_deletions.batching import BatchStepCustom
 from snuba.lw_deletions.formatters import SearchIssuesFormatter
 from snuba.lw_deletions.strategy import FormatQuery, increment_by
 from snuba.utils.streams.topics import Topic as SnubaTopic
-from snuba.web.bulk_delete_query import ConditionsType, DeleteQueryMessage
+from snuba.web.bulk_delete_query import DeleteQueryMessage
+from snuba.web.delete_query import ConditionsType
 
 ROWS_CONDITIONS = {
     5: {"project_id": [1], "group_id": [1, 2, 3, 4]},
