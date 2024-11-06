@@ -100,7 +100,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                 ),
             ),
-            limit=1000,
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
             value_substring_match="",
         )
@@ -113,23 +113,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     name=f"a_tag_{str(i).zfill(3)}", type=AttributeKey.Type.TYPE_STRING
                 )
             )
-        expected += [
-            TraceItemAttributeNamesResponse.Attribute(
-                name="http.status_code", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.category", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.name", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.segment_name", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.service", type=AttributeKey.Type.TYPE_STRING
-            ),
-        ]
         assert res.attributes == expected
 
     def test_simple_float(self) -> None:
@@ -146,7 +129,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                 ),
             ),
-            limit=1000,
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_FLOAT,
             value_substring_match="",
         )
@@ -159,11 +142,6 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     type=AttributeKey.Type.TYPE_FLOAT,
                 )
             )
-        expected.append(
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.duration_ms", type=AttributeKey.Type.TYPE_FLOAT
-            )
-        )
         assert res.attributes == expected
 
     def test_with_filter(self) -> None:
@@ -180,7 +158,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                 ),
             ),
-            limit=1000,
+            limit=TOTAL_GENERATED_ATTR_PER_TYPE,
             type=AttributeKey.Type.TYPE_STRING,
             value_substring_match="28",
         )
@@ -203,28 +181,11 @@ class TestTraceItemAttributeNames(BaseApiTest):
                     type=AttributeKey.Type.TYPE_STRING,
                 )
             )
-        expected_attributes += [
-            TraceItemAttributeNamesResponse.Attribute(
-                name="http.status_code", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.category", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.name", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.segment_name", type=AttributeKey.Type.TYPE_STRING
-            ),
-            TraceItemAttributeNamesResponse.Attribute(
-                name="sentry.service", type=AttributeKey.Type.TYPE_STRING
-            ),
-        ]
-        # we just get the first 10
-        limit = 10
+        # grab 10 at a time until we get them all
+        done = 0
         page_token = None
-        while True:
-            # and grab `limit` at a time until we get them all
+        at_a_time = 10
+        while done < TOTAL_GENERATED_ATTR_PER_TYPE:
             req = TraceItemAttributeNamesRequest(
                 meta=RequestMeta(
                     project_ids=[1, 2, 3],
@@ -238,20 +199,16 @@ class TestTraceItemAttributeNames(BaseApiTest):
                         seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
                     ),
                 ),
-                limit=limit,
+                limit=at_a_time,
                 type=AttributeKey.Type.TYPE_STRING,
                 value_substring_match="",
                 page_token=page_token,
             )
             res = EndpointTraceItemAttributeNames().execute(req)
             page_token = res.page_token
-            reslen = len(res.attributes)
-            if reslen == 0:
-                # we are done, we got everything
-                break
-            else:
-                assert res.attributes == expected_attributes[:reslen]
-                expected_attributes = expected_attributes[reslen:]
+            assert res.attributes == expected_attributes[:at_a_time]
+            expected_attributes = expected_attributes[at_a_time:]
+            done += at_a_time
         assert expected_attributes == []
 
     def test_page_token_offset_filter(self) -> None:
