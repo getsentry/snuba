@@ -71,20 +71,22 @@ class TestCommon:
             AttributeKey(type=AttributeKey.TYPE_INT, name="derp"),
         ) == f.CAST(
             SubscriptableReference(
-                alias="derp",
+                alias=None,
                 column=column("attr_num"),
                 key=literal("derp"),
             ),
             "Int64",
+            alias="derp",
         )
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_BOOLEAN, name="derp"),
         ) == f.CAST(
             SubscriptableReference(
-                alias="derp",
+                alias=None,
                 column=column("attr_num"),
                 key=literal("derp"),
             ),
             "Boolean",
+            alias="derp",
         )
