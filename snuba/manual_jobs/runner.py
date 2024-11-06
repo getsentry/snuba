@@ -41,7 +41,7 @@ MANIFEST_FILENAME = "job_manifest.json"
 
 
 def _read_manifest_from_path(filename: str) -> Mapping[str, JobSpec]:
-    local_root = os.path.dirname(__file__)
+    local_root = os.path.join(os.path.dirname(__file__), "..", "env")
 
     with open(os.path.join(local_root, filename)) as stream:
         contents = simplejson.loads(stream.read())
