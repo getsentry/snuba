@@ -31,6 +31,7 @@ def map_logical_partition_to_slice(
     assert (
         storage_set.value in LOGICAL_PARTITION_MAPPING
     ), f"logical partition mapping missing for storage set {storage_set}"
+
     return LOGICAL_PARTITION_MAPPING[storage_set.value][logical_partition]
 
 

@@ -396,7 +396,11 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     ) -> QueryResult:
         response = EndpointTimeSeries().execute(request)
         if not response.result_timeseries:
-            result: Result = {"meta": [], "data": [], "trace_output": ""}
+            result: Result = {
+                "meta": [],
+                "data": [{request.aggregations[0].label: 0}],
+                "trace_output": "",
+            }
             return QueryResult(
                 result=result, extra={"stats": {}, "sql": "", "experiments": {}}
             )

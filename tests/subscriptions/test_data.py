@@ -2,12 +2,32 @@ from datetime import datetime
 from typing import Optional, Type, Union
 
 import pytest
+from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
+    CreateSubscriptionRequest as CreateSubscriptionRequestProto,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeAggregation,
+    AttributeKey,
+    AttributeValue,
+    ExtrapolationMode,
+    Function,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.query.exceptions import InvalidQueryException
-from snuba.subscriptions.data import SnQLSubscriptionData, SubscriptionData
+from snuba.subscriptions.data import (
+    RPCSubscriptionData,
+    SnQLSubscriptionData,
+    SubscriptionData,
+)
 from snuba.utils.metrics.timer import Timer
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -26,6 +46,7 @@ TESTS = [
             entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
+        10,
         None,
         id="SnQL subscription",
     ),
@@ -42,6 +63,7 @@ TESTS = [
             entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
+        10,
         None,
         id="SnQL subscription",
     ),
@@ -59,6 +81,7 @@ TESTS = [
             entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
+        None,
         InvalidQueryException,
         id="SnQL subscription with 2 many aggregates",
     ),
@@ -76,8 +99,80 @@ TESTS = [
             entity=get_entity(EntityKey.EVENTS),
             metadata={},
         ),
+        None,
         InvalidQueryException,
         id="SnQL subscription with disallowed clause",
+    ),
+    pytest.param(
+        RPCSubscriptionData.from_proto(
+            CreateSubscriptionRequestProto(
+                time_series_request=TimeSeriesRequest(
+                    meta=RequestMeta(
+                        project_ids=[1, 2, 3],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                    ),
+                    aggregations=[
+                        AttributeAggregation(
+                            aggregate=Function.FUNCTION_COUNT,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            ),
+                            label="count",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        ),
+                    ],
+                    granularity_secs=3600,
+                ),
+                time_window_secs=3600,
+                resolution_secs=60,
+            ),
+            EntityKey.EAP_SPANS,
+        ),
+        20.0,
+        None,
+        id="RPC subscription",
+    ),
+    pytest.param(
+        RPCSubscriptionData.from_proto(
+            CreateSubscriptionRequestProto(
+                time_series_request=TimeSeriesRequest(
+                    meta=RequestMeta(
+                        project_ids=[1, 2, 3],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                    ),
+                    aggregations=[
+                        AttributeAggregation(
+                            aggregate=Function.FUNCTION_COUNT,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            ),
+                            label="count",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        ),
+                    ],
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_STRING, name="sentry.sdk.version"
+                            ),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_str="3.0.0"),
+                        )
+                    ),
+                    granularity_secs=3600,
+                ),
+                time_window_secs=3600,
+                resolution_secs=60,
+            ),
+            EntityKey.EAP_SPANS,
+        ),
+        0.0,
+        None,
+        id="RPC subscription with filter",
     ),
 ]
 
@@ -116,10 +211,13 @@ class TestBuildRequestBase:
 
 
 class TestBuildRequest(BaseSubscriptionTest, TestBuildRequestBase):
-    @pytest.mark.parametrize("subscription, exception", TESTS)
+    @pytest.mark.parametrize("subscription, expected_value, exception", TESTS)
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test_conditions(
-        self, subscription: SubscriptionData, exception: Optional[Type[Exception]]
+        self,
+        subscription: SubscriptionData,
+        expected_value: Optional[int | float],
+        exception: Optional[Type[Exception]],
     ) -> None:
-        self.compare_conditions(subscription, exception, "count", 10)
+        self.compare_conditions(subscription, exception, "count", expected_value)
