@@ -58,7 +58,7 @@
     "jest-environment-jsdom": "^29.5.0",
     "react-bootstrap": "^2.7.4",
     "resize-observer-polyfill": "^1.5.1",
-    "ts-jest": "^29.1.2",
+    "ts-jest": "^29.2.5",
     "use-resize-observer": "^9.1.0",
     "webpack": "^5.96.1",
     "webpack-cli": "^4.10.0"
