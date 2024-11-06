@@ -15,6 +15,7 @@ from snuba.consumers.consumer_builder import (
     ProcessingParameters,
 )
 from snuba.consumers.consumer_config import resolve_consumer_config
+from snuba.datasets.deletion_settings import MAX_ROWS_TO_DELETE_DEFAULT
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
@@ -23,6 +24,10 @@ from snuba.lw_deletions.strategy import ConsumerStrategyFactory
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.web.bulk_delete_query import STORAGE_TOPIC
+
+# A longer batch time for deletes is reasonable
+# since we want fewer mutations
+DEFAULT_DELETIONS_MAX_BATCH_TIME_MS = 60000 * 2
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +45,18 @@ logger = logging.getLogger(__name__)
     help="Kafka bootstrap server to use for consuming.",
 )
 @click.option("--storage-name", help="Storage name to consume from", required=True)
+@click.option(
+    "--max-rows-batch-size",
+    default=MAX_ROWS_TO_DELETE_DEFAULT,
+    type=int,
+    help="Max amount of rows to delete at one time.",
+)
+@click.option(
+    "--max-batch-time-ms",
+    default=DEFAULT_DELETIONS_MAX_BATCH_TIME_MS,
+    type=int,
+    help="Max duration to buffer messages in memory for.",
+)
 @click.option(
     "--auto-offset-reset",
     default="earliest",
@@ -69,7 +86,7 @@ def lw_deletions_consumer(
     consumer_group: str,
     bootstrap_server: Sequence[str],
     storage_name: str,
-    max_batch_size: int,
+    max_rows_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
     no_strict_offset_reset: bool,
@@ -116,7 +133,7 @@ def lw_deletions_consumer(
             commit_log_bootstrap_servers=[],
             replacement_bootstrap_servers=[],
             slice_id=None,
-            max_batch_size=max_batch_size,
+            max_batch_size=max_rows_batch_size,
             max_batch_time_ms=max_batch_time_ms,
             group_instance_id=consumer_group,
         )
@@ -131,7 +148,7 @@ def lw_deletions_consumer(
                 queued_min_messages=queued_min_messages,
             ),
             processing_params=ProcessingParameters(None, None, None),
-            max_batch_size=max_batch_size,
+            max_batch_size=max_rows_batch_size,
             max_batch_time_ms=max_batch_time_ms,
             max_insert_batch_size=0,
             max_insert_batch_time_ms=0,
@@ -145,7 +162,7 @@ def lw_deletions_consumer(
         storage = get_writable_storage(StorageKey(storage_name))
         formatter = STORAGE_FORMATTER[storage_name]()
         strategy_factory = ConsumerStrategyFactory(
-            max_batch_size=max_batch_size,
+            max_batch_size=max_rows_batch_size,
             max_batch_time_ms=max_batch_time_ms,
             storage=storage,
             formatter=formatter,
