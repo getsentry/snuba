@@ -9,6 +9,14 @@ from snuba.web.delete_query import ConditionsType
 
 
 class Formatter(ABC):
+    """
+    Simple class with just a format method, which should
+    be implemented for each storage type used for deletes.
+
+    The `format` method takes a list of batched up messages
+    and formats the conditions for the storage, if needed.
+    """
+
     @abstractmethod
     def format(
         self, messages: Sequence[DeleteQueryMessage]
@@ -30,6 +38,20 @@ class SearchIssuesFormatter(Formatter):
     def format(
         self, messages: Sequence[DeleteQueryMessage]
     ) -> Sequence[ConditionsType]:
+        """
+        For the search issues storage we want the additional
+        formatting step of combining group ids for messages
+        that have the same project id.
+
+        ex.
+            project_id [1] and group_id [1, 2]
+            project_id [1] and group_id [3, 4]
+
+        would be grouped into one condition:
+
+            project_id [1] and group_id [1, 2, 3, 4]
+
+        """
         mapping: MutableMapping[int, SearchIssueCondition] = {}
         for message in messages:
             project_id = message["conditions"]["project_id"][0]
