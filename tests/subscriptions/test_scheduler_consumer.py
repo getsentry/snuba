@@ -1,4 +1,5 @@
 import importlib
+import json
 import logging
 import time
 import uuid
@@ -17,6 +18,22 @@ from arroyo.types import BrokerValue, Partition, Topic
 from arroyo.utils.clock import TestingClock
 from confluent_kafka.admin import AdminClient
 from py._path.local import LocalPath
+from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
+    CreateSubscriptionRequest as CreateSubscriptionRequestProto,
+)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeAggregation,
+    AttributeKey,
+    AttributeValue,
+    ExtrapolationMode,
+    Function,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
 
 from snuba import settings
 from snuba.datasets.entities.entity_key import EntityKey
@@ -137,6 +154,153 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
 
     assert (tmpdir / "health.txt").check()
     assert mock_scheduler_producer.produce.call_count == 2
+
+    settings.TOPIC_PARTITION_COUNTS = {}
+
+
+@pytest.mark.redis_db
+def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
+    settings.TOPIC_PARTITION_COUNTS = {"snuba-spans": 2}
+    importlib.reload(scheduler_consumer)
+
+    admin_client = AdminClient(get_default_kafka_configuration())
+    create_topics(admin_client, [SnubaTopic.EAP_SPANS_COMMIT_LOG])
+
+    metrics_backend = TestingMetricsBackend()
+    entity_name = "eap_spans"
+    entity = get_entity(EntityKey(entity_name))
+    storage = entity.get_writable_storage()
+    assert storage is not None
+    stream_loader = storage.get_table_writer().get_stream_loader()
+
+    commit_log_topic = Topic("snuba-eap-spans-commit-log")
+
+    mock_scheduler_producer = mock.Mock()
+
+    from snuba.redis import RedisClientKey, get_redis_client
+    from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
+    from snuba.subscriptions.store import RedisSubscriptionDataStore
+
+    entity_key = EntityKey(entity_name)
+    partition_index = 0
+
+    store = RedisSubscriptionDataStore(
+        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+        entity_key,
+        PartitionId(partition_index),
+    )
+    entity = get_entity(EntityKey.EVENTS)
+    store.create(
+        uuid.uuid4(),
+        RPCSubscriptionData.from_proto(
+            CreateSubscriptionRequestProto(
+                time_series_request=TimeSeriesRequest(
+                    meta=RequestMeta(
+                        project_ids=[1, 2, 3],
+                        organization_id=1,
+                        cogs_category="something",
+                        referrer="something",
+                    ),
+                    aggregations=[
+                        AttributeAggregation(
+                            aggregate=Function.FUNCTION_SUM,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                            ),
+                            label="sum",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        ),
+                    ],
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"),
+                            op=ComparisonFilter.OP_NOT_EQUALS,
+                            value=AttributeValue(val_str="bar"),
+                        )
+                    ),
+                    granularity_secs=300,
+                ),
+                time_window_secs=300,
+                resolution_secs=60,
+            ),
+            EntityKey.EAP_SPANS,
+        ),
+    )
+
+    builder = scheduler_consumer.SchedulerBuilder(
+        entity_name,
+        str(uuid.uuid1().hex),
+        "eap_spans",
+        [],
+        mock_scheduler_producer,
+        "latest",
+        False,
+        60 * 5,
+        None,
+        metrics_backend,
+        health_check_file=(tmpdir / "health.txt").strpath,
+    )
+    scheduler = builder.build_consumer()
+    time.sleep(2)
+    scheduler._run_once()
+    scheduler._run_once()
+    scheduler._run_once()
+
+    epoch = 1000
+
+    producer = KafkaProducer(
+        build_kafka_producer_configuration(
+            stream_loader.get_default_topic_spec().topic,
+        )
+    )
+
+    for partition, offset, ts in [
+        (0, 0, epoch),
+        (1, 0, epoch + 60),
+        (0, 1, epoch + 120),
+        (1, 1, epoch + 180),
+    ]:
+        fut = producer.produce(
+            commit_log_topic,
+            payload=commit_codec.encode(
+                Commit(
+                    "eap_spans",
+                    Partition(commit_log_topic, partition),
+                    offset,
+                    ts,
+                    ts,
+                )
+            ),
+        )
+        fut.result()
+
+    producer.close()
+
+    for _ in range(5):
+        scheduler._run_once()
+
+    scheduler._shutdown()
+
+    assert (tmpdir / "health.txt").check()
+    assert mock_scheduler_producer.produce.call_count == 2
+    assert json.loads(
+        mock_scheduler_producer.produce.call_args_list[0][0][1].value
+    ) == {
+        "timestamp": "1970-01-01T00:16:00",
+        "entity": "eap_spans",
+        "task": {
+            "data": {
+                "project_id": 0,
+                "time_window": 300,
+                "resolution": 60,
+                "time_series_request": "Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSABIKwC",
+                "request_version": "v1",
+                "request_name": "TimeSeriesRequest",
+                "subscription_type": "rpc",
+            }
+        },
+        "tick_upper_offset": 1,
+    }
 
     settings.TOPIC_PARTITION_COUNTS = {}
 

@@ -9,7 +9,6 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.subscriptions.data import RPCSubscriptionData
 from snuba.web.rpc import RPCEndpoint
 
 
@@ -31,6 +30,7 @@ class CreateSubscriptionRequest(
     def _execute(
         self, in_msg: CreateSubscriptionRequestProto
     ) -> CreateSubscriptionResponse:
+        from snuba.subscriptions.data import RPCSubscriptionData
         from snuba.subscriptions.subscription import SubscriptionCreator
 
         dataset = PluggableDataset(name="eap", all_entities=[])

@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from functools import partial
 from typing import (
@@ -27,10 +27,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
-from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    TimeSeriesRequest,
-    TimeSeriesResponse,
-)
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -59,7 +56,7 @@ from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryResult
 from snuba.web.query import run_query
-from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -339,25 +336,20 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     """
 
     time_series_request: str
-    proto_name: str
-    proto_version: str
 
-    @property
-    def endpoint(self) -> RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]:
-        return RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse].get_from_name(
-            self.proto_name, self.proto_version
-        )()
+    request_name: str
+    request_version: str
 
     def validate(self) -> None:
         super().validate()
-        if self.proto_name not in PROTOBUF_ALLOWLIST:
+        if self.request_name not in PROTOBUF_ALLOWLIST:
             raise InvalidSubscriptionError(
-                f"{self.proto_name} is not supported. Supported request types are: {PROTOBUF_ALLOWLIST}"
+                f"{self.request_name} is not supported. Supported request types are: {PROTOBUF_ALLOWLIST}"
             )
 
-        if self.proto_version not in PROTOBUF_VERSION_ALLOWLIST:
+        if self.request_version not in PROTOBUF_VERSION_ALLOWLIST:
             raise InvalidSubscriptionError(
-                f"{self.proto_version} version not supported. Supported versions are: {PROTOBUF_VERSION_ALLOWLIST}"
+                f"{self.request_version} version not supported. Supported versions are: {PROTOBUF_VERSION_ALLOWLIST}"
             )
 
         # TODO: Validate no group by, having, order by etc
@@ -372,13 +364,23 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         referrer: str = SUBSCRIPTION_REFERRER,
     ) -> TimeSeriesRequest:
 
-        request_class = self.endpoint.request_class()()
-
+        request_class = EndpointTimeSeries().request_class()()
         request_class.ParseFromString(base64.b64decode(self.time_series_request))
+
+        # TODO: update it to round to the lowest granularity
+        # rounded_ts = int(timestamp.replace(tzinfo=UTC).timestamp() / 15) * 15
+        rounded_ts = (
+            int(timestamp.replace(tzinfo=UTC).timestamp() / self.time_window_sec)
+            * self.time_window_sec
+        )
+        rounded_start = datetime.utcfromtimestamp(rounded_ts)
+
         start_time_proto = Timestamp()
-        start_time_proto.FromDatetime(timestamp - timedelta(self.time_window_sec))
+        start_time_proto.FromDatetime(
+            rounded_start - timedelta(seconds=self.time_window_sec)
+        )
         end_time_proto = Timestamp()
-        end_time_proto.FromDatetime(timestamp)
+        end_time_proto.FromDatetime(rounded_start)
         request_class.meta.start_timestamp.CopyFrom(start_time_proto)
         request_class.meta.end_timestamp.CopyFrom(end_time_proto)
 
@@ -392,7 +394,12 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         robust: bool = False,
         concurrent_queries_gauge: Optional[Gauge] = None,
     ) -> QueryResult:
-        response = self.endpoint.execute(request)
+        response = EndpointTimeSeries().execute(request)
+        if not response.result_timeseries:
+            result: Result = {"meta": [], "data": [], "trace_output": ""}
+            return QueryResult(
+                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+            )
 
         timeseries = response.result_timeseries[0]
         data = [{timeseries.label: timeseries.data_points[0].data}]
@@ -413,10 +420,10 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
             time_window_sec=int(data["time_window"]),
             resolution_sec=int(data["resolution"]),
             time_series_request=data["time_series_request"],
-            proto_version=data["proto_version"],
-            proto_name=data["proto_name"],
+            request_version=data["request_version"],
+            request_name=data["request_name"],
             entity=entity,
-            metadata={},
+            metadata=data.get("metadata", dict()),
             tenant_ids=data.get("tenant_ids", dict()),
         )
 
@@ -429,6 +436,10 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         class_name = request_class.__name__
         class_version = request_class.__module__.split(".", 3)[2]
 
+        metadata = dict()
+        if item.time_series_request.meta:
+            metadata["organization"] = item.time_series_request.meta.organization_id
+
         return RPCSubscriptionData(
             project_id=item.project_id,
             time_window_sec=item.time_window_secs,
@@ -437,10 +448,10 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
                 item.time_series_request.SerializeToString()
             ).decode("utf-8"),
             entity=entity,
-            metadata={},
+            metadata=metadata,
             tenant_ids={},
-            proto_version=class_version,
-            proto_name=class_name,
+            request_version=class_version,
+            request_name=class_name,
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -449,9 +460,10 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "time_series_request": self.time_series_request,
-            "proto_version": self.proto_version,
-            "proto_name": self.proto_name,
+            "request_version": self.request_version,
+            "request_name": self.request_name,
             "subscription_type": SubscriptionType.RPC.value,
+            "metadata": self.metadata,
         }
 
         return subscription_data_dict

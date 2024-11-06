@@ -37,7 +37,7 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
 
-        if data.get("subscription_type") == SubscriptionType.RPC:
+        if data.get("subscription_type") == SubscriptionType.RPC.value:
             return RPCSubscriptionData.from_dict(data, self.entity_key)
 
         return SnQLSubscriptionData.from_dict(data, self.entity_key)

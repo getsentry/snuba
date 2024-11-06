@@ -3,6 +3,7 @@ The number of logical partitions used to distinguish between where records
 should be stored. These do not require individual physical partitions but allow
 for repartitioning with less code changes per physical change.
 """
+
 from snuba.clusters.storage_sets import StorageSetKey
 
 SENTRY_LOGICAL_PARTITIONS = 256
@@ -30,7 +31,6 @@ def map_logical_partition_to_slice(
     assert (
         storage_set.value in LOGICAL_PARTITION_MAPPING
     ), f"logical partition mapping missing for storage set {storage_set}"
-
     return LOGICAL_PARTITION_MAPPING[storage_set.value][logical_partition]
 
 
