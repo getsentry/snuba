@@ -257,7 +257,8 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
                 suggestion=SUGGESTION,
             )
 
-        if granted_quota.granted < throttle_threshold:
+        # this checks to see if you reached the throttle threshold
+        if granted_quota.granted < scan_limit - throttle_threshold:
             self.metrics.increment(
                 "bytes_scanned_queries_throttled",
                 tags={"referrer": str(tenant_ids.get("referrer", "no_referrer"))},
