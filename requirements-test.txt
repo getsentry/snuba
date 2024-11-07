@@ -8,6 +8,6 @@ types-python-dateutil==2.8.19
 types-python-jose==3.3.0
 types-pyyaml==6.0.11
 types-requests==2.32.0.20240907
-types-setuptools==65.3.0
+types-setuptools==74.1.0.20240907
 types-simplejson==3.17.7
 types-google-cloud-ndb==2.2.0
