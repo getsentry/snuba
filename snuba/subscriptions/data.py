@@ -408,7 +408,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         timeseries = response.result_timeseries[0]
         data = [{timeseries.label: timeseries.data_points[0].data}]
 
-        result: Result = {"meta": [], "data": data, "trace_output": ""}
+        result = {"meta": [], "data": data, "trace_output": ""}
         return QueryResult(
             result=result, extra={"stats": {}, "sql": "", "experiments": {}}
         )
@@ -445,7 +445,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
             metadata["organization"] = item.time_series_request.meta.organization_id
 
         return RPCSubscriptionData(
-            project_id=item.project_id,
+            project_id=item.time_series_request.meta.project_ids[0],
             time_window_sec=item.time_window_secs,
             resolution_sec=item.resolution_secs,
             time_series_request=base64.b64encode(

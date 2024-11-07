@@ -11,7 +11,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.entity import Entity
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages.factory import get_storage, get_writable_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.processor import InsertEvent
 from tests.helpers import write_raw_unprocessed_events, write_unprocessed_events
@@ -169,7 +169,7 @@ class BaseSubscriptionTest:
             ],
         )
 
-        spans_storage = get_storage(StorageKey("eap_spans"))
+        spans_storage = get_writable_storage(StorageKey("eap_spans"))
         messages = [
             gen_span_message(self.base_time + timedelta(minutes=tick))
             for tick in range(self.minutes)

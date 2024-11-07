@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Type, Union
+from typing import Optional, Type
 
 import pytest
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
@@ -185,7 +185,7 @@ class TestBuildRequestBase:
         subscription: SubscriptionData,
         exception: Optional[Type[Exception]],
         aggregate: str,
-        value: Union[int, float],
+        value: Optional[int | float],
     ) -> None:
         timer = Timer("test")
         if exception is not None:
