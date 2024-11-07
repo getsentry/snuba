@@ -122,9 +122,6 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_AVG: f.weightedAvg(
             field, sampling_weight_column, **alias_dict
         ),
-        Function.FUNCTION_MAX: f.max,
-        Function.FUNCTION_MIN: f.min,
-        Function.FUNCTION_UNIQ: f.uniq,
     }
 
     if (
