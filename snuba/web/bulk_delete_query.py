@@ -26,6 +26,7 @@ from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.utils.streams.configuration_builder import build_kafka_producer_configuration
 from snuba.utils.streams.topics import Topic
 from snuba.web.delete_query import (
+    ConditionsType,
     DeletesNotEnabledError,
     _construct_condition,
     _enforce_max_rows,
@@ -35,8 +36,6 @@ from snuba.web.delete_query import (
 
 metrics = MetricsWrapper(environment.metrics, "snuba.delete")
 logger = logging.getLogger(__name__)
-
-ConditionsType = Mapping[str, Sequence[str | int | float]]
 
 
 class DeleteQueryMessage(TypedDict):
@@ -48,7 +47,7 @@ class DeleteQueryMessage(TypedDict):
 
 PRODUCER_MAP: MutableMapping[str, Producer] = {}
 STORAGE_TOPIC: Mapping[str, Topic] = {
-    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_SEARCH_ISSUES
+    StorageKey.SEARCH_ISSUES.value: Topic.LW_DELETIONS_GENERIC_EVENTS
 }
 
 
@@ -219,7 +218,7 @@ def delete_from_tables(
     return result
 
 
-def construct_or_conditions(conditions: Sequence[Dict[str, Any]]) -> Expression:
+def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
     """
     Combines multiple AND conditions: (equals(project_id, 1) AND in(group_id, (2, 3, 4, 5))
     into OR conditions for a bulk delete

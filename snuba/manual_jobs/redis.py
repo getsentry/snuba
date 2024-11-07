@@ -72,6 +72,9 @@ def _get_job_types_multi(job_ids_keys: Sequence[str]) -> List[str]:
 
 
 def _get_job_status_multi(job_ids_keys: Sequence[str]) -> List[JobStatus]:
+    if len(job_ids_keys) == 0:
+        return []
+
     return [
         redis_status.decode() if redis_status is not None else JobStatus.NOT_STARTED
         for redis_status in _redis_client.mget(job_ids_keys)

@@ -29,9 +29,16 @@ pub fn process_message(
     _metadata: KafkaMessageMetadata,
     config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
+    if let Some(headers) = payload.headers() {
+        if let Some(ingest_in_eap) = headers.get("ingest_in_eap") {
+            if ingest_in_eap == b"false" {
+                return Ok(InsertBatch::skip());
+            }
+        }
+    }
+
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
-
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: EAPSpan = msg.try_into()?;
 

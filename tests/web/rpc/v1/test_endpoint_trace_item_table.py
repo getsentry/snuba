@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 import pytest
-from google.protobuf.json_format import MessageToDict
+from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -729,6 +729,118 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
+
+    def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                organization_id=1,
+                project_ids=[1],
+                start_timestamp=hour_ago,
+                end_timestamp=ts,
+                referrer="something",
+                cogs_category="something",
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(name="sentry.name", type=AttributeKey.TYPE_STRING),
+                    label="description",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                        ),
+                    ),
+                    label="count()",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name")],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].attribute_name == "description"
+        assert response.column_values[1].attribute_name == "count()"
+
+    def test_cast_bug(self, setup_teardown: Any) -> None:
+        """
+        This test was added because the following request was causing a bug. The test was added when the bug was fixed.
+
+        Specifically the bug was related to the 2nd and 3rd columns of the request:
+        "type": "TYPE_INT", "name": "attr_num[foo]
+        "type": "TYPE_BOOLEAN", "name": "attr_num[foo]
+        and how alias was added to CAST.
+        """
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        err_req = {
+            "meta": {
+                "organizationId": "1",
+                "referrer": "api.organization-events",
+                "projectIds": ["1"],
+                "startTimestamp": hour_ago.ToJsonString(),
+                "endTimestamp": ts.ToJsonString(),
+            },
+            "columns": [
+                {
+                    "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                    "label": "description",
+                },
+                {
+                    "key": {"type": "TYPE_INT", "name": "attr_num[foo]"},
+                    "label": "tags[foo,number]",
+                },
+                {
+                    "key": {"type": "TYPE_BOOLEAN", "name": "attr_num[foo]"},
+                    "label": "tags[foo,boolean]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                    "label": "tags[foo,string]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                    "label": "tags[foo]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "sentry.span_id"},
+                    "label": "id",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "project.name"},
+                    "label": "project.name",
+                },
+            ],
+            "orderBy": [
+                {
+                    "column": {
+                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                        "label": "description",
+                    }
+                }
+            ],
+            "groupBy": [
+                {"type": "TYPE_STRING", "name": "sentry.name"},
+                {"type": "TYPE_INT", "name": "attr_num[foo]"},
+                {"type": "TYPE_BOOLEAN", "name": "attr_num[foo]"},
+                {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                {"type": "TYPE_STRING", "name": "sentry.span_id"},
+                {"type": "TYPE_STRING", "name": "project.name"},
+            ],
+            "virtualColumnContexts": [
+                {
+                    "fromColumnName": "sentry.project_id",
+                    "toColumnName": "project.name",
+                    "valueMap": {"4554989665714177": "bar"},
+                }
+            ],
+        }
+        err_msg = ParseDict(err_req, TraceItemTableRequest())
+        # just ensuring it doesnt raise an exception
+        EndpointTraceItemTable().execute(err_msg)
 
 
 class TestUtils:

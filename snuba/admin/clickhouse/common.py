@@ -58,7 +58,12 @@ def _validate_node(
     if not is_valid_node(clickhouse_host, clickhouse_port, cluster, storage_name):
         raise InvalidNodeError(
             f"host {clickhouse_host} and port {clickhouse_port} are not valid",
-            extra_data={"host": clickhouse_host, "port": clickhouse_port},
+            extra_data={
+                "host": clickhouse_host,
+                "port": clickhouse_port,
+                "query_host": cluster.get_query_node().host_name,
+                "query_port": cluster.get_query_node().port,
+            },
         )
 
 
