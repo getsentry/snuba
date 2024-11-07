@@ -127,12 +127,8 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
     ):
         agg_func_expr = function_map_sample_weighted.get(aggregation.aggregate)
-    elif aggregation.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_NONE:
-        agg_func_expr = function_map.get(aggregation.aggregate)
     else:
-        raise BadSnubaRPCRequestException(
-            f"Unsupported extrapolation mode: {aggregation.extrapolation_mode}"
-        )
+        agg_func_expr = function_map.get(aggregation.aggregate)
 
     if agg_func_expr is None:
         raise BadSnubaRPCRequestException(
