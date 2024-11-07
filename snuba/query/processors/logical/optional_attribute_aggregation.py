@@ -51,6 +51,11 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
                     result = find_subscriptable_reference(param)
                     if result:
                         return result
+            elif isinstance(exp, CurriedFunctionCall):
+                for param in exp.parameters:
+                    result = find_subscriptable_reference(param)
+                    if result:
+                        return result
             return None
 
         def transform_aggregates_to_conditionals(exp: Expression) -> Expression:
@@ -75,7 +80,6 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
                             ),
                         ),
                     )
-
             elif isinstance(exp, CurriedFunctionCall):
                 if (
                     exp.internal_function.function_name
