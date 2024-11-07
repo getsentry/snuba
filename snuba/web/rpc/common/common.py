@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    ExtrapolationMode,
     Function,
     VirtualColumnContext,
 )
@@ -91,15 +92,59 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_UNIQ: f.uniq,
     }
 
-    agg_func = function_map.get(aggregation.aggregate)
+    field = attribute_key_to_expression(aggregation.key)
+    alias = aggregation.label if aggregation.label else None
+    alias_dict = {"alias": alias} if alias else {}
+    sampling_weight_column = column("sampling_weight")
+    function_map_sample_weighted: dict[
+        Function.ValueType, _CurriedFunctionCall | _FunctionCall
+    ] = {
+        **function_map,
+        Function.FUNCTION_SUM: f.sum(
+            f.multiply(field, sampling_weight_column), **alias_dict
+        ),
+        Function.FUNCTION_AVERAGE: f.weightedAvg(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_COUNT: f.sum(sampling_weight_column, **alias_dict),
+        Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P90: cf.quantileTDigestWeighted(0.9)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P95: cf.quantileTDigestWeighted(0.95)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_AVG: f.weightedAvg(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_MAX: f.max,
+        Function.FUNCTION_MIN: f.min,
+        Function.FUNCTION_UNIQ: f.uniq,
+    }
+
+    if (
+        aggregation.extrapolation_mode
+        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+    ):
+        agg_func = function_map_sample_weighted.get(aggregation.aggregate)
+    elif aggregation.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_NONE:
+        agg_func = function_map.get(aggregation.aggregate)
+    else:
+        raise BadSnubaRPCRequestException(
+            f"Unsupported extrapolation mode: {aggregation.extrapolation_mode}"
+        )
+
     if agg_func is None:
         raise BadSnubaRPCRequestException(
             f"Aggregation not specified for {aggregation.key.name}"
         )
-    field = attribute_key_to_expression(aggregation.key)
-    alias = aggregation.label if aggregation.label else None
-    alias_dict = {"alias": alias} if alias else {}
-    return agg_func(field, **alias_dict)
+
+    return agg_func
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
