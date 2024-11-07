@@ -217,7 +217,7 @@ impl From<FromSpanMessage> for EAPSpan {
 
             // lower precision to compensate floating point errors
             res.sampling_factor = (res.sampling_factor * 1e9).round() / 1e9;
-            res.sampling_weight = (1.0 / res.sampling_factor) as u64;
+            res.sampling_weight = (1.0 / res.sampling_factor).round();
 
             if let Some(data) = from.data {
                 for (k, v) in data {
