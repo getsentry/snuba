@@ -10,7 +10,7 @@ from unittest.mock import Mock, call
 import pytest
 from arroyo.backends.kafka import KafkaPayload
 from arroyo.types import BrokerValue, Message, Partition, Topic
-from py._path.local import LocalPath
+from py._path.local import LocalPath  # type: ignore
 
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumers.consumer import (
