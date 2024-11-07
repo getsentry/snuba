@@ -80,7 +80,6 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             query = construct_query(
                 self.__storage, table, construct_or_conditions(conditions)
             )
-            print("query", query)
             _execute_query(
                 query=query,
                 storage=self.__storage,
@@ -124,7 +123,7 @@ def increment_by(message: BaseValue[KafkaPayload]) -> int:
     return rows_to_delete
 
 
-class ConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
+class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]):
     """
     The factory manages the lifecycle of the `ProcessingStrategy`.
     A strategy is created every time new partitions are assigned to the

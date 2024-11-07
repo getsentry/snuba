@@ -20,7 +20,7 @@ from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.environment import setup_logging, setup_sentry
 from snuba.lw_deletions.formatters import STORAGE_FORMATTER
-from snuba.lw_deletions.strategy import ConsumerStrategyFactory
+from snuba.lw_deletions.strategy import LWDeletionsConsumerStrategyFactory
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.streams.metrics_adapter import StreamMetricsAdapter
 from snuba.web.bulk_delete_query import STORAGE_TOPIC
@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--consumer-group",
     help="Consumer group use for consuming the deletion topic.",
-    default="lw-deletions-consumer",
     required=True,
 )
 @click.option(
@@ -44,7 +43,7 @@ logger = logging.getLogger(__name__)
     multiple=True,
     help="Kafka bootstrap server to use for consuming.",
 )
-@click.option("--storage-name", help="Storage name to consume from", required=True)
+@click.option("--storage", help="Storage name to consume from", required=True)
 @click.option(
     "--max-rows-batch-size",
     default=MAX_ROWS_TO_DELETE_DEFAULT,
@@ -85,7 +84,7 @@ def lw_deletions_consumer(
     *,
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    storage_name: str,
+    storage: str,
     max_rows_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -99,7 +98,7 @@ def lw_deletions_consumer(
 
     logger.info("Consumer Starting")
 
-    sentry_sdk.set_tag("storage", storage_name)
+    sentry_sdk.set_tag("storage", storage)
     shutdown_requested = False
     consumer: Optional[StreamProcessor[KafkaPayload]] = None
 
@@ -113,19 +112,19 @@ def lw_deletions_consumer(
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    topic = STORAGE_TOPIC[storage_name]
+    topic = STORAGE_TOPIC[storage]
 
     while not shutdown_requested:
         metrics_tags = {
             "consumer_group": consumer_group,
-            "storage": storage_name,
+            "storage": storage,
         }
         metrics = MetricsWrapper(
             environment.metrics, "lw_deletions_consumer", tags=metrics_tags
         )
         configure_metrics(StreamMetricsAdapter(metrics), force=True)
         consumer_config = resolve_consumer_config(
-            storage_names=[storage_name],
+            storage_names=[storage],
             raw_topic=topic.value,
             commit_log_topic=None,
             replacements_topic=None,
@@ -159,12 +158,12 @@ def lw_deletions_consumer(
             metrics_tags=metrics_tags,
         )
 
-        storage = get_writable_storage(StorageKey(storage_name))
-        formatter = STORAGE_FORMATTER[storage_name]()
-        strategy_factory = ConsumerStrategyFactory(
+        writable_storage = get_writable_storage(StorageKey(storage))
+        formatter = STORAGE_FORMATTER[storage]()
+        strategy_factory = LWDeletionsConsumerStrategyFactory(
             max_batch_size=max_rows_batch_size,
             max_batch_time_ms=max_batch_time_ms,
-            storage=storage,
+            storage=writable_storage,
             formatter=formatter,
         )
 
