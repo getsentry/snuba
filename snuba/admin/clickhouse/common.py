@@ -31,8 +31,18 @@ def is_valid_node(
     nodes = [
         cluster.get_query_node(),
     ]
-    if storage_name != "discover":
+    try:
         nodes.extend([*cluster.get_local_nodes(), *cluster.get_distributed_nodes()])
+    except Exception as e:
+        raise InvalidNodeError(
+            f"Error getting nodes for storage {storage_name}",
+            extra_data={
+                "error": str(e),
+                "host": host,
+                "port": port,
+                "nodes": ",".join([node.host_name for node in nodes]),
+            },
+        )
 
     return any(node.host_name == host and node.port == port for node in nodes)
 
