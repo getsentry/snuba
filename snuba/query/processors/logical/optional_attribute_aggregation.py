@@ -37,7 +37,9 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
         self._curried_aggregation_names = curried_aggregation_names
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        def find_subscriptable_reference(exp: Expression) -> SubscriptableReference:
+        def find_subscriptable_reference(
+            exp: Expression,
+        ) -> SubscriptableReference | None:
             # Recursively find the SubscriptableReference in nested expressions
             if (
                 isinstance(exp, SubscriptableReference)

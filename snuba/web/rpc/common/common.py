@@ -18,17 +18,13 @@ from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    _CurriedFunctionCall,
-    _FunctionCall,
-    and_cond,
-    column,
-    in_cond,
-    literal,
-    literals_array,
-    or_cond,
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.expressions import (
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    SubscriptableReference,
 )
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -78,28 +74,27 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 
 def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
-    function_map: dict[Function.ValueType, _CurriedFunctionCall | _FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum,
-        Function.FUNCTION_AVERAGE: f.avg,
-        Function.FUNCTION_COUNT: f.count,
-        Function.FUNCTION_P50: cf.quantile(0.5),
-        Function.FUNCTION_P90: cf.quantile(0.9),
-        Function.FUNCTION_P95: cf.quantile(0.95),
-        Function.FUNCTION_P99: cf.quantile(0.99),
-        Function.FUNCTION_AVG: f.avg,
-        Function.FUNCTION_MAX: f.max,
-        Function.FUNCTION_MIN: f.min,
-        Function.FUNCTION_UNIQ: f.uniq,
-    }
-
     field = attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
+    function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
+        Function.FUNCTION_SUM: f.sum(field, **alias_dict),
+        Function.FUNCTION_AVERAGE: f.avg(field, **alias_dict),
+        Function.FUNCTION_COUNT: f.count(field, **alias_dict),
+        Function.FUNCTION_P50: cf.quantile(0.5)(field, **alias_dict),
+        Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
+        Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
+        Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
+        Function.FUNCTION_AVG: f.avg(field, **alias_dict),
+        Function.FUNCTION_MAX: f.max(field, **alias_dict),
+        Function.FUNCTION_MIN: f.min(field, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+    }
+
     sampling_weight_column = column("sampling_weight")
     function_map_sample_weighted: dict[
-        Function.ValueType, _CurriedFunctionCall | _FunctionCall
+        Function.ValueType, CurriedFunctionCall | FunctionCall
     ] = {
-        **function_map,
         Function.FUNCTION_SUM: f.sum(
             f.multiply(field, sampling_weight_column), **alias_dict
         ),
@@ -122,26 +117,29 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_AVG: f.weightedAvg(
             field, sampling_weight_column, **alias_dict
         ),
+        Function.FUNCTION_MAX: f.max(field, **alias_dict),
+        Function.FUNCTION_MIN: f.min(field, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
     }
 
     if (
         aggregation.extrapolation_mode
         == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
     ):
-        agg_func = function_map_sample_weighted.get(aggregation.aggregate)
+        agg_func_expr = function_map_sample_weighted.get(aggregation.aggregate)
     elif aggregation.extrapolation_mode == ExtrapolationMode.EXTRAPOLATION_MODE_NONE:
-        agg_func = function_map.get(aggregation.aggregate)
+        agg_func_expr = function_map.get(aggregation.aggregate)
     else:
         raise BadSnubaRPCRequestException(
             f"Unsupported extrapolation mode: {aggregation.extrapolation_mode}"
         )
 
-    if agg_func is None:
+    if agg_func_expr is None:
         raise BadSnubaRPCRequestException(
             f"Aggregation not specified for {aggregation.key.name}"
         )
 
-    return agg_func
+    return agg_func_expr
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
