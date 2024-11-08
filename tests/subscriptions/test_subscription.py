@@ -372,7 +372,6 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
                             value=AttributeValue(val_str="bar"),
                         )
                     ),
-                    granularity_secs=300,
                 ),
                 time_window_secs=300,
                 resolution_secs=60,

@@ -123,7 +123,6 @@ TESTS = [
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         ),
                     ],
-                    granularity_secs=3600,
                 ),
                 time_window_secs=3600,
                 resolution_secs=60,
@@ -163,7 +162,6 @@ TESTS = [
                             value=AttributeValue(val_str="3.0.0"),
                         )
                     ),
-                    granularity_secs=3600,
                 ),
                 time_window_secs=3600,
                 resolution_secs=60,

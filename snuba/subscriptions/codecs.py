@@ -112,7 +112,7 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
 
         data = scheduled_subscription_dict["task"]["data"]
         subscription: SubscriptionData
-        if data.get("subscription_type") == SubscriptionType.RPC:
+        if data.get("subscription_type") == SubscriptionType.RPC.value:
             subscription = RPCSubscriptionData.from_dict(data, entity_key)
         else:
             subscription = SnQLSubscriptionData.from_dict(data, entity_key)

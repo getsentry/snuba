@@ -218,7 +218,6 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
                             value=AttributeValue(val_str="bar"),
                         )
                     ),
-                    granularity_secs=300,
                 ),
                 time_window_secs=300,
                 resolution_secs=60,

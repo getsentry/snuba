@@ -108,7 +108,6 @@ def build_rpc_subscription(resolution: timedelta, org_id: int) -> Subscription:
                             value=AttributeValue(val_str="bar"),
                         )
                     ),
-                    granularity_secs=300,
                 ),
                 time_window_secs=300,
                 resolution_secs=int(resolution.total_seconds()),

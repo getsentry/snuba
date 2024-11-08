@@ -67,10 +67,13 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
     "resolution",
     "query",
     "tenant_ids",
+    "subscription_type",
+    "time_series_request",
+    "request_name",
+    "request_version",
 }
 
-PROTOBUF_ALLOWLIST = ["TimeSeriesRequest"]
-PROTOBUF_VERSION_ALLOWLIST = ["v1"]
+REQUEST_TYPE_ALLOWLIST = [("TimeSeriesRequest", "v1")]
 
 
 class SubscriptionType(Enum):
@@ -342,14 +345,9 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
     def validate(self) -> None:
         super().validate()
-        if self.request_name not in PROTOBUF_ALLOWLIST:
+        if (self.request_name, self.request_version) not in REQUEST_TYPE_ALLOWLIST:
             raise InvalidSubscriptionError(
-                f"{self.request_name} is not supported. Supported request types are: {PROTOBUF_ALLOWLIST}"
-            )
-
-        if self.request_version not in PROTOBUF_VERSION_ALLOWLIST:
-            raise InvalidSubscriptionError(
-                f"{self.request_version} version not supported. Supported versions are: {PROTOBUF_VERSION_ALLOWLIST}"
+                f"{self.request_name} {self.request_version} not supported."
             )
 
         # TODO: Validate no group by, having, order by etc
@@ -383,6 +381,8 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         end_time_proto.FromDatetime(rounded_start)
         request_class.meta.start_timestamp.CopyFrom(start_time_proto)
         request_class.meta.end_timestamp.CopyFrom(end_time_proto)
+
+        request_class.granularity_secs = self.time_window_sec
 
         return request_class
 
@@ -418,6 +418,10 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
+        metadata = data.pop("metadata", {})
+        for key in data.keys():
+            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+                metadata[key] = data[key]
 
         return RPCSubscriptionData(
             project_id=data["project_id"],
@@ -427,7 +431,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
             request_version=data["request_version"],
             request_name=data["request_name"],
             entity=entity,
-            metadata=data.get("metadata", dict()),
+            metadata=metadata,
             tenant_ids=data.get("tenant_ids", dict()),
         )
 
@@ -440,7 +444,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         class_name = request_class.__name__
         class_version = request_class.__module__.split(".", 3)[2]
 
-        metadata = dict()
+        metadata = {}
         if item.time_series_request.meta:
             metadata["organization"] = item.time_series_request.meta.organization_id
 
@@ -467,8 +471,9 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
             "request_version": self.request_version,
             "request_name": self.request_name,
             "subscription_type": SubscriptionType.RPC.value,
-            "metadata": self.metadata,
         }
+        if self.metadata:
+            subscription_data_dict["metadata"] = self.metadata
 
         return subscription_data_dict
 
