@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Callable, Mapping
 
 import pytest
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest as CreateSubscriptionRequestProto,
 )
@@ -264,28 +265,19 @@ RESULTS_CASES = [
             metadata={},
         ),
         EntityKey.EVENTS,
-        {
-            "query": "MATCH (events) SELECT count() AS count",
-            "tenant_ids": {"referrer": "subscription", "organization_id": 1},
-        },
         id="snql_subscription",
     ),
     pytest.param(
         build_rpc_subscription_data(entity_key=EntityKey.EAP_SPANS, metadata={}),
         EntityKey.EAP_SPANS,
-        {
-            "request": "Ci0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAyoGCMiIuLkGMgYI9Iq4uQYSFCISCgcIARIDZm9vEAYaBRIDYmFyGhoIARIPCAMSC3Rlc3RfbWV0cmljGgNzdW0gASCsAg==",
-            "request_name": "TimeSeriesRequest",
-            "request_version": "v1",
-        },
-        id="snql_subscription",
+        id="rpc_subscriptions",
     ),
 ]
 
 
-@pytest.mark.parametrize("subscription, entity_key, original_body", RESULTS_CASES)
+@pytest.mark.parametrize("subscription, entity_key", RESULTS_CASES)
 def test_subscription_task_result_encoder(
-    subscription: SubscriptionData, entity_key: EntityKey, original_body: dict[str, Any]
+    subscription: SubscriptionData, entity_key: EntityKey
 ) -> None:
     codec = SubscriptionTaskResultEncoder()
 
@@ -325,7 +317,11 @@ def test_subscription_task_result_encoder(
     assert payload["subscription_id"] == str(
         task_result.task.task.subscription.identifier
     )
-    assert payload["request"] == original_body
+    if isinstance(request, ProtobufMessage):
+        assert payload["request"]["request_name"] == "TimeSeriesRequest"
+        assert payload["request"]["request_version"] == "v1"
+    else:
+        assert payload["request"] == request.original_body
     assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
     assert payload["entity"] == entity_key.value
