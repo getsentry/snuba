@@ -54,8 +54,8 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
                 "request": base64.b64encode(request.SerializeToString()).decode(
                     "utf-8"
                 ),
-                "request_name": request.__name__,
-                "request_version": request.__module__.split(".", 3)[2],
+                "request_name": request.__class__.__name__,
+                "request_version": request.__class__.__module__.split(".", 3)[2],
             }
         else:
             original_body = {**request.original_body}

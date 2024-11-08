@@ -274,7 +274,7 @@ RESULTS_CASES = [
         build_rpc_subscription_data(entity_key=EntityKey.EAP_SPANS, metadata={}),
         EntityKey.EAP_SPANS,
         {
-            "request": "Ci0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAyoGCPCDuLkGMgYInIa4uQYSFCISCgcIARIDZm9vEAYaBRIDYmFyGhoIARIPCAMSC3Rlc3RfbWV0cmljGgNzdW0gASCsAg==",
+            "request": "Ci0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAyoGCMiIuLkGMgYI9Iq4uQYSFCISCgcIARIDZm9vEAYaBRIDYmFyGhoIARIPCAMSC3Rlc3RfbWV0cmljGgNzdW0gASCsAg==",
             "request_name": "TimeSeriesRequest",
             "request_version": "v1",
         },
