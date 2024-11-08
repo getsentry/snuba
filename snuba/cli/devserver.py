@@ -488,7 +488,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 [
                     "snuba",
                     "lw-deletions-consumer",
-                    "--storage-name=search_issues",
+                    "--storage=search_issues",
                     "--consumer-group=search_issues_deletes_group",
                     "--max-rows-batch-size=10",
                     "--max-batch-time-ms=1000",
