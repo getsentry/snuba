@@ -30,4 +30,4 @@ class Migration(migration.ClickhouseNodeMigration):
         ]
 
     def backwards_ops(self) -> Sequence[SqlOperation]:
-        pass
+        return []
