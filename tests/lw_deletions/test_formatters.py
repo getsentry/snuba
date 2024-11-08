@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Type
 
 import pytest
 
@@ -61,7 +61,7 @@ SEARCH_ISSUES_FORMATTER = SearchIssuesFormatter
 def test_search_issues_formatter(
     messages: Sequence[DeleteQueryMessage],
     expected_formatted: Sequence[ConditionsType],
-    formatter: Formatter,
+    formatter: Type[Formatter],
 ) -> None:
     formatted = formatter().format(messages)
     assert formatted == expected_formatted

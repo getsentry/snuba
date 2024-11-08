@@ -41,11 +41,16 @@ class SearchIssuesFormatter(Formatter):
             project_id [1] and group_id [1, 2, 3, 4]
 
         """
-        mapping: MutableMapping[int, list[int]] = defaultdict(set)
+        mapping: MutableMapping[int, set[int]] = defaultdict(set)
         conditions = [message["conditions"] for message in messages]
         for condition in conditions:
             project_id = condition["project_id"][0]
-            mapping[project_id] = mapping[project_id].union(set(condition["group_id"]))
+            # appease mypy
+            assert isinstance(project_id, int)
+            mapping[project_id] = mapping[project_id].union(
+                # using int() to make mypy happy
+                set([int(g_id) for g_id in condition["group_id"]])
+            )
 
         return [
             {"project_id": [project_id], "group_id": list(group_ids)}
