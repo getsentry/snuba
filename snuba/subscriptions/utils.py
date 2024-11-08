@@ -24,6 +24,7 @@ class Tick(NamedTuple):
         Returns a new ``Tick`` instance that has had the bounds of its time
         interval shifted by the provided delta.
         """
+        breakpoint()
         return Tick(
             self.partition,
             self.offsets,

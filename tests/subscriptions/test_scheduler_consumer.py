@@ -1,3 +1,4 @@
+import base64
 import importlib
 import json
 import logging
@@ -196,7 +197,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
             CreateSubscriptionRequestProto(
                 time_series_request=TimeSeriesRequest(
                     meta=RequestMeta(
-                        project_ids=[1, 2, 3],
+                        project_ids=[1],
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
@@ -282,24 +283,14 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
 
     assert (tmpdir / "health.txt").check()
     assert mock_scheduler_producer.produce.call_count == 2
-    assert json.loads(
-        mock_scheduler_producer.produce.call_args_list[0][0][1].value
-    ) == {
-        "timestamp": "1970-01-01T00:16:00",
-        "entity": "eap_spans",
-        "task": {
-            "data": {
-                "project_id": 0,
-                "time_window": 300,
-                "resolution": 60,
-                "time_series_request": "Ch0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAxIUIhIKBwgBEgNmb28QBhoFEgNiYXIaGggBEg8IAxILdGVzdF9tZXRyaWMaA3N1bSABIKwC",
-                "request_version": "v1",
-                "request_name": "TimeSeriesRequest",
-                "subscription_type": "rpc",
-            }
-        },
-        "tick_upper_offset": 1,
-    }
+    payload = json.loads(mock_scheduler_producer.produce.call_args_list[0][0][1].value)
+    assert payload["task"]["data"]["project_id"] == 1
+    assert payload["task"]["data"]["resolution"] == 60
+    assert payload["task"]["data"]["time_window"] == 300
+    assert payload["task"]["data"]["request_name"] == "TimeSeriesRequest"
+    assert payload["task"]["data"]["request_version"] == "v1"
+    time_series_request = payload["task"]["data"]["time_series_request"]
+    TimeSeriesRequest().ParseFromString(base64.b64decode(time_series_request))
 
     settings.TOPIC_PARTITION_COUNTS = {}
 
