@@ -1,3 +1,4 @@
+import time
 import typing
 from typing import Mapping, Optional, Sequence, TypeVar
 
@@ -19,6 +20,7 @@ from snuba.lw_deletions.batching import BatchStepCustom, ValuesBatch
 from snuba.lw_deletions.formatters import Formatter
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.state import get_int_config
+from snuba.utils.metrics import MetricsBackend
 from snuba.web.bulk_delete_query import construct_or_conditions, construct_query
 from snuba.web.delete_query import (
     ConditionsType,
@@ -40,12 +42,14 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         next_step: ProcessingStrategy[ValuesBatch[KafkaPayload]],
         storage: WritableTableStorage,
         formatter: Formatter,
+        metrics: MetricsBackend,
     ) -> None:
         self.__next_step = next_step
         self.__storage = storage
         self.__cluster_name = self.__storage.get_cluster().get_clickhouse_cluster_name()
         self.__tables = storage.get_deletion_settings().tables
         self.__formatter: Formatter = formatter
+        self.__metrics = metrics
 
     def poll(self) -> None:
         self.__next_step.poll()
@@ -59,6 +63,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         try:
             self._execute_delete(conditions)
         except TooManyOngoingMutationsError:
+            self.__metrics.increment("too_many_ongoing_mutations")
             raise MessageRejected
 
         self.__next_step.submit(message)
@@ -80,6 +85,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
             query = construct_query(
                 self.__storage, table, construct_or_conditions(conditions)
             )
+            start = time.time()
             _execute_query(
                 query=query,
                 storage=self.__storage,
@@ -88,8 +94,14 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 attribution_info=self._get_attribute_info(),
                 query_settings=query_settings,
             )
+            self.__metrics.timing(
+                "execute_delete_query_ms",
+                (time.time() - start) * 1000,
+                tags={"table": table},
+            )
 
     def _check_ongoing_mutations(self) -> None:
+        start = time.time()
         ongoing_mutations = _num_ongoing_mutations(
             self.__storage.get_cluster(), self.__tables
         )
@@ -99,6 +111,9 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
                 "max_ongoing_mutatations_for_delete",
                 default=settings.MAX_ONGOING_MUTATIONS_FOR_DELETE,
             ),
+        )
+        self.__metrics.timing(
+            "ongoing_mutations_query_ms", (time.time() - start) * 1000
         )
         max_ongoing_mutations = int(settings.MAX_ONGOING_MUTATIONS_FOR_DELETE)
         if ongoing_mutations > max_ongoing_mutations:
@@ -137,11 +152,13 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
         max_batch_time_ms: int,
         storage: WritableTableStorage,
         formatter: Formatter,
+        metrics: MetricsBackend,
     ) -> None:
         self.max_batch_size = max_batch_size
         self.max_batch_time_ms = max_batch_time_ms
         self.storage = storage
         self.formatter = formatter
+        self.metrics = metrics
 
     def create_with_partitions(
         self,
@@ -151,7 +168,9 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
         batch_step = BatchStepCustom(
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
-            next_step=FormatQuery(CommitOffsets(commit), self.storage, self.formatter),
+            next_step=FormatQuery(
+                CommitOffsets(commit), self.storage, self.formatter, self.metrics
+            ),
             increment_by=increment_by,
         )
         return batch_step

@@ -62,13 +62,13 @@ def test_multiple_batches_strategies(
     mock_execute: Mock, mock_num_mutations: Mock
 ) -> None:
     commit_step = Mock()
+    metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-    FormatQuery(commit_step, storage, SearchIssuesFormatter()),
 
     strategy = BatchStepCustom(
         max_batch_size=8,
         max_batch_time=1000,
-        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter()),
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
         increment_by=increment_by,
     )
     make_message = generate_message()
@@ -88,13 +88,13 @@ def test_multiple_batches_strategies(
 @pytest.mark.redis_db
 def test_single_batch(mock_execute: Mock, mock_num_mutations: Mock) -> None:
     commit_step = Mock()
+    metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-    FormatQuery(commit_step, storage, SearchIssuesFormatter()),
 
     strategy = BatchStepCustom(
         max_batch_size=8,
         max_batch_time=1000,
-        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter()),
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
         increment_by=increment_by,
     )
     message = Message(
@@ -130,13 +130,13 @@ def test_too_many_mutations(mock_execute: Mock, mock_num_mutations: Mock) -> Non
     The max is 5 (the default) and our mocked ongoing mutations is 10.
     """
     commit_step = Mock()
+    metrics = Mock()
     storage = get_writable_storage(StorageKey("search_issues"))
-    FormatQuery(commit_step, storage, SearchIssuesFormatter()),
 
     strategy = BatchStepCustom(
         max_batch_size=8,
         max_batch_time=1000,
-        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter()),
+        next_step=FormatQuery(commit_step, storage, SearchIssuesFormatter(), metrics),
         increment_by=increment_by,
     )
     message = Message(

@@ -165,6 +165,7 @@ def lw_deletions_consumer(
             max_batch_time_ms=max_batch_time_ms,
             storage=writable_storage,
             formatter=formatter,
+            metrics=metrics,
         )
 
         consumer = consumer_builder.build_lw_deletions_consumer(strategy_factory)
