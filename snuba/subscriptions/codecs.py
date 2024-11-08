@@ -1,10 +1,10 @@
+import base64
 import json
 from datetime import datetime
 from typing import cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
-from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_kafka_schemas.schema_types import events_subscription_results_v1
 
@@ -50,7 +50,13 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         request, result = value.result
 
         if isinstance(request, ProtobufMessage):
-            original_body = {**MessageToDict(request)}
+            original_body = {
+                "request": base64.b64encode(request.SerializeToString()).decode(
+                    "utf-8"
+                ),
+                "request_name": request.__name__,
+                "request_version": request.__module__.split(".", 3)[2],
+            }
         else:
             original_body = {**request.original_body}
 

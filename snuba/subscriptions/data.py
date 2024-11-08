@@ -418,9 +418,11 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         cls, data: Mapping[str, Any], entity_key: EntityKey
     ) -> RPCSubscriptionData:
         entity: Entity = get_entity(entity_key)
-        metadata = data.pop("metadata", {})
+        metadata = {}
         for key in data.keys():
-            if key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+            if key == "metadata":
+                metadata.update(data[key])
+            elif key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
                 metadata[key] = data[key]
 
         return RPCSubscriptionData(

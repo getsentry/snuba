@@ -253,23 +253,46 @@ def test_decode_rpc(
     assert codec.decode(payload) == subscription
 
 
-def test_subscription_task_result_encoder() -> None:
+RESULTS_CASES = [
+    pytest.param(
+        SnQLSubscriptionData(
+            project_id=1,
+            query="MATCH (events) SELECT count() AS count",
+            time_window_sec=60,
+            resolution_sec=60,
+            entity=get_entity(EntityKey.EVENTS),
+            metadata={},
+        ),
+        EntityKey.EVENTS,
+        {
+            "query": "MATCH (events) SELECT count() AS count",
+            "tenant_ids": {"referrer": "subscription", "organization_id": 1},
+        },
+        id="snql_subscription",
+    ),
+    pytest.param(
+        build_rpc_subscription_data(entity_key=EntityKey.EAP_SPANS, metadata={}),
+        EntityKey.EAP_SPANS,
+        {
+            "request": "Ci0IARIJc29tZXRoaW5nGglzb21ldGhpbmciAwECAyoGCPCDuLkGMgYInIa4uQYSFCISCgcIARIDZm9vEAYaBRIDYmFyGhoIARIPCAMSC3Rlc3RfbWV0cmljGgNzdW0gASCsAg==",
+            "request_name": "TimeSeriesRequest",
+            "request_version": "v1",
+        },
+        id="snql_subscription",
+    ),
+]
+
+
+@pytest.mark.parametrize("subscription, entity_key, original_body", RESULTS_CASES)
+def test_subscription_task_result_encoder(
+    subscription: SubscriptionData, entity_key: EntityKey, original_body: dict[str, Any]
+) -> None:
     codec = SubscriptionTaskResultEncoder()
 
     timestamp = datetime.now()
 
-    entity = get_entity(EntityKey.EVENTS)
-    subscription_data = SnQLSubscriptionData(
-        project_id=1,
-        query="MATCH (events) SELECT count() AS count",
-        time_window_sec=60,
-        resolution_sec=60,
-        entity=entity,
-        metadata={},
-    )
-
     # XXX: This seems way too coupled to the dataset.
-    request = subscription_data.build_request(
+    request = subscription.build_request(
         get_dataset("events"), timestamp, None, Timer("timer")
     )
     result: Result = {
@@ -283,10 +306,10 @@ def test_subscription_task_result_encoder() -> None:
         ScheduledSubscriptionTask(
             timestamp,
             SubscriptionWithMetadata(
-                EntityKey.EVENTS,
+                entity_key,
                 Subscription(
                     SubscriptionIdentifier(PartitionId(1), uuid.uuid1()),
-                    subscription_data,
+                    subscription,
                 ),
                 5,
             ),
@@ -302,10 +325,10 @@ def test_subscription_task_result_encoder() -> None:
     assert payload["subscription_id"] == str(
         task_result.task.task.subscription.identifier
     )
-    assert payload["request"] == request.original_body
+    assert payload["request"] == original_body
     assert payload["result"]["data"] == result["data"]
     assert payload["timestamp"] == task_result.task.timestamp.isoformat()
-    assert payload["entity"] == EntityKey.EVENTS.value
+    assert payload["entity"] == entity_key.value
 
 
 METRICS_CASES = [
