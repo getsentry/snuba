@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import Mapping, MutableMapping, Sequence, Type
-
-from attr import dataclass
 
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.bulk_delete_query import DeleteQueryMessage
@@ -24,16 +23,6 @@ class Formatter(ABC):
         raise NotImplementedError
 
 
-@dataclass
-class SearchIssueCondition:
-    project_id: int
-    group_ids: list[int] = []
-
-    def add_group_ids(self, group_ids: Sequence[int]) -> None:
-        for group_id in group_ids:
-            self.group_ids.append(group_id)
-
-
 class SearchIssuesFormatter(Formatter):
     def format(
         self, messages: Sequence[DeleteQueryMessage]
@@ -52,29 +41,16 @@ class SearchIssuesFormatter(Formatter):
             project_id [1] and group_id [1, 2, 3, 4]
 
         """
-        mapping: MutableMapping[int, SearchIssueCondition] = {}
-        for message in messages:
-            project_id = message["conditions"]["project_id"][0]
-            group_ids = message["conditions"]["group_id"]
-            # make mypy happy
-            assert isinstance(project_id, int)
-            assert isinstance(group_ids, list)
+        mapping: MutableMapping[int, list[int]] = defaultdict(set)
+        conditions = [message["conditions"] for message in messages]
+        for condition in conditions:
+            project_id = condition["project_id"][0]
+            mapping[project_id] = mapping[project_id].union(set(condition["group_id"]))
 
-            and_condition = mapping.get(
-                project_id, SearchIssueCondition(project_id, [])
-            )
-            and_condition.add_group_ids(group_ids)
-            mapping[project_id] = and_condition
-
-        and_conditions: list[ConditionsType] = []
-        for and_condition in mapping.values():
-            and_conditions.append(
-                {
-                    "project_id": [and_condition.project_id],
-                    "group_id": and_condition.group_ids,
-                }
-            )
-        return and_conditions
+        return [
+            {"project_id": [project_id], "group_id": list(group_ids)}
+            for project_id, group_ids in mapping.items()
+        ]
 
 
 STORAGE_FORMATTER: Mapping[str, Type[Formatter]] = {
