@@ -63,6 +63,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         try:
             self._execute_delete(conditions)
         except TooManyOngoingMutationsError:
+            # backpressure is applied while we wait for the
+            # currently ongoing mutations to finish
             self.__metrics.increment("too_many_ongoing_mutations")
             raise MessageRejected
 
