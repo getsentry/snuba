@@ -251,15 +251,18 @@ def parse_request_body(http_request: Request) -> Dict[str, Any]:
 
 
 def _trace_transaction(dataset_name: str) -> None:
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", dataset_name)
-            scope.span.set_tag("referrer", http_request.referrer)
+    span = sentry_sdk.get_current_span()
+    if span:
+        span.set_tag("dataset", dataset_name)
+        span.set_tag("referrer", http_request.referrer)
 
-        if scope.transaction:
-            scope.transaction = (
-                f"{scope.transaction.name}__{dataset_name}__{http_request.referrer}"
-            )
+    scope = sentry_sdk.get_current_scope()
+    if scope.transaction:
+        scope.set_transaction_name(
+            f"{scope.transaction.name}__{dataset_name}__{http_request.referrer}"
+        )
+        scope.transaction.set_tag("dataset", dataset_name)
+        scope.transaction.set_tag("referrer", http_request.referrer)
 
 
 @application.route("/query", methods=["GET", "POST"])
