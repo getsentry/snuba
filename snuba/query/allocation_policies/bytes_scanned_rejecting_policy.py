@@ -247,7 +247,7 @@ class BytesScannedRejectingPolicy(AllocationPolicy):
             )
             return QuotaAllowance(
                 can_run=False,
-                max_threads=self.max_threads,
+                max_threads=0,
                 explanation=explanation,
                 is_throttled=True,
                 throttle_threshold=throttle_threshold,
