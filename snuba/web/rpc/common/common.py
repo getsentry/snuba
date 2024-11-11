@@ -98,10 +98,18 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_SUM: f.sum(
             f.multiply(field, sampling_weight_column), **alias_dict
         ),
-        Function.FUNCTION_AVERAGE: f.weightedAvg(
+        Function.FUNCTION_AVERAGE: f.avgWeighted(
             field, sampling_weight_column, **alias_dict
         ),
-        Function.FUNCTION_COUNT: f.sum(sampling_weight_column, **alias_dict),
+        Function.FUNCTION_COUNT: (
+            f.sumIf(
+                sampling_weight_column,
+                f.mapContains(field.column, field.key),
+                **alias_dict,
+            )  # this is ugly, but we do this because the optional attribute aggregation processor can't handle this case as we are not summing up the actual attribute
+            if isinstance(field, SubscriptableReference)
+            else f.sum(sampling_weight_column, **alias_dict)
+        ),
         Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
             field, sampling_weight_column, **alias_dict
         ),

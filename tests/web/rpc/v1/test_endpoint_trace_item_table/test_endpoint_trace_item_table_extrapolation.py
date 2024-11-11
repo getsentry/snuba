@@ -122,8 +122,12 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             gen_message(
                 start - timedelta(minutes=i),
                 measurements={
-                    "custom_measurement": {"value": 5.0},
-                    "server_sample_rate": {"value": 1.0 / (2**i)},
+                    "custom_measurement": {
+                        "value": i
+                    },  # this results in values of 0, 1, 2, 3, and 4
+                    "server_sample_rate": {
+                        "value": 1.0 / (2**i)
+                    },  # this results in sampling weights of 1, 2, 4, 8, and 16
                 },
                 tags=tags,
             )
@@ -156,10 +160,48 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     )
                 ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVERAGE,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="count(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_P90,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="p90(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
             ],
             order_by=[],
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
         measurement_sum = [v.val_float for v in response.column_values[0].results][0]
-        assert measurement_sum == 155
+        measurement_avg = [v.val_float for v in response.column_values[1].results][0]
+        measurement_count = [v.val_float for v in response.column_values[2].results][0]
+        measurement_p90 = [v.val_float for v in response.column_values[3].results][0]
+        assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
+        assert (
+            abs(measurement_avg - 3.16129032) < 0.000001
+        )  # weighted average - (0*1 + 1*2 + 2*4 + 3*8 + 4*16) / (1+2+4+8+16)
+        assert measurement_count == 31  # weighted count - 1 + 2 + 4 + 8 + 16
+        assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
