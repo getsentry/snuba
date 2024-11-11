@@ -58,6 +58,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
+from snuba.state import get_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -72,6 +73,7 @@ from snuba.utils.health_info import (
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.util import with_span
 from snuba.web import QueryException, QueryTooLongException
+from snuba.web.bulk_delete_query import delete_from_storage as bulk_delete_from_storage
 from snuba.web.constants import get_http_status_for_clickhouse_error
 from snuba.web.converters import DatasetConverter, EntityConverter, StorageConverter
 from snuba.web.delete_query import (
@@ -330,11 +332,18 @@ def storage_delete(
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            payload = delete_from_storage(
-                storage,
-                request_parts.query["query"]["columns"],
-                request_parts.attribution_info,
-            )
+            if get_config("use_bulk_deletes", False):
+                payload = bulk_delete_from_storage(
+                    storage,
+                    request_parts.query["query"]["columns"],
+                    request_parts.attribution_info,
+                )
+            else:
+                payload = delete_from_storage(
+                    storage,
+                    request_parts.query["query"]["columns"],
+                    request_parts.attribution_info,
+                )
         except (
             InvalidJsonRequestException,
             DeletesNotEnabledError,
