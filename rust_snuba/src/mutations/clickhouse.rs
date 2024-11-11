@@ -299,7 +299,7 @@ mod tests {
         // build the mutation batch
         batch.0.insert(primary_key.clone(), update);
 
-        let test_client = ClickhouseTestClient::new("eap_spans".to_string())
+        let test_client = ClickhouseTestClient::new("eap_spans_2".to_string())
             .await
             .unwrap();
 
