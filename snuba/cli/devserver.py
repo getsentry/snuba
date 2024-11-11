@@ -481,6 +481,24 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
             ),
         ]
 
+    if settings.ENABLE_LW_DELETIONS_CONSUMER:
+        daemons += [
+            (
+                "lw-deletions-consumer",
+                [
+                    "snuba",
+                    "lw-deletions-consumer",
+                    "--storage=search_issues",
+                    "--consumer-group=search_issues_deletes_group",
+                    "--max-rows-batch-size=10",
+                    "--max-batch-time-ms=1000",
+                    "--auto-offset-reset=latest",
+                    "--no-strict-offset-reset",
+                    "--log-level=debug",
+                ],
+            ),
+        ]
+
     manager = Manager()
     for name, cmd in daemons:
         manager.add_process(
