@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    ExtrapolationMode,
     Function,
     VirtualColumnContext,
 )
@@ -17,17 +18,13 @@ from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    _CurriedFunctionCall,
-    _FunctionCall,
-    and_cond,
-    column,
-    in_cond,
-    literal,
-    literals_array,
-    or_cond,
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.expressions import (
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    SubscriptableReference,
 )
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -77,29 +74,76 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 
 def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
-    function_map: dict[Function.ValueType, _CurriedFunctionCall | _FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum,
-        Function.FUNCTION_AVERAGE: f.avg,
-        Function.FUNCTION_COUNT: f.count,
-        Function.FUNCTION_P50: cf.quantile(0.5),
-        Function.FUNCTION_P90: cf.quantile(0.9),
-        Function.FUNCTION_P95: cf.quantile(0.95),
-        Function.FUNCTION_P99: cf.quantile(0.99),
-        Function.FUNCTION_AVG: f.avg,
-        Function.FUNCTION_MAX: f.max,
-        Function.FUNCTION_MIN: f.min,
-        Function.FUNCTION_UNIQ: f.uniq,
-    }
-
-    agg_func = function_map.get(aggregation.aggregate)
-    if agg_func is None:
-        raise BadSnubaRPCRequestException(
-            f"Aggregation not specified for {aggregation.key.name}"
-        )
     field = attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
-    return agg_func(field, **alias_dict)
+    function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
+        Function.FUNCTION_SUM: f.sum(field, **alias_dict),
+        Function.FUNCTION_AVERAGE: f.avg(field, **alias_dict),
+        Function.FUNCTION_COUNT: f.count(field, **alias_dict),
+        Function.FUNCTION_P50: cf.quantile(0.5)(field, **alias_dict),
+        Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
+        Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
+        Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
+        Function.FUNCTION_AVG: f.avg(field, **alias_dict),
+        Function.FUNCTION_MAX: f.max(field, **alias_dict),
+        Function.FUNCTION_MIN: f.min(field, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+    }
+
+    sampling_weight_column = column("sampling_weight")
+    function_map_sample_weighted: dict[
+        Function.ValueType, CurriedFunctionCall | FunctionCall
+    ] = {
+        Function.FUNCTION_SUM: f.sum(
+            f.multiply(field, sampling_weight_column), **alias_dict
+        ),
+        Function.FUNCTION_AVERAGE: f.avgWeighted(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_COUNT: (
+            f.sumIf(
+                sampling_weight_column,
+                f.mapContains(field.column, field.key),
+                **alias_dict,
+            )  # this is ugly, but we do this because the optional attribute aggregation processor can't handle this case as we are not summing up the actual attribute
+            if isinstance(field, SubscriptableReference)
+            else f.sum(sampling_weight_column, **alias_dict)
+        ),
+        Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P90: cf.quantileTDigestWeighted(0.9)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P95: cf.quantileTDigestWeighted(0.95)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_AVG: f.weightedAvg(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_MAX: f.max(field, **alias_dict),
+        Function.FUNCTION_MIN: f.min(field, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+    }
+
+    if (
+        aggregation.extrapolation_mode
+        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+    ):
+        agg_func_expr = function_map_sample_weighted.get(aggregation.aggregate)
+    else:
+        agg_func_expr = function_map.get(aggregation.aggregate)
+
+    if agg_func_expr is None:
+        raise BadSnubaRPCRequestException(
+            f"Aggregation not specified for {aggregation.key.name}"
+        )
+
+    return agg_func_expr
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
