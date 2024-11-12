@@ -31,9 +31,9 @@ services:
         soft: 262144
         hard: 262144
     ports:
-      - 9000:9000
-      - 9009:9009
-      - 8123:8123
+      - 127.0.0.1:9000:9000
+      - 127.0.0.1:9009:9009
+      - 127.0.0.1:8123:8123
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/sentry.xml
@@ -45,8 +45,8 @@ services:
   snuba:
     image: ghcr.io/getsentry/snuba:latest
     ports:
-      - 1218:1218
-      - 1219:1219
+      - 127.0.0.1:1218:1218
+      - 127.0.0.1:1219:1219
     command: [devserver]
     environment:
       PYTHONUNBUFFERED: 1
