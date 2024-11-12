@@ -2,10 +2,10 @@ import uuid
 from typing import Type
 
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import (
-    AttributeValuesRequest as AttributeValuesRequestProto,
+from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
+    TraceItemAttributeValuesRequest,
+    TraceItemAttributeValuesResponse,
 )
-from sentry_protos.snuba.v1alpha.endpoint_tags_list_pb2 import AttributeValuesResponse
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -22,14 +22,14 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1alpha.common import (
+from snuba.web.rpc.v1.common import (
     base_conditions_and,
     treeify_or_and_conditions,
     truncate_request_meta_to_day,
 )
 
 
-def _build_query(request: AttributeValuesRequestProto) -> Query:
+def _build_query(request: TraceItemAttributeValuesRequest) -> Query:
     if request.limit > 1000:
         raise BadSnubaRPCRequestException("Limit can be at most 1000")
 
@@ -51,7 +51,7 @@ def _build_query(request: AttributeValuesRequestProto) -> Query:
         ],
         condition=base_conditions_and(
             request.meta,
-            f.equals(column("attr_key"), literal(request.name)),
+            f.equals(column("attr_key"), literal(request.key.name)),
             # multiSearchAny has special treatment with ngram bloom filters
             # https://clickhouse.com/docs/en/engines/table-engines/mergetree-family/mergetree#functions-support
             f.multiSearchAny(
@@ -67,14 +67,13 @@ def _build_query(request: AttributeValuesRequestProto) -> Query:
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
-        offset=request.offset,
     )
     treeify_or_and_conditions(res)
     return res
 
 
 def _build_snuba_request(
-    request: AttributeValuesRequestProto,
+    request: TraceItemAttributeValuesRequest,
 ) -> SnubaRequest:
     return SnubaRequest(
         id=uuid.uuid4(),
@@ -96,17 +95,19 @@ def _build_snuba_request(
 
 
 class AttributeValuesRequest(
-    RPCEndpoint[AttributeValuesRequestProto, AttributeValuesResponse]
+    RPCEndpoint[TraceItemAttributeValuesRequest, TraceItemAttributeValuesResponse]
 ):
     @classmethod
     def version(cls) -> str:
-        return "v1alpha"
+        return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[AttributeValuesRequestProto]:
-        return AttributeValuesRequestProto
+    def request_class(cls) -> Type[TraceItemAttributeValuesRequest]:
+        return TraceItemAttributeValuesRequest
 
-    def _execute(self, in_msg: AttributeValuesRequestProto) -> AttributeValuesResponse:
+    def _execute(
+        self, in_msg: TraceItemAttributeValuesRequest
+    ) -> TraceItemAttributeValuesResponse:
         snuba_request = _build_snuba_request(in_msg)
         print("snuba_request")
         print(snuba_request)
@@ -115,6 +116,6 @@ class AttributeValuesRequest(
             request=snuba_request,
             timer=self._timer,
         )
-        return AttributeValuesResponse(
+        return TraceItemAttributeValuesResponse(
             values=[r["attr_value"] for r in res.result.get("data", [])]
         )
