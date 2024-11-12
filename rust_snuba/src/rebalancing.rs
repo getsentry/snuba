@@ -23,13 +23,11 @@ pub fn delay_kafka_rebalance(configured_delay_secs: u64) {
     ));
 }
 
-/*
-fn quantized_rebalance_signal_handler() {
-
-}
-*/
-
 pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {
+    if consumer_group == "spans" {
+        return Some(15);
+    }
+
     match get_str_config(
         format!(
             "quantized_rebalance_consumer_group_delay_secs__{}",
@@ -78,7 +76,7 @@ mod tests {
             "420",
         );
         let delay_secs = get_rebalance_delay_secs("spans");
-        assert_eq!(delay_secs, Some(420));
+        assert_eq!(delay_secs, Some(15));
         set_str_config(
             "quantized_rebalance_consumer_group_delay_secs__spans",
             "garbage",

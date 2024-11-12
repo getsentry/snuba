@@ -293,10 +293,21 @@ pub fn consumer_impl(
 
     let mut handle = processor.get_handle();
 
-    ctrlc::set_handler(move || {
-        handle.signal_shutdown();
-    })
-    .expect("Error setting Ctrl-C handler");
+    match rebalance_delay_secs {
+        Some(secs) => {
+            ctrlc::set_handler(move || {
+                rebalancing::delay_kafka_rebalance(secs.clone());
+                handle.signal_shutdown();
+            })
+            .expect("Error setting Ctrl-C handler");
+        }
+        None => {
+            ctrlc::set_handler(move || {
+                handle.signal_shutdown();
+            })
+            .expect("Error setting Ctrl-C handler");
+        }
+    }
 
     if let Err(error) = processor.run() {
         let error: &dyn std::error::Error = &error;
