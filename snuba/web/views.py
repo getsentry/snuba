@@ -58,7 +58,7 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.redis import all_redis_clients
 from snuba.request.exceptions import InvalidJsonRequestException, JsonDecodeException
 from snuba.request.schema import RequestSchema
-from snuba.state import get_config
+from snuba.state import get_int_config
 from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId
@@ -332,7 +332,7 @@ def storage_delete(
         try:
             schema = RequestSchema.build(HTTPQuerySettings, is_delete=True)
             request_parts = schema.validate(body)
-            if get_config("use_bulk_deletes", False):
+            if get_int_config("use_bulk_deletes"):
                 payload = bulk_delete_from_storage(
                     storage,
                     request_parts.query["query"]["columns"],
