@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -30,6 +31,9 @@ from snuba.web.rpc.common.common import (
     aggregation_to_expression,
     attribute_key_to_expression,
     base_conditions_and,
+    get_average_sample_rate_column,
+    get_percentile_extrapolation_columns,
+    get_upper_confidence_column,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -181,6 +185,18 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         for aggregation in request.aggregations
     ]
 
+    extrapolation_columns = []
+    for aggregation in request.aggregations:
+        if (
+            aggregation.extrapolation_mode
+            == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+        ):
+            extrapolation_columns.extend(
+                get_upper_confidence_column(aggregation),
+                *get_percentile_extrapolation_columns(aggregation),
+                get_average_sample_rate_column(),
+            )
+
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name, expression=attribute_key_to_expression(attr_key)
@@ -194,6 +210,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             SelectedExpression(name="time", expression=column("time", alias="time")),
             *aggregation_columns,
             *groupby_columns,
+            *extrapolation_columns,
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
