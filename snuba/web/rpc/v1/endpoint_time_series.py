@@ -31,7 +31,9 @@ from snuba.web.rpc.common.common import (
     aggregation_to_expression,
     attribute_key_to_expression,
     base_conditions_and,
+    calculate_reliability,
     get_average_sample_rate_column,
+    get_count_column,
     get_percentile_extrapolation_columns,
     get_upper_confidence_column,
     trace_item_filters_to_expression,
@@ -164,11 +166,24 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
+                upper_confidence_limit = row_data.get(
+                    f"{timeseries.label}_upper_confidence_limit"
+                )
+                average_sample_rate = row_data.get(
+                    f"{timeseries.label}_average_sample_rate"
+                )
+                sample_count = row_data.get(f"{timeseries.label}_count")
+                reliability = calculate_reliability(
+                    row_data[timeseries.label],
+                    upper_confidence_limit,
+                    sample_count,
+                )
                 timeseries.data_points.append(
                     DataPoint(
                         data=row_data[timeseries.label],
                         data_present=True,
-                        avg_sampling_rate=row_data["average_sample_rate"],
+                        avg_sampling_rate=average_sample_rate,
+                        is_reliable=reliability,
                     )
                 )
     return result_timeseries.values()
@@ -195,9 +210,14 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
         ):
+            upper_confidence_column = get_upper_confidence_column(aggregation)
+            if upper_confidence_column is not None:
+                extrapolation_columns.append(upper_confidence_column)
+
             extrapolation_columns.extend(
-                get_upper_confidence_column(aggregation),
                 *get_percentile_extrapolation_columns(aggregation),
+                get_average_sample_rate_column(aggregation),
+                get_count_column(aggregation),
             )
 
     groupby_columns = [
@@ -214,7 +234,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             *aggregation_columns,
             *groupby_columns,
             *extrapolation_columns,
-            get_average_sample_rate_column(),
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
