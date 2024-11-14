@@ -260,6 +260,16 @@ def get_percentile_extrapolation_columns(
     Percentiles require special handling as they require sorting the data by the attribute value
     """
     field = attribute_key_to_expression(aggregation.key)
+    percentile_confidence_lower_alias = (
+        f"{aggregation.label}_percentile_confidence_lower"
+        if aggregation.label
+        else None
+    )
+    percentile_confidence_upper_alias = (
+        f"{aggregation.label}_percentile_confidence_upper"
+        if aggregation.label
+        else None
+    )
 
     def get_percentile_expressions(percentile: float) -> list[Expression]:
         n = f.count(field)
@@ -271,7 +281,8 @@ def get_percentile_extrapolation_columns(
                     z_value,
                     f.sqrt(f.multiply(f.multiply(p, f.minus(literal(1), p)), n)),
                 ),
-            )
+            ),
+            alias=percentile_confidence_lower_alias,
         )
         upper = f.ceil(
             f.plus(
@@ -283,7 +294,8 @@ def get_percentile_extrapolation_columns(
                     ),
                 ),
                 literal(1),
-            )
+            ),
+            alias=percentile_confidence_upper_alias,
         )
 
         return [lower, upper]
@@ -305,7 +317,23 @@ def get_percentile_extrapolation_columns(
 
 
 def get_average_sample_rate_column() -> Expression:
-    return f.avg(f.divide(literal(1), sampling_weight_column))
+    return f.avg(
+        f.divide(literal(1), sampling_weight_column), alias="average_sample_rate"
+    )
+
+
+def get_total_sample_count_column(aggregation: AttributeAggregation) -> Expression:
+    field = attribute_key_to_expression(aggregation.key)
+    count_column_default = (
+        f.countIf(
+            sampling_weight_column,
+            f.mapContains(field.column, field.key),
+            alias=f"{aggregation.label}_total_sample_count",
+        )
+        if isinstance(field, SubscriptableReference)
+        else f.sum(sampling_weight_column)
+    )
+    return column(aggregation.label) if aggregation.label else count_column_default
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse

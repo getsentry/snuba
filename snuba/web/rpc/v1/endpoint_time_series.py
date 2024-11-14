@@ -165,7 +165,11 @@ def _convert_result_timeseries(
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
                 timeseries.data_points.append(
-                    DataPoint(data=row_data[timeseries.label], data_present=True)
+                    DataPoint(
+                        data=row_data[timeseries.label],
+                        data_present=True,
+                        avg_sampling_rate=row_data["average_sample_rate"],
+                    )
                 )
     return result_timeseries.values()
 
@@ -194,7 +198,6 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             extrapolation_columns.extend(
                 get_upper_confidence_column(aggregation),
                 *get_percentile_extrapolation_columns(aggregation),
-                get_average_sample_rate_column(),
             )
 
     groupby_columns = [
@@ -211,6 +214,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             *aggregation_columns,
             *groupby_columns,
             *extrapolation_columns,
+            get_average_sample_rate_column(),
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
