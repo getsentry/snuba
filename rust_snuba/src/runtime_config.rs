@@ -26,7 +26,7 @@ fn get_redis_client() -> Result<redis::Client, redis::RedisError> {
     redis::Client::open(url)
 }
 
-pub fn get_str_config_direct(key: &str) -> Result<Option<String>, Error> {
+fn get_str_config_direct(key: &str) -> Result<Option<String>, Error> {
     let deadline = Deadline::new(Duration::from_secs(10));
 
     let client = get_redis_client()?;
