@@ -1,4 +1,4 @@
-use crate::runtime_config::get_str_config;
+use crate::runtime_config;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -18,17 +18,18 @@ pub fn delay_kafka_rebalance(configured_delay_secs: u64) {
         Ok(duration) => duration.as_secs(),
         Err(_) => 0,
     } % configured_delay_secs;
+    tracing::info!(
+        "Delaying rebalance by {} seconds",
+        configured_delay_secs - time_elapsed_in_slot
+    );
+
     thread::sleep(Duration::from_secs(
         configured_delay_secs - time_elapsed_in_slot,
     ));
 }
 
 pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {
-    if consumer_group == "spans" {
-        return Some(15);
-    }
-
-    match get_str_config(
+    match runtime_config::get_str_config(
         format!(
             "quantized_rebalance_consumer_group_delay_secs__{}",
             consumer_group
@@ -53,35 +54,32 @@ pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pyo3::prelude::{PyModule, Python};
-
-    fn set_str_config(key: &str, val: &str) {
-        let _ = Python::with_gil(|py| {
-            let snuba_state = PyModule::import(py, "snuba.state").unwrap();
-            snuba_state
-                .getattr("set_config")
-                .unwrap()
-                .call1((key, val))
-                .unwrap();
-        });
-    }
 
     #[test]
     fn test_delay_config() {
-        crate::testutils::initialize_python();
+        runtime_config::del_str_config_direct(
+            "quantized_rebalance_consumer_group_delay_secs__spans",
+        )
+        .unwrap();
         let delay_secs = get_rebalance_delay_secs("spans");
         assert_eq!(delay_secs, None);
-        set_str_config(
+        runtime_config::set_str_config_direct(
             "quantized_rebalance_consumer_group_delay_secs__spans",
             "420",
-        );
+        )
+        .unwrap();
         let delay_secs = get_rebalance_delay_secs("spans");
-        assert_eq!(delay_secs, Some(15));
-        set_str_config(
+        assert_eq!(delay_secs, Some(420));
+        runtime_config::set_str_config_direct(
             "quantized_rebalance_consumer_group_delay_secs__spans",
             "garbage",
-        );
+        )
+        .unwrap();
         let delay_secs = get_rebalance_delay_secs("spans");
         assert_eq!(delay_secs, None);
+        runtime_config::del_str_config_direct(
+            "quantized_rebalance_consumer_group_delay_secs__spans",
+        )
+        .unwrap();
     }
 }
