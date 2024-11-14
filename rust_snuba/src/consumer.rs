@@ -236,9 +236,8 @@ pub fn consumer_impl(
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
     let rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
-    match rebalance_delay_secs {
-        Some(secs) => rebalancing::delay_kafka_rebalance(secs),
-        None => (),
+    if let Some(secs) = rebalance_delay_secs {
+        rebalancing::delay_kafka_rebalance(secs)
     }
 
     let processor = if mutations_mode {
@@ -296,7 +295,7 @@ pub fn consumer_impl(
     match rebalance_delay_secs {
         Some(secs) => {
             ctrlc::set_handler(move || {
-                rebalancing::delay_kafka_rebalance(secs.clone());
+                rebalancing::delay_kafka_rebalance(secs);
                 handle.signal_shutdown();
             })
             .expect("Error setting Ctrl-C handler");

@@ -38,17 +38,13 @@ pub fn get_rebalance_delay_secs(consumer_group: &str) -> Option<u64> {
     ) {
         Ok(delay_secs) => match delay_secs {
             Some(secs) => match secs.parse() {
-                Ok(v) => return Some(v),
-                Err(_) => return None,
+                Ok(v) => Some(v),
+                Err(_) => None,
             },
-            None => {
-                return None;
-            }
+            None => None,
         },
-        Err(_) => {
-            return None;
-        }
-    };
+        Err(_) => None,
+    }
 }
 
 #[cfg(test)]
