@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.11.0
+
+### Various fixes & improvements
+
+- feat(consumers): rust consumers quantized rebalance (#6561) by @volokluev
+- chore(deps): bump docker/setup-buildx-action from 2 to 3 (#6553) by @onkar
+- ref(deletes): add lw-deletions-search-issues-consumer to deploy.sh (#6567) by @MeredithAnya
+- fix(admin): ignore gather_profile_events for certain storages (#6566) by @MeredithAnya
+- chore(deps): bump getsentry/action-github-app-token from 2.0.0 to 3.0.0 (#6549) by @onkar
+- ref(deletes): add use_bulk_deletes runtime config (#6560) by @MeredithAnya
+- feat(devservices): Only expose ports to localhost (#6565) by @hubertdeng123
+- chore(deps): bump types-pyyaml from 6.0.11 to 6.0.12.20240808 (#6552) by @onkar
+- chore(deps): bump getsentry/action-migrations from 1.0.8 to 1.2.2 (#6556) by @onkar
+- feat(eap): Add support for extrapolation (#6536) by @davidtsuk
+- feat(devservices): Bump devservices version (#6507) by @hubertdeng123
+- chore(eap-spans): Remove unused tables (#6544) by @phacops
+- chore(eap-spans): Switch test to use new spans table (#6550) by @phacops
+- [CapMan visibility] rejected queries are ran with 0 threads (#6545) by @xurui-c
+- fix: ENABLE_LW_DELETIONS_CONSUMER default to False (#6546) by @MeredithAnya
+- ref(deletes): bulk delete consumer (#6510) by @MeredithAnya
+- chore(deps): bump packaging from 21.3 to 24.1 (#6540) by @onkar
+- chore(deps): bump progressbar2 from 4.0.0 to 4.2.0 (#6534) by @onkar
+- chore(deps): bump jsonschema from 4.16.0 to 4.23.0 (#6539) by @onkar
+- chore(deps): bump google-github-actions/auth from 1 to 2 (#6541) by @onkar
+- build(deps): bump sentry-usage-accountant from 0.0.10 to 0.0.11 (#6542) by @onkar
+- build(deps): bump actions/setup-node from 3 to 4 (#6543) by @onkar
+- Fix sampling weight calculation (#6537) by @davidtsuk
+- chore(deps): bump types-setuptools from 65.3.0 to 74.1.0.20240907 (#6526) by @onkar
+
+_Plus 102 more_
+
 ## 24.10.0
 
 ### Various fixes & improvements
