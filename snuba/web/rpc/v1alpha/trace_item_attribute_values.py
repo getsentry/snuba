@@ -108,8 +108,6 @@ class AttributeValuesRequest(
 
     def _execute(self, in_msg: AttributeValuesRequestProto) -> AttributeValuesResponse:
         snuba_request = _build_snuba_request(in_msg)
-        print("snuba_request")
-        print(snuba_request)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

@@ -21,12 +21,12 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.common import (
+from snuba.web.rpc.common.common import (
     base_conditions_and,
     treeify_or_and_conditions,
     truncate_request_meta_to_day,
 )
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
 def _build_query(request: TraceItemAttributeValuesRequest) -> Query:
@@ -109,8 +109,6 @@ class AttributeValuesRequest(
         self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
         snuba_request = _build_snuba_request(in_msg)
-        print("snuba_request")
-        print(snuba_request)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
