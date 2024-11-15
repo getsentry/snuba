@@ -34,7 +34,6 @@ from snuba.web.rpc.common.common import (
     calculate_reliability,
     get_average_sample_rate_column,
     get_count_column,
-    get_percentile_extrapolation_columns,
     get_upper_confidence_column,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
@@ -166,13 +165,13 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                upper_confidence_limit = row_data.get(
+                upper_confidence_limit = row_data[
                     f"{timeseries.label}_upper_confidence_limit"
-                )
-                average_sample_rate = row_data.get(
+                ]
+                average_sample_rate = row_data[
                     f"{timeseries.label}_average_sample_rate"
-                )
-                sample_count = row_data.get(f"{timeseries.label}_count")
+                ]
+                sample_count = row_data[f"{timeseries.label}_count"]
                 reliability = calculate_reliability(
                     row_data[timeseries.label],
                     upper_confidence_limit,
@@ -212,12 +211,23 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ):
             upper_confidence_column = get_upper_confidence_column(aggregation)
             if upper_confidence_column is not None:
-                extrapolation_columns.append(upper_confidence_column)
+                extrapolation_columns.append(
+                    SelectedExpression(
+                        name=upper_confidence_column.alias,
+                        expression=upper_confidence_column,
+                    )
+                )
 
-            extrapolation_columns.extend(
-                *get_percentile_extrapolation_columns(aggregation),
-                get_average_sample_rate_column(aggregation),
-                get_count_column(aggregation),
+            average_sample_rate_column = get_average_sample_rate_column(aggregation)
+            count_column = get_count_column(aggregation)
+            extrapolation_columns.append(
+                SelectedExpression(
+                    name=average_sample_rate_column.alias,
+                    expression=average_sample_rate_column,
+                )
+            )
+            extrapolation_columns.append(
+                SelectedExpression(name=count_column.alias, expression=count_column)
             )
 
     groupby_columns = [

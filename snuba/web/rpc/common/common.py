@@ -177,9 +177,8 @@ def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression
     Returns the expression for calculating the upper confidence limit for a given aggregation
     """
     field = attribute_key_to_expression(aggregation.key)
-    confidence_column_alias = (
-        f"{aggregation.label}_upper_confidence_limit" if aggregation.label else None
-    )
+    alias = f"{aggregation.label}_upper_confidence_limit" if aggregation.label else None
+    alias_dict = {"alias": alias} if alias else {}
     count_column_default = (
         f.sumIf(sampling_weight_column, f.mapContains(field.column, field.key))
         if isinstance(field, SubscriptableReference)
@@ -203,7 +202,7 @@ def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression
         Function.FUNCTION_COUNT: f.plus(
             field,
             f.multiply(z_value, f.sqrt(f.minus(count_column, f.count(field)))),
-            alias=confidence_column_alias,
+            **alias_dict,
         ),
         # Splitting up confidence interval implementation so commenting for now
         # Function.FUNCTION_AVERAGE: f.plus(
@@ -339,7 +338,7 @@ def get_count_column(aggregation: AttributeAggregation) -> Expression:
 
 
 def calculate_reliability(
-    estimate: int, upper_confidence_limit: int, sample_count: int
+    estimate: float, upper_confidence_limit: float, sample_count: int
 ) -> bool:
     """
     A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
