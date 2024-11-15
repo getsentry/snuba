@@ -23,7 +23,6 @@ use crate::metrics::global_tags::set_global_tag;
 use crate::metrics::statsd::StatsDBackend;
 use crate::mutations::factory::MutConsumerStrategyFactory;
 use crate::processors;
-use crate::rebalancing;
 use crate::types::{InsertOrReplacement, KafkaMessageMetadata};
 
 #[pyfunction]
@@ -235,11 +234,6 @@ pub fn consumer_impl(
 
     let topic = Topic::new(&consumer_config.raw_topic.physical_topic_name);
 
-    let rebalance_delay_secs = rebalancing::get_rebalance_delay_secs(consumer_group);
-    if let Some(secs) = rebalance_delay_secs {
-        rebalancing::delay_kafka_rebalance(secs)
-    }
-
     let processor = if mutations_mode {
         let mut_factory = MutConsumerStrategyFactory {
             storage_config: first_storage,
@@ -292,21 +286,10 @@ pub fn consumer_impl(
 
     let mut handle = processor.get_handle();
 
-    match rebalance_delay_secs {
-        Some(secs) => {
-            ctrlc::set_handler(move || {
-                rebalancing::delay_kafka_rebalance(secs);
-                handle.signal_shutdown();
-            })
-            .expect("Error setting Ctrl-C handler");
-        }
-        None => {
-            ctrlc::set_handler(move || {
-                handle.signal_shutdown();
-            })
-            .expect("Error setting Ctrl-C handler");
-        }
-    }
+    ctrlc::set_handler(move || {
+        handle.signal_shutdown();
+    })
+    .expect("Error setting Ctrl-C handler");
 
     if let Err(error) = processor.run() {
         let error: &dyn std::error::Error = &error;
