@@ -91,6 +91,23 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
     }
 
+    def get_subscriptable_field(field: Expression) -> SubscriptableReference | None:
+        """
+        Check if the field is a subscriptable reference or a function call with a subscriptable reference as the first parameter to handle the case
+        where the field is casting a subscriptable reference (e.g. for integers). If so, return the subscriptable reference.
+        """
+        if isinstance(field, SubscriptableReference):
+            return field
+        if isinstance(field, FunctionCall) and len(field.parameters) > 0:
+            if len(field.parameters) > 0 and isinstance(
+                field.parameters[0], SubscriptableReference
+            ):
+                return field.parameters[0]
+
+        return None
+
+    subscriptable_field = get_subscriptable_field(field)
+
     sampling_weight_column = column("sampling_weight")
     function_map_sample_weighted: dict[
         Function.ValueType, CurriedFunctionCall | FunctionCall
@@ -104,11 +121,11 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_COUNT: (
             f.sumIf(
                 sampling_weight_column,
-                f.mapContains(field.column, field.key),
+                f.mapContains(subscriptable_field.column, subscriptable_field.key),
                 **alias_dict,
             )  # this is ugly, but we do this because the optional attribute aggregation processor can't handle this case as we are not summing up the actual attribute
-            if isinstance(field, SubscriptableReference)
-            else f.sum(sampling_weight_column, **alias_dict)
+            if subscriptable_field is not None
+            else f.sumIf(sampling_weight_column, f.isNotNull(field), **alias_dict)
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
             field, sampling_weight_column, **alias_dict
