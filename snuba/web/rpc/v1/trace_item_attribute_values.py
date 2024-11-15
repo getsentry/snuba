@@ -58,6 +58,11 @@ def _build_query(request: TraceItemAttributeValuesRequest) -> Query:
                 column("attr_value"),
                 literals_array(None, [literal(request.value_substring_match)]),
             ),
+        )
+        if request.value_substring_match is not None
+        else base_conditions_and(
+            request.meta,
+            f.equals(column("attr_key"), literal(request.key.name)),
         ),
         order_by=[
             OrderBy(
