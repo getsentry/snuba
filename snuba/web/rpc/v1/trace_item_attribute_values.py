@@ -6,6 +6,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
     TraceItemAttributeValuesResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -72,6 +73,7 @@ def _build_query(request: TraceItemAttributeValuesRequest) -> Query:
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_value")),
         ],
         limit=request.limit,
+        offset=request.page_token.offset,
     )
     treeify_or_and_conditions(res)
     return res
@@ -113,12 +115,20 @@ class AttributeValuesRequest(
     def _execute(
         self, in_msg: TraceItemAttributeValuesRequest
     ) -> TraceItemAttributeValuesResponse:
+        if not in_msg.HasField("page_token"):
+            in_msg.page_token.offset = 0
+        if in_msg.page_token.HasField("filter_offset"):
+            raise NotImplementedError(
+                "TraceItemAttributeValues does not currently support page_token.filter_offset, please use page_token.offset instead."
+            )
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        values = [r["attr_value"] for r in res.result.get("data", [])]
         return TraceItemAttributeValuesResponse(
-            values=[r["attr_value"] for r in res.result.get("data", [])]
+            values=values,
+            page_token=PageToken(offset=in_msg.page_token.offset + len(values)),
         )
