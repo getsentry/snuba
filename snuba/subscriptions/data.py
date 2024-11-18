@@ -312,21 +312,6 @@ class SnQLSubscriptionData(SubscriptionData):
                 "At least one Entity must have a timestamp column for subscriptions"
             )
 
-    def validate(self) -> None:
-        if self.time_window_sec < 60:
-            raise InvalidSubscriptionError(
-                "Time window must be greater than or equal to 1 minute"
-            )
-        elif self.time_window_sec > 60 * 60 * 24:
-            raise InvalidSubscriptionError(
-                "Time window must be less than or equal to 24 hours"
-            )
-
-        if self.resolution_sec < 60:
-            raise InvalidSubscriptionError(
-                "Resolution must be greater than or equal to 1 minute"
-            )
-
     def build_request(
         self,
         dataset: Dataset,
