@@ -148,12 +148,15 @@ def test_enforcement_switch(policy: AllocationPolicy) -> None:
 @pytest.mark.redis_db
 def test_reject_queries_without_tenant_ids(policy: AllocationPolicy) -> None:
     _configure_policy(policy)
-    assert not policy.get_quota_allowance(
+    quota_allowance = policy.get_quota_allowance(
         tenant_ids={"organization_id": 1234}, query_id=QUERY_ID
-    ).can_run
-    assert not policy.get_quota_allowance(
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
+
+    quota_allowance = policy.get_quota_allowance(
         tenant_ids={"referrer": "bloop"}, query_id=QUERY_ID
-    ).can_run
+    )
+    assert not quota_allowance.can_run and quota_allowance.max_threads == 0
     # These should not fail because we know they don't have an org id
     for referrer in _ORG_LESS_REFERRERS:
         tenant_ids: dict[str, str | int] = {"referrer": referrer}

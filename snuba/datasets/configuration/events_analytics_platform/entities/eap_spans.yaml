@@ -81,11 +81,13 @@ query_processors:
         - sum
         - count
         - avg
+        - avgWeighted
         - max
         - min
         - uniq
       curried_aggregation_names:
         - quantile
+        - quantileTDigestWeighted
   - processor: HashBucketFunctionTransformer
     args:
       hash_bucket_names:

@@ -89,7 +89,7 @@ def test_consume_quota(
         ),
     )
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert not allowance.can_run
+    assert not allowance.can_run and allowance.max_threads == 0
     assert {
         "granted_quota": 0,
         "limit": limit,
@@ -149,7 +149,7 @@ def test_invalid_tenants(
     policy: BytesScannedRejectingPolicy, tenant_ids: dict[str, str | int]
 ) -> None:
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert not allowance.can_run
+    assert not allowance.can_run and allowance.max_threads == 0
     assert allowance.explanation["__name__"] == "InvalidTenantsForAllocationPolicy"
 
 
@@ -206,7 +206,7 @@ def test_overrides(
         ),
     )
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert not allowance.can_run
+    assert not allowance.can_run and allowance.max_threads == 0
     assert allowance.explanation["limit"] == limit
 
 
@@ -243,7 +243,7 @@ def test_penalize_timeout(policy: BytesScannedRejectingPolicy) -> None:
     )
 
     allowance = policy.get_quota_allowance(tenant_ids, QUERY_ID)
-    assert not allowance.can_run
+    assert not allowance.can_run and allowance.max_threads == 0
 
 
 @pytest.mark.redis_db
