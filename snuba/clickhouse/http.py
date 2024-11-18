@@ -306,7 +306,9 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         block_connections: bool = False,
     ):
         if secure:
-            self.__pool = HTTPSConnectionPool(host, port, ca_certs=ca_certs, verify=verify)
+            self.__pool = HTTPSConnectionPool(
+                host, port, ca_certs=ca_certs, verify=verify
+            )
         else:
             self.__pool = HTTPConnectionPool(host, port)
         self.__executor = ThreadPoolExecutor()

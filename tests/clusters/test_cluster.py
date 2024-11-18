@@ -201,16 +201,46 @@ def test_get_local_nodes() -> None:
 @pytest.mark.clickhouse_db
 def test_cache_connections() -> None:
     cluster_1 = cluster.ClickhouseCluster(
-        "127.0.0.1", 8000, "default", "", "default", 8001, False, None, False, {"events"}, True
+        "127.0.0.1",
+        8000,
+        "default",
+        "",
+        "default",
+        8001,
+        False,
+        None,
+        False,
+        {"events"},
+        True,
     )
 
     cluster_2 = cluster.ClickhouseCluster(
-        "127.0.0.1", 8000, "default", "", "default", 8001, False, None, False, {"transactions"}, True
+        "127.0.0.1",
+        8000,
+        "default",
+        "",
+        "default",
+        8001,
+        False,
+        None,
+        False,
+        {"transactions"},
+        True,
     )
 
     # Same node but different user
     cluster_3 = cluster.ClickhouseCluster(
-        "127.0.0.1", 8000, "readonly", "", "default", 8001, False, None, False, {"metrics"}, True
+        "127.0.0.1",
+        8000,
+        "readonly",
+        "",
+        "default",
+        8001,
+        False,
+        None,
+        False,
+        {"metrics"},
+        True,
     )
 
     assert cluster_1.get_query_connection(
