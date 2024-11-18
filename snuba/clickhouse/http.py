@@ -161,7 +161,7 @@ class HTTPWriteBatch:
     def __init__(
         self,
         executor: ThreadPoolExecutor,
-        pool: HTTPConnectionPool,
+        pool: HTTPConnectionPool | HTTPSConnectionPool,
         metrics: MetricsBackend,
         user: str,
         password: str,
@@ -305,6 +305,7 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         max_connections: int = 1,
         block_connections: bool = False,
     ):
+        self.__pool: HTTPSConnectionPool | HTTPConnectionPool
         if secure:
             self.__pool = HTTPSConnectionPool(
                 host, port, ca_certs=ca_certs, verify=verify
