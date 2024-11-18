@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -17,6 +18,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
+from snuba.redis import RedisClientKey, get_redis_client
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series import DummyMetric, store_timeseries
 
@@ -65,6 +67,19 @@ class TestCreateSubscriptionApi(BaseApiTest):
         response_class = CreateSubscriptionResponse()
         response_class.ParseFromString(response.data)
         assert response_class.subscription_id
+
+        redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
+        stored_subscription_data = list(
+            redis_client.hgetall("subscriptions:eap_spans:0").items()
+        )[0]
+        subscription_request = stored_subscription_data[1]
+        subscription_data = json.loads(subscription_request.decode("utf-8"))
+
+        assert "time_series_request" in subscription_data
+        assert subscription_data["time_window"] == 300
+        assert subscription_data["resolution"] == 60
+        assert subscription_data["request_name"] == "TimeSeriesRequest"
+        assert subscription_data["request_version"] == "v1"
 
     def test_create_invalid_subscription(self) -> None:
         store_timeseries(
