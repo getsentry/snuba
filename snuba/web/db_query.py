@@ -182,6 +182,8 @@ def execute_query(
         with_totals=clickhouse_query.has_totals(),
         robust=robust,
     )
+    print("formatted_query", formatted_query)
+    print("reader.execute result", result)
 
     timer.mark("execute")
     stats.update(
@@ -674,6 +676,7 @@ def db_query(
             trace_id,
             robust,
         )
+        print("db_query/result", result)
     except AllocationPolicyViolations as e:
         update_query_metadata_and_stats(
             query=clickhouse_query,

@@ -29,6 +29,7 @@ class EntityProcessingStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[Request]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
+        print("whereeeee query_processing.py")
         query = pipe_input.data.query
         translated_storage_query = try_translate_storage_query(query)
         if translated_storage_query:
@@ -65,6 +66,7 @@ class StorageProcessingStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> ClickhouseQuery | CompositeQuery[Table]:
+        print("whereeeee query_processing.py/StorageProcessingStage")
         self._apply_default_subscriptable_mapping(pipe_input.data)
         if isinstance(pipe_input.data, ClickhouseQuery):
             query_plan = build_best_plan(pipe_input.data, pipe_input.query_settings, [])

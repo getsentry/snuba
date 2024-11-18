@@ -1376,6 +1376,7 @@ class ParsePopulateResolveMQL(
             tuple[str, Dataset, dict[str, Any], QuerySettings | None]
         ],
     ) -> LogicalQuery:
+        print("whereeeee mql/parser.py")
         mql_str, dataset, mql_context_dict, settings = pipe_input.data
 
         with sentry_sdk.start_span(op="parser", description="parse_mql_query_initial"):
@@ -1419,6 +1420,7 @@ class PostProcessAndValidateMQLQuery(
             ]
         ],
     ) -> LogicalQuery:
+        print("whereeeee query/mql/parser.py")
         query, settings, custom_processing = pipe_input.data
         with sentry_sdk.start_span(op="processor", description="post_processors"):
             _post_process(

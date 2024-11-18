@@ -1587,6 +1587,7 @@ class PostProcessAndValidateQuery(
             ]
         ],
     ) -> LogicalQuery | CompositeQuery[LogicalDataSource]:
+        print("whereeeee snql/parser.py")
         query, dataset, custom_processing = pipe_input.data
         settings = pipe_input.query_settings
 

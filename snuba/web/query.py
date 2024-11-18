@@ -57,6 +57,7 @@ def _run_query_pipeline(
         robust=robust,
         concurrent_queries_gauge=concurrent_queries_gauge,
     ).execute(clickhouse_query)
+    print("query.py/res", res)
     if res.error:
         raise res.error
     elif res.data:

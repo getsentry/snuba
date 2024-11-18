@@ -74,6 +74,7 @@ class ExecutionStage(
     def _process_data(
         self, pipe_input: QueryPipelineData[ClickhouseQuery | CompositeQuery[Table]]
     ) -> QueryResult:
+        print("whereeeee query_execution.py")
         cluster = self.get_cluster(pipe_input.data, pipe_input.query_settings)
         if pipe_input.query_settings.get_dry_run():
             return _dry_run_query_runner(
@@ -147,6 +148,7 @@ def _run_and_apply_column_names(
         concurrent_queries_gauge,
         cluster_name,
     )
+    print("query_execution/result", result)
 
     alias_name_mapping: MutableMapping[str, list[str]] = {}
     for select_col in clickhouse_query.get_selected_columns():
@@ -194,6 +196,7 @@ def _format_storage_query_and_run(
         formatted_query = format_query(clickhouse_query)
 
         formatted_sql = formatted_query.get_sql()
+        print("formatted_sql print", formatted_sql)
         query_size_bytes = len(formatted_sql.encode("utf-8"))
         span.set_data(
             "query", textwrap.wrap(formatted_sql, 100, break_long_words=False)

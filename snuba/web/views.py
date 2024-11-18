@@ -287,6 +287,7 @@ def rpc(*, name: str, version: str) -> Response:
     if isinstance(result_proto, ErrorProto):
         return Response(result_proto.SerializeToString(), status=result_proto.code)
     else:
+        print("views.py/result_proto", result_proto)
         return Response(result_proto.SerializeToString(), status=200)
 
 

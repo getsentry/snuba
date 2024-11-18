@@ -129,7 +129,8 @@ def run_rpc_handler(
     name: str, version: str, data: bytes
 ) -> ProtobufMessage | ErrorProto:
     try:
-        endpoint = RPCEndpoint.get_from_name(name, version)()  # type: ignore
+        endpoint = RPCEndpoint.get_from_name(name, version)()
+        print("endpoint", endpoint)# type: ignore
     except (AttributeError, InvalidConfigKeyError) as e:
         return convert_rpc_exception_to_proto(
             RPCRequestException(
@@ -140,6 +141,7 @@ def run_rpc_handler(
 
     try:
         deserialized_protobuf = endpoint.parse_from_string(data)
+        print("deserialized_protobuf", deserialized_protobuf)
     except DecodeError as e:
         return convert_rpc_exception_to_proto(
             RPCRequestException(
