@@ -130,7 +130,7 @@ def run_rpc_handler(
 ) -> ProtobufMessage | ErrorProto:
     try:
         endpoint = RPCEndpoint.get_from_name(name, version)()
-        print("endpoint", endpoint)# type: ignore
+        print("endpoint", endpoint)  # type: ignore
     except (AttributeError, InvalidConfigKeyError) as e:
         return convert_rpc_exception_to_proto(
             RPCRequestException(

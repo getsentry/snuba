@@ -1,36 +1,38 @@
 import json
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Any, TypedDict, Union
+from uuid import uuid4
 
 import pytest
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, VirtualColumnContext
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
+from google.protobuf.timestamp_pb2 import Timestamp
+from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
-from tests.base import BaseApiTest
-from typing import Any, TypedDict, Union
-from datetime import UTC, datetime, timedelta
-from uuid import uuid4
-from google.protobuf.timestamp_pb2 import Timestamp as ProtobufTimestamp
-from google.protobuf.timestamp_pb2 import Timestamp
-from datetime import UTC, datetime, timedelta, timezone
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    VirtualColumnContext,
+)
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
+from tests.base import BaseApiTest
 
 
 def before_now(**kwargs: float) -> datetime:
     date = datetime.now(UTC) - timedelta(**kwargs)
     return date - timedelta(microseconds=date.microsecond % 1000)
 
+
 BASE_TIME = datetime.now(timezone.utc).replace(
     minute=0, second=0, microsecond=0
 ) - timedelta(minutes=180)
 
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestRachel(BaseApiTest):
-
     def create_span(
         self,
         extra_data: dict[str, Any] | None = None,
@@ -43,7 +45,13 @@ class TestRachel(BaseApiTest):
             start_ts = datetime.now() - timedelta(days=30)
         if extra_data is None:
             extra_data = {}
-        span: dict = {'is_segment': False, 'measurements': {}, 'retention_days': 90, 'sentry_tags': {}, 'tags': {}}
+        span: dict = {
+            "is_segment": False,
+            "measurements": {},
+            "retention_days": 90,
+            "sentry_tags": {},
+            "tags": {},
+        }
         # Load some defaults
         span.update(
             {
@@ -79,11 +87,11 @@ class TestRachel(BaseApiTest):
         for span in spans:
             span["ingest_in_eap"] = is_eap
         assert (
-                self.app.post(
-                    f"/tests/entities/{'eap_' if is_eap else ''}spans/insert",
-                    data=json.dumps(spans),
-                ).status_code
-                == 200
+            self.app.post(
+                f"/tests/entities/{'eap_' if is_eap else ''}spans/insert",
+                data=json.dumps(spans),
+            ).status_code
+            == 200
         )
 
     def test_rachel(self):
@@ -101,7 +109,6 @@ class TestRachel(BaseApiTest):
             ],
             is_eap=True,
         )
-
 
         # response = self.do_request(
         #     {
@@ -165,18 +172,24 @@ class TestRachel(BaseApiTest):
                     label="tags[foo]",
                 ),
                 Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.span_id"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                    ),
                     label="id",
                 ),
                 Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="project.name"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="project.name"
+                    ),
                     label="project.name",
-                )
+                ),
             ],
             order_by=[
                 TraceItemTableRequest.OrderBy(
                     column=Column(
-                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name"),
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.name"
+                        ),
                         label="description",
                     )
                 )
@@ -193,11 +206,9 @@ class TestRachel(BaseApiTest):
                 VirtualColumnContext(
                     from_column_name="sentry.project_id",
                     to_column_name="project.name",
-                    value_map={
-                        "4555051977211905": "bar"
-                    }
+                    value_map={"4555051977211905": "bar"},
                 )
-            ]
+            ],
         )
 
         response = self.app.post(
