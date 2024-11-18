@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import partial
 from typing import (
     Any,
@@ -18,6 +20,10 @@ from typing import (
     Union,
 )
 from uuid import UUID
+
+from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
+    CreateSubscriptionRequest,
+)
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -53,7 +59,19 @@ SUBSCRIPTION_DATA_PAYLOAD_KEYS = {
     "resolution",
     "query",
     "tenant_ids",
+    "subscription_type",
+    "time_series_request",
+    "request_name",
+    "request_version",
 }
+
+REQUEST_TYPE_ALLOWLIST = [("TimeSeriesRequest", "v1")]
+
+
+class SubscriptionType(Enum):
+    SNQL = "snql"
+    RPC = "rpc"
+
 
 logger = logging.getLogger("snuba.subscriptions")
 
@@ -83,9 +101,20 @@ class SubscriptionData(ABC):
     metadata: Mapping[str, Any]
     tenant_ids: Mapping[str, Any] = field(default_factory=lambda: dict())
 
-    @abstractmethod
     def validate(self) -> None:
-        raise NotImplementedError
+        if self.time_window_sec < 60:
+            raise InvalidSubscriptionError(
+                "Time window must be greater than or equal to 1 minute"
+            )
+        elif self.time_window_sec > 60 * 60 * 24:
+            raise InvalidSubscriptionError(
+                "Time window must be less than or equal to 24 hours"
+            )
+
+        if self.resolution_sec < 60:
+            raise InvalidSubscriptionError(
+                "Resolution must be greater than or equal to 1 minute"
+            )
 
     @abstractmethod
     def build_request(
@@ -109,6 +138,102 @@ class SubscriptionData(ABC):
     @abstractmethod
     def to_dict(self) -> Mapping[str, Any]:
         raise NotImplementedError
+
+
+@dataclass(frozen=True, kw_only=True)
+class RPCSubscriptionData(SubscriptionData):
+    """
+    Represents the state of an RPC subscription.
+    """
+
+    time_series_request: str
+
+    request_name: str
+    request_version: str
+
+    def validate(self) -> None:
+        super().validate()
+        if (self.request_name, self.request_version) not in REQUEST_TYPE_ALLOWLIST:
+            raise InvalidSubscriptionError(
+                f"{self.request_name} {self.request_version} not supported."
+            )
+
+    def build_request(
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
+    ) -> Request:
+        raise NotImplementedError
+
+    @classmethod
+    def from_dict(
+        cls, data: Mapping[str, Any], entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+        metadata = {}
+        for key in data.keys():
+            if key == "metadata":
+                metadata.update(data[key])
+            elif key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+                metadata[key] = data[key]
+
+        return RPCSubscriptionData(
+            project_id=data["project_id"],
+            time_window_sec=int(data["time_window"]),
+            resolution_sec=int(data["resolution"]),
+            time_series_request=data["time_series_request"],
+            request_version=data["request_version"],
+            request_name=data["request_name"],
+            entity=entity,
+            metadata=metadata,
+            tenant_ids=data.get("tenant_ids", dict()),
+        )
+
+    @classmethod
+    def from_proto(
+        cls, item: CreateSubscriptionRequest, entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+        request_class = item.time_series_request.__class__
+        class_name = request_class.__name__
+        class_version = request_class.__module__.split(".", 3)[2]
+
+        metadata = {}
+        if item.time_series_request.meta:
+            metadata["organization"] = item.time_series_request.meta.organization_id
+
+        return RPCSubscriptionData(
+            project_id=item.time_series_request.meta.project_ids[0],
+            time_window_sec=item.time_window_secs,
+            resolution_sec=item.resolution_secs,
+            time_series_request=base64.b64encode(
+                item.time_series_request.SerializeToString()
+            ).decode("utf-8"),
+            entity=entity,
+            metadata=metadata,
+            tenant_ids={},
+            request_version=class_version,
+            request_name=class_name,
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        subscription_data_dict = {
+            "project_id": self.project_id,
+            "time_window": self.time_window_sec,
+            "resolution": self.resolution_sec,
+            "time_series_request": self.time_series_request,
+            "request_version": self.request_version,
+            "request_name": self.request_name,
+            "subscription_type": SubscriptionType.RPC.value,
+        }
+        if self.metadata:
+            subscription_data_dict["metadata"] = self.metadata
+
+        return subscription_data_dict
 
 
 @dataclass(frozen=True, kw_only=True)
