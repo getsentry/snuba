@@ -194,20 +194,16 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 "cross_org_query"
             ] = f"This referrer is not registered for the current storage {self._storage_key.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
 
-        if can_run:
-            suggestion = NO_SUGGESTION
-        else:
-            suggestion = SUGGESTION
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=self._get_max_threads(referrer),
+            max_threads=self._get_max_threads(referrer) if can_run else 0,
             explanation=decision_explanation,
             is_throttled=False,
             throttle_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             rejection_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
             quota_used=rate_limit_stats.concurrent,
             quota_unit=QUOTA_UNIT,
-            suggestion=suggestion,
+            suggestion=NO_SUGGESTION if can_run else SUGGESTION,
         )
 
     def _update_quota_balance(

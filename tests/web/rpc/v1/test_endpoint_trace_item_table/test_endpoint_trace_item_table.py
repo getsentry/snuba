@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 import pytest
-from google.protobuf.json_format import MessageToDict
+from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -22,6 +22,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
     AttributeValue,
+    ExtrapolationMode,
     Function,
     VirtualColumnContext,
 )
@@ -35,7 +36,10 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
+from snuba.web.rpc.v1.endpoint_trace_item_table import (
+    EndpointTraceItemTable,
+    _apply_labels_to_columns,
+)
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -127,7 +131,7 @@ BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timed
 )
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     start = BASE_TIME
@@ -241,7 +245,7 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING,
+                                    type=AttributeKey.TYPE_FLOAT,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
@@ -251,7 +255,7 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_STRING,
+                                    type=AttributeKey.TYPE_FLOAT,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_GREATER_THAN,
@@ -478,6 +482,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
                 Column(
@@ -487,6 +492,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="avg(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     ),
                 ),
             ],
@@ -551,6 +557,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                         ),
                         label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -597,6 +604,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -610,6 +618,7 @@ class TestTraceItemTable(BaseApiTest):
                                 type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                             ),
                             label="max(my.float.field)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         )
                     )
                 ),
@@ -619,7 +628,7 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_order_by_aggregation(self) -> None:
+    def test_order_by_aggregation(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -649,6 +658,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -662,6 +672,7 @@ class TestTraceItemTable(BaseApiTest):
                                 type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
                             ),
                             label="avg(eap.measurment)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                         )
                     )
                 ),
@@ -708,6 +719,7 @@ class TestTraceItemTable(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
                         ),
                         label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                     )
                 ),
             ],
@@ -717,3 +729,149 @@ class TestTraceItemTable(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
+
+    def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                organization_id=1,
+                project_ids=[1],
+                start_timestamp=hour_ago,
+                end_timestamp=ts,
+                referrer="something",
+                cogs_category="something",
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(name="sentry.name", type=AttributeKey.TYPE_STRING),
+                    label="description",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                        ),
+                    ),
+                    label="count()",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name")],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].attribute_name == "description"
+        assert response.column_values[1].attribute_name == "count()"
+
+    def test_cast_bug(self, setup_teardown: Any) -> None:
+        """
+        This test was added because the following request was causing a bug. The test was added when the bug was fixed.
+
+        Specifically the bug was related to the 2nd and 3rd columns of the request:
+        "type": "TYPE_INT", "name": "attr_num[foo]
+        "type": "TYPE_BOOLEAN", "name": "attr_num[foo]
+        and how alias was added to CAST.
+        """
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        err_req = {
+            "meta": {
+                "organizationId": "1",
+                "referrer": "api.organization-events",
+                "projectIds": ["1"],
+                "startTimestamp": hour_ago.ToJsonString(),
+                "endTimestamp": ts.ToJsonString(),
+            },
+            "columns": [
+                {
+                    "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                    "label": "description",
+                },
+                {
+                    "key": {"type": "TYPE_INT", "name": "attr_num[foo]"},
+                    "label": "tags[foo,number]",
+                },
+                {
+                    "key": {"type": "TYPE_BOOLEAN", "name": "attr_num[foo]"},
+                    "label": "tags[foo,boolean]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                    "label": "tags[foo,string]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                    "label": "tags[foo]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "sentry.span_id"},
+                    "label": "id",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "project.name"},
+                    "label": "project.name",
+                },
+            ],
+            "orderBy": [
+                {
+                    "column": {
+                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                        "label": "description",
+                    }
+                }
+            ],
+            "groupBy": [
+                {"type": "TYPE_STRING", "name": "sentry.name"},
+                {"type": "TYPE_INT", "name": "attr_num[foo]"},
+                {"type": "TYPE_BOOLEAN", "name": "attr_num[foo]"},
+                {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                {"type": "TYPE_STRING", "name": "attr_str[foo]"},
+                {"type": "TYPE_STRING", "name": "sentry.span_id"},
+                {"type": "TYPE_STRING", "name": "project.name"},
+            ],
+            "virtualColumnContexts": [
+                {
+                    "fromColumnName": "sentry.project_id",
+                    "toColumnName": "project.name",
+                    "valueMap": {"4554989665714177": "bar"},
+                }
+            ],
+        }
+        err_msg = ParseDict(err_req, TraceItemTableRequest())
+        # just ensuring it doesnt raise an exception
+        EndpointTraceItemTable().execute(err_msg)
+
+
+class TestUtils:
+    def test_apply_labels_to_columns(self) -> None:
+        message = TraceItemTableRequest(
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement_2)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label=None,  # type: ignore
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        _apply_labels_to_columns(message)
+        assert message.columns[0].label == "avg(custom_measurement)"
+        assert message.columns[1].label == "avg(custom_measurement_2)"

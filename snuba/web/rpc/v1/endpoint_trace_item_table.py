@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
@@ -32,7 +33,10 @@ from snuba.web.rpc.common.common import (
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.debug_info import extract_response_meta
+from snuba.web.rpc.common.debug_info import (
+    extract_response_meta,
+    setup_trace_query_settings,
+)
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
@@ -73,11 +77,16 @@ def _build_query(request: TraceItemTableRequest) -> Query:
     for column in request.columns:
         if column.HasField("key"):
             key_col = attribute_key_to_expression(column.key)
+            # The key_col expression alias may differ from the column label. That is okay
+            # the attribute key name is used in the groupby, the column label is just the name of
+            # the returned attribute value
             selected_columns.append(
-                SelectedExpression(name=column.key.name, expression=key_col)
+                SelectedExpression(name=column.label, expression=key_col)
             )
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
+            # aggregation label may not be set and the column label takes priority anyways.
+            function_expr = replace(function_expr, alias=column.label)
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=function_expr)
             )
@@ -107,11 +116,15 @@ def _build_query(request: TraceItemTableRequest) -> Query:
 
 
 def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
+    query_settings = (
+        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    )
+
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
         query=_build_query(request),
-        query_settings=HTTPQuerySettings(),
+        query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
             team="eap",
@@ -176,7 +189,7 @@ def _get_page_token(
 
 def _apply_labels_to_columns(in_msg: TraceItemTableRequest) -> TraceItemTableRequest:
     def _apply_label_to_column(column: Column) -> None:
-        if column.label:
+        if column.label != "" and column.label is not None:
             return
 
         if column.HasField("key"):
@@ -202,7 +215,7 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
     aggregation_present = any([c for c in in_msg.columns if c.HasField("aggregation")])
     if non_aggregted_columns != grouped_by_columns and aggregation_present:
         raise BadSnubaRPCRequestException(
-            f"Non aggregated columns should be in group_by. non_aggregted_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
+            f"Non aggregated columns should be in group_by. non_aggregated_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
         )
 
 
@@ -245,7 +258,10 @@ class EndpointTraceItemTable(
         )
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
-            in_msg.meta.request_id, in_msg.meta.debug, [res], [self._timer]
+            in_msg.meta.request_id,
+            in_msg.meta.debug,
+            [res],
+            [self._timer],
         )
         return TraceItemTableResponse(
             column_values=column_values,

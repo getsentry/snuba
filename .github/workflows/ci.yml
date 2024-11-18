@@ -32,15 +32,15 @@ jobs:
         name: Checkout code
       - name: Internal github app token
         id: token
-        uses: getsentry/action-github-app-token@97c9e23528286821f97fba885c1b1123284b29cc # v2.0.0
+        uses: getsentry/action-github-app-token@d4b5da6c5e37703f8c3b3e43abb5705b46e159cc # v3.0.0
         continue-on-error: true
         with:
           app_id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
           private_key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: cache-epoch-1|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
@@ -76,7 +76,7 @@ jobs:
       # If working tree is dirty, commit and update if we have a token
       - name: Apply any pre-commit fixed files
         if: steps.token.outcome == 'success' && github.ref != 'refs/heads/master' && always()
-        uses: getsentry/action-github-commit@v1.0.0
+        uses: getsentry/action-github-commit@v2.1.0
         with:
           github-token: ${{ steps.token.outputs.token }}
 
@@ -98,7 +98,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
@@ -116,7 +116,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
@@ -138,7 +138,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Get branch name
         id: branch
@@ -153,7 +153,7 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Build snuba docker image for CI
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         if: github.repository_owner == 'getsentry'
         with:
           context: .

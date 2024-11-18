@@ -32,9 +32,10 @@ class TestPerReferrerPolicy:
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
         )
 
-        assert not policy.get_quota_allowance(
+        quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
-        ).can_run
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
         # clean up the failed request
         policy.update_quota_balance(
             tenant_ids={"referrer": "statistical_detectors"},
@@ -108,6 +109,8 @@ class TestPerReferrerPolicy:
             0,
             {"referrer": "statistical_detectors"},
         )
-        assert not policy.get_quota_allowance(
+
+        quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
-        ).can_run
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0

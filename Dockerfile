@@ -1,6 +1,6 @@
 ARG PYTHON_VERSION=3.11.8
 
-FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
+FROM python:${PYTHON_VERSION}-slim-bookworm AS build_base
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -150,7 +150,7 @@ EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
-FROM application_base as application
+FROM application_base AS application
 USER 0
 RUN set -ex; \
     apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \

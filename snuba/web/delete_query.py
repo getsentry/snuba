@@ -1,6 +1,6 @@
 import typing
 import uuid
-from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba import settings
 from snuba.attribution import get_app_id
@@ -35,6 +35,8 @@ from snuba.utils.schemas import ColumnValidator, InvalidColumnType
 from snuba.web import QueryException, QueryExtraData, QueryResult
 from snuba.web.db_query import _apply_allocation_policies_quota
 
+ConditionsType = Mapping[str, Sequence[str | int | float]]
+
 
 class DeletesNotEnabledError(Exception):
     pass
@@ -47,7 +49,7 @@ class TooManyOngoingMutationsError(Exception):
 @with_span()
 def delete_from_storage(
     storage: WritableTableStorage,
-    columns: Dict[str, list[Any]],
+    columns: ConditionsType,
     attribution_info: Mapping[str, Any],
 ) -> dict[str, Result]:
     """
@@ -108,7 +110,7 @@ def delete_from_storage(
 def _delete_from_table(
     storage: WritableTableStorage,
     table: str,
-    conditions: Dict[str, Any],
+    conditions: ConditionsType,
     attribution_info: AttributionInfo,
 ) -> Result:
     cluster_name = storage.get_cluster().get_clickhouse_cluster_name()
@@ -200,7 +202,7 @@ def _get_rows_to_delete(
     return typing.cast(int, select_query_results["data"][0]["count"])
 
 
-def _enforce_max_rows(delete_query: Query) -> None:
+def _enforce_max_rows(delete_query: Query) -> int:
     """
     The cost of a lightweight delete operation depends on the number of matching rows in the WHERE clause and the current number of data parts.
     This operation will be most efficient when matching a small number of rows, **and on wide parts** (where the `_row_exists` column is stored
@@ -250,6 +252,8 @@ def _enforce_max_rows(delete_query: Query) -> None:
         raise TooManyDeleteRowsException(
             f"Too many rows to delete ({rows_to_delete}), maximum allowed is {max_rows_allowed}"
         )
+
+    return rows_to_delete
 
 
 def _get_attribution_info(attribution_info: Mapping[str, Any]) -> AttributionInfo:
@@ -343,7 +347,7 @@ def _execute_query(
         )
 
 
-def _construct_condition(columns: Dict[str, Any]) -> Expression:
+def _construct_condition(columns: ConditionsType) -> Expression:
     and_conditions = []
     for col, values in columns.items():
         if len(values) == 1:

@@ -357,6 +357,9 @@ ENABLE_GROUP_ATTRIBUTES_CONSUMER = os.environ.get(
     "ENABLE_GROUP_ATTRIBUTES_CONSUMER", False
 )
 
+# Enable lw deletions consumer (search issues only for now)
+ENABLE_LW_DELETIONS_CONSUMER = os.environ.get("ENABLE_LW_DELETIONS_CONSUMER", False)
+
 # Cutoff time from UTC 00:00:00 to stop running optimize jobs to
 # avoid spilling over to the next day.
 OPTIMIZE_JOB_CUTOFF_TIME = 23

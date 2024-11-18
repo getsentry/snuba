@@ -5,6 +5,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
+    ExtrapolationMode,
     Function,
     VirtualColumnContext,
 )
@@ -17,17 +18,13 @@ from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import (
-    _CurriedFunctionCall,
-    _FunctionCall,
-    and_cond,
-    column,
-    in_cond,
-    literal,
-    literals_array,
-    or_cond,
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.expressions import (
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    SubscriptableReference,
 )
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -77,29 +74,93 @@ def treeify_or_and_conditions(query: Query) -> None:
 
 
 def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
-    function_map: dict[Function.ValueType, _CurriedFunctionCall | _FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum,
-        Function.FUNCTION_AVERAGE: f.avg,
-        Function.FUNCTION_COUNT: f.count,
-        Function.FUNCTION_P50: cf.quantile(0.5),
-        Function.FUNCTION_P90: cf.quantile(0.9),
-        Function.FUNCTION_P95: cf.quantile(0.95),
-        Function.FUNCTION_P99: cf.quantile(0.99),
-        Function.FUNCTION_AVG: f.avg,
-        Function.FUNCTION_MAX: f.max,
-        Function.FUNCTION_MIN: f.min,
-        Function.FUNCTION_UNIQ: f.uniq,
-    }
-
-    agg_func = function_map.get(aggregation.aggregate)
-    if agg_func is None:
-        raise BadSnubaRPCRequestException(
-            f"Aggregation not specified for {aggregation.key.name}"
-        )
     field = attribute_key_to_expression(aggregation.key)
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
-    return agg_func(field, **alias_dict)
+    function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
+        Function.FUNCTION_SUM: f.sum(field, **alias_dict),
+        Function.FUNCTION_AVERAGE: f.avg(field, **alias_dict),
+        Function.FUNCTION_COUNT: f.count(field, **alias_dict),
+        Function.FUNCTION_P50: cf.quantile(0.5)(field, **alias_dict),
+        Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
+        Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
+        Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
+        Function.FUNCTION_AVG: f.avg(field, **alias_dict),
+        Function.FUNCTION_MAX: f.max(field, **alias_dict),
+        Function.FUNCTION_MIN: f.min(field, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+    }
+
+    def get_subscriptable_field(field: Expression) -> SubscriptableReference | None:
+        """
+        Check if the field is a subscriptable reference or a function call with a subscriptable reference as the first parameter to handle the case
+        where the field is casting a subscriptable reference (e.g. for integers). If so, return the subscriptable reference.
+        """
+        if isinstance(field, SubscriptableReference):
+            return field
+        if isinstance(field, FunctionCall) and len(field.parameters) > 0:
+            if len(field.parameters) > 0 and isinstance(
+                field.parameters[0], SubscriptableReference
+            ):
+                return field.parameters[0]
+
+        return None
+
+    subscriptable_field = get_subscriptable_field(field)
+
+    sampling_weight_column = column("sampling_weight")
+    function_map_sample_weighted: dict[
+        Function.ValueType, CurriedFunctionCall | FunctionCall
+    ] = {
+        Function.FUNCTION_SUM: f.sum(
+            f.multiply(field, sampling_weight_column), **alias_dict
+        ),
+        Function.FUNCTION_AVERAGE: f.avgWeighted(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_COUNT: (
+            f.sumIf(
+                sampling_weight_column,
+                f.mapContains(subscriptable_field.column, subscriptable_field.key),
+                **alias_dict,
+            )  # this is ugly, but we do this because the optional attribute aggregation processor can't handle this case as we are not summing up the actual attribute
+            if subscriptable_field is not None
+            else f.sumIf(sampling_weight_column, f.isNotNull(field), **alias_dict)
+        ),
+        Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P90: cf.quantileTDigestWeighted(0.9)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P95: cf.quantileTDigestWeighted(0.95)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_AVG: f.weightedAvg(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_MAX: f.max(field, **alias_dict),
+        Function.FUNCTION_MIN: f.min(field, **alias_dict),
+        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
+    }
+
+    if (
+        aggregation.extrapolation_mode
+        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+    ):
+        agg_func_expr = function_map_sample_weighted.get(aggregation.aggregate)
+    else:
+        agg_func_expr = function_map.get(aggregation.aggregate)
+
+    if agg_func_expr is None:
+        raise BadSnubaRPCRequestException(
+            f"Aggregation not specified for {aggregation.key.name}"
+        )
+
+    return agg_func_expr
 
 
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
@@ -112,8 +173,8 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
     "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_INT,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_INT,
+    "sentry.duration_ms": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
     "sentry.retention_days": AttributeKey.Type.TYPE_INT,
     "sentry.name": AttributeKey.Type.TYPE_STRING,
     "sentry.sample_weight": AttributeKey.Type.TYPE_FLOAT,
@@ -177,20 +238,20 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.type == AttributeKey.Type.TYPE_INT:
         return f.CAST(
             SubscriptableReference(
-                alias=alias,
-                column=column("attr_num"),
-                key=literal(attr_key.name),
+                alias=None, column=column("attr_num"), key=literal(attr_key.name)
             ),
             "Int64",
+            alias=alias,
         )
     if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
         return f.CAST(
             SubscriptableReference(
-                alias=alias,
+                alias=None,
                 column=column("attr_num"),
                 key=literal(attr_key.name),
             ),
             "Boolean",
+            alias=alias,
         )
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
@@ -271,7 +332,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
     :param item_filter:
     :return:
     """
-    if item_filter.and_filter:
+    if item_filter.HasField("and_filter"):
         filters = item_filter.and_filter.filters
         if len(filters) == 0:
             return literal(True)
@@ -279,7 +340,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return trace_item_filters_to_expression(filters[0])
         return and_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
-    if item_filter.or_filter:
+    if item_filter.HasField("or_filter"):
         filters = item_filter.or_filter.filters
         if len(filters) == 0:
             raise BadSnubaRPCRequestException(
@@ -289,7 +350,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return trace_item_filters_to_expression(filters[0])
         return or_cond(*(trace_item_filters_to_expression(x) for x in filters))
 
-    if item_filter.comparison_filter:
+    if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
         k_expression = attribute_key_to_expression(k)
         op = item_filter.comparison_filter.op
@@ -337,7 +398,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
-    if item_filter.exists_filter:
+    if item_filter.HasField("exists_filter"):
         k = item_filter.exists_filter.key
         if k.name in NORMALIZED_COLUMNS.keys():
             return f.isNotNull(column(k.name))
@@ -346,7 +407,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
         else:
             return f.mapContains(column("attr_num"), literal(k.name))
 
-    raise Exception("Unknown filter: ", item_filter)
+    return literal(True)
 
 
 def project_id_and_org_conditions(meta: RequestMeta) -> Expression:
