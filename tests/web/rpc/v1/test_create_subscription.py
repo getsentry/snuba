@@ -73,6 +73,8 @@ class TestCreateSubscriptionApi(BaseApiTest):
         entity_key = EntityKey("eap_spans")
 
         redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
+        # TODO[fix]: querying the redis client like this directly is temporary
+        # because we don't have decode support for rpc queries in the codec yet.
         stored_subscription_data = list(
             redis_client.hgetall(
                 f"subscriptions:{entity_key.value}:{partition}"
