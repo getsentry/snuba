@@ -12,7 +12,10 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    ExtrapolationMode,
+    Reliability,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -172,17 +175,19 @@ def _convert_result_timeseries(
                     f"{timeseries.label}_average_sample_rate"
                 ]
                 sample_count = row_data[f"{timeseries.label}_count"]
+
                 reliability = calculate_reliability(
                     row_data[timeseries.label],
                     upper_confidence_limit,
                     sample_count,
                 )
+                reliability = Reliability.HIGH if reliability else Reliability.LOW
                 timeseries.data_points.append(
                     DataPoint(
                         data=row_data[timeseries.label],
                         data_present=True,
                         avg_sampling_rate=average_sample_rate,
-                        is_reliable=reliability,
+                        reliability=reliability,
                     )
                 )
     return result_timeseries.values()

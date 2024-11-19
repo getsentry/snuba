@@ -172,12 +172,31 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
     return agg_func_expr
 
 
+def get_attribute_confidence_interval_alias(
+    aggregation: AttributeAggregation,
+) -> str | None:
+    function_alias_map = {
+        Function.FUNCTION_COUNT: "count",
+        Function.FUNCTION_AVERAGE: "avg",
+        Function.FUNCTION_SUM: "sum",
+        Function.FUNCTION_P50: "p50",
+        Function.FUNCTION_P90: "p90",
+        Function.FUNCTION_P95: "p95",
+        Function.FUNCTION_P99: "p99",
+    }
+
+    if function_alias_map.get(aggregation.aggregate) is not None:
+        return f"{aggregation.label}_upper_confidence_limit_{function_alias_map.get(aggregation.aggregate)}"
+
+    return None
+
+
 def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation
     """
     field = attribute_key_to_expression(aggregation.key)
-    alias = f"{aggregation.label}_upper_confidence_limit" if aggregation.label else None
+    alias = get_attribute_confidence_interval_alias(aggregation)
     alias_dict = {"alias": alias} if alias else {}
     count_column_default = (
         f.sumIf(sampling_weight_column, f.mapContains(field.column, field.key))
@@ -338,12 +357,19 @@ def get_count_column(aggregation: AttributeAggregation) -> Expression:
 
 
 def calculate_reliability(
-    estimate: float, upper_confidence_limit: float, sample_count: int
+    estimate: float,
+    upper_confidence_limit: float,
+    sample_count: int,
+    confidence_interval_multiplier: float = 1.5,
+    sample_count_threshold: int = 100,
 ) -> bool:
     """
     A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
     """
-    return upper_confidence_limit > estimate * 1.5 and sample_count >= 100
+    return (
+        upper_confidence_limit > estimate * confidence_interval_multiplier
+        and sample_count >= sample_count_threshold
+    )
 
 
 def get_total_sample_count_column(aggregation: AttributeAggregation) -> Expression:

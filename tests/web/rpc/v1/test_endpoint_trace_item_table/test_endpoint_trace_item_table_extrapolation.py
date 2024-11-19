@@ -225,3 +225,95 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             measurement_count_duration == 36
         )  # weighted count (all events have duration) - 5*1 + 1 + 2 + 4 + 8 + 16
         assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
+
+    def test_count_reliability(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        tags = {"custom_tag": "blah"}
+        messages_w_measurement = [
+            gen_message(
+                start - timedelta(minutes=i),
+                measurements={
+                    "custom_measurement": {
+                        "value": i
+                    },  # this results in values of 0, 1, 2, 3, and 4
+                    "server_sample_rate": {
+                        "value": 1.0 / (2**i)
+                    },  # this results in sampling weights of 1, 2, 4, 8, and 16
+                },
+                tags=tags,
+            )
+            for i in range(5)
+        ]
+        messages_no_measurement = [
+            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(5)
+        ]
+        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="sum(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVERAGE,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="count(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_P90,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="p90(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        measurement_sum = [v.val_float for v in response.column_values[0].results][0]
+        measurement_avg = [v.val_float for v in response.column_values[1].results][0]
+        measurement_count = [v.val_float for v in response.column_values[2].results][0]
+        measurement_p90 = [v.val_float for v in response.column_values[3].results][0]
+        assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
+        assert (
+            abs(measurement_avg - 3.16129032) < 0.000001
+        )  # weighted average - (0*1 + 1*2 + 2*4 + 3*8 + 4*16) / (1+2+4+8+16)
+        assert measurement_count == 31  # weighted count - 1 + 2 + 4 + 8 + 16
+        assert abs(measurement_p90 - 4) < 0.01  # weighted p90 - 4
