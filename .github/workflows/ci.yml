@@ -154,34 +154,29 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v6
-        if: github.repository_owner == 'getsentry'
         with:
           context: .
           # push: true
           load: true
           target: testing
           tags: |
-            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-            ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-            ghcr.io/getsentry/snuba-ci:latest
+            ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
+            ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
           cache-from: |
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
           # cache-to is re-implemented using the next step, to run conditionally for contributors
 
       - name: Publish images for cache
-        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
-        # outside contributors won't be able to push to the docker registry
-        # ignore the failures in this step
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up CI
-          docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
-          docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
+          docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
           if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
             # The latest tag should only be published on `master`
-            docker push ghcr.io/getsentry/snuba-ci:latest
+            docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
           fi
 
   tests:
