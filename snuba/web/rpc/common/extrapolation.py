@@ -1,3 +1,5 @@
+from typing import List
+
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     Function,
@@ -21,9 +23,65 @@ z_value = 1.96
 
 
 class CustomColumn:
-    def __init__(self, expression: Expression, alias: str | None = None):
+    """
+    A custom column that can be used to represent a column in the query result.
+    """
+
+    def __init__(
+        self,
+        expression: Expression,
+        expression_parameters: List[str],
+        column_prefix: str,
+    ):
         self.expression = expression
-        self.alias = alias
+        self.column_prefix = column_prefix
+        self.alias = f"{column_prefix}({','.join(expression_parameters)})"
+
+    def get_alias(self) -> str:
+        return self.alias
+
+    def get_expression(self) -> Expression:
+        return self.expression
+
+    @staticmethod
+    def parse_alias(alias: str, prefix: str) -> dict:
+        """
+        Parse the alias to retrieve the information needed to reproduce the column.
+        This should be implemented by subclasses.
+        """
+        if alias.startswith(f"{prefix}(") and alias.endswith(")"):
+            parts = alias[len(prefix) + 1 : -1].split(",")
+            return parts
+        raise ValueError(f"Invalid alias format for {prefix} column")
+
+
+class UpperConfidenceLimit(CustomColumn):
+    """
+    A custom column representing the upper confidence limit of another column.
+    """
+
+    def __init__(
+        self, referenced_column: str, confidence_type: str, expression: Expression
+    ):
+        super().__init__(
+            expression,
+            [referenced_column, confidence_type],
+            "UCL",
+        )
+        self.referenced_column = referenced_column
+        self.confidence_type = confidence_type
+
+    @staticmethod
+    def parse_alias(alias: str) -> dict:
+        """
+        Parse the alias to retrieve the referenced column and confidence level.
+        """
+
+    def get_referenced_column(self) -> str:
+        return self.referenced_column
+
+    def get_confidence_type(self) -> str:
+        return self.confidence_type
 
 
 def get_extrapolated_function(
