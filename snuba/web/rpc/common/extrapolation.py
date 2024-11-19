@@ -20,6 +20,12 @@ sampling_weight_column = column("sampling_weight")
 z_value = 1.96
 
 
+class CustomColumn:
+    def __init__(self, expression: Expression, alias: str | None = None):
+        self.expression = expression
+        self.alias = alias
+
+
 def get_extrapolated_function(
     aggregation: AttributeAggregation,
 ) -> CurriedFunctionCall | FunctionCall | None:
