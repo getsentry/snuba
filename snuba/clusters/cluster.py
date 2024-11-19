@@ -177,10 +177,22 @@ class ConnectionCache:
         user: str,
         password: str,
         database: str,
+        secure: bool,
+        ca_certs: Optional[str],
+        verify: Optional[bool],
     ) -> ClickhousePool:
         with self.__lock:
             settings, timeout = client_settings.value
-            cache_key = (node, client_settings, user, password, database)
+            cache_key = (
+                node,
+                client_settings,
+                user,
+                password,
+                database,
+                secure,
+                ca_certs,
+                verify,
+            )
             if cache_key not in self.__cache:
                 self.__cache[cache_key] = ClickhousePool(
                     node.host_name,
@@ -190,6 +202,9 @@ class ConnectionCache:
                     database,
                     client_settings=settings,
                     send_receive_timeout=timeout,
+                    secure=secure,
+                    ca_certs=ca_certs,
+                    verify=verify,
                 )
 
             return self.__cache[cache_key]
