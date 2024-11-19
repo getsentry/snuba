@@ -1,3 +1,4 @@
+import base64
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -18,6 +19,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Function,
 )
 
+from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series import DummyMetric, store_timeseries
@@ -67,15 +69,21 @@ class TestCreateSubscriptionApi(BaseApiTest):
         response_class = CreateSubscriptionResponse()
         response_class.ParseFromString(response.data)
         assert response_class.subscription_id
+        partition = response_class.subscription_id.split("/", 1)[0]
+        entity_key = EntityKey("eap_spans")
 
         redis_client = get_redis_client(RedisClientKey.SUBSCRIPTION_STORE)
         stored_subscription_data = list(
-            redis_client.hgetall("subscriptions:eap_spans:0").items()
+            redis_client.hgetall(
+                f"subscriptions:{entity_key.value}:{partition}"
+            ).items()
         )[0]
         subscription_request = stored_subscription_data[1]
         subscription_data = json.loads(subscription_request.decode("utf-8"))
 
-        assert "time_series_request" in subscription_data
+        time_series_request = subscription_data["time_series_request"]
+        request_class = TimeSeriesRequest()
+        request_class.ParseFromString(base64.b64decode(time_series_request))
         assert subscription_data["time_window"] == 300
         assert subscription_data["resolution"] == 60
         assert subscription_data["request_name"] == "TimeSeriesRequest"
