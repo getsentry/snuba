@@ -84,7 +84,7 @@ def gen_message(
         "origin": "auto.http.django",
         "project_id": 1,
         "received": 1721319572.877828,
-        "retention_days": 90,
+        "retention_days": 91,
         "segment_id": "8873a98879faf06d",
         "sentry_tags": {
             "category": "http",
@@ -841,6 +841,7 @@ class TestTraceItemTable(BaseApiTest):
         err_msg = ParseDict(err_req, TraceItemTableRequest())
         # just ensuring it doesnt raise an exception
         EndpointTraceItemTable().execute(err_msg)
+        assert False
 
 
 class TestUtils:

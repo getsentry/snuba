@@ -251,6 +251,7 @@ class EndpointTraceItemTable(
             uuid.uuid4()
         )
         snuba_request = _build_snuba_request(in_msg)
+        print("snuba_request", snuba_request)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
