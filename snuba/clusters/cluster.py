@@ -162,7 +162,16 @@ class Cluster(ABC, Generic[TWriterOptions]):
 ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
-CacheKey = Tuple[ClickhouseNode, ClickhouseClientSettings, str, str, str]
+CacheKey = Tuple[
+    ClickhouseNode,
+    ClickhouseClientSettings,
+    str,
+    str,
+    str,
+    bool,
+    Optional[str],
+    Optional[bool],
+]
 
 
 class ConnectionCache:
