@@ -16,6 +16,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     ExtrapolationMode,
     Function,
+    Reliability,
 )
 
 from snuba.datasets.storages.factory import get_storage
@@ -118,8 +119,8 @@ def store_timeseries(
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
         numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
-        measurements = {m.name: m.get_value(secs) for m in measurements}
-        messages.append(gen_message(dt, tags, numerical_attributes, measurements))
+        measurements_dict = {m.name: {"value": m.get_value(secs)} for m in measurements}
+        messages.append(gen_message(dt, tags, numerical_attributes, measurements_dict))
     spans_storage = get_storage(StorageKey("eap_spans"))
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -127,17 +128,19 @@ def store_timeseries(
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
-    def test_count(self) -> None:
-        # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 300
-        query_duration = 60 * 30
+    def test_count_unreliable(self) -> None:
+        # store a a test metric with a value of 1, every second for an hour
+        granularity_secs = 120
+        query_duration = 3600
         store_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
             measurements=[
-                DummyMeasurement("client_sample_rate", get_value=lambda s: 1)
+                DummyMeasurement(
+                    "client_sample_rate", get_value=lambda s: 0.0001
+                )  # 0.01% sample rate should result in unreliable extrapolation
             ],
         )
 
@@ -156,13 +159,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_COUNT,
                     key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="count",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-                ),
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_COUNT,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="count",
+                    label="count(test_metric)",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                 ),
             ],
@@ -175,18 +172,73 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
         assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
-                label="avg",
+                label="count(test_metric)",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=1, data_present=True)
+                    DataPoint(
+                        data=120 / 0.0001,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_LOW,
+                        avg_sampling_rate=0.0001,
+                    )
                     for _ in range(len(expected_buckets))
                 ],
             ),
+        ]
+
+    def test_count_reliable(self) -> None:
+        # store a a test metric with a value of 1, every second for an hour
+        granularity_secs = 120
+        query_duration = 3600
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            measurements=[
+                DummyMeasurement(
+                    "client_sample_rate", get_value=lambda s: 1
+                )  # 100% sample rate should result in reliable extrapolation
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="count(test_metric)",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
             TimeSeries(
-                label="sum",
+                label="count(test_metric)",
                 buckets=expected_buckets,
                 data_points=[
-                    DataPoint(data=300, data_present=True)
+                    DataPoint(
+                        data=120,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_HIGH,
+                        avg_sampling_rate=0.0001,
+                    )
                     for _ in range(len(expected_buckets))
                 ],
             ),

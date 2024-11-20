@@ -30,14 +30,17 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.common.aggregation import (
     aggregation_to_expression,
-    attribute_key_to_expression,
-    base_conditions_and,
     calculate_reliability,
     get_average_sample_rate_column,
     get_count_column,
+    get_custom_column_information,
     get_upper_confidence_column,
+)
+from snuba.web.rpc.common.common import (
+    attribute_key_to_expression,
+    base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -168,20 +171,48 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                upper_confidence_limit = row_data[
-                    f"{timeseries.label}_upper_confidence_limit"
-                ]
-                average_sample_rate = row_data[
-                    f"{timeseries.label}_average_sample_rate"
-                ]
-                sample_count = row_data[f"{timeseries.label}_count"]
+                upper_confidence_limit = None
+                average_sample_rate = 0
+                sample_count = None
+                for col_name, col_value in row_data.items():
+                    if (
+                        col_name not in group_by_labels
+                        and col_name not in aggregation_labels
+                        and col_name != "time"
+                    ):
+                        custom_column_information = get_custom_column_information(
+                            col_name
+                        )
+                        if (
+                            custom_column_information.referenced_column is None
+                            or custom_column_information.referenced_column
+                            != timeseries.label
+                        ):
+                            continue
 
-                reliability = calculate_reliability(
-                    row_data[timeseries.label],
-                    upper_confidence_limit,
-                    sample_count,
-                )
-                reliability = Reliability.HIGH if reliability else Reliability.LOW
+                        if custom_column_information.column_type == "upper_confidence":
+                            upper_confidence_limit = col_value
+                        elif (
+                            custom_column_information.column_type
+                            == "average_sample_rate"
+                        ):
+                            average_sample_rate = col_value
+                        elif custom_column_information.column_type == "count":
+                            sample_count = col_value
+
+                reliability = Reliability.RELIABILITY_UNSPECIFIED
+                if upper_confidence_limit is not None and sample_count is not None:
+                    reliability = calculate_reliability(
+                        row_data[timeseries.label],
+                        upper_confidence_limit,
+                        sample_count,
+                    )
+                    reliability = (
+                        Reliability.RELIABILITY_HIGH
+                        if reliability
+                        else Reliability.RELIABILITY_LOW
+                    )
+
                 timeseries.data_points.append(
                     DataPoint(
                         data=row_data[timeseries.label],
