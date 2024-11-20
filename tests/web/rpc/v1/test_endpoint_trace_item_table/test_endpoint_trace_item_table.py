@@ -877,7 +877,6 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(spans_storage, messages)
 
-        # breakpoint()
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         err_req = {

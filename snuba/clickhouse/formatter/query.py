@@ -108,7 +108,6 @@ def _format_query_content(
     Should we have more differences going on we should break this
     method into smaller ones.
     """
-    print("new ParsingContext created", query)
     parsing_context = ParsingContext()
     formatter = expression_formatter_type(parsing_context)
 
@@ -174,16 +173,9 @@ def _format_on_cluster(
 def _format_select(
     query: AbstractQuery, formatter: ExpressionVisitor[str]
 ) -> StringNode:
-    selected_cols = []
-    for e in query.get_selected_columns():
-        # breakpoint()
-        print("e in query.get_selected_columns", e.expression)
-        selected_col = e.expression.accept(formatter)
-        print("selected_col singular", selected_col)
-        selected_cols.append(selected_col)
-    print("selected_cols", selected_cols)
-    formatter.cache_all()
-    # breakpoint()
+    selected_cols = [
+        e.expression.accept(formatter) for e in query.get_selected_columns()
+    ]
     return StringNode(f"SELECT {', '.join(selected_cols)}")
 
 
