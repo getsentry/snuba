@@ -350,7 +350,7 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
             CreateSubscriptionRequestProto(
                 time_series_request=TimeSeriesRequest(
                     meta=RequestMeta(
-                        project_ids=[1, 2, 3],
+                        project_ids=[1],
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
@@ -362,7 +362,7 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
                                 type=AttributeKey.TYPE_FLOAT, name="test_metric"
                             ),
                             label="sum",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
                     ],
                     filter=TraceItemFilter(

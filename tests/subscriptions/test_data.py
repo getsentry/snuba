@@ -108,7 +108,7 @@ TESTS = [
             CreateSubscriptionRequestProto(
                 time_series_request=TimeSeriesRequest(
                     meta=RequestMeta(
-                        project_ids=[1, 2, 3],
+                        project_ids=[1],
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
@@ -120,7 +120,7 @@ TESTS = [
                                 type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                             ),
                             label="count",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
                     ],
                 ),
@@ -138,7 +138,7 @@ TESTS = [
             CreateSubscriptionRequestProto(
                 time_series_request=TimeSeriesRequest(
                     meta=RequestMeta(
-                        project_ids=[1, 2, 3],
+                        project_ids=[1],
                         organization_id=1,
                         cogs_category="something",
                         referrer="something",
@@ -150,7 +150,7 @@ TESTS = [
                                 type=AttributeKey.TYPE_FLOAT, name="my.float.field"
                             ),
                             label="count",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
                     ],
                     filter=TraceItemFilter(

@@ -68,7 +68,7 @@ def build_rpc_subscription_data_from_proto(
                             type=AttributeKey.TYPE_FLOAT, name="test_metric"
                         ),
                         label="sum",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
                 ],
                 filter=TraceItemFilter(

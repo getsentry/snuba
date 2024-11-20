@@ -209,7 +209,7 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
                                 type=AttributeKey.TYPE_FLOAT, name="test_metric"
                             ),
                             label="sum",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                         ),
                     ],
                     filter=TraceItemFilter(
