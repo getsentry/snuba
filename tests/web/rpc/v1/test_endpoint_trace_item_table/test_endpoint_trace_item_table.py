@@ -875,7 +875,7 @@ class TestTraceItemTable(BaseApiTest):
                 "end_timestamp_precise": dt.timestamp() + 1,
             }
         ]
-        write_raw_unprocessed_events(spans_storage, messages)
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
@@ -936,9 +936,7 @@ class TestTraceItemTable(BaseApiTest):
         }
 
         err_msg = ParseDict(err_req, TraceItemTableRequest())
-        # just ensuring it doesnt raise an exception
         result = EndpointTraceItemTable().execute(err_msg)
-        print(result)
 
         assert result.column_values[1].attribute_name == "tags[foo,number]"
         assert result.column_values[1].results[0].val_int == 5

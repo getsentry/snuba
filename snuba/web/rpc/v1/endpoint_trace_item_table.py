@@ -65,6 +65,10 @@ def _convert_order_by(
     return res
 
 
+def _build_label_mapping_key(column_key: AttributeKey) -> str:
+    return column_key.name + " " + AttributeKey.Type.Name(column_key.type)
+
+
 def _build_query(request: TraceItemTableRequest) -> Query:
     # TODO: This is hardcoded still
     entity = Entity(
@@ -73,16 +77,19 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         sample=None,
     )
 
+    label_mapping = {}
+
     selected_columns = []
     for column in request.columns:
         if column.HasField("key"):
-            key_col = attribute_key_to_expression(column.key)
+            key_col = attribute_key_to_expression(column.key, column.label)
             # The key_col expression alias may differ from the column label. That is okay
             # the attribute key name is used in the groupby, the column label is just the name of
             # the returned attribute value
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=key_col)
             )
+            label_mapping[_build_label_mapping_key(column.key)] = column.label
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
             # aggregation label may not be set and the column label takes priority anyways.
@@ -104,7 +111,8 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         ),
         order_by=_convert_order_by(request.order_by),
         groupby=[
-            attribute_key_to_expression(attr_key) for attr_key in request.group_by
+            attribute_key_to_expression(attr_key, _build_label_mapping_key(attr_key))
+            for attr_key in request.group_by
         ],
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data

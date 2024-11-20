@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Final, Mapping, Sequence, Set
+from typing import Final, Mapping, Optional, Sequence, Set
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
@@ -194,12 +194,15 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 }
 
 
-def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+def attribute_key_to_expression(
+    attr_key: AttributeKey, alias: Optional[str] = None
+) -> Expression:
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
         )
-    alias = attr_key.name
+    if alias is None:
+        alias = attr_key.name
 
     if attr_key.name == "sentry.trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
