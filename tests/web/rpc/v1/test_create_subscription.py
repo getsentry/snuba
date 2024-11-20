@@ -20,6 +20,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
+from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series import DummyMetric, store_timeseries
@@ -188,13 +189,17 @@ class TestCreateSubscriptionApi(BaseApiTest):
         response_class = CreateSubscriptionResponse()
         response_class.ParseFromString(response.data)
         assert response_class.subscription_id
-        partition = response_class.subscription_id.split("/", 1)[0]
+        partition = int(response_class.subscription_id.split("/", 1)[0])
 
-        rpc_subscription_data = RedisSubscriptionDataStore(
-            get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-            EntityKey("eap_spans"),
-            partition,
-        ).all()[0][1]
+        rpc_subscription_data = list(
+            RedisSubscriptionDataStore(
+                get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
+                EntityKey("eap_spans"),
+                PartitionId(partition),
+            ).all()
+        )[0][1]
+
+        assert isinstance(rpc_subscription_data, RPCSubscriptionData)
 
         request_class = TimeSeriesRequest()
         request_class.ParseFromString(
