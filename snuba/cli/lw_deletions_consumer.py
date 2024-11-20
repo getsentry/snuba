@@ -80,6 +80,12 @@ logger = logging.getLogger(__name__)
     help="Minimum number of messages per topic+partition the local consumer queue should contain before messages are sent to kafka.",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--group-instance-id",
+    type=str,
+    default=None,
+    help="Kafka group instance id. passing a value here will run kafka with static membership.",
+)
 def lw_deletions_consumer(
     *,
     consumer_group: str,
@@ -92,6 +98,7 @@ def lw_deletions_consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: str,
+    group_instance_id: Optional[str],
 ) -> None:
     setup_logging(log_level)
     setup_sentry()
@@ -134,7 +141,7 @@ def lw_deletions_consumer(
             slice_id=None,
             max_batch_size=max_rows_batch_size,
             max_batch_time_ms=max_batch_time_ms,
-            group_instance_id=consumer_group,
+            group_instance_id=group_instance_id,
         )
 
         consumer_builder = ConsumerBuilder(
@@ -156,6 +163,7 @@ def lw_deletions_consumer(
             join_timeout=None,
             enforce_schema=False,
             metrics_tags=metrics_tags,
+            group_instance_id=group_instance_id,
         )
 
         writable_storage = get_writable_storage(StorageKey(storage))
