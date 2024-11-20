@@ -162,6 +162,167 @@ class _SubscriptionData(ABC, Generic[TRequest]):
 
 
 @dataclass(frozen=True, kw_only=True)
+class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
+    """
+    Represents the state of an RPC subscription.
+    """
+
+    time_series_request: str
+
+    request_name: str
+    request_version: str
+
+    def validate(self) -> None:
+        super().validate()
+        if (self.request_name, self.request_version) not in REQUEST_TYPE_ALLOWLIST:
+            raise InvalidSubscriptionError(
+                f"{self.request_name} {self.request_version} not supported."
+            )
+
+        request = TimeSeriesRequest()
+        request.ParseFromString(base64.b64decode(self.time_series_request))
+
+        if not (request.meta) or len(request.meta.project_ids) == 0:
+            raise InvalidSubscriptionError("Project ID is required.")
+
+        if len(request.meta.project_ids) != 1:
+            raise InvalidSubscriptionError("Multiple project IDs not supported.")
+
+        if not request.aggregations or len(request.aggregations) != 1:
+            raise InvalidSubscriptionError("Exactly one aggregation required.")
+
+        if request.group_by:
+            raise InvalidSubscriptionError("Group bys not supported.")
+
+    def build_request(
+        self,
+        dataset: Dataset,
+        timestamp: datetime,
+        offset: Optional[int],
+        timer: Timer,
+        metrics: Optional[MetricsBackend] = None,
+        referrer: str = SUBSCRIPTION_REFERRER,
+    ) -> TimeSeriesRequest:
+
+        request_class = EndpointTimeSeries().request_class()()
+        request_class.ParseFromString(base64.b64decode(self.time_series_request))
+
+        # TODO: update it to round to the lowest granularity
+        # rounded_ts = int(timestamp.replace(tzinfo=UTC).timestamp() / 15) * 15
+        rounded_ts = (
+            int(timestamp.replace(tzinfo=UTC).timestamp() / self.time_window_sec)
+            * self.time_window_sec
+        )
+        rounded_start = datetime.utcfromtimestamp(rounded_ts)
+
+        start_time_proto = Timestamp()
+        start_time_proto.FromDatetime(
+            rounded_start - timedelta(seconds=self.time_window_sec)
+        )
+        end_time_proto = Timestamp()
+        end_time_proto.FromDatetime(rounded_start)
+        request_class.meta.start_timestamp.CopyFrom(start_time_proto)
+        request_class.meta.end_timestamp.CopyFrom(end_time_proto)
+
+        request_class.granularity_secs = self.time_window_sec
+
+        return request_class
+
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TimeSeriesRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        response = EndpointTimeSeries().execute(request)
+        if not response.result_timeseries:
+            result: Result = {
+                "meta": [],
+                "data": [{request.aggregations[0].label: 0}],
+                "trace_output": "",
+            }
+            return QueryResult(
+                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+            )
+
+        timeseries = response.result_timeseries[0]
+        data = [{timeseries.label: timeseries.data_points[0].data}]
+
+        result = {"meta": [], "data": data, "trace_output": ""}
+        return QueryResult(
+            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+        )
+
+    @classmethod
+    def from_dict(
+        cls, data: Mapping[str, Any], entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+        metadata = {}
+        for key in data.keys():
+            if key == "metadata":
+                metadata.update(data[key])
+            elif key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
+                metadata[key] = data[key]
+
+        return RPCSubscriptionData(
+            project_id=data["project_id"],
+            time_window_sec=int(data["time_window"]),
+            resolution_sec=int(data["resolution"]),
+            time_series_request=data["time_series_request"],
+            request_version=data["request_version"],
+            request_name=data["request_name"],
+            entity=entity,
+            metadata=metadata,
+            tenant_ids=data.get("tenant_ids", dict()),
+        )
+
+    @classmethod
+    def from_proto(
+        cls, item: CreateSubscriptionRequest, entity_key: EntityKey
+    ) -> RPCSubscriptionData:
+        entity: Entity = get_entity(entity_key)
+        request_class = item.time_series_request.__class__
+        class_name = request_class.__name__
+        class_version = request_class.__module__.split(".", 3)[2]
+
+        metadata = {}
+        if item.time_series_request.meta:
+            metadata["organization"] = item.time_series_request.meta.organization_id
+
+        return RPCSubscriptionData(
+            project_id=item.time_series_request.meta.project_ids[0],
+            time_window_sec=item.time_window_secs,
+            resolution_sec=item.resolution_secs,
+            time_series_request=base64.b64encode(
+                item.time_series_request.SerializeToString()
+            ).decode("utf-8"),
+            entity=entity,
+            metadata=metadata,
+            tenant_ids={},
+            request_version=class_version,
+            request_name=class_name,
+        )
+
+    def to_dict(self) -> Mapping[str, Any]:
+        subscription_data_dict = {
+            "project_id": self.project_id,
+            "time_window": self.time_window_sec,
+            "resolution": self.resolution_sec,
+            "time_series_request": self.time_series_request,
+            "request_version": self.request_version,
+            "request_name": self.request_name,
+            "subscription_type": SubscriptionType.RPC.value,
+        }
+        if self.metadata:
+            subscription_data_dict["metadata"] = self.metadata
+
+        return subscription_data_dict
+
+
+@dataclass(frozen=True, kw_only=True)
 class SnQLSubscriptionData(_SubscriptionData[Request]):
     """
     Represents the state of a subscription.
@@ -329,167 +490,6 @@ class SnQLSubscriptionData(_SubscriptionData[Request]):
         if subscription_processors:
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
-        return subscription_data_dict
-
-
-@dataclass(frozen=True, kw_only=True)
-class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
-    """
-    Represents the state of an RPC subscription.
-    """
-
-    time_series_request: str
-
-    request_name: str
-    request_version: str
-
-    def validate(self) -> None:
-        super().validate()
-        if (self.request_name, self.request_version) not in REQUEST_TYPE_ALLOWLIST:
-            raise InvalidSubscriptionError(
-                f"{self.request_name} {self.request_version} not supported."
-            )
-
-        request = TimeSeriesRequest()
-        request.ParseFromString(base64.b64decode(self.time_series_request))
-
-        if not (request.meta) or len(request.meta.project_ids) == 0:
-            raise InvalidSubscriptionError("Project ID is required.")
-
-        if len(request.meta.project_ids) != 1:
-            raise InvalidSubscriptionError("Multiple project IDs not supported.")
-
-        if not request.aggregations or len(request.aggregations) != 1:
-            raise InvalidSubscriptionError("Exactly one aggregation required.")
-
-        if request.group_by:
-            raise InvalidSubscriptionError("Group bys not supported.")
-
-    def build_request(
-        self,
-        dataset: Dataset,
-        timestamp: datetime,
-        offset: Optional[int],
-        timer: Timer,
-        metrics: Optional[MetricsBackend] = None,
-        referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> TimeSeriesRequest:
-
-        request_class = EndpointTimeSeries().request_class()()
-        request_class.ParseFromString(base64.b64decode(self.time_series_request))
-
-        # TODO: update it to round to the lowest granularity
-        # rounded_ts = int(timestamp.replace(tzinfo=UTC).timestamp() / 15) * 15
-        rounded_ts = (
-            int(timestamp.replace(tzinfo=UTC).timestamp() / self.time_window_sec)
-            * self.time_window_sec
-        )
-        rounded_start = datetime.utcfromtimestamp(rounded_ts)
-
-        start_time_proto = Timestamp()
-        start_time_proto.FromDatetime(
-            rounded_start - timedelta(seconds=self.time_window_sec)
-        )
-        end_time_proto = Timestamp()
-        end_time_proto.FromDatetime(rounded_start)
-        request_class.meta.start_timestamp.CopyFrom(start_time_proto)
-        request_class.meta.end_timestamp.CopyFrom(end_time_proto)
-
-        request_class.granularity_secs = self.time_window_sec
-
-        return request_class
-
-    def run_query(
-        self,
-        dataset: Dataset,
-        request: TimeSeriesRequest,
-        timer: Timer,
-        robust: bool = False,
-        concurrent_queries_gauge: Optional[Gauge] = None,
-    ) -> QueryResult:
-        response = EndpointTimeSeries().execute(request)
-        if not response.result_timeseries:
-            result: Result = {
-                "meta": [],
-                "data": [{request.aggregations[0].label: 0}],
-                "trace_output": "",
-            }
-            return QueryResult(
-                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
-            )
-
-        timeseries = response.result_timeseries[0]
-        data = [{timeseries.label: timeseries.data_points[0].data}]
-
-        result = {"meta": [], "data": data, "trace_output": ""}
-        return QueryResult(
-            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
-        )
-
-    @classmethod
-    def from_dict(
-        cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> RPCSubscriptionData:
-        entity: Entity = get_entity(entity_key)
-        metadata = {}
-        for key in data.keys():
-            if key == "metadata":
-                metadata.update(data[key])
-            elif key not in SUBSCRIPTION_DATA_PAYLOAD_KEYS:
-                metadata[key] = data[key]
-
-        return RPCSubscriptionData(
-            project_id=data["project_id"],
-            time_window_sec=int(data["time_window"]),
-            resolution_sec=int(data["resolution"]),
-            time_series_request=data["time_series_request"],
-            request_version=data["request_version"],
-            request_name=data["request_name"],
-            entity=entity,
-            metadata=metadata,
-            tenant_ids=data.get("tenant_ids", dict()),
-        )
-
-    @classmethod
-    def from_proto(
-        cls, item: CreateSubscriptionRequest, entity_key: EntityKey
-    ) -> RPCSubscriptionData:
-        entity: Entity = get_entity(entity_key)
-        request_class = item.time_series_request.__class__
-        class_name = request_class.__name__
-        class_version = request_class.__module__.split(".", 3)[2]
-
-        metadata = {}
-        if item.time_series_request.meta:
-            metadata["organization"] = item.time_series_request.meta.organization_id
-
-        return RPCSubscriptionData(
-            project_id=item.time_series_request.meta.project_ids[0],
-            time_window_sec=item.time_window_secs,
-            resolution_sec=item.resolution_secs,
-            time_series_request=base64.b64encode(
-                item.time_series_request.SerializeToString()
-            ).decode("utf-8"),
-            entity=entity,
-            metadata=metadata,
-            tenant_ids={},
-            request_version=class_version,
-            request_name=class_name,
-        )
-
-    def to_dict(self) -> Mapping[str, Any]:
-        subscription_data_dict = {
-            "project_id": self.project_id,
-            "time_window": self.time_window_sec,
-            "resolution": self.resolution_sec,
-            "time_series_request": self.time_series_request,
-            "request_version": self.request_version,
-            "request_name": self.request_name,
-            "subscription_type": SubscriptionType.RPC.value,
-        }
-        if self.metadata:
-            subscription_data_dict["metadata"] = self.metadata
-
         return subscription_data_dict
 
 
