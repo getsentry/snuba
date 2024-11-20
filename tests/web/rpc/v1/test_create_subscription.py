@@ -28,6 +28,125 @@ END_TIME = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC)
 START_TIME = END_TIME - timedelta(hours=1)
 
 
+TESTS_INVALID_RPC_SUBSCRIPTIONS = [
+    pytest.param(
+        CreateSubscriptionRequestProto(
+            time_series_request=TimeSeriesRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                ),
+                aggregations=[
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ],
+            ),
+            time_window_secs=172800,
+            resolution_secs=60,
+        ),
+        "Time window must be less than or equal to 24 hours",
+        id="Invalid subscription: time window",
+    ),
+    pytest.param(
+        CreateSubscriptionRequestProto(
+            time_series_request=TimeSeriesRequest(
+                meta=RequestMeta(
+                    project_ids=[1, 2, 3],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                ),
+                aggregations=[
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ],
+            ),
+            time_window_secs=300,
+            resolution_secs=60,
+        ),
+        "Multiple project IDs not supported",
+        id="Invalid subscription: multiple project ids",
+    ),
+    pytest.param(
+        CreateSubscriptionRequestProto(
+            time_series_request=TimeSeriesRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                ),
+                aggregations=[
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ],
+            ),
+            time_window_secs=300,
+            resolution_secs=60,
+        ),
+        "Exactly one aggregation required",
+        id="Invalid subscription: multiple aggregations",
+    ),
+    pytest.param(
+        CreateSubscriptionRequestProto(
+            time_series_request=TimeSeriesRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                ),
+                group_by=[
+                    AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")
+                ],
+                aggregations=[
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ],
+            ),
+            time_window_secs=300,
+            resolution_secs=60,
+        ),
+        "Group bys not supported",
+        id="Invalid subscription: group by",
+    ),
+]
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
@@ -42,7 +161,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         message = CreateSubscriptionRequestProto(
             time_series_request=TimeSeriesRequest(
                 meta=RequestMeta(
-                    project_ids=[1, 2, 3],
+                    project_ids=[1],
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
@@ -91,7 +210,12 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert subscription_data["request_name"] == "TimeSeriesRequest"
         assert subscription_data["request_version"] == "v1"
 
-    def test_create_invalid_subscription(self) -> None:
+    @pytest.mark.parametrize(
+        "create_subscription, error_message", TESTS_INVALID_RPC_SUBSCRIPTIONS
+    )
+    def test_create_invalid_subscription(
+        self, create_subscription: CreateSubscriptionRequestProto, error_message: str
+    ) -> None:
         store_timeseries(
             START_TIME,
             1,
@@ -99,36 +223,11 @@ class TestCreateSubscriptionApi(BaseApiTest):
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
         )
 
-        message = CreateSubscriptionRequestProto(
-            time_series_request=TimeSeriesRequest(
-                meta=RequestMeta(
-                    project_ids=[1, 2, 3],
-                    organization_id=1,
-                    cogs_category="something",
-                    referrer="something",
-                ),
-                aggregations=[
-                    AttributeAggregation(
-                        aggregate=Function.FUNCTION_SUM,
-                        key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                        ),
-                        label="sum",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                    ),
-                ],
-                granularity_secs=172800,
-            ),
-            time_window_secs=172800,
-            resolution_secs=60,
-        )
         response = self.app.post(
-            "/rpc/CreateSubscriptionRequest/v1", data=message.SerializeToString()
+            "/rpc/CreateSubscriptionRequest/v1",
+            data=create_subscription.SerializeToString(),
         )
         assert response.status_code == 500
         error = Error()
         error.ParseFromString(response.data)
-        assert (
-            error.message
-            == "internal error occurred while executing this RPC call: Time window must be less than or equal to 24 hours"
-        )
+        assert error_message in error.message

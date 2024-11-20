@@ -24,6 +24,7 @@ from uuid import UUID
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
+from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -157,6 +158,21 @@ class RPCSubscriptionData(SubscriptionData):
             raise InvalidSubscriptionError(
                 f"{self.request_name} {self.request_version} not supported."
             )
+
+        request = TimeSeriesRequest()
+        request.ParseFromString(base64.b64decode(self.time_series_request))
+
+        if not (request.meta) or len(request.meta.project_ids) == 0:
+            raise InvalidSubscriptionError("Project ID is required.")
+
+        if len(request.meta.project_ids) != 1:
+            raise InvalidSubscriptionError("Multiple project IDs not supported.")
+
+        if not request.aggregations or len(request.aggregations) != 1:
+            raise InvalidSubscriptionError("Exactly one aggregation required.")
+
+        if request.group_by:
+            raise InvalidSubscriptionError("Group bys not supported.")
 
     def build_request(
         self,
