@@ -350,7 +350,20 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
                 f"{self.request_name} {self.request_version} not supported."
             )
 
-        # TODO: Validate no group by, having, order by etc
+        request = TimeSeriesRequest()
+        request.ParseFromString(base64.b64decode(self.time_series_request))
+
+        if not (request.meta) or len(request.meta.project_ids) == 0:
+            raise InvalidSubscriptionError("Project ID is required.")
+
+        if len(request.meta.project_ids) != 1:
+            raise InvalidSubscriptionError("Multiple project IDs not supported.")
+
+        if not request.aggregations or len(request.aggregations) != 1:
+            raise InvalidSubscriptionError("Exactly one aggregation required.")
+
+        if request.group_by:
+            raise InvalidSubscriptionError("Group bys not supported.")
 
     def build_request(
         self,
