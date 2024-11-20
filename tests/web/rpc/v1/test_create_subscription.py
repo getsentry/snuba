@@ -145,6 +145,32 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
         "Group bys not supported",
         id="Invalid subscription: group by",
     ),
+    pytest.param(
+        CreateSubscriptionRequestProto(
+            time_series_request=TimeSeriesRequest(
+                meta=RequestMeta(
+                    project_ids=[1],
+                    organization_id=1,
+                    cogs_category="something",
+                    referrer="something",
+                ),
+                aggregations=[
+                    AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="test_metric"
+                        ),
+                        label="sum",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ],
+            ),
+            time_window_secs=300,
+            resolution_secs=60,
+        ),
+        "Invalid extrapolation mode",
+        id="Invalid subscription: extrapolation mode",
+    ),
 ]
 
 
@@ -174,7 +200,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                             type=AttributeKey.TYPE_FLOAT, name="test_metric"
                         ),
                         label="sum",
-                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                     ),
                 ],
                 granularity_secs=300,

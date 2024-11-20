@@ -28,6 +28,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.entities.entity_key import EntityKey
@@ -193,6 +194,15 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
 
         if request.group_by:
             raise InvalidSubscriptionError("Group bys not supported.")
+
+        aggregation = request.aggregations[0]
+        if (
+            aggregation.extrapolation_mode
+            != ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+        ):
+            raise InvalidSubscriptionError(
+                f"Invalid extrapolation mode. Allowed extrapolation modes: {ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED}"
+            )
 
     def build_request(
         self,

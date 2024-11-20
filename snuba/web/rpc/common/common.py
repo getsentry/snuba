@@ -82,6 +82,7 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_AVERAGE: f.avg(field, **alias_dict),
         Function.FUNCTION_COUNT: f.count(field, **alias_dict),
         Function.FUNCTION_P50: cf.quantile(0.5)(field, **alias_dict),
+        Function.FUNCTION_P75: cf.quantile(0.75)(field, **alias_dict),
         Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
         Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
         Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
@@ -128,6 +129,9 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
             else f.sumIf(sampling_weight_column, f.isNotNull(field), **alias_dict)
         ),
         Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
+            field, sampling_weight_column, **alias_dict
+        ),
+        Function.FUNCTION_P75: cf.quantileTDigestWeighted(0.75)(
             field, sampling_weight_column, **alias_dict
         ),
         Function.FUNCTION_P90: cf.quantileTDigestWeighted(0.9)(

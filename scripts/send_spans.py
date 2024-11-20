@@ -288,17 +288,25 @@ def create_kafka_producer(host: str, topic: str) -> tuple[Producer, Any]:
     kafka_producer = KafkaProducer(conf)
 
     def producer(messages: list[Span], dryrun: bool, verbose: bool) -> None:
+        futures = []
         for i, message in enumerate(messages):
             if verbose:
                 print(f"{i + 1} / {len(messages)}")
                 print(json.dumps(message))
             if not dryrun:
-                kafka_producer.produce(
-                    Topic(name=(topic)),
-                    KafkaPayload(
-                        key=None, value=json.dumps(message).encode("utf-8"), headers=[]
-                    ),
+                futures.append(
+                    kafka_producer.produce(
+                        Topic(name=(topic)),
+                        KafkaPayload(
+                            key=None,
+                            value=json.dumps(message).encode("utf-8"),
+                            headers=[],
+                        ),
+                    )
                 )
+
+        for future in futures:
+            future.result()
 
     return producer, kafka_producer
 

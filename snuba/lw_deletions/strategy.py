@@ -169,7 +169,7 @@ class LWDeletionsConsumerStrategyFactory(ProcessingStrategyFactory[KafkaPayload]
     ) -> ProcessingStrategy[KafkaPayload]:
         batch_step = BatchStepCustom(
             max_batch_size=self.max_batch_size,
-            max_batch_time=self.max_batch_time_ms,
+            max_batch_time=(self.max_batch_time_ms / 1000),
             next_step=FormatQuery(
                 CommitOffsets(commit), self.storage, self.formatter, self.metrics
             ),
