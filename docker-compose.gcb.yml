@@ -70,7 +70,7 @@ services:
       KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
       KAFKA_TOOLS_LOG4J_LOGLEVEL: "WARN"
   clickhouse:
-    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.3.19.33.altinitystable}"
+    image: "${CLICKHOUSE_IMAGE:-ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:23.8.11.29.altinitystable}"
     hostname: clickhouse.local
     extra_hosts:
       - "clickhouse.local:127.0.0.1"  # Add entry to /etc/hosts file
