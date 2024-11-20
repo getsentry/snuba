@@ -9,10 +9,15 @@ class ParsingContext:
     """
 
     def __init__(self) -> None:
-        self.__alias_cache: List[str] = []
+        self.__running_aliases: List[str] = []
+        self.__cache: List[str] = []
+
+    def cache_all(self):
+        for alias in self.__running_aliases:
+            self.__cache.append(alias)
 
     def add_alias(self, alias: str) -> None:
-        self.__alias_cache.append(alias)
+        self.__running_aliases.append(alias)
 
     def is_alias_present(self, alias: str) -> bool:
-        return alias in self.__alias_cache
+        return alias in self.__cache

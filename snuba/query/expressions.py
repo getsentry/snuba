@@ -128,6 +128,10 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     def visit_lambda(self, exp: Lambda) -> TVisited:
         raise NotImplementedError
 
+    @classmethod
+    def cache_all(cls) -> bool:
+        raise NotImplementedError
+
 
 class NoopVisitor(ExpressionVisitor[None]):
     """A noop visitor that will traverse every node but will not

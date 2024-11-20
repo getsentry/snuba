@@ -42,10 +42,14 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             parsing_context if parsing_context is not None else ParsingContext()
         )
 
+    def cache_all(self):
+        self._parsing_context.cache_all()
+
     def _alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
             return formatted_exp
         elif self._parsing_context.is_alias_present(alias):
+            print("rachel_alias", alias)
             ret = escape_alias(alias)
             # This is for the type checker. escape_alias can return None if
             # we pass None. But here we do not pass None so a None return value
@@ -53,6 +57,7 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             assert ret is not None
             return ret
         else:
+            # breakpoint()
             self._parsing_context.add_alias(alias)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
@@ -153,7 +158,10 @@ class ExpressionFormatterBase(ExpressionVisitor[str], ABC):
             return f"({' OR '.join(formatted)})"
 
         ret = f"{escape_identifier(exp.function_name)}({self.__visit_params(exp.parameters)})"
-        return self._alias(ret, exp.alias)
+        # breakpoint()
+        alias_result = self._alias(ret, exp.alias)
+        print("alias_result", alias_result)
+        return alias_result
 
     def visit_curried_function_call(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)

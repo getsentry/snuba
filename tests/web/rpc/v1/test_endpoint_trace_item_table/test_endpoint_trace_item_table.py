@@ -867,7 +867,7 @@ class TestTraceItemTable(BaseApiTest):
                     "status": "success",
                 },
                 "span_id": "123456781234567D",
-                "tags": {"foo": "five"},
+                "tags": {"foo": "five", "rachelkey": "rachelval"},
                 "trace_id": uuid.uuid4().hex,
                 "start_timestamp_ms": int(dt.timestamp()) * 1000
                 - int(random.gauss(1000, 200)),
@@ -877,13 +877,14 @@ class TestTraceItemTable(BaseApiTest):
         ]
         write_raw_unprocessed_events(spans_storage, messages)
 
+        # breakpoint()
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         err_req = {
             "meta": {
-                "organizationId": "4555075531505664",
+                "organizationId": "1",
                 "referrer": "api.organization-events",
-                "projectIds": ["4555075531898880"],
+                "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
             },
@@ -937,8 +938,17 @@ class TestTraceItemTable(BaseApiTest):
 
         err_msg = ParseDict(err_req, TraceItemTableRequest())
         # just ensuring it doesnt raise an exception
-        print(EndpointTraceItemTable().execute(err_msg))
-        assert False
+        result = EndpointTraceItemTable().execute(err_msg)
+        print(result)
+
+        assert result.column_values[1].attribute_name == "tags[foo,number]"
+        assert result.column_values[1].results[0].val_int == 5
+
+        assert result.column_values[2].attribute_name == "tags[foo,string]"
+        assert result.column_values[2].results[0].val_str == "five"
+
+        assert result.column_values[3].attribute_name == "tags[foo]"
+        assert result.column_values[3].results[0].val_str == "five"
 
 
 class TestUtils:

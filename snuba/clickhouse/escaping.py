@@ -34,6 +34,7 @@ def escape_expression(expr: Optional[str], regex: Pattern[str]) -> Optional[str]
 
 
 def escape_alias(alias: Optional[str]) -> Optional[str]:
+    print("escape", escape_expression(alias, SAFE_ALIAS_RE))
     return escape_expression(alias, SAFE_ALIAS_RE)
 
 
