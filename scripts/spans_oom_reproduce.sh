@@ -28,7 +28,7 @@ fi
 docker exec -it sentry_kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group spans_group --reset-offsets --to-earliest --topic snuba-spans --execute
 
 # Run the standard spans consumer in the background
-snuba rust-consumer --storage=spans --consumer-group=spans_group --use-rust-processor --use-rust-processor --auto-offset-reset=earliest --no-strict-offset-reset --log-level=info > /dev/null 2>&1 &
+snuba rust-consumer --storage=spans --consumer-group=spans_group --use-rust-processor --auto-offset-reset=earliest --no-strict-offset-reset --log-level=info > /dev/null 2>&1 &
 
 # Get the PID of the consumer. We'll use this PID to monitor memory usage.
 CONSUMER_PID=$!
@@ -38,8 +38,11 @@ while true; do
     echo "Memory usage of consumer $CONSUMER_PID: $(ps -o rss= -p $CONSUMER_PID | awk '{printf "%.2fMB", $1/1024}')"
     sleep 1
 
-    snuba rust-consumer --storage=spans --consumer-group=spans_group --use-rust-processor --use-rust-processor --auto-offset-reset=earliest --no-strict-offset-reset --log-level=info > /dev/null 2>&1 &
+    snuba rust-consumer --storage=spans --consumer-group=spans_group --use-rust-processor --auto-offset-reset=earliest --no-strict-offset-reset --log-level=info > /dev/null 2>&1 &
     CONSUMER_PID2=$!
     sleep 5
     kill -TERM $CONSUMER_PID2
+
+    # Dump the consumer offset of the consumer group
+    docker exec -it sentry_kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group spans_group --describe
 done
