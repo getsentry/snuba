@@ -87,6 +87,7 @@ def _get_extrapolation_meta(
     average_sample_rate = 0
     sample_count = None
     for col_name, col_value in row_data.items():
+        # we ignore non-custom columns
         if col_name.startswith(CUSTOM_COLUMN_PREFIX):
             custom_column_information = get_custom_column_information(col_name)
             if (
