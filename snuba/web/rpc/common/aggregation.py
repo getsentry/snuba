@@ -27,6 +27,11 @@ z_value = 1.96
 
 @dataclass(frozen=True)
 class CustomColumnInformation:
+    """
+    In order to support extrapolation, we need to be able to create a new column in clickhouse that computes some value, potentially based on some existing column.
+    This class holds the information needed to generate alias for the column so we can know what the column represents when getting results.
+    """
+
     column_type: str
     referenced_column: Optional[str]
     metadata: dict[str, str]
