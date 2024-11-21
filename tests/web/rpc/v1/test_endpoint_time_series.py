@@ -165,6 +165,7 @@ class TestTimeSeriesApi(BaseApiTest):
             assert response.status_code == 200, (error.message, error.details)
 
     def test_sum(self) -> None:
+        print(BASE_TIME.timestamp())
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
         query_duration = 60 * 30
@@ -225,6 +226,72 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             ),
         ]
+        assert False
+
+    def test_rachel(self) -> None:
+        start_timestamp_seconds = 1725892950
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 15
+        query_duration = 60 * 30
+        store_timeseries(
+            datetime.fromtimestamp(start_timestamp_seconds, tz=UTC),
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=start_timestamp_seconds),
+                end_timestamp=Timestamp(
+                    seconds=int(start_timestamp_seconds + query_duration)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="avg",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=1, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data=300, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]
+
+        assert False
 
     def test_with_group_by(self) -> None:
         store_timeseries(
@@ -514,49 +581,6 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             )
         ]
-
-    def test_rachel(self) -> None:
-        # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 15
-        query_duration = 60 * 30
-        store_timeseries(
-            datetime.utcfromtimestamp(10000),
-            1,
-            3600,
-            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
-        )
-        message = TimeSeriesRequest(
-            meta=RequestMeta(
-                project_ids=[1, 2, 3],
-                organization_id=1,
-                cogs_category="something",
-                referrer="something",
-                start_timestamp=Timestamp(seconds=10001),
-                end_timestamp=Timestamp(seconds=int(10001 + query_duration)),
-            ),
-            aggregations=[
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="sum",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="avg",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
-            ],
-            granularity_secs=granularity_secs,
-        )
-        response = EndpointTimeSeries().execute(message)
-        print("rachelresponse", response)
-        print(response.result_timeseries)
-        print(len(response.result_timeseries))
-        print(len(response.result_timeseries) == 0)
-        assert len(response.result_timeseries) != 0
-        assert False
 
 
 class TestUtils:

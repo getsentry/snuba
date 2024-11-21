@@ -129,21 +129,19 @@ def _convert_result_timeseries(
     query_duration = (
         request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     )
-    start_timestamp_seconds = _rewind(
-        request.meta.start_timestamp.seconds, granularity=request.granularity_secs
-    )
-    print(start_timestamp_seconds, request.meta.start_timestamp.seconds)
-    # start_timestamp_seconds = request.meta.start_timestamp.seconds
+    # start_timestamp_seconds = _rewind(
+    #     request.meta.start_timestamp.seconds, granularity=request.granularity_secs
+    # )
+    start_timestamp_seconds = request.meta.start_timestamp.seconds
     time_buckets = [
         Timestamp(seconds=start_timestamp_seconds + secs)
         for secs in range(0, query_duration, request.granularity_secs)
     ]
-
+    print("request", request)
     print("data", data)
 
     # this loop fill in our pre-computed dictionaries so that we can zerofill later
     for row in data:
-        print(row)
         group_by_map = {}
 
         for col_name, col_value in row.items():
