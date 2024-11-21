@@ -373,11 +373,13 @@ def optimize_partitions(
 
         start = time.time()
         clickhouse.execute(query, retryable=False)
+        duration = time.time() - start
         metrics.timing(
             "optimized_part",
-            time.time() - start,
+            duration,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
+        logger.info(f"Optimized partition: {partition} in {duration}s")
 
 
 def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bool:
