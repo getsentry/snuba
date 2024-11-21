@@ -842,7 +842,7 @@ class TestTraceItemTable(BaseApiTest):
         # just ensuring it doesnt raise an exception
         EndpointTraceItemTable().execute(err_msg)
 
-    def test_rachel(self) -> None:
+    def test_same_column_name(self) -> None:
 
         dt = BASE_TIME - timedelta(minutes=5)
         spans_storage = get_storage(StorageKey("eap_spans"))
