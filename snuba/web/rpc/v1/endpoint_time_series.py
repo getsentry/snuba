@@ -15,6 +15,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
+from snuba.cli import start
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
@@ -56,6 +57,10 @@ _VALID_GRANULARITY_SECS = set(
 )
 
 _MAX_BUCKETS_IN_REQUEST = 1000
+
+
+def _rewind(start_timestamp: int, granularity: int) -> int:
+    return (start_timestamp // granularity) * granularity
 
 
 def _convert_result_timeseries(
@@ -124,13 +129,21 @@ def _convert_result_timeseries(
     query_duration = (
         request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     )
+    start_timestamp_seconds = _rewind(
+        request.meta.start_timestamp.seconds, granularity=request.granularity_secs
+    )
+    print(start_timestamp_seconds, request.meta.start_timestamp.seconds)
+    # start_timestamp_seconds = request.meta.start_timestamp.seconds
     time_buckets = [
-        Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
+        Timestamp(seconds=start_timestamp_seconds + secs)
         for secs in range(0, query_duration, request.granularity_secs)
     ]
 
+    print("data", data)
+
     # this loop fill in our pre-computed dictionaries so that we can zerofill later
     for row in data:
+        print(row)
         group_by_map = {}
 
         for col_name, col_value in row.items():

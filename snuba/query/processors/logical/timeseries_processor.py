@@ -241,6 +241,8 @@ def extract_granularity_from_query(query: Query, column: str) -> Optional[int]:
         ),
     )
 
+    print("expr_match", expr_match)
+
     for top_expr in groupby:
         for expr in top_expr:
             result = fn_match.match(expr)

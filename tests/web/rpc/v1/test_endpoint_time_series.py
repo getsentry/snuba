@@ -515,6 +515,49 @@ class TestTimeSeriesApi(BaseApiTest):
             )
         ]
 
+    def test_rachel(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 15
+        query_duration = 60 * 30
+        store_timeseries(
+            datetime.utcfromtimestamp(10000),
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=10001),
+                end_timestamp=Timestamp(seconds=int(10001 + query_duration)),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_AVG,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="avg",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        print("rachelresponse", response)
+        print(response.result_timeseries)
+        print(len(response.result_timeseries))
+        print(len(response.result_timeseries) == 0)
+        assert len(response.result_timeseries) != 0
+        assert False
+
 
 class TestUtils:
     def test_no_duplicate_labels(self) -> None:
