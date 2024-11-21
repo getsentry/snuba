@@ -22,7 +22,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.redis import RedisClientKey, get_redis_client
 from tests.base import BaseApiTest
-from tests.web.rpc.v1.test_endpoint_time_series import DummyMetric, store_timeseries
+from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
+    DummyMetric,
+    store_timeseries,
+)
 
 END_TIME = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC)
 START_TIME = END_TIME - timedelta(hours=1)

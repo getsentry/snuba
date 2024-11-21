@@ -11,7 +11,12 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeKey,
+    AttributeValue,
+    ExtrapolationMode,
+    Reliability,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -25,8 +30,14 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.common.aggregation import (
+    ExtrapolationMeta,
     aggregation_to_expression,
+    get_average_sample_rate_column,
+    get_count_column,
+    get_upper_confidence_column,
+)
+from snuba.web.rpc.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
     base_conditions_and,
@@ -90,6 +101,35 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=function_expr)
             )
+
+            if (
+                column.aggregation.extrapolation_mode
+                == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+            ):
+                upper_confidence_column = get_upper_confidence_column(
+                    column.aggregation
+                )
+                if upper_confidence_column is not None:
+                    selected_columns.append(
+                        SelectedExpression(
+                            name=upper_confidence_column.alias,
+                            expression=upper_confidence_column,
+                        )
+                    )
+
+                average_sample_rate_column = get_average_sample_rate_column(
+                    column.aggregation
+                )
+                count_column = get_count_column(column.aggregation)
+                selected_columns.append(
+                    SelectedExpression(
+                        name=average_sample_rate_column.alias,
+                        expression=average_sample_rate_column,
+                    )
+                )
+                selected_columns.append(
+                    SelectedExpression(name=count_column.alias, expression=count_column)
+                )
         else:
             raise BadSnubaRPCRequestException(
                 "Column is neither an aggregate or an attribute"
@@ -165,8 +205,17 @@ def _convert_results(
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
         for column_name, value in row.items():
-            res[column_name].results.append(converters[column_name](value))
-            res[column_name].attribute_name = column_name
+            if column_name in converters.keys():
+                res[column_name].results.append(converters[column_name](value))
+                res[column_name].attribute_name = column_name
+                extrapolation_meta = ExtrapolationMeta.from_row(row, column_name)
+                if (
+                    extrapolation_meta.reliability
+                    != Reliability.RELIABILITY_UNSPECIFIED
+                ):
+                    res[column_name].reliabilities.append(
+                        extrapolation_meta.reliability
+                    )
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 

@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -26,8 +27,14 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.common.aggregation import (
+    ExtrapolationMeta,
     aggregation_to_expression,
+    get_average_sample_rate_column,
+    get_count_column,
+    get_upper_confidence_column,
+)
+from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -160,8 +167,16 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
+                extrapolation_meta = ExtrapolationMeta.from_row(
+                    row_data, timeseries.label
+                )
                 timeseries.data_points.append(
-                    DataPoint(data=row_data[timeseries.label], data_present=True)
+                    DataPoint(
+                        data=row_data[timeseries.label],
+                        data_present=True,
+                        avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
+                        reliability=extrapolation_meta.reliability,
+                    )
                 )
     return result_timeseries.values()
 
@@ -181,6 +196,33 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         for aggregation in request.aggregations
     ]
 
+    extrapolation_columns = []
+    for aggregation in request.aggregations:
+        if (
+            aggregation.extrapolation_mode
+            == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+        ):
+            upper_confidence_column = get_upper_confidence_column(aggregation)
+            if upper_confidence_column is not None:
+                extrapolation_columns.append(
+                    SelectedExpression(
+                        name=upper_confidence_column.alias,
+                        expression=upper_confidence_column,
+                    )
+                )
+
+            average_sample_rate_column = get_average_sample_rate_column(aggregation)
+            count_column = get_count_column(aggregation)
+            extrapolation_columns.append(
+                SelectedExpression(
+                    name=average_sample_rate_column.alias,
+                    expression=average_sample_rate_column,
+                )
+            )
+            extrapolation_columns.append(
+                SelectedExpression(name=count_column.alias, expression=count_column)
+            )
+
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name, expression=attribute_key_to_expression(attr_key)
@@ -194,6 +236,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             SelectedExpression(name="time", expression=column("time", alias="time")),
             *aggregation_columns,
             *groupby_columns,
+            *extrapolation_columns,
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
