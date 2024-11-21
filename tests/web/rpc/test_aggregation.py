@@ -12,7 +12,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 from snuba.web.rpc.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
-    get_extrapolation_meta,
+    ExtrapolationMeta,
     get_upper_confidence_column,
 )
 
@@ -145,6 +145,6 @@ def test_get_extrapolation_meta(
     average_sample_rate: float,
     reliability: Reliability.ValueType,
 ) -> None:
-    extrapolation_meta = get_extrapolation_meta(row_data, column_name)
+    extrapolation_meta = ExtrapolationMeta.from_row(row_data, column_name)
     assert extrapolation_meta.avg_sampling_rate == average_sample_rate
     assert extrapolation_meta.reliability == reliability

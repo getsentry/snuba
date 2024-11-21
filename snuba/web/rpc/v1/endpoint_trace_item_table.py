@@ -31,10 +31,10 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
+    ExtrapolationMeta,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_count_column,
-    get_extrapolation_meta,
     get_upper_confidence_column,
 )
 from snuba.web.rpc.common.common import (
@@ -208,7 +208,7 @@ def _convert_results(
             if column_name in converters.keys():
                 res[column_name].results.append(converters[column_name](value))
                 res[column_name].attribute_name = column_name
-                extrapolation_meta = get_extrapolation_meta(row, column_name)
+                extrapolation_meta = ExtrapolationMeta.from_row(row, column_name)
                 if (
                     extrapolation_meta.reliability
                     != Reliability.RELIABILITY_UNSPECIFIED

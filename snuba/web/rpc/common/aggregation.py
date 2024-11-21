@@ -33,6 +33,48 @@ class ExtrapolationMeta:
     reliability: Reliability.ValueType
     avg_sampling_rate: float
 
+    @staticmethod
+    def from_row(row_data: Dict[str, Any], column_label: str) -> "ExtrapolationMeta":
+        """
+        Computes the reliability and average sample rate for a column based on the extrapolation columns.
+        """
+        upper_confidence_limit = None
+        average_sample_rate = 0
+        sample_count = None
+        for col_name, col_value in row_data.items():
+            # we ignore non-custom columns
+            if col_name.startswith(CUSTOM_COLUMN_PREFIX):
+                custom_column_information = CustomColumnInformation.from_alias(col_name)
+                if (
+                    custom_column_information.referenced_column is None
+                    or custom_column_information.referenced_column != column_label
+                ):
+                    continue
+
+                if custom_column_information.custom_column_id == "upper_confidence":
+                    upper_confidence_limit = col_value
+                elif (
+                    custom_column_information.custom_column_id == "average_sample_rate"
+                ):
+                    average_sample_rate = col_value
+                elif custom_column_information.custom_column_id == "count":
+                    sample_count = col_value
+
+        reliability = Reliability.RELIABILITY_UNSPECIFIED
+        if upper_confidence_limit is not None and sample_count is not None:
+            is_reliable = calculate_reliability(
+                row_data[column_label],
+                upper_confidence_limit,
+                sample_count,
+            )
+            reliability = (
+                Reliability.RELIABILITY_HIGH
+                if is_reliable
+                else Reliability.RELIABILITY_LOW
+            )
+
+        return ExtrapolationMeta(reliability, average_sample_rate)
+
 
 @dataclass(frozen=True)
 class CustomColumnInformation:
@@ -284,43 +326,3 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         )
 
     return agg_func_expr
-
-
-def get_extrapolation_meta(
-    row_data: Dict[str, Any], column_label: str
-) -> ExtrapolationMeta:
-    """
-    Computes the reliability and average sample rate for a column based on the extrapolation columns.
-    """
-    upper_confidence_limit = None
-    average_sample_rate = 0
-    sample_count = None
-    for col_name, col_value in row_data.items():
-        # we ignore non-custom columns
-        if col_name.startswith(CUSTOM_COLUMN_PREFIX):
-            custom_column_information = CustomColumnInformation.from_alias(col_name)
-            if (
-                custom_column_information.referenced_column is None
-                or custom_column_information.referenced_column != column_label
-            ):
-                continue
-
-            if custom_column_information.custom_column_id == "upper_confidence":
-                upper_confidence_limit = col_value
-            elif custom_column_information.custom_column_id == "average_sample_rate":
-                average_sample_rate = col_value
-            elif custom_column_information.custom_column_id == "count":
-                sample_count = col_value
-
-    reliability = Reliability.RELIABILITY_UNSPECIFIED
-    if upper_confidence_limit is not None and sample_count is not None:
-        is_reliable = calculate_reliability(
-            row_data[column_label],
-            upper_confidence_limit,
-            sample_count,
-        )
-        reliability = (
-            Reliability.RELIABILITY_HIGH if is_reliable else Reliability.RELIABILITY_LOW
-        )
-
-    return ExtrapolationMeta(reliability, average_sample_rate)

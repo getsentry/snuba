@@ -28,10 +28,10 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
+    ExtrapolationMeta,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_count_column,
-    get_extrapolation_meta,
     get_upper_confidence_column,
 )
 from snuba.web.rpc.common.common import (
@@ -167,7 +167,9 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                extrapolation_meta = get_extrapolation_meta(row_data, timeseries.label)
+                extrapolation_meta = ExtrapolationMeta.from_row(
+                    row_data, timeseries.label
+                )
                 timeseries.data_points.append(
                     DataPoint(
                         data=row_data[timeseries.label],
