@@ -24,61 +24,6 @@ sampling_weight_column = column("sampling_weight")
 # Z value for 95% confidence interval is 1.96
 z_value = 1.96
 
-"""
-'sumIf(
-    minus(
-        multiply(sampling_weight, sampling_weight),
-        sampling_weight
-    ),
-    mapContains(attr_num_6, 'test_metric')
-)',
-'avgIf(
-    divide(1, sampling_weight),
-    mapContains(attr_num_6, 'test_metric')
-)',
-'countIf(
-    arrayElement(attr_num_6, 'test_metric'),
-    mapContains(attr_num_6, 'test_metric')
-)',
-'sumIf(
-    sampling_weight,
-    mapContains(attr_num_6, 'test_metric')
-)',
-'toDateTime(
-    multiply(
-        intDiv(toUInt32(_sort_timestamp), 120),
-        120
-    ),
-    'Universal'
-)'
-]: While processing toDateTime(
-    intDiv(toUInt32(_sort_timestamp), 120) * 120,
-    'Universal'
-) AS time,
-sumIf(
-    sampling_weight,
-    mapContains(attr_num_6, 'test_metric')
-) AS `count(test_metric)`,
-((attr_num_6['test_metric']) AS test_metric) + (
-    (1.96 * sqrt(
-        (-log(
-            avgIf(
-                1 / sampling_weight,
-                mapContains(attr_num_6, 'test_metric')
-            ) AS `average_sample_rate$count(test_metric)$`
-        )) * sumIf(
-            (sampling_weight * sampling_weight) - sampling_weight,
-            mapContains(attr_num_6, 'test_metric')
-        )
-    )) AS `upper_confidence$count(test_metric)$function_type:count`
-),
-`average_sample_rate$count(test_metric)$`,
-countIf(
-    test_metric,
-    mapContains(attr_num_6, 'test_metric')
-) AS `count$count(test_metric)$`
-"""
-
 
 @dataclass(frozen=True)
 class CustomColumnInformation:
