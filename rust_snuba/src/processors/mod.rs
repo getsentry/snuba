@@ -2,7 +2,6 @@ pub(crate) mod eap_spans;
 mod errors;
 mod functions;
 mod generic_metrics;
-mod metrics_summaries;
 mod outcomes;
 mod profile_chunks;
 mod profiles;
@@ -57,7 +56,6 @@ define_processing_functions! {
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
     ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
     ("EAPSpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_spans::process_message)),
-    ("MetricsSummariesMessageProcessor", "snuba-metrics-summaries", ProcessingFunctionType::ProcessingFunction(metrics_summaries::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),
     ("GenericCountersMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_counter_message)),
     ("GenericSetsMetricsProcessor", "snuba-generic-metrics", ProcessingFunctionType::ProcessingFunction(generic_metrics::process_set_message)),
