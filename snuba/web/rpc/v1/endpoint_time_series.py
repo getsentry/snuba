@@ -71,9 +71,9 @@ _VALID_GRANULARITY_SECS = set(
 _MAX_BUCKETS_IN_REQUEST = 1000
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExtrapolationMeta:
-    reliability: Reliability
+    reliability: Reliability.ValueType
     avg_sampling_rate: float
 
 

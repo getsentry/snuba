@@ -294,7 +294,7 @@ class TestUtils:
         row_data: dict[str, Any],
         column_name: str,
         average_sample_rate: float,
-        reliability: Reliability,
+        reliability: Reliability.ValueType,
     ) -> None:
         extrapolation_meta = _get_extrapolation_meta(row_data, column_name)
         assert extrapolation_meta.avg_sampling_rate == average_sample_rate
