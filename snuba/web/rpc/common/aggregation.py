@@ -21,8 +21,10 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 sampling_weight_column = column("sampling_weight")
 
-# Z value for 95% confidence interval is 1.96
+# Z value for 95% confidence interval is 1.96 which comes from the normal distribution z score.
 z_value = 1.96
+
+CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,7 @@ class CustomColumnInformation:
 def _generate_custom_column_alias(
     custom_column_information: CustomColumnInformation,
 ) -> str:
-    alias = custom_column_information.column_type
+    alias = CUSTOM_COLUMN_PREFIX + custom_column_information.column_type
     if custom_column_information.referenced_column is not None:
         alias += f"${custom_column_information.referenced_column}"
     if custom_column_information.metadata:
@@ -54,6 +56,10 @@ def _generate_custom_column_alias(
 
 
 def get_custom_column_information(alias: str) -> CustomColumnInformation:
+    if not alias.startswith(CUSTOM_COLUMN_PREFIX):
+        raise ValueError(f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}")
+
+    alias = alias[len(CUSTOM_COLUMN_PREFIX) :]
     parts = alias.split("$")
     column_type = parts[0]
     referenced_column = parts[1] if len(parts) > 1 else None
@@ -182,12 +188,16 @@ def get_extrapolated_function(
 
 def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression | None:
     """
-    Returns the expression for calculating the upper confidence limit for a given aggregation
+    Returns the expression for calculating the upper confidence limit for a given aggregation.
+    Calculations are based on https://github.com/getsentry/extrapolation-math/blob/main/2024-10-04%20Confidence%20-%20Final%20Approach.ipynb
+    Note that in the above notebook, the formulas are based on the sampling rate, while we perform calculations based on the sampling weight (1 / sampling rate).
     """
     alias = get_attribute_confidence_interval_alias(aggregation)
     alias_dict = {"alias": alias} if alias else {}
 
     function_map_upper_confidence_limit = {
+        # upper confidence = Z cdot sqrt{-log{(frac{sum_{i=1}^n frac{1}{w_i}}{n})} cdot sigma^2(sum_{i=1}^n w_i^2 - w_i)}
+        # where w_i is the sampling weight for the i-th event and n is the number of events.
         Function.FUNCTION_COUNT: f.multiply(
             z_value,
             f.sqrt(

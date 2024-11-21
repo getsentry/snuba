@@ -1,6 +1,7 @@
 import math
 import uuid
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, Type
 
@@ -31,6 +32,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
+    CUSTOM_COLUMN_PREFIX,
     aggregation_to_expression,
     calculate_reliability,
     get_average_sample_rate_column,
@@ -67,6 +69,51 @@ _VALID_GRANULARITY_SECS = set(
 )
 
 _MAX_BUCKETS_IN_REQUEST = 1000
+
+
+@dataclass
+class ExtrapolationMeta:
+    reliability: Reliability
+    avg_sampling_rate: float
+
+
+def _get_extrapolation_meta(
+    row_data: Dict[str, Any], column_label: str
+) -> ExtrapolationMeta:
+    """
+    Computes the reliability and average sample rate for a column based on the extrapolation columns.
+    """
+    upper_confidence_limit = None
+    average_sample_rate = 0
+    sample_count = None
+    for col_name, col_value in row_data.items():
+        if col_name.startswith(CUSTOM_COLUMN_PREFIX):
+            custom_column_information = get_custom_column_information(col_name)
+            if (
+                custom_column_information.referenced_column is None
+                or custom_column_information.referenced_column != column_label
+            ):
+                continue
+
+            if custom_column_information.column_type == "upper_confidence":
+                upper_confidence_limit = col_value
+            elif custom_column_information.column_type == "average_sample_rate":
+                average_sample_rate = col_value
+            elif custom_column_information.column_type == "count":
+                sample_count = col_value
+
+    reliability = Reliability.RELIABILITY_UNSPECIFIED
+    if upper_confidence_limit is not None and sample_count is not None:
+        is_reliable = calculate_reliability(
+            row_data[column_label],
+            upper_confidence_limit,
+            sample_count,
+        )
+        reliability = (
+            Reliability.RELIABILITY_HIGH if is_reliable else Reliability.RELIABILITY_LOW
+        )
+
+    return ExtrapolationMeta(reliability, average_sample_rate)
 
 
 def _convert_result_timeseries(
@@ -171,54 +218,15 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                upper_confidence_limit = None
-                average_sample_rate = 0
-                sample_count = None
-                for col_name, col_value in row_data.items():
-                    if (
-                        col_name not in group_by_labels
-                        and col_name not in aggregation_labels
-                        and col_name != "time"
-                    ):
-                        custom_column_information = get_custom_column_information(
-                            col_name
-                        )
-                        if (
-                            custom_column_information.referenced_column is None
-                            or custom_column_information.referenced_column
-                            != timeseries.label
-                        ):
-                            continue
 
-                        if custom_column_information.column_type == "upper_confidence":
-                            upper_confidence_limit = col_value
-                        elif (
-                            custom_column_information.column_type
-                            == "average_sample_rate"
-                        ):
-                            average_sample_rate = col_value
-                        elif custom_column_information.column_type == "count":
-                            sample_count = col_value
-
-                reliability = Reliability.RELIABILITY_UNSPECIFIED
-                if upper_confidence_limit is not None and sample_count is not None:
-                    is_reliable = calculate_reliability(
-                        row_data[timeseries.label],
-                        upper_confidence_limit,
-                        sample_count,
-                    )
-                    reliability = (
-                        Reliability.RELIABILITY_HIGH
-                        if is_reliable
-                        else Reliability.RELIABILITY_LOW
-                    )
+                extrapolation_meta = _get_extrapolation_meta(row_data, timeseries.label)
 
                 timeseries.data_points.append(
                     DataPoint(
                         data=row_data[timeseries.label],
                         data_present=True,
-                        avg_sampling_rate=average_sample_rate,
-                        reliability=reliability,
+                        avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
+                        reliability=extrapolation_meta.reliability,
                     )
                 )
     return result_timeseries.values()
