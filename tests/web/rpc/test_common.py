@@ -13,7 +13,7 @@ class TestCommon:
                 type=AttributeKey.TYPE_STRING,
                 name="sentry.trace_id",
             ),
-        ) == f.CAST(column("trace_id"), "String", alias="sentry.trace_id TYPE_STRING")
+        ) == f.CAST(column("trace_id"), "String", alias="sentry.trace_id")
 
     def test_timestamp_columns(self) -> None:
         for col in [
@@ -26,23 +26,19 @@ class TestCommon:
                     type=AttributeKey.TYPE_STRING,
                     name=col,
                 ),
-            ) == f.CAST(
-                column(col[len("sentry.") :]), "String", alias=col + " TYPE_STRING"
-            )
+            ) == f.CAST(column(col[len("sentry.") :]), "String", alias=col)
             assert attribute_key_to_expression(
                 AttributeKey(
                     type=AttributeKey.TYPE_INT,
                     name=col,
                 ),
-            ) == f.CAST(column(col[len("sentry.") :]), "Int64", alias=col + " TYPE_INT")
+            ) == f.CAST(column(col[len("sentry.") :]), "Int64", alias=col)
             assert attribute_key_to_expression(
                 AttributeKey(
                     type=AttributeKey.TYPE_FLOAT,
                     name=col,
                 ),
-            ) == f.CAST(
-                column(col[len("sentry.") :]), "Float64", alias=col + " TYPE_FLOAT"
-            )
+            ) == f.CAST(column(col[len("sentry.") :]), "Float64", alias=col)
 
     def test_normalized_col(self) -> None:
         for col in [
@@ -62,13 +58,13 @@ class TestCommon:
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_STRING, name="derp"),
         ) == SubscriptableReference(
-            alias="derp TYPE_STRING", column=column("attr_str"), key=literal("derp")
+            alias="derp", column=column("attr_str"), key=literal("derp")
         )
 
         assert attribute_key_to_expression(
             AttributeKey(type=AttributeKey.TYPE_FLOAT, name="derp"),
         ) == SubscriptableReference(
-            alias="derp TYPE_FLOAT", column=column("attr_num"), key=literal("derp")
+            alias="derp", column=column("attr_num"), key=literal("derp")
         )
 
         assert attribute_key_to_expression(
@@ -80,7 +76,7 @@ class TestCommon:
                 key=literal("derp"),
             ),
             "Int64",
-            alias="derp TYPE_INT",
+            alias="derp",
         )
 
         assert attribute_key_to_expression(
@@ -92,5 +88,5 @@ class TestCommon:
                 key=literal("derp"),
             ),
             "Boolean",
-            alias="derp TYPE_BOOLEAN",
+            alias="derp",
         )

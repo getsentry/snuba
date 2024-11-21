@@ -195,14 +195,11 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
-    def _build_label_mapping_key(attr_key: AttributeKey) -> str:
-        return attr_key.name + " " + AttributeKey.Type.Name(attr_key.type)
-
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
         )
-    alias = _build_label_mapping_key(attr_key)
+    alias = attr_key.name
 
     if attr_key.name == "sentry.trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
