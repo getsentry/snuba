@@ -237,7 +237,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                         data=120,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_HIGH,
-                        avg_sampling_rate=0.0001,
+                        avg_sampling_rate=1,
                     )
                     for _ in range(len(expected_buckets))
                 ],
