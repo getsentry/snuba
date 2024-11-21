@@ -32,10 +32,9 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
     aggregation_to_expression,
-    calculate_reliability,
     get_average_sample_rate_column,
     get_count_column,
-    get_custom_column_information,
+    get_extrapolation_meta,
     get_upper_confidence_column,
 )
 from snuba.web.rpc.common.common import (
@@ -205,40 +204,18 @@ def _convert_results(
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
-        sample_counts = {}
-        upper_confidence_limits = {}
-        estimates = {}
         for column_name, value in row.items():
             if column_name in converters.keys():
                 res[column_name].results.append(converters[column_name](value))
                 res[column_name].attribute_name = column_name
-                estimates[column_name] = value
-            else:
-                custom_column_information = get_custom_column_information(column_name)
-                referenced_column = custom_column_information.referenced_column
-
-                if referenced_column is None:
-                    continue
-                if custom_column_information.column_type == "upper_confidence":
-                    upper_confidence_limits[referenced_column] = value
-                elif custom_column_information.column_type == "count":
-                    sample_counts[referenced_column] = value
-
-        reliability = Reliability.RELIABILITY_UNSPECIFIED
-        for column_name, sample_count in sample_counts.items():
-            if column_name in upper_confidence_limits:
-                is_reliable = calculate_reliability(
-                    estimates[column_name],
-                    upper_confidence_limits[column_name],
-                    sample_count,
-                )
-                reliability = (
-                    Reliability.RELIABILITY_HIGH
-                    if is_reliable
-                    else Reliability.RELIABILITY_LOW
-                )
-
-                res[column_name].reliabilities.append(reliability)
+                extrapolation_meta = get_extrapolation_meta(row, column_name)
+                if (
+                    extrapolation_meta.reliability
+                    != Reliability.RELIABILITY_UNSPECIFIED
+                ):
+                    res[column_name].reliabilities.append(
+                        extrapolation_meta.reliability
+                    )
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
 

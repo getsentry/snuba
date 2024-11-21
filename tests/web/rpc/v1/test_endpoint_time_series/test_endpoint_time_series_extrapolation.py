@@ -21,11 +21,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.common.aggregation import CUSTOM_COLUMN_PREFIX
-from snuba.web.rpc.v1.endpoint_time_series import (
-    EndpointTimeSeries,
-    _get_extrapolation_meta,
-)
+from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -247,55 +243,3 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
-
-
-class TestUtils:
-    @pytest.mark.parametrize(
-        ("row_data", "column_name", "average_sample_rate", "reliability"),
-        [
-            (
-                {
-                    "time": "2024-4-20 16:20:00",
-                    "count(sentry.duration)": 100,
-                    "p95(sentry.duration)": 123456,
-                    CUSTOM_COLUMN_PREFIX
-                    + "upper_confidence$count(sentry.duration)$function_type:count": 20,
-                    CUSTOM_COLUMN_PREFIX
-                    + "average_sample_rate$count(sentry.duration)": 0.5,
-                    CUSTOM_COLUMN_PREFIX + "count$count(sentry.duration)": 120,
-                    "group_by_attr_1": "g1",
-                    "group_by_attr_2": "a1",
-                },
-                "count(sentry.duration)",
-                0.5,
-                Reliability.RELIABILITY_HIGH,
-            ),
-            (
-                {
-                    "time": "2024-4-20 16:20:00",
-                    "count(sentry.duration)": 100,
-                    "min(sentry.duration)": 123456,
-                    CUSTOM_COLUMN_PREFIX
-                    + "upper_confidence$count(sentry.duration)$function_type:count": 20,
-                    CUSTOM_COLUMN_PREFIX
-                    + "average_sample_rate$count(sentry.duration)": 0.5,
-                    CUSTOM_COLUMN_PREFIX + "count$count(sentry.duration)": 120,
-                    "group_by_attr_1": "g1",
-                    "group_by_attr_2": "a1",
-                },
-                "min(sentry.duration)",
-                0,
-                Reliability.RELIABILITY_UNSPECIFIED,
-            ),
-        ],
-    )
-    def test_get_extrapolation_meta(
-        self,
-        row_data: dict[str, Any],
-        column_name: str,
-        average_sample_rate: float,
-        reliability: Reliability.ValueType,
-    ) -> None:
-        extrapolation_meta = _get_extrapolation_meta(row_data, column_name)
-        assert extrapolation_meta.avg_sampling_rate == average_sample_rate
-        assert extrapolation_meta.reliability == reliability

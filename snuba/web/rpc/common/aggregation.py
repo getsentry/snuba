@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     ExtrapolationMode,
     Function,
+    Reliability,
 )
 
 from snuba.query.dsl import CurriedFunctions as cf
@@ -28,48 +29,57 @@ CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
 
 @dataclass(frozen=True)
+class ExtrapolationMeta:
+    reliability: Reliability.ValueType
+    avg_sampling_rate: float
+
+
+@dataclass(frozen=True)
 class CustomColumnInformation:
     """
     In order to support extrapolation, we need to be able to create a new column in clickhouse that computes some value, potentially based on some existing column.
     This class holds the information needed to generate alias for the column so we can know what the column represents when getting results.
     """
 
-    column_type: str
+    # A string identifier for the custom column that can be used to determine what the column represents
+    custom_column_id: str
+
+    # A column that this custom column depends on or attached to.
+    # For example, if we are computing the confidence interval for an aggregation column, we need to know for which column we are computing a confidence interval.
     referenced_column: Optional[str]
+
+    # Metadata about the custom column that can be used to encode additional information in the column.
+    # E.g. the aggregation function type for the confidence interval column.
     metadata: dict[str, str]
 
+    def to_alias(self) -> str:
+        alias = CUSTOM_COLUMN_PREFIX + self.custom_column_id
+        if self.referenced_column is not None:
+            alias += f"${self.referenced_column}"
+        if self.metadata:
+            alias += "$" + ",".join(
+                [f"{key}:{value}" for key, value in self.metadata.items()]
+            )
+        return alias
 
-def _generate_custom_column_alias(
-    custom_column_information: CustomColumnInformation,
-) -> str:
-    alias = CUSTOM_COLUMN_PREFIX + custom_column_information.column_type
-    if custom_column_information.referenced_column is not None:
-        alias += f"${custom_column_information.referenced_column}"
-    if custom_column_information.metadata:
-        alias += "$" + ",".join(
-            [
-                f"{key}:{value}"
-                for key, value in custom_column_information.metadata.items()
-            ]
-        )
-    return alias
+    @staticmethod
+    def from_alias(alias: str) -> "CustomColumnInformation":
+        if not alias.startswith(CUSTOM_COLUMN_PREFIX):
+            raise ValueError(
+                f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}"
+            )
 
+        alias = alias[len(CUSTOM_COLUMN_PREFIX) :]
+        parts = alias.split("$")
+        column_type = parts[0]
+        referenced_column = parts[1] if len(parts) > 1 else None
+        metadata_parts = parts[2].split(",") if len(parts) > 2 else []
+        metadata = {}
+        for metadata_part in metadata_parts:
+            key, value = metadata_part.split(":")
+            metadata[key] = value
 
-def get_custom_column_information(alias: str) -> CustomColumnInformation:
-    if not alias.startswith(CUSTOM_COLUMN_PREFIX):
-        raise ValueError(f"Alias {alias} does not start with {CUSTOM_COLUMN_PREFIX}")
-
-    alias = alias[len(CUSTOM_COLUMN_PREFIX) :]
-    parts = alias.split("$")
-    column_type = parts[0]
-    referenced_column = parts[1] if len(parts) > 1 else None
-    metadata_parts = parts[2].split(",") if len(parts) > 2 else []
-    metadata = {}
-    for metadata_part in metadata_parts:
-        key, value = metadata_part.split(":")
-        metadata[key] = value
-
-    return CustomColumnInformation(column_type, referenced_column, metadata)
+        return CustomColumnInformation(column_type, referenced_column, metadata)
 
 
 def get_attribute_confidence_interval_alias(
@@ -87,15 +97,13 @@ def get_attribute_confidence_interval_alias(
 
     function_type = function_alias_map.get(aggregation.aggregate)
     if function_type is not None:
-        return _generate_custom_column_alias(
-            CustomColumnInformation(
-                column_type="upper_confidence",
-                referenced_column=aggregation.label,
-                metadata={
-                    "function_type": function_type,
-                },
-            )
-        )
+        return CustomColumnInformation(
+            custom_column_id="upper_confidence",
+            referenced_column=aggregation.label,
+            metadata={
+                "function_type": function_type,
+            },
+        ).to_alias()
 
     return None
 
@@ -125,13 +133,11 @@ def get_field_existence_expression(aggregation: AttributeAggregation) -> Express
 
 
 def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Expression:
-    alias = _generate_custom_column_alias(
-        CustomColumnInformation(
-            column_type="average_sample_rate",
-            referenced_column=aggregation.label,
-            metadata={},
-        )
-    )
+    alias = CustomColumnInformation(
+        custom_column_id="average_sample_rate",
+        referenced_column=aggregation.label,
+        metadata={},
+    ).to_alias()
     return f.avgIf(
         f.divide(literal(1), sampling_weight_column),
         get_field_existence_expression(aggregation),
@@ -188,7 +194,7 @@ def get_extrapolated_function(
 
 def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression | None:
     """
-    Returns the expression for calculating the upper confidence limit for a given aggregation.
+    Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
     Calculations are based on https://github.com/getsentry/extrapolation-math/blob/main/2024-10-04%20Confidence%20-%20Final%20Approach.ipynb
     Note that in the above notebook, the formulas are based on the sampling rate, while we perform calculations based on the sampling weight (1 / sampling rate).
     """
@@ -221,11 +227,11 @@ def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression
 
 def get_count_column(aggregation: AttributeAggregation) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
-    alias = _generate_custom_column_alias(
-        CustomColumnInformation(
-            column_type="count", referenced_column=aggregation.label, metadata={}
-        )
-    )
+    alias = CustomColumnInformation(
+        custom_column_id="count",
+        referenced_column=aggregation.label,
+        metadata={},
+    ).to_alias()
     return f.count(field, alias=alias)
 
 
@@ -278,3 +284,43 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         )
 
     return agg_func_expr
+
+
+def get_extrapolation_meta(
+    row_data: Dict[str, Any], column_label: str
+) -> ExtrapolationMeta:
+    """
+    Computes the reliability and average sample rate for a column based on the extrapolation columns.
+    """
+    upper_confidence_limit = None
+    average_sample_rate = 0
+    sample_count = None
+    for col_name, col_value in row_data.items():
+        # we ignore non-custom columns
+        if col_name.startswith(CUSTOM_COLUMN_PREFIX):
+            custom_column_information = CustomColumnInformation.from_alias(col_name)
+            if (
+                custom_column_information.referenced_column is None
+                or custom_column_information.referenced_column != column_label
+            ):
+                continue
+
+            if custom_column_information.custom_column_id == "upper_confidence":
+                upper_confidence_limit = col_value
+            elif custom_column_information.custom_column_id == "average_sample_rate":
+                average_sample_rate = col_value
+            elif custom_column_information.custom_column_id == "count":
+                sample_count = col_value
+
+    reliability = Reliability.RELIABILITY_UNSPECIFIED
+    if upper_confidence_limit is not None and sample_count is not None:
+        is_reliable = calculate_reliability(
+            row_data[column_label],
+            upper_confidence_limit,
+            sample_count,
+        )
+        reliability = (
+            Reliability.RELIABILITY_HIGH if is_reliable else Reliability.RELIABILITY_LOW
+        )
+
+    return ExtrapolationMeta(reliability, average_sample_rate)
