@@ -202,14 +202,14 @@ def _convert_result_timeseries(
 
                 reliability = Reliability.RELIABILITY_UNSPECIFIED
                 if upper_confidence_limit is not None and sample_count is not None:
-                    reliability = calculate_reliability(
+                    is_reliable = calculate_reliability(
                         row_data[timeseries.label],
                         upper_confidence_limit,
                         sample_count,
                     )
                     reliability = (
                         Reliability.RELIABILITY_HIGH
-                        if reliability
+                        if is_reliable
                         else Reliability.RELIABILITY_LOW
                     )
 

@@ -30,7 +30,7 @@ def gen_message(
     dt: datetime,
     tags: dict[str, str],
     numerical_attributes: dict[str, float],
-    measurements: dict[str, float],
+    measurements: dict[str, dict[str, float]],
 ) -> MutableMapping[str, Any]:
     return {
         "description": "/api/0/relays/projectconfigs/",

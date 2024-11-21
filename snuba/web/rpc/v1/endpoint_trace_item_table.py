@@ -227,14 +227,14 @@ def _convert_results(
         reliability = Reliability.RELIABILITY_UNSPECIFIED
         for column_name, sample_count in sample_counts.items():
             if column_name in upper_confidence_limits:
-                reliability = calculate_reliability(
+                is_reliable = calculate_reliability(
                     estimates[column_name],
                     upper_confidence_limits[column_name],
                     sample_count,
                 )
                 reliability = (
                     Reliability.RELIABILITY_HIGH
-                    if reliability
+                    if is_reliable
                     else Reliability.RELIABILITY_LOW
                 )
 

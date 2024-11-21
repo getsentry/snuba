@@ -79,13 +79,14 @@ def get_attribute_confidence_interval_alias(
         Function.FUNCTION_P99: "p99",
     }
 
-    if function_alias_map.get(aggregation.aggregate) is not None:
+    function_type = function_alias_map.get(aggregation.aggregate)
+    if function_type is not None:
         return _generate_custom_column_alias(
             CustomColumnInformation(
                 column_type="upper_confidence",
                 referenced_column=aggregation.label,
                 metadata={
-                    "function_type": function_alias_map.get(aggregation.aggregate)
+                    "function_type": function_type,
                 },
             )
         )
