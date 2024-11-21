@@ -38,7 +38,7 @@ def test_generate_custom_column_alias_without_metadata() -> None:
     )
 
     assert (
-        custom_column_information_without_metadata.to_alias
+        custom_column_information_without_metadata.to_alias()
         == CUSTOM_COLUMN_PREFIX + "column_id$count"
     )
 
@@ -50,8 +50,9 @@ def test_generate_custom_column_alias_without_referenced_column() -> None:
         metadata={},
     )
 
-    assert custom_column_information_without_referenced_column.to_alias() == (
-        CUSTOM_COLUMN_PREFIX + "column_id"
+    assert (
+        custom_column_information_without_referenced_column.to_alias()
+        == CUSTOM_COLUMN_PREFIX + "column_id"
     )
 
 
@@ -139,7 +140,6 @@ def test_get_upper_confidence_column_for_non_extrapolatable_column() -> None:
     ],
 )
 def test_get_extrapolation_meta(
-    self,
     row_data: dict[str, Any],
     column_name: str,
     average_sample_rate: float,
