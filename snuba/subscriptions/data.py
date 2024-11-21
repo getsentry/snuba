@@ -250,7 +250,7 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         if not response.result_timeseries:
             result: Result = {
                 "meta": [],
-                "data": [{request.aggregations[0].label: 0}],
+                "data": [{request.aggregations[0].label: None}],
                 "trace_output": "",
             }
             return QueryResult(

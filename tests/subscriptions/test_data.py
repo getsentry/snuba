@@ -168,7 +168,7 @@ TESTS = [
             ),
             EntityKey.EAP_SPANS,
         ),
-        0.0,
+        None,
         None,
         id="RPC subscription with filter",
     ),
