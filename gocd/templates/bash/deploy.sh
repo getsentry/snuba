@@ -49,7 +49,6 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="spans-exp-static-off" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
-  --container-name="metrics-summaries-consumer" \
   --container-name="eap-spans-consumer" \
   --container-name="eap-mutations-consumer" \
   --container-name="eap-spans-profiled-consumer" \
