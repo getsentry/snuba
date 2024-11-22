@@ -93,7 +93,7 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     def _build_label_mapping_key(attr_key: AttributeKey) -> str:
-        return attr_key.name + " " + AttributeKey.Type.Name(attr_key.type)
+        return attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
 
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
