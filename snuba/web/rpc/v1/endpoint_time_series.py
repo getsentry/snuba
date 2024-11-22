@@ -55,6 +55,11 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
+
+def _rewind(start_timestamp: int, granularity: int) -> int:
+    return (start_timestamp // granularity) * granularity
+
+
 _MAX_BUCKETS_IN_REQUEST = 1000
 
 
@@ -121,11 +126,14 @@ def _convert_result_timeseries(
         tuple[str, str], dict[int, Dict[str, Any]]
     ] = defaultdict(dict)
 
+    start_timestamp_seconds = _rewind(
+        request.meta.start_timestamp.seconds, request.granularity_secs
+    )
     query_duration = (
         request.meta.end_timestamp.seconds - request.meta.start_timestamp.seconds
     )
     time_buckets = [
-        Timestamp(seconds=(request.meta.start_timestamp.seconds) + secs)
+        Timestamp(seconds=(start_timestamp_seconds) + secs)
         for secs in range(0, query_duration, request.granularity_secs)
     ]
 

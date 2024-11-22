@@ -227,16 +227,17 @@ class TestTimeSeriesApi(BaseApiTest):
         ]
 
     def test_rachel(self) -> None:
-        start_timestamp_seconds = 1500
         # store a a test metric with a value of 1, every second of one hour
-        granularity_secs = 15
+        granularity_secs = 300
         query_duration = 60 * 30
         store_timeseries(
-            datetime.fromtimestamp(start_timestamp_seconds, tz=UTC),
+            BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
         )
+
+        print(BASE_TIME.timestamp())
 
         message = TimeSeriesRequest(
             meta=RequestMeta(
@@ -244,9 +245,9 @@ class TestTimeSeriesApi(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=start_timestamp_seconds),
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 1)),
                 end_timestamp=Timestamp(
-                    seconds=int(start_timestamp_seconds + query_duration)
+                    seconds=int(BASE_TIME.timestamp() + 1 + query_duration)
                 ),
             ),
             aggregations=[
@@ -266,7 +267,14 @@ class TestTimeSeriesApi(BaseApiTest):
             granularity_secs=granularity_secs,
         )
         response = EndpointTimeSeries().execute(message)
-        assert len(response.result_timeseries) != 0
+
+        print(response)
+        for ts in response.result_timeseries:
+            # expect ts.data_points to look like this: [, , , , , ]
+            for datapoint in ts.data_points:
+                assert datapoint != DataPoint()
+
+        assert False
 
     def test_with_group_by(self) -> None:
         store_timeseries(
