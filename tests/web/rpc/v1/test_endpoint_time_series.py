@@ -226,7 +226,7 @@ class TestTimeSeriesApi(BaseApiTest):
             ),
         ]
 
-    def test_rachel(self) -> None:
+    def test_start_time_not_divisible_by_time_buckets_returns_valid_data(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
         query_duration = 60 * 30
@@ -237,8 +237,6 @@ class TestTimeSeriesApi(BaseApiTest):
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
         )
 
-        print(BASE_TIME.timestamp())
-
         message = TimeSeriesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -247,7 +245,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 1)),
                 end_timestamp=Timestamp(
-                    seconds=int(BASE_TIME.timestamp() + 1 + query_duration)
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
             ),
             aggregations=[
@@ -273,8 +271,6 @@ class TestTimeSeriesApi(BaseApiTest):
             # expect ts.data_points to look like this: [, , , , , ]
             for datapoint in ts.data_points:
                 assert datapoint != DataPoint()
-
-        assert False
 
     def test_with_group_by(self) -> None:
         store_timeseries(
