@@ -47,29 +47,31 @@ mod tests {
 
     #[test]
     fn test_delay_config() {
-        runtime_config::del_str_config_direct(
+        // teardown, even when the test fails
+        let _guard = scopeguard::guard((), |_| {
+            runtime_config::patch_str_config_for_test(
+                "quantized_rebalance_consumer_group_delay_secs__spans",
+                None,
+            );
+        });
+
+        runtime_config::patch_str_config_for_test(
             "quantized_rebalance_consumer_group_delay_secs__spans",
-        )
-        .unwrap();
+            None,
+        );
         let delay_secs = get_rebalance_delay_secs("spans");
         assert_eq!(delay_secs, None);
-        runtime_config::set_str_config_direct(
+        runtime_config::patch_str_config_for_test(
             "quantized_rebalance_consumer_group_delay_secs__spans",
-            "420",
-        )
-        .unwrap();
+            Some("420"),
+        );
         let delay_secs = get_rebalance_delay_secs("spans");
         assert_eq!(delay_secs, Some(420));
-        runtime_config::set_str_config_direct(
+        runtime_config::patch_str_config_for_test(
             "quantized_rebalance_consumer_group_delay_secs__spans",
-            "garbage",
-        )
-        .unwrap();
+            Some("garbage"),
+        );
         let delay_secs = get_rebalance_delay_secs("spans");
         assert_eq!(delay_secs, None);
-        runtime_config::del_str_config_direct(
-            "quantized_rebalance_consumer_group_delay_secs__spans",
-        )
-        .unwrap();
     }
 }
