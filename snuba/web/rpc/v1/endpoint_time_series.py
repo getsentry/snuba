@@ -142,7 +142,7 @@ def _convert_result_timeseries(
 
         for col_name, col_value in row.items():
             if col_name in group_by_labels:
-                group_by_map[col_name] = col_value
+                group_by_map[col_name] = str(col_value)
 
         group_by_key = "|".join([f"{k},{v}" for k, v in group_by_map.items()])
         for col_name in aggregation_labels:
