@@ -189,6 +189,11 @@ impl From<FromSpanMessage> for EAPSpan {
         };
 
         {
+            if let Some(profile_id) = from.profile_id {
+                res.attributes
+                    .insert_str("sentry.profile_id".to_owned(), profile_id.to_string());
+            }
+
             if let Some(sentry_tags) = from.sentry_tags {
                 for (k, v) in sentry_tags {
                     if k == "transaction" {
