@@ -173,11 +173,6 @@ class GroupAttributesLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.group_attributes")
 
 
-class MetricsSummariesLoader(DirectoryLoader):
-    def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.metrics_summaries")
-
-
 class ProfileChunksLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.profile_chunks")
