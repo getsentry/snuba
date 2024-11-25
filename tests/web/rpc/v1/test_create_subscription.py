@@ -23,7 +23,10 @@ from snuba.redis import RedisClientKey, get_redis_client
 from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
-from tests.web.rpc.v1.test_endpoint_time_series import DummyMetric, store_timeseries
+from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
+    DummyMetric,
+    store_timeseries,
+)
 
 END_TIME = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC)
 START_TIME = END_TIME - timedelta(hours=1)

@@ -35,6 +35,9 @@ expression: snapshot_payload
       "sentry.op": "http.client",
       "tag2": "123"
     },
+    "attr_str_3": {
+      "sentry.profile_id": "deadbeefdeadbeefdeadbeefdeadbeef"
+    },
     "attr_str_5": {
       "sentry.transaction.op": "navigation"
     },

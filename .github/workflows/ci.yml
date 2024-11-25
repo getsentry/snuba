@@ -14,7 +14,7 @@ jobs:
     outputs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
     steps:
-      - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v2
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - name: Internal github app token
         id: token
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - name: Run linter
         run: |
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - uses: actions/setup-python@v5
         with:
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - uses: actions/setup-python@v5
         with:
@@ -135,7 +135,7 @@ jobs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -200,7 +200,7 @@ jobs:
           ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Registry login
         run: |
@@ -246,7 +246,7 @@ jobs:
     name: Front end tests for snuba admin
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         name: Checkout code
       - uses: volta-cli/action@v4
       - name: Set up and run tests through yarn
@@ -270,14 +270,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Registry login
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
       - name: Checkout sentry
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: getsentry/sentry
           path: sentry
@@ -367,7 +367,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Registry login
         run: |
@@ -392,7 +392,7 @@ jobs:
 
     steps:
       - name: Checkout Snuba
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Run Sentry self-hosted e2e CI
         uses: getsentry/action-self-hosted-e2e-tests@main
         with:
@@ -406,7 +406,7 @@ jobs:
     runs-on: ubuntu-20.04
     if: ${{ (github.ref_name == 'master') }}
     steps:
-      - uses: actions/checkout@v3 # v3.1.0
+      - uses: actions/checkout@v4 # v3.1.0
       - name: Pull the test image
         id: image_pull
         env:

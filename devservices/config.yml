@@ -41,6 +41,7 @@ services:
       host.docker.internal: host-gateway
     networks:
       - devservices
+    restart: unless-stopped
 
   snuba:
     image: ghcr.io/getsentry/snuba:latest
@@ -71,6 +72,7 @@ services:
       host.docker.internal: host-gateway
     networks:
       - devservices
+    restart: unless-stopped
 
 volumes:
   clickhouse-data:
@@ -78,3 +80,4 @@ volumes:
 networks:
   devservices:
     name: devservices
+    external: true

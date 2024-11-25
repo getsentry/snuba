@@ -2872,6 +2872,7 @@ dependencies = [
  "reqwest",
  "rust_arroyo",
  "schemars",
+ "scopeguard",
  "sentry",
  "sentry-kafka-schemas",
  "sentry_usage_accountant",
