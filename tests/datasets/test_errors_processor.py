@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from unittest.mock import ANY
-from uuid import UUID
 
 import pytest
 
