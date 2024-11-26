@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.11.1
+
+### Various fixes & improvements
+
+- ref(clickhouse-24.3): allow_suspicious_primary_key for eap migration (#6602) by @MeredithAnya
+- chore(devservices): Bumping the version of devservices to latest (#6596) by @IanWoodard
+- feat(consumers): Quantized rebalancing in Rust (#6595) by @untitaker
+- chore(metrics-summaries): Remove metrics summaries consumer code (#6590) by @phacops
+- feat(eap): Extract profile id for eap spans (#6597) by @Zylphrex
+- fix(codeowners): Code owners for eap processor (#6598) by @Zylphrex
+- fix(eap): fix bug where we pass non str group by mapping to timeseries (#6593) by @davidtsuk
+- fix(eap-api): delimeter for alias (#6592) by @xurui-c
+- feat(eap): Add confidence interval calculations for count (#6568) by @davidtsuk
+- RPC handles same name attributes (#6581) by @xurui-c
+- log(optimize): after optimize, log how long it took w/partition (#6591) by @onewland
+- feat(devservices): Add restart settings and use external devservices network (#6587) by @hubertdeng123
+- chore(deps): bump actions/checkout from 2 to 4 (#6554) by @onkar
+- chore(devservices): Bumping the version of devservices to latest (#6582) by @IanWoodard
+- chore(ci): Upgrade ClickHouse to v23.8 for CI (#6584) by @phacops
+- feat(subscriptions): Add a create subscription rpc endpoint (#6571) by @shruthilayaj
+- fix(script): Wait for futures when producing to kafka (#6583) by @nikhars
+- fix: convert max_batch_time seconds (#6580) by @MeredithAnya
+- fix: dont set group.instance.id incorrectly (#6578) by @MeredithAnya
+- chore(eap-spans): Increase the number of replicas to scan in parallel (#6577) by @phacops
+- V1 RPC of TraceItemAttributeValues (#6563) by @xurui-c
+- meta: Bump new development version (9b923342)
+- build(deps): bump types-python-dateutil from 2.8.19 to 2.8.19.14 (#6557) by @onkar
+- build(deps-dev): bump webpack-cli from 4.10.0 to 5.1.4 in /snuba/admin (#6558) by @onkar
+
+_Plus 4 more_
+
 ## 24.11.0
 
 ### Various fixes & improvements
