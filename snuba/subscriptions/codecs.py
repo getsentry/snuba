@@ -84,7 +84,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
 class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscriptionTask]):
     """
     Encodes/decodes a scheduled subscription to Kafka payload.
-    Does not support non SnQL subscriptions.
+    Supports SnQL and RPC subscriptions.
     """
 
     def encode(self, value: ScheduledSubscriptionTask) -> KafkaPayload:

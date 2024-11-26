@@ -49,6 +49,7 @@ from snuba.utils.streams.configuration_builder import (
     get_default_kafka_configuration,
 )
 from snuba.utils.streams.topics import Topic as SnubaTopic
+from snuba.web.rpc.v1.create_subscription import CreateSubscriptionRequest
 from tests.assertions import assert_changes
 from tests.backends.metrics import TestingMetricsBackend
 
@@ -159,6 +160,7 @@ def test_scheduler_consumer(tmpdir: LocalPath) -> None:
     settings.TOPIC_PARTITION_COUNTS = {}
 
 
+@pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
     settings.TOPIC_PARTITION_COUNTS = {"snuba-spans": 2}
@@ -178,54 +180,34 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
 
     mock_scheduler_producer = mock.Mock()
 
-    from snuba.redis import RedisClientKey, get_redis_client
-    from snuba.subscriptions.data import PartitionId, RPCSubscriptionData
-    from snuba.subscriptions.store import RedisSubscriptionDataStore
-
-    entity_key = EntityKey(entity_name)
-    partition_index = 0
-
-    store = RedisSubscriptionDataStore(
-        get_redis_client(RedisClientKey.SUBSCRIPTION_STORE),
-        entity_key,
-        PartitionId(partition_index),
-    )
-    entity = get_entity(EntityKey.EVENTS)
-    store.create(
-        uuid.uuid4(),
-        RPCSubscriptionData.from_proto(
-            CreateSubscriptionRequestProto(
-                time_series_request=TimeSeriesRequest(
-                    meta=RequestMeta(
-                        project_ids=[1],
-                        organization_id=1,
-                        cogs_category="something",
-                        referrer="something",
-                    ),
-                    aggregations=[
-                        AttributeAggregation(
-                            aggregate=Function.FUNCTION_SUM,
-                            key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="test_metric"
-                            ),
-                            label="sum",
-                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
-                        ),
-                    ],
-                    filter=TraceItemFilter(
-                        comparison_filter=ComparisonFilter(
-                            key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"),
-                            op=ComparisonFilter.OP_NOT_EQUALS,
-                            value=AttributeValue(val_str="bar"),
-                        )
-                    ),
-                ),
-                time_window_secs=300,
-                resolution_secs=60,
+    message = CreateSubscriptionRequestProto(
+        time_series_request=TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
             ),
-            EntityKey.EAP_SPANS,
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="foo"),
+                    op=ComparisonFilter.OP_NOT_EQUALS,
+                    value=AttributeValue(val_str="bar"),
+                )
+            ),
         ),
+        time_window_secs=300,
+        resolution_secs=60,
     )
+    CreateSubscriptionRequest().execute(message)
 
     builder = scheduler_consumer.SchedulerBuilder(
         entity_name,
@@ -256,9 +238,9 @@ def test_scheduler_consumer_rpc_subscriptions(tmpdir: LocalPath) -> None:
 
     for partition, offset, ts in [
         (0, 0, epoch),
-        (1, 0, epoch + 60),
+        (1, 0, epoch),
         (0, 1, epoch + 120),
-        (1, 1, epoch + 180),
+        (1, 1, epoch + 120),
     ]:
         fut = producer.produce(
             commit_log_topic,

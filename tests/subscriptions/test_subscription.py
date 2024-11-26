@@ -24,6 +24,7 @@ from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.entity_subscriptions.validators import InvalidSubscriptionError
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query.exceptions import InvalidQueryException, ValidationException
 from snuba.query.validation.validators import ColumnValidationMode
 from snuba.redis import RedisClientKey, get_redis_client
@@ -386,14 +387,12 @@ TESTS_CREATE_RPC_SUBSCRIPTIONS = [
 class TestEAPSpansRPCSubscriptionCreator:
     timer = Timer("test")
 
-    def setup_method(self) -> None:
-        self.dataset = get_dataset("metrics")
-
     @pytest.mark.parametrize("subscription", TESTS_CREATE_RPC_SUBSCRIPTIONS)
     @pytest.mark.clickhouse_db
     @pytest.mark.redis_db
     def test(self, subscription: SubscriptionData) -> None:
-        creator = SubscriptionCreator(self.dataset, EntityKey.EAP_SPANS)
+        dataset = PluggableDataset(name="eap", all_entities=[])
+        creator = SubscriptionCreator(dataset, EntityKey.EAP_SPANS)
         identifier = creator.create(subscription, self.timer)
         assert (
             cast(
