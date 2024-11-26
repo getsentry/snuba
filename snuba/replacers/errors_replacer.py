@@ -819,6 +819,7 @@ def _convert_hash(
         else:
             return "'%s'" % _hashify(hash)
 
+
 @dataclass
 class DeleteTagReplacement(Replacement):
     project_id: int
