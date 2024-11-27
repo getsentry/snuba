@@ -138,12 +138,19 @@ def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> No
         ReplacementType.EXCLUDE_GROUPS,  # Arbitrary replacement type, no impact on tests
     )
 
+    query_settings = HTTPQuerySettings()
     PostReplacementConsistencyEnforcer(
         "project_id", ReplacerState.ERRORS
-    ).process_query(query, HTTPQuerySettings())
+    ).process_query(query, query_settings)
 
     assert query.get_condition() == build_in("project_id", [2])
     assert query.get_from_clause().final
+    assert (
+        query_settings.get_clickhouse_settings()[
+            "do_not_merge_across_partitions_select_final"
+        ]
+        == 1
+    )
 
 
 @pytest.mark.redis_db
