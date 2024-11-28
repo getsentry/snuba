@@ -132,6 +132,13 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     # End of special handling, just send to the appropriate bucket
     if attr_key.type == AttributeKey.Type.TYPE_STRING:
+        # return f.CAST(
+        #     SubscriptableReference(
+        #         alias=None, column=column("attr_str"), key=literal(attr_key.name)
+        #     ),
+        #     "String",
+        #     alias=alias,
+        # )
         return SubscriptableReference(
             alias=alias, column=column("attr_str"), key=literal(attr_key.name)
         )
