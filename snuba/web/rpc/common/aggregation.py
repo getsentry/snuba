@@ -38,7 +38,7 @@ class ExtrapolationMeta:
         """
         Computes the reliability and average sample rate for a column based on the extrapolation columns.
         """
-        upper_confidence_limit = None
+        confidence_interval = None
         average_sample_rate = 0
         sample_count = None
         for col_name, col_value in row_data.items():
@@ -51,8 +51,8 @@ class ExtrapolationMeta:
                 ):
                     continue
 
-                if custom_column_information.custom_column_id == "upper_confidence":
-                    upper_confidence_limit = col_value
+                if custom_column_information.custom_column_id == "confidence_interval":
+                    confidence_interval = col_value
                 elif (
                     custom_column_information.custom_column_id == "average_sample_rate"
                 ):
@@ -61,10 +61,10 @@ class ExtrapolationMeta:
                     sample_count = col_value
 
         reliability = Reliability.RELIABILITY_UNSPECIFIED
-        if upper_confidence_limit is not None and sample_count is not None:
+        if confidence_interval is not None and sample_count is not None:
             is_reliable = calculate_reliability(
                 row_data[column_label],
-                upper_confidence_limit,
+                confidence_interval,
                 sample_count,
             )
             reliability = (
@@ -129,7 +129,7 @@ def get_attribute_confidence_interval_alias(
 ) -> str | None:
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
-        Function.FUNCTION_AVERAGE: "avg",
+        Function.FUNCTION_AVG: "avg",
         Function.FUNCTION_SUM: "sum",
         Function.FUNCTION_P50: "p50",
         Function.FUNCTION_P90: "p90",
@@ -140,7 +140,7 @@ def get_attribute_confidence_interval_alias(
     function_type = function_alias_map.get(aggregation.aggregate)
     if function_type is not None:
         return CustomColumnInformation(
-            custom_column_id="upper_confidence",
+            custom_column_id="confidence_interval",
             referenced_column=aggregation.label,
             metadata={
                 "function_type": function_type,
@@ -187,6 +187,19 @@ def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Express
     )
 
 
+def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
+    return CustomColumnInformation(
+        custom_column_id="count",
+        referenced_column=aggregation.label,
+        metadata={},
+    ).to_alias()
+
+
+def get_count_column(aggregation: AttributeAggregation) -> Expression:
+    field = attribute_key_to_expression(aggregation.key)
+    return f.count(field, alias=_get_count_column_alias(aggregation))
+
+
 def get_extrapolated_function(
     aggregation: AttributeAggregation,
 ) -> CurriedFunctionCall | FunctionCall | None:
@@ -200,8 +213,21 @@ def get_extrapolated_function(
         Function.FUNCTION_SUM: f.sum(
             f.multiply(field, sampling_weight_column), **alias_dict
         ),
-        Function.FUNCTION_AVERAGE: f.avgWeighted(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_AVERAGE: f.divide(
+            f.sum(f.multiply(field, sampling_weight_column)),
+            f.sumIf(
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+            ),
+            **alias_dict,
+        ),
+        Function.FUNCTION_AVG: f.divide(
+            f.sum(f.multiply(field, sampling_weight_column)),
+            f.sumIf(
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+            ),
+            **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.sumIf(
             sampling_weight_column,
@@ -223,9 +249,6 @@ def get_extrapolated_function(
         Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
             field, sampling_weight_column, **alias_dict
         ),
-        Function.FUNCTION_AVG: f.weightedAvg(
-            field, sampling_weight_column, **alias_dict
-        ),
         Function.FUNCTION_MAX: f.max(field, **alias_dict),
         Function.FUNCTION_MIN: f.min(field, **alias_dict),
         Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
@@ -234,17 +257,28 @@ def get_extrapolated_function(
     return function_map_sample_weighted.get(aggregation.aggregate)
 
 
-def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression | None:
+def get_confidence_interval_column(
+    aggregation: AttributeAggregation,
+) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
     Calculations are based on https://github.com/getsentry/extrapolation-math/blob/main/2024-10-04%20Confidence%20-%20Final%20Approach.ipynb
     Note that in the above notebook, the formulas are based on the sampling rate, while we perform calculations based on the sampling weight (1 / sampling rate).
     """
+    field = attribute_key_to_expression(aggregation.key)
     alias = get_attribute_confidence_interval_alias(aggregation)
     alias_dict = {"alias": alias} if alias else {}
 
-    function_map_upper_confidence_limit = {
-        # upper confidence = Z cdot sqrt{-log{(frac{sum_{i=1}^n frac{1}{w_i}}{n})} cdot sigma^2(sum_{i=1}^n w_i^2 - w_i)}
+    function_map_confidence_interval = {
+        # confidence interval = Z \cdot \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} \cdot \sum_{i=1}^n w_i^2 - w_i}
+        #        ┌─────────────────────────┐
+        #        │      ₙ
+        #        │      ⎲  1
+        #    ╲   │      ⎳  ──    ₙ
+        #     ╲  │     ⁱ⁼¹ wᵢ    ⎲   2
+        # Z *  ╲ │-log(──────) * ⎳  wᵢ - wᵢ
+        #       ╲│       n      ⁱ⁼¹
+        #
         # where w_i is the sampling weight for the i-th event and n is the number of events.
         Function.FUNCTION_COUNT: f.multiply(
             z_value,
@@ -262,24 +296,99 @@ def get_upper_confidence_column(aggregation: AttributeAggregation) -> Expression
             ),
             **alias_dict,
         ),
+        # confidence interval = Z * \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} * \sum_{i=1}^n x_i^2w_i^2 - x_i^2w_i}
+        #        ┌──────────────────────────────┐
+        #        │      ₙ
+        #        │      ⎲  1
+        #    ╲   │      ⎳  ──     ₙ
+        #     ╲  │     ⁱ⁼¹ wᵢ     ⎲   2 2    2
+        # Z *   ╲ │-log(──────) *  ⎳  xᵢwᵢ - xᵢwᵢ
+        #       ╲│       n       ⁱ⁼¹
+        Function.FUNCTION_SUM: f.multiply(
+            z_value,
+            f.sqrt(
+                f.multiply(
+                    f.negate(f.log(get_average_sample_rate_column(aggregation))),
+                    f.sumIf(
+                        f.minus(
+                            f.multiply(
+                                f.multiply(field, field),
+                                f.multiply(
+                                    sampling_weight_column, sampling_weight_column
+                                ),
+                            ),
+                            f.multiply(
+                                f.multiply(field, field), sampling_weight_column
+                            ),
+                        ),
+                        get_field_existence_expression(aggregation),
+                    ),
+                )
+            ),
+            **alias_dict,
+        ),
+        # confidence interval = Z * \sqrt{\frac{N * (\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N})}{n * (N-1) c* (N-1)}}
+        #          ┌────────────────────────────┐
+        #          │                  ₙ
+        #          │                  ⎲
+        #          │      ₙ         ( ⎳  wᵢxᵢ)²
+        #     ╲    │      ⎲     2    ⁱ⁼¹
+        #      ╲   │N * ( ⎳  wᵢxᵢ - ───────────)
+        #       ╲  │     ⁱ⁼¹             N
+        # Z *    ╲ │────────────────────────────
+        #         ╲│     n * (N-1) c* (N-1)
+        Function.FUNCTION_AVG: f.multiply(
+            z_value,
+            f.sqrt(
+                f.divide(
+                    f.multiply(
+                        f.sumIf(
+                            sampling_weight_column,
+                            get_field_existence_expression(aggregation),
+                            alias=f"{alias}_N",
+                        ),
+                        f.minus(
+                            f.sumIf(
+                                f.multiply(
+                                    sampling_weight_column,
+                                    f.multiply(field, field),
+                                ),
+                                get_field_existence_expression(aggregation),
+                            ),
+                            f.divide(
+                                f.multiply(
+                                    f.sumIf(
+                                        f.multiply(sampling_weight_column, field),
+                                        get_field_existence_expression(aggregation),
+                                    ),
+                                    f.sumIf(
+                                        f.multiply(sampling_weight_column, field),
+                                        get_field_existence_expression(aggregation),
+                                    ),
+                                ),
+                                column(f"{alias}_N"),
+                            ),
+                        ),
+                    ),
+                    f.multiply(
+                        column(_get_count_column_alias(aggregation)),
+                        f.multiply(
+                            f.minus(column(f"{alias}_N"), literal(1)),
+                            f.minus(column(f"{alias}_N"), literal(1)),
+                        ),
+                    ),
+                )
+            ),
+            **alias_dict,
+        ),
     }
 
-    return function_map_upper_confidence_limit.get(aggregation.aggregate)
-
-
-def get_count_column(aggregation: AttributeAggregation) -> Expression:
-    field = attribute_key_to_expression(aggregation.key)
-    alias = CustomColumnInformation(
-        custom_column_id="count",
-        referenced_column=aggregation.label,
-        metadata={},
-    ).to_alias()
-    return f.count(field, alias=alias)
+    return function_map_confidence_interval.get(aggregation.aggregate)
 
 
 def calculate_reliability(
     estimate: float,
-    upper_confidence_limit: float,
+    confidence_interval: float,
     sample_count: int,
     confidence_interval_multiplier: float = 1.5,
     sample_count_threshold: int = 100,
@@ -288,7 +397,7 @@ def calculate_reliability(
     A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
     """
     return (
-        estimate + upper_confidence_limit <= estimate * confidence_interval_multiplier
+        estimate + confidence_interval <= estimate * confidence_interval_multiplier
         and sample_count >= sample_count_threshold
     )
 

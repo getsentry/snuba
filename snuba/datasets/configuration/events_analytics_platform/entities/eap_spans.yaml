@@ -94,7 +94,7 @@ query_processors:
         - attr_str
         - attr_num
 
-validate_data_model: error
+validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
 validators:
   - validator: EntityRequiredColumnValidator
     args:
