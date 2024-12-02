@@ -174,6 +174,12 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                     label="avg(test_metric)",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
                 ),
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_P50,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="p50(test_metric)",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ),
             ],
             granularity_secs=granularity_secs,
         )
@@ -202,6 +208,19 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 data_points=[
                     DataPoint(
                         data=120,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_HIGH,
+                        avg_sampling_rate=1,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+            TimeSeries(
+                label="p50(test_metric)",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=50,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_HIGH,
                         avg_sampling_rate=1,

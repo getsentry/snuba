@@ -132,10 +132,10 @@ def get_attribute_confidence_interval_alias(
         Function.FUNCTION_COUNT: "count",
         Function.FUNCTION_AVG: "avg",
         Function.FUNCTION_SUM: "sum",
-        Function.FUNCTION_P50: "p50",
-        Function.FUNCTION_P90: "p90",
-        Function.FUNCTION_P95: "p95",
-        Function.FUNCTION_P99: "p99",
+        Function.FUNCTION_P50: "percentile",
+        Function.FUNCTION_P90: "percentile",
+        Function.FUNCTION_P95: "percentile",
+        Function.FUNCTION_P99: "percentile",
     }
 
     function_type = function_alias_map.get(aggregation.aggregate)
@@ -199,6 +199,42 @@ def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
 def get_count_column(aggregation: AttributeAggregation) -> Expression:
     field = attribute_key_to_expression(aggregation.key)
     return f.count(field, alias=_get_count_column_alias(aggregation))
+
+
+def _get_percentile_confidence_interval_expression(
+    aggregation: AttributeAggregation, percentile: float
+) -> Expression:
+    # we calculate the quantile of:
+    #         ┌───────┐
+    # ⌈1+np+Z╲│p(1-p)n ⌉
+    # ──────────────────
+    #         n
+
+    field = attribute_key_to_expression(aggregation.key)
+    return cf.quantileTDigestWeighted(
+        f.divide(
+            f.ceil(
+                f.plus(
+                    f.plus(
+                        f.multiply(f.count(field), percentile),
+                        f.multiply(
+                            z_value,
+                            f.sqrt(
+                                f.multiply(
+                                    f.multiply(
+                                        percentile, f.minus(literal(1), percentile)
+                                    ),
+                                    f.count(field),
+                                ),
+                            ),
+                        ),
+                    ),
+                    literal(1),
+                )
+            ),
+            f.count(field),
+        )
+    )(field, alias=get_attribute_confidence_interval_alias(aggregation))
 
 
 def get_extrapolated_function(
@@ -383,6 +419,21 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
+        Function.FUNCTION_P50: _get_percentile_confidence_interval_expression(
+            aggregation, 0.5
+        ),
+        Function.FUNCTION_P75: _get_percentile_confidence_interval_expression(
+            aggregation, 0.75
+        ),
+        Function.FUNCTION_P90: _get_percentile_confidence_interval_expression(
+            aggregation, 0.9
+        ),
+        Function.FUNCTION_P95: _get_percentile_confidence_interval_expression(
+            aggregation, 0.95
+        ),
+        Function.FUNCTION_P99: _get_percentile_confidence_interval_expression(
+            aggregation, 0.99
+        ),
     }
 
     return function_map_confidence_interval.get(aggregation.aggregate)
@@ -394,14 +445,18 @@ def calculate_reliability(
     sample_count: int,
     confidence_interval_multiplier: float = 1.5,
     sample_count_threshold: int = 100,
+    confidence_interval_includes_estimate: bool = False,
 ) -> bool:
     """
     A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
     """
-    return (
-        estimate + confidence_interval <= estimate * confidence_interval_multiplier
-        and sample_count >= sample_count_threshold
-    )
+    if sample_count < sample_count_threshold:
+        return False
+
+    if confidence_interval_includes_estimate:
+        return confidence_interval <= estimate * confidence_interval_multiplier
+
+    return estimate + confidence_interval <= estimate * confidence_interval_multiplier
 
 
 def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
