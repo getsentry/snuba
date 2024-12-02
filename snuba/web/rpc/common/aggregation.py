@@ -271,16 +271,14 @@ def get_confidence_interval_column(
 
     function_map_confidence_interval = {
         # confidence interval = Z \cdot \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} \cdot \sum_{i=1}^n w_i^2 - w_i}
-        
-#        ┌─────────────────────────┐
-#        │      ₙ
-#        │      ⎲  1
-#    ╲   │      ⎳  ──    ₙ
-#     ╲  │     ⁱ⁼¹ wᵢ    ⎲   2
-# Z *  ╲ │-log(──────) * ⎳  wᵢ - wᵢ
-#       ╲│       n      ⁱ⁼¹
-# 
-
+        #        ┌─────────────────────────┐
+        #        │      ₙ
+        #        │      ⎲  1
+        #    ╲   │      ⎳  ──    ₙ
+        #     ╲  │     ⁱ⁼¹ wᵢ    ⎲   2
+        # Z *  ╲ │-log(──────) * ⎳  wᵢ - wᵢ
+        #       ╲│       n      ⁱ⁼¹
+        #
         # where w_i is the sampling weight for the i-th event and n is the number of events.
         Function.FUNCTION_COUNT: f.multiply(
             z_value,
@@ -299,16 +297,13 @@ def get_confidence_interval_column(
             **alias_dict,
         ),
         # confidence interval = Z * \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} * \sum_{i=1}^n x_i^2w_i^2 - x_i^2w_i}
-        
-
-#        ┌──────────────────────────────┐
-#        │      ₙ
-#        │      ⎲  1
-#    ╲   │      ⎳  ──     ₙ
-#     ╲  │     ⁱ⁼¹ wᵢ     ⎲   2 2    2
-#Z *   ╲ │-log(──────) *  ⎳  xᵢwᵢ - xᵢwᵢ
-#       ╲│       n       ⁱ⁼¹
-
+        #        ┌──────────────────────────────┐
+        #        │      ₙ
+        #        │      ⎲  1
+        #    ╲   │      ⎳  ──     ₙ
+        #     ╲  │     ⁱ⁼¹ wᵢ     ⎲   2 2    2
+        # Z *   ╲ │-log(──────) *  ⎳  xᵢwᵢ - xᵢwᵢ
+        #       ╲│       n       ⁱ⁼¹
         Function.FUNCTION_SUM: f.multiply(
             z_value,
             f.sqrt(
@@ -333,16 +328,15 @@ def get_confidence_interval_column(
             **alias_dict,
         ),
         # confidence interval = Z * \sqrt{\frac{N * (\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N})}{n * (N-1) c* (N-1)}}
-        
-#          ┌────────────────────────────┐
-#          │                  ₙ
-#          │                  ⎲
-#          │      ₙ         ( ⎳  wᵢxᵢ)²
-#     ╲    │      ⎲     2    ⁱ⁼¹
-#      ╲   │N * ( ⎳  wᵢxᵢ - ───────────)
-#       ╲  │     ⁱ⁼¹             N
-# Z *    ╲ │────────────────────────────
-#         ╲│     n * (N-1) c* (N-1)
+        #          ┌────────────────────────────┐
+        #          │                  ₙ
+        #          │                  ⎲
+        #          │      ₙ         ( ⎳  wᵢxᵢ)²
+        #     ╲    │      ⎲     2    ⁱ⁼¹
+        #      ╲   │N * ( ⎳  wᵢxᵢ - ───────────)
+        #       ╲  │     ⁱ⁼¹             N
+        # Z *    ╲ │────────────────────────────
+        #         ╲│     n * (N-1) c* (N-1)
         Function.FUNCTION_AVG: f.multiply(
             z_value,
             f.sqrt(
