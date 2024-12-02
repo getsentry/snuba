@@ -94,7 +94,7 @@ query_processors:
         - attr_str
         - attr_num
 
-validate_data_model: none
+validate_data_model: do_nothing
 validators:
   - validator: EntityRequiredColumnValidator
     args:

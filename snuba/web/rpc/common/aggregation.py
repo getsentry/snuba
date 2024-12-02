@@ -129,7 +129,7 @@ def get_attribute_confidence_interval_alias(
 ) -> str | None:
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
-        Function.FUNCTION_AVERAGE: "avg",
+        Function.FUNCTION_AVG: "avg",
         Function.FUNCTION_SUM: "sum",
         Function.FUNCTION_P50: "p50",
         Function.FUNCTION_P90: "p90",
@@ -187,6 +187,19 @@ def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Express
     )
 
 
+def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
+    return CustomColumnInformation(
+        custom_column_id="count",
+        referenced_column=aggregation.label,
+        metadata={},
+    ).to_alias()
+
+
+def get_count_column(aggregation: AttributeAggregation) -> Expression:
+    field = attribute_key_to_expression(aggregation.key)
+    return f.count(field, alias=_get_count_column_alias(aggregation))
+
+
 def get_extrapolated_function(
     aggregation: AttributeAggregation,
 ) -> CurriedFunctionCall | FunctionCall | None:
@@ -200,8 +213,21 @@ def get_extrapolated_function(
         Function.FUNCTION_SUM: f.sum(
             f.multiply(field, sampling_weight_column), **alias_dict
         ),
-        Function.FUNCTION_AVERAGE: f.avgWeighted(
-            field, sampling_weight_column, **alias_dict
+        Function.FUNCTION_AVERAGE: f.divide(
+            f.sum(f.multiply(field, sampling_weight_column)),
+            f.sumIf(
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+            ),
+            **alias_dict,
+        ),
+        Function.FUNCTION_AVG: f.divide(
+            f.sum(f.multiply(field, sampling_weight_column)),
+            f.sumIf(
+                sampling_weight_column,
+                get_field_existence_expression(aggregation),
+            ),
+            **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.sumIf(
             sampling_weight_column,
@@ -221,9 +247,6 @@ def get_extrapolated_function(
             field, sampling_weight_column, **alias_dict
         ),
         Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_AVG: f.weightedAvg(
             field, sampling_weight_column, **alias_dict
         ),
         Function.FUNCTION_MAX: f.max(field, **alias_dict),
@@ -289,19 +312,54 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
+        # confidence interval = Z cdot sqrt{frac{N cdot (sum_{i=1}^n w_ix_i^2 - frac{(sum_{i=1}^n w_ix_i)^2}{N})}{n cdot (N-1) cdot (N-1)}}
+        Function.FUNCTION_AVG: f.multiply(
+            z_value,
+            f.sqrt(
+                f.divide(
+                    f.multiply(
+                        f.sumIf(
+                            sampling_weight_column,
+                            get_field_existence_expression(aggregation),
+                            alias=f"{alias}_N",
+                        ),
+                        f.minus(
+                            f.sumIf(
+                                f.multiply(
+                                    sampling_weight_column,
+                                    f.multiply(field, field),
+                                ),
+                                get_field_existence_expression(aggregation),
+                            ),
+                            f.divide(
+                                f.multiply(
+                                    f.sumIf(
+                                        f.multiply(sampling_weight_column, field),
+                                        get_field_existence_expression(aggregation),
+                                    ),
+                                    f.sumIf(
+                                        f.multiply(sampling_weight_column, field),
+                                        get_field_existence_expression(aggregation),
+                                    ),
+                                ),
+                                column(f"{alias}_N"),
+                            ),
+                        ),
+                    ),
+                    f.multiply(
+                        column(_get_count_column_alias(aggregation)),
+                        f.multiply(
+                            f.minus(column(f"{alias}_N"), literal(1)),
+                            f.minus(column(f"{alias}_N"), literal(1)),
+                        ),
+                    ),
+                )
+            ),
+            **alias_dict,
+        ),
     }
 
     return function_map_confidence_interval.get(aggregation.aggregate)
-
-
-def get_count_column(aggregation: AttributeAggregation) -> Expression:
-    field = attribute_key_to_expression(aggregation.key)
-    alias = CustomColumnInformation(
-        custom_column_id="count",
-        referenced_column=aggregation.label,
-        metadata={},
-    ).to_alias()
-    return f.count(field, alias=alias)
 
 
 def calculate_reliability(

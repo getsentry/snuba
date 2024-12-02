@@ -163,7 +163,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 ),
                 Column(
                     aggregation=AttributeAggregation(
-                        aggregate=Function.FUNCTION_AVERAGE,
+                        aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
                         ),
