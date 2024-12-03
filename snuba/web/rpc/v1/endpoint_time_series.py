@@ -234,6 +234,14 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     res = Query(
         from_clause=entity,
         selected_columns=[
+            # buckets time by granularity according to the start time of the request.
+            # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
+            # Example:
+            #   start_time = 1001
+            #   end_time = 1901
+            #   granularity = 300
+            #   timestamps = [1201, 1002, 1302, 1400, 1700]
+            #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
             SelectedExpression(
                 name="time",
                 expression=f.toDateTime(
