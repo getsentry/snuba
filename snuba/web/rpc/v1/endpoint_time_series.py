@@ -21,6 +21,7 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -233,7 +234,33 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     res = Query(
         from_clause=entity,
         selected_columns=[
-            SelectedExpression(name="time", expression=column("time", alias="time")),
+            # buckets time by granularity according to the start time of the request.
+            # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
+            # Example:
+            #   start_time = 1001
+            #   end_time = 1901
+            #   granularity = 300
+            #   timestamps = [1201, 1002, 1302, 1400, 1700]
+            #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
+            SelectedExpression(
+                name="time",
+                expression=f.toDateTime(
+                    f.plus(
+                        request.meta.start_timestamp.seconds,
+                        f.multiply(
+                            f.intDiv(
+                                f.minus(
+                                    f.toUnixTimestamp(column("timestamp")),
+                                    request.meta.start_timestamp.seconds,
+                                ),
+                                request.granularity_secs,
+                            ),
+                            request.granularity_secs,
+                        ),
+                    ),
+                    alias="time_slot",
+                ),
+            ),
             *aggregation_columns,
             *groupby_columns,
             *extrapolation_columns,
@@ -243,10 +270,12 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             request.meta, trace_item_filters_to_expression(request.filter)
         ),
         groupby=[
-            column("time"),
+            column("time_slot"),
             *[attribute_key_to_expression(attr_key) for attr_key in request.group_by],
         ],
-        order_by=[OrderBy(expression=column("time"), direction=OrderByDirection.ASC)],
+        order_by=[
+            OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)
+        ],
     )
     treeify_or_and_conditions(res)
     return res
