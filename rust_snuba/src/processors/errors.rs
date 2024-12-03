@@ -132,8 +132,6 @@ struct ErrorData {
     #[serde(default, alias = "sentry.interfaces.Exception")]
     exception: Option<Exception>,
     #[serde(default)]
-    hierarchical_hashes: Vec<String>,
-    #[serde(default)]
     location: Option<String>,
     #[serde(default)]
     modules: Option<BTreeMap<String, Option<String>>>,
@@ -350,7 +348,6 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
-    hierarchical_hashes: Vec<Uuid>,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -419,12 +416,6 @@ impl ErrorRow {
 
         // Hashes
         let primary_hash = to_uuid(from.primary_hash);
-        let hierarchical_hashes: Vec<Uuid> = from
-            .data
-            .hierarchical_hashes
-            .into_iter()
-            .map(to_uuid)
-            .collect();
 
         // SDK Integrations
         let from_sdk = from.data.sdk.unwrap_or_default();
@@ -671,7 +662,6 @@ impl ErrorRow {
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
             group_id: from.group_id,
-            hierarchical_hashes,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,
