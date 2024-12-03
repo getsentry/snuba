@@ -428,6 +428,16 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 ],
             ),
             (
+                "profile_chunks",
+                [
+                    "snuba",
+                    "rust-consumer",
+                    "--storage=profile_chunks",
+                    "--consumer-group=profile_chunks_group",
+                    *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+                ],
+            ),
+            (
                 "functions",
                 [
                     "snuba",
