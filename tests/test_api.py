@@ -1932,31 +1932,6 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
-    def test_hierarchical_hashes_array_slice(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "granularity": 3600,
-                    "selected_columns": [["arraySlice", ["hierarchical_hashes", 0, 2]]],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        result = json.loads(response.data)
-
-        val = (
-            "SELECT (arrayMap(x -> replaceAll(toString(x), '-', ''), "
-            "arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`)"
-        )
-        assert result["sql"].startswith(val)
-
     def test_backslashes_in_query(self) -> None:
         response = self.post(
             json.dumps(
@@ -1981,31 +1956,6 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"times_seen": 0}]
-
-    def test_hierarchical_hashes_array_join(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "granularity": 3600,
-                    "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        result = json.loads(response.data)
-
-        val = (
-            "SELECT (arrayJoin((arrayMap(x -> replaceAll(toString(x), '-', ''), "
-            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`)"
-        )
-        assert result["sql"].startswith(val)
 
     def test_test_endpoints(self) -> None:
         project_id = 73

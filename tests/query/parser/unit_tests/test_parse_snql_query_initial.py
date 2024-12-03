@@ -719,7 +719,7 @@ test_cases = [
         ),
     ),
     pytest.param(
-        "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks, hierarchical_hashes WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
+        "MATCH (events) SELECT count() AS count, exception_stacks.type ARRAY JOIN exception_stacks WHERE or(equals(exception_stacks.type, 'ArithmeticException'), equals(exception_stacks.type, 'RuntimeException')) = 1 AND timestamp >= toDateTime('2021-01-01T00:00:00') AND timestamp < toDateTime('2021-01-02T00:00:00') AND project_id = 1",
         Query(
             from_clause=Entity(
                 EntityKey.EVENTS, get_entity(EntityKey.EVENTS).get_data_model()
@@ -730,7 +730,7 @@ test_cases = [
                     "exception_stacks.type", column("exception_stacks.type")
                 ),
             ],
-            array_join=[column("exception_stacks"), column("hierarchical_hashes")],
+            array_join=[column("exception_stacks")],
             condition=and_cond(
                 and_cond(
                     f.equals(

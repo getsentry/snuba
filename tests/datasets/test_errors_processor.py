@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from unittest.mock import ANY
-from uuid import UUID
 
 import pytest
 
@@ -206,10 +205,6 @@ class ErrorEvent:
                 },
                 "fingerprint": ["{{ default }}"],
                 "hashes": ["c8b21c571231e989060b9110a2ade7d3"],
-                "hierarchical_hashes": [
-                    "04233d08ac90cf6fc015b1be5932e7e3",
-                    "04233d08ac90cf6fc015b1be5932e7e4",
-                ],
                 "key_id": "537125",
                 "level": "error",
                 "location": "snuba/clickhouse/http.py",
@@ -342,10 +337,6 @@ class ErrorEvent:
             "deleted": 0,
             "group_id": self.group_id,
             "primary_hash": "d36001ef-28af-2542-fde8-cf2935766141",
-            "hierarchical_hashes": [
-                str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
-                str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
-            ],
             "received": int(
                 self.received_timestamp.replace(tzinfo=timezone.utc)
                 .replace(tzinfo=None, microsecond=0)
