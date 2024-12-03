@@ -596,21 +596,14 @@ class TestTimeSeriesApi(BaseApiTest):
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
-                AttributeAggregation(
-                    aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
-                    label="avg",
-                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
-                ),
             ],
             granularity_secs=granularity_secs,
         )
         response = EndpointTimeSeries().execute(message)
 
-        for ts in response.result_timeseries:
-            # expect ts.data_points to look like this: [, , , , , ]
-            for datapoint in ts.data_points:
-                assert datapoint != DataPoint()
+        ts = response.result_timeseries[0]
+        assert len(ts.data_points) == 1
+        assert ts.data_points[0].data == 300
 
 
 class TestUtils:
