@@ -34,8 +34,8 @@ from snuba.web.rpc.common.aggregation import (
     ExtrapolationMeta,
     aggregation_to_expression,
     get_average_sample_rate_column,
+    get_confidence_interval_column,
     get_count_column,
-    get_upper_confidence_column,
 )
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
@@ -106,14 +106,14 @@ def _build_query(request: TraceItemTableRequest) -> Query:
                 column.aggregation.extrapolation_mode
                 == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
             ):
-                upper_confidence_column = get_upper_confidence_column(
+                confidence_interval_column = get_confidence_interval_column(
                     column.aggregation
                 )
-                if upper_confidence_column is not None:
+                if confidence_interval_column is not None:
                     selected_columns.append(
                         SelectedExpression(
-                            name=upper_confidence_column.alias,
-                            expression=upper_confidence_column,
+                            name=confidence_interval_column.alias,
+                            expression=confidence_interval_column,
                         )
                     )
 

@@ -363,6 +363,7 @@ jobs:
         version:
           [
             "23.8.11.29.altinitystable",
+            "24.3.5.47.altinitystable",
           ]
 
     steps:

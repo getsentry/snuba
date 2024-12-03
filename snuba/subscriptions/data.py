@@ -5,11 +5,12 @@ import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from functools import partial
 from typing import (
     Any,
+    Generic,
     Iterator,
     List,
     Mapping,
@@ -17,10 +18,12 @@ from typing import (
     NewType,
     Optional,
     Tuple,
+    TypeVar,
     Union,
 )
 from uuid import UUID
 
+from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
     CreateSubscriptionRequest,
 )
@@ -50,7 +53,11 @@ from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.subscriptions.utils import Tick
 from snuba.utils.metrics import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
+from snuba.web import QueryResult
+from snuba.web.query import run_query
+from snuba.web.rpc.v1.endpoint_time_series import EndpointTimeSeries
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -79,6 +86,8 @@ logger = logging.getLogger("snuba.subscriptions")
 
 PartitionId = NewType("PartitionId", int)
 
+TRequest = TypeVar("TRequest")
+
 
 @dataclass(frozen=True)
 class SubscriptionIdentifier:
@@ -95,7 +104,7 @@ class SubscriptionIdentifier:
 
 
 @dataclass(frozen=True, kw_only=True)
-class SubscriptionData(ABC):
+class _SubscriptionData(ABC, Generic[TRequest]):
     project_id: int
     resolution_sec: int
     time_window_sec: int
@@ -127,14 +136,25 @@ class SubscriptionData(ABC):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
+    ) -> TRequest:
+        raise NotImplementedError
+
+    @abstractmethod
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> _SubscriptionData[TRequest]:
         raise NotImplementedError
 
     @abstractmethod
@@ -143,7 +163,7 @@ class SubscriptionData(ABC):
 
 
 @dataclass(frozen=True, kw_only=True)
-class RPCSubscriptionData(SubscriptionData):
+class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
     """
     Represents the state of an RPC subscription.
     """
@@ -192,8 +212,58 @@ class RPCSubscriptionData(SubscriptionData):
         timer: Timer,
         metrics: Optional[MetricsBackend] = None,
         referrer: str = SUBSCRIPTION_REFERRER,
-    ) -> Request:
-        raise NotImplementedError
+    ) -> TimeSeriesRequest:
+
+        request_class = EndpointTimeSeries().request_class()()
+        request_class.ParseFromString(base64.b64decode(self.time_series_request))
+
+        # TODO: update it to round to the lowest granularity
+        # rounded_ts = int(timestamp.replace(tzinfo=UTC).timestamp() / 15) * 15
+        rounded_ts = (
+            int(timestamp.replace(tzinfo=UTC).timestamp() / self.time_window_sec)
+            * self.time_window_sec
+        )
+        rounded_start = datetime.utcfromtimestamp(rounded_ts)
+
+        start_time_proto = Timestamp()
+        start_time_proto.FromDatetime(
+            rounded_start - timedelta(seconds=self.time_window_sec)
+        )
+        end_time_proto = Timestamp()
+        end_time_proto.FromDatetime(rounded_start)
+        request_class.meta.start_timestamp.CopyFrom(start_time_proto)
+        request_class.meta.end_timestamp.CopyFrom(end_time_proto)
+
+        request_class.granularity_secs = self.time_window_sec
+
+        return request_class
+
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: TimeSeriesRequest,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        response = EndpointTimeSeries().execute(request)
+        if not response.result_timeseries:
+            result: Result = {
+                "meta": [],
+                "data": [{request.aggregations[0].label: None}],
+                "trace_output": "",
+            }
+            return QueryResult(
+                result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+            )
+
+        timeseries = response.result_timeseries[0]
+        data = [{timeseries.label: timeseries.data_points[0].data}]
+
+        result = {"meta": [], "data": data, "trace_output": ""}
+        return QueryResult(
+            result=result, extra={"stats": {}, "sql": "", "experiments": {}}
+        )
 
     @classmethod
     def from_dict(
@@ -263,7 +333,7 @@ class RPCSubscriptionData(SubscriptionData):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SnQLSubscriptionData(SubscriptionData):
+class SnQLSubscriptionData(_SubscriptionData[Request]):
     """
     Represents the state of a subscription.
     """
@@ -379,10 +449,26 @@ class SnQLSubscriptionData(SubscriptionData):
         )
         return request
 
+    def run_query(
+        self,
+        dataset: Dataset,
+        request: Request,
+        timer: Timer,
+        robust: bool = False,
+        concurrent_queries_gauge: Optional[Gauge] = None,
+    ) -> QueryResult:
+        return run_query(
+            dataset,
+            request,
+            timer,
+            robust=robust,
+            concurrent_queries_gauge=concurrent_queries_gauge,
+        )
+
     @classmethod
     def from_dict(
         cls, data: Mapping[str, Any], entity_key: EntityKey
-    ) -> SubscriptionData:
+    ) -> SnQLSubscriptionData:
         entity: Entity = get_entity(entity_key)
 
         metadata = {}
@@ -407,6 +493,7 @@ class SnQLSubscriptionData(SubscriptionData):
             "time_window": self.time_window_sec,
             "resolution": self.resolution_sec,
             "query": self.query,
+            "subscription_type": SubscriptionType.SNQL.value,
         }
 
         subscription_processors = self.entity.get_subscription_processors()
@@ -414,6 +501,10 @@ class SnQLSubscriptionData(SubscriptionData):
             for processor in subscription_processors:
                 subscription_data_dict.update(processor.to_dict(self.metadata))
         return subscription_data_dict
+
+
+SubscriptionData = Union[RPCSubscriptionData, SnQLSubscriptionData]
+SubscriptionRequest = Union[Request, TimeSeriesRequest]
 
 
 class Subscription(NamedTuple):
@@ -461,9 +552,9 @@ class SubscriptionScheduler(ABC):
 
 class SubscriptionTaskResultFuture(NamedTuple):
     task: ScheduledSubscriptionTask
-    future: Future[Tuple[Request, Result]]
+    future: Future[Tuple[SubscriptionRequest, Result]]
 
 
 class SubscriptionTaskResult(NamedTuple):
     task: ScheduledSubscriptionTask
-    result: Tuple[Request, Result]
+    result: Tuple[SubscriptionRequest, Result]

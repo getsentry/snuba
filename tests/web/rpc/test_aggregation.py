@@ -13,20 +13,20 @@ from snuba.web.rpc.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationMeta,
-    get_upper_confidence_column,
+    get_confidence_interval_column,
 )
 
 
 def test_generate_custom_column_alias() -> None:
     custom_column_information_with_metadata = CustomColumnInformation(
-        custom_column_id="upper_confidence",
+        custom_column_id="confidence_interval",
         referenced_column="count",
         metadata={"function_type": "count", "additional_metadata": "value"},
     )
 
     assert custom_column_information_with_metadata.to_alias() == (
         CUSTOM_COLUMN_PREFIX
-        + "upper_confidence$count$function_type:count,additional_metadata:value"
+        + "confidence_interval$count$function_type:count,additional_metadata:value"
     )
 
 
@@ -66,9 +66,9 @@ def test_get_custom_column_information() -> None:
     )
 
 
-def test_get_upper_confidence_column_for_non_extrapolatable_column() -> None:
+def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
     assert (
-        get_upper_confidence_column(
+        get_confidence_interval_column(
             AttributeAggregation(
                 aggregate=Function.FUNCTION_MIN,
                 key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test"),
@@ -89,7 +89,7 @@ def test_get_upper_confidence_column_for_non_extrapolatable_column() -> None:
                 "count(sentry.duration)": 100,
                 "p95(sentry.duration)": 123456,
                 CustomColumnInformation(
-                    custom_column_id="upper_confidence",
+                    custom_column_id="confidence_interval",
                     referenced_column="count(sentry.duration)",
                     metadata={"function_type": "count"},
                 ).to_alias(): 20,
@@ -116,7 +116,7 @@ def test_get_upper_confidence_column_for_non_extrapolatable_column() -> None:
                 "count(sentry.duration)": 100,
                 "min(sentry.duration)": 123456,
                 CustomColumnInformation(
-                    custom_column_id="upper_confidence",
+                    custom_column_id="confidence_interval",
                     referenced_column="count(sentry.duration)",
                     metadata={"function_type": "count"},
                 ).to_alias(): 20,

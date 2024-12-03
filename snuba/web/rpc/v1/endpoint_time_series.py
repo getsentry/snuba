@@ -31,8 +31,8 @@ from snuba.web.rpc.common.aggregation import (
     ExtrapolationMeta,
     aggregation_to_expression,
     get_average_sample_rate_column,
+    get_confidence_interval_column,
     get_count_column,
-    get_upper_confidence_column,
 )
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
@@ -202,12 +202,12 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
         ):
-            upper_confidence_column = get_upper_confidence_column(aggregation)
-            if upper_confidence_column is not None:
+            confidence_interval_column = get_confidence_interval_column(aggregation)
+            if confidence_interval_column is not None:
                 extrapolation_columns.append(
                     SelectedExpression(
-                        name=upper_confidence_column.alias,
-                        expression=upper_confidence_column,
+                        name=confidence_interval_column.alias,
+                        expression=confidence_interval_column,
                     )
                 )
 
