@@ -2149,23 +2149,23 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.11"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
+checksum = "4e613fc340b2220f734a8595782c551f1250e969d87d3be1ae0579e8d4065179"
 dependencies = [
  "num_enum_derive",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.5.11"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
+checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.58",
 ]
 
 [[package]]
@@ -2684,8 +2684,27 @@ dependencies = [
 
 [[package]]
 name = "rdkafka"
-version = "0.36.2"
-source = "git+https://github.com/fede1024/rust-rdkafka#c6d9a65a6df8c43fdf93b42bb276b6b7d2ba6c23"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "630c0065f6fca81773883fe78e7a7d14af1b1c5ed11907a28fbf12b1385e0c50"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "libc",
+ "log",
+ "rdkafka-sys",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "slab",
+ "tokio",
+]
+
+[[package]]
+name = "rdkafka"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14b52c81ac3cac39c9639b95c20452076e74b8d9a71bc6fc4d83407af2ea6fff"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -2702,8 +2721,9 @@ dependencies = [
 
 [[package]]
 name = "rdkafka-sys"
-version = "4.7.0+2.3.0"
-source = "git+https://github.com/fede1024/rust-rdkafka#c6d9a65a6df8c43fdf93b42bb276b6b7d2ba6c23"
+version = "4.8.0+2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ced38182dc436b3d9df0c77976f37a67134df26b050df1f0006688e46fc4c8be"
 dependencies = [
  "cmake",
  "libc",
@@ -2829,26 +2849,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_arroyo"
-version = "2.18.0"
-source = "git+https://github.com/getsentry/arroyo#a8545c79bf81d78ff432addf9c8ad737b81082a7"
-dependencies = [
- "chrono",
- "coarsetime",
- "once_cell",
- "parking_lot",
- "rand 0.8.5",
- "rdkafka",
- "sentry",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "rust_snuba"
 version = "0.1.0"
 dependencies = [
@@ -2870,11 +2870,11 @@ dependencies = [
  "procspawn",
  "pyo3",
  "reqwest",
- "rust_arroyo",
  "schemars",
  "scopeguard",
  "sentry",
  "sentry-kafka-schemas",
+ "sentry_arroyo",
  "sentry_usage_accountant",
  "seq-macro",
  "serde",
@@ -3177,13 +3177,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentry_arroyo"
+version = "2.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "742eaedce02dd900432c55d216d3d9316a1a31af836e5d4cf27e8a97bbd5a501"
+dependencies = [
+ "chrono",
+ "coarsetime",
+ "once_cell",
+ "parking_lot",
+ "rand 0.8.5",
+ "rdkafka 0.37.0",
+ "sentry",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "sentry_usage_accountant"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94f0a631e328036db251337a0076dc5858a155f6831110c6417fe2537502ceae"
 dependencies = [
  "chrono",
- "rdkafka",
+ "rdkafka 0.36.1",
  "serde",
  "serde_json",
  "thiserror",
@@ -4385,3 +4406,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "rdkafka"
+version = "0.36.2"
+source = "git+https://github.com/fede1024/rust-rdkafka#c6d9a65a6df8c43fdf93b42bb276b6b7d2ba6c23"

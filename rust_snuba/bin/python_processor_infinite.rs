@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::run_task::RunTask;
-use rust_arroyo::processing::strategies::ProcessingStrategy;
-use rust_arroyo::types::{Message, Partition, Topic};
 use rust_snuba::{MessageProcessorConfig, Noop, PythonTransformStep};
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::run_task::RunTask;
+use sentry_arroyo::processing::strategies::ProcessingStrategy;
+use sentry_arroyo::types::{Message, Partition, Topic};
 use serde_json::json;
 
 fn main() {

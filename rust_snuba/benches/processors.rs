@@ -6,22 +6,22 @@ use criterion::measurement::WallTime;
 use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::local::broker::LocalBroker;
-use rust_arroyo::backends::local::LocalConsumer;
-use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
-use rust_arroyo::backends::ConsumerError;
-use rust_arroyo::metrics;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
-use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
-use rust_arroyo::types::{Partition, Topic};
-use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
     BrokerConfig, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
     MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
     StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
 };
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::local::broker::LocalBroker;
+use sentry_arroyo::backends::local::LocalConsumer;
+use sentry_arroyo::backends::storages::memory::MemoryMessageStorage;
+use sentry_arroyo::backends::ConsumerError;
+use sentry_arroyo::metrics;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::strategies::ProcessingStrategyFactory;
+use sentry_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
+use sentry_arroyo::types::{Partition, Topic};
+use sentry_arroyo::utils::clock::SystemClock;
 use uuid::Uuid;
 
 #[cfg(not(target_env = "msvc"))]

@@ -1,14 +1,14 @@
 use crate::types::BytesInsertBatch;
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use serde::{Deserialize, Serialize};
 use std::str;
 use std::sync::Arc;
@@ -200,8 +200,8 @@ mod tests {
 
     use super::*;
     use crate::testutils::TestStrategy;
-    use rust_arroyo::backends::ProducerError;
-    use rust_arroyo::types::Topic;
+    use sentry_arroyo::backends::ProducerError;
+    use sentry_arroyo::types::Topic;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 
