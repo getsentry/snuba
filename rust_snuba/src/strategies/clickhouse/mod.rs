@@ -63,15 +63,15 @@ impl TaskRunner<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error
     }
 }
 
-pub struct ClickhouseWriterStep {
-    inner: RunTaskInThreads<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error>,
+pub struct ClickhouseWriterStep<N> {
+    inner: RunTaskInThreads<BytesInsertBatch<HttpBatch>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
-impl ClickhouseWriterStep {
-    pub fn new<N>(next_step: N, concurrency: &ConcurrencyConfig) -> Self
-    where
-        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
-    {
+impl<N> ClickhouseWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    pub fn new(next_step: N, concurrency: &ConcurrencyConfig) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ClickhouseWriter::new()),
@@ -83,7 +83,10 @@ impl ClickhouseWriterStep {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch<HttpBatch>> for ClickhouseWriterStep {
+impl<N> ProcessingStrategy<BytesInsertBatch<HttpBatch>> for ClickhouseWriterStep<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>>,
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }

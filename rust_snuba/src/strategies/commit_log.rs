@@ -139,12 +139,15 @@ impl TaskRunner<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error> for P
     }
 }
 
-pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error>,
+pub struct ProduceCommitLog<N> {
+    inner: RunTaskInThreads<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
-impl ProduceCommitLog {
-    pub fn new<N>(
+impl<N> ProduceCommitLog<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    pub fn new(
         next_step: N,
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
         destination: Topic,
@@ -152,10 +155,7 @@ impl ProduceCommitLog {
         consumer_group: String,
         concurrency: &ConcurrencyConfig,
         skip_produce: bool,
-    ) -> Self
-    where
-        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
-    {
+    ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
             Box::new(ProduceMessage::new(
@@ -173,7 +173,10 @@ impl ProduceCommitLog {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog {
+impl<N> ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>>,
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
