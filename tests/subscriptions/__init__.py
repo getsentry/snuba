@@ -174,7 +174,10 @@ class BaseSubscriptionTest:
             gen_span_message(self.base_time + timedelta(minutes=tick))
             for tick in range(self.minutes)
         ]
-        write_raw_unprocessed_events(spans_storage, messages)
+        extra_messages = [
+            gen_span_message(self.base_time - timedelta(hours=4)) for _ in range(2)
+        ]
+        write_raw_unprocessed_events(spans_storage, extra_messages + messages)
 
 
 def __entity_eq__(self: Entity, other: object) -> bool:
