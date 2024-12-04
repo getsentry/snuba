@@ -5,7 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import partial
 from typing import (
@@ -217,20 +217,12 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         request_class = EndpointTimeSeries().request_class()()
         request_class.ParseFromString(base64.b64decode(self.time_series_request))
 
-        # TODO: update it to round to the lowest granularity
-        # rounded_ts = int(timestamp.replace(tzinfo=UTC).timestamp() / 15) * 15
-        rounded_ts = (
-            int(timestamp.replace(tzinfo=UTC).timestamp() / self.time_window_sec)
-            * self.time_window_sec
-        )
-        rounded_start = datetime.utcfromtimestamp(rounded_ts)
-
         start_time_proto = Timestamp()
         start_time_proto.FromDatetime(
-            rounded_start - timedelta(seconds=self.time_window_sec)
+            timestamp - timedelta(seconds=self.time_window_sec)
         )
         end_time_proto = Timestamp()
-        end_time_proto.FromDatetime(rounded_start)
+        end_time_proto.FromDatetime(timestamp)
         request_class.meta.start_timestamp.CopyFrom(start_time_proto)
         request_class.meta.end_timestamp.CopyFrom(end_time_proto)
 

@@ -28,7 +28,7 @@ from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import
     store_timeseries,
 )
 
-END_TIME = datetime.utcnow().replace(second=0, microsecond=0, tzinfo=UTC)
+END_TIME = datetime.utcnow().replace(tzinfo=UTC)
 START_TIME = END_TIME - timedelta(hours=1)
 
 
