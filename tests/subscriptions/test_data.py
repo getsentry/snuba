@@ -124,7 +124,7 @@ TESTS = [
                         ),
                     ],
                 ),
-                time_window_secs=3600,
+                time_window_secs=10800,
                 resolution_secs=60,
             ),
             EntityKey.EAP_SPANS,
