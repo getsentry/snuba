@@ -132,8 +132,11 @@ def is_query_using_only_system_tables(
 
     for line in explain_query_tree_result.results:
         line = line[0].strip()
-        # We don't allow table functions for now as the clickhouse analyzer isn't good enough yet to resolve those tables
-        if line.startswith("TABLE_FUNCTION"):
+        # We don't allow table functions (except clusterAllReplicas) for now as the clickhouse analyzer isn't good enough yet to resolve those tables
+        if (
+            line.startswith("TABLE_FUNCTION")
+            and "table_function_name: clusterAllReplicas" not in line
+        ):
             return False
         if line.startswith("TABLE"):
             match = re.search(r"table_name:\s*(\S+)", line, re.IGNORECASE)
