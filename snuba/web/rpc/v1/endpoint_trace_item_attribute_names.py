@@ -47,16 +47,12 @@ def _convert_filter_offset(filter_offset: TraceItemFilter) -> Expression:
     k_expression = column(filter_offset.comparison_filter.key.name)
     v = filter_offset.comparison_filter.value
     value_type = v.WhichOneof("value")
-    if value_type is None:
-        raise BadSnubaRPCRequestException("comparison does not have a right hand side")
+    if value_type != "val_str":
+        raise BadSnubaRPCRequestException(
+            "keys are strings, so please provide a string filter"
+        )
 
-    v_expression = {
-        "val_bool": literal(v.val_bool),
-        "val_str": literal(v.val_str),
-        "val_float": literal(v.val_float),
-        "val_int": literal(v.val_int),
-    }[value_type]
-    return f.greater(k_expression, v_expression)
+    return f.greater(k_expression, literal(v.val_str))
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
@@ -201,7 +197,14 @@ class EndpointTraceItemAttributeNames(
         self, req: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
         if not req.HasField("page_token"):
-            req.page_token.offset = 0
+            req.page_token.filter_offset.comparison_filter.key.type = (
+                AttributeKey.TYPE_STRING
+            )
+            req.page_token.filter_offset.comparison_filter.key.name = "attr_key"
+            req.page_token.filter_offset.comparison_filter.op = (
+                ComparisonFilter.OP_GREATER_THAN
+            )
+            req.page_token.filter_offset.comparison_filter.value.val_str = ""
 
         if not req.meta.request_id:
             req.meta.request_id = str(uuid.uuid4())

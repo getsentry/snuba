@@ -9,11 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -174,7 +170,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
         ]
         assert res.attributes == expected
 
-    def test_with_page_token(self) -> None:
+    def test_with_page_token_offset(self) -> None:
         # this is all the expected attributes
         expected_attributes = []
         for i in range(TOTAL_GENERATED_ATTR_PER_TYPE):
@@ -186,7 +182,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             )
         # grab 10 at a time until we get them all
         done = 0
-        page_token = None
+        page_token = PageToken(offset=0)
         at_a_time = 10
         while done < TOTAL_GENERATED_ATTR_PER_TYPE:
             req = TraceItemAttributeNamesRequest(
@@ -226,15 +222,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             )
         # grab 10 at a time until we get them all
         done = 0
-        page_token = PageToken(
-            filter_offset=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="attr_key"),
-                    op=ComparisonFilter.OP_GREATER_THAN,
-                    value=AttributeValue(val_str=""),
-                )
-            )
-        )
+        page_token = None
         at_a_time = 10
 
         while done < TOTAL_GENERATED_ATTR_PER_TYPE:
