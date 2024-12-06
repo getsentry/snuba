@@ -18,8 +18,10 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeValue,
     ExtrapolationMode,
     Function,
+    StrArray,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AndFilter,
     ComparisonFilter,
     TraceItemFilter,
 )
@@ -483,10 +485,29 @@ class TestTimeSeriesApi(BaseApiTest):
                 ),
             ],
             filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="customer"),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_str="bob"),
+                and_filter=AndFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="customer"
+                                ),
+                                op=ComparisonFilter.OP_EQUALS,
+                                value=AttributeValue(val_str="bob"),
+                            )
+                        ),
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_STRING, name="customer"
+                                ),
+                                op=ComparisonFilter.OP_IN,
+                                value=AttributeValue(
+                                    val_str_array=StrArray(values=["bob", "alice"])
+                                ),
+                            )
+                        ),
+                    ]
                 )
             ),
             granularity_secs=granularity_secs,

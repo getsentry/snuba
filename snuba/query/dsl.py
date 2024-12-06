@@ -217,6 +217,10 @@ def in_cond(
     return binary_condition("in", lhs, rhs, alias)
 
 
+def not_cond(expr: Expression, alias: Optional[str] = None) -> FunctionCall:
+    return FunctionCall(alias, "not", (expr,))
+
+
 # aggregate functions
 def count(column: Optional[Column] = None, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "count", (column,) if column else ())
