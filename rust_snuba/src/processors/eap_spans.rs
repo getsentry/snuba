@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use schemars::JsonSchema;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde_json::Value;
 
 use crate::config::ProcessorConfig;

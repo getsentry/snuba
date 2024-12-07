@@ -3,17 +3,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::TimeDelta;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::commit_offsets::CommitOffsets;
-use rust_arroyo::processing::strategies::healthcheck::HealthCheck;
-use rust_arroyo::processing::strategies::reduce::Reduce;
-use rust_arroyo::processing::strategies::run_task::RunTask;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::commit_offsets::CommitOffsets;
+use sentry_arroyo::processing::strategies::healthcheck::HealthCheck;
+use sentry_arroyo::processing::strategies::reduce::Reduce;
+use sentry_arroyo::processing::strategies::run_task::RunTask;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskInThreads,
 };
-use rust_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
-use rust_arroyo::types::Message;
-use rust_arroyo::types::{Partition, Topic};
+use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
+use sentry_arroyo::types::Message;
+use sentry_arroyo::types::{Partition, Topic};
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;

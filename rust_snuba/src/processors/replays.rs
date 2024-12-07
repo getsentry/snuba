@@ -1,7 +1,7 @@
 use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
@@ -463,7 +463,7 @@ pub struct ReplayRow {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::{str::FromStr, time::SystemTime};
 
     #[test]

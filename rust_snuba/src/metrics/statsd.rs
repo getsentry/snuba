@@ -1,4 +1,4 @@
-use rust_arroyo::metrics::{Metric, MetricSink, Recorder, StatsdRecorder};
+use sentry_arroyo::metrics::{Metric, MetricSink, Recorder, StatsdRecorder};
 use statsdproxy::cadence::StatsdProxyMetricSink;
 use statsdproxy::config::{AggregateMetricsConfig, SampleConfig};
 use statsdproxy::middleware::aggregate::AggregateMetrics;
@@ -66,7 +66,7 @@ impl StatsDBackend {
 
 #[cfg(test)]
 mod tests {
-    use rust_arroyo::metric;
+    use sentry_arroyo::metric;
 
     use super::*;
 

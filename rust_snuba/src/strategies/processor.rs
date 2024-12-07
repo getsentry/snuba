@@ -2,14 +2,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::counter;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry::{Hub, SentryFutureExt};
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
-use rust_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
-use sentry::{Hub, SentryFutureExt};
+use sentry_arroyo::processing::strategies::{InvalidMessage, ProcessingStrategy};
+use sentry_arroyo::types::{BrokerMessage, InnerMessage, Message, Partition};
 use sentry_kafka_schemas::{Schema, SchemaError};
 
 use crate::config::ProcessorConfig;
@@ -340,8 +340,8 @@ mod tests {
     use super::*;
 
     use chrono::Utc;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
-    use rust_arroyo::types::{Message, Partition, Topic};
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::types::{Message, Partition, Topic};
 
     use crate::types::InsertBatch;
     use crate::Noop;

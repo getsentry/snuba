@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use crate::strategies::clickhouse::batch::HttpBatch;
 
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::timer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]

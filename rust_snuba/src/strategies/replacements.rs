@@ -1,14 +1,14 @@
 use crate::strategies::noop::Noop;
 use crate::types::{BytesInsertBatch, InsertOrReplacement, RowData};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::processing::strategies::merge_commit_request;
-use rust_arroyo::processing::strategies::produce::Produce;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::processing::strategies::merge_commit_request;
+use sentry_arroyo::processing::strategies::produce::Produce;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::strategies::{
     CommitRequest, MessageRejected, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use std::time::Duration;
 
 /// Takes messages that are either inserts or replacements.
