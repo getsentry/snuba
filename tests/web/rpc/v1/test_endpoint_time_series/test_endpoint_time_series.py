@@ -318,6 +318,58 @@ class TestTimeSeriesApi(BaseApiTest):
             key=sort_key,
         )
 
+    def test_with_non_string_group_by(self) -> None:
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[
+                DummyMetric("test_metric", get_value=lambda x: 1),
+                DummyMetric("group_by_metric", get_value=lambda x: 1),
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_FLOAT, name="group_by_metric"),
+            ],
+            granularity_secs=300,
+        )
+
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, 60 * 30, 300)
+        ]
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                group_by_attributes={"group_by_metric": "1.0"},
+                data_points=[
+                    DataPoint(data=300, data_present=True)
+                    for _ in range(len(expected_buckets))
+                ],
+            )
+        ]
+
     def test_with_no_data_present(self) -> None:
         granularity_secs = 300
         query_duration = 60 * 30
@@ -514,6 +566,44 @@ class TestTimeSeriesApi(BaseApiTest):
                 ],
             )
         ]
+
+    def test_start_time_not_divisible_by_time_buckets_returns_valid_data(self) -> None:
+        # store a a test metric with a value of 1, every second of one hour
+        granularity_secs = 300
+        query_duration = 300
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 1)),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration + 1)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+
+        ts = response.result_timeseries[0]
+        assert len(ts.data_points) == 1
+        assert ts.data_points[0].data == 300
 
 
 class TestUtils:

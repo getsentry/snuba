@@ -19,7 +19,6 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "SPANS": "spans",
     "EVENTS_ANALYTICS_PLATFORM": "events_analytics_platform",
     "GROUP_ATTRIBUTES": "group_attributes",
-    "METRICS_SUMMARIES": "metrics_summaries",
     "PROFILE_CHUNKS": "profile_chunks",
 }
 

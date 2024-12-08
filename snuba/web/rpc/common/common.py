@@ -3,10 +3,7 @@ from typing import Final, Mapping, Sequence, Set
 
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
     AttributeKey,
-    ExtrapolationMode,
-    Function,
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -16,15 +13,9 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
-from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
-from snuba.query.expressions import (
-    CurriedFunctionCall,
-    Expression,
-    FunctionCall,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 
@@ -73,100 +64,6 @@ def treeify_or_and_conditions(query: Query) -> None:
     query.transform_expressions(transform)
 
 
-def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
-    field = attribute_key_to_expression(aggregation.key)
-    alias = aggregation.label if aggregation.label else None
-    alias_dict = {"alias": alias} if alias else {}
-    function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum(field, **alias_dict),
-        Function.FUNCTION_AVERAGE: f.avg(field, **alias_dict),
-        Function.FUNCTION_COUNT: f.count(field, **alias_dict),
-        Function.FUNCTION_P50: cf.quantile(0.5)(field, **alias_dict),
-        Function.FUNCTION_P75: cf.quantile(0.75)(field, **alias_dict),
-        Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
-        Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
-        Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
-        Function.FUNCTION_AVG: f.avg(field, **alias_dict),
-        Function.FUNCTION_MAX: f.max(field, **alias_dict),
-        Function.FUNCTION_MIN: f.min(field, **alias_dict),
-        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
-    }
-
-    def get_subscriptable_field(field: Expression) -> SubscriptableReference | None:
-        """
-        Check if the field is a subscriptable reference or a function call with a subscriptable reference as the first parameter to handle the case
-        where the field is casting a subscriptable reference (e.g. for integers). If so, return the subscriptable reference.
-        """
-        if isinstance(field, SubscriptableReference):
-            return field
-        if isinstance(field, FunctionCall) and len(field.parameters) > 0:
-            if len(field.parameters) > 0 and isinstance(
-                field.parameters[0], SubscriptableReference
-            ):
-                return field.parameters[0]
-
-        return None
-
-    subscriptable_field = get_subscriptable_field(field)
-
-    sampling_weight_column = column("sampling_weight")
-    function_map_sample_weighted: dict[
-        Function.ValueType, CurriedFunctionCall | FunctionCall
-    ] = {
-        Function.FUNCTION_SUM: f.sum(
-            f.multiply(field, sampling_weight_column), **alias_dict
-        ),
-        Function.FUNCTION_AVERAGE: f.avgWeighted(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_COUNT: (
-            f.sumIf(
-                sampling_weight_column,
-                f.mapContains(subscriptable_field.column, subscriptable_field.key),
-                **alias_dict,
-            )  # this is ugly, but we do this because the optional attribute aggregation processor can't handle this case as we are not summing up the actual attribute
-            if subscriptable_field is not None
-            else f.sumIf(sampling_weight_column, f.isNotNull(field), **alias_dict)
-        ),
-        Function.FUNCTION_P50: cf.quantileTDigestWeighted(0.5)(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_P75: cf.quantileTDigestWeighted(0.75)(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_P90: cf.quantileTDigestWeighted(0.9)(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_P95: cf.quantileTDigestWeighted(0.95)(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_P99: cf.quantileTDigestWeighted(0.99)(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_AVG: f.weightedAvg(
-            field, sampling_weight_column, **alias_dict
-        ),
-        Function.FUNCTION_MAX: f.max(field, **alias_dict),
-        Function.FUNCTION_MIN: f.min(field, **alias_dict),
-        Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
-    }
-
-    if (
-        aggregation.extrapolation_mode
-        == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
-    ):
-        agg_func_expr = function_map_sample_weighted.get(aggregation.aggregate)
-    else:
-        agg_func_expr = function_map.get(aggregation.aggregate)
-
-    if agg_func_expr is None:
-        raise BadSnubaRPCRequestException(
-            f"Aggregation not specified for {aggregation.key.name}"
-        )
-
-    return agg_func_expr
-
-
 # These are the columns which aren't stored in attr_str_ nor attr_num_ in clickhouse
 NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.organization_id": AttributeKey.Type.TYPE_INT,
@@ -181,7 +78,8 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
     "sentry.retention_days": AttributeKey.Type.TYPE_INT,
     "sentry.name": AttributeKey.Type.TYPE_STRING,
-    "sentry.sample_weight": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.sampling_weight": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.sampling_factor": AttributeKey.Type.TYPE_FLOAT,
     "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
@@ -195,11 +93,14 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+    def _build_label_mapping_key(attr_key: AttributeKey) -> str:
+        return attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+
     if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
         raise BadSnubaRPCRequestException(
             f"attribute key {attr_key.name} must have a type specified"
         )
-    alias = attr_key.name
+    alias = _build_label_mapping_key(attr_key)
 
     if attr_key.name == "sentry.trace_id":
         if attr_key.type == AttributeKey.Type.TYPE_STRING:

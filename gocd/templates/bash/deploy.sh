@@ -49,10 +49,11 @@ eval $(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}"
   --container-name="spans-exp-static-off" \
   --container-name="dlq-consumer" \
   --container-name="group-attributes-consumer" \
-  --container-name="metrics-summaries-consumer" \
   --container-name="eap-spans-consumer" \
   --container-name="eap-mutations-consumer" \
   --container-name="eap-spans-profiled-consumer" \
+  --container-name="eap-spans-subscriptions-scheduler" \
+  --container-name="eap-spans-subscriptions-executor" \
   --container-name="lw-deletions-search-issues-consumer" \
 && /devinfra/scripts/k8s/k8s-deploy.py \
   --label-selector="${LABEL_SELECTOR}" \

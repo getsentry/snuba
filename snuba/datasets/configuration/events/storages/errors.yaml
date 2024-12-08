@@ -104,11 +104,6 @@ schema:
       { name: deleted, type: UInt, args: { size: 8 } },
       { name: group_id, type: UInt, args: { size: 64 } },
       { name: primary_hash, type: UUID },
-      {
-        name: hierarchical_hashes,
-        type: Array,
-        args: { inner_type: { type: UUID } },
-      },
       { name: received, type: DateTime },
       { name: message, type: String },
       { name: title, type: String },
@@ -307,10 +302,6 @@ query_processors:
     args:
       columns: !!set
         span_id: null
-  - processor: UUIDArrayColumnProcessor
-    args:
-      columns: !!set
-        hierarchical_hashes: null
   - processor: SliceOfMapOptimizer
   - processor: EventsBooleanContextsProcessor
   - processor: TypeConditionOptimizer

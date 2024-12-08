@@ -53,6 +53,10 @@ class QuerySettings(ABC):
         pass
 
     @abstractmethod
+    def push_clickhouse_setting(self, key: str, value: Any) -> None:
+        pass
+
+    @abstractmethod
     def get_asynchronous(self) -> bool:
         pass
 
@@ -116,6 +120,9 @@ class HTTPQuerySettings(QuerySettings):
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         self.__clickhouse_settings = settings
 
+    def push_clickhouse_setting(self, key: str, value: Any) -> None:
+        self.__clickhouse_settings[key] = value
+
     def get_asynchronous(self) -> bool:
         return self.__asynchronous
 
@@ -176,6 +183,9 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         self.__clickhouse_settings = settings
+
+    def push_clickhouse_setting(self, key: str, value: Any) -> None:
+        self.__clickhouse_settings[key] = value
 
     def get_asynchronous(self) -> bool:
         return False

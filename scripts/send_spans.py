@@ -120,7 +120,7 @@ def create_span(
         "organization_id": ORGANIZATION_ID,
         "project_id": project_id,
         "trace_id": trace_id,
-        "span_id": int(uuid.uuid4().hex[:16], 16),
+        "span_id": str(int(uuid.uuid4().hex[:8], 16)),
         "parent_span_id": parent_span_id,
         "segment_id": segment_id,
         "profile_id": uuid.uuid4().hex,
@@ -173,7 +173,7 @@ def generate_span_branch(
         span = create_span(
             trace_id=trace_id,
             parent_span_id=parent_span_id,
-            segment_id=transaction_name,
+            segment_id=parent_span_id,
             is_segment=False,
             project_id=project_id,
             duration_ms=span_duration,

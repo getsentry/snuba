@@ -842,6 +842,111 @@ class TestTraceItemTable(BaseApiTest):
         # just ensuring it doesnt raise an exception
         EndpointTraceItemTable().execute(err_msg)
 
+    def test_same_column_name(self) -> None:
+
+        dt = BASE_TIME - timedelta(minutes=5)
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        messages = [
+            {
+                "description": "foo",
+                "duration_ms": 152,
+                "event_id": "d826225de75d42d6b2f01b957d51f18f",
+                "exclusive_time_ms": 0.228,
+                "is_segment": True,
+                "data": {},
+                "measurements": {
+                    "foo": {"value": 5},
+                },
+                "organization_id": 1,
+                "origin": "auto.http.django",
+                "project_id": 1,
+                "received": 1721319572.877828,
+                "retention_days": 90,
+                "segment_id": "8873a98879faf06d",
+                "sentry_tags": {
+                    "status": "success",
+                },
+                "span_id": "123456781234567D",
+                "tags": {"foo": "five", "rachelkey": "rachelval"},
+                "trace_id": uuid.uuid4().hex,
+                "start_timestamp_ms": int(dt.timestamp()) * 1000
+                - int(random.gauss(1000, 200)),
+                "start_timestamp_precise": dt.timestamp(),
+                "end_timestamp_precise": dt.timestamp() + 1,
+            }
+        ]
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        err_req = {
+            "meta": {
+                "organizationId": "1",
+                "referrer": "api.organization-events",
+                "projectIds": ["1"],
+                "startTimestamp": hour_ago.ToJsonString(),
+                "endTimestamp": ts.ToJsonString(),
+            },
+            "columns": [
+                {
+                    "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                    "label": "description",
+                },
+                {
+                    "key": {"type": "TYPE_INT", "name": "foo"},
+                    "label": "tags[foo,number]",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "foo"},
+                    "label": "tags[foo,string]",
+                },
+                {"key": {"type": "TYPE_STRING", "name": "foo"}, "label": "tags[foo]"},
+                {
+                    "key": {"type": "TYPE_STRING", "name": "sentry.span_id"},
+                    "label": "id",
+                },
+                {
+                    "key": {"type": "TYPE_STRING", "name": "project.name"},
+                    "label": "project.name",
+                },
+            ],
+            "orderBy": [
+                {
+                    "column": {
+                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                        "label": "description",
+                    }
+                }
+            ],
+            "groupBy": [
+                {"type": "TYPE_STRING", "name": "sentry.name"},
+                {"type": "TYPE_INT", "name": "foo"},
+                {"type": "TYPE_STRING", "name": "foo"},
+                {"type": "TYPE_STRING", "name": "foo"},
+                {"type": "TYPE_STRING", "name": "sentry.span_id"},
+                {"type": "TYPE_STRING", "name": "project.name"},
+            ],
+            "virtualColumnContexts": [
+                {
+                    "fromColumnName": "sentry.project_id",
+                    "toColumnName": "project.name",
+                    "valueMap": {"4555075531898880": "bar"},
+                }
+            ],
+        }
+
+        err_msg = ParseDict(err_req, TraceItemTableRequest())
+        result = EndpointTraceItemTable().execute(err_msg)
+
+        assert result.column_values[1].attribute_name == "tags[foo,number]"
+        assert result.column_values[1].results[0].val_int == 5
+
+        assert result.column_values[2].attribute_name == "tags[foo,string]"
+        assert result.column_values[2].results[0].val_str == "five"
+
+        assert result.column_values[3].attribute_name == "tags[foo]"
+        assert result.column_values[3].results[0].val_str == "five"
+
 
 class TestUtils:
     def test_apply_labels_to_columns(self) -> None:

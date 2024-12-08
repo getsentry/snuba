@@ -12,7 +12,6 @@ from snuba.migrations.group_loader import (
     GroupAttributesLoader,
     GroupLoader,
     MetricsLoader,
-    MetricsSummariesLoader,
     OutcomesLoader,
     ProfileChunksLoader,
     ProfilesLoader,
@@ -45,7 +44,6 @@ class MigrationGroup(Enum):
     SPANS = "spans"
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
-    METRICS_SUMMARIES = "metrics_summaries"
     PROFILE_CHUNKS = "profile_chunks"
 
 
@@ -62,7 +60,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.TEST_MIGRATION,
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
-    MigrationGroup.METRICS_SUMMARIES,
     MigrationGroup.PROFILE_CHUNKS,
 }
 
@@ -175,11 +172,6 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=GroupAttributesLoader(),
         storage_sets_keys={StorageSetKey.GROUP_ATTRIBUTES},
         readiness_state=ReadinessState.COMPLETE,
-    ),
-    MigrationGroup.METRICS_SUMMARIES: _MigrationGroup(
-        loader=MetricsSummariesLoader(),
-        storage_sets_keys={StorageSetKey.METRICS_SUMMARIES},
-        readiness_state=ReadinessState.PARTIAL,
     ),
     MigrationGroup.PROFILE_CHUNKS: _MigrationGroup(
         loader=ProfileChunksLoader(),

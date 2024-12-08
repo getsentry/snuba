@@ -58,6 +58,7 @@ expression: span
     "sentry.op": "http.server"
   },
   "attr_str_3": {
+    "sentry.profile_id": "56c7d1401ea14ad7b4ac86de46baebae",
     "sentry.thread.id": "8522009600"
   },
   "attr_str_4": {

@@ -147,8 +147,9 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
         target: OperationTarget = OperationTarget.UNSET,
+        settings: Optional[Mapping[str, Any]] = None,
     ):
-        super().__init__(storage_set, target=target)
+        super().__init__(storage_set, target=target, settings=settings)
         self.table_name = table_name
         self.__columns = columns
         self.engine = engine
