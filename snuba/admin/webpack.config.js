@@ -10,6 +10,10 @@ module.exports = (env) => ({
                 use: 'ts-loader',
                 exclude: /node_modules/,
             },
+            {
+                test: /\.css$/i,
+                use: ["style-loader", "css-loader"],
+            },
         ],
     },
     resolve: {
@@ -34,6 +38,7 @@ module.exports = (env) => ({
             // Auth tokens can be obtained from https://sentry.io/settings/account/api/auth-tokens/
             // and need `project:releases` and `org:read` scopes
             authToken: process.env.SENTRY_AUTH_TOKEN,
+            telemetry: false,
         }),
     ],
 })
