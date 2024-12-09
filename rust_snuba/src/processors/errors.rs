@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, StringToIntDatetime};

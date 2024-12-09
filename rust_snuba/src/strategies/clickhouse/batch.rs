@@ -1,7 +1,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
-use rust_arroyo::gauge;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::gauge;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
 use std::mem;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};

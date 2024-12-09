@@ -3,15 +3,15 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
-use rust_arroyo::backends::kafka::producer::KafkaProducer;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::metrics;
-use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
+use sentry_arroyo::backends::kafka::config::KafkaConfig;
+use sentry_arroyo::backends::kafka::producer::KafkaProducer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::metrics;
+use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::Topic;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::StreamProcessor;
+use sentry_arroyo::types::Topic;
 
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;

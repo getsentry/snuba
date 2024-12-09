@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 

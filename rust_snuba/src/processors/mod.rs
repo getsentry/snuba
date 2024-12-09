@@ -13,7 +13,7 @@ mod utils;
 
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 pub enum ProcessingFunctionType {
     ProcessingFunction(ProcessingFunction),
