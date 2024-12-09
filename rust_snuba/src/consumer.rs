@@ -46,7 +46,7 @@ pub fn consumer(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_bytes_before_external_group_by: Option<usize>,
-    max_dlq_buffer_size: Option<usize>,
+    max_dlq_buffer_length: Option<usize>,
 ) {
     py.allow_threads(|| {
         consumer_impl(
@@ -66,7 +66,7 @@ pub fn consumer(
             batch_write_timeout_ms,
             max_bytes_before_external_group_by,
             mutations_mode,
-            max_dlq_buffer_size,
+            max_dlq_buffer_length,
         )
     });
 }
@@ -89,7 +89,7 @@ pub fn consumer_impl(
     batch_write_timeout_ms: Option<u64>,
     max_bytes_before_external_group_by: Option<usize>,
     mutations_mode: bool,
-    max_dlq_buffer_size: Option<usize>,
+    max_dlq_buffer_length: Option<usize>,
 ) -> usize {
     setup_logging();
 
@@ -209,7 +209,7 @@ pub fn consumer_impl(
                 max_invalid_ratio: None,
                 max_consecutive_count: None,
             },
-            max_dlq_buffer_size,
+            max_dlq_buffer_length,
         )
     });
 

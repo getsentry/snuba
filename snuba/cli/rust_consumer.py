@@ -149,10 +149,10 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     """,
 )
 @click.option(
-    "--max-dlq-buffer-size",
+    "--max-dlq-buffer-length",
     type=int,
     default=None,
-    help="Set a per-partition limit to the size (length) of the DLQ buffer",
+    help="Set a per-partition limit to the length of the DLQ buffer",
 )
 @click.option(
     "--health-check-file",
@@ -219,7 +219,7 @@ def rust_consumer(
     batch_write_timeout_ms: Optional[int],
     max_bytes_before_external_group_by: Optional[int],
     mutations_mode: bool,
-    max_dlq_buffer_size: Optional[int]
+    max_dlq_buffer_length: Optional[int]
 ) -> None:
     """
     Experimental alternative to `snuba consumer`
@@ -272,7 +272,7 @@ def rust_consumer(
         stop_at_timestamp,
         batch_write_timeout_ms,
         max_bytes_before_external_group_by,
-        max_dlq_buffer_size,
+        max_dlq_buffer_length,
     )
 
     sys.exit(exitcode)
