@@ -196,16 +196,6 @@ class EndpointTraceItemAttributeNames(
     def _execute(
         self, req: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
-        if not req.HasField("page_token"):
-            req.page_token.filter_offset.comparison_filter.key.type = (
-                AttributeKey.TYPE_STRING
-            )
-            req.page_token.filter_offset.comparison_filter.key.name = "attr_key"
-            req.page_token.filter_offset.comparison_filter.op = (
-                ComparisonFilter.OP_GREATER_THAN
-            )
-            req.page_token.filter_offset.comparison_filter.value.val_str = ""
-
         if not req.meta.request_id:
             req.meta.request_id = str(uuid.uuid4())
 
