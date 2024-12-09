@@ -26,6 +26,24 @@ from snuba.redis import RedisClientKey, get_redis_client
     help="Clickhouse native port to write to.",
 )
 @click.option(
+    "--clickhouse-secure",
+    type=bool,
+    default=False,
+    help="If true, an encrypted connection will be used",
+)
+@click.option(
+    "--clickhouse-ca-certs",
+    type=str,
+    default=None,
+    help="An optional path to certificates directory.",
+)
+@click.option(
+    "--clickhouse-verify",
+    type=bool,
+    default=False,
+    help="Verify ClickHouse SSL cert.",
+)
+@click.option(
     "--storage",
     "storage_name",
     type=click.Choice(["errors"]),
@@ -44,6 +62,9 @@ def optimize(
     *,
     clickhouse_host: Optional[str],
     clickhouse_port: Optional[int],
+    clickhouse_secure: bool,
+    clickhouse_ca_certs: Optional[str],
+    clickhouse_verify: Optional[bool],
     storage_name: str,
     default_parallel_threads: int,
     log_level: Optional[str] = None,
@@ -79,6 +100,9 @@ def optimize(
             clickhouse_user,
             clickhouse_password,
             database,
+            clickhouse_secure,
+            clickhouse_ca_certs,
+            clickhouse_verify,
             send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
         )
     elif not storage.get_cluster().is_single_node():
