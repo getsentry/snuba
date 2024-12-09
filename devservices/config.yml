@@ -82,6 +82,8 @@ services:
       host.docker.internal: host-gateway
     networks:
       - devservices
+    labels:
+      - orchestrator=devservices
     restart: unless-stopped
 
 volumes:
