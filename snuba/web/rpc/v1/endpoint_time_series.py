@@ -63,7 +63,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-_MAX_BUCKETS_IN_REQUEST = 1000
+# MAX 5 minute granularity over 7 days
+_MAX_BUCKETS_IN_REQUEST = 2016
 
 
 def _convert_result_timeseries(
