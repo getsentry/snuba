@@ -150,6 +150,7 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
 )
 @click.option(
     "--max-dlq-buffer-size",
+    type=int,
     default=None,
     help="Set a per-partition limit to the size (length) of the DLQ buffer",
 )
