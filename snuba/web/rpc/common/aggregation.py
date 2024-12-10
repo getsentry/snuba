@@ -1,5 +1,7 @@
+import math
+from bisect import bisect_left
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -42,6 +44,10 @@ class ExtrapolationMeta:
         confidence_interval = None
         average_sample_rate = 0
         sample_count = None
+        is_percentile = False
+        percentile = 0
+        granularity = 0
+        width = 0
         for col_name, col_value in row_data.items():
             # we ignore non-custom columns
             if col_name.startswith(CUSTOM_COLUMN_PREFIX):
@@ -54,6 +60,20 @@ class ExtrapolationMeta:
 
                 if custom_column_information.custom_column_id == "confidence_interval":
                     confidence_interval = col_value
+                    is_percentile = custom_column_information.metadata.get(
+                        "function_type", ""
+                    ).startswith("p")
+                    if is_percentile:
+                        percentile = (
+                            float(
+                                custom_column_information.metadata["function_type"][1:]
+                            )
+                            / 100
+                        )
+                        granularity = float(
+                            custom_column_information.metadata.get("granularity")
+                        )
+                        width = float(custom_column_information.metadata.get("width"))
                 elif (
                     custom_column_information.custom_column_id == "average_sample_rate"
                 ):
@@ -63,9 +83,26 @@ class ExtrapolationMeta:
 
         reliability = Reliability.RELIABILITY_UNSPECIFIED
         if confidence_interval is not None and sample_count is not None:
+            estimate = row_data[column_label]
+            # relative confidence represents the ratio of the confidence interval to the estimate (by default it is the upper bound)
+            if is_percentile:
+                lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(
+                    sample_count, percentile
+                )
+                percentile_index_lower = _get_closest_percentile_index(
+                    lower_bound, percentile, granularity, width
+                )
+                percentile_index_upper = _get_closest_percentile_index(
+                    upper_bound, percentile, granularity, width
+                )
+                ci_lower = confidence_interval[percentile_index_lower]
+                ci_upper = confidence_interval[percentile_index_upper]
+                relative_confidence = max(estimate / ci_lower, ci_upper / estimate)
+            else:
+                relative_confidence = (estimate + confidence_interval) / estimate
+
             is_reliable = calculate_reliability(
-                row_data[column_label],
-                confidence_interval,
+                relative_confidence,
                 sample_count,
             )
             reliability = (
@@ -126,16 +163,17 @@ class CustomColumnInformation:
 
 
 def get_attribute_confidence_interval_alias(
-    aggregation: AttributeAggregation,
+    aggregation: AttributeAggregation, additional_metadata: dict[str, str] = {}
 ) -> str | None:
     function_alias_map = {
         Function.FUNCTION_COUNT: "count",
         Function.FUNCTION_AVG: "avg",
         Function.FUNCTION_SUM: "sum",
-        Function.FUNCTION_P50: "percentile",
-        Function.FUNCTION_P90: "percentile",
-        Function.FUNCTION_P95: "percentile",
-        Function.FUNCTION_P99: "percentile",
+        Function.FUNCTION_P50: "p50",
+        Function.FUNCTION_P75: "p75",
+        Function.FUNCTION_P90: "p90",
+        Function.FUNCTION_P95: "p95",
+        Function.FUNCTION_P99: "p99",
     }
 
     function_type = function_alias_map.get(aggregation.aggregate)
@@ -145,6 +183,7 @@ def get_attribute_confidence_interval_alias(
             referenced_column=aggregation.label,
             metadata={
                 "function_type": function_type,
+                **additional_metadata,
             },
         ).to_alias()
 
@@ -201,40 +240,36 @@ def get_count_column(aggregation: AttributeAggregation) -> Expression:
     return f.count(field, alias=_get_count_column_alias(aggregation))
 
 
-def _get_percentile_confidence_interval_expression(
-    aggregation: AttributeAggregation, percentile: float
-) -> Expression:
-    # we calculate the quantile of:
-    #         ┌───────┐
-    # ⌈1+np+Z╲│p(1-p)n ⌉
-    # ──────────────────
-    #         n
-
-    field = attribute_key_to_expression(aggregation.key)
-    return cf.quantileTDigestWeighted(
-        f.divide(
-            f.ceil(
-                f.plus(
-                    f.plus(
-                        f.multiply(f.count(field), percentile),
-                        f.multiply(
-                            z_value,
-                            f.sqrt(
-                                f.multiply(
-                                    f.multiply(
-                                        percentile, f.minus(literal(1), percentile)
-                                    ),
-                                    f.count(field),
-                                ),
-                            ),
-                        ),
-                    ),
-                    literal(1),
-                )
-            ),
-            f.count(field),
+def _get_possible_percentiles(
+    percentile: float, granularity: float, width: float
+) -> List[float]:
+    # we multiply by 100000 to get a precision of 5 decimal places
+    return [
+        x / 100000
+        for x in range(
+            int(max(granularity, percentile - width) * 100000),
+            int(min(1, percentile + width) * 100000),
+            int(granularity * 100000),
         )
-    )(field, alias=get_attribute_confidence_interval_alias(aggregation))
+    ]
+
+
+def _get_possible_percentiles_expression(
+    aggregation: AttributeAggregation,
+    percentile: float,
+    granularity: int = 0.005,
+    width: int = 0.2,
+) -> Expression:
+    # In order to approximate the confidence intervals, we calculate a bunch of quantiles around the desired percentile, using the given granularity and width.
+    # We then use this to approximate the bounds of the confidence interval
+    field = attribute_key_to_expression(aggregation.key)
+    possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
+    return cf.quantilesTDigest(*possible_percentiles)(
+        field,
+        alias=get_attribute_confidence_interval_alias(
+            aggregation, {"granularity": str(granularity), "width": str(width)}
+        ),
+    )
 
 
 def get_extrapolated_function(
@@ -297,7 +332,7 @@ def get_extrapolated_function(
 
 def get_confidence_interval_column(
     aggregation: AttributeAggregation,
-) -> Expression | None:
+) -> List[Expression]:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
     Calculations are based on https://github.com/getsentry/extrapolation-math/blob/main/2024-10-04%20Confidence%20-%20Final%20Approach.ipynb
@@ -419,33 +454,47 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
-        Function.FUNCTION_P50: _get_percentile_confidence_interval_expression(
-            aggregation, 0.5
-        ),
-        Function.FUNCTION_P75: _get_percentile_confidence_interval_expression(
-            aggregation, 0.75
-        ),
-        Function.FUNCTION_P90: _get_percentile_confidence_interval_expression(
-            aggregation, 0.9
-        ),
-        Function.FUNCTION_P95: _get_percentile_confidence_interval_expression(
-            aggregation, 0.95
-        ),
-        Function.FUNCTION_P99: _get_percentile_confidence_interval_expression(
-            aggregation, 0.99
-        ),
+        Function.FUNCTION_P50: _get_possible_percentiles_expression(aggregation, 0.5),
+        Function.FUNCTION_P75: _get_possible_percentiles_expression(aggregation, 0.75),
+        Function.FUNCTION_P90: _get_possible_percentiles_expression(aggregation, 0.9),
+        Function.FUNCTION_P95: _get_possible_percentiles_expression(aggregation, 0.95),
+        Function.FUNCTION_P99: _get_possible_percentiles_expression(aggregation, 0.99),
     }
 
     return function_map_confidence_interval.get(aggregation.aggregate)
 
 
+def _get_closest_percentile_index(
+    value: float, percentile: float, granularity: float, width: float
+) -> float:
+    possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
+    index = bisect_left(possible_percentiles, value)
+    if index == 0:
+        return 0
+    if index == len(possible_percentiles):
+        return len(possible_percentiles) - 1
+
+    if possible_percentiles[index] - value < value - possible_percentiles[index - 1]:
+        return index
+    return index - 1
+
+
+def _calculate_approximate_ci_percentile_levels(
+    sample_count: int, percentile: float
+) -> List[float]:
+    # We calculate the approximate percentile levels we want to use for the confidence interval bounds
+    n = sample_count
+    p = percentile
+    lower_index = n * p - z_value * math.sqrt(n * p * (1 - p))
+    upper_index = 1 + n * p + z_value * math.sqrt(n * p * (1 - p))
+    return (lower_index / n, upper_index / n)
+
+
 def calculate_reliability(
-    estimate: float,
-    confidence_interval: float,
+    relative_confidence: float,
     sample_count: int,
-    confidence_interval_multiplier: float = 1.5,
+    confidence_interval_threshold: float = 1.5,
     sample_count_threshold: int = 100,
-    confidence_interval_includes_estimate: bool = False,
 ) -> bool:
     """
     A reliability check to determine if the sample count is large enough to be reliable and the confidence interval is small enough.
@@ -453,10 +502,7 @@ def calculate_reliability(
     if sample_count < sample_count_threshold:
         return False
 
-    if confidence_interval_includes_estimate:
-        return confidence_interval <= estimate * confidence_interval_multiplier
-
-    return estimate + confidence_interval <= estimate * confidence_interval_multiplier
+    return relative_confidence <= confidence_interval_threshold
 
 
 def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
