@@ -112,9 +112,6 @@ def get_health_info(thorough: Union[bool, str]) -> HealthInfo:
         else:
             logger.info("Snuba health check failed! Tags: %s", metric_tags)
 
-    if status != 200 or down_file_exists:
-        logger.info(payload)
-
     metrics.timing(
         "healthcheck.latency",
         time.time() - start,
