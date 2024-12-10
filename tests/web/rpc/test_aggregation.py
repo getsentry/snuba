@@ -154,10 +154,34 @@ def test_get_extrapolation_meta(
 @pytest.mark.parametrize(
     ("value", "percentile", "granularity", "width", "expected_index"),
     [
-        (0, 0.5, 0.05, 0.1, 0),  # possible percentiles are [0.4, 0.45, 0.5, 0.55, 0.6]
-        (0.43, 0.5, 0.05, 0.1, 1),
-        (0.52, 0.5, 0.05, 0.1, 2),
-        (0.8, 0.5, 0.05, 0.1, 4),
+        (
+            0,
+            0.5,
+            0.05,
+            0.1,
+            0,
+        ),  # possible percentiles are [0.4, 0.45, 0.5, 0.55], closest to 0 is 0.4
+        (
+            0.43,
+            0.5,
+            0.05,
+            0.1,
+            1,
+        ),  # possible percentiles are [0.4, 0.45, 0.5, 0.55], closest to 0.43 is 0.45
+        (
+            0.52,
+            0.5,
+            0.05,
+            0.1,
+            2,
+        ),  # possible percentiles are [0.4, 0.45, 0.5, 0.55], closest to 0.52 is 0.5
+        (
+            0.8,
+            0.5,
+            0.05,
+            0.1,
+            3,
+        ),  # possible percentiles are [0.4, 0.45, 0.5, 0.55], closest to 0.8 is 0.55
     ],
 )
 def test_get_closest_percentile_index(

@@ -268,10 +268,11 @@ def _get_possible_percentiles_expression(
     aggregation: AttributeAggregation,
     percentile: float,
     granularity: float = 0.005,
-    width: float = 0.2,
+    width: float = 0.1,
 ) -> Expression:
     # In order to approximate the confidence intervals, we calculate a bunch of quantiles around the desired percentile, using the given granularity and width.
     # We then use this to approximate the bounds of the confidence interval. Increasing granularity will increase the percision of the confidence interval, but will also increase the number of quantiles we need to calculate.
+    # In the worst case, with the minimum sample size required to be reliable (100), for the lowest percentile (0.5), we need to calculate values in the range [0.45, 0.56], so we set the width to 0.1 to be safe.
     field = attribute_key_to_expression(aggregation.key)
     possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
     alias = get_attribute_confidence_interval_alias(
