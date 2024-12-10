@@ -18,6 +18,23 @@
     }
   },
   "AttributeValuesRequest": {
+    "v1": {
+      "meta": {
+        "project_ids": [
+          1
+        ],
+        "organization_id": 1,
+        "cogs_category": "something",
+        "referrer": "something",
+        "start_timestamp": "2024-10-03T00:00:00Z",
+        "end_timestamp": "2024-10-06T00:00:00Z"
+      },
+      "key": {
+        "type": "TYPE_STRING",
+        "name": "http.status_code"
+      },
+      "limit": 5
+    },
     "v1alpha": {
       "meta": {
         "project_ids": [
