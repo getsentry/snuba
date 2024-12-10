@@ -13,6 +13,7 @@ from snuba.web.rpc.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationMeta,
+    _get_closest_percentile_index,
     get_confidence_interval_column,
 )
 
@@ -148,3 +149,25 @@ def test_get_extrapolation_meta(
     extrapolation_meta = ExtrapolationMeta.from_row(row_data, column_name)
     assert extrapolation_meta.avg_sampling_rate == average_sample_rate
     assert extrapolation_meta.reliability == reliability
+
+
+@pytest.mark.parametrize(
+    ("value", "percentile", "granularity", "width", "expected_index"),
+    [
+        (0, 0.5, 0.05, 0.1, 0),  # possible percentiles are [0.4, 0.45, 0.5, 0.55, 0.6]
+        (0.43, 0.5, 0.05, 0.1, 1),
+        (0.52, 0.5, 0.05, 0.1, 2),
+        (0.8, 0.5, 0.05, 0.1, 4),
+    ],
+)
+def test_get_closest_percentile_index(
+    value: float,
+    percentile: float,
+    granularity: float,
+    width: float,
+    expected_index: int,
+) -> None:
+    assert (
+        _get_closest_percentile_index(value, percentile, granularity, width)
+        == expected_index
+    )

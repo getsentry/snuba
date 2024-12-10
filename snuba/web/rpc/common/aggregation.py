@@ -28,6 +28,9 @@ sign_column = column("sign")
 # Z value for 95% confidence interval is 1.96 which comes from the normal distribution z score.
 z_value = 1.96
 
+PERCENTILE_PRECISION = 100000
+CONFIDENCE_INTERVAL_THRESHOLD = 1.5
+
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
 
@@ -106,6 +109,7 @@ class ExtrapolationMeta:
             is_reliable = calculate_reliability(
                 relative_confidence,
                 sample_count,
+                CONFIDENCE_INTERVAL_THRESHOLD,
             )
             reliability = (
                 Reliability.RELIABILITY_HIGH
@@ -245,13 +249,17 @@ def get_count_column(aggregation: AttributeAggregation) -> Expression:
 def _get_possible_percentiles(
     percentile: float, granularity: float, width: float
 ) -> List[float]:
-    # we multiply by 100000 to get a precision of 5 decimal places
+    """
+    Returns a list of possible percentiles to use for the confidence interval calculation from the range percentile - width to percentile + width,
+    with a granularity of granularity.
+    """
+    # we multiply by PERCENTILE_PRECISION to get a precision of 5 decimal places
     return [
-        x / 100000
+        x / PERCENTILE_PRECISION
         for x in range(
-            int(max(granularity, percentile - width) * 100000),
-            int(min(1, percentile + width) * 100000),
-            int(granularity * 100000),
+            int(max(granularity, percentile - width) * PERCENTILE_PRECISION),
+            int(min(1, percentile + width) * PERCENTILE_PRECISION),
+            int(granularity * PERCENTILE_PRECISION),
         )
     ]
 
@@ -263,7 +271,7 @@ def _get_possible_percentiles_expression(
     width: float = 0.2,
 ) -> Expression:
     # In order to approximate the confidence intervals, we calculate a bunch of quantiles around the desired percentile, using the given granularity and width.
-    # We then use this to approximate the bounds of the confidence interval
+    # We then use this to approximate the bounds of the confidence interval. Increasing granularity will increase the percision of the confidence interval, but will also increase the number of quantiles we need to calculate.
     field = attribute_key_to_expression(aggregation.key)
     possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
     alias = get_attribute_confidence_interval_alias(
@@ -470,7 +478,7 @@ def get_confidence_interval_column(
 
 def _get_closest_percentile_index(
     value: float, percentile: float, granularity: float, width: float
-) -> float:
+) -> int:
     possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
     index = bisect_left(possible_percentiles, value)
     if index == 0:
@@ -497,7 +505,7 @@ def _calculate_approximate_ci_percentile_levels(
 def calculate_reliability(
     relative_confidence: float,
     sample_count: int,
-    confidence_interval_threshold: float = 1.5,
+    confidence_interval_threshold: float,
     sample_count_threshold: int = 100,
 ) -> bool:
     """
