@@ -45,9 +45,9 @@ class ExtrapolationMeta:
         average_sample_rate = 0
         sample_count = None
         is_percentile = False
-        percentile = 0
-        granularity = 0
-        width = 0
+        percentile = 0.0
+        granularity = 0.0
+        width = 0.0
         for col_name, col_value in row_data.items():
             # we ignore non-custom columns
             if col_name.startswith(CUSTOM_COLUMN_PREFIX):
@@ -71,9 +71,11 @@ class ExtrapolationMeta:
                             / 100
                         )
                         granularity = float(
-                            custom_column_information.metadata.get("granularity")
+                            custom_column_information.metadata.get("granularity", "0")
                         )
-                        width = float(custom_column_information.metadata.get("width"))
+                        width = float(
+                            custom_column_information.metadata.get("width", "0")
+                        )
                 elif (
                     custom_column_information.custom_column_id == "average_sample_rate"
                 ):
@@ -257,18 +259,18 @@ def _get_possible_percentiles(
 def _get_possible_percentiles_expression(
     aggregation: AttributeAggregation,
     percentile: float,
-    granularity: int = 0.005,
-    width: int = 0.2,
+    granularity: float = 0.005,
+    width: float = 0.2,
 ) -> Expression:
     # In order to approximate the confidence intervals, we calculate a bunch of quantiles around the desired percentile, using the given granularity and width.
     # We then use this to approximate the bounds of the confidence interval
     field = attribute_key_to_expression(aggregation.key)
     possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
+    alias = get_attribute_confidence_interval_alias(aggregation)
+    alias_dict = {"alias": alias} if alias else {}
     return cf.quantilesTDigest(*possible_percentiles)(
         field,
-        alias=get_attribute_confidence_interval_alias(
-            aggregation, {"granularity": str(granularity), "width": str(width)}
-        ),
+        **alias_dict,
     )
 
 
@@ -332,7 +334,7 @@ def get_extrapolated_function(
 
 def get_confidence_interval_column(
     aggregation: AttributeAggregation,
-) -> List[Expression]:
+) -> Expression | None:
     """
     Returns the expression for calculating the upper confidence limit for a given aggregation. If the aggregation cannot be extrapolated, returns None.
     Calculations are based on https://github.com/getsentry/extrapolation-math/blob/main/2024-10-04%20Confidence%20-%20Final%20Approach.ipynb
@@ -481,7 +483,7 @@ def _get_closest_percentile_index(
 
 def _calculate_approximate_ci_percentile_levels(
     sample_count: int, percentile: float
-) -> List[float]:
+) -> tuple[float, float]:
     # We calculate the approximate percentile levels we want to use for the confidence interval bounds
     n = sample_count
     p = percentile
