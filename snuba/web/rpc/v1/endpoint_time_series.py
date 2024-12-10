@@ -55,6 +55,7 @@ _VALID_GRANULARITY_SECS = set(
         2 * 60,
         5 * 60,
         10 * 60,
+        15 * 60,
         30 * 60,  # minutes
         1 * 3600,
         3 * 3600,
