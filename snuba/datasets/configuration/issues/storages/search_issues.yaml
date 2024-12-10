@@ -96,7 +96,7 @@ delete_allocation_policies:
         - referrer
         - project_id
       default_config_overrides:
-        is_enforced: 0
+        is_enforced: 1
 
 query_processors:
   - processor: MappingOptimizer
