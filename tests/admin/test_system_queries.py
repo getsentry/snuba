@@ -51,6 +51,7 @@ from snuba.admin.user import AdminUser
             memory DESC
         """,
         "SELECT hostname(), avg(query_duration_ms) FROM clusterAllReplicas('default', system.query_log) GROUP BY hostname()",
+        "SELECT count() FROM merge('system', '.*settings')",
     ],
 )
 @pytest.mark.clickhouse_db
