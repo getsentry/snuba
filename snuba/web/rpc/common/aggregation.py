@@ -266,7 +266,9 @@ def _get_possible_percentiles_expression(
     # We then use this to approximate the bounds of the confidence interval
     field = attribute_key_to_expression(aggregation.key)
     possible_percentiles = _get_possible_percentiles(percentile, granularity, width)
-    alias = get_attribute_confidence_interval_alias(aggregation)
+    alias = get_attribute_confidence_interval_alias(
+        aggregation, {"granularity": str(granularity), "width": str(width)}
+    )
     alias_dict = {"alias": alias} if alias else {}
     return cf.quantilesTDigest(*possible_percentiles)(
         field,
