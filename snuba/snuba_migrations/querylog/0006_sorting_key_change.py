@@ -38,11 +38,11 @@ def update_querylog_table(clickhouse: ClickhousePool, database: str) -> None:
     # Update the timestamp column
     # Clickhouse 20 does not support altering a column in the primary key so we need to do it here
     new_timestamp_type = "`timestamp` DateTime CODEC(T64, ZSTD(1))"
-    assert new_create_table_statement.count(new_timestamp_type) == 0
-    assert new_create_table_statement.count("`timestamp` DateTime") == 1
-    new_create_table_statement = new_create_table_statement.replace(
-        "`timestamp` DateTime", new_timestamp_type
-    )
+    if new_create_table_statement.count(new_timestamp_type) == 0:
+        assert new_create_table_statement.count("`timestamp` DateTime") == 1
+        new_create_table_statement = new_create_table_statement.replace(
+            "`timestamp` DateTime", new_timestamp_type
+        )
     assert new_timestamp_type in new_create_table_statement
 
     # Create the new table
