@@ -62,6 +62,7 @@ interface StyledSpanProps {
 interface EndpointSelectorProps {
     endpoints: Array<{ name: string; version: string }>;
     selectedEndpoint: string | null;
+    selectedVersion: string | null;
     handleEndpointSelect: (value: string | null) => void;
 }
 
