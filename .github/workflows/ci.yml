@@ -339,6 +339,8 @@ jobs:
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
+              tests/sentry/integrations/slack/test_unfurl.py \
+              tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
               tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
               tests/sentry/sentry_metrics/querying \
               tests/snuba/test_snql_snuba.py \
