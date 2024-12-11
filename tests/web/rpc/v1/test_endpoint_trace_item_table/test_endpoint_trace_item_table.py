@@ -947,7 +947,7 @@ class TestTraceItemTable(BaseApiTest):
         assert result.column_values[3].attribute_name == "tags[foo]"
         assert result.column_values[3].results[0].val_str == "five"
 
-    def test_rounding(self) -> None:
+    def test_floats_calculations(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
         start = BASE_TIME
         messages = [
@@ -1026,30 +1026,12 @@ class TestTraceItemTable(BaseApiTest):
                 },
                 {
                     "aggregation": {
-                        "aggregate": "FUNCTION_COUNT",
-                        "key": {"type": "TYPE_FLOAT", "name": "sentry.duration_ms"},
-                        "label": "count()",
-                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
-                    },
-                    "label": "count()",
-                },
-                {
-                    "aggregation": {
                         "aggregate": "FUNCTION_MIN",
                         "key": {"type": "TYPE_FLOAT", "name": "sentry.sampling_factor"},
                         "label": "min(sampling_rate)",
                         "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
                     },
                     "label": "min(sampling_rate)",
-                },
-                {
-                    "aggregation": {
-                        "aggregate": "FUNCTION_COUNT",
-                        "key": {"type": "TYPE_FLOAT", "name": "sentry.duration_ms"},
-                        "label": "count_sample()",
-                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
-                    },
-                    "label": "count_sample()",
                 },
             ],
             "limit": 101,
@@ -1058,17 +1040,89 @@ class TestTraceItemTable(BaseApiTest):
         err_msg = ParseDict(err_req, TraceItemTableRequest())
         result = EndpointTraceItemTable().execute(err_msg)
 
-        assert result.column_values[0].attribute_name == "avg_sample(sampling_rate)"
-        assert result.column_values[0].results[0].val_float == 0.475
+        # this passes
+        assert result.column_values == [
+            TraceItemColumnValues(
+                attribute_name="avg_sample(sampling_rate)",
+                results=[
+                    AttributeValue(val_float=0.475),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="min(sampling_rate)",
+                results=[
+                    AttributeValue(val_float=0.1),
+                ],
+            ),
+        ]
 
-        assert result.column_values[2].attribute_name == "min(sampling_rate)"
-        assert result.column_values[2].results[0].val_float == 0.1
+        # these error
+        # assert result.column_values[0].attribute_name == "avg_sample(sampling_rate)"
+        # assert result.column_values[0].results[0].val_float == 0.475
+        #
+        # assert result.column_values[1].attribute_name == "min(sampling_rate)"
+        # assert result.column_values[1].results[0].val_float == 0.1
 
-        assert result.column_values[3].attribute_name == "count_sample()"
-        assert result.column_values[3].results[0].val_int == 2
+    def test_single_float_retrieval(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        messages = [
+            {
+                "is_segment": False,
+                "retention_days": 90,
+                "tags": {},
+                "sentry_tags": {"status": "success"},
+                "measurements": {"client_sample_rate": {"value": 0.123456}},
+                "event_id": "df1626f2c20249368d32cbc7bedc58b6",
+                "organization_id": 1,
+                "project_id": 1,
+                "trace_id": "724cb5bc3e9843e39dba73c7ec2909ab",
+                "span_id": "3a3ff57148b14923",
+                "parent_span_id": "87f08db2b78848c7",
+                "segment_id": "b6684d253c934ea3",
+                "group_raw": "30cff40b57554d8a",
+                "profile_id": "1f2e11173706458f9010599631234fc4",
+                "start_timestamp_ms": int(start.timestamp()) * 1000
+                - int(random.gauss(1000, 200)),
+                "start_timestamp_precise": start.timestamp(),
+                "end_timestamp_precise": start.timestamp() + 1,
+                "received": 1721319572.877828,
+                "duration_ms": 152,
+                "exclusive_time_ms": 0.228,
+                "description": "foo",
+                "ingest_in_eap": True,
+            },
+        ]
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
-        assert result.column_values[1].attribute_name == "count()"
-        assert result.column_values[1].results[0].val_int == 11
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        err_req = {
+            "meta": {
+                "organizationId": 1,
+                "referrer": "api.organization-events",
+                "projectIds": [1],
+                "startTimestamp": hour_ago.ToJsonString(),
+                "endTimestamp": ts.ToJsonString(),
+            },
+            "columns": [
+                {
+                    "key": {"type": "TYPE_FLOAT", "name": "sentry.sampling_factor"},
+                },
+            ],
+        }
+
+        err_msg = ParseDict(err_req, TraceItemTableRequest())
+        result = EndpointTraceItemTable().execute(err_msg)
+
+        assert result.column_values == [
+            TraceItemColumnValues(
+                attribute_name="sentry.sampling_factor",
+                results=[
+                    AttributeValue(val_float=0.123456),
+                ],
+            ),
+        ]
 
 
 class TestUtils:

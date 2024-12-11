@@ -140,7 +140,6 @@ def run_rpc_handler(
 
     try:
         deserialized_protobuf = endpoint.parse_from_string(data)
-        print("requesttttt", deserialized_protobuf)
     except DecodeError as e:
         return convert_rpc_exception_to_proto(
             RPCRequestException(
