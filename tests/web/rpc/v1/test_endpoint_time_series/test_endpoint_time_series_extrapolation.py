@@ -243,6 +243,64 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
             ),
         ]
 
+    def test_confidence_interval_zero_estimate(self) -> None:
+        # store a a test metric with a value of 1, every second for an hour
+        granularity_secs = 120
+        query_duration = 3600
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 0)],
+            measurements=[
+                DummyMeasurement(
+                    "client_sample_rate", get_value=lambda s: 1
+                )  # 100% sample rate should result in reliable extrapolation
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="sum(test_metric)",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="sum(test_metric)",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=0,
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_LOW,
+                        avg_sampling_rate=1,
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            )
+        ]
+
     def test_count_unreliable(self) -> None:
         # store a a test metric with a value of 1, every second for an hour
         granularity_secs = 120

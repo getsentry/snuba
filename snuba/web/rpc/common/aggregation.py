@@ -102,9 +102,16 @@ class ExtrapolationMeta:
                 )
                 ci_lower = confidence_interval[percentile_index_lower]
                 ci_upper = confidence_interval[percentile_index_upper]
-                relative_confidence = max(estimate / ci_lower, ci_upper / estimate)
+                relative_confidence = max(
+                    estimate / ci_lower if ci_lower != 0 else float("inf"),
+                    ci_upper / estimate if estimate != 0 else float("inf"),
+                )
             else:
-                relative_confidence = (estimate + confidence_interval) / estimate
+                relative_confidence = (
+                    (estimate + confidence_interval) / estimate
+                    if estimate != 0
+                    else float("inf")
+                )
 
             is_reliable = calculate_reliability(
                 relative_confidence,
