@@ -16,11 +16,8 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.logical import Query
@@ -28,17 +25,10 @@ from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.aggregation import (
-    ExtrapolationMeta,
-    aggregation_to_expression,
-    get_average_sample_rate_column,
-    get_confidence_interval_column,
-    get_count_column,
-)
+from snuba.web.rpc.common.aggregation import Aggregator, ExtrapolationMeta
 from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
     base_conditions_and,
-    trace_item_filters_to_expression,
+    trace_item_name_to_snuba_bridge,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
@@ -46,28 +36,29 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.trace_item_types import SnubaRPCBridge
 
-_VALID_GRANULARITY_SECS = set(
-    [
-        15,
-        30,
-        60,  # seconds
-        2 * 60,
-        5 * 60,
-        10 * 60,
-        30 * 60,  # minutes
-        1 * 3600,
-        3 * 3600,
-        12 * 3600,
-        24 * 3600,  # hours
-    ]
-)
+_VALID_GRANULARITY_SECS = {
+    15,
+    30,
+    60,  # seconds
+    2 * 60,
+    5 * 60,
+    10 * 60,
+    30 * 60,  # minutes
+    1 * 3600,
+    3 * 3600,
+    12 * 3600,
+    24 * 3600,  # hours
+}
 
 _MAX_BUCKETS_IN_REQUEST = 1000
 
 
 def _convert_result_timeseries(
-    request: TimeSeriesRequest, data: list[Dict[str, Any]]
+    request: TimeSeriesRequest,
+    data: list[Dict[str, Any]],
+    aggregator: Aggregator,
 ) -> Iterable[TimeSeries]:
     """This function takes the results of the clickhouse query and converts it to a list of TimeSeries objects. It also handles
     zerofilling data points where data was not present for a specific bucket.
@@ -169,7 +160,7 @@ def _convert_result_timeseries(
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
                 extrapolation_meta = ExtrapolationMeta.from_row(
-                    row_data, timeseries.label
+                    aggregator, row_data, timeseries.label
                 )
                 timeseries.data_points.append(
                     DataPoint(
@@ -182,17 +173,16 @@ def _convert_result_timeseries(
     return result_timeseries.values()
 
 
-def _build_query(request: TimeSeriesRequest) -> Query:
+def _build_query(
+    request: TimeSeriesRequest, snuba_rpc_bridge: SnubaRPCBridge, aggregator: Aggregator
+) -> Query:
     # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    entity = snuba_rpc_bridge.get_snuba_entity()
 
     aggregation_columns = [
         SelectedExpression(
-            name=aggregation.label, expression=aggregation_to_expression(aggregation)
+            name=aggregation.label,
+            expression=aggregator.aggregation_to_expression(aggregation),
         )
         for aggregation in request.aggregations
     ]
@@ -203,7 +193,9 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             aggregation.extrapolation_mode
             == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
         ):
-            confidence_interval_column = get_confidence_interval_column(aggregation)
+            confidence_interval_column = aggregator.get_confidence_interval_column(
+                aggregation
+            )
             if confidence_interval_column is not None:
                 extrapolation_columns.append(
                     SelectedExpression(
@@ -212,8 +204,10 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                     )
                 )
 
-            average_sample_rate_column = get_average_sample_rate_column(aggregation)
-            count_column = get_count_column(aggregation)
+            average_sample_rate_column = aggregator.get_average_sample_rate_column(
+                aggregation
+            )
+            count_column = aggregator.get_count_column(aggregation)
             extrapolation_columns.append(
                 SelectedExpression(
                     name=average_sample_rate_column.alias,
@@ -226,7 +220,8 @@ def _build_query(request: TimeSeriesRequest) -> Query:
 
     groupby_columns = [
         SelectedExpression(
-            name=attr_key.name, expression=attribute_key_to_expression(attr_key)
+            name=attr_key.name,
+            expression=snuba_rpc_bridge.attribute_key_to_expression(attr_key),
         )
         for attr_key in request.group_by
     ]
@@ -267,11 +262,15 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
-            request.meta, trace_item_filters_to_expression(request.filter)
+            request.meta,
+            snuba_rpc_bridge.trace_item_filters_to_expression(request.filter),
         ),
         groupby=[
             column("time_slot"),
-            *[attribute_key_to_expression(attr_key) for attr_key in request.group_by],
+            *[
+                snuba_rpc_bridge.attribute_key_to_expression(attr_key)
+                for attr_key in request.group_by
+            ],
         ],
         order_by=[
             OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)
@@ -281,7 +280,11 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
+def _build_snuba_request(
+    request: TimeSeriesRequest,
+    snuba_rpc_bridge: SnubaRPCBridge,
+    aggregator: Aggregator,
+) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
@@ -289,7 +292,9 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request),
+        query=_build_query(
+            request, aggregator=aggregator, snuba_rpc_bridge=snuba_rpc_bridge
+        ),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -365,7 +370,11 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
-        snuba_request = _build_snuba_request(in_msg)
+        snuba_rpc_bridge = trace_item_name_to_snuba_bridge(in_msg.meta.trace_item_name)
+        aggregator = Aggregator(snuba_rpc_bridge)
+        snuba_request = _build_snuba_request(
+            in_msg, snuba_rpc_bridge=snuba_rpc_bridge, aggregator=aggregator
+        )
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
@@ -380,7 +389,9 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
 
         return TimeSeriesResponse(
             result_timeseries=list(
-                _convert_result_timeseries(in_msg, res.result.get("data", []))
+                _convert_result_timeseries(
+                    in_msg, res.result.get("data", []), aggregator=aggregator
+                )
             ),
             meta=response_meta,
         )

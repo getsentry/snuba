@@ -20,28 +20,17 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.aggregation import (
-    ExtrapolationMeta,
-    aggregation_to_expression,
-    get_average_sample_rate_column,
-    get_confidence_interval_column,
-    get_count_column,
-)
+from snuba.web.rpc.common.aggregation import Aggregator, ExtrapolationMeta
 from snuba.web.rpc.common.common import (
-    apply_virtual_columns,
-    attribute_key_to_expression,
     base_conditions_and,
-    trace_item_filters_to_expression,
+    trace_item_name_to_snuba_bridge,
     treeify_or_and_conditions,
 )
 from snuba.web.rpc.common.debug_info import (
@@ -49,12 +38,15 @@ from snuba.web.rpc.common.debug_info import (
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.common.trace_item_types import SnubaRPCBridge
 
 _DEFAULT_ROW_LIMIT = 10_000
 
 
 def _convert_order_by(
     order_by: Sequence[TraceItemTableRequest.OrderBy],
+    snuba_rpc_bridge: SnubaRPCBridge,
+    aggregator: Aggregator,
 ) -> Sequence[OrderBy]:
     res: list[OrderBy] = []
     for x in order_by:
@@ -63,31 +55,33 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression(x.column.key),
+                    expression=snuba_rpc_bridge.attribute_key_to_expression(
+                        x.column.key
+                    ),
                 )
             )
         elif x.column.HasField("aggregation"):
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=aggregation_to_expression(x.column.aggregation),
+                    expression=aggregator.aggregation_to_expression(
+                        x.column.aggregation
+                    ),
                 )
             )
     return res
 
 
-def _build_query(request: TraceItemTableRequest) -> Query:
-    # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+def _build_query(
+    request: TraceItemTableRequest, snuba_rpc_bridge: SnubaRPCBridge
+) -> Query:
+    entity = snuba_rpc_bridge.get_snuba_entity()
+    aggregator = Aggregator(snuba_rpc_bridge=snuba_rpc_bridge)
 
     selected_columns = []
     for column in request.columns:
         if column.HasField("key"):
-            key_col = attribute_key_to_expression(column.key)
+            key_col = snuba_rpc_bridge.attribute_key_to_expression(column.key)
             # The key_col expression alias may differ from the column label. That is okay
             # the attribute key name is used in the groupby, the column label is just the name of
             # the returned attribute value
@@ -95,7 +89,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
                 SelectedExpression(name=column.label, expression=key_col)
             )
         elif column.HasField("aggregation"):
-            function_expr = aggregation_to_expression(column.aggregation)
+            function_expr = aggregator.aggregation_to_expression(column.aggregation)
             # aggregation label may not be set and the column label takes priority anyways.
             function_expr = replace(function_expr, alias=column.label)
             selected_columns.append(
@@ -106,7 +100,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
                 column.aggregation.extrapolation_mode
                 == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
             ):
-                confidence_interval_column = get_confidence_interval_column(
+                confidence_interval_column = aggregator.get_confidence_interval_column(
                     column.aggregation
                 )
                 if confidence_interval_column is not None:
@@ -117,10 +111,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
                         )
                     )
 
-                average_sample_rate_column = get_average_sample_rate_column(
+                average_sample_rate_column = aggregator.get_average_sample_rate_column(
                     column.aggregation
                 )
-                count_column = get_count_column(column.aggregation)
+                count_column = aggregator.get_count_column(column.aggregation)
                 selected_columns.append(
                     SelectedExpression(
                         name=average_sample_rate_column.alias,
@@ -140,22 +134,27 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         selected_columns=selected_columns,
         condition=base_conditions_and(
             request.meta,
-            trace_item_filters_to_expression(request.filter),
+            snuba_rpc_bridge.trace_item_filters_to_expression(request.filter),
         ),
-        order_by=_convert_order_by(request.order_by),
+        order_by=_convert_order_by(
+            request.order_by, snuba_rpc_bridge, aggregator=aggregator
+        ),
         groupby=[
-            attribute_key_to_expression(attr_key) for attr_key in request.group_by
+            snuba_rpc_bridge.attribute_key_to_expression(attr_key)
+            for attr_key in request.group_by
         ],
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns(res, request.virtual_column_contexts)
+    snuba_rpc_bridge.apply_virtual_columns(res, request.virtual_column_contexts)
     return res
 
 
-def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
+def _build_snuba_request(
+    request: TraceItemTableRequest, snuba_rpc_bridge: SnubaRPCBridge
+) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
@@ -163,7 +162,7 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request),
+        query=_build_query(request, snuba_rpc_bridge),
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -180,9 +179,11 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
 
 
 def _convert_results(
-    request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
+    request: TraceItemTableRequest,
+    data: Iterable[Dict[str, Any]],
+    snuba_rpc_bridge: SnubaRPCBridge,
 ) -> list[TraceItemColumnValues]:
-
+    aggregator = Aggregator(snuba_rpc_bridge=snuba_rpc_bridge)
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
     for column in request.columns:
@@ -208,7 +209,9 @@ def _convert_results(
             if column_name in converters.keys():
                 res[column_name].results.append(converters[column_name](value))
                 res[column_name].attribute_name = column_name
-                extrapolation_meta = ExtrapolationMeta.from_row(row, column_name)
+                extrapolation_meta = ExtrapolationMeta.from_row(
+                    aggregator, row, column_name
+                )
                 if (
                     extrapolation_meta.reliability
                     != Reliability.RELIABILITY_UNSPECIFIED
@@ -299,13 +302,16 @@ class EndpointTraceItemTable(
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
-        snuba_request = _build_snuba_request(in_msg)
+        snuba_rpc_bridge = trace_item_name_to_snuba_bridge(in_msg.meta.trace_item_name)
+        snuba_request = _build_snuba_request(in_msg, snuba_rpc_bridge)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
-        column_values = _convert_results(in_msg, res.result.get("data", []))
+        column_values = _convert_results(
+            in_msg, res.result.get("data", []), snuba_rpc_bridge
+        )
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
