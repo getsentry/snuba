@@ -26,6 +26,47 @@ def test_basic() -> None:
     assert get_job_status(job_id) == JobStatus.FINISHED
 
 
+@pytest.mark.parametrize(
+    ("jobspec"),
+    [
+        JobSpec(
+            "abc",
+            "ScrubIpFromSentryTags",
+            False,
+            {
+                "project_ids": [1, "b"],
+                "start_datetime": "2024-12-01 00:00:00",
+                "end_datetime": "2024-12-10 00:00:00",
+            },
+        ),
+        JobSpec(
+            "abc",
+            "ScrubIpFromSentryTags",
+            False,
+            {
+                "project_ids": [1, 2],
+                "start_datetime": "2024-12-01 00:00:0",
+                "end_datetime": "2024-12-10 00:00:00",
+            },
+        ),
+        JobSpec(
+            "abc",
+            "ScrubIpFromSentryTags",
+            False,
+            {
+                "project_ids": [1, 2],
+                "start_datetime": "2024-12-01 00:00:00",
+                "end_datetime": "2024-12-10 00:00:0",
+            },
+        ),
+    ],
+)
+@pytest.mark.redis_db
+def test_fail_validation(jobspec) -> None:
+    with pytest.raises(Exception):
+        run_job(jobspec)
+
+
 @pytest.mark.redis_db
 def test_generate_query() -> None:
     job = ScrubIpFromSentryTags(

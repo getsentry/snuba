@@ -14,7 +14,7 @@ class ScrubIpFromSentryTags(Job):
     def __validate_job_params(self, params: Optional[Mapping[Any, Any]]) -> None:
         assert params
         assert isinstance(params["project_ids"], list)
-        assert [isinstance(p, (int, str)) for p in params["project_ids"]]
+        assert all([isinstance(p, int) for p in params["project_ids"]])
         self._project_ids = params["project_ids"]
         self._start_datetime = datetime.fromisoformat(params["start_datetime"])
         self._end_datetime = datetime.fromisoformat(params["end_datetime"])
@@ -46,4 +46,4 @@ AND end_timestamp <= toDateTime('{end_datetime}')"""
         logger.info("Executing query: {query}")
         result = connection.execute(query=query, settings={"mutations_sync": 0})
         logger.info("complete")
-        logger.info(result.__repr__())
+        logger.info(repr(result))
