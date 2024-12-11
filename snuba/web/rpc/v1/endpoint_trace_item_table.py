@@ -274,13 +274,13 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
             "Aggregation is required when including group_by columns"
         )
 
-    # disallowed_group_by_columns = [
-    #     c.name for c in in_msg.group_by if c.name in _GROUP_BY_DISALLOWED_COLUMNS
-    # ]
-    # if disallowed_group_by_columns:
-    #     raise BadSnubaRPCRequestException(
-    #         f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
-    #     )
+    disallowed_group_by_columns = [
+        c.name for c in in_msg.group_by if c.name in _GROUP_BY_DISALLOWED_COLUMNS
+    ]
+    if disallowed_group_by_columns:
+        raise BadSnubaRPCRequestException(
+            f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
+        )
 
 
 def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
