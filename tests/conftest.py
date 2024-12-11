@@ -199,7 +199,6 @@ def _clear_db() -> None:
 def clickhouse_db(
     request: pytest.FixtureRequest, create_databases: None
 ) -> Generator[None, None, None]:
-    print("isthisbeingrun")
     if not request.node.get_closest_marker("clickhouse_db"):
         # Make people use the marker explicitly so `-m` works on CLI
         pytest.fail("Need to use clickhouse_db marker if clickhouse_db fixture is used")

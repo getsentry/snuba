@@ -947,31 +947,60 @@ class TestTraceItemTable(BaseApiTest):
         assert result.column_values[3].attribute_name == "tags[foo]"
         assert result.column_values[3].results[0].val_str == "five"
 
-        assert False
-
-
     def test_rounding(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
         start = BASE_TIME
         messages = [
-            {'is_segment': False, 'retention_days': 90, 'tags': {}, 'sentry_tags': {'status': 'success'},
-             'measurements': {'client_sample_rate': {'value': 0.1}}, 'event_id': 'df1626f2c20249368d32cbc7bedc58b6',
-             'organization_id': 1, 'project_id': 1,
-             'trace_id': '724cb5bc3e9843e39dba73c7ec2909ab', 'span_id': '3a3ff57148b14923',
-             'parent_span_id': '87f08db2b78848c7', 'segment_id': 'b6684d253c934ea3', 'group_raw': '30cff40b57554d8a',
-             'profile_id': '1f2e11173706458f9010599631234fc4', 'start_timestamp_ms': int(start.timestamp()) * 1000 - int(random.gauss(1000, 200)),
-             'start_timestamp_precise': start.timestamp(), 'end_timestamp_precise': start.timestamp() + 1,
-             'received': 1721319572.877828, 'duration_ms': 152, 'exclusive_time_ms': 0.228,
-             'description': 'foo', 'ingest_in_eap': True},
-            {'is_segment': False, 'retention_days': 90, 'tags': {}, 'sentry_tags': {'status': 'success'},
-             'measurements': {'client_sample_rate': {'value': 0.85}}, 'event_id': '9ca81e2a30f94b22b1a8fd318e69e49e',
-             'organization_id': 1, 'project_id': 1,
-             'trace_id': 'b7c9905686464d8d89e7d2aa95b5291a', 'span_id': '49ea9f85b8d94f87',
-             'parent_span_id': '4dcdde0710254636', 'segment_id': 'd433c990ed9343e3', 'group_raw': '90c542ffb67b4629',
-             'profile_id': '16e664cce531405bae63834adc6aee80', 'start_timestamp_ms': 1733871936397,
-             'start_timestamp_precise': start.timestamp(), 'end_timestamp_precise': start.timestamp() + 1,
-             'received': 1721319572.877828, 'duration_ms': 152, 'exclusive_time_ms': 0.228,
-             'description': 'bar', 'ingest_in_eap': True}
+            {
+                "is_segment": False,
+                "retention_days": 90,
+                "tags": {},
+                "sentry_tags": {"status": "success"},
+                "measurements": {"client_sample_rate": {"value": 0.1}},
+                "event_id": "df1626f2c20249368d32cbc7bedc58b6",
+                "organization_id": 1,
+                "project_id": 1,
+                "trace_id": "724cb5bc3e9843e39dba73c7ec2909ab",
+                "span_id": "3a3ff57148b14923",
+                "parent_span_id": "87f08db2b78848c7",
+                "segment_id": "b6684d253c934ea3",
+                "group_raw": "30cff40b57554d8a",
+                "profile_id": "1f2e11173706458f9010599631234fc4",
+                "start_timestamp_ms": int(start.timestamp()) * 1000
+                - int(random.gauss(1000, 200)),
+                "start_timestamp_precise": start.timestamp(),
+                "end_timestamp_precise": start.timestamp() + 1,
+                "received": 1721319572.877828,
+                "duration_ms": 152,
+                "exclusive_time_ms": 0.228,
+                "description": "foo",
+                "ingest_in_eap": True,
+            },
+            {
+                "is_segment": False,
+                "retention_days": 90,
+                "tags": {},
+                "sentry_tags": {"status": "success"},
+                "measurements": {"client_sample_rate": {"value": 0.85}},
+                "event_id": "9ca81e2a30f94b22b1a8fd318e69e49e",
+                "organization_id": 1,
+                "project_id": 1,
+                "trace_id": "b7c9905686464d8d89e7d2aa95b5291a",
+                "span_id": "49ea9f85b8d94f87",
+                "parent_span_id": "4dcdde0710254636",
+                "segment_id": "d433c990ed9343e3",
+                "group_raw": "90c542ffb67b4629",
+                "profile_id": "16e664cce531405bae63834adc6aee80",
+                "start_timestamp_ms": int(start.timestamp()) * 1000
+                - int(random.gauss(1000, 200)),
+                "start_timestamp_precise": start.timestamp(),
+                "end_timestamp_precise": start.timestamp() + 1,
+                "received": 1721319572.877828,
+                "duration_ms": 152,
+                "exclusive_time_ms": 0.228,
+                "description": "bar",
+                "ingest_in_eap": True,
+            },
         ]
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -981,9 +1010,7 @@ class TestTraceItemTable(BaseApiTest):
             "meta": {
                 "organizationId": 1,
                 "referrer": "api.organization-events",
-                "projectIds": [
-                    1
-                ],
+                "projectIds": [1],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
             },
@@ -991,61 +1018,57 @@ class TestTraceItemTable(BaseApiTest):
                 {
                     "aggregation": {
                         "aggregate": "FUNCTION_AVERAGE",
-                        "key": {
-                            "type": "TYPE_FLOAT",
-                            "name": "sentry.sampling_factor"
-                        },
+                        "key": {"type": "TYPE_FLOAT", "name": "sentry.sampling_factor"},
                         "label": "avg_sample(sampling_rate)",
-                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE"
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
                     },
-                    "label": "avg_sample(sampling_rate)"
+                    "label": "avg_sample(sampling_rate)",
                 },
                 {
                     "aggregation": {
                         "aggregate": "FUNCTION_COUNT",
-                        "key": {
-                            "type": "TYPE_FLOAT",
-                            "name": "sentry.duration_ms"
-                        },
+                        "key": {"type": "TYPE_FLOAT", "name": "sentry.duration_ms"},
                         "label": "count()",
-                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED"
+                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
                     },
-                    "label": "count()"
+                    "label": "count()",
                 },
                 {
                     "aggregation": {
                         "aggregate": "FUNCTION_MIN",
-                        "key": {
-                            "type": "TYPE_FLOAT",
-                            "name": "sentry.sampling_factor"
-                        },
+                        "key": {"type": "TYPE_FLOAT", "name": "sentry.sampling_factor"},
                         "label": "min(sampling_rate)",
-                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED"
+                        "extrapolationMode": "EXTRAPOLATION_MODE_SAMPLE_WEIGHTED",
                     },
-                    "label": "min(sampling_rate)"
+                    "label": "min(sampling_rate)",
                 },
                 {
                     "aggregation": {
                         "aggregate": "FUNCTION_COUNT",
-                        "key": {
-                            "type": "TYPE_FLOAT",
-                            "name": "sentry.duration_ms"
-                        },
+                        "key": {"type": "TYPE_FLOAT", "name": "sentry.duration_ms"},
                         "label": "count_sample()",
-                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE"
+                        "extrapolationMode": "EXTRAPOLATION_MODE_NONE",
                     },
-                    "label": "count_sample()"
-                }
+                    "label": "count_sample()",
+                },
             ],
-            "limit": 101
+            "limit": 101,
         }
 
         err_msg = ParseDict(err_req, TraceItemTableRequest())
         result = EndpointTraceItemTable().execute(err_msg)
-        print(result)
-        assert False
 
+        assert result.column_values[0].attribute_name == "avg_sample(sampling_rate)"
+        assert result.column_values[0].results[0].val_float == 0.475
 
+        assert result.column_values[2].attribute_name == "min(sampling_rate)"
+        assert result.column_values[2].results[0].val_float == 0.1
+
+        assert result.column_values[3].attribute_name == "count_sample()"
+        assert result.column_values[3].results[0].val_int == 2
+
+        assert result.column_values[1].attribute_name == "count()"
+        assert result.column_values[1].results[0].val_int == 11
 
 
 class TestUtils:
