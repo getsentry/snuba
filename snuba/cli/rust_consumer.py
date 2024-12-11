@@ -178,16 +178,6 @@ from snuba.datasets.storages.factory import get_writable_storage_keys
     default=None,
     help="Optional timeout for batch writer client connecting and sending request to Clickhouse",
 )
-@click.option(
-    "--max-bytes-before-external-group-by",
-    type=int,
-    default=None,
-    help="""
-    Allow batching on disk for GROUP BY queries. This is a test mitigation for whether a
-    materialized view is causing OOM on inserts. If successful, this should be set in storage config.
-    If not successful, this option should be removed.
-    """,
-)
 def rust_consumer(
     *,
     storage_names: Sequence[str],
@@ -217,7 +207,6 @@ def rust_consumer(
     enforce_schema: bool,
     stop_at_timestamp: Optional[int],
     batch_write_timeout_ms: Optional[int],
-    max_bytes_before_external_group_by: Optional[int],
     mutations_mode: bool,
     max_dlq_buffer_length: Optional[int]
 ) -> None:
@@ -271,7 +260,6 @@ def rust_consumer(
         health_check_file,
         stop_at_timestamp,
         batch_write_timeout_ms,
-        max_bytes_before_external_group_by,
         max_dlq_buffer_length,
     )
 
