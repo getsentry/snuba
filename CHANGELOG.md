@@ -1,5 +1,36 @@
 # Changelog
 
+## 24.11.2
+
+### Various fixes & improvements
+
+- feat(eap): Bump max timeseries buckets (#6630) by @volokluev
+- fix(scripts): Automatically create local tables before MV (#6648) by @untitaker
+- feat(eap): Implement confidence intervals for percentiles (#6634) by @davidtsuk
+- fix: admin rpc endpoint selector bug fix (#6641) by @kylemumma
+- ref(admin): Allow merge function in FROM clause (#6643) by @evanh
+- fix: Actual Rust support in bump-version (#6640) by @untitaker
+- fix 0006_sorting_key_change migration (#6633) by @MeredithAnya
+- chore: Bump Arroyo 2.19.2 (#6639) by @ayirr7
+- chore: Bump Arroyo to 2.19.1 (#6632) by @ayirr7
+- chore(devservices): Bumping the version of devservices to latest (#6629) by @IanWoodard
+- feat(eap-api): support in conditions in TraceItemFilter (#6623) by @kylemumma
+- Revert "ref(ci): Disable self-hosted e2e CI due to resource constraints" (#6622) by @hubertdeng123
+- feat(devservices): Use https for repo links (#6627) by @hubertdeng123
+- chore: Bump rust-arroyo to published crate (#6614) by @untitaker
+- feat(label): adding label to container (#6628) by @IanWoodard
+- consumer: Add flag to configure DLQ buffer limit (#6626) by @ayirr7
+- feat(runtime_config): A way to add static descriptions to config items (#6624) by @untitaker
+- fix(admin): add example RPC call for the endpoints missing it (#6615) by @kylemumma
+- feat(eap-api): Use signs in count, average, and sum calculations (#6613) by @davidtsuk
+- feat(devservices): Add healthchecks to clickhouse and snuba (#6616) by @hubertdeng123
+- feat(memory): Add script to debug consumer OOM issues (#6585) by @nikhars
+- ref(ci): Disable self-hosted e2e CI due to resource constraints (#6620) by @hubertdeng123
+- ref(admin): Allow clusterAllReplicas in system queries (#6619) by @evanh
+- ref(profiling): start the profile_chunks consumer when ENABLE_PROFILES_CONSUMER is true (#6607) by @viglia
+
+_Plus 11 more_
+
 ## 24.11.1
 
 ### Various fixes & improvements
