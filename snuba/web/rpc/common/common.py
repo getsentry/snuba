@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Final, Mapping, Sequence, Set
 
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TRACE_ITEM_NAME_EAP_SPANS, TRACE_ITEM_NAME_EAP_LOGS
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     VirtualColumnContext,
@@ -11,8 +11,11 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
+from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
     and_cond,
@@ -120,13 +123,13 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     if attr_key.name in TIMESTAMP_COLUMNS:
         if attr_key.type == AttributeKey.Type.TYPE_STRING:
             return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "String", alias=alias
+                column(attr_key.name[len("sentry."):]), "String", alias=alias
             )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
-            return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
+            return f.CAST(column(attr_key.name[len("sentry."):]), "Int64", alias=alias)
         if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
             return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
+                column(attr_key.name[len("sentry."):]), "Float64", alias=alias
             )
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
@@ -134,7 +137,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name in NORMALIZED_COLUMNS:
         if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
-            return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
+            return column(attr_key.name[len("sentry."):], alias=attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
         )
@@ -171,8 +174,19 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
     )
 
 
+def attribute_key_to_expression_logs(attr_key: AttributeKey):
+    if attr_key.type == AttributeKey.Type.TYPE_UNSPECIFIED:
+        raise BadSnubaRPCRequestException(
+            f"attribute key {attr_key.name} must have a type specified"
+        )
+    alias = attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
+    if attr_key.type == AttributeKey.Type.TYPE_INT:
+        return f.CAST(column(attr_key.name), "Int64", alias=alias)
+    if attr_key.type == AttributeKey.Type.TYPE_STRING:
+        return f.CAST(column(attr_key.name), "Int64", alias=alias)
+
 def apply_virtual_columns(
-    query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
+        query: Query, virtual_column_contexts: Sequence[VirtualColumnContext]
 ) -> None:
     """Injects virtual column mappings into the clickhouse query. Works with NORMALIZED_COLUMNS on the table or
     dynamic columns in attr_str
@@ -265,7 +279,7 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
 
     if item_filter.HasField("comparison_filter"):
         k = item_filter.comparison_filter.key
-        k_expression = attribute_key_to_expression(k)
+        k_expression = attribute_key_to_expression_logs(k)
         op = item_filter.comparison_filter.op
         v = item_filter.comparison_filter.value
 
@@ -388,3 +402,20 @@ def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expressi
         ),
         *other_exprs,
     )
+
+
+def snuba_entity_from_meta(meta: RequestMeta) -> Entity:
+    if meta.trace_item_name == TRACE_ITEM_NAME_EAP_SPANS:
+        return Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
+    if meta.trace_item_name == TRACE_ITEM_NAME_EAP_LOGS:
+        return Entity(
+            key=EntityKey("eap_logs"),
+            schema=get_entity(EntityKey("eap_logs")).get_data_model(),
+            sample=None,
+        )
+    raise Exception(f'unknown trace item name: {meta.trace_item_name}')
+

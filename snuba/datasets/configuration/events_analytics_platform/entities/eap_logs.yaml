@@ -1,0 +1,31 @@
+version: v1
+kind: entity
+name: eap_logs
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: timestamp, type: DateTime },
+    { name: origin, type: String },
+    { name: hostname, type: String },
+    { name: message, type: String },
+    { name: attr_str, type: Map, args: { key: { type: String }, value: { type: String } } },
+    { name: attr_num, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
+  ]
+
+storages:
+  - storage: eap_logs
+    is_writable: false
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+
+validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [organization_id]
+
+required_time_column: timestamp

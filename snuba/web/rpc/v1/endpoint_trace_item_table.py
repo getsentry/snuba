@@ -20,11 +20,8 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -39,10 +36,10 @@ from snuba.web.rpc.common.aggregation import (
 )
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
-    attribute_key_to_expression,
+    attribute_key_to_expression_logs,
     base_conditions_and,
     trace_item_filters_to_expression,
-    treeify_or_and_conditions,
+    treeify_or_and_conditions, snuba_entity_from_meta,
 )
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
@@ -63,7 +60,7 @@ def _convert_order_by(
             res.append(
                 OrderBy(
                     direction=direction,
-                    expression=attribute_key_to_expression(x.column.key),
+                    expression=attribute_key_to_expression_logs(x.column.key),
                 )
             )
         elif x.column.HasField("aggregation"):
@@ -77,17 +74,12 @@ def _convert_order_by(
 
 
 def _build_query(request: TraceItemTableRequest) -> Query:
-    # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    entity = snuba_entity_from_meta(request.meta)
 
     selected_columns = []
     for column in request.columns:
         if column.HasField("key"):
-            key_col = attribute_key_to_expression(column.key)
+            key_col = attribute_key_to_expression_logs(column.key)
             # The key_col expression alias may differ from the column label. That is okay
             # the attribute key name is used in the groupby, the column label is just the name of
             # the returned attribute value
@@ -144,7 +136,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         ),
         order_by=_convert_order_by(request.order_by),
         groupby=[
-            attribute_key_to_expression(attr_key) for attr_key in request.group_by
+            attribute_key_to_expression_logs(attr_key) for attr_key in request.group_by
         ],
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
