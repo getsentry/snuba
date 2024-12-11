@@ -229,7 +229,9 @@ def apply_virtual_columns(
                 f.CAST(attribute_expression, "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal("unknown"),
+                literal(
+                    context.default_value if context.default_value != "" else "unknown"
+                ),
                 alias=context.to_column_name,
             )
 
