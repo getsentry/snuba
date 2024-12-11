@@ -62,7 +62,7 @@ def test_basic() -> None:
     ],
 )
 @pytest.mark.redis_db
-def test_fail_validation(jobspec) -> None:
+def test_fail_validation(jobspec: JobSpec) -> None:
     with pytest.raises(Exception):
         run_job(jobspec)
 
