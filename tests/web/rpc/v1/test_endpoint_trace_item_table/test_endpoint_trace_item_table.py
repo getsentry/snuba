@@ -812,6 +812,13 @@ class TestTraceItemTable(BaseApiTest):
                     "key": {"type": "TYPE_STRING", "name": "project.name"},
                     "label": "project.name",
                 },
+                {
+                    "aggregation": {
+                        "aggregate": "FUNCTION_COUNT",
+                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                    },
+                    "label": "count()",
+                },
             ],
             "orderBy": [
                 {
@@ -909,6 +916,13 @@ class TestTraceItemTable(BaseApiTest):
                     "key": {"type": "TYPE_STRING", "name": "project.name"},
                     "label": "project.name",
                 },
+                {
+                    "aggregation": {
+                        "aggregate": "FUNCTION_COUNT",
+                        "key": {"type": "TYPE_STRING", "name": "sentry.name"},
+                    },
+                    "label": "count()",
+                },
             ],
             "orderBy": [
                 {
@@ -946,6 +960,70 @@ class TestTraceItemTable(BaseApiTest):
 
         assert result.column_values[3].attribute_name == "tags[foo]"
         assert result.column_values[3].results[0].val_str == "five"
+
+    def test_table_with_disallowed_group_by_columns(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_table_with_group_by_columns_without_aggregation(
+        self, setup_teardown: Any
+    ) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="timestamp")
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="timestamp")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="timestamp"
+                        )
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
 
 
 class TestUtils:
