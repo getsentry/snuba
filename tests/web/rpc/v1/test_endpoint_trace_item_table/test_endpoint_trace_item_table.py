@@ -947,6 +947,25 @@ class TestTraceItemTable(BaseApiTest):
         assert result.column_values[3].attribute_name == "tags[foo]"
         assert result.column_values[3].results[0].val_str == "five"
 
+    def test_single_float_comparison(self) -> None:
+        protobuf_with_float = TraceItemColumnValues(
+            attribute_name="blah",
+            results=[
+                AttributeValue(val_float=0.123456),
+            ],
+        )
+
+        # this passes
+        assert protobuf_with_float == TraceItemColumnValues(
+            attribute_name="blah",
+            results=[
+                AttributeValue(val_float=0.123456),
+            ],
+        )
+
+        # this should NOT pass
+        assert protobuf_with_float.results[0].val_float != 0.123456
+
 
 class TestUtils:
     def test_apply_labels_to_columns(self) -> None:
