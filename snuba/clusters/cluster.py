@@ -498,9 +498,9 @@ def _build_sliced_cluster(cluster: Mapping[str, Any]) -> ClickhouseCluster:
         password=cluster.get("password", ""),
         database=cluster.get("database", "default"),
         http_port=cluster["http_port"],
-        secure=cluster["secure"],
-        ca_certs=cluster["ca_certs"],
-        verify=cluster["verify"],
+        secure=cluster.get("secure", False),
+        ca_certs=cluster.get("ca_certs", None),
+        verify=cluster.get("verify", False),
         storage_sets={
             storage_tuple[0] for storage_tuple in cluster["storage_set_slices"]
         },
