@@ -27,7 +27,7 @@ pytest-watch==4.2.0
 python-dateutil==2.8.2
 python-rapidjson==1.8
 redis==4.5.4
-sentry-arroyo==2.19.4
+sentry-arroyo==2.19.5
 sentry-kafka-schemas==0.1.122
 sentry-redis-tools==0.3.0
 sentry-relay==0.9.2
