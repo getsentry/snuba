@@ -21,8 +21,7 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
-from snuba.query.expressions import Expression
+from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Row
@@ -30,29 +29,16 @@ from snuba.request import Request as SnubaRequest
 from snuba.web import QueryResult
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
+from snuba.web.rpc.common.common import (
+    base_conditions_and,
+    convert_filter_offset,
+    treeify_or_and_conditions,
+)
 from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
-
-
-def _convert_filter_offset(filter_offset: TraceItemFilter) -> Expression:
-    if not filter_offset.HasField("comparison_filter"):
-        raise TypeError("filter_offset needs to be a comparison filter")
-    if filter_offset.comparison_filter.op != ComparisonFilter.OP_GREATER_THAN:
-        raise TypeError("filter_offset must use the greater than comparison")
-
-    k_expression = column(filter_offset.comparison_filter.key.name)
-    v = filter_offset.comparison_filter.value
-    value_type = v.WhichOneof("value")
-    if value_type != "val_str":
-        raise BadSnubaRPCRequestException(
-            "keys are strings, so please provide a string filter"
-        )
-
-    return f.greater(k_expression, literal(v.val_str))
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
@@ -86,7 +72,7 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
         base_conditions_and(
             req.meta,
             f.like(column("attr_key"), f"%{req.value_substring_match}%"),
-            _convert_filter_offset(req.page_token.filter_offset),
+            convert_filter_offset(req.page_token.filter_offset),
         )
         if req.page_token.HasField("filter_offset")
         else base_conditions_and(
