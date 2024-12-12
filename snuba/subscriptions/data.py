@@ -226,6 +226,8 @@ class RPCSubscriptionData(_SubscriptionData[TimeSeriesRequest]):
         request_class.meta.start_timestamp.CopyFrom(start_time_proto)
         request_class.meta.end_timestamp.CopyFrom(end_time_proto)
 
+        request_class.meta.referrer = referrer
+
         request_class.granularity_secs = self.time_window_sec
 
         return request_class
