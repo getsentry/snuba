@@ -441,6 +441,9 @@ VALIDATE_DATASET_YAMLS_ON_STARTUP = False
 
 MAX_ONGOING_MUTATIONS_FOR_DELETE = 5
 
+SNUBA_SPANS_USER_IP_PROJECTS = set()
+SNUBA_SPANS_USER_IP_NEW_VALUE = ""
+
 
 def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment

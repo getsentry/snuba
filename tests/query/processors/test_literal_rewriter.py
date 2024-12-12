@@ -123,10 +123,15 @@ test_cases = [
 
 @pytest.mark.parametrize("name, query, expected_query", test_cases)
 def test_format_expressions(
-    name: str, query: ClickhouseQuery, expected_query: ClickhouseQuery
+    name: str, query: ClickhouseQuery, expected_query: ClickhouseQuery, monkeypatch
 ) -> None:
-    LiteralRewriter("project_id", {"old_tag": "new_tag"}, None).process_query(
-        query, HTTPQuerySettings()
+    monkeypatch.setattr(
+        "snuba.query.processors.physical.literal_rewriter.get_object_ids_in_query_ast",
+        lambda query, column: [42],
     )
+    monkeypatch.setattr("snuba.settings.SNUBA_SPANS_USER_IP_NEW_VALUE", "new_tag")
+    monkeypatch.setattr("snuba.settings.SNUBA_SPANS_USER_IP_PROJECTS", [42])
+
+    LiteralRewriter("project_id", ["old_tag"]).process_query(query, HTTPQuerySettings())
 
     assert query.get_selected_columns() == expected_query.get_selected_columns()

@@ -165,6 +165,10 @@ query_processors:
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: measurements
+  - processor: LiteralRewriter
+    args:
+      project_column: project_id
+      literals: [user.ip]
   - processor: PrewhereProcessor
     args:
       prewhere_candidates:
