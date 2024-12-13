@@ -28,7 +28,6 @@ class ScrubIpFromSentryTags(Job):
 {on_cluster}
 UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user.ip', 'scrubbed', v), `sentry_tags.key`, `sentry_tags.value`)
 WHERE project_id IN [{project_ids}]
-AND has(`sentry_tags.key`, 'user.ip')
 AND end_timestamp > toDateTime('{start_datetime}')
 AND end_timestamp <= toDateTime('{end_datetime}')"""
 
