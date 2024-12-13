@@ -158,12 +158,10 @@ def test_do_the_thing() -> None:
         "SELECT any(has(sentry_tags.value, '0.0.0.0')) FROM spans_local WHERE project_id IN [1,2]"
     )
     assert res.results[0][0] == 0
-    print(res)
     res = connection.execute(
         "SELECT groupBitAnd(has(sentry_tags.value, '0.0.0.0')) FROM spans_local WHERE project_id IN [3, 4, 5]"
     )
     assert res.results[0][0] == 1
-    print(res)
 
 
 @pytest.mark.parametrize(
