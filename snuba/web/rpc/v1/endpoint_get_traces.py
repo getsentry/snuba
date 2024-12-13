@@ -3,9 +3,9 @@ from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
 from google.protobuf.json_format import MessageToDict
-from sentry_protos.snuba.v1.endpoint_find_traces_pb2 import (
-    FindTracesRequest,
-    FindTracesResponse,
+from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
+    GetTracesRequest,
+    GetTracesResponse,
     TraceColumn,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
@@ -40,8 +40,8 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 _DEFAULT_ROW_LIMIT = 10_000
 
 _COLUMN_TO_NAME: dict[TraceColumn.Name, str] = {
-    TraceColumn.Name.TRACE_ID: "trace_id",
-    TraceColumn.Name.START_TIMESTAMP: "start_timestamp",
+    TraceColumn.Name.NAME_TRACE_ID: "trace_id",
+    TraceColumn.Name.NAME_START_TIMESTAMP: "start_timestamp",
 }
 
 _NAME_TO_COLUMN: dict[str, TraceColumn.Name] = {
@@ -55,10 +55,10 @@ _TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type, str] = {
 }
 
 _POSSIBLE_TYPES: dict[TraceColumn.Name, set[AttributeKey.Type]] = {
-    TraceColumn.Name.TRACE_ID: {
+    TraceColumn.Name.NAME_TRACE_ID: {
         AttributeKey.Type.TYPE_STRING,
     },
-    TraceColumn.Name.START_TIMESTAMP: {
+    TraceColumn.Name.NAME_START_TIMESTAMP: {
         AttributeKey.Type.TYPE_STRING,
         AttributeKey.Type.TYPE_INT,
         AttributeKey.Type.TYPE_FLOAT,
@@ -84,7 +84,7 @@ def _column_to_expression(trace_column: TraceColumn) -> Expression:
 
 
 def _convert_order_by(
-    order_by: Sequence[FindTracesRequest.OrderBy],
+    order_by: Sequence[GetTracesRequest.OrderBy],
 ) -> Sequence[OrderBy]:
     res: list[OrderBy] = []
     for x in order_by:
@@ -98,7 +98,7 @@ def _convert_order_by(
     return res
 
 
-def _build_query(request: FindTracesRequest) -> Query:
+def _build_query(request: GetTracesRequest) -> Query:
     entity = Entity(
         key=EntityKey("eap_spans"),
         schema=get_entity(EntityKey("eap_spans")).get_data_model(),
@@ -128,7 +128,7 @@ def _build_query(request: FindTracesRequest) -> Query:
             _column_to_expression(
                 TraceColumn(
                     type=AttributeKey.TYPE_STRING,
-                    name=TraceColumn.Name.TRACE_ID,
+                    name=TraceColumn.Name.NAME_TRACE_ID,
                 ),
             ),
         ],
@@ -138,7 +138,7 @@ def _build_query(request: FindTracesRequest) -> Query:
     return res
 
 
-def _build_snuba_request(request: FindTracesRequest) -> SnubaRequest:
+def _build_snuba_request(request: GetTracesRequest) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
@@ -163,8 +163,8 @@ def _build_snuba_request(request: FindTracesRequest) -> SnubaRequest:
 
 
 def _convert_results(
-    request: FindTracesRequest, data: Iterable[Dict[str, Any]]
-) -> list[FindTracesResponse.Trace]:
+    request: GetTracesRequest, data: Iterable[Dict[str, Any]]
+) -> list[GetTracesResponse.Trace]:
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
     for trace_column in request.columns:
@@ -177,27 +177,28 @@ def _convert_results(
         elif trace_column.type == AttributeKey.TYPE_FLOAT:
             converters[trace_column.name] = lambda x: AttributeValue(val_float=float(x))
 
-    res: list[FindTracesResponse.Trace] = []
+    res: list[GetTracesResponse.Trace] = []
     column_ordering = {
         trace_column.name: i for i, trace_column in enumerate(request.columns)
     }
 
     for row in data:
         values: defaultdict[
-            TraceColumn.Name, FindTracesResponse.Trace.Column
-        ] = defaultdict(FindTracesResponse.Trace.Column)
+            TraceColumn.Name, GetTracesResponse.Trace.Column
+        ] = defaultdict(GetTracesResponse.Trace.Column)
         for column_name, value in row.items():
             name = _NAME_TO_COLUMN[column_name]
             if name in converters.keys():
-                values[name] = FindTracesResponse.Trace.Column(
+                values[name] = GetTracesResponse.Trace.Column(
+                    name=name,
                     value=converters[name](value),
                 )
         res.append(
-            FindTracesResponse.Trace(
+            GetTracesResponse.Trace(
                 # we return the columns in the order they were requested
                 columns=sorted(
                     values.values(),
-                    key=lambda c: column_ordering.__getitem__(c.name),
+                    key=lambda c: column_ordering[c.name],
                 )
             )
         )
@@ -206,7 +207,7 @@ def _convert_results(
 
 
 def _get_page_token(
-    request: FindTracesRequest, response: list[FindTracesResponse.Trace]
+    request: GetTracesRequest, response: list[GetTracesResponse.Trace]
 ) -> PageToken:
     if not response:
         return PageToken(offset=0)
@@ -214,7 +215,7 @@ def _get_page_token(
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
-def _validate_order_by(in_msg: FindTracesRequest) -> None:
+def _validate_order_by(in_msg: GetTracesRequest) -> None:
     order_by_cols = set([ob.column.name for ob in in_msg.order_by])
     selected_columns = set([c.name for c in in_msg.columns])
     if not order_by_cols.issubset(selected_columns):
@@ -223,20 +224,20 @@ def _validate_order_by(in_msg: FindTracesRequest) -> None:
         )
 
 
-class EndpointFindTraces(RPCEndpoint[FindTracesRequest, FindTracesResponse]):
+class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     @classmethod
     def version(cls) -> str:
         return "v1"
 
     @classmethod
-    def request_class(cls) -> Type[FindTracesRequest]:
-        return FindTracesRequest
+    def request_class(cls) -> Type[GetTracesRequest]:
+        return GetTracesRequest
 
     @classmethod
-    def response_class(cls) -> Type[FindTracesResponse]:
-        return FindTracesResponse
+    def response_class(cls) -> Type[GetTracesResponse]:
+        return GetTracesResponse
 
-    def _execute(self, in_msg: FindTracesRequest) -> FindTracesResponse:
+    def _execute(self, in_msg: GetTracesRequest) -> GetTracesResponse:
         _validate_order_by(in_msg)
 
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
@@ -255,7 +256,7 @@ class EndpointFindTraces(RPCEndpoint[FindTracesRequest, FindTracesResponse]):
             [res],
             [self._timer],
         )
-        return FindTracesResponse(
+        return GetTracesResponse(
             traces=traces,
             page_token=_get_page_token(in_msg, traces),
             meta=response_meta,

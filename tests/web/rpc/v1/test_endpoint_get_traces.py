@@ -5,9 +5,9 @@ from typing import Any, Mapping
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_find_traces_pb2 import (
-    FindTracesRequest,
-    FindTracesResponse,
+from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
+    GetTracesRequest,
+    GetTracesResponse,
     TraceColumn,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
@@ -24,7 +24,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
-from snuba.web.rpc.v1.endpoint_find_traces import EndpointFindTraces
+from snuba.web.rpc.v1.endpoint_get_traces import EndpointGetTraces
 from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
@@ -134,11 +134,11 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-class TestFindTraces(BaseApiTest):
+class TestGetTraces(BaseApiTest):
     def test_no_data(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
-        message = FindTracesRequest(
+        message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -149,14 +149,14 @@ class TestFindTraces(BaseApiTest):
             ),
             columns=[
                 TraceColumn(
-                    name=TraceColumn.Name.TRACE_ID,
+                    name=TraceColumn.Name.NAME_TRACE_ID,
                     type=AttributeKey.TYPE_STRING,
                 )
             ],
             limit=10,
         )
         response = self.app.post(
-            "/rpc/EndpointFindTraces/v1", data=message.SerializeToString()
+            "/rpc/EndpointGetTraces/v1", data=message.SerializeToString()
         )
         error_proto = ErrorProto()
         if response.status_code != 200:
@@ -166,7 +166,7 @@ class TestFindTraces(BaseApiTest):
     def test_with_data_and_order_by(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         hour_ago = int((_BASE_TIME - timedelta(hours=1)).timestamp())
-        message = FindTracesRequest(
+        message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -178,26 +178,26 @@ class TestFindTraces(BaseApiTest):
             ),
             columns=[
                 TraceColumn(
-                    name=TraceColumn.Name.TRACE_ID,
+                    name=TraceColumn.Name.NAME_TRACE_ID,
                     type=AttributeKey.TYPE_STRING,
                 )
             ],
             order_by=[
-                FindTracesRequest.OrderBy(
+                GetTracesRequest.OrderBy(
                     column=TraceColumn(
-                        name=TraceColumn.Name.TRACE_ID,
+                        name=TraceColumn.Name.NAME_TRACE_ID,
                         type=AttributeKey.TYPE_STRING,
                     ),
                 ),
             ],
         )
-        response = EndpointFindTraces().execute(message)
-        expected_response = FindTracesResponse(
+        response = EndpointGetTraces().execute(message)
+        expected_response = GetTracesResponse(
             traces=[
-                FindTracesResponse.Trace(
+                GetTracesResponse.Trace(
                     columns=[
-                        FindTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.TRACE_ID,
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_TRACE_ID,
                             value=AttributeValue(
                                 val_str=trace_id,
                             ),
@@ -214,7 +214,7 @@ class TestFindTraces(BaseApiTest):
     def test_with_data_order_by_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         hour_ago = int((_BASE_TIME - timedelta(hours=1)).timestamp())
-        message = FindTracesRequest(
+        message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -226,27 +226,27 @@ class TestFindTraces(BaseApiTest):
             ),
             columns=[
                 TraceColumn(
-                    name=TraceColumn.Name.TRACE_ID,
+                    name=TraceColumn.Name.NAME_TRACE_ID,
                     type=AttributeKey.TYPE_STRING,
                 ),
             ],
             order_by=[
-                FindTracesRequest.OrderBy(
+                GetTracesRequest.OrderBy(
                     column=TraceColumn(
-                        name=TraceColumn.Name.TRACE_ID,
+                        name=TraceColumn.Name.NAME_TRACE_ID,
                         type=AttributeKey.TYPE_STRING,
                     ),
                 ),
             ],
             limit=1,
         )
-        response = EndpointFindTraces().execute(message)
-        expected_response = FindTracesResponse(
+        response = EndpointGetTraces().execute(message)
+        expected_response = GetTracesResponse(
             traces=[
-                FindTracesResponse.Trace(
+                GetTracesResponse.Trace(
                     columns=[
-                        FindTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.TRACE_ID,
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_TRACE_ID,
                             value=AttributeValue(
                                 val_str=sorted(_TRACE_IDS)[0],
                             ),
@@ -262,7 +262,7 @@ class TestFindTraces(BaseApiTest):
     def test_with_data_and_filter(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         hour_ago = int((_BASE_TIME - timedelta(hours=1)).timestamp())
-        message = FindTracesRequest(
+        message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
@@ -286,18 +286,18 @@ class TestFindTraces(BaseApiTest):
             ),
             columns=[
                 TraceColumn(
-                    name=TraceColumn.Name.TRACE_ID,
+                    name=TraceColumn.Name.NAME_TRACE_ID,
                     type=AttributeKey.TYPE_STRING,
                 ),
             ],
         )
-        response = EndpointFindTraces().execute(message)
-        expected_response = FindTracesResponse(
+        response = EndpointGetTraces().execute(message)
+        expected_response = GetTracesResponse(
             traces=[
-                FindTracesResponse.Trace(
+                GetTracesResponse.Trace(
                     columns=[
-                        FindTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.TRACE_ID,
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_TRACE_ID,
                             value=AttributeValue(
                                 val_str=_TRACE_IDS[0],
                             ),
@@ -308,4 +308,5 @@ class TestFindTraces(BaseApiTest):
             page_token=PageToken(offset=1),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
+        print(response, expected_response)
         assert response == expected_response
