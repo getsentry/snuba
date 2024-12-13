@@ -75,6 +75,18 @@ SHOW_QUERY_RE = re.compile(
     re.VERBOSE,
 )
 
+KILL_COMMAND_RE = re.compile(
+    r"""
+        ^
+        (KILL\sMUTATION\sWHERE)
+        \s
+        .*\s*=\s*.*
+        ;?
+        $
+    """,
+    re.IGNORECASE + re.VERBOSE,
+)
+
 SYSTEM_COMMAND_RE = re.compile(
     r"""
         ^
@@ -195,8 +207,9 @@ def is_system_command(sql_query: str) -> bool:
     Validates whether we are running something like SYSTEM STOP MERGES
     """
     sql_query = " ".join(sql_query.split())
-    match = SYSTEM_COMMAND_RE.match(sql_query)
-    return True if match else False
+    smatch = SYSTEM_COMMAND_RE.match(sql_query)
+    kmatch = KILL_COMMAND_RE.match(sql_query)
+    return True if smatch or kmatch else False
 
 
 def is_query_optimize(sql_query: str) -> bool:
