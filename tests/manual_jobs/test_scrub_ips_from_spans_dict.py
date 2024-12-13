@@ -14,7 +14,9 @@ from snuba.manual_jobs.runner import get_job_status, run_job
 from tests.helpers import write_processed_messages
 
 
-def generate_fizzbuzz_events(project_ids, base_time, minutes=5) -> None:
+def generate_fizzbuzz_events(
+    project_ids: list[int], base_time: datetime, minutes: int = 5
+) -> None:
     """
     Generate a deterministic set of events across a time range.
     """
