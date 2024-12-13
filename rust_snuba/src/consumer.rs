@@ -47,7 +47,7 @@ pub fn consumer(
     batch_write_timeout_ms: Option<u64>,
     max_bytes_before_external_group_by: Option<usize>,
     max_dlq_buffer_length: Option<usize>,
-) {
+) -> usize {
     py.allow_threads(|| {
         consumer_impl(
             consumer_group,
@@ -68,7 +68,7 @@ pub fn consumer(
             mutations_mode,
             max_dlq_buffer_length,
         )
-    });
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
