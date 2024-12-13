@@ -308,5 +308,4 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=1),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
-        print(response, expected_response)
         assert response == expected_response
