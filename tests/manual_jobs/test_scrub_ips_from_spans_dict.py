@@ -11,6 +11,7 @@ from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.runner import get_job_status, run_job
+from snuba.manual_jobs.scrub_ips_from_spans_dictionary import _DICTIONARY_NAME
 from tests.helpers import write_processed_messages
 
 
@@ -164,6 +165,7 @@ def test_do_the_thing() -> None:
         "SELECT groupBitAnd(has(sentry_tags.value, '0.0.0.0')) FROM spans_local WHERE project_id IN [3, 4, 5]"
     )
     assert res.results[0][0] == 1
+    connection.execute(f"DROP DICTIONARY {_DICTIONARY_NAME}")
 
 
 @pytest.mark.parametrize(
