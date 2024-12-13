@@ -32,22 +32,16 @@ AND _sort_timestamp > toDateTime('{start_datetime}')
 AND _sort_timestamp <= toDateTime('{end_datetime}')"""
 
     def execute(self, logger: JobLogger) -> None:
-        print("isitevenexecuting")
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
-        print(1)
         storage_node = cluster.get_local_nodes()[0]
-        print(2)
         connection = cluster.get_node_connection(
             ClickhouseClientSettings.CLEANUP, storage_node
         )
-        print(3)
         if not cluster.is_single_node():
             cluster_name = cluster.get_clickhouse_cluster_name()
         else:
             cluster_name = None
-        print(4)
         query = self._get_query(cluster_name)
-        print("queryyyyy", query)
         logger.info("Executing query: {query}")
         result = connection.execute(query=query, settings={"mutations_sync": 0})
         logger.info("complete")

@@ -1,10 +1,9 @@
 import random
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 import pytest
-from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
@@ -12,40 +11,21 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeAggregation,
-    AttributeKey,
-    AttributeValue,
-    ExtrapolationMode,
-    Function,
-    VirtualColumnContext,
-)
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
-    ComparisonFilter,
-    ExistsFilter,
-    OrFilter,
-    TraceItemFilter,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 
-from snuba.datasets.processors.replays_processor import to_datetime
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs import JobSpec
 from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.runner import get_job_status, run_job
 from snuba.manual_jobs.scrub_ips_from_eap_spans import ScrubIpFromEAPSpans
-from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
-from snuba.web.rpc.v1.endpoint_trace_item_table import (
-    EndpointTraceItemTable,
-    _apply_labels_to_columns,
-)
-from tests.base import BaseApiTest
+from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable
 from tests.helpers import write_raw_unprocessed_events
 
 _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
@@ -131,7 +111,7 @@ def test_generate_query() -> None:
         job._get_query(None)
         == """ALTER TABLE eap_spans_2_local
 
-UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)))
+UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`)
 WHERE organization_id IN [1,3,5,6]
 AND _sort_timestamp > toDateTime('2024-12-01T00:00:00')
 AND _sort_timestamp <= toDateTime('2024-12-10T00:00:00')"""
