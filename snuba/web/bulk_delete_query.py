@@ -211,7 +211,7 @@ def delete_from_tables(
 
     storage_name = storage.get_storage_key().value
     project_id = attribution_info.tenant_ids.get("project_id")
-    if project_id and should_use_killswitch(storage_name, project_id):
+    if project_id and should_use_killswitch(storage_name, str(project_id)):
         return result
 
     delete_query: DeleteQueryMessage = {
@@ -232,8 +232,8 @@ def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
     return combine_or_conditions([_construct_condition(cond) for cond in conditions])
 
 
-def should_use_killswitch(storage_name: str, project_id: int):
+def should_use_killswitch(storage_name: str, project_id: str) -> bool:
     killswitch_config = get_str_config(
         f"lw_deletes_killswitch_{storage_name}", default=""
     )
-    return str(project_id) in killswitch_config
+    return project_id in killswitch_config if killswitch_config else False
