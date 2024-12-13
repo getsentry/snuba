@@ -135,6 +135,7 @@ def run_job(job_spec: JobSpec) -> JobStatus:
             current_job_status = _set_job_status(job_spec.job_id, JobStatus.FINISHED)
             job_logger.info("[runner] job execution finished")
     except BaseException as e:
+        print("errorrrrr", e)
         current_job_status = _set_job_status(job_spec.job_id, JobStatus.FAILED)
         job_logger.error("[runner] job execution failed")
         job_logger.info(f"[runner] exception {traceback.format_exc()}")

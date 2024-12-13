@@ -26,14 +26,14 @@ class ScrubIpFromEAPSpans(Job):
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""ALTER TABLE eap_spans_2_local
 {on_cluster}
-UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)))
+UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`)
 WHERE organization_id IN [{organization_ids}]
 AND _sort_timestamp > toDateTime('{start_datetime}')
 AND _sort_timestamp <= toDateTime('{end_datetime}')"""
 
     def execute(self, logger: JobLogger) -> None:
         print("isitevenexecuting")
-        cluster = get_cluster(StorageSetKey.EAP_SPANS)
+        cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
         print(1)
         storage_node = cluster.get_local_nodes()[0]
         print(2)

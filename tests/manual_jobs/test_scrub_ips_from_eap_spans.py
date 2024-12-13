@@ -1,17 +1,7 @@
-import pytest
-from snuba.datasets.processors.replays_processor import to_datetime
-
-from snuba.manual_jobs import JobSpec
-from snuba.manual_jobs.job_status import JobStatus
-from snuba.manual_jobs.runner import get_job_status, run_job
-from snuba.manual_jobs.scrub_ips_from_eap_spans import ScrubIpFromEAPSpans
-from tests.helpers import write_raw_unprocessed_events
-from datetime import datetime
-from typing import Any, Mapping
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
-
+from typing import Any, Mapping
 
 import pytest
 from google.protobuf.json_format import MessageToDict, ParseDict
@@ -43,8 +33,13 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
+from snuba.datasets.processors.replays_processor import to_datetime
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
+from snuba.manual_jobs import JobSpec
+from snuba.manual_jobs.job_status import JobStatus
+from snuba.manual_jobs.runner import get_job_status, run_job
+from snuba.manual_jobs.scrub_ips_from_eap_spans import ScrubIpFromEAPSpans
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.endpoint_trace_item_table import (
     EndpointTraceItemTable,
@@ -221,6 +216,7 @@ def _gen_message(
         "end_timestamp_precise": dt.timestamp() + 1,
     }
 
+
 def _generate_request(ts: Any, hour_ago: int) -> TraceItemTableRequest:
     return TraceItemTableRequest(
         meta=RequestMeta(
@@ -238,27 +234,24 @@ def _generate_request(ts: Any, hour_ago: int) -> TraceItemTableRequest:
             )
         ),
         columns=[
-            Column(
-                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
-            )
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name"))
         ],
         order_by=[
             TraceItemTableRequest.OrderBy(
                 column=Column(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING, name="server_name"
-                    )
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="server_name")
                 )
             )
         ],
     )
 
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_span_is_scrubbed() -> None:
-    BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
-        minutes=180
-    )
+    BASE_TIME = datetime.utcnow().replace(
+        minute=0, second=0, microsecond=0
+    ) - timedelta(minutes=180)
     spans_storage = get_storage(StorageKey("eap_spans"))
     start = BASE_TIME
     messages = [_gen_message(start - timedelta(minutes=i)) for i in range(2)]
@@ -279,7 +272,7 @@ def test_span_is_scrubbed() -> None:
         page_token=PageToken(offset=2),
         meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
     )
-    assert response == expected_response # type: ignore
+    assert response == expected_response  # type: ignore
 
     run_job(
         JobSpec(
