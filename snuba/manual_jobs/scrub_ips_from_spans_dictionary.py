@@ -5,7 +5,7 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
 
-_DICTIONARY_NAME = "project_ids_to_scrub"
+_DICTIONARY_NAME = "default.project_ids_to_scrub"
 
 
 class ScrubIpFromSentryTagsDictionary(Job):
@@ -23,8 +23,8 @@ class ScrubIpFromSentryTagsDictionary(Job):
         self._mutations_sync = params.get("mutations_sync", 0)
 
     def _get_query(self, cluster_name: str | None) -> str:
-        start_datetime = self._start_datetime.isoformat()
-        end_datetime = self._end_datetime.isoformat()
+        start_datetime = self._start_datetime.strftime("%Y-%m-%dT%H:%M:%S")
+        end_datetime = self._end_datetime.strftime("%Y-%m-%dT%H:%M:%S")
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""ALTER TABLE spans_local
 {on_cluster}
@@ -37,7 +37,7 @@ AND end_timestamp < toDateTime('{end_datetime}')"""
         project_ids_str = ",".join([str(p) for p in self._project_ids])
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""
-            CREATE DICTIONARY IF NOT EXISTS default.{_DICTIONARY_NAME}
+            CREATE OR REPLACE DICTIONARY {_DICTIONARY_NAME}
             {on_cluster}
             (
                 project_id UInt64
@@ -45,7 +45,7 @@ AND end_timestamp < toDateTime('{end_datetime}')"""
             PRIMARY KEY project_id
             SOURCE(
                 CLICKHOUSE(
-                    QUERY 'SELECT [{project_ids_str}]'
+                    QUERY 'SELECT arrayJoin([{project_ids_str}])'
                 )
             )
             LIFETIME(MIN 1 MAX 100000)
@@ -62,10 +62,6 @@ AND end_timestamp < toDateTime('{end_datetime}')"""
             cluster_name = cluster.get_clickhouse_cluster_name()
         else:
             cluster_name = None
-
-        import pdb
-
-        pdb.set_trace()
         connection.execute(
             query=self._dictionary_query(cluster_name), settings={"mutations_sync": 2}
         )
