@@ -42,6 +42,7 @@ AND _sort_timestamp <= toDateTime('{end_datetime}')"""
         else:
             cluster_name = None
         query = self._get_query(cluster_name)
+        print("queryyyyy", query)
         logger.info("Executing query: {query}")
         result = connection.execute(query=query, settings={"mutations_sync": 0})
         logger.info("complete")

@@ -125,6 +125,13 @@ def _gen_message(
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
+    start_timestamp_ms = int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200))
+    start_timestamp_ms_str = datetime.utcfromtimestamp(start_timestamp_ms / 1000)
+    print(
+        "start_timestamp_ms inserted into eap",
+        start_timestamp_ms,
+        start_timestamp_ms_str,
+    )
     return {
         "description": "/api/0/relays/projectconfigs/",
         "duration_ms": 152,
@@ -233,8 +240,7 @@ def test_span_is_scrubbed() -> None:
         minute=0, second=0, microsecond=0
     ) - timedelta(minutes=180)
     spans_storage = get_storage(StorageKey("eap_spans"))
-    start = BASE_TIME
-    messages = [_gen_message(start - timedelta(minutes=i)) for i in range(2)]
+    messages = [_gen_message(BASE_TIME - timedelta(minutes=i)) for i in range(120)]
     write_raw_unprocessed_events(spans_storage, messages)
 
     ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -246,13 +252,13 @@ def test_span_is_scrubbed() -> None:
         column_values=[
             TraceItemColumnValues(
                 attribute_name="server_name",
-                results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(2)],
+                results=[AttributeValue(val_str=_SERVER_NAME) for _ in range(60)],
             )
         ],
-        page_token=PageToken(offset=2),
+        page_token=PageToken(offset=60),
         meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
     )
-    assert response == expected_response  # type: ignore
+    assert response == expected_response
 
     run_job(
         JobSpec(
@@ -266,7 +272,8 @@ def test_span_is_scrubbed() -> None:
             },
         )
     )
-    message = _generate_request(ts, hour_ago)
-    response = EndpointTraceItemTable().execute(message)
     print(response)
-    assert False
+    assert response == TraceItemTableResponse(
+        page_token=PageToken(offset=0),
+        meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+    )
