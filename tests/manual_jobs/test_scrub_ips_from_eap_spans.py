@@ -198,10 +198,13 @@ def _gen_message(
     }
 
 
-def _generate_request(ts: Any, hour_ago: int) -> TraceItemTableRequest:
+def _generate_request(
+    ts: Any, hour_ago: int, project_ids: list[int]
+) -> TraceItemTableRequest:
+    # project_ids is added as an argument to avoid this query getting cached
     return TraceItemTableRequest(
         meta=RequestMeta(
-            project_ids=[1, 2, 3],
+            project_ids=project_ids,
             organization_id=1,
             cogs_category="something",
             referrer="something",
@@ -239,8 +242,9 @@ def test_span_is_scrubbed() -> None:
 
     ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
     hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
-    message = _generate_request(ts, hour_ago)
-    response = EndpointTraceItemTable().execute(message)
+    response = EndpointTraceItemTable().execute(
+        _generate_request(ts, hour_ago, [1, 2, 3])
+    )
     expected_response = TraceItemTableResponse(
         column_values=[
             TraceItemColumnValues(
@@ -271,7 +275,9 @@ def test_span_is_scrubbed() -> None:
         )
     )
 
-    print(response)
+    response = EndpointTraceItemTable().execute(
+        _generate_request(ts, hour_ago, [3, 2, 1])
+    )
     assert response == TraceItemTableResponse(
         column_values=[
             TraceItemColumnValues(

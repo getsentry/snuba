@@ -42,27 +42,8 @@ AND _sort_timestamp <= toDateTime('{end_datetime}')"""
         else:
             cluster_name = None
         query = self._get_query(cluster_name)
-        print("queryyyy", query)
         logger.info("Executing query: {query}")
         result = connection.execute(query=query, settings={"mutations_sync": 0})
-
-        # this shows all the user.ip are scrubbed, so the mapping works
-        print(
-            "mapApplyresult",
-            connection.execute(
-                query="SELECT mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`) from eap_spans_2_local",
-                settings={"mutations_sync": 0},
-            ),
-        )
-
-        # this shows the table is not updated even though the mapping is correct
-        print(
-            "selectresult",
-            connection.execute(
-                query="SELECT attr_str_1 from eap_spans_2_local LIMIT 1",
-                settings={"mutations_sync": 0},
-            ),
-        )
 
         logger.info("complete")
         logger.info(repr(result))
