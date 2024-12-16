@@ -25,11 +25,11 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.UPTIME_MONITORS,
-                table_name="uptime_monitors_local",
+                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
+                table_name="uptime_monitor_checks_local",
                 columns=raw_columns,
                 engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.UPTIME_MONITORS,
+                    storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
                     order_by="(project_id, timestamp, uptime_subscription_id, uptime_check_id)",
                     partition_by="(toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
@@ -40,19 +40,19 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.UPTIME_MONITORS,
-                table_name="uptime_monitors_local",
+                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
+                table_name="uptime_monitor_checks_local",
             ),
         ]
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.UPTIME_MONITORS,
-                table_name="uptime_monitors_dist",
+                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
+                table_name="uptime_monitor_checks_dist",
                 columns=raw_columns,
                 engine=table_engines.Distributed(
-                    local_table_name="uptime_monitors_local",
+                    local_table_name="uptime_monitor_checks_local",
                     sharding_key="cityHash64(uptime_check_id)",
                 ),
             ),
@@ -61,7 +61,7 @@ class Migration(migration.ClickhouseNodeMigrationLegacy):
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.UPTIME_MONITORS,
-                table_name="uptime_monitors_dist",
+                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
+                table_name="uptime_monitor_checks_dist",
             ),
         ]

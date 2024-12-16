@@ -29,7 +29,7 @@ for minute in range(24 * 60 * 90):  # 24 hours * 60 minutes * 90 days
 
 # Insert data into ClickHouse using HTTP API
 query = """
-INSERT INTO default.uptime_monitors_local (
+INSERT INTO default.uptime_monitor_checks_local (
     project_id, environment_id, uptime_subscription_id, timestamp,
     uptime_check_id, duration, location_id, status, timeout_at, trace_id
 ) FORMAT JSONEachRow
@@ -42,6 +42,6 @@ response = requests.post(
 )
 
 if response.status_code == 200:
-    print(f"Successfully inserted {len(data)} records into uptime_monitors_local")
+    print(f"Successfully inserted {len(data)} records into uptime_monitor_checks_local")
 else:
     print(f"Error inserting data: {response.text}")

@@ -1,9 +1,9 @@
 version: v1
 kind: writable_storage
-name: uptime_monitors
+name: uptime_monitor_checks
 storage:
-  key: uptime_monitors
-  set_key: uptime_monitors
+  key: uptime_monitor_checks
+  set_key: uptime_monitor_checks
 readiness_state: limited
 schema:
   columns:
@@ -19,17 +19,17 @@ schema:
       { name: timeout_at, type: DateTime },
       { name: trace_id, type: UUID },
     ]
-  local_table_name: uptime_monitors_local
-  dist_table_name: uptime_monitors_dist
+  local_table_name: uptime_monitor_checks_local
+  dist_table_name: uptime_monitor_checks_dist
 
 
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 
 stream_loader:
-  processor: UptimeMonitorsProcessor
-  default_topic: snuba-uptime-monitors-events
-  dlq_topic: snuba-dead-letter-uptime-monitors
+  processor: UptimeMonitorChecksProcessor
+  default_topic: snuba-uptime-monitor-checks
+  dlq_topic: snuba-dead-letter-uptime-monitor-checks
 
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy

@@ -9,7 +9,7 @@ mod querylog;
 mod release_health_metrics;
 mod replays;
 mod spans;
-mod uptime_monitors;
+mod uptime_monitor_checks;
 mod utils;
 use crate::config::ProcessorConfig;
 use crate::types::{InsertBatch, InsertOrReplacement, KafkaMessageMetadata};
@@ -54,7 +54,7 @@ define_processing_functions! {
     ("ProfilesMessageProcessor", "processed-profiles", ProcessingFunctionType::ProcessingFunction(profiles::process_message)),
     ("QuerylogProcessor", "snuba-queries", ProcessingFunctionType::ProcessingFunction(querylog::process_message)),
     ("ReplaysProcessor", "ingest-replay-events", ProcessingFunctionType::ProcessingFunction(replays::process_message)),
-    ("UptimeMonitorsProcessor", "snuba-uptime-monitors-events", ProcessingFunctionType::ProcessingFunction(uptime_monitors::process_message)),
+    ("UptimeMonitorChecksProcessor", "snuba-uptime-monitor-checks", ProcessingFunctionType::ProcessingFunction(uptime_monitor_checks::process_message)),
     ("SpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(spans::process_message)),
     ("EAPSpansMessageProcessor", "snuba-spans", ProcessingFunctionType::ProcessingFunction(eap_spans::process_message)),
     ("OutcomesProcessor", "outcomes", ProcessingFunctionType::ProcessingFunction(outcomes::process_message)),

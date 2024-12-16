@@ -3,4 +3,4 @@ kind: dataset
 name: spans
 
 entities:
-  - uptime_monitors
+  - uptime_monitor_checks
