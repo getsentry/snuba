@@ -113,8 +113,8 @@ def test_generate_query() -> None:
 
 UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`)
 WHERE organization_id IN [1,3,5,6]
-AND _sort_timestamp > toDateTime('2024-12-01T00:00:00')
-AND _sort_timestamp <= toDateTime('2024-12-10T00:00:00')"""
+AND _sort_timestamp >= toDateTime('2024-12-01T00:00:00')
+AND _sort_timestamp < toDateTime('2024-12-10T00:00:00')"""
     )
 
 

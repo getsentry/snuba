@@ -28,8 +28,8 @@ class ScrubIpFromEAPSpans(Job):
 {on_cluster}
 UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`)
 WHERE organization_id IN [{organization_ids}]
-AND _sort_timestamp > toDateTime('{start_datetime}')
-AND _sort_timestamp <= toDateTime('{end_datetime}')"""
+AND _sort_timestamp >= toDateTime('{start_datetime}')
+AND _sort_timestamp < toDateTime('{end_datetime}')"""
 
     def execute(self, logger: JobLogger) -> None:
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
