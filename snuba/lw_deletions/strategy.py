@@ -74,7 +74,7 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
         return AttributionInfo(
             app_id=AppID("lw-deletes"),
             # concurrent allocation policies requires project or org id
-            tenant_ids={"organization_id": 1},
+            tenant_ids={"project_id": 1},
             referrer="lw-deletes",
             team=None,
             feature=None,
