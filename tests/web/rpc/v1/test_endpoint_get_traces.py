@@ -1,5 +1,6 @@
 import random
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
@@ -36,6 +37,7 @@ _BASE_TIME = datetime.now(tz=timezone.utc).replace(
     second=0,
     microsecond=0,
 ) - timedelta(minutes=180)
+_SPAN_COUNT = 120
 
 
 def gen_message(
@@ -43,13 +45,14 @@ def gen_message(
     trace_id: str,
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
+    span_op: str = "http.server",
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
     return {
         "description": "/api/0/relays/projectconfigs/",
         "duration_ms": 152,
-        "event_id": "d826225de75d42d6b2f01b957d51f18f",
+        "event_id": uuid.uuid4().hex,
         "exclusive_time_ms": 0.228,
         "is_segment": True,
         "data": {
@@ -81,7 +84,7 @@ def gen_message(
         "sentry_tags": {
             "category": "http",
             "environment": "development",
-            "op": "http.server",
+            "op": span_op,
             "platform": "python",
             "release": _RELEASE_TAG,
             "sdk.name": "sentry.python.django",
@@ -96,7 +99,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": "123456781234567D",
+        "span_id": uuid.uuid4().hex[:16],
         "tags": {
             "http.status_code": "200",
             "relay_endpoint_version": "3",
@@ -118,18 +121,20 @@ def gen_message(
     }
 
 
+_SPANS = [
+    gen_message(
+        dt=_BASE_TIME - timedelta(minutes=i),
+        trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
+        span_op="http.server" if i < len(_TRACE_IDS) else "db",
+    )
+    for i in range(_SPAN_COUNT)
+]
+
+
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
-    start = _BASE_TIME
-    messages = [
-        gen_message(
-            dt=start - timedelta(minutes=i),
-            trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
-        )
-        for i in range(120)
-    ]
-    write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(spans_storage, _SPANS)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -180,7 +185,7 @@ class TestGetTraces(BaseApiTest):
                 TraceColumn(
                     name=TraceColumn.Name.NAME_TRACE_ID,
                     type=AttributeKey.TYPE_STRING,
-                )
+                ),
             ],
             order_by=[
                 GetTracesRequest.OrderBy(
@@ -306,6 +311,102 @@ class TestGetTraces(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=1),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+        )
+        assert response == expected_response
+
+    def test_with_data_and_order_by_and_aggregated_fields(
+        self, setup_teardown: Any
+    ) -> None:
+        ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
+        three_hours_ago = int((_BASE_TIME - timedelta(hours=3)).timestamp())
+        start_timestamp_per_trace_id = defaultdict(lambda: 2 * 1e10)
+        for s in _SPANS:
+            start_timestamp_per_trace_id[s["trace_id"]] = min(
+                start_timestamp_per_trace_id[s["trace_id"]],
+                s["start_timestamp_precise"],
+            )
+        message = GetTracesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=three_hours_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            ),
+            columns=[
+                TraceColumn(
+                    name=TraceColumn.Name.NAME_TRACE_ID,
+                    type=AttributeKey.TYPE_STRING,
+                ),
+                TraceColumn(
+                    name=TraceColumn.Name.NAME_START_TIMESTAMP,
+                    type=AttributeKey.TYPE_FLOAT,
+                ),
+                TraceColumn(
+                    name=TraceColumn.Name.NAME_TOTAL_SPAN_COUNT,
+                    type=AttributeKey.TYPE_INT,
+                ),
+                TraceColumn(
+                    name=TraceColumn.Name.NAME_FILTERED_SPAN_COUNT,
+                    type=AttributeKey.TYPE_INT,
+                ),
+            ],
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        name="sentry.op",
+                        type=AttributeKey.TYPE_STRING,
+                    ),
+                    op=ComparisonFilter.OP_EQUALS,
+                    value=AttributeValue(val_str="db"),
+                ),
+            ),
+            order_by=[
+                GetTracesRequest.OrderBy(
+                    column=TraceColumn(
+                        name=TraceColumn.Name.NAME_TRACE_ID,
+                        type=AttributeKey.TYPE_STRING,
+                    ),
+                ),
+            ],
+        )
+        response = EndpointGetTraces().execute(message)
+        expected_response = GetTracesResponse(
+            traces=[
+                GetTracesResponse.Trace(
+                    columns=[
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_TRACE_ID,
+                            value=AttributeValue(
+                                val_str=trace_id,
+                            ),
+                        ),
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_START_TIMESTAMP,
+                            value=AttributeValue(
+                                val_float=start_timestamp_per_trace_id[trace_id],
+                            ),
+                        ),
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_TOTAL_SPAN_COUNT,
+                            value=AttributeValue(
+                                val_int=_SPAN_COUNT // len(_TRACE_IDS),
+                            ),
+                        ),
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_FILTERED_SPAN_COUNT,
+                            value=AttributeValue(
+                                val_int=(_SPAN_COUNT // len(_TRACE_IDS)) - 1,
+                            ),
+                        ),
+                    ],
+                )
+                for trace_id in sorted(_TRACE_IDS)
+            ],
+            page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
         assert response == expected_response

@@ -42,6 +42,8 @@ _DEFAULT_ROW_LIMIT = 10_000
 _COLUMN_TO_NAME: dict[TraceColumn.Name, str] = {
     TraceColumn.Name.NAME_TRACE_ID: "trace_id",
     TraceColumn.Name.NAME_START_TIMESTAMP: "start_timestamp",
+    TraceColumn.Name.NAME_TOTAL_SPAN_COUNT: "total_span_count",
+    TraceColumn.Name.NAME_FILTERED_SPAN_COUNT: "filtered_span_count",
 }
 
 _NAME_TO_COLUMN: dict[str, TraceColumn.Name] = {
@@ -66,7 +68,17 @@ _POSSIBLE_TYPES: dict[TraceColumn.Name, set[AttributeKey.Type]] = {
 }
 
 
-def _column_to_expression(trace_column: TraceColumn) -> Expression:
+def _column_to_expression(trace_column: TraceColumn, conditions=None) -> Expression:
+    if trace_column.name == TraceColumn.Name.NAME_TOTAL_SPAN_COUNT:
+        return f.count(alias="total_span_count")
+    if trace_column.name == TraceColumn.Name.NAME_FILTERED_SPAN_COUNT:
+        return f.countIf(conditions, alias="filtered_span_count")
+    if trace_column.name == TraceColumn.Name.NAME_START_TIMESTAMP:
+        return f.CAST(
+            f.min(column("start_timestamp")),
+            _TYPES_TO_CLICKHOUSE[trace_column.type],
+            alias=_COLUMN_TO_NAME[trace_column.name],
+        )
     if (
         trace_column.name in _COLUMN_TO_NAME
         and trace_column.type in _POSSIBLE_TYPES.get(trace_column.name, {})
@@ -99,16 +111,11 @@ def _convert_order_by(
 
 
 def _build_query(request: GetTracesRequest) -> Query:
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
-
+    trace_item_filter_expressions = trace_item_filters_to_expression(request.filter)
     selected_columns = []
 
     for trace_column in request.columns:
-        expression = _column_to_expression(trace_column)
+        expression = _column_to_expression(trace_column, trace_item_filter_expressions)
         selected_columns.append(
             SelectedExpression(
                 name=_COLUMN_TO_NAME[trace_column.name],
@@ -116,12 +123,16 @@ def _build_query(request: GetTracesRequest) -> Query:
             )
         )
 
+    entity = Entity(
+        key=EntityKey("eap_spans"),
+        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+        sample=None,
+    )
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
         condition=base_conditions_and(
             request.meta,
-            trace_item_filters_to_expression(request.filter),
         ),
         order_by=_convert_order_by(request.order_by),
         groupby=[
@@ -134,7 +145,9 @@ def _build_query(request: GetTracesRequest) -> Query:
         ],
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
     )
+
     treeify_or_and_conditions(res)
+
     return res
 
 
@@ -184,7 +197,8 @@ def _convert_results(
 
     for row in data:
         values: defaultdict[
-            TraceColumn.Name, GetTracesResponse.Trace.Column
+            TraceColumn.Name,
+            GetTracesResponse.Trace.Column,
         ] = defaultdict(GetTracesResponse.Trace.Column)
         for column_name, value in row.items():
             name = _NAME_TO_COLUMN[column_name]
