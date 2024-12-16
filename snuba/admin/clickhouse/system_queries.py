@@ -93,7 +93,7 @@ SYSTEM_COMMAND_RE = re.compile(
         (SYSTEM)
         \s
         (?!SHUTDOWN\b)(?!KILL\b)
-        [\w\s]+
+        [\w\s'-_]+
         ;? # Optional semicolon
         $
     """,
@@ -104,7 +104,7 @@ OPTIMIZE_QUERY_RE = re.compile(
     r"""^
         (OPTIMIZE\sTABLE)
         \s
-        [\w\s]+
+        [\w\s_-']+
         ;? # Optional semicolon
         $
     """,
