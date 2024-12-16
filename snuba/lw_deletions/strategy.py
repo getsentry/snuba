@@ -73,7 +73,8 @@ class FormatQuery(ProcessingStrategy[ValuesBatch[KafkaPayload]]):
     def _get_attribute_info(self) -> AttributionInfo:
         return AttributionInfo(
             app_id=AppID("lw-deletes"),
-            tenant_ids={},
+            # concurrent allocation policies requires project or org id
+            tenant_ids={"organization_id": 1},
             referrer="lw-deletes",
             team=None,
             feature=None,
