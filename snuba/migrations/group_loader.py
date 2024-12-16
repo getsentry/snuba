@@ -176,3 +176,8 @@ class GroupAttributesLoader(DirectoryLoader):
 class ProfileChunksLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.profile_chunks")
+
+
+class UptimeMonitorsLoader(DirectoryLoader):
+    def __init__(self) -> None:
+        super().__init__("snuba.snuba_migrations.uptime_monitors")

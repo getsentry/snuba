@@ -20,6 +20,7 @@ _HARDCODED_STORAGE_SET_KEYS = {
     "EVENTS_ANALYTICS_PLATFORM": "events_analytics_platform",
     "GROUP_ATTRIBUTES": "group_attributes",
     "PROFILE_CHUNKS": "profile_chunks",
+    "UPTIME_MONITORS": "uptime_monitors",
 }
 
 
