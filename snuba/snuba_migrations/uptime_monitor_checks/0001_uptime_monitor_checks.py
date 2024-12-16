@@ -1,67 +1,73 @@
-from typing import Sequence
+from typing import List, Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, UInt
+from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
+from snuba.migrations.operations import OperationTarget, SqlOperation
 
-raw_columns: Sequence[Column[Modifiers]] = [
+storage_set = StorageSetKey.UPTIME_MONITOR_CHECKS
+table_prefix = "uptime_monitor_checks"
+local_table_name = f"{table_prefix}_local"
+dist_table_name = f"{table_prefix}_dist"
+
+
+# do i need any of the domain or mutable info in postgres?
+columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
-    Column("environment_id", UInt(64, Modifiers(nullable=True))),
+    Column("environment_id", String(Modifiers(nullable=True))),
     Column("uptime_subscription_id", UInt(64)),
     Column("timestamp", DateTime()),
     Column("uptime_check_id", UUID()),
     Column("duration", UInt(32)),
     Column("location_id", UInt(32, Modifiers(nullable=True))),
     Column("status", UInt(16)),
-    Column("timeout_at", UInt(16)),
+    Column("timeout", UInt(16)),
     Column("trace_id", UUID()),
 ]
 
 
-class Migration(migration.ClickhouseNodeMigrationLegacy):
+class Migration(migration.ClickhouseNodeMigration):
     blocking = False
 
-    def forwards_local(self) -> Sequence[operations.SqlOperation]:
+    def forwards_ops(self) -> Sequence[SqlOperation]:
         return [
             operations.CreateTable(
-                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
-                table_name="uptime_monitor_checks_local",
-                columns=raw_columns,
+                storage_set=storage_set,
+                table_name=local_table_name,
+                columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
-                    order_by="(project_id, timestamp, uptime_subscription_id, uptime_check_id)",
+                    # is this the right order by? what about tostartOfDay?
+                    # should environment be in the order by?
+                    order_by="(project_id, uptime_subscription_id, timestamp, uptime_check_id)",
                     partition_by="(toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
+                    storage_set=storage_set,
                 ),
+                target=OperationTarget.LOCAL,
             ),
-        ]
-
-    def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
-                table_name="uptime_monitor_checks_local",
-            ),
-        ]
-
-    def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
             operations.CreateTable(
-                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
-                table_name="uptime_monitor_checks_dist",
-                columns=raw_columns,
+                storage_set=storage_set,
+                table_name=dist_table_name,
+                columns=columns,
                 engine=table_engines.Distributed(
-                    local_table_name="uptime_monitor_checks_local",
+                    local_table_name=local_table_name,
                     sharding_key="cityHash64(uptime_check_id)",
                 ),
+                target=OperationTarget.DISTRIBUTED,
             ),
         ]
 
-    def backwards_dist(self) -> Sequence[operations.SqlOperation]:
+    def backwards_ops(self) -> Sequence[SqlOperation]:
         return [
             operations.DropTable(
-                storage_set=StorageSetKey.UPTIME_MONITOR_CHECKS,
-                table_name="uptime_monitor_checks_dist",
+                storage_set=storage_set,
+                table_name=dist_table_name,
+                target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.DropTable(
+                storage_set=storage_set,
+                table_name=local_table_name,
+                target=OperationTarget.LOCAL,
             ),
         ]
