@@ -16,7 +16,7 @@ schema:
       { name: duration, type: UInt, args: { size: 32 } },
       { name: location_id, type: UInt, args: { schema_modifiers: [nullable], size: 32 } },
       { name: status, type: UInt, args: { size: 16 } },
-      { name: timeout_at, type: DateTime },
+      { name: timeout, type: UInt, args: { size: 16 } },
       { name: trace_id, type: UUID },
     ]
   local_table_name: uptime_monitor_checks_local
