@@ -110,6 +110,7 @@ def test_invalid_system_query(sql_query: str) -> None:
         ("SYSSSSSSSTEM DO SOMETHING", False),
         ("SYSTEM STOP MERGES", True),
         ("SYSTEM STOP TTL MERGES", True),
+        ("SYSTEM STOP TTL MERGES ON CLUSTER 'snuba-spans'", True),
         ("KILL MUTATION WHERE mutation_id='0000000000'", True),
         ("system STOP MerGes", True),
         ("system SHUTDOWN", False),
