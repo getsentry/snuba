@@ -48,7 +48,7 @@ class ExtrapolationMeta:
         """
         confidence_interval = None
         average_sample_rate = 0
-        sample_count = None
+        sample_count = 0
         is_percentile = False
         percentile = 0.0
         granularity = 0.0
