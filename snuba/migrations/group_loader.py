@@ -178,6 +178,6 @@ class ProfileChunksLoader(DirectoryLoader):
         super().__init__("snuba.snuba_migrations.profile_chunks")
 
 
-class UptimeMonitorsLoader(DirectoryLoader):
+class UptimeMonitorChecksLoader(DirectoryLoader):
     def __init__(self) -> None:
-        super().__init__("snuba.snuba_migrations.uptime_monitors")
+        super().__init__("snuba.snuba_migrations.uptime_monitor_checks")

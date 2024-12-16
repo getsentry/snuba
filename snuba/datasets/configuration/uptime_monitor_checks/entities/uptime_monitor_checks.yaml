@@ -1,6 +1,6 @@
 version: v1
 kind: entity
-name: uptime_monitors
+name: uptime_monitor_checks
 schema:
   [
     { name: project_id, type: UInt, args: { size: 64 } },
@@ -17,7 +17,7 @@ schema:
 required_time_column: timestamp
 
 storages:
-  - storage: uptime_monitors
+  - storage: uptime_monitor_checks
     is_writable: true
 
 storage_selector:
