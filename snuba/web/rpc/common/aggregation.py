@@ -233,10 +233,12 @@ def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Express
         referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
-    field = attribute_key_to_expression(aggregation.key)
     return f.divide(
-        f.count(field),
-        f.sumIf(sampling_weight_column, get_field_existence_expression(aggregation)),
+        f.sumIf(sign_column, get_field_existence_expression(aggregation)),
+        f.sumIf(
+            f.multiply(sign_column, sampling_weight_column),
+            get_field_existence_expression(aggregation),
+        ),
         alias=alias,
     )
 
