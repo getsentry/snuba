@@ -538,3 +538,64 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 ],
             ),
         ]
+
+    def test_average_sampling_rate(self) -> None:
+        granularity_secs = 120
+        query_duration = 3600
+        store_timeseries(
+            BASE_TIME,
+            60,
+            3600,
+            metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
+            measurements=[
+                DummyMeasurement(
+                    # for each time bucket we store an event with 1% sampling rate and 100% sampling rate
+                    "client_sample_rate",
+                    get_value=lambda s: 0.01 if (s / 60) % 2 == 0 else 1,
+                )
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(
+                    seconds=int(BASE_TIME.timestamp() + query_duration)
+                ),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    label="count(test_metric)",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                ),
+            ],
+            granularity_secs=granularity_secs,
+        )
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, query_duration, granularity_secs)
+        ]
+        assert sorted(response.result_timeseries, key=lambda x: x.label) == [
+            TimeSeries(
+                label="count(test_metric)",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(
+                        data=1 / 0.01
+                        + 1,  # 2 events (1 with 1% sampling rate and 1 with 100% sampling rate)
+                        data_present=True,
+                        reliability=Reliability.RELIABILITY_LOW,
+                        avg_sampling_rate=2
+                        / 101,  # weighted average = (1 + 1)/(1/0.01 + 1) = 2/101
+                    )
+                    for _ in range(len(expected_buckets))
+                ],
+            ),
+        ]

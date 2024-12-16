@@ -252,8 +252,11 @@ def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
 
 
 def get_count_column(aggregation: AttributeAggregation) -> Expression:
-    field = attribute_key_to_expression(aggregation.key)
-    return f.count(field, alias=_get_count_column_alias(aggregation))
+    return f.sumIf(
+        sign_column,
+        get_field_existence_expression(aggregation),
+        alias=_get_count_column_alias(aggregation),
+    )
 
 
 def _get_possible_percentiles(
