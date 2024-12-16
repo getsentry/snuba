@@ -40,10 +40,11 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 _DEFAULT_ROW_LIMIT = 10_000
 
 _COLUMN_TO_NAME: dict[TraceColumn.Name, str] = {
-    TraceColumn.Name.NAME_TRACE_ID: "trace_id",
+    TraceColumn.Name.NAME_FILTERED_SPAN_COUNT: "filtered_span_count",
+    TraceColumn.Name.NAME_ROOT_SPAN_NAME: "root_span_name",
     TraceColumn.Name.NAME_START_TIMESTAMP: "start_timestamp",
     TraceColumn.Name.NAME_TOTAL_SPAN_COUNT: "total_span_count",
-    TraceColumn.Name.NAME_FILTERED_SPAN_COUNT: "filtered_span_count",
+    TraceColumn.Name.NAME_TRACE_ID: "trace_id",
 }
 
 _NAME_TO_COLUMN: dict[str, TraceColumn.Name] = {
@@ -70,13 +71,24 @@ _POSSIBLE_TYPES: dict[TraceColumn.Name, set[AttributeKey.Type]] = {
 
 def _column_to_expression(trace_column: TraceColumn, conditions=None) -> Expression:
     if trace_column.name == TraceColumn.Name.NAME_TOTAL_SPAN_COUNT:
-        return f.count(alias="total_span_count")
+        return f.count(
+            alias=_COLUMN_TO_NAME[trace_column.name],
+        )
     if trace_column.name == TraceColumn.Name.NAME_FILTERED_SPAN_COUNT:
-        return f.countIf(conditions, alias="filtered_span_count")
+        return f.countIf(
+            conditions,
+            alias=_COLUMN_TO_NAME[trace_column.name],
+        )
     if trace_column.name == TraceColumn.Name.NAME_START_TIMESTAMP:
         return f.CAST(
             f.min(column("start_timestamp")),
             _TYPES_TO_CLICKHOUSE[trace_column.type],
+            alias=_COLUMN_TO_NAME[trace_column.name],
+        )
+    if trace_column.name == TraceColumn.Name.NAME_ROOT_SPAN_NAME:
+        return f.anyIf(
+            column("name"),
+            f.equals(column("is_segment"), True),
             alias=_COLUMN_TO_NAME[trace_column.name],
         )
     if (

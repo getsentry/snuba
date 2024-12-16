@@ -46,15 +46,17 @@ def gen_message(
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
     span_op: str = "http.server",
+    span_name: str = "root",
+    is_segment: bool = False,
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
     return {
-        "description": "/api/0/relays/projectconfigs/",
+        "description": span_name,
         "duration_ms": 152,
         "event_id": uuid.uuid4().hex,
         "exclusive_time_ms": 0.228,
-        "is_segment": True,
+        "is_segment": is_segment,
         "data": {
             "sentry.environment": "development",
             "sentry.release": _RELEASE_TAG,
@@ -80,7 +82,7 @@ def gen_message(
         "project_id": 1,
         "received": 1721319572.877828,
         "retention_days": 90,
-        "segment_id": "8873a98879faf06d",
+        "segment_id": trace_id[:16],
         "sentry_tags": {
             "category": "http",
             "environment": "development",
@@ -126,6 +128,12 @@ _SPANS = [
         dt=_BASE_TIME - timedelta(minutes=i),
         trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
         span_op="http.server" if i < len(_TRACE_IDS) else "db",
+        span_name=(
+            "root"
+            if i < len(_TRACE_IDS)
+            else f"child {i%len(_TRACE_IDS)+1} of {_SPAN_COUNT//len(_TRACE_IDS)-1}"
+        ),
+        is_segment=True if i < len(_TRACE_IDS) else False,
     )
     for i in range(_SPAN_COUNT)
 ]
@@ -353,6 +361,10 @@ class TestGetTraces(BaseApiTest):
                     name=TraceColumn.Name.NAME_FILTERED_SPAN_COUNT,
                     type=AttributeKey.TYPE_INT,
                 ),
+                TraceColumn(
+                    name=TraceColumn.Name.NAME_ROOT_SPAN_NAME,
+                    type=AttributeKey.TYPE_STRING,
+                ),
             ],
             filter=TraceItemFilter(
                 comparison_filter=ComparisonFilter(
@@ -369,6 +381,12 @@ class TestGetTraces(BaseApiTest):
                     column=TraceColumn(
                         name=TraceColumn.Name.NAME_TRACE_ID,
                         type=AttributeKey.TYPE_STRING,
+                    ),
+                ),
+                GetTracesRequest.OrderBy(
+                    column=TraceColumn(
+                        name=TraceColumn.Name.NAME_START_TIMESTAMP,
+                        type=AttributeKey.TYPE_FLOAT,
                     ),
                 ),
             ],
@@ -400,6 +418,12 @@ class TestGetTraces(BaseApiTest):
                             name=TraceColumn.Name.NAME_FILTERED_SPAN_COUNT,
                             value=AttributeValue(
                                 val_int=(_SPAN_COUNT // len(_TRACE_IDS)) - 1,
+                            ),
+                        ),
+                        GetTracesResponse.Trace.Column(
+                            name=TraceColumn.Name.NAME_ROOT_SPAN_NAME,
+                            value=AttributeValue(
+                                val_str="root",
                             ),
                         ),
                     ],
