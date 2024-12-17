@@ -90,7 +90,10 @@ class ExtrapolationMeta:
                     sample_count = col_value
 
         reliability = Reliability.RELIABILITY_UNSPECIFIED
-        if confidence_interval is not None and sample_count != 0:
+        if confidence_interval is not None:
+            if sample_count == 0:
+                return None
+
             estimate = row_data[column_label]
             # relative confidence represents the ratio of the confidence interval to the estimate (by default it is the upper bound)
             if is_percentile:
@@ -127,12 +130,7 @@ class ExtrapolationMeta:
                 else Reliability.RELIABILITY_LOW
             )
 
-            return ExtrapolationMeta(reliability, average_sample_rate)
-
-        if sample_count != 0:
-            return ExtrapolationMeta(Reliability.RELIABILITY_UNSPECIFIED, 0)
-
-        return None
+        return ExtrapolationMeta(reliability, average_sample_rate)
 
 
 @dataclass(frozen=True)
