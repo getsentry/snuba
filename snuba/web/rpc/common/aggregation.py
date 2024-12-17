@@ -128,6 +128,9 @@ class ExtrapolationMeta:
 
             return ExtrapolationMeta(reliability, average_sample_rate)
 
+        if sample_count != 0:
+            return ExtrapolationMeta(Reliability.RELIABILITY_UNSPECIFIED, 0)
+
         return None
 
 
