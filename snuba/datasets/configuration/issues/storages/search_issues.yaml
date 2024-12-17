@@ -94,6 +94,7 @@ delete_allocation_policies:
     args:
       required_tenant_types:
         - referrer
+        - project_id
       default_config_overrides:
         is_enforced: 1
 
