@@ -45,6 +45,7 @@ class ExtrapolationMeta:
     ) -> "ExtrapolationMeta | None":
         """
         Computes the reliability and average sample rate for a column based on the extrapolation columns.
+        If the sample count is 0, we return None as we don't have any data to extrapolate.
         """
         confidence_interval = None
         average_sample_rate = 0
