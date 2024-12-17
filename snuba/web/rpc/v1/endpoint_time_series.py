@@ -173,14 +173,17 @@ def _convert_result_timeseries(
                 extrapolation_meta = ExtrapolationMeta.from_row(
                     row_data, timeseries.label
                 )
-                timeseries.data_points.append(
-                    DataPoint(
-                        data=row_data[timeseries.label],
-                        data_present=True,
-                        avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
-                        reliability=extrapolation_meta.reliability,
+                if extrapolation_meta is not None:
+                    timeseries.data_points.append(
+                        DataPoint(
+                            data=row_data[timeseries.label],
+                            data_present=True,
+                            avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
+                            reliability=extrapolation_meta.reliability,
+                        )
                     )
-                )
+                else:
+                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
 
 

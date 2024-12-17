@@ -147,6 +147,7 @@ def test_get_extrapolation_meta(
     reliability: Reliability.ValueType,
 ) -> None:
     extrapolation_meta = ExtrapolationMeta.from_row(row_data, column_name)
+    assert extrapolation_meta is not None
     assert extrapolation_meta.avg_sampling_rate == average_sample_rate
     assert extrapolation_meta.reliability == reliability
 
