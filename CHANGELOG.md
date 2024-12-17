@@ -1,5 +1,33 @@
 # Changelog
 
+## 24.12.0
+
+### Various fixes & improvements
+
+- feat(inc-984): store project ids list in dictionary in scrub job (#6675) by @volokluev
+- ref(lw-deletes): enforce ratelimiter (#6644) by @MeredithAnya
+- fix(admin): Allow KILL MUTATION commands in sudo mode (#6672) by @evanh
+- fix(inc984): align start/end timestamp to partition boundaries (#6670) by @volokluev
+- chore(deps): bump relay from 0.9.2 to 0.9.4 (#6660) by @jjbayer
+- feat(inc984): make mutation condition simpler (#6669) by @volokluev
+- chore: Bump Arroyo to 2.19.5 (#6666) by @ayirr7
+- ref: bump sentry-arroyo to 2.19.4 (#6663) by @getsentry-bot
+- fix(eap-alerts): Fix subscriptions referrer for eap alerts (#6662) by @shruthilayaj
+- chore(api): Do not log healthcheck error if downfile exists (#6635) by @untitaker
+- feat(eap): add additional validation for group by  (#6659) by @davidtsuk
+- feat(eap): add default value to virtual column (#6657) by @davidtsuk
+- ref: bump sentry-arroyo to 2.19.3 (#6656) by @getsentry-bot
+- Implement filter offset for attribute keys API (#6618) by @xurui-c
+- feat: make sentry RPC instrumentation more specific to the endpoint (#6654) by @kylemumma
+- fix(consumers): Respect 60 day retention days period (#6631) by @volokluev
+- feat: add missing example in admin rpc tool (#6647) by @kylemumma
+- hotfix(inc-984): Add manual job to scrub IPs from spans (#6649) by @volokluev
+- feat: support 15 minute granularity on eap time series RPC (#6645) by @kylemumma
+- fix(eap): Fix divide by 0 bug (#6653) by @davidtsuk
+- fix: run sentry tests when RPC changes (#6652) by @colin-sentry
+- meta: Bump new development version (60ff5441)
+- chore(eap-spans): Take advantage of parallel reads (#6579) by @phacops
+
 ## 24.11.2
 
 ### Various fixes & improvements
