@@ -1,6 +1,0 @@
-version: v1
-kind: dataset
-name: uptime_monitor_checks
-
-entities:
-  - uptime_monitor_checks
