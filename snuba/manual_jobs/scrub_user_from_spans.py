@@ -29,8 +29,39 @@ class ScrubUserFromSentryTags(Job):
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""ALTER TABLE spans_local
 {on_cluster}
-UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user' AND startsWith(v, '{_IP_PREFIX}'), '{_SCRUBBED}', v), `sentry_tags.key`, `sentry_tags.value`),
-`user` = if(startsWith(`user`, '{_IP_PREFIX}'), '{_SCRUBBED}', `user`)
+UPDATE
+    `sentry_tags.value` = arrayMap(
+        (k, v) -> if(
+            k = 'user.ip',
+            '{_SCRUBBED}',
+            if(
+                k = 'user' AND startsWith(v, '{_IP_PREFIX}'),
+                concat(
+                    '{_IP_PREFIX}',
+                    if(
+                        isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4)),
+                        '{_SCRUBBED}',
+                        substring(v, 4)
+                    )
+                ),
+                v
+            )
+        ),
+        `sentry_tags.key`,
+        `sentry_tags.value`
+    ),
+    `user` = if(
+        startsWith(user, '{_IP_PREFIX}'),
+        concat(
+            '{_IP_PREFIX}',
+            if(
+                isIPv4String(substring(user, 4)) OR isIPv6String(substring(user, 4)),
+                '{_SCRUBBED}',
+                substring(user, 4)
+            )
+        ),
+        user
+    )
 WHERE project_id IN [{project_ids}]
 AND end_timestamp >= toDateTime('{start_datetime}')
 AND end_timestamp < toDateTime('{end_datetime}')"""

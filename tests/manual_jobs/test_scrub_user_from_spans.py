@@ -85,8 +85,39 @@ def test_generate_query() -> None:
         job._get_query(None)
         == """ALTER TABLE spans_local
 
-UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user' AND startsWith(v, 'ip:'), 'scrubbed', v), `sentry_tags.key`, `sentry_tags.value`),
-`user` = if(startsWith(`user`, 'ip:'), 'scrubbed', `user`)
+UPDATE
+    `sentry_tags.value` = arrayMap(
+        (k, v) -> if(
+            k = 'user.ip',
+            'scrubbed',
+            if(
+                k = 'user' AND startsWith(v, 'ip:'),
+                concat(
+                    'ip:',
+                    if(
+                        isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4)),
+                        'scrubbed',
+                        substring(v, 4)
+                    )
+                ),
+                v
+            )
+        ),
+        `sentry_tags.key`,
+        `sentry_tags.value`
+    ),
+    `user` = if(
+        startsWith(user, 'ip:'),
+        concat(
+            'ip:',
+            if(
+                isIPv4String(substring(user, 4)) OR isIPv6String(substring(user, 4)),
+                'scrubbed',
+                substring(user, 4)
+            )
+        ),
+        user
+    )
 WHERE project_id IN [1,3,5,6]
 AND end_timestamp >= toDateTime('2024-12-01T00:00:00')
 AND end_timestamp < toDateTime('2024-12-10T00:00:00')"""
@@ -96,8 +127,39 @@ AND end_timestamp < toDateTime('2024-12-10T00:00:00')"""
         job._get_query("snuba-spans")
         == """ALTER TABLE spans_local
 ON CLUSTER 'snuba-spans'
-UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user' AND startsWith(v, 'ip:'), 'scrubbed', v), `sentry_tags.key`, `sentry_tags.value`),
-`user` = if(startsWith(`user`, 'ip:'), 'scrubbed', `user`)
+UPDATE
+    `sentry_tags.value` = arrayMap(
+        (k, v) -> if(
+            k = 'user.ip',
+            'scrubbed',
+            if(
+                k = 'user' AND startsWith(v, 'ip:'),
+                concat(
+                    'ip:',
+                    if(
+                        isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4)),
+                        'scrubbed',
+                        substring(v, 4)
+                    )
+                ),
+                v
+            )
+        ),
+        `sentry_tags.key`,
+        `sentry_tags.value`
+    ),
+    `user` = if(
+        startsWith(user, 'ip:'),
+        concat(
+            'ip:',
+            if(
+                isIPv4String(substring(user, 4)) OR isIPv6String(substring(user, 4)),
+                'scrubbed',
+                substring(user, 4)
+            )
+        ),
+        user
+    )
 WHERE project_id IN [1,3,5,6]
 AND end_timestamp >= toDateTime('2024-12-01T00:00:00')
 AND end_timestamp < toDateTime('2024-12-10T00:00:00')"""
