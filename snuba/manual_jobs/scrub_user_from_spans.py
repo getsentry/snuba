@@ -5,6 +5,9 @@ from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
 
+_IP_PREFIX = "ip:"
+_SCRUBBED = "scrubbed"
+
 
 class ScrubUserFromSentryTags(Job):
     def __init__(self, job_spec: JobSpec) -> None:
@@ -26,7 +29,8 @@ class ScrubUserFromSentryTags(Job):
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""ALTER TABLE spans_local
 {on_cluster}
-UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user', 'scrubbed', v) AND startsWith(v, 'ip:'), `sentry_tags.key`, `sentry_tags.value`)
+UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user' AND startsWith(v, '{_IP_PREFIX}'), '{_SCRUBBED}', v), `sentry_tags.key`, `sentry_tags.value`),
+`user` = if(startsWith(`user`, '{_IP_PREFIX}'), '{_SCRUBBED}', `user`)
 WHERE project_id IN [{project_ids}]
 AND end_timestamp >= toDateTime('{start_datetime}')
 AND end_timestamp < toDateTime('{end_datetime}')"""
