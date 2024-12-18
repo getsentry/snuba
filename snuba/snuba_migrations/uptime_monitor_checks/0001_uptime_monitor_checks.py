@@ -56,7 +56,7 @@ class Migration(migration.ClickhouseNodeMigration):
                     # do i actually need primary key to be different than sorting key?
                     primary_key="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, uptime_check_id, trace_id)",
                     order_by="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, uptime_check_id, trace_id)",
-                    partition_by="(toMonday(_sort_timestamp))",
+                    partition_by="(retention_days, toMonday(_sort_timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
                     ttl="_sort_timestamp + toIntervalDay(retention_days)",
