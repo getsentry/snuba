@@ -150,6 +150,12 @@ class AttributeValuesRequest(
             timer=self._timer,
         )
         values = [r["attr_value"] for r in res.result.get("data", [])]
+        if len(values) == 0:
+            return TraceItemAttributeValuesResponse(
+                values=values,
+                page_token=None,
+            )
+
         return TraceItemAttributeValuesResponse(
             values=values,
             page_token=(
