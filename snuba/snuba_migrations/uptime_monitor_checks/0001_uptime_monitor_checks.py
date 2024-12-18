@@ -53,7 +53,6 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    # do i actually need primary key to be different than sorting key?
                     primary_key="(organization_id, project_id, _sort_timestamp, uptime_check_id)",
                     order_by="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, uptime_check_id)",
                     partition_by="(retention_days, toMonday(_sort_timestamp))",
