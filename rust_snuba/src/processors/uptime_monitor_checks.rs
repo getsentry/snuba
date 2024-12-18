@@ -91,8 +91,6 @@ pub struct UptimeMonitorCheckRow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::DateTime;
-    use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
     #[test]
     fn test_parse_monitor_checkin() {
