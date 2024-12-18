@@ -250,6 +250,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             expected_attributes = expected_attributes[at_a_time:]
             done += at_a_time
         assert expected_attributes == []
+        assert False
 
     def test_response_metadata(self) -> None:
         # debug must be true in RequestMeta for it to return query_info in the response
