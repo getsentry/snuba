@@ -183,7 +183,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
     ),
     MigrationGroup.UPTIME_MONITOR_CHECKS: _MigrationGroup(
         loader=UptimeMonitorChecksLoader(),
-        storage_sets_keys={StorageSetKey.UPTIME_MONITOR_CHECKS},
+        storage_sets_keys={StorageSetKey.EVENTS_ANALYTICS_PLATFORM},
         readiness_state=ReadinessState.LIMITED,
     ),
 }
