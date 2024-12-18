@@ -88,9 +88,6 @@ def test_generate_query() -> None:
 UPDATE
     `sentry_tags.value` = arrayMap(
         (k, v) -> if(
-            k = 'user.ip',
-            'scrubbed',
-            if(
                 k = 'user' AND startsWith(v, 'ip:'),
                 concat(
                     'ip:',
@@ -101,8 +98,7 @@ UPDATE
                     )
                 ),
                 v
-            )
-        ),
+            ),
         `sentry_tags.key`,
         `sentry_tags.value`
     ),
@@ -130,9 +126,6 @@ ON CLUSTER 'snuba-spans'
 UPDATE
     `sentry_tags.value` = arrayMap(
         (k, v) -> if(
-            k = 'user.ip',
-            'scrubbed',
-            if(
                 k = 'user' AND startsWith(v, 'ip:'),
                 concat(
                     'ip:',
@@ -143,8 +136,7 @@ UPDATE
                     )
                 ),
                 v
-            )
-        ),
+            ),
         `sentry_tags.key`,
         `sentry_tags.value`
     ),

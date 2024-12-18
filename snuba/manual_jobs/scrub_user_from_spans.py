@@ -32,9 +32,6 @@ class ScrubUserFromSentryTags(Job):
 UPDATE
     `sentry_tags.value` = arrayMap(
         (k, v) -> if(
-            k = 'user.ip',
-            '{_SCRUBBED}',
-            if(
                 k = 'user' AND startsWith(v, '{_IP_PREFIX}'),
                 concat(
                     '{_IP_PREFIX}',
@@ -45,8 +42,7 @@ UPDATE
                     )
                 ),
                 v
-            )
-        ),
+            ),
         `sentry_tags.key`,
         `sentry_tags.value`
     ),
