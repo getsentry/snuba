@@ -131,6 +131,9 @@ def copy_tables(
     if not tables:
         tables = [result[0] for result in source_client.execute("SHOW TABLES")]
 
+    # create local tables before MVs
+    tables = sorted(tables, key=lambda x: "_local" not in x)
+
     show_table_statements = OrderedDict()
     show_mv_statements = OrderedDict()
 

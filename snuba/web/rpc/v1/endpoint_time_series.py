@@ -55,6 +55,7 @@ _VALID_GRANULARITY_SECS = set(
         2 * 60,
         5 * 60,
         10 * 60,
+        15 * 60,
         30 * 60,  # minutes
         1 * 3600,
         3 * 3600,
@@ -63,7 +64,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-_MAX_BUCKETS_IN_REQUEST = 1000
+# MAX 5 minute granularity over 7 days
+_MAX_BUCKETS_IN_REQUEST = 2016
 
 
 def _convert_result_timeseries(
@@ -171,14 +173,17 @@ def _convert_result_timeseries(
                 extrapolation_meta = ExtrapolationMeta.from_row(
                     row_data, timeseries.label
                 )
-                timeseries.data_points.append(
-                    DataPoint(
-                        data=row_data[timeseries.label],
-                        data_present=True,
-                        avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
-                        reliability=extrapolation_meta.reliability,
+                if extrapolation_meta is not None:
+                    timeseries.data_points.append(
+                        DataPoint(
+                            data=row_data[timeseries.label],
+                            data_present=True,
+                            avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
+                            reliability=extrapolation_meta.reliability,
+                        )
                     )
-                )
+                else:
+                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
 
 

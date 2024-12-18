@@ -46,7 +46,7 @@ pub fn consumer(
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
     max_dlq_buffer_length: Option<usize>,
-) {
+) -> usize {
     py.allow_threads(|| {
         consumer_impl(
             consumer_group,
@@ -66,7 +66,7 @@ pub fn consumer(
             mutations_mode,
             max_dlq_buffer_length,
         )
-    });
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -243,20 +243,11 @@ pub fn consumer_impl(
     let processor = if mutations_mode {
         let mut_factory = MutConsumerStrategyFactory {
             storage_config: first_storage,
-            env_config,
-            logical_topic_name,
             max_batch_size,
             max_batch_time,
             processing_concurrency: ConcurrencyConfig::new(concurrency),
             clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
-            async_inserts,
-            python_max_queue_depth,
-            use_rust_processor,
             health_check_file: health_check_file.map(ToOwned::to_owned),
-            enforce_schema,
-            physical_consumer_group: consumer_group.to_owned(),
-            physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
-            accountant_topic_config: consumer_config.accountant_topic,
             batch_write_timeout,
         };
 

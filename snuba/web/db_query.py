@@ -302,7 +302,6 @@ def execute_query_with_readthrough_caching(
         clickhouse_query_settings["query_id"] = query_id
         if span:
             span.set_data("query_id", query_id)
-
         return execute_query(
             clickhouse_query,
             query_settings,
