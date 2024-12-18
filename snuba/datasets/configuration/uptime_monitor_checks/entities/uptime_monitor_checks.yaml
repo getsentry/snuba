@@ -11,7 +11,7 @@ schema:
     { name: scheduled_check_time, type: DateTime },
     { name: timestamp, type: DateTime }, # this is actual_check_time
     { name: duration, type: UInt, args: { size: 64 } },
-    { name: location_id, type: UInt, args: { schema_modifiers: [nullable], size: 32 } },
+    { name: region_id, type: UInt, args: { schema_modifiers: [nullable], size: 16 } },
     { name: check_status, type: String },
     { name: check_status_reason, type: String, args: { schema_modifiers: [nullable] } },
     { name: http_status_code, type: UInt, args: { size: 16 } },

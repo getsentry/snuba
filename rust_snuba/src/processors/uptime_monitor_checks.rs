@@ -36,7 +36,7 @@ pub fn deserialize_message(
         timestamp: monitor_message.timestamp as u32,
         _sort_timestamp: monitor_message.timestamp as u32,
         duration: monitor_message.duration,
-        location_id: monitor_message.location_id,
+        region_id: monitor_message.region_id,
         check_status: monitor_message.check_status,
         check_status_reason: monitor_message.check_status_reason,
         http_status_code: monitor_message.http_status_code,
@@ -59,7 +59,7 @@ struct UptimeMonitorCheckMessage {
     scheduled_check_time: f64,
     timestamp: f64,
     duration: u64,
-    location_id: Option<u32>,
+    region_id: Option<u16>,
     check_status: String,
     check_status_reason: Option<String>,
     http_status_code: u16,
@@ -78,7 +78,7 @@ pub struct UptimeMonitorCheckRow {
     timestamp: u32,
     _sort_timestamp: u32,
     duration: u64,
-    location_id: Option<u32>,
+    region_id: Option<u16>,
     check_status: String,
     check_status_reason: Option<String>,
     http_status_code: u16,
@@ -105,7 +105,7 @@ mod tests {
             "scheduled_check_time": 1702659277,
             "timestamp": 1702659277,
             "duration": 100,
-            "location_id": 42,
+            "region_id": 42,
             "check_status": "ok",
             "check_status_reason": "Request successful",
             "http_status_code": 200,
@@ -123,7 +123,7 @@ mod tests {
         assert_eq!(monitor_row.duration, 100);
         assert_eq!(monitor_row.timestamp, 1702659277);
         assert_eq!(monitor_row._sort_timestamp, 1702659277);
-        assert_eq!(monitor_row.location_id, Some(42));
+        assert_eq!(monitor_row.region_id, Some(42));
         assert_eq!(&monitor_row.check_status, "ok");
         assert_eq!(
             monitor_row.check_status_reason,

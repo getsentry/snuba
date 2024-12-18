@@ -11,8 +11,7 @@ table_prefix = "uptime_monitor_checks"
 local_table_name = f"{table_prefix}_local"
 dist_table_name = f"{table_prefix}_dist"
 
-## what about all the fany codecs?
-## do i need retention days?
+## what about all the fancy codecs? do we need those?
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
@@ -23,7 +22,7 @@ columns: List[Column[Modifiers]] = [
     Column("timestamp", DateTime()),
     Column("_sort_timestamp", DateTime()),
     Column("duration", UInt(64)),
-    Column("location_id", UInt(32, Modifiers(nullable=True))),
+    Column("region_id", UInt(16, Modifiers(nullable=True))),
     Column("check_status", String(Modifiers(low_cardinality=True))),
     Column(
         "check_status_reason",
@@ -54,10 +53,9 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    # is this the right order by? what about tostartOfDay?
-                    # do i need a primary key?
-                    primary_key="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, trace_id)",
-                    order_by="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, trace_id)",
+                    # do i actually need primary key to be different than sorting key?
+                    primary_key="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, uptime_check_id, trace_id)",
+                    order_by="(organization_id, project_id, uptime_subscription_id, _sort_timestamp, uptime_check_id, trace_id)",
                     partition_by="(toMonday(_sort_timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
@@ -74,6 +72,12 @@ class Migration(migration.ClickhouseNodeMigration):
                     sharding_key="cityHash64(reinterpretAsUInt128(trace_id))",
                 ),
                 target=OperationTarget.DISTRIBUTED,
+            ),
+            operations.AddIndices(
+                storage_set=storage_set,
+                table_name=local_table_name,
+                indices=indices,
+                target=OperationTarget.LOCAL,
             ),
         ]
 

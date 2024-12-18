@@ -13,7 +13,7 @@ base_time = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsec
 query = """
 INSERT INTO default.uptime_monitor_checks_local (
     organization_id, project_id, environment, uptime_subscription_id, uptime_check_id,
-    scheduled_check_time, timestamp, duration, location_id, check_status,
+    scheduled_check_time, timestamp, duration, region_id, check_status,
     check_status_reason, http_status_code, trace_id, retention_days
 ) FORMAT JSONEachRow
 """
@@ -39,7 +39,7 @@ for project_id in range(1, 2):
                 "scheduled_check_time": scheduled_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                 "duration": random.randint(1, 1000),
-                "location_id": random.randint(1, 3),
+                "region_id": random.randint(1, 3),
                 "check_status": check_status,
                 "check_status_reason": "Timeout error"
                 if check_status == "failure"

@@ -1,6 +1,6 @@
 version: v1
 kind: dataset
-name: spans
+name: uptime_monitor_checks
 
 entities:
   - uptime_monitor_checks
