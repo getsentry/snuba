@@ -45,7 +45,6 @@ pub fn consumer(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
-    max_bytes_before_external_group_by: Option<usize>,
     max_dlq_buffer_length: Option<usize>,
 ) -> usize {
     py.allow_threads(|| {
@@ -64,7 +63,6 @@ pub fn consumer(
             health_check_file,
             stop_at_timestamp,
             batch_write_timeout_ms,
-            max_bytes_before_external_group_by,
             mutations_mode,
             max_dlq_buffer_length,
         )
@@ -87,7 +85,6 @@ pub fn consumer_impl(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
-    max_bytes_before_external_group_by: Option<usize>,
     mutations_mode: bool,
     max_dlq_buffer_length: Option<usize>,
 ) -> usize {
@@ -278,7 +275,6 @@ pub fn consumer_impl(
             accountant_topic_config: consumer_config.accountant_topic,
             stop_at_timestamp,
             batch_write_timeout,
-            max_bytes_before_external_group_by,
         };
 
         StreamProcessor::with_kafka(config, factory, topic, dlq_policy)
