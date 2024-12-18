@@ -1,10 +1,11 @@
 from typing import List, Sequence
 
-from snuba.clickhouse.columns import UUID, Column, DateTime, String, UInt
+from snuba.clickhouse.columns import UUID, Column, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
+from snuba.utils.schemas import DateTime64
 
 storage_set = StorageSetKey.UPTIME_MONITOR_CHECKS
 table_prefix = "uptime_monitor_checks"
@@ -18,10 +19,10 @@ columns: List[Column[Modifiers]] = [
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("uptime_subscription_id", UInt(64)),
     Column("uptime_check_id", UUID()),
-    Column("scheduled_check_time", DateTime()),
-    Column("timestamp", DateTime()),
+    Column("scheduled_check_time", DateTime64(3)),  # millisecond precision
+    Column("timestamp", DateTime64(3)),  # millisecond precision
     Column("duration_ms", UInt(64)),
-    Column("region_id", UInt(16, Modifiers(nullable=True))),
+    Column("region_slug", String(Modifiers(low_cardinality=True))),
     Column("check_status", String(Modifiers(low_cardinality=True))),
     Column(
         "check_status_reason",
@@ -43,12 +44,12 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    primary_key="(organization_id, project_id, timestamp, uptime_check_id, trace_id)",
-                    order_by="(organization_id, project_id, timestamp, uptime_check_id, trace_id)",
+                    primary_key="(organization_id, project_id, toDateTime(timestamp), uptime_check_id, trace_id)",
+                    order_by="(organization_id, project_id, toDateTime(timestamp), uptime_check_id, trace_id)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
-                    ttl="timestamp + toIntervalDay(retention_days)",
+                    ttl="toDateTime(timestamp) + toIntervalDay(retention_days)",
                 ),
                 target=OperationTarget.LOCAL,
             ),

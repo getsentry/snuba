@@ -13,14 +13,14 @@ base_time = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsec
 query = """
 INSERT INTO default.uptime_monitor_checks_local (
     organization_id, project_id, environment, uptime_subscription_id, uptime_check_id,
-    scheduled_check_time, timestamp, duration, region_id, check_status,
+    scheduled_check_time, timestamp, duration_ms, region_slug, check_status,
     check_status_reason, http_status_code, trace_id, retention_days
 ) FORMAT JSONEachRow
 """
 
 total_records = 0
 
-for project_id in range(1, 2):
+for project_id in range(2, 100):
     project_data = []
     for minute in range(24 * 60 * 90):  # 24 hours * 60 minutes * 90 days
         timestamp = base_time + datetime.timedelta(minutes=minute)
@@ -36,10 +36,12 @@ for project_id in range(1, 2):
                 "environment": "production",
                 "uptime_subscription_id": random.randint(1, 3) * project_id,
                 "uptime_check_id": str(uuid.uuid4()),
-                "scheduled_check_time": scheduled_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                "duration": random.randint(1, 1000),
-                "region_id": random.randint(1, 3),
+                "scheduled_check_time": scheduled_time.strftime("%Y-%m-%d %H:%M:%S.%f")[
+                    :-3
+                ],
+                "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+                "duration_ms": random.randint(1, 1000),
+                "region_slug": f"region-{random.randint(1, 3)}",
                 "check_status": check_status,
                 "check_status_reason": "Timeout error"
                 if check_status == "failure"
