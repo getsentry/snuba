@@ -36,7 +36,7 @@ where
     }
 }
 
-impl<'a, M> Middleware for AddGlobalTags<'a, M>
+impl<M> Middleware for AddGlobalTags<'_, M>
 where
     M: Middleware,
 {

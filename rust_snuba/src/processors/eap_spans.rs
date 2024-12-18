@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let span: EAPSpan = msg.try_into().unwrap();
+        let span: EAPSpan = msg.into();
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(span)
         });
