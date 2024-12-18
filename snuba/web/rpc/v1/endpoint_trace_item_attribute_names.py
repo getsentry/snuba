@@ -41,7 +41,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 MAX_REQUEST_LIMIT = 1000
 
 
-def  convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
+def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
     if req.limit > MAX_REQUEST_LIMIT:
         raise BadSnubaRPCRequestException(
             f"Limit can be at most {MAX_REQUEST_LIMIT}, but was {req.limit}. For larger limits please utilize pagination via the page_token variable in your request."
@@ -68,7 +68,11 @@ def  convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReque
             f"Attribute type '{req.type}' is not supported. Supported types are: TYPE_STRING, TYPE_FLOAT, TYPE_INT, TYPE_BOOLEAN"
         )
     print("hiiii")
-    print("req.page_token.filter_offset", req.page_token.filter_offset, req.page_token.HasField("filter_offset"))
+    print(
+        "req.page_token.filter_offset",
+        req.page_token.filter_offset,
+        req.page_token.HasField("filter_offset"),
+    )
 
     condition = (
         base_conditions_and(
