@@ -13,7 +13,7 @@ use sentry_arroyo::processing::strategies::run_task_in_threads::{
 };
 use sentry_arroyo::processing::strategies::{ProcessingStrategy, ProcessingStrategyFactory};
 use sentry_arroyo::types::Message;
-use sentry_arroyo::types::{Partition, Topic};
+use sentry_arroyo::types::Partition;
 
 use crate::config;
 use crate::metrics::global_tags::set_global_tag;
@@ -25,20 +25,11 @@ use crate::mutations::synchronize::Synchronizer;
 
 pub struct MutConsumerStrategyFactory {
     pub storage_config: config::StorageConfig,
-    pub env_config: config::EnvConfig,
-    pub logical_topic_name: String,
     pub max_batch_size: usize,
     pub max_batch_time: Duration,
     pub processing_concurrency: ConcurrencyConfig,
     pub clickhouse_concurrency: ConcurrencyConfig,
-    pub async_inserts: bool,
-    pub python_max_queue_depth: Option<usize>,
-    pub use_rust_processor: bool,
     pub health_check_file: Option<String>,
-    pub enforce_schema: bool,
-    pub physical_consumer_group: String,
-    pub physical_topic_name: Topic,
-    pub accountant_topic_config: config::TopicConfig,
     pub batch_write_timeout: Option<Duration>,
 }
 
