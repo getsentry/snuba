@@ -3,17 +3,20 @@ kind: entity
 name: uptime_monitor_checks
 schema:
   [
-    # Do i need org id?
+    { name: organization_id, type: UInt, args: { size: 64 } },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: environment, type: String, args: { schema_modifiers: [nullable] } },
     { name: uptime_subscription_id, type: UInt, args: { size: 64 } },
-    { name: timestamp, type: DateTime },
     { name: uptime_check_id, type: UUID },
-    { name: duration, type: UInt, args: { size: 32 } },
+    { name: scheduled_check_time, type: DateTime },
+    { name: timestamp, type: DateTime }, # this is actual_check_time
+    { name: duration, type: UInt, args: { size: 64 } },
     { name: location_id, type: UInt, args: { schema_modifiers: [nullable], size: 32 } },
-    { name: status, type: UInt, args: { size: 16, schema_modifiers: [nullable] } },
-    { name: timeout, type: UInt, args: { size: 16 } },
-    { name: trace_id, type: UUID, args: { schema_modifiers: [nullable] } },
+    { name: check_status, type: String },
+    { name: check_status_reason, type: String, args: { schema_modifiers: [nullable] } },
+    { name: http_status_code, type: UInt, args: { size: 16 } },
+    { name: trace_id, type: UUID },
+    { name: retention_days, type: UInt, args: { schema_modifiers: [nullable], size: 16 } },
   ]
 required_time_column: timestamp
 
