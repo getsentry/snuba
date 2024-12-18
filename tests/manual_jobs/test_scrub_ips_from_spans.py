@@ -87,9 +87,8 @@ def test_generate_query() -> None:
 
 UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user.ip', 'scrubbed', v), `sentry_tags.key`, `sentry_tags.value`)
 WHERE project_id IN [1,3,5,6]
-AND has(`sentry_tags.key`, 'user.ip')
-AND end_timestamp > toDateTime('2024-12-01T00:00:00')
-AND end_timestamp <= toDateTime('2024-12-10T00:00:00')"""
+AND end_timestamp >= toDateTime('2024-12-01T00:00:00')
+AND end_timestamp < toDateTime('2024-12-10T00:00:00')"""
     )
 
     assert (
@@ -98,7 +97,6 @@ AND end_timestamp <= toDateTime('2024-12-10T00:00:00')"""
 ON CLUSTER 'snuba-spans'
 UPDATE `sentry_tags.value` = arrayMap((k, v) -> if(k = 'user.ip', 'scrubbed', v), `sentry_tags.key`, `sentry_tags.value`)
 WHERE project_id IN [1,3,5,6]
-AND has(`sentry_tags.key`, 'user.ip')
-AND end_timestamp > toDateTime('2024-12-01T00:00:00')
-AND end_timestamp <= toDateTime('2024-12-10T00:00:00')"""
+AND end_timestamp >= toDateTime('2024-12-01T00:00:00')
+AND end_timestamp < toDateTime('2024-12-10T00:00:00')"""
     )

@@ -96,7 +96,7 @@ delete_allocation_policies:
         - referrer
         - project_id
       default_config_overrides:
-        is_enforced: 0
+        is_enforced: 1
 
 query_processors:
   - processor: MappingOptimizer
@@ -124,7 +124,7 @@ query_processors:
 
 deletion_settings:
   is_enabled: 1
-  max_rows_to_delete: 100000
+  max_rows_to_delete: 2000000
   tables:
     - search_issues_local_v2
   allowed_columns:

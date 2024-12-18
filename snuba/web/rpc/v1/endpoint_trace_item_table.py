@@ -212,7 +212,8 @@ def _convert_results(
                 res[column_name].attribute_name = column_name
                 extrapolation_meta = ExtrapolationMeta.from_row(row, column_name)
                 if (
-                    extrapolation_meta.reliability
+                    extrapolation_meta is not None
+                    and extrapolation_meta.reliability
                     != Reliability.RELIABILITY_UNSPECIFIED
                 ):
                     res[column_name].reliabilities.append(
