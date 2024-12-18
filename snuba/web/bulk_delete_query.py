@@ -20,6 +20,7 @@ from snuba.query.dsl import literal
 from snuba.query.exceptions import InvalidQueryException, NoRowsToDeleteException
 from snuba.query.expressions import Expression
 from snuba.reader import Result
+from snuba.state import get_str_config
 from snuba.utils.metrics.util import with_span
 from snuba.utils.metrics.wrapper import MetricsWrapper
 from snuba.utils.schemas import ColumnValidator, InvalidColumnType
@@ -208,9 +209,14 @@ def delete_from_tables(
     if highest_rows_to_delete == 0:
         return result
 
+    storage_name = storage.get_storage_key().value
+    project_id = attribution_info.tenant_ids.get("project_id")
+    if project_id and should_use_killswitch(storage_name, str(project_id)):
+        return result
+
     delete_query: DeleteQueryMessage = {
         "rows_to_delete": highest_rows_to_delete,
-        "storage_name": storage.get_storage_key().value,
+        "storage_name": storage_name,
         "conditions": conditions,
         "tenant_ids": attribution_info.tenant_ids,
     }
@@ -224,3 +230,10 @@ def construct_or_conditions(conditions: Sequence[ConditionsType]) -> Expression:
     into OR conditions for a bulk delete
     """
     return combine_or_conditions([_construct_condition(cond) for cond in conditions])
+
+
+def should_use_killswitch(storage_name: str, project_id: str) -> bool:
+    killswitch_config = get_str_config(
+        f"lw_deletes_killswitch_{storage_name}", default=""
+    )
+    return project_id in killswitch_config if killswitch_config else False

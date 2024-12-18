@@ -40,13 +40,16 @@ class ExtrapolationMeta:
     avg_sampling_rate: float
 
     @staticmethod
-    def from_row(row_data: Dict[str, Any], column_label: str) -> "ExtrapolationMeta":
+    def from_row(
+        row_data: Dict[str, Any], column_label: str
+    ) -> "ExtrapolationMeta | None":
         """
         Computes the reliability and average sample rate for a column based on the extrapolation columns.
+        If the sample count is 0, we return None as we don't have any data to extrapolate.
         """
         confidence_interval = None
         average_sample_rate = 0
-        sample_count = None
+        sample_count = 0
         is_percentile = False
         percentile = 0.0
         granularity = 0.0
@@ -87,7 +90,10 @@ class ExtrapolationMeta:
                     sample_count = col_value
 
         reliability = Reliability.RELIABILITY_UNSPECIFIED
-        if confidence_interval is not None and sample_count is not None:
+        if confidence_interval is not None:
+            if sample_count == 0:
+                return None
+
             estimate = row_data[column_label]
             # relative confidence represents the ratio of the confidence interval to the estimate (by default it is the upper bound)
             if is_percentile:
@@ -233,9 +239,12 @@ def get_average_sample_rate_column(aggregation: AttributeAggregation) -> Express
         referenced_column=aggregation.label,
         metadata={},
     ).to_alias()
-    return f.avgIf(
-        f.divide(literal(1), sampling_weight_column),
-        get_field_existence_expression(aggregation),
+    return f.divide(
+        f.sumIf(sign_column, get_field_existence_expression(aggregation)),
+        f.sumIf(
+            f.multiply(sign_column, sampling_weight_column),
+            get_field_existence_expression(aggregation),
+        ),
         alias=alias,
     )
 
@@ -249,8 +258,11 @@ def _get_count_column_alias(aggregation: AttributeAggregation) -> str:
 
 
 def get_count_column(aggregation: AttributeAggregation) -> Expression:
-    field = attribute_key_to_expression(aggregation.key)
-    return f.count(field, alias=_get_count_column_alias(aggregation))
+    return f.sumIf(
+        sign_column,
+        get_field_existence_expression(aggregation),
+        alias=_get_count_column_alias(aggregation),
+    )
 
 
 def _get_possible_percentiles(

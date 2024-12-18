@@ -1,12 +1,10 @@
 =============================
 ClickHouse supported versions
 =============================
-The following versions of Clickhouse have been tested and are known to work
+The following version(s) of Clickhouse have been tested and are known to work
 with Snuba:
 
-- 20.3
-- 20.7
-- 21.8
+- 23.8.11.29 (Altinity Stable Build)
 
 Any version of Clikhouse used outside of this list could potentially work,
 but is not guaranteed to work. Some functionality might be broken. Use a
