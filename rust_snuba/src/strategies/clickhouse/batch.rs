@@ -268,7 +268,6 @@ mod tests {
             "",
             false,
             None,
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -304,7 +303,6 @@ mod tests {
             "",
             true,
             None,
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -339,7 +337,6 @@ mod tests {
             "",
             false,
             None,
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -371,7 +368,6 @@ mod tests {
             "default",
             "",
             false,
-            None,
             None,
         );
 
@@ -409,7 +405,6 @@ mod tests {
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
             Some(Duration::from_millis(0)),
-            None,
         );
 
         let mut batch = factory.new_batch();
@@ -444,7 +439,6 @@ mod tests {
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
-            None,
         );
 
         let mut batch = factory.new_batch();
