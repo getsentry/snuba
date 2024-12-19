@@ -295,7 +295,18 @@ def test_do_the_thing() -> None:
         f"SELECT any(has(sentry_tags.value, '{_IP_ADDRESS}')) FROM spans_local WHERE project_id IN [1,2]"
     )
     assert res.results[0][0] == 0
+
+    res = connection.execute(
+        f"SELECT countIf(user = '{_IP_ADDRESS}') FROM spans_local WHERE project_id IN [1,2]"
+    )
+    assert res.results[0][0] == 0
+
     res = connection.execute(
         f"SELECT groupBitAnd(has(sentry_tags.value, 'ip:{_IP_ADDRESS}')) FROM spans_local WHERE project_id IN [3, 4, 5]"
     )
     assert res.results[0][0] == 1
+
+    res = connection.execute(
+        f"SELECT countIf(user = 'ip:{_IP_ADDRESS}') FROM spans_local WHERE project_id IN [3, 4, 5]"
+    )
+    assert res.results[0][0] > 0
