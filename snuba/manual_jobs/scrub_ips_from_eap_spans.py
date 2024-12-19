@@ -26,7 +26,7 @@ class ScrubIpFromEAPSpans(Job):
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""ALTER TABLE eap_spans_2_local
 {on_cluster}
-UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`)
+UPDATE `attr_str_14` = mapApply((k, v) -> (k, if(k = 'sentry.user.ip', 'scrubbed', v)), `attr_str_14`)
 WHERE organization_id IN [{organization_ids}]
 AND _sort_timestamp >= toDateTime('{start_datetime}')
 AND _sort_timestamp < toDateTime('{end_datetime}')"""
