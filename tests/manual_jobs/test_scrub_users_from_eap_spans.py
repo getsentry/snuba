@@ -121,10 +121,10 @@ AND _sort_timestamp < toDateTime('2024-12-10T00:00:00')"""
 def _gen_message(
     dt: datetime,
     organization_id: int,
-    measurements: dict[str, dict[str, float]] | None = None,
+    user: str,
     tags: dict[str, str] | None = None,
 ) -> Mapping[str, Any]:
-    measurements = measurements or {}
+    measurements = {}
     tags = tags or {}
     return {
         "description": "/api/0/relays/projectconfigs/",
@@ -174,7 +174,7 @@ def _gen_message(
             "transaction": "/api/0/relays/projectconfigs/",
             "transaction.method": "POST",
             "transaction.op": "http.server",
-            "user": "ip:192.168.0.45",
+            "user": user,
         },
         "span_id": "123456781234567D",
         "tags": {
@@ -186,7 +186,7 @@ def _gen_message(
             "relay_use_post_or_schedule": "True",
             "relay_use_post_or_schedule_rejected": "version",
             "user.ip": "192.168.0.45",
-            "user": "ip:192.168.0.45",
+            "user": user,
             "spans_over_limit": "False",
             "server_name": "blah",
             "color": random.choice(["red", "green", "blue"]),
@@ -235,7 +235,7 @@ def _generate_expected_response(user: str) -> TraceItemTableResponse:
         column_values=[
             TraceItemColumnValues(
                 attribute_name="user",
-                results=[AttributeValue(val_str="ip:" + user) for _ in range(20)],
+                results=[AttributeValue(val_str=user) for _ in range(20)],
             )
         ],
         page_token=PageToken(offset=20),
@@ -251,11 +251,31 @@ def test_span_is_scrubbed() -> None:
     ) - timedelta(minutes=180)
     organization_ids = [0, 1]
     spans_storage = get_storage(StorageKey("eap_spans"))
-    messages = [
-        _gen_message(BASE_TIME - timedelta(minutes=i), organization_id)
-        for organization_id in organization_ids
-        for i in range(20)
-    ]
+    messages = []
+    for organization_id in organization_ids:
+        for i in range(20):
+            if organization_id == 0:
+                messages.append(
+                    _gen_message(
+                        BASE_TIME - timedelta(minutes=i), organization_id, "ip:" + _USER
+                    )
+                )
+            if organization_id == 1:
+                messages.append(
+                    _gen_message(
+                        BASE_TIME - timedelta(minutes=i),
+                        organization_id,
+                        "email:" + _USER,
+                    )
+                )
+    # messages = [
+    #     _gen_message(BASE_TIME - timedelta(minutes=i), organization_id, "ip:" + _USER)
+    #     for organization_id in organization_ids
+    #     for i in range(20)
+    # ]
+
+    print(messages[0])
+
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
     # we inserted spans for organizations 0, 1, 2, and we make sure they look as expected
@@ -266,7 +286,10 @@ def test_span_is_scrubbed() -> None:
         response = EndpointTraceItemTable().execute(
             _generate_request(ts, hour_ago, organization_id, [1, 2, 3])
         )
-        assert response == _generate_expected_response(_USER)
+        if organization_id == 0:
+            assert response == _generate_expected_response("ip:" + _USER)
+        if organization_id == 1:
+            assert response == _generate_expected_response("email:" + _USER)
 
     # next we scrub organizations 0
     start_datetime = datetime.utcfromtimestamp(Timestamp(seconds=hour_ago).seconds)
@@ -288,10 +311,10 @@ def test_span_is_scrubbed() -> None:
     response = EndpointTraceItemTable().execute(
         _generate_request(ts, hour_ago, organization_ids[0], [3, 2, 1])
     )
-    assert response == _generate_expected_response("scrubbed")
+    assert response == _generate_expected_response("ip:scrubbed")
 
     # then we make sure organization 1 is NOT SCRUBBED
     response = EndpointTraceItemTable().execute(
         _generate_request(ts, hour_ago, organization_ids[1], [3, 2, 1])
     )
-    assert response == _generate_expected_response(_USER)
+    assert response == _generate_expected_response("email:" + _USER)
