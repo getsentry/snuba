@@ -111,7 +111,7 @@ def test_generate_query() -> None:
         job._get_query(None)
         == """ALTER TABLE eap_spans_2_local
 
-UPDATE `attr_str_2` = mapApply((k, v) -> (k, if(k = 'user' AND startsWith(v, 'ip:') AND (isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4))), 'ip:scrubbed', v)), `attr_str_2`)
+UPDATE `attr_str_11` = mapApply((k, v) -> (k, if(k = 'sentry.user' AND startsWith(v, 'ip:') AND (isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4))), 'ip:scrubbed', v)), `attr_str_11`)
 WHERE organization_id IN [1,3,5,6]
 AND _sort_timestamp >= toDateTime('2024-12-01T00:00:00')
 AND _sort_timestamp < toDateTime('2024-12-10T00:00:00')"""
@@ -185,8 +185,6 @@ def _gen_message(
             "relay_protocol_version": "3",
             "relay_use_post_or_schedule": "True",
             "relay_use_post_or_schedule_rejected": "version",
-            "user.ip": "192.168.0.45",
-            "user": user,
             "spans_over_limit": "False",
             "server_name": "blah",
             "color": random.choice(["red", "green", "blue"]),
@@ -219,11 +217,13 @@ def _generate_request(
                 key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
             )
         ),
-        columns=[Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user"))],
+        columns=[
+            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.user"))
+        ],
         order_by=[
             TraceItemTableRequest.OrderBy(
                 column=Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user")
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.user")
                 )
             )
         ],
@@ -234,7 +234,7 @@ def _generate_expected_response(user: str) -> TraceItemTableResponse:
     return TraceItemTableResponse(
         column_values=[
             TraceItemColumnValues(
-                attribute_name="user",
+                attribute_name="sentry.user",
                 results=[AttributeValue(val_str=user) for _ in range(20)],
             )
         ],
