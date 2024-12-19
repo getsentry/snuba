@@ -21,6 +21,7 @@ class ScrubUserFromSentryTags(Job):
         self._project_ids = params["project_ids"]
         self._start_datetime = datetime.fromisoformat(params["start_datetime"])
         self._end_datetime = datetime.fromisoformat(params["end_datetime"])
+        self._mutations_sync = params.get("mutations_sync", 0)
 
     def _get_query(self, cluster_name: str | None) -> str:
         project_ids = ",".join([str(p) for p in self._project_ids])
@@ -74,6 +75,8 @@ AND end_timestamp < toDateTime('{end_datetime}')"""
             cluster_name = None
         query = self._get_query(cluster_name)
         logger.info("Executing query: {query}")
-        result = connection.execute(query=query, settings={"mutations_sync": 0})
+        result = connection.execute(
+            query=query, settings={"mutations_sync": self._mutations_sync}
+        )
         logger.info("complete")
         logger.info(repr(result))
