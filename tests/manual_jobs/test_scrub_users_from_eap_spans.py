@@ -111,14 +111,7 @@ def test_generate_query() -> None:
         job._get_query(None)
         == """ALTER TABLE eap_spans_2_local
 
-UPDATE `attr_str_2` = mapApply((k, v) -> (k, if(k = 'user' AND startsWith(v, 'ip:'), concat(
-                    'ip:',
-                    if(
-                        isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4)),
-                        'scrubbed',
-                        substring(v, 4)
-                    )
-                ), v)), `attr_str_2`)
+UPDATE `attr_str_2` = mapApply((k, v) -> (k, if(k = 'user' AND startsWith(v, 'ip:') AND (isIPv4String(substring(v, 4)) OR isIPv6String(substring(v, 4))), 'ip:scrubbed', v)), `attr_str_2`)
 WHERE organization_id IN [1,3,5,6]
 AND _sort_timestamp >= toDateTime('2024-12-01T00:00:00')
 AND _sort_timestamp < toDateTime('2024-12-10T00:00:00')"""
