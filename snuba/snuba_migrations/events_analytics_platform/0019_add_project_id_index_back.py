@@ -6,6 +6,8 @@ from snuba.migrations.operations import SqlOperation
 
 storage_set_name = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "eap_spans_2_local"
+field_name = "project_id"
+index_name = f"bf_{field_name}"
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -16,8 +18,8 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.AddIndex(
                 storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
                 table_name=local_table_name,
-                index_name="bf_project_id",
-                index_expression="project_id",
+                index_name=index_name,
+                index_expression=field_name,
                 index_type="bloom_filter",
                 granularity=1,
                 target=operations.OperationTarget.LOCAL,
@@ -29,7 +31,7 @@ class Migration(migration.ClickhouseNodeMigration):
             operations.DropIndex(
                 storage_set=StorageSetKey.EVENTS_ANALYTICS_PLATFORM,
                 table_name=local_table_name,
-                index_name="bf_project_id",
+                index_name=index_name,
                 target=operations.OperationTarget.LOCAL,
             ),
         ]
