@@ -124,7 +124,7 @@ def _gen_message(
     user: str,
     tags: dict[str, str] | None = None,
 ) -> Mapping[str, Any]:
-    measurements = {}
+    measurements: dict[Any, Any] = {}
     tags = tags or {}
     return {
         "description": "/api/0/relays/projectconfigs/",
