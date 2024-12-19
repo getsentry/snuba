@@ -32,7 +32,7 @@ mandatory_condition_checkers:
 
 stream_loader:
   processor: UptimeMonitorChecksProcessor
-  default_topic: snuba-uptime-monitor-checks
+  default_topic: uptime-results
   dlq_topic: snuba-dead-letter-uptime-monitor-checks
 
 allocation_policies:
