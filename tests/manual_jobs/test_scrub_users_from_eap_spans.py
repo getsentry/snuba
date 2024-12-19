@@ -249,7 +249,7 @@ def test_span_is_scrubbed() -> None:
     BASE_TIME = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0
     ) - timedelta(minutes=180)
-    organization_ids = [0, 1]
+    organization_ids = [0, 1, 2]
     spans_storage = get_storage(StorageKey("eap_spans"))
     messages = []
     for organization_id in organization_ids:
@@ -268,13 +268,14 @@ def test_span_is_scrubbed() -> None:
                         "email:" + _USER,
                     )
                 )
-    # messages = [
-    #     _gen_message(BASE_TIME - timedelta(minutes=i), organization_id, "ip:" + _USER)
-    #     for organization_id in organization_ids
-    #     for i in range(20)
-    # ]
-
-    print(messages[0])
+            if organization_id == 2:
+                messages.append(
+                    _gen_message(
+                        BASE_TIME - timedelta(minutes=i),
+                        organization_id,
+                        "noscrub",
+                    )
+                )
 
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -290,6 +291,8 @@ def test_span_is_scrubbed() -> None:
             assert response == _generate_expected_response("ip:" + _USER)
         if organization_id == 1:
             assert response == _generate_expected_response("email:" + _USER)
+        if organization_id == 2:
+            assert response == _generate_expected_response("noscrub")
 
     # next we scrub organizations 0
     start_datetime = datetime.utcfromtimestamp(Timestamp(seconds=hour_ago).seconds)
@@ -313,8 +316,14 @@ def test_span_is_scrubbed() -> None:
     )
     assert response == _generate_expected_response("ip:scrubbed")
 
-    # then we make sure organization 1 is NOT SCRUBBED
+    # then we make sure organization 1 is NOT SCRUBBED because it's not coalesced using ip
     response = EndpointTraceItemTable().execute(
         _generate_request(ts, hour_ago, organization_ids[1], [3, 2, 1])
     )
     assert response == _generate_expected_response("email:" + _USER)
+
+    # then we make sure organization 2 is NOT SCRUBBED because its irrelevant
+    response = EndpointTraceItemTable().execute(
+        _generate_request(ts, hour_ago, organization_ids[2], [3, 2, 1])
+    )
+    assert response == _generate_expected_response("noscrub")
