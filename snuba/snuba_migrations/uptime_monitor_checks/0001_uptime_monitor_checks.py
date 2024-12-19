@@ -17,7 +17,7 @@ columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
-    Column("uptime_subscription_id", UInt(64)),
+    Column("uptime_subscription_id", UUID()),
     Column("uptime_check_id", UUID()),
     Column("scheduled_check_time", DateTime64(3)),  # millisecond precision
     Column("timestamp", DateTime64(3)),  # millisecond precision
