@@ -28,7 +28,15 @@ class ScrubUserFromEAPSpansStrAttrs(Job):
         on_cluster = f"ON CLUSTER '{cluster_name}'" if cluster_name else ""
         return f"""ALTER TABLE spans_str_attrs_3_local
 {on_cluster}
-DELETE WHERE (attr_key = 'sentry.user.ip' OR attr_key = 'sentry.user')
+DELETE WHERE
+(
+    attr_key = 'sentry.user.ip' OR
+    (
+        attr_key = 'sentry.user' AND
+        startsWith(attr_value, 'ip:') AND
+        (isIPv4String(substring(attr_value, 4)) OR isIPv6String(substring(attr_value, 4)))
+    )
+)
 AND organization_id IN [{organization_ids}]
 AND timestamp >= toDateTime('{start_datetime}')
 AND timestamp < toDateTime('{end_datetime}')"""
@@ -45,7 +53,7 @@ AND timestamp < toDateTime('{end_datetime}')"""
             cluster_name = None
         query = self._get_query(cluster_name)
         logger.info("Executing query: {query}")
-        result = connection.execute(query=query, settings={"mutations_sync": 2})
+        result = connection.execute(query=query, settings={"mutations_sync": 0})
 
         logger.info("complete")
         logger.info(repr(result))
