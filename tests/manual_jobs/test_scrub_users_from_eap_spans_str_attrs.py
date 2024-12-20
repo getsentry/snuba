@@ -123,34 +123,42 @@ AND timestamp < toDateTime('2024-12-10T00:00:00')"""
 def test_simple_case() -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     messages = [
-        gen_message({"tag1": "herp", "tag2": "herp"}),
+        gen_message(tags={"tag1": "herp", "tag2": "herp"}, sentry_tags={}),
         gen_message(
-            {
+            tags={
                 "tag1": "herpderp",
                 "tag2": "herp",
-                "sentry.user": "ip:1.2.3.4",
-                "sentry.user.ip": "1.2.3.4",
-            }
+            },
+            sentry_tags={
+                "user": "ip:1.2.3.4",
+                "user.ip": "1.2.3.4",
+            },
         ),
         gen_message(
-            {
+            tags={
                 "tag1": "durp",
                 "tag3": "herp",
-                "sentry.user": "ip:2.3.4.5",
-                "sentry.user.ip": "2.3.4.5",
-            }
+            },
+            sentry_tags={
+                "user": "ip:2.3.4.5",
+                "user.ip": "2.3.4.5",
+            },
         ),
-        gen_message({"tag1": "blah", "tag2": "herp"}),
+        gen_message(tags={"tag1": "blah", "tag2": "herp"}, sentry_tags={}),
         gen_message(
-            {
+            tags={
                 "tag1": "derpderp",
                 "tag2": "derp",
-                "sentry.user": "ip:3.4.5.6",
-                "sentry.user.ip": "3.4.5.6",
-            }
+            },
+            sentry_tags={
+                "user": "ip:3.4.5.6",
+                "user.ip": "3.4.5.6",
+            },
         ),
-        gen_message({"tag2": "hehe", "sentry.user.ip": "5.5.5.5"}),
-        gen_message({"tag1": "some_last_value", "sentry.user": "normal-user"}),
+        gen_message(tags={"tag2": "hehe"}, sentry_tags={"user.ip": "5.5.5.5"}),
+        gen_message(
+            tags={"tag1": "some_last_value"}, sentry_tags={"user": "normal-user"}
+        ),
     ]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -233,7 +241,9 @@ COMMON_META = RequestMeta(
 )
 
 
-def gen_message(tags: Mapping[str, str]) -> Mapping[str, Any]:
+def gen_message(
+    tags: Mapping[str, str], sentry_tags: Mapping[str, str]
+) -> Mapping[str, Any]:
     return {
         "description": "/api/0/relays/projectconfigs/",
         "duration_ms": 152,
@@ -248,7 +258,7 @@ def gen_message(tags: Mapping[str, str]) -> Mapping[str, Any]:
         "received": 1721319572.877828,
         "retention_days": 90,
         "segment_id": "8873a98879faf06d",
-        "sentry_tags": {},
+        "sentry_tags": sentry_tags,
         "span_id": uuid.uuid4().hex,
         "tags": tags,
         "trace_id": uuid.uuid4().hex,
