@@ -66,7 +66,6 @@ struct UptimeMonitorCheckMessage {
     actual_check_time_ms: f64,
     duration_ms: u64,
     status: String,
-    span_id: Option<String>,
     status_reason: Option<CheckStatusReason>,
     trace_id: Uuid,
     request_info: Option<RequestInfo>,
@@ -74,7 +73,6 @@ struct UptimeMonitorCheckMessage {
 #[derive(Debug, Deserialize)]
 pub struct RequestInfo {
     pub http_status_code: Option<u16>,
-    pub request_type: Option<String>,
 }
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
