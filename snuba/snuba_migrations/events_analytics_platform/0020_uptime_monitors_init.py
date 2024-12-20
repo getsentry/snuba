@@ -24,10 +24,7 @@ columns: List[Column[Modifiers]] = [
     Column("duration_ms", UInt(64)),
     Column("region_slug", String(Modifiers(low_cardinality=True))),
     Column("check_status", String(Modifiers(low_cardinality=True))),
-    Column(
-        "check_status_reason",
-        String(Modifiers(nullable=True, low_cardinality=True)),
-    ),
+    Column("check_status_reason", String(Modifiers(low_cardinality=True))),
     Column("http_status_code", UInt(16)),
     Column("trace_id", UUID()),
     Column("retention_days", UInt(16)),
@@ -44,8 +41,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    primary_key="(organization_id, project_id, toDateTime(timestamp), uptime_check_id, trace_id)",
-                    order_by="(organization_id, project_id, toDateTime(timestamp), uptime_check_id, trace_id)",
+                    order_by="(organization_id, project_id, toDateTime(timestamp), trace_id, uptime_check_id)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
