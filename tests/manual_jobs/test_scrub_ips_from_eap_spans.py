@@ -111,7 +111,7 @@ def test_generate_query() -> None:
         job._get_query(None)
         == """ALTER TABLE eap_spans_2_local
 
-UPDATE `attr_str_1` = mapApply((k, v) -> (k, if(k = 'user.ip', 'scrubbed', v)), `attr_str_1`)
+UPDATE `attr_str_14` = mapApply((k, v) -> (k, if(k = 'sentry.user.ip', 'scrubbed', v)), `attr_str_14`)
 WHERE organization_id IN [1,3,5,6]
 AND _sort_timestamp >= toDateTime('2024-12-01T00:00:00')
 AND _sort_timestamp < toDateTime('2024-12-10T00:00:00')"""
@@ -175,6 +175,7 @@ def _gen_message(
             "transaction.method": "POST",
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
+            "user.ip": _USER_IP,
         },
         "span_id": "123456781234567D",
         "tags": {
@@ -185,7 +186,6 @@ def _gen_message(
             "relay_protocol_version": "3",
             "relay_use_post_or_schedule": "True",
             "relay_use_post_or_schedule_rejected": "version",
-            "user.ip": _USER_IP,
             "spans_over_limit": "False",
             "server_name": "blah",
             "color": random.choice(["red", "green", "blue"]),
@@ -219,12 +219,16 @@ def _generate_request(
             )
         ),
         columns=[
-            Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user.ip"))
+            Column(
+                key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.user.ip")
+            )
         ],
         order_by=[
             TraceItemTableRequest.OrderBy(
                 column=Column(
-                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="user.ip")
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.user.ip"
+                    )
                 )
             )
         ],
@@ -235,7 +239,7 @@ def _generate_expected_response(ip: str) -> TraceItemTableResponse:
     return TraceItemTableResponse(
         column_values=[
             TraceItemColumnValues(
-                attribute_name="user.ip",
+                attribute_name="sentry.user.ip",
                 results=[AttributeValue(val_str=ip) for _ in range(20)],
             )
         ],
