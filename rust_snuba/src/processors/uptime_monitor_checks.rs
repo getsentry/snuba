@@ -37,7 +37,7 @@ pub fn deserialize_message(
         duration: monitor_message.duration_ms,
         region_slug: Some("global".to_string()),
         check_status: monitor_message.status,
-        check_status_reason: monitor_message.status_reason,
+        check_status_reason: monitor_message.status_reason.map(|r| r.r#type),
         http_status_code: monitor_message
             .request_info
             .unwrap()
@@ -66,13 +66,22 @@ struct UptimeMonitorCheckMessage {
     actual_check_time_ms: f64,
     duration_ms: u64,
     status: String,
-    status_reason: Option<String>,
+    status_reason: Option<CheckStatusReason>,
     trace_id: Uuid,
     request_info: Option<RequestInfo>,
 }
 #[derive(Debug, Deserialize)]
 pub struct RequestInfo {
     pub http_status_code: Option<u16>,
+}
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CheckStatusReason {
+    /// The type of the status reason
+    pub r#type: String,
+
+    /// A human readable description of the status reason
+    pub description: String,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -109,7 +118,10 @@ mod tests {
             "actual_check_time_ms": 1702659277,
             "duration_ms": 100,
             "status": "ok",
-            "status_reason": "Request successful",
+            "status_reason": {
+                "type": "Request successful",
+                "description": "Request successful"
+            },
             "http_status_code": 200,
             "trace_id": "550e8400-e29b-41d4-a716-446655440000",
             "request_info": {
