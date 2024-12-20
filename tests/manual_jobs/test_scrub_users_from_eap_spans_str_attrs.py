@@ -118,9 +118,25 @@ AND timestamp < toDateTime('2024-12-10T00:00:00')"""
     )
 
 
+def _clear_attr_storage() -> None:
+    from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
+    from snuba.clusters.storage_sets import StorageSetKey
+
+    cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
+    storage_node = cluster.get_local_nodes()[0]
+    connection = cluster.get_node_connection(
+        ClickhouseClientSettings.MIGRATE, storage_node
+    )
+    connection.execute("TRUNCATE TABLE IF EXISTS spans_str_attrs_3_local")
+    connection.execute("TRUNCATE TABLE IF EXISTS spans_str_attrs_3_dist")
+
+
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 def test_simple_case() -> None:
+    # the table is populated via materialized view, therefore may not be dropped
+    # by the time we do this test
+    _clear_attr_storage()
     spans_storage = get_storage(StorageKey("eap_spans"))
     messages = [
         gen_message(tags={"tag1": "herp", "tag2": "herp"}, sentry_tags={}),
