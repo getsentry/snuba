@@ -23,6 +23,7 @@ from snuba.migrations.group_loader import (
     SystemLoader,
     TestMigrationLoader,
     TransactionsLoader,
+    UptimeMonitorChecksLoader,
 )
 
 
@@ -45,6 +46,7 @@ class MigrationGroup(Enum):
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     PROFILE_CHUNKS = "profile_chunks"
+    UPTIME_MONITOR_CHECKS = "uptime_monitor_checks"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -61,6 +63,7 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.PROFILE_CHUNKS,
+    MigrationGroup.UPTIME_MONITOR_CHECKS,
 }
 
 
@@ -177,6 +180,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
         readiness_state=ReadinessState.PARTIAL,
+    ),
+    MigrationGroup.UPTIME_MONITOR_CHECKS: _MigrationGroup(
+        loader=UptimeMonitorChecksLoader(),
+        storage_sets_keys={StorageSetKey.UPTIME_MONITOR_CHECKS},
+        readiness_state=ReadinessState.LIMITED,
     ),
 }
 
