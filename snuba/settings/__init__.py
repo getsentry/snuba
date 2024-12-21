@@ -93,7 +93,7 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "password": os.environ.get("CLICKHOUSE_PASSWORD", ""),
         "database": os.environ.get("CLICKHOUSE_DATABASE", "default"),
         "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
-        "secure": os.environ.get("CLICKHOUSE_SECURE", "0") == "1",
+        "secure": os.environ.get("CLICKHOUSE_SECURE", False),
         "ca_certs": os.environ.get("CLICKHOUSE_CA_CERTS"),
         "verify": os.environ.get("CLICKHOUSE_VERIFY"),
         "storage_sets": {
