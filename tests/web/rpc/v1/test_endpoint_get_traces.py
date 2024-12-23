@@ -5,17 +5,19 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import pytest
+from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesRequest,
     GetTracesResponse,
-    TraceColumn,
+    TraceAttribute,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
 from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
+    TraceItemName,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -148,7 +150,7 @@ def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
 class TestGetTraces(BaseApiTest):
-    def test_no_data(self) -> None:
+    def test_without_data(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         message = GetTracesRequest(
@@ -160,10 +162,9 @@ class TestGetTraces(BaseApiTest):
                 start_timestamp=ts,
                 end_timestamp=ts,
             ),
-            columns=[
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_TRACE_ID,
-                    type=AttributeKey.TYPE_STRING,
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 )
             ],
             limit=10,
@@ -189,18 +190,14 @@ class TestGetTraces(BaseApiTest):
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
-            columns=[
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_TRACE_ID,
-                    type=AttributeKey.TYPE_STRING,
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
             order_by=[
                 GetTracesRequest.OrderBy(
-                    column=TraceColumn(
-                        name=TraceColumn.Name.NAME_TRACE_ID,
-                        type=AttributeKey.TYPE_STRING,
-                    ),
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
         )
@@ -208,9 +205,10 @@ class TestGetTraces(BaseApiTest):
         expected_response = GetTracesResponse(
             traces=[
                 GetTracesResponse.Trace(
-                    columns=[
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_TRACE_ID,
+                    attributes=[
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_TRACE_ID,
+                            type=AttributeKey.TYPE_STRING,
                             value=AttributeValue(
                                 val_str=trace_id,
                             ),
@@ -222,7 +220,7 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
-        assert response == expected_response
+        assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_order_by_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -237,18 +235,14 @@ class TestGetTraces(BaseApiTest):
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
-            columns=[
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_TRACE_ID,
-                    type=AttributeKey.TYPE_STRING,
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
             order_by=[
                 GetTracesRequest.OrderBy(
-                    column=TraceColumn(
-                        name=TraceColumn.Name.NAME_TRACE_ID,
-                        type=AttributeKey.TYPE_STRING,
-                    ),
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
             limit=1,
@@ -257,11 +251,15 @@ class TestGetTraces(BaseApiTest):
         expected_response = GetTracesResponse(
             traces=[
                 GetTracesResponse.Trace(
-                    columns=[
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_TRACE_ID,
+                    attributes=[
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_TRACE_ID,
+                            type=AttributeKey.Type.TYPE_STRING,
                             value=AttributeValue(
-                                val_str=sorted(_TRACE_IDS)[0],
+                                val_str=sorted(
+                                    _SPANS,
+                                    key=lambda s: s["start_timestamp_ms"],
+                                )[len(_SPANS) - 1]["trace_id"],
                             ),
                         )
                     ],
@@ -270,7 +268,7 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=1),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
-        assert response == expected_response
+        assert MessageToDict(response) == MessageToDict(expected_response)
 
     def test_with_data_and_filter(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -285,22 +283,26 @@ class TestGetTraces(BaseApiTest):
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        type=AttributeKey.TYPE_STRING,
-                        name="sentry.trace_id",
-                    ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(
-                        val_str=_TRACE_IDS[0],
+            filters=[
+                GetTracesRequest.TraceFilter(
+                    item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(
+                                name="sentry.trace_id",
+                                type=AttributeKey.TYPE_STRING,
+                            ),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(
+                                val_str=_TRACE_IDS[0],
+                            ),
+                        ),
                     ),
                 ),
-            ),
-            columns=[
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_TRACE_ID,
-                    type=AttributeKey.TYPE_STRING,
+            ],
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
         )
@@ -308,9 +310,10 @@ class TestGetTraces(BaseApiTest):
         expected_response = GetTracesResponse(
             traces=[
                 GetTracesResponse.Trace(
-                    columns=[
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_TRACE_ID,
+                    attributes=[
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_TRACE_ID,
+                            type=AttributeKey.Type.TYPE_STRING,
                             value=AttributeValue(
                                 val_str=_TRACE_IDS[0],
                             ),
@@ -321,9 +324,9 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=1),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
-        assert response == expected_response
+        assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_and_order_by_and_aggregated_fields(
+    def test_with_data_order_by_and_aggregated_fields(
         self, setup_teardown: Any
     ) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
@@ -344,50 +347,49 @@ class TestGetTraces(BaseApiTest):
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
-            columns=[
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_TRACE_ID,
+            attributes=[
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                     type=AttributeKey.TYPE_STRING,
                 ),
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_START_TIMESTAMP,
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
                     type=AttributeKey.TYPE_FLOAT,
                 ),
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_TOTAL_SPAN_COUNT,
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT,
                     type=AttributeKey.TYPE_INT,
                 ),
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_FILTERED_SPAN_COUNT,
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
                     type=AttributeKey.TYPE_INT,
                 ),
-                TraceColumn(
-                    name=TraceColumn.Name.NAME_ROOT_SPAN_NAME,
+                TraceAttribute(
+                    key=TraceAttribute.Key.KEY_ROOT_SPAN_NAME,
                     type=AttributeKey.TYPE_STRING,
                 ),
             ],
-            filter=TraceItemFilter(
-                comparison_filter=ComparisonFilter(
-                    key=AttributeKey(
-                        name="sentry.op",
-                        type=AttributeKey.TYPE_STRING,
+            filters=[
+                GetTracesRequest.TraceFilter(
+                    item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                    filter=TraceItemFilter(
+                        comparison_filter=ComparisonFilter(
+                            key=AttributeKey(
+                                name="sentry.op",
+                                type=AttributeKey.TYPE_STRING,
+                            ),
+                            op=ComparisonFilter.OP_EQUALS,
+                            value=AttributeValue(val_str="db"),
+                        ),
                     ),
-                    op=ComparisonFilter.OP_EQUALS,
-                    value=AttributeValue(val_str="db"),
                 ),
-            ),
+            ],
             order_by=[
                 GetTracesRequest.OrderBy(
-                    column=TraceColumn(
-                        name=TraceColumn.Name.NAME_TRACE_ID,
-                        type=AttributeKey.TYPE_STRING,
-                    ),
+                    key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
                 GetTracesRequest.OrderBy(
-                    column=TraceColumn(
-                        name=TraceColumn.Name.NAME_START_TIMESTAMP,
-                        type=AttributeKey.TYPE_FLOAT,
-                    ),
+                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
                 ),
             ],
         )
@@ -395,33 +397,38 @@ class TestGetTraces(BaseApiTest):
         expected_response = GetTracesResponse(
             traces=[
                 GetTracesResponse.Trace(
-                    columns=[
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_TRACE_ID,
+                    attributes=[
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_TRACE_ID,
+                            type=AttributeKey.TYPE_STRING,
                             value=AttributeValue(
                                 val_str=trace_id,
                             ),
                         ),
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_START_TIMESTAMP,
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_START_TIMESTAMP,
+                            type=AttributeKey.TYPE_FLOAT,
                             value=AttributeValue(
                                 val_float=start_timestamp_per_trace_id[trace_id],
                             ),
                         ),
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_TOTAL_SPAN_COUNT,
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT,
+                            type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
                                 val_int=_SPAN_COUNT // len(_TRACE_IDS),
                             ),
                         ),
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_FILTERED_SPAN_COUNT,
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
+                            type=AttributeKey.TYPE_INT,
                             value=AttributeValue(
                                 val_int=(_SPAN_COUNT // len(_TRACE_IDS)) - 1,
                             ),
                         ),
-                        GetTracesResponse.Trace.Column(
-                            name=TraceColumn.Name.NAME_ROOT_SPAN_NAME,
+                        TraceAttribute(
+                            key=TraceAttribute.Key.KEY_ROOT_SPAN_NAME,
+                            type=AttributeKey.TYPE_STRING,
                             value=AttributeValue(
                                 val_str="root",
                             ),
@@ -433,4 +440,4 @@ class TestGetTraces(BaseApiTest):
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
         )
-        assert response == expected_response
+        assert MessageToDict(response) == MessageToDict(expected_response)

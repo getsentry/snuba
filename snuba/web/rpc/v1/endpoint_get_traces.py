@@ -6,20 +6,21 @@ from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesRequest,
     GetTracesResponse,
-    TraceColumn,
+    TraceAttribute,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemName
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array
 from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
@@ -28,6 +29,8 @@ from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.common import (
     base_conditions_and,
+    project_id_and_org_conditions,
+    timestamp_in_range_condition,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -39,16 +42,31 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
 
-_COLUMN_TO_NAME: dict[TraceColumn.Name, str] = {
-    TraceColumn.Name.NAME_FILTERED_SPAN_COUNT: "filtered_span_count",
-    TraceColumn.Name.NAME_ROOT_SPAN_NAME: "root_span_name",
-    TraceColumn.Name.NAME_START_TIMESTAMP: "start_timestamp",
-    TraceColumn.Name.NAME_TOTAL_SPAN_COUNT: "total_span_count",
-    TraceColumn.Name.NAME_TRACE_ID: "trace_id",
+_ATTRIBUTES: dict[TraceAttribute.Key, tuple[str, AttributeKey.Type]] = {
+    TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT: (
+        "filtered_item_count",
+        AttributeKey.Type.TYPE_INT,
+    ),
+    TraceAttribute.Key.KEY_ROOT_SPAN_NAME: (
+        "root_span_name",
+        AttributeKey.Type.TYPE_STRING,
+    ),
+    TraceAttribute.Key.KEY_START_TIMESTAMP: (
+        "start_timestamp",
+        AttributeKey.Type.TYPE_FLOAT,
+    ),
+    TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT: (
+        "total_item_count",
+        AttributeKey.Type.TYPE_INT,
+    ),
+    TraceAttribute.Key.KEY_TRACE_ID: (
+        "trace_id",
+        AttributeKey.Type.TYPE_STRING,
+    ),
 }
 
-_NAME_TO_COLUMN: dict[str, TraceColumn.Name] = {
-    v: k for k, v in _COLUMN_TO_NAME.items()
+_NAME_TO_ATTRIBUTE: dict[str, TraceAttribute.Key] = {
+    v[0]: k for k, v in _ATTRIBUTES.items()
 }
 
 _TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type, str] = {
@@ -57,53 +75,41 @@ _TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type, str] = {
     AttributeKey.Type.TYPE_FLOAT: "Float64",
 }
 
-_POSSIBLE_TYPES: dict[TraceColumn.Name, set[AttributeKey.Type]] = {
-    TraceColumn.Name.NAME_TRACE_ID: {
-        AttributeKey.Type.TYPE_STRING,
-    },
-    TraceColumn.Name.NAME_START_TIMESTAMP: {
-        AttributeKey.Type.TYPE_STRING,
-        AttributeKey.Type.TYPE_INT,
-        AttributeKey.Type.TYPE_FLOAT,
-    },
-}
 
-
-def _column_to_expression(trace_column: TraceColumn, conditions=None) -> Expression:
-    if trace_column.name == TraceColumn.Name.NAME_TOTAL_SPAN_COUNT:
+def _attribute_to_expression(
+    trace_attribute: TraceAttribute, conditions=None
+) -> Expression:
+    if trace_attribute.key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
         return f.count(
-            alias=_COLUMN_TO_NAME[trace_column.name],
+            alias=_ATTRIBUTES[trace_attribute.key][0],
         )
-    if trace_column.name == TraceColumn.Name.NAME_FILTERED_SPAN_COUNT:
+    if trace_attribute.key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
         return f.countIf(
             conditions,
-            alias=_COLUMN_TO_NAME[trace_column.name],
+            alias=_ATTRIBUTES[trace_attribute.key][0],
         )
-    if trace_column.name == TraceColumn.Name.NAME_START_TIMESTAMP:
+    if trace_attribute.key == TraceAttribute.Key.KEY_START_TIMESTAMP:
+        attribute = _ATTRIBUTES[trace_attribute.key]
         return f.CAST(
             f.min(column("start_timestamp")),
-            _TYPES_TO_CLICKHOUSE[trace_column.type],
-            alias=_COLUMN_TO_NAME[trace_column.name],
+            _TYPES_TO_CLICKHOUSE[attribute[1]],
+            alias=_ATTRIBUTES[trace_attribute.key][0],
         )
-    if trace_column.name == TraceColumn.Name.NAME_ROOT_SPAN_NAME:
+    if trace_attribute.key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
         return f.anyIf(
             column("name"),
             f.equals(column("is_segment"), True),
-            alias=_COLUMN_TO_NAME[trace_column.name],
+            alias=_ATTRIBUTES[trace_attribute.key][0],
         )
-    if (
-        trace_column.name in _COLUMN_TO_NAME
-        and trace_column.type in _POSSIBLE_TYPES.get(trace_column.name, {})
-    ):
+    if trace_attribute.key in _ATTRIBUTES:
+        attribute = _ATTRIBUTES[trace_attribute.key]
         return f.CAST(
-            column(
-                _COLUMN_TO_NAME[trace_column.name],
-            ),
-            _TYPES_TO_CLICKHOUSE[trace_column.type],
-            alias=_COLUMN_TO_NAME[trace_column.name],
+            column(attribute[0]),
+            _TYPES_TO_CLICKHOUSE[attribute[1]],
+            alias=attribute[0],
         )
     raise BadSnubaRPCRequestException(
-        f"{trace_column.name} had an unknown or unset type: {trace_column.type}"
+        f"{trace_attribute.key} had an unknown or unset type: {trace_attribute.type}"
     )
 
 
@@ -112,58 +118,18 @@ def _convert_order_by(
 ) -> Sequence[OrderBy]:
     res: list[OrderBy] = []
     for x in order_by:
-        direction = OrderByDirection.DESC if x.descending else OrderByDirection.ASC
         res.append(
             OrderBy(
-                direction=direction,
-                expression=_column_to_expression(x.column),
-            )
-        )
-    return res
-
-
-def _build_query(request: GetTracesRequest) -> Query:
-    trace_item_filter_expressions = trace_item_filters_to_expression(request.filter)
-    selected_columns = []
-
-    for trace_column in request.columns:
-        expression = _column_to_expression(trace_column, trace_item_filter_expressions)
-        selected_columns.append(
-            SelectedExpression(
-                name=_COLUMN_TO_NAME[trace_column.name],
-                expression=expression,
-            )
-        )
-
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
-    res = Query(
-        from_clause=entity,
-        selected_columns=selected_columns,
-        condition=base_conditions_and(
-            request.meta,
-        ),
-        order_by=_convert_order_by(request.order_by),
-        groupby=[
-            _column_to_expression(
-                TraceColumn(
-                    type=AttributeKey.TYPE_STRING,
-                    name=TraceColumn.Name.NAME_TRACE_ID,
+                direction=(
+                    OrderByDirection.DESC if x.descending else OrderByDirection.ASC
                 ),
-            ),
-        ],
-        limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
-    )
-
-    treeify_or_and_conditions(res)
-
+                expression=_attribute_to_expression(TraceAttribute(key=x.key)),
+            )
+        )
     return res
 
 
-def _build_snuba_request(request: GetTracesRequest) -> SnubaRequest:
+def _build_snuba_request(request: GetTracesRequest, query: Query) -> SnubaRequest:
     query_settings = (
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
@@ -171,7 +137,7 @@ def _build_snuba_request(request: GetTracesRequest) -> SnubaRequest:
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
-        query=_build_query(request),
+        query=query,
         query_settings=query_settings,
         attribution_info=AttributionInfo(
             referrer=request.meta.referrer,
@@ -192,39 +158,42 @@ def _convert_results(
 ) -> list[GetTracesResponse.Trace]:
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
-    for trace_column in request.columns:
-        if trace_column.type == AttributeKey.TYPE_BOOLEAN:
-            converters[trace_column.name] = lambda x: AttributeValue(val_bool=bool(x))
-        elif trace_column.type == AttributeKey.TYPE_STRING:
-            converters[trace_column.name] = lambda x: AttributeValue(val_str=str(x))
-        elif trace_column.type == AttributeKey.TYPE_INT:
-            converters[trace_column.name] = lambda x: AttributeValue(val_int=int(x))
-        elif trace_column.type == AttributeKey.TYPE_FLOAT:
-            converters[trace_column.name] = lambda x: AttributeValue(val_float=float(x))
+    for trace_attribute in request.attributes:
+        attribute_type = _ATTRIBUTES[trace_attribute.key][1]
+        if attribute_type == AttributeKey.TYPE_BOOLEAN:
+            converters[trace_attribute.key] = lambda x: AttributeValue(val_bool=bool(x))
+        elif attribute_type == AttributeKey.TYPE_STRING:
+            converters[trace_attribute.key] = lambda x: AttributeValue(val_str=str(x))
+        elif attribute_type == AttributeKey.TYPE_INT:
+            converters[trace_attribute.key] = lambda x: AttributeValue(val_int=int(x))
+        elif attribute_type == AttributeKey.TYPE_FLOAT:
+            converters[trace_attribute.key] = lambda x: AttributeValue(
+                val_float=float(x)
+            )
 
     res: list[GetTracesResponse.Trace] = []
     column_ordering = {
-        trace_column.name: i for i, trace_column in enumerate(request.columns)
+        trace_attribute.key: i for i, trace_attribute in enumerate(request.attributes)
     }
 
     for row in data:
         values: defaultdict[
-            TraceColumn.Name,
-            GetTracesResponse.Trace.Column,
-        ] = defaultdict(GetTracesResponse.Trace.Column)
+            TraceAttribute.Key,
+            TraceAttribute,
+        ] = defaultdict(TraceAttribute)
         for column_name, value in row.items():
-            name = _NAME_TO_COLUMN[column_name]
-            if name in converters.keys():
-                values[name] = GetTracesResponse.Trace.Column(
-                    name=name,
-                    value=converters[name](value),
-                )
+            key = _NAME_TO_ATTRIBUTE[column_name]
+            values[key] = TraceAttribute(
+                key=key,
+                value=converters[key](value),
+                type=_ATTRIBUTES[key][1],
+            )
         res.append(
             GetTracesResponse.Trace(
                 # we return the columns in the order they were requested
-                columns=sorted(
+                attributes=sorted(
                     values.values(),
-                    key=lambda c: column_ordering[c.name],
+                    key=lambda c: column_ordering[c.key],
                 )
             )
         )
@@ -233,17 +202,18 @@ def _convert_results(
 
 
 def _get_page_token(
-    request: GetTracesRequest, response: list[GetTracesResponse.Trace]
+    request: GetTracesRequest,
+    rows: list[GetTracesResponse.Trace],
 ) -> PageToken:
-    if not response:
+    if not rows:
         return PageToken(offset=0)
-    num_rows = len(response)
+    num_rows = len(rows)
     return PageToken(offset=request.page_token.offset + num_rows)
 
 
 def _validate_order_by(in_msg: GetTracesRequest) -> None:
-    order_by_cols = set([ob.column.name for ob in in_msg.order_by])
-    selected_columns = set([c.name for c in in_msg.columns])
+    order_by_cols = set([ob.key for ob in in_msg.order_by])
+    selected_columns = set([c.key for c in in_msg.attributes])
     if not order_by_cols.issubset(selected_columns):
         raise BadSnubaRPCRequestException(
             f"Ordered by columns {order_by_cols} not selected: {selected_columns}"
@@ -269,21 +239,156 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
-        snuba_request = _build_snuba_request(in_msg)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
-        traces = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
-            [res],
+            [],
             [self._timer],
         )
+
+        # Get a dict of trace IDs and timestamps.
+        trace_ids = self._list_trace_ids(request=in_msg)
+        if len(trace_ids) == 0:
+            return GetTracesResponse(meta=response_meta)
+
+        # Get metadata for those traces.
+        traces = self._get_metadata_for_traces(request=in_msg, trace_ids=trace_ids)
         return GetTracesResponse(
             traces=traces,
             page_token=_get_page_token(in_msg, traces),
             meta=response_meta,
         )
+
+    def _list_trace_ids(
+        self,
+        request: GetTracesRequest,
+    ) -> dict[str, int]:
+        # Find first span filter.
+        # TODO: support more than one filter.
+        trace_item_filters_expression = trace_item_filters_to_expression(
+            next(
+                f.filter
+                for f in request.filters
+                if f.item_name == TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+            )
+            if len(request.filters) > 0
+            else TraceItemFilter()
+        )
+        selected_columns: list[SelectedExpression] = [
+            SelectedExpression(
+                name="trace_id",
+                expression=f.cast(
+                    column("trace_id"),
+                    "String",
+                    alias="trace_id",
+                ),
+            ),
+            SelectedExpression(
+                name="_sort_timestamp",
+                expression=f.cast(
+                    column("_sort_timestamp"),
+                    "UInt32",
+                    alias="_sort_timestamp",
+                ),
+            ),
+        ]
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
+        query = Query(
+            from_clause=entity,
+            selected_columns=selected_columns,
+            condition=base_conditions_and(
+                request.meta,
+                trace_item_filters_expression,
+            ),
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("_sort_timestamp"),
+                ),
+            ],
+            limitby=LimitBy(limit=1, columns=[column("trace_id")]),
+            limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+        )
+
+        treeify_or_and_conditions(query)
+
+        results = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=_build_snuba_request(request, query),
+            timer=self._timer,
+        )
+        trace_ids: dict[str, int] = {}
+        for row in results.result.get("data", []):
+            trace_ids[row["trace_id"]] = row["_sort_timestamp"]
+        return trace_ids
+
+    def _get_metadata_for_traces(
+        self,
+        request: GetTracesRequest,
+        trace_ids: dict[str, int],
+    ):
+        trace_item_filters_expression = trace_item_filters_to_expression(
+            request.filters[0].filter if len(request.filters) > 0 else TraceItemFilter()
+        )
+
+        selected_columns: list[SelectedExpression] = []
+        for trace_attribute in request.attributes:
+            selected_columns.append(
+                SelectedExpression(
+                    name=_ATTRIBUTES[trace_attribute.key][0],
+                    expression=_attribute_to_expression(
+                        trace_attribute,
+                        trace_item_filters_expression,
+                    ),
+                )
+            )
+
+        entity = Entity(
+            key=EntityKey("eap_spans"),
+            schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+            sample=None,
+        )
+        timestamps = trace_ids.values()
+        query = Query(
+            from_clause=entity,
+            selected_columns=selected_columns,
+            condition=and_cond(
+                project_id_and_org_conditions(request.meta),
+                timestamp_in_range_condition(
+                    min(timestamps) - 2 * 3600,
+                    max(timestamps) + 2 * 3600,
+                ),
+                in_cond(
+                    f.cast(
+                        column("trace_id"),
+                        "String",
+                        alias="trace_id",
+                    ),
+                    literals_array(
+                        None, [literal(trace_id) for trace_id in trace_ids.keys()]
+                    ),
+                ),
+            ),
+            groupby=[
+                _attribute_to_expression(
+                    TraceAttribute(
+                        key=TraceAttribute.Key.KEY_TRACE_ID,
+                    ),
+                ),
+            ],
+            order_by=_convert_order_by(request.order_by),
+        )
+
+        treeify_or_and_conditions(query)
+
+        results = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=_build_snuba_request(request, query),
+            timer=self._timer,
+        )
+
+        return _convert_results(request, results.result.get("data", []))
