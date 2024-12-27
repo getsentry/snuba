@@ -15,6 +15,7 @@ ENTITY_KEYS = [
     EntityKey.DISCOVER,
     EntityKey.EVENTS,
     EntityKey.EAP_SPANS,
+    EntityKey.EAP_SPANS_RPC,
     EntityKey.SPANS_NUM_ATTRS,
     EntityKey.SPANS_STR_ATTRS,
     EntityKey.GROUPASSIGNEE,
