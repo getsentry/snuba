@@ -16,11 +16,8 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.logical import Query
@@ -38,6 +35,7 @@ from snuba.web.rpc.common.aggregation import (
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
+    entity_from_trace_item_name,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
@@ -195,12 +193,7 @@ def _convert_result_timeseries(
 
 
 def _build_query(request: TimeSeriesRequest) -> Query:
-    # TODO: This is hardcoded still
-    entity = Entity(
-        key=EntityKey("eap_spans"),
-        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
-        sample=None,
-    )
+    entity = entity_from_trace_item_name(request.meta.trace_item_name)
 
     aggregation_columns = [
         SelectedExpression(
