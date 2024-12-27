@@ -29,7 +29,6 @@ schema:
     { name: attr_str, type: Map, args: { key: { type: String }, value: { type: String } } },
     { name: attr_f64, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
     { name: attr_i64, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
-    { name: attr_bool, type: Map, args: { key: { type: String }, value: { type: DateTime64 } } },
   ]
 
 storages:
@@ -82,15 +81,6 @@ storages:
             normalized_columns:
               sentry.organization_id: organization_id
               sentry.project_id: project_id
-        - mapper: SubscriptableHashBucketMapper
-          args:
-            from_column_table: null
-            from_column_name: attr_bool
-            to_col_table: null
-            to_col_name: attr_num
-            data_type: Boolean
-            normalized_columns:
-              sentry.is_segment: is_segment
 
 storage_selector:
   selector: DefaultQueryStorageSelector
