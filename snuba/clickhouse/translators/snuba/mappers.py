@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Mapping, Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -9,7 +9,8 @@ from snuba.clickhouse.translators.snuba.allowed import (
     SubscriptableReferenceMapper,
     ValidColumnMappings,
 )
-from snuba.query.dsl import arrayElement
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import arrayElement, column
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import CurriedFunctionCall, Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
@@ -239,6 +240,12 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
+    # if specified, casts the result to the specified type.
+    data_type: Optional[str]
+    # if you add {'sentry.span_id': 'span_id'} here, then if the user requests attr_blah[sentry.span_id],
+    # this mapper will return a reference to the actual column instead of attr_str.
+    # if specified, data_type must also be specified.
+    normalized_columns: Optional[Mapping[str, str]]
 
     def attempt_map(
         self,
@@ -256,12 +263,36 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
+        if (
+            self.normalized_columns
+            and key.value in self.normalized_columns
+            and self.cast_as
+        ):
+            return f.CAST(
+                column(self.normalized_columns[key.value]),
+                self.data_type,
+                alias=expression.alias,
+            )
+
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-        return arrayElement(
-            expression.alias,
-            ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
-            key,
-        )
+        if self.data_type:
+            return f.CAST(
+                f.arrayElement(
+                    None,
+                    ColumnExpr(
+                        None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"
+                    ),
+                    key,
+                ),
+                self.data_type,
+                alias=expression.alias,
+            )
+        else:
+            return f.arrayElement(
+                expression.alias,
+                ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
+                key,
+            )
 
 
 @dataclass(frozen=True)
