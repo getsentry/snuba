@@ -9,8 +9,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
     SubscriptableReferenceMapper,
     ValidColumnMappings,
 )
-from snuba.query.dsl import Functions as f
-from snuba.query.dsl import arrayElement, column
+from snuba.query.dsl import arrayElement, column, literal
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import CurriedFunctionCall, Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
@@ -268,24 +267,30 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
             and key.value in self.normalized_columns
             and self.data_type
         ):
-            return f.CAST(
-                column(self.normalized_columns[key.value]),
-                self.data_type,
-                alias=expression.alias,
+            return FunctionCallExpr(
+                expression.alias,
+                "CAST",
+                (
+                    column(self.normalized_columns[key.value]),
+                    literal(self.data_type),
+                ),
             )
 
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
         if self.data_type:
-            return f.CAST(
-                arrayElement(
-                    None,
-                    ColumnExpr(
-                        None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"
+            return FunctionCallExpr(
+                expression.alias,
+                "CAST",
+                (
+                    arrayElement(
+                        None,
+                        ColumnExpr(
+                            None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"
+                        ),
+                        key,
                     ),
-                    key,
+                    literal(self.data_type),
                 ),
-                self.data_type,
-                alias=expression.alias,
             )
         else:
             return arrayElement(
