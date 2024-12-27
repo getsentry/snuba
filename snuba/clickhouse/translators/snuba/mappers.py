@@ -241,11 +241,11 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     to_col_table: Optional[str]
     to_col_name: str
     # if specified, casts the result to the specified type.
-    data_type: Optional[str]
+    data_type: Optional[str] = None
     # if you add {'sentry.span_id': 'span_id'} here, then if the user requests attr_blah[sentry.span_id],
     # this mapper will return a reference to the actual column instead of attr_str.
     # if specified, data_type must also be specified.
-    normalized_columns: Optional[Mapping[str, str]]
+    normalized_columns: Optional[Mapping[str, str]] = None
 
     def attempt_map(
         self,
@@ -266,7 +266,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if (
             self.normalized_columns
             and key.value in self.normalized_columns
-            and self.cast_as
+            and self.data_type
         ):
             return f.CAST(
                 column(self.normalized_columns[key.value]),
@@ -277,7 +277,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
         if self.data_type:
             return f.CAST(
-                f.arrayElement(
+                arrayElement(
                     None,
                     ColumnExpr(
                         None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"
@@ -288,7 +288,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
                 alias=expression.alias,
             )
         else:
-            return f.arrayElement(
+            return arrayElement(
                 expression.alias,
                 ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
                 key,
