@@ -196,6 +196,7 @@ test_data = [
             condition=binary_condition(
                 "or",
                 f.mapContains(column("attr_str"), literal("blah"), alias="x"),
+                f.mapContains(column("attr_i64"), literal("blah"), alias="y"),
                 f.mapContains(column("attr_strz"), literal("blah"), alias="z"),
             ),
         ),
@@ -210,6 +211,7 @@ test_data = [
             condition=binary_condition(
                 "or",
                 f.mapContains(column("attr_str_2"), literal("blah"), alias="x"),
+                f.mapContains(column("attr_num_2"), literal("blah"), alias="y"),
                 f.mapContains(column("attr_strz"), literal("blah"), alias="z"),
             ),
         ),
@@ -220,7 +222,9 @@ test_data = [
 @pytest.mark.parametrize("pre_format, expected_query", test_data)
 def test_format_expressions(pre_format: Query, expected_query: Query) -> None:
     copy = deepcopy(pre_format)
-    HashBucketFunctionTransformer("attr_str").process_query(copy, HTTPQuerySettings())
+    HashBucketFunctionTransformer(
+        {"attr_str": "attr_str", "attr_i64": "attr_num"}
+    ).process_query(copy, HTTPQuerySettings())
     assert copy.get_selected_columns() == expected_query.get_selected_columns()
     assert copy.get_groupby() == expected_query.get_groupby()
     assert copy.get_condition() == expected_query.get_condition()
