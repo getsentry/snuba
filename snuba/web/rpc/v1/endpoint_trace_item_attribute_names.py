@@ -99,7 +99,7 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
         selected_columns=[
             SelectedExpression(
                 name="attr_key",
-                expression=column("attr_key"),
+                expression=column("attr_key", alias="attr_key"),
             ),
         ],
         condition=condition,
