@@ -93,6 +93,12 @@ query_processors:
       time_parse_columns:
         - start_timestamp
         - end_timestamp
+  - processor: HashBucketFunctionTransformer
+    args:
+      hash_bucket_name_mapping:
+        attr_str: attr_str
+        attr_f64: attr_num
+        attr_i64: attr_num
   - processor: OptionalAttributeAggregationTransformer
     args:
       attribute_column_names:
@@ -108,11 +114,6 @@ query_processors:
       curried_aggregation_names:
         - quantile
         - quantileTDigestWeighted
-  - processor: HashBucketFunctionTransformer
-    args:
-      hash_bucket_names:
-        - attr_str
-        - attr_num
 
 validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
 validators:
