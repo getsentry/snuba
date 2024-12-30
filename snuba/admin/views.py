@@ -1369,7 +1369,20 @@ def get_job_specs() -> Response:
 @check_tool_perms(tools=[AdminTools.MANUAL_JOBS])
 def execute_job(job_id: str) -> Response:
     job_specs = list_job_specs()
-    return make_response(run_job(job_specs[job_id]), 200)
+    job_status = None
+    try:
+        job_status = run_job(job_specs[job_id])
+    except BaseException as e:
+        return make_response(
+            jsonify(
+                {
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    return make_response(job_status, 200)
 
 
 @application.route("/job-specs/<job_id>/logs", methods=["GET"])
