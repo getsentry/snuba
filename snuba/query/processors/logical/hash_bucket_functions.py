@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Mapping
 
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query
@@ -22,11 +22,9 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
     It converts mapExists(attr_str, 'blah') to mapExists(attr_str_{hash('blah')%20}, 'blah')
     """
 
-    def __init__(
-        self,
-        hash_bucket_names: Sequence[str],
-    ):
-        self.hash_bucket_names = hash_bucket_names
+    def __init__(self, hash_bucket_name_mapping: Mapping[str, str]):
+        super().__init__()
+        self.hash_bucket_name_mapping = hash_bucket_name_mapping
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_map_keys_and_values_expression(exp: Expression) -> Expression:
@@ -40,7 +38,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             if not isinstance(param, Column):
                 return exp
 
-            if param.column_name not in self.hash_bucket_names:
+            if param.column_name not in self.hash_bucket_name_mapping:
                 return exp
 
             if exp.function_name not in ("mapKeys", "mapValues"):
@@ -56,7 +54,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                         parameters=(
                             Column(
                                 None,
-                                column_name=f"{param.column_name}_{i}",
+                                column_name=f"{self.hash_bucket_name_mapping[param.column_name]}_{i}",
                                 table_name=param.table_name,
                             ),
                         ),
@@ -76,7 +74,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             if not isinstance(column, Column):
                 return exp
 
-            if column.column_name not in self.hash_bucket_names:
+            if column.column_name not in self.hash_bucket_name_mapping:
                 return exp
 
             if exp.function_name != "mapContains":
@@ -91,7 +89,11 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                 alias=exp.alias,
                 function_name=exp.function_name,
                 parameters=(
-                    Column(None, None, f"{column.column_name}_{bucket_idx}"),
+                    Column(
+                        None,
+                        None,
+                        f"{self.hash_bucket_name_mapping[column.column_name]}_{bucket_idx}",
+                    ),
                     key,
                 ),
             )
