@@ -1,3 +1,4 @@
+use std::ascii::AsciiExt;
 use std::borrow::Cow;
 
 use anyhow::Context;
@@ -445,7 +446,7 @@ impl ErrorRow {
             .into_iter()
             .flatten()
         {
-            if key == "Referrer" {
+            if key == "Referer" || key == "Referrer" {
                 http_referer = value.0;
                 break;
             }

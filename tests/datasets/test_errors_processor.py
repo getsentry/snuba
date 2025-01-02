@@ -260,6 +260,7 @@ class ErrorEvent:
             2,
             "insert",
             serialized_event,
+            {},
         )
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
@@ -326,7 +327,7 @@ class ErrorEvent:
                 "CPython",
                 "3.7.6",
                 "deadbeef",
-                self.trace_id,
+                self.trace_id.replace("-", ""),
             ],
             "partition": meta.partition,
             "offset": meta.offset,
@@ -336,7 +337,7 @@ class ErrorEvent:
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
-            "primary_hash": "d36001ef-28af-2542-fde8-cf2935766141",
+            "primary_hash": "04233d08-ac90-cf6f-c015-b1be5932e7e2",
             "received": int(
                 self.received_timestamp.replace(tzinfo=timezone.utc)
                 .replace(tzinfo=None, microsecond=0)
@@ -352,7 +353,7 @@ class ErrorEvent:
             "exception_stacks.type": ["ClickHouseError"],
             "exception_stacks.value": ["[171] DB::Exception: Block structure mismatch"],
             "exception_stacks.mechanism_type": ["excepthook"],
-            "exception_stacks.mechanism_handled": [False],
+            "exception_stacks.mechanism_handled": [0],
             "exception_frames.abs_path": ["/usr/local/bin/snuba"],
             "exception_frames.colno": [None],
             "exception_frames.filename": ["snuba"],
@@ -436,8 +437,9 @@ class TestErrorsProcessor:
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
         processor = ErrorsProcessor()
-        assert processor.process_message(payload, meta) == InsertBatch(
-            [message.build_result(meta)], ANY
+        assert (
+            processor.process_message(payload, meta).rows
+            == InsertBatch([message.build_result(meta)], ANY).rows
         )
 
     def test_errors_replayid_context(self) -> None:
