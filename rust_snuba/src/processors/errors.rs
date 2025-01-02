@@ -1,4 +1,3 @@
-use std::ascii::AsciiExt;
 use std::borrow::Cow;
 
 use anyhow::Context;
