@@ -210,6 +210,26 @@ class TestTraceItemAttributeNames(BaseApiTest):
             done += at_a_time
         assert expected_attributes == []
 
+    def test_empty_results(self) -> None:
+        req = TraceItemAttributeNamesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            type=AttributeKey.Type.TYPE_STRING,
+            value_substring_match="this_definitely_doesnt_exist_93710",
+        )
+        res = EndpointTraceItemAttributeNames().execute(req)
+        assert res.attributes == []
+
     def test_page_token_offset_filter(self) -> None:
 
         expected_attributes = []
