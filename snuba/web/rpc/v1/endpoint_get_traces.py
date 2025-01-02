@@ -55,7 +55,7 @@ _ATTRIBUTES: dict[
         AttributeKey.Type.TYPE_STRING,
     ),
     TraceAttribute.Key.KEY_START_TIMESTAMP: (
-        "start_timestamp",
+        "trace_start_timestamp",
         AttributeKey.Type.TYPE_FLOAT,
     ),
     TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT: (
@@ -100,9 +100,10 @@ def _attribute_to_expression(
             alias=_ATTRIBUTES[trace_attribute.key][0],
         )
     if trace_attribute.key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
-        return f.anyIf(
+        # TODO: Change to return the root span name instead of the trace's first span's name.
+        return f.argMin(
             column("name"),
-            f.equals(column("is_segment"), True),
+            column("start_timestamp"),
             alias=_ATTRIBUTES[trace_attribute.key][0],
         )
     if trace_attribute.key in _ATTRIBUTES:

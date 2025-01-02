@@ -54,6 +54,9 @@ def gen_message(
 ) -> Mapping[str, Any]:
     measurements = measurements or {}
     tags = tags or {}
+    timestamp = dt.timestamp()
+    if not is_segment:
+        timestamp += random.random()
     return {
         "description": span_name,
         "duration_ms": 152,
@@ -120,15 +123,15 @@ def gen_message(
             **tags,
         },
         "trace_id": trace_id,
-        "start_timestamp_ms": int(dt.timestamp()) * 1000 - int(random.gauss(1000, 200)),
-        "start_timestamp_precise": dt.timestamp(),
-        "end_timestamp_precise": dt.timestamp() + 1,
+        "start_timestamp_ms": int(timestamp * 1000),
+        "start_timestamp_precise": timestamp,
+        "end_timestamp_precise": timestamp + 1,
     }
 
 
 _SPANS = [
     gen_message(
-        dt=_BASE_TIME - timedelta(minutes=i),
+        dt=_BASE_TIME + timedelta(minutes=i),
         trace_id=_TRACE_IDS[i % len(_TRACE_IDS)],
         span_op="http.server" if i < len(_TRACE_IDS) else "db",
         span_name=(
@@ -136,7 +139,7 @@ _SPANS = [
             if i < len(_TRACE_IDS)
             else f"child {i%len(_TRACE_IDS)+1} of {_SPAN_COUNT//len(_TRACE_IDS)-1}"
         ),
-        is_segment=True if i < len(_TRACE_IDS) else False,
+        is_segment=i < len(_TRACE_IDS),
     )
     for i in range(_SPAN_COUNT)
 ]
@@ -180,15 +183,15 @@ class TestGetTraces(BaseApiTest):
 
     def test_with_data_and_order_by(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        hour_ago = int((_BASE_TIME - timedelta(hours=1)).timestamp())
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             attributes=[
@@ -225,15 +228,15 @@ class TestGetTraces(BaseApiTest):
 
     def test_with_data_order_by_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        hour_ago = int((_BASE_TIME - timedelta(hours=1)).timestamp())
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             attributes=[
@@ -274,15 +277,15 @@ class TestGetTraces(BaseApiTest):
 
     def test_with_data_and_filter(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        hour_ago = int((_BASE_TIME - timedelta(hours=1)).timestamp())
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=hour_ago),
-                end_timestamp=ts,
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             filters=[
@@ -332,7 +335,7 @@ class TestGetTraces(BaseApiTest):
         self, setup_teardown: Any
     ) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
-        three_hours_ago = int((_BASE_TIME - timedelta(hours=3)).timestamp())
+        three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
         for s in _SPANS:
             start_timestamp_per_trace_id[s["trace_id"]] = min(
@@ -345,8 +348,8 @@ class TestGetTraces(BaseApiTest):
                 organization_id=1,
                 cogs_category="something",
                 referrer="something",
-                start_timestamp=Timestamp(seconds=three_hours_ago),
-                end_timestamp=ts,
+                start_timestamp=ts,
+                end_timestamp=Timestamp(seconds=three_hours_later),
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
             ),
             attributes=[
