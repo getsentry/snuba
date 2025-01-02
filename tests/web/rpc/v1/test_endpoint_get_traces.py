@@ -41,6 +41,7 @@ _BASE_TIME = datetime.now(tz=timezone.utc).replace(
     microsecond=0,
 ) - timedelta(minutes=180)
 _SPAN_COUNT = 120
+_REQUEST_ID = uuid.uuid4().hex
 
 
 def gen_message(
@@ -165,6 +166,7 @@ class TestGetTraces(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=ts,
+                request_id=_REQUEST_ID,
             ),
             attributes=[
                 TraceAttribute(
@@ -192,7 +194,7 @@ class TestGetTraces(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=Timestamp(seconds=three_hours_later),
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                request_id=_REQUEST_ID,
             ),
             attributes=[
                 TraceAttribute(
@@ -222,7 +224,7 @@ class TestGetTraces(BaseApiTest):
                 for trace_id in sorted(_TRACE_IDS)
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -237,7 +239,7 @@ class TestGetTraces(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=Timestamp(seconds=three_hours_later),
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                request_id=_REQUEST_ID,
             ),
             attributes=[
                 TraceAttribute(
@@ -271,7 +273,7 @@ class TestGetTraces(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=1),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -286,7 +288,7 @@ class TestGetTraces(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=Timestamp(seconds=three_hours_later),
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                request_id=_REQUEST_ID,
             ),
             filters=[
                 GetTracesRequest.TraceFilter(
@@ -327,7 +329,7 @@ class TestGetTraces(BaseApiTest):
                 )
             ],
             page_token=PageToken(offset=1),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
@@ -350,7 +352,7 @@ class TestGetTraces(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=Timestamp(seconds=three_hours_later),
-                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                request_id=_REQUEST_ID,
             ),
             attributes=[
                 TraceAttribute(
@@ -443,6 +445,6 @@ class TestGetTraces(BaseApiTest):
                 for trace_id in sorted(_TRACE_IDS)
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
-            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+            meta=ResponseMeta(request_id=_REQUEST_ID),
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
