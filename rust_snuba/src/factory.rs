@@ -103,10 +103,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
             };
 
         // Write to clickhouse
-        let next_step = Box::new(ClickhouseWriterStep::new(
-            next_step,
-            &self.clickhouse_concurrency,
-        ));
+        let next_step = ClickhouseWriterStep::new(next_step, &self.clickhouse_concurrency);
 
         let next_step = SetJoinTimeout::new(next_step, None);
 
@@ -210,15 +207,13 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                 let schema = get_schema(&self.logical_topic_name, self.enforce_schema);
 
                 Box::new(RunTaskInThreads::new(
-                    Box::new(
-                        PythonTransformStep::new(
-                            next_step,
-                            self.storage_config.message_processor.clone(),
-                            self.processing_concurrency.concurrency,
-                            self.python_max_queue_depth,
-                        )
-                        .unwrap(),
-                    ),
+                    PythonTransformStep::new(
+                        next_step,
+                        self.storage_config.message_processor.clone(),
+                        self.processing_concurrency.concurrency,
+                        self.python_max_queue_depth,
+                    )
+                    .unwrap(),
                     Box::new(SchemaValidator {
                         schema,
                         enforce_schema: self.enforce_schema,
