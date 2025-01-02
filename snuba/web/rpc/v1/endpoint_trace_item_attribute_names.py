@@ -172,7 +172,7 @@ class EndpointTraceItemAttributeNames(
         attributes = convert_to_attributes(res, req.type)
         page_token = (
             PageToken(offset=req.page_token.offset + len(attributes))
-            if req.page_token.HasField("offset")
+            if req.page_token.HasField("offset") or len(attributes) == 0
             else PageToken(
                 filter_offset=TraceItemFilter(
                     comparison_filter=ComparisonFilter(
