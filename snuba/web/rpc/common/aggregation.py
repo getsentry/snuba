@@ -150,7 +150,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if self.confidence_interval is None:
+        if not self.is_extrapolated or not self.extrapolated_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         relative_confidence = (
@@ -183,7 +183,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if self.confidence_interval is None:
+        if not self.is_extrapolated or not self.extrapolated_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(
