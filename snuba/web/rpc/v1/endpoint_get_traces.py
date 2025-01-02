@@ -2,6 +2,7 @@ import uuid
 from collections import defaultdict
 from typing import Any, Callable, Dict, Iterable, Sequence, Type
 
+from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesRequest,
@@ -231,6 +232,24 @@ def _validate_order_by(in_msg: GetTracesRequest) -> None:
         )
 
 
+def _select_supported_filters(
+    filters: RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter],
+) -> TraceItemFilter:
+    filter_count = len(filters)
+    if filter_count == 0:
+        return TraceItemFilter()
+    if filter_count > 1:
+        raise BadSnubaRPCRequestException("Multiple filters are not supported.")
+    try:
+        return next(
+            f.filter
+            for f in filters
+            if f.item_name == TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+        )
+    except StopIteration:
+        raise BadSnubaRPCRequestException("Only one span filter is supported.")
+
+
 class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
     @classmethod
     def version(cls) -> str:
@@ -277,13 +296,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         # Find first span filter.
         # TODO: support more than one filter.
         trace_item_filters_expression = trace_item_filters_to_expression(
-            next(
-                f.filter
-                for f in request.filters
-                if f.item_name == TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
-            )
-            if len(request.filters) > 0
-            else TraceItemFilter()
+            _select_supported_filters(request.filters),
         )
         selected_columns: list[SelectedExpression] = [
             SelectedExpression(
