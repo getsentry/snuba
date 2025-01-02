@@ -42,7 +42,10 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
 
-_ATTRIBUTES: dict[TraceAttribute.Key, tuple[str, AttributeKey.Type]] = {
+_ATTRIBUTES: dict[
+    TraceAttribute.Key.ValueType,
+    tuple[str, AttributeKey.Type.ValueType],
+] = {
     TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT: (
         "filtered_item_count",
         AttributeKey.Type.TYPE_INT,
@@ -65,11 +68,11 @@ _ATTRIBUTES: dict[TraceAttribute.Key, tuple[str, AttributeKey.Type]] = {
     ),
 }
 
-_NAME_TO_ATTRIBUTE: dict[str, TraceAttribute.Key] = {
+_NAME_TO_ATTRIBUTE: dict[str, TraceAttribute.Key.ValueType] = {
     v[0]: k for k, v in _ATTRIBUTES.items()
 }
 
-_TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type, str] = {
+_TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type.ValueType, str] = {
     AttributeKey.Type.TYPE_STRING: "String",
     AttributeKey.Type.TYPE_INT: "Int64",
     AttributeKey.Type.TYPE_FLOAT: "Float64",
@@ -77,7 +80,8 @@ _TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type, str] = {
 
 
 def _attribute_to_expression(
-    trace_attribute: TraceAttribute, conditions=None
+    trace_attribute: TraceAttribute,
+    *conditions: Expression,
 ) -> Expression:
     if trace_attribute.key == TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT:
         return f.count(
@@ -85,12 +89,12 @@ def _attribute_to_expression(
         )
     if trace_attribute.key == TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT:
         return f.countIf(
-            conditions,
+            *conditions,
             alias=_ATTRIBUTES[trace_attribute.key][0],
         )
     if trace_attribute.key == TraceAttribute.Key.KEY_START_TIMESTAMP:
         attribute = _ATTRIBUTES[trace_attribute.key]
-        return f.CAST(
+        return f.cast(
             f.min(column("start_timestamp")),
             _TYPES_TO_CLICKHOUSE[attribute[1]],
             alias=_ATTRIBUTES[trace_attribute.key][0],
@@ -103,7 +107,7 @@ def _attribute_to_expression(
         )
     if trace_attribute.key in _ATTRIBUTES:
         attribute = _ATTRIBUTES[trace_attribute.key]
-        return f.CAST(
+        return f.cast(
             column(attribute[0]),
             _TYPES_TO_CLICKHOUSE[attribute[1]],
             alias=attribute[0],
@@ -156,7 +160,13 @@ def _build_snuba_request(request: GetTracesRequest, query: Query) -> SnubaReques
 def _convert_results(
     request: GetTracesRequest, data: Iterable[Dict[str, Any]]
 ) -> list[GetTracesResponse.Trace]:
-    converters: Dict[str, Callable[[Any], AttributeValue]] = {}
+    converters: Dict[
+        TraceAttribute.Key.ValueType,
+        Callable[
+            [Any],
+            AttributeValue,
+        ],
+    ] = {}
 
     for trace_attribute in request.attributes:
         attribute_type = _ATTRIBUTES[trace_attribute.key][1]
@@ -178,7 +188,7 @@ def _convert_results(
 
     for row in data:
         values: defaultdict[
-            TraceAttribute.Key,
+            TraceAttribute.Key.ValueType,
             TraceAttribute,
         ] = defaultdict(TraceAttribute)
         for column_name, value in row.items():
@@ -330,7 +340,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         self,
         request: GetTracesRequest,
         trace_ids: dict[str, int],
-    ):
+    ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
             request.filters[0].filter if len(request.filters) > 0 else TraceItemFilter()
         )

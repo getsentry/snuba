@@ -2,6 +2,7 @@ import random
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from operator import itemgetter
 from typing import Any, Mapping
 
 import pytest
@@ -248,6 +249,10 @@ class TestGetTraces(BaseApiTest):
             limit=1,
         )
         response = EndpointGetTraces().execute(message)
+        last_span = sorted(
+            _SPANS,
+            key=itemgetter("start_timestamp_ms"),
+        )[len(_SPANS) - 1]
         expected_response = GetTracesResponse(
             traces=[
                 GetTracesResponse.Trace(
@@ -256,10 +261,7 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_TRACE_ID,
                             type=AttributeKey.Type.TYPE_STRING,
                             value=AttributeValue(
-                                val_str=sorted(
-                                    _SPANS,
-                                    key=lambda s: s["start_timestamp_ms"],
-                                )[len(_SPANS) - 1]["trace_id"],
+                                val_str=last_span["trace_id"],
                             ),
                         )
                     ],
@@ -331,7 +333,7 @@ class TestGetTraces(BaseApiTest):
     ) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_ago = int((_BASE_TIME - timedelta(hours=3)).timestamp())
-        start_timestamp_per_trace_id = defaultdict(lambda: 2 * 1e10)
+        start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
         for s in _SPANS:
             start_timestamp_per_trace_id[s["trace_id"]] = min(
                 start_timestamp_per_trace_id[s["trace_id"]],
