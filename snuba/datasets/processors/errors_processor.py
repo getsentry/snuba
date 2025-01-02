@@ -302,6 +302,8 @@ class ErrorsProcessor(DatasetMessageProcessor):
         if trace_sampled:
             output["trace_sampled"] = bool(trace_sampled)
 
+        extract_features_context(output, contexts)
+
     def extract_common(
         self,
         output: MutableMapping[str, Any],
@@ -460,3 +462,24 @@ class ErrorsProcessor(DatasetMessageProcessor):
             if i:
                 sdk_integrations.append(i)
         output["sdk_integrations"] = sdk_integrations
+
+
+def extract_features_context(
+    output: MutableMapping[str, Any],
+    contexts: MutableMapping[str, Any],
+) -> None:
+    features_keys = []
+    features_values = []
+    _flags = contexts.get("flags", {})
+    if isinstance(_flags, dict):
+        _features_inner = _flags.get("values", [])
+        if isinstance(_features_inner, list):
+            for flag in _features_inner:
+                if isinstance(flag, dict):
+                    key = _unicodify(flag.get("key"))
+                    if key is not None:
+                        features_keys.append(key)
+                        features_values.append(_unicodify(flag.get("value")))
+
+    output["features.key"] = features_keys
+    output["features.value"] = features_values
