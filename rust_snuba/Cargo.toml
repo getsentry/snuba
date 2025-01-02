@@ -54,6 +54,7 @@ zstd = "0.12.3"
 serde_with = "3.8.1"
 seq-macro = "0.3"
 sentry_arroyo = "2.19.5"
+regex = "1.11.1"
 
 
 [dev-dependencies]
