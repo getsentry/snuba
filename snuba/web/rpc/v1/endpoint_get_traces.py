@@ -232,6 +232,7 @@ def _validate_order_by(in_msg: GetTracesRequest) -> None:
         )
 
 
+# TODO: support more than one filter.
 def _select_supported_filters(
     filters: RepeatedCompositeFieldContainer[GetTracesRequest.TraceFilter],
 ) -> TraceItemFilter:
@@ -241,6 +242,7 @@ def _select_supported_filters(
     if filter_count > 1:
         raise BadSnubaRPCRequestException("Multiple filters are not supported.")
     try:
+        # Find first span filter.
         return next(
             f.filter
             for f in filters
@@ -293,8 +295,6 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         self,
         request: GetTracesRequest,
     ) -> dict[str, int]:
-        # Find first span filter.
-        # TODO: support more than one filter.
         trace_item_filters_expression = trace_item_filters_to_expression(
             _select_supported_filters(request.filters),
         )
@@ -356,7 +356,7 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
         trace_ids: dict[str, int],
     ) -> list[GetTracesResponse.Trace]:
         trace_item_filters_expression = trace_item_filters_to_expression(
-            request.filters[0].filter if len(request.filters) > 0 else TraceItemFilter()
+            _select_supported_filters(request.filters),
         )
 
         selected_columns: list[SelectedExpression] = []
