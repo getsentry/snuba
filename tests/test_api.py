@@ -625,7 +625,7 @@ class TestApi(SimpleAPITest):
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
                             "received": calendar.timegm(self.base_time.timetuple()),
-                            "tags": {},
+                            "tags": [],
                             "exception": {
                                 "values": [
                                     {
