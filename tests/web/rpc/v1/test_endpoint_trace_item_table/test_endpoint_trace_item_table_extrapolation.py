@@ -1,3 +1,4 @@
+import math
 import random
 import uuid
 from datetime import datetime, timedelta
@@ -284,3 +285,133 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         assert (
             measurement_reliability == Reliability.RELIABILITY_LOW
         )  # low reliability due to low sample count
+
+    def test_count_reliability_with_group_by(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        messages_w_measurement = [
+            gen_message(
+                start - timedelta(minutes=i),
+                measurements={
+                    "custom_measurement": {
+                        "value": i
+                    },  # this results in values of 0, 1, 2, 3, and 4
+                    "server_sample_rate": {"value": 1.0},
+                },
+                tags={"key": "foo"},
+            )
+            for i in range(5)
+        ]
+        messages_no_measurement = [
+            gen_message(start - timedelta(minutes=i), tags={"key": "bar"})
+            for i in range(5)
+        ]
+        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="sum(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="count(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_P90,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="p90(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+                    )
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")
+                    ),
+                    descending=True,
+                ),
+            ],
+            group_by=[
+                AttributeKey(type=AttributeKey.TYPE_STRING, name="key"),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        measurement_tags = [v.val_str for v in response.column_values[0].results]
+        assert measurement_tags == ["foo", "bar"]
+
+        measurement_sums = [v.val_float for v in response.column_values[1].results]
+        measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
+        assert measurement_sums == [sum(range(5)), 0]
+        assert measurement_reliabilities == [
+            Reliability.RELIABILITY_LOW,
+            Reliability.RELIABILITY_UNSPECIFIED,
+        ]  # low reliability due to low sample count
+
+        measurement_avgs = [v.val_float for v in response.column_values[2].results]
+        measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
+        assert len(measurement_avgs) == 2
+        assert measurement_avgs[0] == sum(range(5)) / 5
+        assert math.isnan(measurement_avgs[1])
+        assert measurement_reliabilities == [
+            Reliability.RELIABILITY_LOW,
+            Reliability.RELIABILITY_UNSPECIFIED,
+        ]  # low reliability due to low sample count
+
+        measurement_counts = [v.val_float for v in response.column_values[3].results]
+        measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
+        assert measurement_counts == [5, 0]
+        assert measurement_reliabilities == [
+            Reliability.RELIABILITY_LOW,
+            Reliability.RELIABILITY_UNSPECIFIED,
+        ]  # low reliability due to low sample count
+
+        measurement_p90s = [v.val_float for v in response.column_values[4].results]
+        measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
+        assert len(measurement_p90s) == 2
+        assert measurement_p90s[0] == 4
+        assert math.isnan(measurement_p90s[1])
+        assert measurement_reliabilities == [
+            Reliability.RELIABILITY_LOW,
+            Reliability.RELIABILITY_UNSPECIFIED,
+        ]  # low reliability due to low sample count
