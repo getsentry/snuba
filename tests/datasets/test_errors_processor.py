@@ -381,12 +381,6 @@ class ErrorEvent:
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
-            expected_result["tags.key"].insert(4, "replayId")
-            expected_result["tags.value"].insert(4, self.replay_id.hex)
-
-        if self.trace_sampled:
-            expected_result["contexts.key"].insert(7, "trace.sampled")
-            expected_result["contexts.value"].insert(7, str(self.trace_sampled))
 
         return expected_result
 
@@ -562,7 +556,8 @@ class TestErrorsProcessor:
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
         result = message.build_result(meta)
-        result["replay_id"] = str(replay_id)
+        result["tags.key"].insert(4, "replayId")
+        result["tags.value"].insert(4, message.replay_id.hex)
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY
         )
@@ -753,7 +748,7 @@ class TestErrorsProcessor:
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
         result = message.build_result(meta)
-        result["trace_sampled"] = True
+        result["trace_sampled"] = 1
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY
