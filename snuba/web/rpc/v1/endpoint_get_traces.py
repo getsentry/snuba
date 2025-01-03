@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from typing import Any, Callable, Dict, Iterable, Sequence, Type
+from typing import Any, Callable, Dict, Iterable, Type
 
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 from google.protobuf.json_format import MessageToDict
@@ -42,6 +42,7 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
+_BUFFER_WINDOW = 2 * 3600  # 2 hours
 
 _ATTRIBUTES: dict[
     TraceAttribute.Key.ValueType,
@@ -117,22 +118,6 @@ def _attribute_to_expression(
     raise BadSnubaRPCRequestException(
         f"{trace_attribute.key} had an unknown or unset type: {trace_attribute.type}"
     )
-
-
-def _convert_order_by(
-    order_by: Sequence[GetTracesRequest.OrderBy],
-) -> Sequence[OrderBy]:
-    res: list[OrderBy] = []
-    for x in order_by:
-        res.append(
-            OrderBy(
-                direction=(
-                    OrderByDirection.DESC if x.descending else OrderByDirection.ASC
-                ),
-                expression=_attribute_to_expression(TraceAttribute(key=x.key)),
-            )
-        )
-    return res
 
 
 def _build_snuba_request(request: GetTracesRequest, query: Query) -> SnubaRequest:
@@ -383,8 +368,8 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
             condition=and_cond(
                 project_id_and_org_conditions(request.meta),
                 timestamp_in_range_condition(
-                    min(timestamps) - 2 * 3600,
-                    max(timestamps) + 2 * 3600,
+                    min(timestamps) - _BUFFER_WINDOW,
+                    max(timestamps) + _BUFFER_WINDOW,
                 ),
                 in_cond(
                     f.cast(
@@ -404,7 +389,12 @@ class EndpointGetTraces(RPCEndpoint[GetTracesRequest, GetTracesResponse]):
                     ),
                 ),
             ],
-            order_by=_convert_order_by(request.order_by),
+            order_by=[
+                OrderBy(
+                    direction=OrderByDirection.DESC,
+                    expression=column("trace_start_timestamp"),
+                ),
+            ],
         )
 
         treeify_or_and_conditions(query)

@@ -183,7 +183,7 @@ class TestGetTraces(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
 
-    def test_with_data_and_order_by(self, setup_teardown: Any) -> None:
+    def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
@@ -198,11 +198,6 @@ class TestGetTraces(BaseApiTest):
             ),
             attributes=[
                 TraceAttribute(
-                    key=TraceAttribute.Key.KEY_TRACE_ID,
-                ),
-            ],
-            order_by=[
-                GetTracesRequest.OrderBy(
                     key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
@@ -228,7 +223,7 @@ class TestGetTraces(BaseApiTest):
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_order_by_and_limit(self, setup_teardown: Any) -> None:
+    def test_with_data_and_limit(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         message = GetTracesRequest(
@@ -243,11 +238,6 @@ class TestGetTraces(BaseApiTest):
             ),
             attributes=[
                 TraceAttribute(
-                    key=TraceAttribute.Key.KEY_TRACE_ID,
-                ),
-            ],
-            order_by=[
-                GetTracesRequest.OrderBy(
                     key=TraceAttribute.Key.KEY_TRACE_ID,
                 ),
             ],
@@ -333,9 +323,7 @@ class TestGetTraces(BaseApiTest):
         )
         assert MessageToDict(response) == MessageToDict(expected_response)
 
-    def test_with_data_order_by_and_aggregated_fields(
-        self, setup_teardown: Any
-    ) -> None:
+    def test_with_data_and_aggregated_fields(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(_BASE_TIME.timestamp()))
         three_hours_later = int((_BASE_TIME + timedelta(hours=3)).timestamp())
         start_timestamp_per_trace_id: dict[str, float] = defaultdict(lambda: 2 * 1e10)
@@ -344,6 +332,10 @@ class TestGetTraces(BaseApiTest):
                 start_timestamp_per_trace_id[s["trace_id"]],
                 s["start_timestamp_precise"],
             )
+        trace_id_per_start_timestamp: dict[float, str] = {
+            timestamp: trace_id
+            for trace_id, timestamp in start_timestamp_per_trace_id.items()
+        }
         message = GetTracesRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
@@ -391,14 +383,6 @@ class TestGetTraces(BaseApiTest):
                     ),
                 ),
             ],
-            order_by=[
-                GetTracesRequest.OrderBy(
-                    key=TraceAttribute.Key.KEY_TRACE_ID,
-                ),
-                GetTracesRequest.OrderBy(
-                    key=TraceAttribute.Key.KEY_START_TIMESTAMP,
-                ),
-            ],
         )
         response = EndpointGetTraces().execute(message)
         expected_response = GetTracesResponse(
@@ -409,14 +393,16 @@ class TestGetTraces(BaseApiTest):
                             key=TraceAttribute.Key.KEY_TRACE_ID,
                             type=AttributeKey.TYPE_STRING,
                             value=AttributeValue(
-                                val_str=trace_id,
+                                val_str=trace_id_per_start_timestamp[start_timestamp],
                             ),
                         ),
                         TraceAttribute(
                             key=TraceAttribute.Key.KEY_START_TIMESTAMP,
                             type=AttributeKey.TYPE_FLOAT,
                             value=AttributeValue(
-                                val_float=start_timestamp_per_trace_id[trace_id],
+                                val_float=start_timestamp_per_trace_id[
+                                    trace_id_per_start_timestamp[start_timestamp]
+                                ],
                             ),
                         ),
                         TraceAttribute(
@@ -442,9 +428,13 @@ class TestGetTraces(BaseApiTest):
                         ),
                     ],
                 )
-                for trace_id in sorted(_TRACE_IDS)
+                for start_timestamp in reversed(
+                    sorted(trace_id_per_start_timestamp.keys())
+                )
             ],
             page_token=PageToken(offset=len(_TRACE_IDS)),
             meta=ResponseMeta(request_id=_REQUEST_ID),
         )
+        for start_timestamp in reversed(sorted(trace_id_per_start_timestamp.keys())):
+            print(start_timestamp, trace_id_per_start_timestamp[start_timestamp])
         assert MessageToDict(response) == MessageToDict(expected_response)
