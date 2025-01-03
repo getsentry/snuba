@@ -45,7 +45,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
         let next_step = CommitOffsets::new(Duration::from_secs(1));
 
         let next_step = RunTaskInThreads::new(
-            Box::new(next_step),
+            next_step,
             Box::new(ClickhouseWriter::new(
                 &self.storage_config.clickhouse_cluster.host,
                 self.storage_config.clickhouse_cluster.http_port,
@@ -86,7 +86,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
         );
 
         let next_step = RunTaskInThreads::new(
-            Box::new(next_step),
+            next_step,
             Box::new(MutationParser),
             &self.processing_concurrency,
             Some("parse"),
