@@ -29,7 +29,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
-    ExtrapolationMeta,
+    ExtrapolationContext,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -170,16 +170,23 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                extrapolation_meta = ExtrapolationMeta.from_row(
-                    row_data, timeseries.label
+                extrapolation_context = ExtrapolationContext.from_row(
+                    timeseries.label, row_data
                 )
-                if extrapolation_meta is not None:
+                if (
+                    # This isn't quite right but all non extrapolated aggregates
+                    # are assumed to be present.
+                    not extrapolation_context.is_extrapolated
+                    # This checks if the extrapolated aggregate is present by
+                    # inspecting the sample count
+                    or extrapolation_context.extrapolated_data_present
+                ):
                     timeseries.data_points.append(
                         DataPoint(
                             data=row_data[timeseries.label],
                             data_present=True,
-                            avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
-                            reliability=extrapolation_meta.reliability,
+                            avg_sampling_rate=extrapolation_context.average_sample_rate,
+                            reliability=extrapolation_context.reliability,
                         )
                     )
                 else:
