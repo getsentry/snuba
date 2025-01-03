@@ -69,7 +69,10 @@ _ATTRIBUTES: dict[
         AttributeKey.Type.TYPE_STRING,
     ),
 }
-_TYPES_TO_CLICKHOUSE: dict[AttributeKey.Type.ValueType, tuple[str, Callable]] = {
+_TYPES_TO_CLICKHOUSE: dict[
+    AttributeKey.Type.ValueType,
+    tuple[str, Callable[[Any], AttributeValue]],
+] = {
     AttributeKey.Type.TYPE_STRING: (
         "String",
         lambda x: AttributeValue(val_str=str(x)),
