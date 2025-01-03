@@ -146,6 +146,59 @@ def test_hash_bucket_tag_translation() -> None:
     )
 
 
+def test_hash_bucket_normalized() -> None:
+    mapper = SubscriptableHashBucketMapper(
+        from_column_table=None,
+        from_column_name="tags_str",
+        to_col_table=None,
+        to_col_name="tags_float",
+        data_type="String",
+        normalized_columns={"derp.hello": "some_column"},
+    )
+
+    non_normalized_mapped = mapper.attempt_map(
+        SubscriptableReference(
+            "tags_str[z]", Column(None, None, "tags_str"), Literal(None, "z")
+        ),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    )
+
+    normalized_mapped = mapper.attempt_map(
+        SubscriptableReference(
+            "tags_str[derp.hello]",
+            Column(None, None, "tags_str"),
+            Literal(None, "derp.hello"),
+        ),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    )
+
+    assert non_normalized_mapped == FunctionCall(
+        "tags_str[z]",
+        "CAST",
+        (
+            FunctionCall(
+                None,
+                "arrayElement",
+                (
+                    Column(
+                        None,
+                        None,
+                        f"tags_float_{fnv_1a(b'z') % constants.ATTRIBUTE_BUCKETS}",
+                    ),
+                    Literal(None, "z"),
+                ),
+            ),
+            Literal(None, "String"),
+        ),
+    )
+
+    assert normalized_mapped == FunctionCall(
+        "tags_str[derp.hello]",
+        "CAST",
+        (Column(None, None, "some_column"), Literal(None, "String")),
+    )
+
+
 def _get_nullable_expr(alias: str) -> FunctionCall:
     return FunctionCall(
         alias,
