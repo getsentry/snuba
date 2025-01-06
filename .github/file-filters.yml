@@ -8,3 +8,7 @@ api_changes:
   - "snuba/cli/devserver.py"
   - "rust_snuba/src/processors/*"
   - "snuba/datasets/processors/*"
+
+devservices_changes:
+  - 'devservices/**'
+  - '.github/workflows/ci.yml'
