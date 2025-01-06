@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import math
+from abc import ABC, abstractmethod
 from bisect import bisect_left
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, Dict, List, Optional
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
@@ -35,102 +39,176 @@ CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
 
 @dataclass(frozen=True)
-class ExtrapolationMeta:
-    reliability: Reliability.ValueType
-    avg_sampling_rate: float
+class ExtrapolationContext(ABC):
+    value: float
+    confidence_interval: Any
+    average_sample_rate: float
+    sample_count: int
+
+    @property
+    def extrapolated_data_present(self) -> bool:
+        return self.sample_count > 0
+
+    @property
+    @abstractmethod
+    def is_extrapolated(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def reliability(self) -> Reliability.ValueType:
+        raise NotImplementedError
 
     @staticmethod
     def from_row(
-        row_data: Dict[str, Any], column_label: str
-    ) -> "ExtrapolationMeta | None":
-        """
-        Computes the reliability and average sample rate for a column based on the extrapolation columns.
-        If the sample count is 0, we return None as we don't have any data to extrapolate.
-        """
+        column_label: str,
+        row_data: Dict[str, Any],
+    ) -> ExtrapolationContext:
+        value = row_data[column_label]
+
         confidence_interval = None
-        average_sample_rate = 0
-        sample_count = 0
-        is_percentile = False
+        average_sample_rate = None
+        sample_count = None
+
         percentile = 0.0
         granularity = 0.0
         width = 0.0
+
+        is_percentile = False
+
         for col_name, col_value in row_data.items():
             # we ignore non-custom columns
-            if col_name.startswith(CUSTOM_COLUMN_PREFIX):
-                custom_column_information = CustomColumnInformation.from_alias(col_name)
-                if (
-                    custom_column_information.referenced_column is None
-                    or custom_column_information.referenced_column != column_label
-                ):
-                    continue
+            if not col_name.startswith(CUSTOM_COLUMN_PREFIX):
+                continue
 
-                if custom_column_information.custom_column_id == "confidence_interval":
-                    confidence_interval = col_value
-                    is_percentile = custom_column_information.metadata.get(
-                        "function_type", ""
-                    ).startswith("p")
-                    if is_percentile:
-                        percentile = (
-                            float(
-                                custom_column_information.metadata["function_type"][1:]
-                            )
-                            / 100
-                        )
-                        granularity = float(
-                            custom_column_information.metadata.get("granularity", "0")
-                        )
-                        width = float(
-                            custom_column_information.metadata.get("width", "0")
-                        )
-                elif (
-                    custom_column_information.custom_column_id == "average_sample_rate"
-                ):
-                    average_sample_rate = col_value
-                elif custom_column_information.custom_column_id == "count":
-                    sample_count = col_value
+            custom_column_information = CustomColumnInformation.from_alias(col_name)
+            if (
+                custom_column_information.referenced_column is None
+                or custom_column_information.referenced_column != column_label
+            ):
+                continue
 
-        reliability = Reliability.RELIABILITY_UNSPECIFIED
-        if confidence_interval is not None:
-            if sample_count == 0:
-                return None
+            if custom_column_information.custom_column_id == "confidence_interval":
+                confidence_interval = col_value
 
-            estimate = row_data[column_label]
-            # relative confidence represents the ratio of the confidence interval to the estimate (by default it is the upper bound)
-            if is_percentile:
-                lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(
-                    sample_count, percentile
-                )
-                percentile_index_lower = _get_closest_percentile_index(
-                    lower_bound, percentile, granularity, width
-                )
-                percentile_index_upper = _get_closest_percentile_index(
-                    upper_bound, percentile, granularity, width
-                )
-                ci_lower = confidence_interval[percentile_index_lower]
-                ci_upper = confidence_interval[percentile_index_upper]
-                relative_confidence = max(
-                    estimate / ci_lower if ci_lower != 0 else float("inf"),
-                    ci_upper / estimate if estimate != 0 else float("inf"),
-                )
-            else:
-                relative_confidence = (
-                    (estimate + confidence_interval) / estimate
-                    if estimate != 0
-                    else float("inf")
-                )
+                is_percentile = custom_column_information.metadata.get(
+                    "function_type", ""
+                ).startswith("p")
+                if is_percentile:
+                    percentile = (
+                        float(custom_column_information.metadata["function_type"][1:])
+                        / 100
+                    )
+                    granularity = float(
+                        custom_column_information.metadata.get("granularity", "0")
+                    )
+                    width = float(custom_column_information.metadata.get("width", "0"))
+            elif custom_column_information.custom_column_id == "average_sample_rate":
+                average_sample_rate = col_value
+            elif custom_column_information.custom_column_id == "count":
+                sample_count = col_value
 
-            is_reliable = calculate_reliability(
-                relative_confidence,
-                sample_count,
-                CONFIDENCE_INTERVAL_THRESHOLD,
-            )
-            reliability = (
-                Reliability.RELIABILITY_HIGH
-                if is_reliable
-                else Reliability.RELIABILITY_LOW
+        if (
+            confidence_interval is None
+            or average_sample_rate is None
+            or sample_count is None
+        ):
+            return GenericExtrapolationContext(
+                value=value,
+                confidence_interval=None,
+                average_sample_rate=0,
+                sample_count=0,
             )
 
-        return ExtrapolationMeta(reliability, average_sample_rate)
+        if is_percentile:
+            return PercentileExtrapolationContext(
+                value=value,
+                confidence_interval=confidence_interval,
+                average_sample_rate=average_sample_rate,
+                sample_count=sample_count,
+                percentile=percentile,
+                granularity=granularity,
+                width=width,
+            )
+
+        return GenericExtrapolationContext(
+            value=value,
+            confidence_interval=confidence_interval,
+            average_sample_rate=average_sample_rate,
+            sample_count=sample_count,
+        )
+
+
+@dataclass(frozen=True)
+class GenericExtrapolationContext(ExtrapolationContext):
+    @property
+    def is_extrapolated(self) -> bool:
+        # We infer if a column is extrapolated or not by the presence of the
+        # confidence interval. It will be present for extrapolated aggregates
+        # but not for non-extrapolated aggregates and scalars.
+        return self.confidence_interval is not None
+
+    @cached_property
+    def reliability(self) -> Reliability.ValueType:
+        if not self.is_extrapolated or not self.extrapolated_data_present:
+            return Reliability.RELIABILITY_UNSPECIFIED
+
+        relative_confidence = (
+            (self.value + self.confidence_interval) / self.value
+            if self.value != 0
+            else float("inf")
+        )
+        is_reliable = calculate_reliability(
+            relative_confidence,
+            self.sample_count,
+            CONFIDENCE_INTERVAL_THRESHOLD,
+        )
+        if is_reliable:
+            return Reliability.RELIABILITY_HIGH
+        return Reliability.RELIABILITY_LOW
+
+
+@dataclass(frozen=True)
+class PercentileExtrapolationContext(ExtrapolationContext):
+    percentile: float
+    granularity: float
+    width: float
+
+    @property
+    def is_extrapolated(self) -> bool:
+        # We infer if a column is extrapolated or not by the presence of the
+        # confidence interval. It will be present for extrapolated aggregates
+        # but not for non-extrapolated aggregates and scalars.
+        return self.confidence_interval is not None
+
+    @cached_property
+    def reliability(self) -> Reliability.ValueType:
+        if not self.is_extrapolated or not self.extrapolated_data_present:
+            return Reliability.RELIABILITY_UNSPECIFIED
+
+        lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(
+            self.sample_count, self.percentile
+        )
+        percentile_index_lower = _get_closest_percentile_index(
+            lower_bound, self.percentile, self.granularity, self.width
+        )
+        percentile_index_upper = _get_closest_percentile_index(
+            upper_bound, self.percentile, self.granularity, self.width
+        )
+        ci_lower = self.confidence_interval[percentile_index_lower]
+        ci_upper = self.confidence_interval[percentile_index_upper]
+        relative_confidence = max(
+            self.value / ci_lower if ci_lower != 0 else float("inf"),
+            ci_upper / self.value if self.value != 0 else float("inf"),
+        )
+        is_reliable = calculate_reliability(
+            relative_confidence,
+            self.sample_count,
+            CONFIDENCE_INTERVAL_THRESHOLD,
+        )
+        if is_reliable:
+            return Reliability.RELIABILITY_HIGH
+        return Reliability.RELIABILITY_LOW
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
     ExtrapolationMode,
-    Reliability,
 )
 
 from snuba.attribution.appid import AppID
@@ -31,7 +30,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
-    ExtrapolationMeta,
+    ExtrapolationContext,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -210,14 +209,10 @@ def _convert_results(
             if column_name in converters.keys():
                 res[column_name].results.append(converters[column_name](value))
                 res[column_name].attribute_name = column_name
-                extrapolation_meta = ExtrapolationMeta.from_row(row, column_name)
-                if (
-                    extrapolation_meta is not None
-                    and extrapolation_meta.reliability
-                    != Reliability.RELIABILITY_UNSPECIFIED
-                ):
+                extrapolation_context = ExtrapolationContext.from_row(column_name, row)
+                if extrapolation_context.is_extrapolated:
                     res[column_name].reliabilities.append(
-                        extrapolation_meta.reliability
+                        extrapolation_context.reliability
                     )
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}

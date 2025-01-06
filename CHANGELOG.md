@@ -1,5 +1,30 @@
 # Changelog
 
+## 24.12.1
+
+### Various fixes & improvements
+
+- Revert "fix(eap-spans): Add an index on project_id (#6695)" (9f5c3f57) by @getsentry-bot
+- fix(eap-spans): Add an index on project_id (#6695) by @phacops
+- 984: scrub eap_spans_str_attrs (#6694) by @kylemumma
+- fix(inc984): scrub the correct bucket for sentry.user (#6693) by @xurui-c
+- fix(inc984): scrub the correct bucket for sentry.user.ip (#6692) by @volokluev
+- inc984: scrub `user` from eap_spans (#6691) by @xurui-c
+- inc984: scrub `user` from spans (#6689) by @xurui-c
+- fix(rust): Honor exit code (#6674) by @untitaker
+- ref(admin): lw delete related system queries (#6685) by @MeredithAnya
+- chore: Bump rust-toolchain (#6688) by @untitaker
+- chore(devservices): Bumping the version of devservices to latest (#6682) by @IanWoodard
+- fix(devservices): Add orchestrator devservices label to clickhouse (#6687) by @hubertdeng123
+- fix(eap): Fix divide by 0 errors caused when the sample count is 0 (#6681) by @davidtsuk
+- meta: Bump new development version (44657332)
+- ref(lw-deletes): add project_id killswitch and some logging (#6677) by @MeredithAnya
+- docs: update CH supported versions (#6683) by @MeredithAnya
+- feat(inc-984): Cleanup EAP spans  (#6676) by @xurui-c
+- fix(admin): Allow special characters in SYSTEM/OPTIMIZE queries (#6680) by @evanh
+- feat(eap): Use weighted average instead of simple average for calculating average sampling rate (#6678) by @davidtsuk
+- ref(lw-deletes): concurrent allocation policy requires org id (#6679) by @MeredithAnya
+
 ## 24.12.0
 
 ### Various fixes & improvements
