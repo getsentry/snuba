@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from snuba.clusters.cluster import ClickhouseClientSettings, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.manual_jobs import Job, JobLogger, JobSpec
@@ -10,11 +8,10 @@ class ExtractSpanData(Job):
         super().__init__(job_spec)
 
     def _generate_spans_query(self):
-        # Columns that should not be hashed (numeric and date types)
-        numeric_columns = {
-            "organization_id",
-            "project_id",
+        # Columns that should not be scrubbed
+        unscrubbed_columns = {
             "span_id",
+            "trace_id",
             "parent_span_id",
             "segment_id",
             "is_segment",
@@ -59,14 +56,14 @@ class ExtractSpanData(Job):
 
         scrubbed_columns = []
         for col in all_columns:
-            if col in numeric_columns or col.startswith("attr_num"):
+            if col in unscrubbed_columns or col.startswith("attr_num"):
                 scrubbed_columns.append(col)
             elif col.startswith("attr_str"):
                 scrubbed_columns.append(
-                    f"mapApply((k, v) -> (k, cityHash64(v)), {col}) AS {col}"
+                    f"mapApply((k, v) -> (k, cityHash64(v)), {col}) AS {col}_scrubbed"
                 )
             else:
-                scrubbed_columns.append(f"cityHash64({col}) AS {col}")
+                scrubbed_columns.append(f"cityHash64({col}) AS {col}_scrubbed")
 
         query = f"""
         SELECT
@@ -83,13 +80,10 @@ class ExtractSpanData(Job):
         cluster = get_cluster(StorageSetKey.EVENTS_ANALYTICS_PLATFORM)
         connection = cluster.get_query_connection(ClickhouseClientSettings.QUERY)
 
-        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name = f"scrubbed_spans_data_{current_time}.csv.gz"
-
         query = f"""
-        INSERT INTO FUNCTION gcs('https://storage.googleapis.com/{self.gcp_bucket_name}/{file_name}',
+        INSERT INTO FUNCTION gcs('{self.gcp_bucket_name}/{self.output_file_path}',
             'CSVWithNames',
-            '',
+            'auto',
             'gzip'
         )
         {self._generate_spans_query()}
@@ -98,5 +92,5 @@ class ExtractSpanData(Job):
         logger.info("Executing query")
         connection.execute(query=query)
         logger.info(
-            f"Data written to GCS bucket: https://storage.googleapis.com/{self.gcp_bucket_name}/{file_name}"
+            f"Data written to GCS bucket: {self.gcp_bucket_name}/{self.output_file_path}"
         )

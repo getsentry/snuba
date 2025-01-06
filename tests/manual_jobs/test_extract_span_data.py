@@ -8,6 +8,7 @@ import pytest
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
 from snuba.manual_jobs import JobSpec
+from snuba.manual_jobs.job_status import JobStatus
 from snuba.manual_jobs.runner import run_job
 from tests.helpers import write_raw_unprocessed_events
 
@@ -92,7 +93,7 @@ def _gen_message(
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-@pytest.mark.skip(reason="can't test writing to GCS")
+# @pytest.mark.skip(reason="can't test writing to GCS")
 def test_extract_span_data() -> None:
     BASE_TIME = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0
@@ -107,13 +108,22 @@ def test_extract_span_data() -> None:
 
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
-    run_job(
-        JobSpec(
-            "jobid",
-            "ExtractSpanData",
-            False,
-            {
-                "organization_ids": [0, 1],
-            },
+    assert (
+        run_job(
+            JobSpec(
+                "jobid",
+                "ExtractSpanData",
+                False,
+                {
+                    "organization_ids": [0, 1],
+                    "start_timestamp": (BASE_TIME - timedelta(minutes=30)).isoformat(),
+                    "end_timestamp": (BASE_TIME + timedelta(hours=24)).isoformat(),
+                    "table_name": "snuba_test.eap_spans_2_local",
+                    "limit": 1000000,
+                    "output_file_path": "scrubbed_spans_data.csv.gz",
+                    "gcp_bucket_name": "test-bucket",
+                },
+            )
         )
+        == JobStatus.FINISHED
     )
