@@ -450,14 +450,14 @@ jobs:
           docker tag ${IMAGE_URL} getsentry/snuba:nightly
           docker push getsentry/snuba:nightly
 
-    validate-devservices-config:
-      runs-on: ubuntu-24.04
-      needs: files-changed
-      if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
-      steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
-        name: Checkout repository
-      - uses: getsentry/action-validate-devservices-config@049567d407bbf73e3b0cad39dae7bc9447fc7669
-        name: Validate devservices config
-        with:
-          requirements-file-path: requirements.txt
+  validate-devservices-config:
+    runs-on: ubuntu-24.04
+    needs: files-changed
+    if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
+    steps:
+    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      name: Checkout repository
+    - uses: getsentry/action-validate-devservices-config@049567d407bbf73e3b0cad39dae7bc9447fc7669
+      name: Validate devservices config
+      with:
+        requirements-file-path: requirements.txt
