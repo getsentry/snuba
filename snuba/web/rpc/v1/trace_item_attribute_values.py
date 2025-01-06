@@ -160,7 +160,7 @@ class AttributeValuesRequest(
             values=values,
             page_token=(
                 PageToken(offset=in_msg.page_token.offset + len(values))
-                if in_msg.page_token.HasField("offset")
+                if in_msg.page_token.HasField("offset") or len(values) == 0
                 else PageToken(
                     filter_offset=TraceItemFilter(
                         comparison_filter=ComparisonFilter(

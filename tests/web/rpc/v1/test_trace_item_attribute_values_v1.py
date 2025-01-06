@@ -184,3 +184,22 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["derpderp", "herp", "herpderp"]
+
+    def test_empty_results(self) -> None:
+        req = TraceItemAttributeValuesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            value_substring_match="this_definitely_doesnt_exist_93710",
+        )
+        res = AttributeValuesRequest().execute(req)
+        assert res.values == []
