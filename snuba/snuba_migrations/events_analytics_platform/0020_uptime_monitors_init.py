@@ -12,7 +12,6 @@ table_prefix = "uptime_monitor_checks"
 local_table_name = f"{table_prefix}_local"
 dist_table_name = f"{table_prefix}_dist"
 
-
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
