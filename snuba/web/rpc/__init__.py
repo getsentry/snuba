@@ -159,6 +159,7 @@ def run_rpc_handler(
     except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,
