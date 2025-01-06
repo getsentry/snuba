@@ -93,7 +93,7 @@ def _gen_message(
 
 @pytest.mark.clickhouse_db
 @pytest.mark.redis_db
-# @pytest.mark.skip(reason="can't test writing to GCS")
+@pytest.mark.skip(reason="can't test writing to GCS")
 def test_extract_span_data() -> None:
     BASE_TIME = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0
