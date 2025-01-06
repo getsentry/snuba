@@ -13,7 +13,7 @@ jobs:
     # Map a step output to a job output
     outputs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
-      devservices_changes: ${{ steps.changes.outputs.devservices }}
+      devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v2
 
