@@ -25,8 +25,6 @@ from snuba.query.matchers import (
     Param,
     String,
 )
-from snuba.utils.constants import ATTRIBUTE_BUCKETS
-from snuba.utils.hashes import fnv_1a
 
 
 # This is a workaround for a mypy bug, found here: https://github.com/python/mypy/issues/5374
@@ -227,41 +225,6 @@ class SubscriptableMapper(SubscriptableReferenceMapper):
             )
         else:
             return None
-
-
-@dataclass(frozen=True)
-class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
-    """
-    Maps a key into the appropriate bucket by hashing the key. For example, hello[test] might go to attr_str_22['test']
-    """
-
-    from_column_table: Optional[str]
-    from_column_name: str
-    to_col_table: Optional[str]
-    to_col_name: str
-
-    def attempt_map(
-        self,
-        expression: SubscriptableReference,
-        children_translator: SnubaClickhouseStrictTranslator,
-    ) -> Optional[FunctionCallExpr]:
-        if (
-            expression.column.table_name != self.from_column_table
-            or expression.column.column_name != self.from_column_name
-        ):
-            return None
-        key = expression.key.accept(children_translator)
-        if not isinstance(key, LiteralExpr):
-            return None
-        if not isinstance(key.value, str):
-            return None
-
-        bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-        return arrayElement(
-            expression.alias,
-            ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
-            key,
-        )
 
 
 @dataclass(frozen=True)

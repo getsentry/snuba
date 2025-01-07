@@ -1,6 +1,11 @@
-from typing import Mapping
-
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.dsl import arrayElement, column, literal
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
@@ -8,7 +13,7 @@ from snuba.utils.constants import ATTRIBUTE_BUCKETS
 from snuba.utils.hashes import fnv_1a
 
 
-class HashBucketFunctionTransformer(LogicalQueryProcessor):
+class EAPMapSharder(LogicalQueryProcessor):
     """
     In eap_spans, we split up map columns for better performance.
     In the entity, attr_str Map(String, String) becomes
@@ -20,11 +25,15 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
     and the same for mapValues
 
     It converts mapExists(attr_str, 'blah') to mapExists(attr_str_{hash('blah')%20}, 'blah')
+
+    It converts attr_str[blah] to CAST(arrayElement(attr_str_10, 'blah'), 'String')
     """
 
-    def __init__(self, hash_bucket_name_mapping: Mapping[str, str]):
+    def __init__(self, src_bucket_name: str, dest_bucket_name: str, data_type: str):
         super().__init__()
-        self.hash_bucket_name_mapping = hash_bucket_name_mapping
+        self.src_bucket_name = src_bucket_name
+        self.dest_bucket_name = dest_bucket_name
+        self.data_type = data_type
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
         def transform_map_keys_and_values_expression(exp: Expression) -> Expression:
@@ -38,7 +47,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             if not isinstance(param, Column):
                 return exp
 
-            if param.column_name not in self.hash_bucket_name_mapping:
+            if param.column_name != self.src_bucket_name:
                 return exp
 
             if exp.function_name not in ("mapKeys", "mapValues"):
@@ -54,7 +63,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                         parameters=(
                             Column(
                                 None,
-                                column_name=f"{self.hash_bucket_name_mapping[param.column_name]}_{i}",
+                                column_name=f"{self.dest_bucket_name}_{i}",
                                 table_name=param.table_name,
                             ),
                         ),
@@ -74,7 +83,7 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
             if not isinstance(column, Column):
                 return exp
 
-            if column.column_name not in self.hash_bucket_name_mapping:
+            if column.column_name != self.src_bucket_name:
                 return exp
 
             if exp.function_name != "mapContains":
@@ -92,11 +101,33 @@ class HashBucketFunctionTransformer(LogicalQueryProcessor):
                     Column(
                         None,
                         None,
-                        f"{self.hash_bucket_name_mapping[column.column_name]}_{bucket_idx}",
+                        f"{self.dest_bucket_name}_{bucket_idx}",
                     ),
                     key,
                 ),
             )
 
+        def transform_subscript_expression(exp: Expression) -> Expression:
+            if not isinstance(exp, SubscriptableReference):
+                return exp
+
+            if exp.column.column_name != self.src_bucket_name:
+                return exp
+
+            bucket_idx = fnv_1a(exp.key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
+            return FunctionCall(
+                exp.alias,
+                "CAST",
+                (
+                    arrayElement(
+                        None,
+                        column(f"{self.dest_bucket_name}_{bucket_idx}"),
+                        exp.key,
+                    ),
+                    literal(self.data_type),
+                ),
+            )
+
         query.transform_expressions(transform_map_keys_and_values_expression)
         query.transform_expressions(transform_map_contains_expression)
+        query.transform_expressions(transform_subscript_expression)

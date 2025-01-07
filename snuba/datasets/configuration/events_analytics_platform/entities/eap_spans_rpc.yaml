@@ -43,49 +43,11 @@ storages:
             to_table_name: null
             to_col_name: _sort_timestamp
 
-      subscriptables:
-        - mapper: SubscriptableHashBucketMapper
-          args:
-            from_column_table: null
-            from_column_name: attr_str
-            to_col_table: null
-            to_col_name: attr_str
-            data_type: String
-            normalized_columns:
-              sentry.name: name
-              sentry.service: service
-              sentry.span_id: span_id
-              sentry.parent_span_id: parent_span_id
-              sentry.segment_id: segment_id
-              sentry.segment_name: segment_name
-              sentry.start_timestamp: start_timestamp
-              sentry.end_timestamp: end_timestamp
-              sentry.timestamp: _sort_timestamp
-        - mapper: SubscriptableHashBucketMapper
-          args:
-            from_column_table: null
-            from_column_name: attr_f64
-            to_col_table: null
-            to_col_name: attr_num
-            data_type: Float64
-            normalized_columns:
-              sentry.exclusive_time_micro: exclusive_time_micro
-              sentry.duration_micro: duration_micro
-        - mapper: SubscriptableHashBucketMapper
-          args:
-            from_column_table: null
-            from_column_name: attr_i64
-            to_col_table: null
-            to_col_name: attr_num
-            data_type: Int64
-            normalized_columns:
-              sentry.organization_id: organization_id
-              sentry.project_id: project_id
-
 storage_selector:
   selector: DefaultQueryStorageSelector
 
 query_processors:
+  # a processor that creates a virtual 'time' column to group by for generating timeseries.
   - processor: TimeSeriesProcessor
     args:
       time_group_columns:
@@ -93,19 +55,52 @@ query_processors:
       time_parse_columns:
         - start_timestamp
         - end_timestamp
-  - processor: HashBucketFunctionTransformer
+  # maps (e.g.) attr_str[sentry.name] to the clickhouse column 'name'
+  - processor: EAPClickhouseColumnRemapper
     args:
-      hash_bucket_name_mapping:
-        attr_str: attr_str
-        attr_f64: attr_num
-        attr_i64: attr_num
+      hash_bucket_name: attr_str
+      data_type: String
+      keys:
+        sentry.name: name
+        sentry.service: service
+        sentry.parent_span_id: parent_span_id
+        sentry.segment_name: segment_name
+        sentry.start_timestamp: start_timestamp
+        sentry.end_timestamp: end_timestamp
+        sentry.timestamp: timestamp
+  # maps attr_str[span_id] to hex(span_id)
+  - processor: EAPClickhouseColumnRemapper
+    args:
+      hash_bucket_name: attr_str
+      data_type: hex
+      keys:
+        sentry.span_id: span_id
+        sentry.segment_id: segment_id
+  # maps attr_f64[duration_ms] to CAST(duration_ms, Float64)
+  - processor: EAPClickhouseColumnRemapper
+    args:
+      hash_bucket_name: attr_f64
+      data_type: Float64
+      keys:
+        sentry.exclusive_time_ms: exclusive_time_ms
+        sentry.duration_ms: duration_ms
+  # maps attr_i64[project_id] to CAST(project_id, Int64)
+  - processor: EAPClickhouseColumnRemapper
+    args:
+      hash_bucket_name: attr_i64
+      data_type: Int64
+      keys:
+        sentry.exclusive_time_micro: exclusive_time_micro
+        sentry.duration_micro: duration_micro
+        sentry.organization_id: organization_id
+        sentry.project_id: project_id
+  # maps avg(attr_i64[hello]) to avgIf(attr_i64['hello'], mapContains(attr_i64, 'hello'))
   - processor: OptionalAttributeAggregationTransformer
     args:
       attribute_column_names:
         - attr_f64
         - attr_i64
       aggregation_names:
-        - sum
         - count
         - avg
         - avgWeighted
@@ -115,6 +110,26 @@ query_processors:
       curried_aggregation_names:
         - quantile
         - quantileTDigestWeighted
+  # maps a few things:
+  # - attr_i64['blah'] to CAST(arrayIndex(attr_num_5, 'blah'), 'Int64')
+  # - mapContains(attr_str, blah) to mapContains(attr_str_5, blah)
+  # - mapKeys(attr_str) to arrayConcat(mapKeys(attr_str_0), mapKeys(attr_str_1), ...)
+  # - mapValues(attr_str) to arrayConcat(mapValues(attr_str_0), mapValues(attr_str_1), ...)
+  - processor: EAPMapSharder
+    args:
+      src_bucket_name: attr_str
+      dest_bucket_name: attr_str
+      data_type: String
+  - processor: EAPMapSharder
+    args:
+      src_bucket_name: attr_f64
+      dest_bucket_name: attr_num
+      data_type: Float64
+  - processor: EAPMapSharder
+    args:
+      src_bucket_name: attr_i64
+      dest_bucket_name: attr_num
+      data_type: Int64
 
 validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
 validators:

@@ -48,22 +48,6 @@ storages:
             from_col_name: exclusive_time_ms
             to_col_name: exclusive_time_micro
 
-      subscriptables:
-        - mapper: SubscriptableHashBucketMapper
-          args:
-            from_column_table: null
-            from_column_name: attr_str
-            to_col_table: null
-            to_col_name: attr_str
-            data_type: String
-        - mapper: SubscriptableHashBucketMapper
-          args:
-            from_column_table: null
-            from_column_name: attr_num
-            to_col_table: null
-            to_col_name: attr_num
-            data_type: Float64
-
 storage_selector:
   selector: DefaultQueryStorageSelector
 
@@ -90,11 +74,16 @@ query_processors:
       curried_aggregation_names:
         - quantile
         - quantileTDigestWeighted
-  - processor: HashBucketFunctionTransformer
+  - processor: EAPMapSharder
     args:
-      hash_bucket_name_mapping:
-        attr_str: attr_str
-        attr_num: attr_num
+      src_bucket_name: attr_str
+      dest_bucket_name: attr_str
+      data_type: String
+  - processor: EAPMapSharder
+    args:
+      src_bucket_name: attr_num
+      dest_bucket_name: attr_num
+      data_type: Float64
 
 validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
 validators:
