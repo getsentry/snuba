@@ -185,6 +185,11 @@ jobs:
           fi
 
       - name: Publish snuba-ci image to artifacts
+      # we publish to github artifacts separately so that third-party
+      # contributions also work, as all the test jobs need this image.
+      # otherwise third-party contributors would have to provide a working,
+      # authenticated GHCR, which seems impossible to ensure in the general
+      # case.
         uses: actions/upload-artifact@v4
         with:
           name: snuba-ci
