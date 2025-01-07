@@ -263,7 +263,7 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
             return None
 
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-        expr = arrayElement(
+        expr: Expression = arrayElement(
             None,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
             key,
