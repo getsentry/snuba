@@ -113,20 +113,22 @@ class SimpleAPITest(BaseApiTest):
                                             self.base_time + timedelta(minutes=tick)
                                         ).timetuple()
                                     ),
-                                    "tags": {
-                                        # Sentry
-                                        "environment": self.environments[
-                                            (tock * p) % len(self.environments)
-                                        ],
-                                        "sentry:release": str(tick),
-                                        "sentry:dist": "dist1",
-                                        "os.name": "windows",
-                                        "os.rooted": 1,
-                                        # User
-                                        "foo": "baz",
-                                        "foo.bar": "qux",
-                                        "os_name": "linux",
-                                    },
+                                    "tags": list(
+                                        {
+                                            # Sentry
+                                            "environment": self.environments[
+                                                (tock * p) % len(self.environments)
+                                            ],
+                                            "sentry:release": str(tick),
+                                            "sentry:dist": "dist1",
+                                            "os.name": "windows",
+                                            "os.rooted": 1,
+                                            # User
+                                            "foo": "baz",
+                                            "foo.bar": "qux",
+                                            "os_name": "linux",
+                                        }.items()
+                                    ),
                                     "exception": {
                                         "values": [
                                             {
@@ -623,7 +625,7 @@ class TestApi(SimpleAPITest):
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
                             "received": calendar.timegm(self.base_time.timetuple()),
-                            "tags": {},
+                            "tags": [],
                             "exception": {
                                 "values": [
                                     {
