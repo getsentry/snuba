@@ -1,0 +1,46 @@
+version: v1
+kind: entity
+name: spans_str_attrs
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: attr_key, type: String },
+    { name: attr_value, type: String },
+    { name: timestamp, type: DateTime },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    {
+      name: count,
+      type: SimpleAggregateFunction,
+      args:
+        {
+          func: "sum",
+          arg_types: [ { type: UInt, args: { size: 64 } } ],
+        },
+    },
+  ]
+
+storages:
+  - storage: spans_str_attrs
+    is_writable: false
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - start_timestamp
+        - end_timestamp
+
+validate_data_model: error
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [organization_id]
+
+required_time_column: timestamp

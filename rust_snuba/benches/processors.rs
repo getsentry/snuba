@@ -6,22 +6,22 @@ use criterion::measurement::WallTime;
 use criterion::{black_box, BenchmarkGroup, BenchmarkId, Criterion, Throughput};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::local::broker::LocalBroker;
-use rust_arroyo::backends::local::LocalConsumer;
-use rust_arroyo::backends::storages::memory::MemoryMessageStorage;
-use rust_arroyo::backends::ConsumerError;
-use rust_arroyo::metrics;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::strategies::ProcessingStrategyFactory;
-use rust_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
-use rust_arroyo::types::{Partition, Topic};
-use rust_arroyo::utils::clock::SystemClock;
 use rust_snuba::{
     BrokerConfig, ClickhouseConfig, ConsumerStrategyFactory, EnvConfig, KafkaMessageMetadata,
     MessageProcessorConfig, ProcessingFunction, ProcessingFunctionType, ProcessorConfig,
     StatsDBackend, StorageConfig, TopicConfig, PROCESSORS,
 };
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::local::broker::LocalBroker;
+use sentry_arroyo::backends::local::LocalConsumer;
+use sentry_arroyo::backends::storages::memory::MemoryMessageStorage;
+use sentry_arroyo::backends::ConsumerError;
+use sentry_arroyo::metrics;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::strategies::ProcessingStrategyFactory;
+use sentry_arroyo::processing::{Callbacks, ConsumerState, RunError, StreamProcessor};
+use sentry_arroyo::types::{Partition, Topic};
+use sentry_arroyo::utils::clock::SystemClock;
 use uuid::Uuid;
 
 #[cfg(not(target_env = "msvc"))]
@@ -72,31 +72,33 @@ fn create_factory(
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
     let replacements_concurrency =
         ConcurrencyConfig::with_runtime(concurrency, RUNTIME.handle().to_owned());
-    let factory = ConsumerStrategyFactory::new(
-        storage,
-        EnvConfig::default(),
-        schema.into(),
-        1_000,
-        Duration::from_millis(10),
-        true,
+    let factory = ConsumerStrategyFactory {
+        storage_config: storage,
+        env_config: EnvConfig::default(),
+        logical_topic_name: schema.into(),
+        max_batch_size: 1_000,
+        max_batch_time: Duration::from_millis(10),
         processing_concurrency,
         clickhouse_concurrency,
         commitlog_concurrency,
         replacements_concurrency,
-        None,
-        true,
-        None,
-        false,
-        None,
-        None,
-        "test-group".to_owned(),
-        Topic::new("test"),
-        TopicConfig {
+        async_inserts: false,
+        python_max_queue_depth: None,
+        use_rust_processor: true,
+        health_check_file: None,
+        enforce_schema: false,
+        commit_log_producer: None,
+        replacements_config: None,
+        physical_consumer_group: "test-group".to_owned(),
+        physical_topic_name: Topic::new("test"),
+        accountant_topic_config: TopicConfig {
             physical_topic_name: "shared-resources-usage".to_string(),
             logical_topic_name: "shared-resources-usage".to_string(),
             broker_config: BrokerConfig::default(),
         },
-    );
+        stop_at_timestamp: None,
+        batch_write_timeout: None,
+    };
     Box::new(factory)
 }
 

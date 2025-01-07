@@ -9,6 +9,8 @@ import { NAV_ITEMS } from "SnubaAdmin/data";
 import Client from "SnubaAdmin/api_client";
 import { MantineProvider } from "@mantine/core";
 
+import 'bootstrap/dist/css/bootstrap.min.css';
+
 const containerStyle = {
   display: "flex",
   flexDirection: "column" as const,
@@ -34,7 +36,7 @@ client.getSettings().then((settings) => {
       tracesSampleRate: settings.tracesSampleRate,
       // Profiles
       profilesSampleRate: settings.profilesSampleRate,
-      tracePropagationTargets: settings.tracePropagationTargets,
+      tracePropagationTargets: settings.tracePropagationTargets ?? undefined,
       // Session Replay
       replaysSessionSampleRate: settings.replaysSessionSampleRate,
       replaysOnErrorSampleRate: settings.replaysOnErrorSampleRate,
@@ -84,7 +86,9 @@ function getTab(locationHash: string): string {
     throw new Error("invalid hash");
   }
 
-  const navItem = NAV_ITEMS.find((item) => "#" + item.id === locationHash);
+  const hash = locationHash.split("/")[0];
+
+  const navItem = NAV_ITEMS.find((item) => "#" + item.id === hash);
 
   if (typeof navItem === "undefined") {
     throw new Error("invalid hash");
@@ -92,3 +96,5 @@ function getTab(locationHash: string): string {
 
   return navItem.id;
 }
+
+export default {};

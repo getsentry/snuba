@@ -10,5 +10,5 @@ def build_dataset_from_config(config_file_path: str) -> PluggableDataset:
     config = load_configuration_data(config_file_path, DATASET_VALIDATORS)
     return PluggableDataset(
         name=config["name"],
-        all_entities=[EntityKey(key) for key in config["entities"]],
+        all_entities=[EntityKey(key) for key in config.get("entities", [])],
     )

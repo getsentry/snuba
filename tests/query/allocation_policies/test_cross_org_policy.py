@@ -43,9 +43,10 @@ class TestCrossOrgQueryAllocationPolicy:
         assert cross_org_allowance.can_run is True
         assert cross_org_allowance.max_threads == 1
 
-        assert not policy.get_quota_allowance(
+        quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
-        ).can_run
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
         policy.update_quota_balance(
             tenant_ids={"referrer": "statistical_detectors"},
             query_id="2",
@@ -124,9 +125,11 @@ class TestCrossOrgQueryAllocationPolicy:
             0,
             {"referrer": "statistical_detectors"},
         )
-        assert not policy.get_quota_allowance(
+
+        quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
-        ).can_run
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
 
     @pytest.mark.redis_db
     def test_override_unregistered_referrer(self):

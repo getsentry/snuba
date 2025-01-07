@@ -4,10 +4,10 @@ use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, Usage
 use std::time::Duration;
 
 use crate::types::BytesInsertBatch;
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::Message;
+use sentry_arroyo::types::Message;
 
 pub struct CogsAccountant {
     accountant: UsageAccountant<KafkaProducer>,
@@ -17,10 +17,13 @@ pub struct CogsAccountant {
 
 impl CogsAccountant {
     pub fn new(broker_config: HashMap<String, String>, topic_name: &str) -> Self {
-        let config = KafkaConfig::new_producer_config(broker_config);
+        let config = KafkaConfig {
+            config: broker_config,
+            topic: topic_name.to_owned(),
+        };
 
         Self {
-            accountant: UsageAccountant::new_with_kafka(config, Some(topic_name), None),
+            accountant: UsageAccountant::new_with_kafka(config, None),
             logged_warning: false,
         }
     }
@@ -51,7 +54,7 @@ impl<N> RecordCogs<N> {
         topic_name: &str,
     ) -> Self
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
     {
         let accountant = CogsAccountant::new(broker_config, topic_name);
 
@@ -63,9 +66,9 @@ impl<N> RecordCogs<N> {
     }
 }
 
-impl<N> ProcessingStrategy<BytesInsertBatch> for RecordCogs<N>
+impl<N> ProcessingStrategy<BytesInsertBatch<()>> for RecordCogs<N>
 where
-    N: ProcessingStrategy<BytesInsertBatch> + 'static,
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
 {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.next_step.poll()
@@ -73,18 +76,14 @@ where
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+        message: Message<BytesInsertBatch<()>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<()>>> {
         for (app_feature, amount_bytes) in message.payload().cogs_data().data.iter() {
             self.accountant
                 .record_bytes(&self.resource_id, app_feature, *amount_bytes)
         }
 
         self.next_step.submit(message)
-    }
-
-    fn close(&mut self) {
-        self.next_step.close()
     }
 
     fn terminate(&mut self) {

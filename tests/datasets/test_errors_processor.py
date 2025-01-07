@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from unittest.mock import ANY
-from uuid import UUID
 
 import pytest
 
@@ -206,10 +205,6 @@ class ErrorEvent:
                 },
                 "fingerprint": ["{{ default }}"],
                 "hashes": ["c8b21c571231e989060b9110a2ade7d3"],
-                "hierarchical_hashes": [
-                    "04233d08ac90cf6fc015b1be5932e7e3",
-                    "04233d08ac90cf6fc015b1be5932e7e4",
-                ],
                 "key_id": "537125",
                 "level": "error",
                 "location": "snuba/clickhouse/http.py",
@@ -265,6 +260,7 @@ class ErrorEvent:
             2,
             "insert",
             serialized_event,
+            {},
         )
 
     def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
@@ -331,7 +327,7 @@ class ErrorEvent:
                 "CPython",
                 "3.7.6",
                 "deadbeef",
-                self.trace_id,
+                self.trace_id.replace("-", ""),
             ],
             "partition": meta.partition,
             "offset": meta.offset,
@@ -341,11 +337,7 @@ class ErrorEvent:
             "retention_days": 90,
             "deleted": 0,
             "group_id": self.group_id,
-            "primary_hash": "d36001ef-28af-2542-fde8-cf2935766141",
-            "hierarchical_hashes": [
-                str(UUID("04233d08ac90cf6fc015b1be5932e7e3")),
-                str(UUID("04233d08ac90cf6fc015b1be5932e7e4")),
-            ],
+            "primary_hash": "04233d08-ac90-cf6f-c015-b1be5932e7e2",
             "received": int(
                 self.received_timestamp.replace(tzinfo=timezone.utc)
                 .replace(tzinfo=None, microsecond=0)
@@ -361,7 +353,7 @@ class ErrorEvent:
             "exception_stacks.type": ["ClickHouseError"],
             "exception_stacks.value": ["[171] DB::Exception: Block structure mismatch"],
             "exception_stacks.mechanism_type": ["excepthook"],
-            "exception_stacks.mechanism_handled": [False],
+            "exception_stacks.mechanism_handled": [0],
             "exception_frames.abs_path": ["/usr/local/bin/snuba"],
             "exception_frames.colno": [None],
             "exception_frames.filename": ["snuba"],
@@ -389,12 +381,6 @@ class ErrorEvent:
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
-            expected_result["tags.key"].insert(4, "replayId")
-            expected_result["tags.value"].insert(4, self.replay_id.hex)
-
-        if self.trace_sampled:
-            expected_result["contexts.key"].insert(7, "trace.sampled")
-            expected_result["contexts.value"].insert(7, str(self.trace_sampled))
 
         return expected_result
 
@@ -445,8 +431,9 @@ class TestErrorsProcessor:
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
         processor = ErrorsProcessor()
-        assert processor.process_message(payload, meta) == InsertBatch(
-            [message.build_result(meta)], ANY
+        assert (
+            processor.process_message(payload, meta).rows
+            == InsertBatch([message.build_result(meta)], ANY).rows
         )
 
     def test_errors_replayid_context(self) -> None:
@@ -569,7 +556,8 @@ class TestErrorsProcessor:
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
         result = message.build_result(meta)
-        result["replay_id"] = str(replay_id)
+        result["tags.key"].insert(4, "replayId")
+        result["tags.value"].insert(4, message.replay_id.hex)
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY
         )
@@ -760,7 +748,7 @@ class TestErrorsProcessor:
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
 
         result = message.build_result(meta)
-        result["trace_sampled"] = True
+        result["trace_sampled"] = 1
 
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY

@@ -6,11 +6,13 @@ from snuba.clickhouse.columns import (
     Array,
     Column,
     DateTime,
+    DateTime64,
     Enum,
     Float,
     Nested,
     SchemaModifiers,
     String,
+    Tuple,
     UInt,
 )
 from snuba.query.processors.condition_checkers import ConditionChecker
@@ -20,8 +22,11 @@ from snuba.utils.schemas import (
     AggregateFunction,
     ColumnType,
     FixedString,
+    Int,
     IPv4,
     IPv6,
+    Map,
+    SimpleAggregateFunction,
 )
 
 
@@ -58,6 +63,7 @@ def get_mandatory_condition_checkers(
 
 
 NUMBER_COLUMN_TYPES: dict[str, Any] = {
+    "Int": Int,
     "UInt": UInt,
     "Float": Float,
 }
@@ -82,7 +88,11 @@ def __parse_number(
     col: dict[str, Any], modifiers: SchemaModifiers | None
 ) -> ColumnType[SchemaModifiers]:
     col_type = NUMBER_COLUMN_TYPES[col["type"]](col["args"]["size"], modifiers)
-    assert isinstance(col_type, UInt) or isinstance(col_type, Float)
+    assert (
+        isinstance(col_type, UInt)
+        or isinstance(col_type, Float)
+        or isinstance(col_type, Int)
+    )
     return col_type
 
 
@@ -103,10 +113,25 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = __parse_simple(col, modifiers)
     elif col["type"] == "Nested":
         column_type = Nested(parse_columns(col["args"]["subcolumns"]), modifiers)
+    elif col["type"] == "Map":
+        column_type = Map(
+            __parse_column_type(col["args"]["key"]),
+            __parse_column_type(col["args"]["value"]),
+            modifiers,
+        )
     elif col["type"] == "Array":
         column_type = Array(__parse_column_type(col["args"]["inner_type"]), modifiers)
+    elif col["type"] == "Tuple":
+        types = [__parse_column_type(typ) for typ in col["args"]["inner_types"]]
+        column_type = Tuple(tuple(types), modifiers)
     elif col["type"] == "AggregateFunction":
         column_type = AggregateFunction(
+            col["args"]["func"],
+            [__parse_column_type(c) for c in col["args"]["arg_types"]],
+            modifiers,
+        )
+    elif col["type"] == "SimpleAggregateFunction":
+        column_type = SimpleAggregateFunction(
             col["args"]["func"],
             [__parse_column_type(c) for c in col["args"]["arg_types"]],
             modifiers,
@@ -115,6 +140,12 @@ def __parse_column_type(col: dict[str, Any]) -> ColumnType[SchemaModifiers]:
         column_type = FixedString(col["args"]["length"], modifiers)
     elif col["type"] == "Enum":
         column_type = Enum(col["args"]["values"], modifiers)
+    elif col["type"] == "DateTime64":
+        column_type = DateTime64(
+            precision=col["args"].get("precision", 3),
+            timezone=col["args"].get("timezone"),
+            modifiers=modifiers,
+        )
     assert column_type is not None
     return column_type
 

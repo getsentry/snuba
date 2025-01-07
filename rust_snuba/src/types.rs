@@ -1,9 +1,11 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 
+use crate::strategies::clickhouse::batch::HttpBatch;
+
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::timer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::timer;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -173,8 +175,8 @@ impl InsertBatch {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BytesInsertBatch {
-    rows: RowData,
+pub struct BytesInsertBatch<R> {
+    rows: R,
 
     /// when the message was inserted into the snuba topic
     ///
@@ -199,10 +201,10 @@ pub struct BytesInsertBatch {
     cogs_data: CogsData,
 }
 
-impl BytesInsertBatch {
+impl<R> BytesInsertBatch<R> {
     pub fn new(
-        rows: RowData,
-        message_timestamp: DateTime<Utc>,
+        rows: R,
+        message_timestamp: Option<DateTime<Utc>>,
         origin_timestamp: Option<DateTime<Utc>>,
         sentry_received_timestamp: Option<DateTime<Utc>>,
         commit_log_offsets: CommitLogOffsets,
@@ -210,7 +212,9 @@ impl BytesInsertBatch {
     ) -> Self {
         BytesInsertBatch {
             rows,
-            message_timestamp: message_timestamp.into(),
+            message_timestamp: message_timestamp
+                .map(LatencyRecorder::from)
+                .unwrap_or_default(),
             origin_timestamp: origin_timestamp
                 .map(LatencyRecorder::from)
                 .unwrap_or_default(),
@@ -222,18 +226,25 @@ impl BytesInsertBatch {
         }
     }
 
-    pub fn merge(mut self, other: Self) -> Self {
-        self.rows
-            .encoded_rows
-            .extend_from_slice(&other.rows.encoded_rows);
-        self.commit_log_offsets.merge(other.commit_log_offsets);
-        self.rows.num_rows += other.rows.num_rows;
-        self.message_timestamp.merge(other.message_timestamp);
-        self.origin_timestamp.merge(other.origin_timestamp);
-        self.sentry_received_timestamp
-            .merge(other.sentry_received_timestamp);
-        self.cogs_data.merge(other.cogs_data);
-        self
+    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
+        &self.commit_log_offsets
+    }
+
+    pub fn cogs_data(&self) -> &CogsData {
+        &self.cogs_data
+    }
+
+    pub fn take(self) -> (R, BytesInsertBatch<()>) {
+        let new = BytesInsertBatch {
+            rows: (),
+            message_timestamp: self.message_timestamp,
+            origin_timestamp: self.origin_timestamp,
+            sentry_received_timestamp: self.sentry_received_timestamp,
+            commit_log_offsets: self.commit_log_offsets,
+            cogs_data: self.cogs_data,
+        };
+
+        (self.rows, new)
     }
 
     pub fn record_message_latency(&self) {
@@ -245,21 +256,26 @@ impl BytesInsertBatch {
         self.sentry_received_timestamp
             .send_metric(write_time, "sentry_received_latency");
     }
+}
 
+impl BytesInsertBatch<RowData> {
     pub fn len(&self) -> usize {
         self.rows.num_rows
     }
+}
 
-    pub fn encoded_rows(&self) -> &[u8] {
-        &self.rows.encoded_rows
-    }
-
-    pub fn commit_log_offsets(&self) -> &CommitLogOffsets {
-        &self.commit_log_offsets
-    }
-
-    pub fn cogs_data(&self) -> &CogsData {
-        &self.cogs_data
+impl BytesInsertBatch<HttpBatch> {
+    pub fn merge(mut self, other: BytesInsertBatch<RowData>) -> Self {
+        self.rows
+            .write_rows(&other.rows)
+            .expect("failed to write rows to channel");
+        self.commit_log_offsets.merge(other.commit_log_offsets);
+        self.message_timestamp.merge(other.message_timestamp);
+        self.origin_timestamp.merge(other.origin_timestamp);
+        self.sentry_received_timestamp
+            .merge(other.sentry_received_timestamp);
+        self.cogs_data.merge(other.cogs_data);
+        self
     }
 }
 

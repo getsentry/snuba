@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import logging
+import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
@@ -28,6 +32,9 @@ class OperationTarget(Enum):
     LOCAL = "local"
     DISTRIBUTED = "distributed"
     UNSET = "unset"  # target is not set. will throw an error if executed
+
+    def __repr__(self) -> str:
+        return f"OperationTarget.{self.value.upper()}"
 
 
 class SqlOperation(ABC):
@@ -72,15 +79,44 @@ class SqlOperation(ABC):
             logger.info(f"Executing on {self.target.value} node: {node}")
             try:
                 connection.execute(self.format_sql(), settings=self._settings)
+                self._block_on_mutations(connection)
             except Exception:
                 logger.exception(
                     f"Failed to execute operation on {self.storage_set}, target: {self.target}\n{self.format_sql()}\n{self._settings}"
                 )
                 raise
 
+    def _block_on_mutations(
+        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
+    ) -> None:
+        """
+        This function blocks until all entries of system.mutations
+        have is_done=1. Polls system.mutations every poll_seconds.
+        Raises error if not unblocked after timeout_seconds.
+        """
+        slept_so_far = 0
+        while True:
+            is_mutating = conn.execute(
+                "select count(*) from system.mutations where is_done=0"
+            ).results != [(0,)]
+            if not is_mutating:
+                return
+            elif slept_so_far >= timeout_seconds:
+                raise TimeoutError(
+                    f"{conn.host}:{conn.port} not finished mutating after {timeout_seconds} seconds"
+                )
+            else:
+                time.sleep(poll_seconds)
+                slept_so_far += poll_seconds
+
     @abstractmethod
     def format_sql(self) -> str:
         raise NotImplementedError
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, SqlOperation):
+            return False
+        return other.format_sql() == self.format_sql()
 
 
 class RunSql(SqlOperation):
@@ -111,8 +147,9 @@ class CreateTable(SqlOperation):
         columns: Sequence[Column[MigrationModifiers]],
         engine: TableEngine,
         target: OperationTarget = OperationTarget.UNSET,
+        settings: Optional[Mapping[str, Any]] = None,
     ):
-        super().__init__(storage_set, target=target)
+        super().__init__(storage_set, target=target, settings=settings)
         self.table_name = table_name
         self.__columns = columns
         self.engine = engine
@@ -272,6 +309,17 @@ class AddColumn(SqlOperation):
         optional_after_clause = f" AFTER {self.__after}" if self.__after else ""
         return f"ALTER TABLE {self.table_name} ADD COLUMN IF NOT EXISTS {column}{optional_after_clause};"
 
+    def get_reverse(self) -> DropColumn:
+        return DropColumn(
+            storage_set=self.storage_set,
+            table_name=self.table_name,
+            column_name=self.column.name,
+            target=self.target,
+        )
+
+    def __repr__(self) -> str:
+        return f"AddColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column={repr(self.column)}, after={repr(self.__after)}, target={repr(self.target)})"
+
 
 class DropColumn(SqlOperation):
     """
@@ -299,6 +347,9 @@ class DropColumn(SqlOperation):
         return (
             f"ALTER TABLE {self.table_name} DROP COLUMN IF EXISTS {self.column_name};"
         )
+
+    def __repr__(self) -> str:
+        return f"DropColumn(storage_set={repr(self.storage_set)}, table_name={repr(self.table_name)}, column_name={repr(self.column_name)}, target={repr(self.target)})"
 
 
 class ModifyColumn(SqlOperation):
@@ -418,6 +469,44 @@ class AddIndex(SqlOperation):
         return f"ALTER TABLE {self.__table_name} ADD INDEX IF NOT EXISTS {self.__index_name} {self.__index_expression} TYPE {self.__index_type} GRANULARITY {self.__granularity}{optional_after_clause};"
 
 
+@dataclass
+class AddIndicesData:
+    name: str  # e.g.: bf_index
+    expression: str  # e.g.: mapKeys(my_map)
+    type: str  # e.g.: bloom_filter(0.1)
+    granularity: int  # e.g.: 4
+
+
+class AddIndices(SqlOperation):
+    """
+    Adds an index.
+
+    Only works with the MergeTree family of tables.
+
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        indices: Sequence[AddIndicesData],
+        target: OperationTarget = OperationTarget.UNSET,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__indices = indices
+
+    def format_sql(self) -> str:
+        statements = [
+            f"ADD INDEX IF NOT EXISTS {idx.name} {idx.expression} TYPE {idx.type} GRANULARITY {idx.granularity}"
+            for idx in self.__indices
+        ]
+
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)};"
+
+
 class DropIndex(SqlOperation):
     """
     Drops an index.
@@ -429,15 +518,55 @@ class DropIndex(SqlOperation):
         table_name: str,
         index_name: str,
         target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
     ):
         super().__init__(storage_set, target=target)
         self.__table_name = table_name
         self.__index_name = index_name
+        self.__run_async = run_async
 
     def format_sql(self) -> str:
-        return (
-            f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name};"
-        )
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0"
+        return f"ALTER TABLE {self.__table_name} DROP INDEX IF EXISTS {self.__index_name}{settings};"
+
+    def _block_on_mutations(
+        self, conn: ClickhousePool, poll_seconds: int = 5, timeout_seconds: int = 300
+    ) -> None:
+        if self.__run_async:
+            return
+        else:
+            super()._block_on_mutations(conn, poll_seconds, timeout_seconds)
+
+
+class DropIndices(SqlOperation):
+    """
+    Drops many indices.
+    Only works with the MergeTree family of tables.
+    In ClickHouse versions prior to 20.1.2.4, this requires setting
+    allow_experimental_data_skipping_indices = 1
+    """
+
+    def __init__(
+        self,
+        storage_set: StorageSetKey,
+        table_name: str,
+        indices: Sequence[str],
+        target: OperationTarget = OperationTarget.UNSET,
+        run_async: bool = False,
+    ):
+        super().__init__(storage_set, target=target)
+        self.__table_name = table_name
+        self.__indices = indices
+        self.__run_async = run_async
+
+    def format_sql(self) -> str:
+        settings = ""
+        if self.__run_async:
+            settings = " SETTINGS mutations_sync=0, alter_sync=0"
+        statements = [f"DROP INDEX IF EXISTS {idx}" for idx in self.__indices]
+        return f"ALTER TABLE {self.__table_name} {', '.join(statements)}{settings};"
 
 
 class InsertIntoSelect(SqlOperation):

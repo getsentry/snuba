@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from random import random
 from typing import Any, Mapping, Optional, Union
+from uuid import UUID
 
 import sentry_sdk
-from sentry_sdk import Hub
+from sentry_kafka_schemas.schema_types import snuba_queries_v1
 from usageaccountant import UsageUnit
 
 from snuba import environment, settings, state
@@ -185,7 +187,7 @@ def _add_tags(
     experiments: Optional[Mapping[str, Any]] = None,
     metadata: Optional[SnubaQueryMetadata] = None,
 ) -> None:
-    if Hub.current.scope.span:
+    if sentry_sdk.get_current_span():
         duration_group = timer.get_duration_group()
         sentry_sdk.set_tag("duration_group", duration_group)
         if duration_group == ">30s":
@@ -201,7 +203,44 @@ def _add_tags(
                     break
 
 
+def _build_failed_request_dict(
+    request_id: UUID,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
+    request_status: Status,
+    referrer: Optional[str],
+    exception_name: str | None = None,
+) -> snuba_queries_v1.Querylog:
+    return {
+        "request": {
+            "id": request_id.hex,
+            "body": body,
+            "referrer": str(referrer),
+            "team": None,
+            "app_id": "none",
+            "feature": None,
+        },
+        "dataset": dataset,
+        "entity": "error",
+        "start_timestamp": None,
+        "end_timestamp": None,
+        "status": request_status.status.value,
+        "request_status": request_status.status.value,
+        "slo": request_status.slo.value,
+        "projects": [],
+        "query_list": [],
+        "timing": {"timestamp": int(time.time()), "duration_ms": 0, "tags": {}},
+        "snql_anonymized": "",
+        "organization": organization,
+    }
+
+
 def record_invalid_request(
+    request_id: UUID,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
     timer: Timer,
     request_status: Status,
     referrer: Optional[str],
@@ -212,12 +251,27 @@ def record_invalid_request(
     it records failures during parsing/validation.
     This is for client errors.
     """
-    _record_failure_building_request(
+    _record_failure_metric_with_status(
         QueryStatus.INVALID_REQUEST, request_status, timer, referrer, exception_name
+    )
+    state.record_query(
+        _build_failed_request_dict(
+            request_id,
+            body,
+            dataset,
+            organization,
+            request_status,
+            referrer,
+            exception_name,
+        )
     )
 
 
 def record_error_building_request(
+    request_id: UUID,
+    body: dict[str, Any],
+    dataset: str,
+    organization: int,
     timer: Timer,
     request_status: Status,
     referrer: Optional[str],
@@ -228,12 +282,23 @@ def record_error_building_request(
     it records failures during parsing/validation.
     This is for system errors during parsing/validation.
     """
-    _record_failure_building_request(
+    _record_failure_metric_with_status(
         QueryStatus.ERROR, request_status, timer, referrer, exception_name
+    )
+    state.record_query(
+        _build_failed_request_dict(
+            request_id,
+            body,
+            dataset,
+            organization,
+            request_status,
+            referrer,
+            exception_name,
+        )
     )
 
 
-def _record_failure_building_request(
+def _record_failure_metric_with_status(
     status: QueryStatus,
     request_status: Status,
     timer: Timer,

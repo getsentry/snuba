@@ -4,10 +4,12 @@ use std::str::FromStr;
 use anyhow::Context;
 use chrono::DateTime;
 use schemars::JsonSchema;
+use sentry_arroyo::timer;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use serde_json::Value;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::enforce_retention;
@@ -21,6 +23,8 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
 
+    timer!("spans.messages.size", payload_bytes.len() as f64);
+
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
     let mut span: Span = msg.try_into()?;
 
@@ -32,29 +36,34 @@ pub fn process_message(
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
-struct FromSpanMessage {
-    description: Option<String>,
-    duration_ms: u32,
-    event_id: Option<Uuid>,
-    exclusive_time_ms: f64,
-    is_segment: bool,
-    measurements: Option<BTreeMap<String, FromMeasurementValue>>,
-    parent_span_id: Option<String>,
-    profile_id: Option<Uuid>,
-    project_id: u64,
-    received: f64,
-    retention_days: Option<u16>,
-    segment_id: Option<String>,
-    sentry_tags: Option<BTreeMap<String, String>>,
-    span_id: String,
-    start_timestamp_ms: u64,
-    tags: Option<BTreeMap<String, String>>,
-    trace_id: Uuid,
+pub(crate) struct FromSpanMessage {
+    pub(crate) description: Option<String>,
+    pub(crate) duration_ms: u32,
+    pub(crate) end_timestamp_precise: f64,
+    pub(crate) event_id: Option<Uuid>,
+    pub(crate) exclusive_time_ms: f64,
+    pub(crate) is_segment: bool,
+    pub(crate) measurements: Option<BTreeMap<String, FromMeasurementValue>>,
+    pub(crate) data: Option<BTreeMap<String, Value>>,
+    pub(crate) parent_span_id: Option<String>,
+    pub(crate) profile_id: Option<Uuid>,
+    pub(crate) organization_id: u64,
+    pub(crate) project_id: u64,
+    pub(crate) received: f64,
+    pub(crate) retention_days: Option<u16>,
+    pub(crate) segment_id: Option<String>,
+    pub(crate) sentry_tags: Option<BTreeMap<String, String>>,
+    pub(crate) span_id: String,
+    #[serde(alias = "start_timestamp_micro")]
+    pub(crate) start_timestamp_precise: f64,
+    pub(crate) start_timestamp_ms: u64,
+    pub(crate) tags: Option<BTreeMap<String, String>>,
+    pub(crate) trace_id: Uuid,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
-struct FromMeasurementValue {
-    value: f64,
+pub(crate) struct FromMeasurementValue {
+    pub(crate) value: f64,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -63,11 +72,11 @@ struct Span {
     action: String,
     deleted: u8,
     description: String,
-    #[serde(default)]
-    domain: String,
+    domain: Option<String>,
     duration: u32,
     end_ms: u16,
     end_timestamp: u64,
+    end_timestamp_precise: u64,
     exclusive_time: f64,
     group: u64,
     #[serde(default)]
@@ -98,6 +107,7 @@ struct Span {
     span_status: u8,
     start_ms: u16,
     start_timestamp: u64,
+    start_timestamp_precise: u64,
     status: u32,
     #[serde(rename(serialize = "tags.key"))]
     tag_keys: Vec<String>,
@@ -144,10 +154,11 @@ impl TryFrom<FromSpanMessage> for Span {
         Ok(Self {
             action: sentry_tags.get("action").cloned().unwrap_or_default(),
             description: from.description.unwrap_or_default(),
-            domain: sentry_tags.get("domain").cloned().unwrap_or_default(),
+            domain: sentry_tags.get("domain").cloned(),
             duration: from.duration_ms,
             end_ms: (end_timestamp_ms % 1000) as u16,
             end_timestamp: end_timestamp_ms / 1000,
+            end_timestamp_precise: (from.end_timestamp_precise * 1e6) as u64,
             exclusive_time: from.exclusive_time_ms,
             group,
             is_segment: if from.is_segment { 1 } else { 0 },
@@ -172,6 +183,7 @@ impl TryFrom<FromSpanMessage> for Span {
             span_status: status as u8,
             start_ms: (from.start_timestamp_ms % 1000) as u16,
             start_timestamp: from.start_timestamp_ms / 1000,
+            start_timestamp_precise: (from.start_timestamp_precise * 1e6) as u64,
             status: status as u32,
             tag_keys,
             tag_values,
@@ -308,6 +320,7 @@ mod tests {
     #[derive(Debug, Default, Deserialize, Serialize)]
     struct TestSentryTags {
         action: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         domain: Option<String>,
         group: Option<String>,
         #[serde(rename = "http.method")]
@@ -330,16 +343,19 @@ mod tests {
         duration_ms: Option<u32>,
         event_id: Option<Uuid>,
         exclusive_time_ms: Option<f64>,
+        end_timestamp_precise: Option<f64>,
         is_segment: Option<bool>,
         parent_span_id: Option<String>,
         profile_id: Option<Uuid>,
         project_id: Option<u64>,
+        organization_id: Option<u64>,
         received: Option<f64>,
         retention_days: Option<u16>,
         segment_id: Option<String>,
         sentry_tags: TestSentryTags,
         span_id: Option<String>,
         start_timestamp_ms: Option<u64>,
+        start_timestamp_precise: Option<f64>,
         tags: Option<BTreeMap<String, String>>,
         trace_id: Option<Uuid>,
     }
@@ -350,10 +366,12 @@ mod tests {
             duration_ms: Some(1000),
             event_id: Some(Uuid::new_v4()),
             exclusive_time_ms: Some(1000.0),
+            end_timestamp_precise: Some(1715866674.111787),
             is_segment: Some(false),
             parent_span_id: Some("deadbeefdeadbeef".into()),
             profile_id: Some(Uuid::new_v4()),
             project_id: Some(1),
+            organization_id: Some(1),
             retention_days: Some(90),
             received: Some(1691105878.720),
             segment_id: Some("deadbeefdeadbeef".into()),
@@ -373,6 +391,7 @@ mod tests {
             },
             span_id: Some("deadbeefdeadbeef".into()),
             start_timestamp_ms: Some(1691105878720),
+            start_timestamp_precise: Some(1715866673.111787),
             tags: Some(BTreeMap::from([
                 ("tag1".into(), "value1".into()),
                 ("tag2".into(), "123".into()),
@@ -446,5 +465,20 @@ mod tests {
     #[test]
     fn schema() {
         run_schema_type_test::<FromSpanMessage>("snuba-spans", None);
+    }
+
+    #[test]
+    fn test_null_domain() {
+        let mut span = valid_span();
+        span.sentry_tags.domain = Option::None;
+        let data = serde_json::to_vec(&span).unwrap();
+        let payload = KafkaPayload::new(None, None, Some(data));
+        let meta = KafkaMessageMetadata {
+            partition: 0,
+            offset: 1,
+            timestamp: DateTime::from(SystemTime::now()),
+        };
+        process_message(payload, meta, &ProcessorConfig::default())
+            .expect("The message should be processed");
     }
 }

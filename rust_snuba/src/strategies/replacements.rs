@@ -1,14 +1,14 @@
 use crate::strategies::noop::Noop;
-use crate::types::{BytesInsertBatch, InsertOrReplacement};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::processing::strategies::merge_commit_request;
-use rust_arroyo::processing::strategies::produce::Produce;
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::strategies::{
+use crate::types::{BytesInsertBatch, InsertOrReplacement, RowData};
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::processing::strategies::merge_commit_request;
+use sentry_arroyo::processing::strategies::produce::Produce;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::strategies::{
     CommitRequest, MessageRejected, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use std::time::Duration;
 
 /// Takes messages that are either inserts or replacements.
@@ -16,7 +16,7 @@ use std::time::Duration;
 /// Replacements are produced to the replacement topic.
 /// This is  only relevant for the "errors" dataset.
 pub struct ProduceReplacements {
-    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch>>,
+    next_step: Box<dyn ProcessingStrategy<BytesInsertBatch<RowData>>>,
     inner: Box<dyn ProcessingStrategy<KafkaPayload>>,
     skip_produce: bool,
 }
@@ -30,7 +30,7 @@ impl ProduceReplacements {
         skip_produce: bool,
     ) -> Self
     where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
+        N: ProcessingStrategy<BytesInsertBatch<RowData>> + 'static,
     {
         let inner: Box<dyn ProcessingStrategy<KafkaPayload>> = match skip_produce {
             false => Box::new(Produce::new(
@@ -50,7 +50,7 @@ impl ProduceReplacements {
     }
 }
 
-impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> for ProduceReplacements {
+impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch<RowData>>> for ProduceReplacements {
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         let _ = self.inner.poll(); // Replacement offsets are not committed
         self.next_step.poll()
@@ -58,8 +58,8 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> for ProduceReplac
 
     fn submit(
         &mut self,
-        message: Message<InsertOrReplacement<BytesInsertBatch>>,
-    ) -> Result<(), SubmitError<InsertOrReplacement<BytesInsertBatch>>> {
+        message: Message<InsertOrReplacement<BytesInsertBatch<RowData>>>,
+    ) -> Result<(), SubmitError<InsertOrReplacement<BytesInsertBatch<RowData>>>> {
         let payload = message.clone().into_payload();
 
         match payload {
@@ -103,11 +103,6 @@ impl ProcessingStrategy<InsertOrReplacement<BytesInsertBatch>> for ProduceReplac
                     })
             }
         }
-    }
-
-    fn close(&mut self) {
-        self.inner.close();
-        self.next_step.close();
     }
 
     fn terminate(&mut self) {
@@ -156,7 +151,7 @@ mod tests {
             .submit(Message::new_any_message(
                 InsertOrReplacement::Insert(BytesInsertBatch::new(
                     RowData::from_rows(row_data).unwrap(),
-                    Utc::now(),
+                    Some(Utc::now()),
                     None,
                     None,
                     CommitLogOffsets::default(),
@@ -178,7 +173,6 @@ mod tests {
             .unwrap();
 
         strategy.poll().unwrap();
-        strategy.close();
         strategy.join(None).unwrap();
 
         assert_eq!(produced_payloads.lock().unwrap().len(), 1);

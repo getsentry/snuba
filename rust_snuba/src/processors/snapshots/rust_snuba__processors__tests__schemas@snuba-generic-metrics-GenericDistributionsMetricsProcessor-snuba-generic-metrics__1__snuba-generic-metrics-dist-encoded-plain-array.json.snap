@@ -18,12 +18,13 @@ expression: snapshot_payload
       2,
       3
     ],
-    "materialization_version": 2,
+    "materialization_version": 4,
     "metric_id": 65563,
     "metric_type": "distribution",
     "min_retention_days": 90,
     "org_id": 1,
     "project_id": 3,
+    "record_meta": 1,
     "retention_days": 90,
     "tags.indexed_value": [
       0,

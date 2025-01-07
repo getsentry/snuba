@@ -129,6 +129,15 @@ class PostReplacementConsistencyEnforcer(ClickhouseQueryProcessor):
                     )
                 )
 
+        if (
+            set_final
+            and self.__replacer_state_name is not None
+            and self.__replacer_state_name == ReplacerState.ERRORS
+        ):
+            query_settings.push_clickhouse_setting(
+                "do_not_merge_across_partitions_select_final", 1
+            )
+
         self._set_query_final(query, set_final)
 
     def _initialize_tags(

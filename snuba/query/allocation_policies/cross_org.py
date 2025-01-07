@@ -27,6 +27,11 @@ logger = logging.getLogger("snuba.query.allocation_policy_cross_org")
 _RATE_LIMIT_NAME = "concurrent_limit_policy"
 _UNREGISTERED_REFERRER_MAX_THREADS = 1
 _UNREGISTERED_REFERRER_CONCURRENT_QUERIES = 1
+from snuba.query.allocation_policies import MAX_THRESHOLD, NO_SUGGESTION, NO_UNITS
+
+QUOTA_UNIT = "concurrent_queries"
+SUGGESTION = "scan less concurrent queries"
+import typing
 
 
 class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
@@ -167,22 +172,38 @@ class CrossOrgQueryAllocationPolicy(BaseConcurrentRateLimitAllocationPolicy):
                 can_run=True,
                 max_threads=self.max_threads,
                 explanation={"reason": "pass_through"},
+                is_throttled=False,
+                throttle_threshold=MAX_THRESHOLD,
+                rejection_threshold=MAX_THRESHOLD,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
             )
 
         concurrent_limit = self._get_concurrent_limit(referrer)
-        can_run, explanation = self._is_within_rate_limit(
+        rate_limit_params = RateLimitParameters(
+            self.rate_limit_name, referrer, None, concurrent_limit
+        )
+        rate_limit_stats, can_run, explanation = self._is_within_rate_limit(
             query_id,
-            RateLimitParameters(self.rate_limit_name, referrer, None, concurrent_limit),
+            rate_limit_params,
         )
         decision_explanation: dict[str, JsonSerializable] = {"reason": explanation}
         if not self._referrer_is_registered(referrer):
             decision_explanation[
                 "cross_org_query"
             ] = f"This referrer is not registered for the current storage {self._storage_key.value}, if you want to increase its limits, register it in the yaml of the CrossOrgQueryAllocationPolicy"
+
         return QuotaAllowance(
             can_run=can_run,
-            max_threads=self._get_max_threads(referrer),
+            max_threads=self._get_max_threads(referrer) if can_run else 0,
             explanation=decision_explanation,
+            is_throttled=False,
+            throttle_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
+            rejection_threshold=typing.cast(int, rate_limit_params.concurrent_limit),
+            quota_used=rate_limit_stats.concurrent,
+            quota_unit=QUOTA_UNIT,
+            suggestion=NO_SUGGESTION if can_run else SUGGESTION,
         )
 
     def _update_quota_balance(

@@ -25,6 +25,8 @@ class GroupAttributesMessageProcessor(DatasetMessageProcessor):
                     "group_id": message["group_id"],
                     "group_status": message["status"],
                     "group_substatus": message["substatus"],
+                    "group_priority": message.get("priority", None),
+                    "group_first_release": message.get("first_release", None),
                     "group_first_seen": datetime.strptime(
                         message["first_seen"], settings.PAYLOAD_DATETIME_FORMAT
                     ),

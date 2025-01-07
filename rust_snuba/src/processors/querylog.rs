@@ -3,8 +3,8 @@ use std::convert::TryFrom;
 
 use crate::config::ProcessorConfig;
 use anyhow::Context;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use schemars::JsonSchema;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{ser::Error, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
@@ -102,6 +102,7 @@ struct Profile {
 #[serde(default)]
 struct ResultProfile {
     bytes: u64,
+    progress_bytes: u64,
     elapsed: f64,
 }
 
@@ -163,6 +164,8 @@ struct QueryList {
     array_join_columns: Vec<Vec<String>>,
     #[serde(rename(serialize = "clickhouse_queries.bytes_scanned"))]
     bytes_scanned: Vec<u64>,
+    #[serde(rename(serialize = "clickhouse_queries.bytes"))]
+    bytes: Vec<u64>,
     #[serde(rename(serialize = "clickhouse_queries.duration_ms"))]
     duration_ms: Vec<u64>,
 }
@@ -190,6 +193,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
         let mut groupby_columns = vec![];
         let mut array_join_columns = vec![];
         let mut bytes_scanned = vec![];
+        let mut bytes = vec![];
         let mut duration_ms = vec![];
 
         for q in from {
@@ -224,7 +228,8 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             groupby_columns.push(q.profile.groupby_cols);
             array_join_columns.push(q.profile.array_join_cols);
             let result_profile = q.result_profile.unwrap_or_default();
-            bytes_scanned.push(result_profile.bytes);
+            bytes_scanned.push(result_profile.progress_bytes);
+            bytes.push(result_profile.bytes);
             duration_ms.push((result_profile.elapsed * 1000.0) as u64);
 
             // consistent, cache hit, max_threads and is_duplicated may not be present
@@ -273,6 +278,7 @@ impl TryFrom<Vec<FromQuery>> for QueryList {
             groupby_columns,
             array_join_columns,
             bytes_scanned,
+            bytes,
             duration_ms,
         })
     }
@@ -312,7 +318,7 @@ mod tests {
     use super::*;
 
     use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
 
     #[test]
@@ -383,6 +389,8 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes": 0,
+                  "blocks": 1,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -490,6 +498,8 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes": 0,
+                  "blocks": 1,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539
@@ -597,6 +607,8 @@ mod tests {
                 },
                 "result_profile": {
                   "bytes": 1305,
+                  "progress_bytes": 0,
+                  "blocks": 1,
                   "blocks": 1,
                   "rows": 22,
                   "elapsed": 0.009863138198852539

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, MutableMapping, Optional, Sequence
+from typing import Any, List, MutableMapping, Optional
 
 from snuba.state.quota import ResourceQuota
 from snuba.state.rate_limit import RateLimitParameters
@@ -37,14 +37,6 @@ class QuerySettings(ABC):
         pass
 
     @abstractmethod
-    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
-        pass
-
-    @abstractmethod
-    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
-        pass
-
-    @abstractmethod
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         pass
 
@@ -58,6 +50,10 @@ class QuerySettings(ABC):
 
     @abstractmethod
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
+        pass
+
+    @abstractmethod
+    def push_clickhouse_setting(self, key: str, value: Any) -> None:
         pass
 
     @abstractmethod
@@ -112,12 +108,6 @@ class HTTPQuerySettings(QuerySettings):
     def get_legacy(self) -> bool:
         return self.__legacy
 
-    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
-        return self.__rate_limit_params
-
-    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
-        self.__rate_limit_params.append(rate_limit_param)
-
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         return self.__resource_quota
 
@@ -129,6 +119,9 @@ class HTTPQuerySettings(QuerySettings):
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         self.__clickhouse_settings = settings
+
+    def push_clickhouse_setting(self, key: str, value: Any) -> None:
+        self.__clickhouse_settings[key] = value
 
     def get_asynchronous(self) -> bool:
         return self.__asynchronous
@@ -179,12 +172,6 @@ class SubscriptionQuerySettings(QuerySettings):
     def get_feature(self) -> str:
         return self.__feature
 
-    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
-        return []
-
-    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
-        pass
-
     def get_resource_quota(self) -> Optional[ResourceQuota]:
         return None
 
@@ -196,6 +183,9 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def set_clickhouse_settings(self, settings: MutableMapping[str, Any]) -> None:
         self.__clickhouse_settings = settings
+
+    def push_clickhouse_setting(self, key: str, value: Any) -> None:
+        self.__clickhouse_settings[key] = value
 
     def get_asynchronous(self) -> bool:
         return False

@@ -32,9 +32,10 @@ class TestPerReferrerPolicy:
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
         )
 
-        assert not policy.get_quota_allowance(
+        quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
-        ).can_run
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0
         # clean up the failed request
         policy.update_quota_balance(
             tenant_ids={"referrer": "statistical_detectors"},
@@ -50,6 +51,34 @@ class TestPerReferrerPolicy:
         assert policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="4"
         ).can_run
+
+    @pytest.mark.redis_db
+    def test_throttle(self) -> None:
+        policy = ReferrerGuardRailPolicy.from_kwargs(
+            **{
+                "storage_key": "generic_metrics_distributions",
+                "required_tenant_types": ["referrer"],
+            }
+        )
+
+        policy.set_config_value("default_concurrent_request_per_referrer", 4)
+        policy.set_config_value("requests_throttle_divider", 2)
+        policy.set_config_value("threads_throttle_divider", 2)
+        first_quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="1"
+        )
+        assert first_quota_allowance.max_threads == policy.max_threads
+
+        second_quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
+        )
+        assert second_quota_allowance.max_threads == policy.max_threads
+
+        third_quota_allowance = policy.get_quota_allowance(
+            tenant_ids={"referrer": "statistical_detectors"}, query_id="3"
+        )
+        assert third_quota_allowance.max_threads == policy.max_threads // 2
+        assert third_quota_allowance.can_run
 
     @pytest.mark.redis_db
     def test_override(self):
@@ -80,6 +109,8 @@ class TestPerReferrerPolicy:
             0,
             {"referrer": "statistical_detectors"},
         )
-        assert not policy.get_quota_allowance(
+
+        quota_allowance = policy.get_quota_allowance(
             tenant_ids={"referrer": "statistical_detectors"}, query_id="2"
-        ).can_run
+        )
+        assert not quota_allowance.can_run and quota_allowance.max_threads == 0

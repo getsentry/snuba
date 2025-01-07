@@ -1,7 +1,7 @@
 use crate::config::ProcessorConfig;
 use anyhow::{anyhow, Context};
 use chrono::DateTime;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
@@ -26,7 +26,10 @@ pub fn deserialize_message(
     offset: u64,
 ) -> anyhow::Result<(Vec<ReplayRow>, f64)> {
     let replay_message: ReplayMessage = serde_json::from_slice(payload)?;
-    let replay_payload = serde_json::from_slice(&replay_message.payload)?;
+    let replay_payload = match replay_message.payload {
+        RawReplayPayload::Sliced(s) => serde_json::from_slice(&s)?,
+        RawReplayPayload::Serialized(p) => p,
+    };
 
     let rows = match replay_payload {
         ReplayPayload::ClickEvent(event) => event
@@ -50,7 +53,7 @@ pub fn deserialize_message(
                 event_hash: click.event_hash,
                 offset,
                 partition,
-                platform: "javascript".to_string(),
+                platform: "".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
@@ -131,7 +134,7 @@ pub fn deserialize_message(
                 os_name: event.contexts.os.name.unwrap_or_default(),
                 os_version: event.contexts.os.version.unwrap_or_default(),
                 partition,
-                platform: event.platform.unwrap_or("javascript".to_string()),
+                platform: event.platform.unwrap_or("".to_string()),
                 project_id: replay_message.project_id,
                 release: event.release.unwrap_or_default(),
                 replay_id: event.replay_id,
@@ -178,7 +181,7 @@ pub fn deserialize_message(
                 info_id: event.info_id.unwrap_or_default(),
                 offset,
                 partition,
-                platform: "javascript".to_string(),
+                platform: "".to_string(),
                 project_id: replay_message.project_id,
                 replay_id: replay_message.replay_id,
                 retention_days: replay_message.retention_days,
@@ -188,14 +191,37 @@ pub fn deserialize_message(
                 ..Default::default()
             }]
         }
+        ReplayPayload::ViewedEvent(event) => {
+            vec![ReplayRow {
+                error_sample_rate: -1.0,
+                event_hash: Uuid::from_u64_pair(0, event.viewed_by_id),
+                offset,
+                partition,
+                platform: "".to_string(),
+                project_id: replay_message.project_id,
+                replay_id: replay_message.replay_id,
+                retention_days: replay_message.retention_days,
+                session_sample_rate: -1.0,
+                timestamp: event.timestamp as u32,
+                viewed_by_id: event.viewed_by_id,
+                ..Default::default()
+            }]
+        }
     };
 
     Ok((rows, replay_message.start_time))
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawReplayPayload {
+    Sliced(Vec<u8>),
+    Serialized(ReplayPayload),
+}
+
+#[derive(Debug, Deserialize)]
 struct ReplayMessage {
-    payload: Vec<u8>,
+    payload: RawReplayPayload,
     start_time: f64,
     project_id: u64,
     replay_id: Uuid,
@@ -211,6 +237,8 @@ enum ReplayPayload {
     Event(Box<ReplayEvent>),
     #[serde(rename = "event_link")]
     EventLinkEvent(ReplayEventLinkEvent),
+    #[serde(rename = "replay_viewed")]
+    ViewedEvent(ReplayViewedEvent),
 }
 
 // Replay Click Event
@@ -357,6 +385,12 @@ struct ReplayEventLinkEvent {
     warning_id: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ReplayViewedEvent {
+    viewed_by_id: u64,
+    timestamp: f64,
+}
+
 // ReplayRow is not an exact match with the schema. We're trying to remove many of the nullable
 // columns. These nullable columns are written to with empty values and will eventually have
 // their null condition dropped.
@@ -421,6 +455,7 @@ pub struct ReplayRow {
     user_id: String,
     user_name: String,
     user: String,
+    viewed_by_id: u64,
     warning_id: Uuid,
 }
 
@@ -428,7 +463,7 @@ pub struct ReplayRow {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::{str::FromStr, time::SystemTime};
 
     #[test]
@@ -565,6 +600,7 @@ mod tests {
         assert_eq!(replay_row.error_id, Uuid::nil());
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -663,7 +699,7 @@ mod tests {
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
         assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.project_id, 1);
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.retention_days, 30);
@@ -695,6 +731,7 @@ mod tests {
         assert_eq!(replay_row.error_id, Uuid::nil());
         assert_eq!(replay_row.fatal_id, Uuid::nil());
         assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -788,12 +825,13 @@ mod tests {
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
         assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
         assert_eq!(replay_row.trace_ids, vec![]);
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
     }
 
@@ -882,12 +920,13 @@ mod tests {
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
         assert_eq!(replay_row.is_archived, 0);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
         assert_eq!(replay_row.trace_ids, vec![]);
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
     }
 
     #[test]
@@ -964,13 +1003,169 @@ mod tests {
         assert_eq!(replay_row.info_id, Uuid::nil());
         assert_eq!(replay_row.ip_address_v4, None);
         assert_eq!(replay_row.ip_address_v6, None);
-        assert_eq!(replay_row.platform, "javascript".to_string());
+        assert_eq!(replay_row.platform, "".to_string());
         assert_eq!(replay_row.replay_start_timestamp, None);
         assert_eq!(replay_row.session_sample_rate, -1.0);
         assert_eq!(replay_row.title, None);
         assert_eq!(replay_row.trace_ids, vec![]);
         assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(replay_row.viewed_by_id, 0);
         assert_eq!(replay_row.warning_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_parse_replay_viewed_event() {
+        let payload = r#"{
+            "type": "replay_viewed",
+            "viewed_by_id": 23823623242,
+            "timestamp": 1712009295
+        }"#;
+        let payload_value = payload.as_bytes();
+
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        assert_eq!(replay_row.viewed_by_id, 23823623242);
+        assert_eq!(replay_row.project_id, 1);
+        assert_eq!(replay_row.timestamp, 1712009295);
+        assert_eq!(
+            replay_row.replay_id,
+            Uuid::parse_str("048aa04be40243948eb3b57089c519ee").unwrap()
+        );
+
+        assert_eq!(&replay_row.browser_name, "");
+        assert_eq!(&replay_row.browser_version, "");
+        assert_eq!(&replay_row.click_alt, "");
+        assert_eq!(&replay_row.click_aria_label, "");
+        assert_eq!(replay_row.click_class, Vec::<String>::new());
+        assert_eq!(&replay_row.click_component_name, "");
+        assert_eq!(&replay_row.click_id, "");
+        assert_eq!(replay_row.click_is_dead, 0);
+        assert_eq!(replay_row.click_is_rage, 0);
+        assert_eq!(replay_row.click_node_id, 0);
+        assert_eq!(&replay_row.click_role, "");
+        assert_eq!(&replay_row.click_tag, "");
+        assert_eq!(&replay_row.click_testid, "");
+        assert_eq!(&replay_row.click_text, "");
+        assert_eq!(&replay_row.click_title, "");
+        assert_eq!(replay_row.debug_id, Uuid::nil());
+        assert_eq!(&replay_row.device_brand, "");
+        assert_eq!(&replay_row.device_family, "");
+        assert_eq!(&replay_row.device_model, "");
+        assert_eq!(&replay_row.device_name, "");
+        assert_eq!(&replay_row.dist, "");
+        assert_eq!(&replay_row.environment, "");
+        assert_eq!(replay_row.error_id, Uuid::nil());
+        assert_eq!(replay_row.error_ids, vec![]);
+        assert_eq!(replay_row.error_sample_rate, -1.0);
+        assert_eq!(replay_row.fatal_id, Uuid::nil());
+        assert_eq!(replay_row.info_id, Uuid::nil());
+        assert_eq!(replay_row.ip_address_v4, None);
+        assert_eq!(replay_row.ip_address_v6, None);
+        assert_eq!(replay_row.is_archived, 0);
+        assert_eq!(replay_row.offset, 0);
+        assert_eq!(&replay_row.os_name, "");
+        assert_eq!(&replay_row.os_version, "");
+        assert_eq!(replay_row.partition, 0);
+        assert_eq!(replay_row.platform, "".to_string());
+        assert_eq!(&replay_row.release, "");
+        assert_eq!(replay_row.replay_start_timestamp, None);
+        assert_eq!(&replay_row.replay_type, "");
+        assert_eq!(replay_row.retention_days, 30);
+        assert_eq!(&replay_row.sdk_name, "");
+        assert_eq!(&replay_row.sdk_version, "");
+        assert_eq!(replay_row.segment_id, None);
+        assert_eq!(replay_row.session_sample_rate, -1.0);
+        assert_eq!(replay_row.tags_key, Vec::<String>::new());
+        assert_eq!(replay_row.tags_value, Vec::<String>::new());
+        assert_eq!(replay_row.title, None);
+        assert_eq!(replay_row.trace_ids, vec![]);
+        assert_eq!(replay_row.urls, Vec::<String>::new());
+        assert_eq!(&replay_row.user_email, "");
+        assert_eq!(&replay_row.user_id, "");
+        assert_eq!(&replay_row.user_name, "");
+        assert_eq!(&replay_row.user, "");
+        assert_eq!(replay_row.warning_id, Uuid::nil());
+    }
+
+    #[test]
+    fn test_replay_viewed_event_event_hash() {
+        // test 1-to-1 mapping of user id and event hash
+        let payload = r#"{
+            "type": "replay_viewed",
+            "viewed_by_id": 23823623242,
+            "timestamp": 1712009295
+        }"#;
+        let payload_value = payload.as_bytes();
+        let data = format!(
+            r#"{{
+                "payload": {payload_value:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+        let (rows, _) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let replay_row = rows.first().unwrap();
+
+        let payload_same_user = r#"{
+            "type": "replay_viewed",
+            "viewed_by_id": 23823623242,
+            "timestamp": 1712009299
+        }"#;
+        let payload_value_same_user = payload_same_user.as_bytes();
+        let data_same_user = format!(
+            r#"{{
+                "payload": {payload_value_same_user:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+        let (rows_same_user, _) = deserialize_message(data_same_user.as_bytes(), 0, 0).unwrap();
+        let replay_row_same_user = rows_same_user.first().unwrap();
+
+        // diff user but same time
+        let payload_diff_user = r#"{
+            "type": "replay_viewed",
+            "viewed_by_id": 1234,
+            "timestamp": 1712009295
+        }"#;
+        let payload_value_diff_user = payload_diff_user.as_bytes();
+        let data_diff_user = format!(
+            r#"{{
+                "payload": {payload_value_diff_user:?},
+                "project_id": 1,
+                "replay_id": "048aa04be40243948eb3b57089c519ee",
+                "retention_days": 30,
+                "segment_id": null,
+                "start_time": 100,
+                "type": "replay_event"
+            }}"#
+        );
+        let (rows_diff_user, _) = deserialize_message(data_diff_user.as_bytes(), 0, 0).unwrap();
+        let replay_row_diff_user = rows_diff_user.first().unwrap();
+
+        assert_eq!(replay_row.event_hash, replay_row_same_user.event_hash);
+        assert_ne!(replay_row.event_hash, replay_row_diff_user.event_hash);
     }
 
     #[test]

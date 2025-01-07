@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any, Sequence
+from typing import Any, List, Sequence
 from unittest import mock
 
 import pytest
@@ -9,12 +9,14 @@ import pytest
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.readiness_state import ReadinessState
-from snuba.datasets.storage import ReadableTableStorage
+from snuba.datasets.storage import ReadableTableStorage, Storage
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.utils.health_info import (
     _set_shutdown,
-    check_clickhouse,
+    check_all_tables_present,
     filter_checked_storages,
     get_shutdown,
+    sanity_check_clickhouse_connections,
 )
 
 
@@ -84,6 +86,15 @@ def fake_get_dataset(name: str) -> Dataset:
     }[name]
 
 
+class FakeStorageKey(StorageKey):
+    def __init__(self, value: str) -> None:
+        super().__init__(value=value)
+
+
+def fake_get_all_storage_keys() -> list[StorageKey]:
+    return [FakeStorageKey("fake_storage_key")]
+
+
 @pytest.fixture(scope="function")
 def temp_settings() -> Any:
     from snuba import settings
@@ -93,57 +104,83 @@ def temp_settings() -> Any:
 
 
 @mock.patch(
-    "snuba.utils.health_info.get_enabled_dataset_names",
-    return_value=["events"],
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
 )
-@mock.patch("snuba.utils.health_info.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
-def test_check_clickhouse(mock1: mock.MagicMock, mock2: mock.MagicMock) -> None:
-    assert check_clickhouse()
+def test_check_all_tables_present(mock1: mock.MagicMock) -> None:
+    assert check_all_tables_present()
 
 
 @mock.patch(
-    "snuba.utils.health_info.get_enabled_dataset_names",
-    return_value=["events", "bad"],
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
 )
-@mock.patch("snuba.utils.health_info.get_dataset", side_effect=fake_get_dataset)
-def test_bad_dataset_fails_healthcheck(
-    mock1: mock.MagicMock, mock2: mock.MagicMock
-) -> None:
+@pytest.mark.clickhouse_db
+def test_sanity_check_clickhouse_connections(mock1: mock.MagicMock) -> None:
+    assert sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO, FakeStorageKey("fake_storage_key")],
+)
+def test_bad_dataset_fails_thorough_healthcheck(mock1: mock.MagicMock) -> None:
     # the bad dataset is enabled and not experimental, therefore the healthcheck
     # should fail
-    assert not check_clickhouse()
+    assert not check_all_tables_present()
 
 
 @mock.patch(
-    "snuba.utils.health_info.get_enabled_dataset_names",
-    return_value=["events"],
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO, FakeStorageKey("fake_storage_key")],
+)
+@pytest.mark.clickhouse_db
+def test_single_bad_dataset_passes_healthcheck(mock1: mock.MagicMock) -> None:
+    # a bad dataset is enabled and not operable, but at least a single
+    # clickhouse query node is still operable. We still want to pass the
+    # regular healthcheck in this case so that we can continue to serve request
+    # despite outage in a single cluster.
+    assert sanity_check_clickhouse_connections()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[FakeStorageKey("fake_storage_key")],
+)
+def test_all_bad_dataset_fails_thorough_healthcheck(mock1: mock.MagicMock) -> None:
+    # No query nodes are available, fail healthcheck because there's likely a
+    # connection issue with the underlying host
+    assert not check_all_tables_present()
+
+
+@mock.patch(
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
 )
 @mock.patch("snuba.clusters.cluster._get_storage_set_cluster_map", return_value={})
 def test_dataset_undefined_storage_set(
     mock1: mock.MagicMock, mock2: mock.MagicMock
 ) -> None:
     metrics_tags: dict[str, str] = {}
-    assert not check_clickhouse(metric_tags=metrics_tags)
+    assert not check_all_tables_present(metric_tags=metrics_tags)
     for v in metrics_tags.values():
         assert isinstance(v, str)
 
 
 @mock.patch(
-    "snuba.utils.health_info.get_enabled_dataset_names",
-    return_value=["events", "experimental", "mock"],
+    "snuba.utils.health_info.get_all_storage_keys",
+    return_value=[StorageKey.ERRORS_RO],
 )
-@mock.patch("snuba.utils.health_info.get_dataset", side_effect=fake_get_dataset)
 @pytest.mark.clickhouse_db
-def test_filter_checked_storages(
-    mock1: mock.MagicMock, mock2: mock.MagicMock, temp_settings: Any
-) -> None:
+def test_filter_checked_storages(mock1: mock.MagicMock, temp_settings: Any) -> None:
     temp_settings.SUPPORTED_STATES = {
         "limited",
         "partial",
         "complete",
     }  # remove deprecate from supported states
-    storages = filter_checked_storages()
+    storages: List[Storage] = []
+    filter_checked_storages(storages)
 
     # check experimental dataset's storage is not in list
     assert BadStorage() not in storages
