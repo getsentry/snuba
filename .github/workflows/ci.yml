@@ -160,13 +160,13 @@ jobs:
           load: true
           target: testing
           tags: |
-            ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
-            ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
+            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            ghcr.io/getsentry/snuba-ci:latest
           cache-from: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+            type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
           # cache-to is re-implemented using the next step, to run conditionally for contributors
           outputs: type=docker,dest=/tmp/snuba-ci.tar
 
@@ -177,11 +177,11 @@ jobs:
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up CI
-          docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
-          docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
+          docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
+          docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
             # The latest tag should only be published on `master`
-            docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
+            docker push ghcr.io/getsentry/snuba-ci:latest
           fi
 
       - name: Publish snuba-ci image to artifacts
@@ -226,23 +226,23 @@ jobs:
 
       - name: Docker Snuba Rust tests
         run: |
-          SNUBA_IMAGE=snuba-ci SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test-rust
         if: ${{ matrix.snuba_settings == 'test_rust' }}
 
       - name: Docker Snuba tests
         run: |
-          SNUBA_IMAGE=snuba-ci SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=${{ matrix.snuba_settings }} docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' || matrix.snuba_settings  == 'test_distributed' }}
 
       - name: Docker Snuba Multi-Node Tests
         run: |
-          SNUBA_IMAGE=snuba-ci SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
-          SNUBA_IMAGE=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml up -d
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_distributed_migrations TEST_LOCATION=test_distributed_migrations docker compose --profile multi_node -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test_distributed_migrations' }}
 
       - name: Docker Snuba Init Tests
         run: |
-          SNUBA_IMAGE=snuba-ci SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test_initialization TEST_LOCATION=test_initialization docker compose -f docker-compose.gcb.yml run --rm snuba-test
         if: ${{ matrix.snuba_settings == 'test' }}
 
       - name: Upload test results to Codecov
@@ -329,7 +329,7 @@ jobs:
             -e REDIS_DB=1 \
             --name sentry_snuba \
             --network sentry \
-            ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }}
+            ghcr.io/getsentry/snuba-ci:${{ github.sha }}
           docker exec sentry_snuba snuba migrations migrate --force
 
       - name: Run snuba tests
@@ -397,7 +397,7 @@ jobs:
       - name: Docker Snuba Test other ClickHouse versions
         run: |
           export CLICKHOUSE_IMAGE=ghcr.io/getsentry/image-mirror-altinity-clickhouse-server:${{matrix.version}}
-          SNUBA_IMAGE=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
+          SNUBA_IMAGE=ghcr.io/getsentry/snuba-ci:${{ github.sha }} SNUBA_SETTINGS=test docker compose -f docker-compose.gcb.yml run --rm snuba-test
 
       - name: Upload to codecov
         run: |
@@ -414,7 +414,7 @@ jobs:
         uses: getsentry/action-self-hosted-e2e-tests@main
         with:
           project_name: snuba
-          docker_repo: ${{ github.repository_owner }}/snuba
+          docker_repo: getsentry/snuba
           image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
           docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
 
@@ -454,11 +454,11 @@ jobs:
           if [[ "${{ secrets.DOCKER_HUB_RW_TOKEN }}" ]]; then echo "${{ secrets.DOCKER_HUB_RW_TOKEN }}" | docker login --username=sentrybuilder --password-stdin; fi
           # We push 3 tags to Dockerhub:
           # first, the full sha of the commit
-          docker tag ${IMAGE_URL} ${{ github.repository_owner }}/snuba:${GITHUB_SHA}
-          docker push ${{ github.repository_owner }}/snuba:${GITHUB_SHA}
+          docker tag ${IMAGE_URL} getsentry/snuba:${GITHUB_SHA}
+          docker push getsentry/snuba:${GITHUB_SHA}
           # second, the short sha of the commit
-          docker tag ${IMAGE_URL} ${{ github.repository_owner }}/snuba:${SHORT_SHA}
-          docker push ${{ github.repository_owner }}/snuba:${SHORT_SHA}
+          docker tag ${IMAGE_URL} getsentry/snuba:${SHORT_SHA}
+          docker push getsentry/snuba:${SHORT_SHA}
           # finally, nightly
-          docker tag ${IMAGE_URL} ${{ github.repository_owner }}/snuba:nightly
-          docker push ${{ github.repository_owner }}/snuba:nightly
+          docker tag ${IMAGE_URL} getsentry/snuba:nightly
+          docker push getsentry/snuba:nightly
