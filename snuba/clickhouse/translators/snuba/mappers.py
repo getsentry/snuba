@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Mapping, Optional, Tuple
+from typing import Optional, Tuple
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseStrictTranslator
 from snuba.clickhouse.translators.snuba.allowed import (
@@ -9,7 +9,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
     SubscriptableReferenceMapper,
     ValidColumnMappings,
 )
-from snuba.query.dsl import arrayElement, column, literal
+from snuba.query.dsl import arrayElement
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import CurriedFunctionCall, Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
@@ -239,12 +239,6 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
-    # the result is cast to this type
-    data_type: str
-    # if you add {'sentry.span_id': 'span_id'} here, then if the user requests attr_blah[sentry.span_id],
-    # this mapper will return a reference to the actual column instead of attr_str.
-    # if specified, data_type must also be specified.
-    normalized_columns: Optional[Mapping[str, str]] = None
 
     def attempt_map(
         self,
@@ -263,22 +257,10 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
             return None
 
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-        expr: Expression = arrayElement(
-            None,
+        return arrayElement(
+            expression.alias,
             ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
             key,
-        )
-
-        if self.normalized_columns and key.value in self.normalized_columns:
-            expr = column(self.normalized_columns[key.value])
-
-        return FunctionCallExpr(
-            expression.alias,
-            "CAST",
-            (
-                expr,
-                literal(self.data_type),
-            ),
         )
 
 
