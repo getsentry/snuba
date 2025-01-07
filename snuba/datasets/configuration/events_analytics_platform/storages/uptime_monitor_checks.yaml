@@ -33,7 +33,6 @@ mandatory_condition_checkers:
 stream_loader:
   processor: UptimeMonitorChecksProcessor
   default_topic: snuba-uptime-results
-  dlq_topic: snuba-dead-letter-uptime-results
 
 allocation_policies:
   - name: ConcurrentRateLimitAllocationPolicy

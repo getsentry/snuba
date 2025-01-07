@@ -60,7 +60,6 @@ class Topic(Enum):
     DEAD_LETTER_METRICS = "snuba-dead-letter-metrics"
     DEAD_LETTER_GENERIC_METRICS = "snuba-dead-letter-generic-metrics"
     DEAD_LETTER_REPLAYS = "snuba-dead-letter-replays"
-    DEAD_LETTER_UPTIME_RESULTS = "snuba-dead-letter-uptime-results"
     DEAD_LETTER_GENERIC_EVENTS = "snuba-dead-letter-generic-events"
     DEAD_LETTER_QUERYLOG = "snuba-dead-letter-querylog"
     DEAD_LETTER_GROUP_ATTRIBUTES = "snuba-dead-letter-group-attributes"
