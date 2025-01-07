@@ -41,8 +41,7 @@ pub fn deserialize_message(
         http_status_code: monitor_message
             .request_info
             .unwrap_or_default()
-            .http_status_code
-            .unwrap_or(0),
+            .http_status_code,
         trace_id: monitor_message.trace_id,
         retention_days: monitor_message.retention_days,
         partition,
@@ -98,7 +97,7 @@ pub struct UptimeMonitorCheckRow {
     region_slug: String,
     check_status: String,
     check_status_reason: Option<String>,
-    http_status_code: u16,
+    http_status_code: Option<u16>,
     trace_id: Uuid,
     retention_days: u16,
     partition: u16,
@@ -112,6 +111,10 @@ mod tests {
     #[test]
     fn test_parse_monitor_checkin() {
         let data = r#"{
+            "organization_id": 1,
+            "project_id": 1,
+            "retention_days": 30,
+            "region_slug": "global",
             "environment": "prod",
             "subscription_id": "123e4567-e89b-12d3-a456-426614174000",
             "guid": "550e8400-e29b-41d4-a716-446655440000",
@@ -143,13 +146,13 @@ mod tests {
         );
         assert_eq!(monitor_row.duration, 100);
         assert_eq!(monitor_row.timestamp, 1702659277.0);
-        assert_eq!(monitor_row.region_slug, Some("global".to_string()));
+        assert_eq!(monitor_row.region_slug, "global".to_string());
         assert_eq!(&monitor_row.check_status, "ok");
         assert_eq!(
             monitor_row.check_status_reason,
             Some("Request successful".to_string())
         );
-        assert_eq!(monitor_row.http_status_code, 200);
+        assert_eq!(monitor_row.http_status_code, Some(200));
         assert_eq!(monitor_row.retention_days, 30);
         assert_eq!(monitor_row.partition, 0);
         assert_eq!(monitor_row.offset, 0);
