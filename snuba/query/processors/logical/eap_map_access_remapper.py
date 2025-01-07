@@ -1,7 +1,12 @@
 from typing import Mapping
 
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.query.logical import Query
 from snuba.query.processors.logical import LogicalQueryProcessor
 from snuba.query.query_settings import QuerySettings
@@ -33,6 +38,9 @@ class EAPClickhouseColumnRemapper(LogicalQueryProcessor):
                 return exp
 
             if exp.column.column_name != self.hash_bucket_name:
+                return exp
+
+            if not isinstance(exp.key, Literal) or not isinstance(exp.key.value, str):
                 return exp
 
             if exp.key.value not in self.keys:

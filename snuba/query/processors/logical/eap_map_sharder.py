@@ -114,6 +114,9 @@ class EAPMapSharder(LogicalQueryProcessor):
             if exp.column.column_name != self.src_bucket_name:
                 return exp
 
+            if not isinstance(exp.key, Literal) or not isinstance(exp.key.value, str):
+                return exp
+
             bucket_idx = fnv_1a(exp.key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
             return FunctionCall(
                 exp.alias,
