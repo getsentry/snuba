@@ -177,6 +177,8 @@ struct TraceContext {
     span_id: Option<String>,
     #[serde(default)]
     trace_id: Option<Uuid>,
+    #[serde(default)]
+    parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
 }
@@ -549,6 +551,11 @@ impl ErrorRow {
         if let Some(trace_id) = from_trace_context.trace_id {
             contexts_keys.push("trace.trace_id".to_owned());
             contexts_values.push(trace_id.simple().to_string());
+        }
+
+        if let Some(parent_span_id) = from_trace_context.parent_span_id {
+            contexts_keys.push("trace.parent_span_id".to_owned());
+            contexts_values.push(parent_span_id.to_string());
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
