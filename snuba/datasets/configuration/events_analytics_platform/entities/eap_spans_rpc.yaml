@@ -5,7 +5,6 @@ name: eap_spans_rpc
 schema:
   [
     { name: service, type: String },
-    { name: trace_id, type: UUID },
     { name: span_id, type: UInt, args: { size: 64 } },
     { name: parent_span_id, type: UInt, args: { size: 64 } },
     { name: segment_id, type: UInt, args: { size: 64 } },
@@ -18,6 +17,7 @@ schema:
     { name: name, type: String },
 
     # these are the required columns for an 'RPC entity' that can be used by EAP RPCs
+    { name: trace_id, type: UUID },
     { name: organization_id, type: UInt, args: { size: 64 } },
     { name: project_id, type: UInt, args: { size: 64 } },
     { name: time, type: DateTime }, # used by TimeSeriesProcessor
@@ -102,7 +102,8 @@ query_processors:
   - processor: OptionalAttributeAggregationTransformer
     args:
       attribute_column_names:
-        - attr_num
+        - attr_f64
+        - attr_i64
       aggregation_names:
         - sum
         - count
