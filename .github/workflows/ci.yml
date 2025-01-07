@@ -154,7 +154,6 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v6
-        if: github.repository_owner == 'getsentry'
         with:
           context: .
           # push: true
