@@ -239,8 +239,8 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
     from_column_name: str
     to_col_table: Optional[str]
     to_col_name: str
-    # if specified, casts the result to the specified type.
-    data_type: Optional[str] = None
+    # the result is cast to this type
+    data_type: str
     # if you add {'sentry.span_id': 'span_id'} here, then if the user requests attr_blah[sentry.span_id],
     # this mapper will return a reference to the actual column instead of attr_str.
     # if specified, data_type must also be specified.
@@ -262,42 +262,24 @@ class SubscriptableHashBucketMapper(SubscriptableReferenceMapper):
         if not isinstance(key.value, str):
             return None
 
-        if (
-            self.normalized_columns
-            and key.value in self.normalized_columns
-            and self.data_type
-        ):
-            return FunctionCallExpr(
-                expression.alias,
-                "CAST",
-                (
-                    column(self.normalized_columns[key.value]),
-                    literal(self.data_type),
-                ),
-            )
-
         bucket_idx = fnv_1a(key.value.encode("utf-8")) % ATTRIBUTE_BUCKETS
-        if self.data_type:
-            return FunctionCallExpr(
-                expression.alias,
-                "CAST",
-                (
-                    arrayElement(
-                        None,
-                        ColumnExpr(
-                            None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"
-                        ),
-                        key,
-                    ),
-                    literal(self.data_type),
-                ),
-            )
-        else:
-            return arrayElement(
-                expression.alias,
-                ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
-                key,
-            )
+        expr = arrayElement(
+            None,
+            ColumnExpr(None, self.to_col_table, f"{self.to_col_name}_{bucket_idx}"),
+            key,
+        )
+
+        if self.normalized_columns and key.value in self.normalized_columns:
+            expr = column(self.normalized_columns[key.value])
+
+        return FunctionCallExpr(
+            expression.alias,
+            "CAST",
+            (
+                expr,
+                literal(self.data_type),
+            ),
+        )
 
 
 @dataclass(frozen=True)
