@@ -27,24 +27,24 @@ pub fn deserialize_message(
     let monitor_message: UptimeMonitorCheckMessage = serde_json::from_slice(payload)?;
 
     let rows = vec![UptimeMonitorCheckRow {
-        organization_id: 1,
-        project_id: 1,
+        organization_id: monitor_message.organization_id,
+        project_id: monitor_message.project_id,
         environment: monitor_message.environment,
         uptime_subscription_id: monitor_message.subscription_id,
         uptime_check_id: monitor_message.guid,
         scheduled_check_time: monitor_message.scheduled_check_time_ms,
         timestamp: monitor_message.actual_check_time_ms,
         duration: monitor_message.duration_ms,
-        region_slug: Some("global".to_string()),
+        region_slug: monitor_message.region_slug.unwrap_or_default(),
         check_status: monitor_message.status,
-        check_status_reason: monitor_message.status_reason.map(|r| r.r#type),
+        check_status_reason: monitor_message.status_reason.map(|r| r.ty),
         http_status_code: monitor_message
             .request_info
-            .unwrap()
+            .unwrap_or_default()
             .http_status_code
             .unwrap_or(0),
         trace_id: monitor_message.trace_id,
-        retention_days: 30,
+        retention_days: monitor_message.retention_days,
         partition,
         offset,
     }];
@@ -55,10 +55,10 @@ pub fn deserialize_message(
 #[derive(Debug, Deserialize)]
 struct UptimeMonitorCheckMessage {
     // TODO: add these to the message
-    // organization_id: u64,
-    // project_id: u64,
-    // retention_days: u16,
-    // region_slug: Option<String>,
+    organization_id: u64,
+    project_id: u64,
+    retention_days: u16,
+    region_slug: Option<String>,
     environment: Option<String>,
     subscription_id: Uuid,
     guid: Uuid,
@@ -70,7 +70,7 @@ struct UptimeMonitorCheckMessage {
     trace_id: Uuid,
     request_info: Option<RequestInfo>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct RequestInfo {
     pub http_status_code: Option<u16>,
 }
@@ -78,7 +78,8 @@ pub struct RequestInfo {
 #[serde(rename_all = "snake_case")]
 pub struct CheckStatusReason {
     /// The type of the status reason
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub ty: String,
 
     /// A human readable description of the status reason
     pub description: String,
@@ -94,7 +95,7 @@ pub struct UptimeMonitorCheckRow {
     scheduled_check_time: f64,
     timestamp: f64,
     duration: u64,
-    region_slug: Option<String>,
+    region_slug: String,
     check_status: String,
     check_status_reason: Option<String>,
     http_status_code: u16,
