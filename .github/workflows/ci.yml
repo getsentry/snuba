@@ -168,12 +168,8 @@ jobs:
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/snuba-ci:latest
           # cache-to is re-implemented using the next step, to run conditionally for contributors
-
+          #
       - name: Publish images for cache
-        if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
-        # outside contributors won't be able to push to the docker registry
-        # ignore the failures in this step
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Useful to speed up CI
           docker push ghcr.io/${{ github.repository_owner }}/snuba-ci:${{ steps.branch.outputs.branch }}
