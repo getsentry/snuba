@@ -1,48 +1,16 @@
 import math
 import uuid
-from collections import defaultdict
-from datetime import datetime
-from typing import Any, Dict, Iterable, Type
+from typing import Type
 
-from google.protobuf.json_format import MessageToDict
-from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
-    DataPoint,
-    TimeSeries,
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
-from snuba.attribution.appid import AppID
-from snuba.attribution.attribution_info import AttributionInfo
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
-from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.data_source.simple import Entity
-from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
-from snuba.query.logical import Query
-from snuba.query.query_settings import HTTPQuerySettings
-from snuba.request import Request as SnubaRequest
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
-from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
-    base_conditions_and,
-    trace_item_filters_to_expression,
-    treeify_or_and_conditions,
-)
-from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
-from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
-    ExtrapolationContext,
-    aggregation_to_expression,
-    get_average_sample_rate_column,
-    get_confidence_interval_column,
-    get_count_column,
-)
 
 _VALID_GRANULARITY_SECS = set(
     [
