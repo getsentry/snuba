@@ -44,7 +44,10 @@ class EmptyTagConditionProcessor(ClickhouseQueryProcessor):
                     replacement = FunctionCall(
                         exp.alias,
                         "has",
-                        (Column(None, table_name, self.key_column), Literal(None, rhs)),
+                        (
+                            Column(None, table_name, self.column_name),
+                            Literal(None, rhs),
+                        ),
                     )
 
                     assert isinstance(exp, FunctionCall)
