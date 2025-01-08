@@ -335,7 +335,7 @@ query_processors:
       killswitch: events_features_hash_map_enabled
   - processor: EmptyTagConditionProcessor
     args:
-      column_name: tags.key
+      column_name: tags.key.key
   - processor: EmptyTagConditionProcessor
     args:
       column_name: features.key

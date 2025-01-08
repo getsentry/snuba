@@ -156,6 +156,8 @@ query_processors:
       hash_map_name: _measurements_hash_map
       killswitch: measurements_hash_map_enabled
   - processor: EmptyTagConditionProcessor
+    args:
+      column_name: tags.key
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
