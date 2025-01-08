@@ -42,7 +42,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 target=target,
             )
             for table_name, target in [
-                (self.local_table_name, OperationTarget.DISTRIBUTED),
-                (self.dist_table_name, OperationTarget.LOCAL),
+                (self.dist_table_name, OperationTarget.DISTRIBUTED),
+                (self.local_table_name, OperationTarget.LOCAL),
             ]
         ]
