@@ -2,7 +2,7 @@ version: v1
 kind: writable_storage
 name: uptime_monitor_checks
 storage:
-  key: events_analytics_platform
+  key: uptime_monitor_checks
   set_key: events_analytics_platform
 readiness_state: experimental
 schema:
