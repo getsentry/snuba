@@ -9,10 +9,7 @@ from unittest.mock import ANY
 import pytest
 
 from snuba.consumers.types import KafkaMessageMetadata
-from snuba.datasets.processors.errors_processor import (
-    ErrorsProcessor,
-    extract_flags_context,
-)
+from snuba.datasets.processors.errors_processor import ErrorsProcessor
 from snuba.processor import InsertBatch
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
@@ -382,14 +379,14 @@ class ErrorEvent:
             "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
             "transaction_name": "",
             "num_processing_errors": len(self.errors) if self.errors is not None else 0,
-            "flags.key": [],
-            "flags.value": [],
+            "features.key": [],
+            "features.value": [],
         }
 
         if self.features:
             for feature in self.features:
-                expected_result["flags.key"].append(feature["key"])
-                expected_result["flags.value"].append(str(feature["value"]))
+                expected_result["features.key"].append(feature["key"])
+                expected_result["features.value"].append(str(feature["value"]))
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
@@ -888,40 +885,3 @@ class TestErrorsProcessor:
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY
         )
-
-
-def test_extract_flags_context():
-    output = {}
-    extract_flags_context(
-        output,
-        {
-            "flags": {
-                "values": [
-                    {"key": "hello", "value": True},
-                    {"key": "world", "value": False},
-                ]
-            }
-        },
-    )
-    assert output["flags.key"] == ["hello", "world"]
-    assert output["flags.value"] == ["True", "False"]
-
-
-def test_extract_flags_context_malformed():
-    output = {}
-
-    extract_flags_context(output, {})
-    assert output["flags.key"] == []
-    assert output["flags.value"] == []
-
-    extract_flags_context(output, {"flags": None})
-    assert output["flags.key"] == []
-    assert output["flags.value"] == []
-
-    extract_flags_context(output, {"flags": {"values": None}})
-    assert output["flags.key"] == []
-    assert output["flags.value"] == []
-
-    extract_flags_context(output, {"flags": {"values": [None]}})
-    assert output["flags.key"] == []
-    assert output["flags.value"] == []
