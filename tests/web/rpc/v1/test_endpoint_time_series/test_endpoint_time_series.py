@@ -396,13 +396,17 @@ class TestTimeSeriesApi(BaseApiTest):
             aggregations=[
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_SUM,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="sparse_metric"
+                    ),
                     label="sum",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
                 AttributeAggregation(
                     aggregate=Function.FUNCTION_AVG,
-                    key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="test_metric"),
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="sparse_metric"
+                    ),
                     label="avg",
                     extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
                 ),
