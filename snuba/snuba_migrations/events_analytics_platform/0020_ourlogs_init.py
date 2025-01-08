@@ -15,7 +15,7 @@ num_attr_buckets = 20
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
-    Column("trace_id", UUID(modifiers=Modifiers(nullable=True))),
+    Column("trace_id", UUID()),  # optional
     Column("span_id", UInt(64)),  # optional
     Column("severity_text", String()),
     Column("severity_number", UInt(8)),
@@ -55,7 +55,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.MergeTree(
-                    order_by="(organization_id, project_id, toDateTime(timestamp))",
+                    order_by="(organization_id, project_id, toDateTime(timestamp), trace_id)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
