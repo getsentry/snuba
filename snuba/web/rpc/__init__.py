@@ -27,15 +27,37 @@ Tout = TypeVar("Tout", bound=ProtobufMessage)
 
 
 class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
+    def __init__(
+        self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
+    ) -> None:
+        self._timer = timer or Timer("endpoint_timing")
+        self._metrics_backend = metrics_backend or environment.metrics
+
     @classmethod
     def config_key(cls) -> str:
-        return f"{cls.__name__}__{cls.trace_item_name}"
+        return f"{cls.endpoint_name()}__{cls.trace_item_name()}"
 
     @classmethod
-    def trace_item_name(cls) -> TraceItemName:
+    def endpoint_name(cls) -> str:
+        if cls.__name__ == "TraceItemDataResolver":
+            return cls.__name__
         raise NotImplementedError
 
-    @final
+    @classmethod
+    def trace_item_name(cls) -> TraceItemName.ValueType:
+        return TraceItemName.TRACE_ITEM_NAME_UNSPECIFIED
+
+    @classmethod
+    def get_from_trace_item_name(
+        cls, trace_item_name: TraceItemName.ValueType
+    ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
+        return cast(
+            Type["TraceItemDataResolver[Tin, Tout]"],
+            getattr(cls, "_registry").get_class_from_name(
+                f"{cls.endpoint_name()}__{trace_item_name}"
+            ),
+        )
+
     def resolve(self, in_msg: Tin) -> Tout:
         raise NotImplementedError
 
@@ -61,7 +83,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     def config_key(cls) -> str:
         return f"{cls.__name__}__{cls.version()}"
 
-    def get_resolver(self) -> TraceItemDataResolver[Tin, Tout]:
+    def get_resolver(
+        self, trace_item_name: TraceItemName.ValueType
+    ) -> TraceItemDataResolver[Tin, Tout]:
         raise NotImplementedError
 
     @property
