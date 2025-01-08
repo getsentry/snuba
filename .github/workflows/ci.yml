@@ -170,6 +170,11 @@ jobs:
           # cache-to is re-implemented using the next step, to run conditionally for contributors
           outputs: type=docker,dest=/tmp/snuba-ci.tar
 
+      - name: Load snuba-ci image
+        run: |
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
+
       - name: Publish snuba-ci image to registry
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
         # outside contributors won't be able to push to the docker registry
