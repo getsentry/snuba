@@ -16,7 +16,7 @@ columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
     Column("message", String()),
-    Column("timestamp", DateTime64(3)),  # millisecond precision
+    Column("timestamp", DateTime64(6)),  # microsecond precision
     Column("trace_id", UUID(modifiers=Modifiers(nullable=True))),
     Column("retention_days", UInt(16)),
 ]
