@@ -67,8 +67,8 @@ class ExtrapolationContext(ABC):
         value = row_data[column_label]
 
         confidence_interval = None
-        average_sample_rate = None
-        sample_count = None
+        average_sample_rate = 0
+        sample_count = 0
 
         percentile = 0.0
         granularity = 0.0
@@ -113,7 +113,7 @@ class ExtrapolationContext(ABC):
                 value=value,
                 confidence_interval=None,
                 average_sample_rate=0,
-                sample_count=sample_count if sample_count is not None else 0,
+                sample_count=sample_count,
             )
 
         if is_percentile:
