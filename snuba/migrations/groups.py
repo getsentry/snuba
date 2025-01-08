@@ -23,7 +23,6 @@ from snuba.migrations.group_loader import (
     SystemLoader,
     TestMigrationLoader,
     TransactionsLoader,
-    UptimeMonitorChecksLoader,
 )
 
 
@@ -180,11 +179,6 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=ProfileChunksLoader(),
         storage_sets_keys={StorageSetKey.PROFILE_CHUNKS},
         readiness_state=ReadinessState.PARTIAL,
-    ),
-    MigrationGroup.UPTIME_RESULTS: _MigrationGroup(
-        loader=UptimeMonitorChecksLoader(),
-        storage_sets_keys={StorageSetKey.UPTIME_RESULTS},
-        readiness_state=ReadinessState.LIMITED,
     ),
 }
 
