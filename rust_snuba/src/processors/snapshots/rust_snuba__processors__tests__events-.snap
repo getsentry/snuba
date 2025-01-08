@@ -4,6 +4,13 @@ expression: diff
 ---
 [
     Change {
+        path: ".<anyOf:0>.2.data.contexts.<anyOf:0>.trace.<anyOf:0>",
+        change: PropertyAdd {
+            lhs_additional_properties: true,
+            added: "parent_span_id",
+        },
+    },
+    Change {
         path: ".<anyOf:1>.0",
         change: TypeRemove {
             removed: Number,
