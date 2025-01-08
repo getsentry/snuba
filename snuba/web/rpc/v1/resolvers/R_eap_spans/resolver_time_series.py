@@ -152,14 +152,7 @@ def _convert_result_timeseries(
                 extrapolation_context = ExtrapolationContext.from_row(
                     timeseries.label, row_data
                 )
-                if (
-                    # This isn't quite right but all non extrapolated aggregates
-                    # are assumed to be present.
-                    not extrapolation_context.is_extrapolated
-                    # This checks if the extrapolated aggregate is present by
-                    # inspecting the sample count
-                    or extrapolation_context.extrapolated_data_present
-                ):
+                if extrapolation_context.is_data_present:
                     timeseries.data_points.append(
                         DataPoint(
                             data=row_data[timeseries.label],
@@ -188,7 +181,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         for aggregation in request.aggregations
     ]
 
-    extrapolation_columns = []
+    additional_context_columns = []
     for aggregation in request.aggregations:
         if (
             aggregation.extrapolation_mode
@@ -196,7 +189,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         ):
             confidence_interval_column = get_confidence_interval_column(aggregation)
             if confidence_interval_column is not None:
-                extrapolation_columns.append(
+                additional_context_columns.append(
                     SelectedExpression(
                         name=confidence_interval_column.alias,
                         expression=confidence_interval_column,
@@ -204,16 +197,17 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                 )
 
             average_sample_rate_column = get_average_sample_rate_column(aggregation)
-            count_column = get_count_column(aggregation)
-            extrapolation_columns.append(
+            additional_context_columns.append(
                 SelectedExpression(
                     name=average_sample_rate_column.alias,
                     expression=average_sample_rate_column,
                 )
             )
-            extrapolation_columns.append(
-                SelectedExpression(name=count_column.alias, expression=count_column)
-            )
+
+        count_column = get_count_column(aggregation)
+        additional_context_columns.append(
+            SelectedExpression(name=count_column.alias, expression=count_column)
+        )
 
     groupby_columns = [
         SelectedExpression(
@@ -254,7 +248,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
             ),
             *aggregation_columns,
             *groupby_columns,
-            *extrapolation_columns,
+            *additional_context_columns,
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
