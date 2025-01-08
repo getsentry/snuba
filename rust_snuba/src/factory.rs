@@ -170,7 +170,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                     false,
                 );
 
-                return make_rust_processor_with_replacements(
+                make_rust_processor_with_replacements(
                     replacements_step,
                     func,
                     &self.logical_topic_name,
@@ -180,7 +180,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         env_config: self.env_config.clone(),
                     },
                     self.stop_at_timestamp,
-                );
+                )
             }
             (true, Some(processors::ProcessingFunctionType::ProcessingFunction(func))) => {
                 make_rust_processor(
