@@ -29,7 +29,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
-    ExtrapolationMeta,
+    ExtrapolationContext,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -55,6 +55,7 @@ _VALID_GRANULARITY_SECS = set(
         2 * 60,
         5 * 60,
         10 * 60,
+        15 * 60,
         30 * 60,  # minutes
         1 * 3600,
         3 * 3600,
@@ -63,7 +64,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-_MAX_BUCKETS_IN_REQUEST = 1000
+# MAX 5 minute granularity over 7 days
+_MAX_BUCKETS_IN_REQUEST = 2016
 
 
 def _convert_result_timeseries(
@@ -168,17 +170,27 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                extrapolation_meta = ExtrapolationMeta.from_row(
-                    row_data, timeseries.label
+                extrapolation_context = ExtrapolationContext.from_row(
+                    timeseries.label, row_data
                 )
-                timeseries.data_points.append(
-                    DataPoint(
-                        data=row_data[timeseries.label],
-                        data_present=True,
-                        avg_sampling_rate=extrapolation_meta.avg_sampling_rate,
-                        reliability=extrapolation_meta.reliability,
+                if (
+                    # This isn't quite right but all non extrapolated aggregates
+                    # are assumed to be present.
+                    not extrapolation_context.is_extrapolated
+                    # This checks if the extrapolated aggregate is present by
+                    # inspecting the sample count
+                    or extrapolation_context.extrapolated_data_present
+                ):
+                    timeseries.data_points.append(
+                        DataPoint(
+                            data=row_data[timeseries.label],
+                            data_present=True,
+                            avg_sampling_rate=extrapolation_context.average_sample_rate,
+                            reliability=extrapolation_context.reliability,
+                        )
                     )
-                )
+                else:
+                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
 
 

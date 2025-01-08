@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::Message;
+use sentry_arroyo::types::Message;
 
 pub struct SetJoinTimeout<N> {
     next_step: N,

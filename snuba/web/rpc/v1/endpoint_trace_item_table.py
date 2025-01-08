@@ -15,7 +15,6 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
     ExtrapolationMode,
-    Reliability,
 )
 
 from snuba.attribution.appid import AppID
@@ -31,7 +30,7 @@ from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
 from snuba.web.rpc.common.aggregation import (
-    ExtrapolationMeta,
+    ExtrapolationContext,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -51,6 +50,8 @@ from snuba.web.rpc.common.debug_info import (
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 _DEFAULT_ROW_LIMIT = 10_000
+
+_GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
 
 
 def _convert_order_by(
@@ -208,13 +209,10 @@ def _convert_results(
             if column_name in converters.keys():
                 res[column_name].results.append(converters[column_name](value))
                 res[column_name].attribute_name = column_name
-                extrapolation_meta = ExtrapolationMeta.from_row(row, column_name)
-                if (
-                    extrapolation_meta.reliability
-                    != Reliability.RELIABILITY_UNSPECIFIED
-                ):
+                extrapolation_context = ExtrapolationContext.from_row(column_name, row)
+                if extrapolation_context.is_extrapolated:
                     res[column_name].reliabilities.append(
-                        extrapolation_meta.reliability
+                        extrapolation_context.reliability
                     )
 
     column_ordering = {column.label: i for i, column in enumerate(request.columns)}
@@ -267,6 +265,19 @@ def _validate_select_and_groupby(in_msg: TraceItemTableRequest) -> None:
             f"Non aggregated columns should be in group_by. non_aggregated_columns: {non_aggregted_columns}, grouped_by_columns: {grouped_by_columns}"
         )
 
+    if not aggregation_present and grouped_by_columns:
+        raise BadSnubaRPCRequestException(
+            "Aggregation is required when including group_by columns"
+        )
+
+    disallowed_group_by_columns = [
+        c.name for c in in_msg.group_by if c.name in _GROUP_BY_DISALLOWED_COLUMNS
+    ]
+    if disallowed_group_by_columns:
+        raise BadSnubaRPCRequestException(
+            f"Columns {', '.join(disallowed_group_by_columns)} are not permitted in group_by. The following columns are not allowed: {', '.join(_GROUP_BY_DISALLOWED_COLUMNS)}"
+        )
+
 
 def _validate_order_by(in_msg: TraceItemTableRequest) -> None:
     order_by_cols = set([ob.column.label for ob in in_msg.order_by])
@@ -296,6 +307,7 @@ class EndpointTraceItemTable(
         in_msg = _apply_labels_to_columns(in_msg)
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
+
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )

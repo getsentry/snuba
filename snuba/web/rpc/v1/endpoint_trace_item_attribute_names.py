@@ -7,7 +7,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeNamesResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import PageToken
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
+from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    ComparisonFilter,
+    TraceItemFilter,
+)
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -17,7 +21,8 @@ from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import column, literal
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.reader import Row
@@ -31,6 +36,23 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 # max value the user can provide for 'limit' in their request
 MAX_REQUEST_LIMIT = 1000
+
+
+def _convert_filter_offset(filter_offset: TraceItemFilter) -> Expression:
+    if not filter_offset.HasField("comparison_filter"):
+        raise TypeError("filter_offset needs to be a comparison filter")
+    if filter_offset.comparison_filter.op != ComparisonFilter.OP_GREATER_THAN:
+        raise TypeError("filter_offset must use the greater than comparison")
+
+    k_expression = column(filter_offset.comparison_filter.key.name)
+    v = filter_offset.comparison_filter.value
+    value_type = v.WhichOneof("value")
+    if value_type != "val_str":
+        raise BadSnubaRPCRequestException(
+            "keys are strings, so please provide a string filter"
+        )
+
+    return f.greater(k_expression, literal(v.val_str))
 
 
 def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaRequest:
@@ -60,17 +82,27 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
             f"Attribute type '{req.type}' is not supported. Supported types are: TYPE_STRING, TYPE_FLOAT, TYPE_INT, TYPE_BOOLEAN"
         )
 
+    condition = (
+        base_conditions_and(
+            req.meta,
+            f.like(column("attr_key"), f"%{req.value_substring_match}%"),
+            _convert_filter_offset(req.page_token.filter_offset),
+        )
+        if req.page_token.HasField("filter_offset")
+        else base_conditions_and(
+            req.meta, f.like(column("attr_key"), f"%{req.value_substring_match}%")
+        )
+    )
+
     query = Query(
         from_clause=entity,
         selected_columns=[
             SelectedExpression(
                 name="attr_key",
-                expression=column("attr_key"),
+                expression=column("attr_key", alias="attr_key"),
             ),
         ],
-        condition=base_conditions_and(
-            req.meta, f.like(column("attr_key"), f"%{req.value_substring_match}%")
-        ),
+        condition=condition,
         order_by=[
             OrderBy(direction=OrderByDirection.ASC, expression=column("attr_key")),
         ],
@@ -138,9 +170,24 @@ class EndpointTraceItemAttributeNames(
         res: QueryResult,
     ) -> TraceItemAttributeNamesResponse:
         attributes = convert_to_attributes(res, req.type)
+        page_token = (
+            PageToken(offset=req.page_token.offset + len(attributes))
+            if req.page_token.HasField("offset") or len(attributes) == 0
+            else PageToken(
+                filter_offset=TraceItemFilter(
+                    comparison_filter=ComparisonFilter(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="attr_key"
+                        ),
+                        op=ComparisonFilter.OP_GREATER_THAN,
+                        value=AttributeValue(val_str=attributes[-1].name),
+                    )
+                )
+            )
+        )
         return TraceItemAttributeNamesResponse(
             attributes=attributes,
-            page_token=PageToken(offset=req.page_token.offset + len(attributes)),
+            page_token=page_token,
             meta=extract_response_meta(
                 req.meta.request_id, req.meta.debug, [res], [self._timer]
             ),
@@ -149,12 +196,6 @@ class EndpointTraceItemAttributeNames(
     def _execute(
         self, req: TraceItemAttributeNamesRequest
     ) -> TraceItemAttributeNamesResponse:
-        if not req.HasField("page_token"):
-            req.page_token.offset = 0
-        if req.page_token.HasField("filter_offset"):
-            raise NotImplementedError(
-                "EndpointTraceItemAttributeNames does not currently support page_token.filter_offset, please use page_token.offset instead."
-            )
         if not req.meta.request_id:
             req.meta.request_id = str(uuid.uuid4())
 

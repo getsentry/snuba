@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
 use schemars::JsonSchema;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde_json::Value;
 
 use crate::config::ProcessorConfig;
@@ -40,7 +40,7 @@ pub fn process_message(
     let payload_bytes = payload.payload().context("Expected payload")?;
     let msg: FromSpanMessage = serde_json::from_slice(payload_bytes)?;
     let origin_timestamp = DateTime::from_timestamp(msg.received as i64, 0);
-    let mut span: EAPSpan = msg.try_into()?;
+    let mut span: EAPSpan = msg.into();
 
     span.retention_days = Some(enforce_retention(span.retention_days, &config.env_config));
 
@@ -354,7 +354,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         let msg: FromSpanMessage = serde_json::from_slice(SPAN_KAFKA_MESSAGE.as_bytes()).unwrap();
-        let span: EAPSpan = msg.try_into().unwrap();
+        let span: EAPSpan = msg.into();
         insta::with_settings!({sort_maps => true}, {
             insta::assert_json_snapshot!(span)
         });

@@ -154,7 +154,6 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v6
-        if: github.repository_owner == 'getsentry'
         with:
           context: .
           # push: true
@@ -169,8 +168,9 @@ jobs:
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
           # cache-to is re-implemented using the next step, to run conditionally for contributors
+          outputs: type=docker,dest=/tmp/snuba-ci.tar
 
-      - name: Publish images for cache
+      - name: Publish snuba-ci image to registry
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
         # outside contributors won't be able to push to the docker registry
         # ignore the failures in this step
@@ -183,6 +183,18 @@ jobs:
             # The latest tag should only be published on `master`
             docker push ghcr.io/getsentry/snuba-ci:latest
           fi
+
+      - name: Publish snuba-ci image to artifacts
+      # we publish to github artifacts separately so that third-party
+      # contributions also work, as all the test jobs need this image.
+      # otherwise third-party contributors would have to provide a working,
+      # authenticated GHCR, which seems impossible to ensure in the general
+      # case.
+        uses: actions/upload-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp/snuba-ci.tar
+
 
   tests:
     needs: [linting, snuba-image]
@@ -202,9 +214,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Docker set up
         run: |
@@ -272,9 +291,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Checkout sentry
         uses: actions/checkout@v4
@@ -339,6 +365,8 @@ jobs:
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
+              tests/sentry/integrations/slack/test_unfurl.py \
+              tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
               tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
               tests/sentry/sentry_metrics/querying \
               tests/snuba/test_snql_snuba.py \
@@ -370,9 +398,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Docker set up
         run: |
@@ -387,21 +422,20 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-  # TODO: Re-enable this once CI is stable, seems to be running into issues potentially with resource constraints
-  # self-hosted-end-to-end:
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 30
+  self-hosted-end-to-end:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
-  #   steps:
-  #     - name: Checkout Snuba
-  #       uses: actions/checkout@v4
-  #     - name: Run Sentry self-hosted e2e CI
-  #       uses: getsentry/action-self-hosted-e2e-tests@main
-  #       with:
-  #         project_name: snuba
-  #         docker_repo: getsentry/snuba
-  #         image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
-  #         docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
+    steps:
+      - name: Checkout Snuba
+        uses: actions/checkout@v4
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/action-self-hosted-e2e-tests@main
+        with:
+          project_name: snuba
+          docker_repo: getsentry/snuba
+          image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
+          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
 
   publish-to-dockerhub:
     name: Publish Snuba to DockerHub

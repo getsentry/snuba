@@ -2,7 +2,7 @@ use adler::Adler32;
 use anyhow::Context;
 use chrono::DateTime;
 use core::f64;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -278,7 +278,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_metrics_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -315,7 +315,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_metrics_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -352,7 +352,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_metrics_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )

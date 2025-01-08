@@ -1,5 +1,89 @@
 # Changelog
 
+## 24.12.1
+
+### Various fixes & improvements
+
+- Revert "fix(eap-spans): Add an index on project_id (#6695)" (9f5c3f57) by @getsentry-bot
+- fix(eap-spans): Add an index on project_id (#6695) by @phacops
+- 984: scrub eap_spans_str_attrs (#6694) by @kylemumma
+- fix(inc984): scrub the correct bucket for sentry.user (#6693) by @xurui-c
+- fix(inc984): scrub the correct bucket for sentry.user.ip (#6692) by @volokluev
+- inc984: scrub `user` from eap_spans (#6691) by @xurui-c
+- inc984: scrub `user` from spans (#6689) by @xurui-c
+- fix(rust): Honor exit code (#6674) by @untitaker
+- ref(admin): lw delete related system queries (#6685) by @MeredithAnya
+- chore: Bump rust-toolchain (#6688) by @untitaker
+- chore(devservices): Bumping the version of devservices to latest (#6682) by @IanWoodard
+- fix(devservices): Add orchestrator devservices label to clickhouse (#6687) by @hubertdeng123
+- fix(eap): Fix divide by 0 errors caused when the sample count is 0 (#6681) by @davidtsuk
+- meta: Bump new development version (44657332)
+- ref(lw-deletes): add project_id killswitch and some logging (#6677) by @MeredithAnya
+- docs: update CH supported versions (#6683) by @MeredithAnya
+- feat(inc-984): Cleanup EAP spans  (#6676) by @xurui-c
+- fix(admin): Allow special characters in SYSTEM/OPTIMIZE queries (#6680) by @evanh
+- feat(eap): Use weighted average instead of simple average for calculating average sampling rate (#6678) by @davidtsuk
+- ref(lw-deletes): concurrent allocation policy requires org id (#6679) by @MeredithAnya
+
+## 24.12.0
+
+### Various fixes & improvements
+
+- feat(inc-984): store project ids list in dictionary in scrub job (#6675) by @volokluev
+- ref(lw-deletes): enforce ratelimiter (#6644) by @MeredithAnya
+- fix(admin): Allow KILL MUTATION commands in sudo mode (#6672) by @evanh
+- fix(inc984): align start/end timestamp to partition boundaries (#6670) by @volokluev
+- chore(deps): bump relay from 0.9.2 to 0.9.4 (#6660) by @jjbayer
+- feat(inc984): make mutation condition simpler (#6669) by @volokluev
+- chore: Bump Arroyo to 2.19.5 (#6666) by @ayirr7
+- ref: bump sentry-arroyo to 2.19.4 (#6663) by @getsentry-bot
+- fix(eap-alerts): Fix subscriptions referrer for eap alerts (#6662) by @shruthilayaj
+- chore(api): Do not log healthcheck error if downfile exists (#6635) by @untitaker
+- feat(eap): add additional validation for group by  (#6659) by @davidtsuk
+- feat(eap): add default value to virtual column (#6657) by @davidtsuk
+- ref: bump sentry-arroyo to 2.19.3 (#6656) by @getsentry-bot
+- Implement filter offset for attribute keys API (#6618) by @xurui-c
+- feat: make sentry RPC instrumentation more specific to the endpoint (#6654) by @kylemumma
+- fix(consumers): Respect 60 day retention days period (#6631) by @volokluev
+- feat: add missing example in admin rpc tool (#6647) by @kylemumma
+- hotfix(inc-984): Add manual job to scrub IPs from spans (#6649) by @volokluev
+- feat: support 15 minute granularity on eap time series RPC (#6645) by @kylemumma
+- fix(eap): Fix divide by 0 bug (#6653) by @davidtsuk
+- fix: run sentry tests when RPC changes (#6652) by @colin-sentry
+- meta: Bump new development version (60ff5441)
+- chore(eap-spans): Take advantage of parallel reads (#6579) by @phacops
+
+## 24.11.2
+
+### Various fixes & improvements
+
+- feat(eap): Bump max timeseries buckets (#6630) by @volokluev
+- fix(scripts): Automatically create local tables before MV (#6648) by @untitaker
+- feat(eap): Implement confidence intervals for percentiles (#6634) by @davidtsuk
+- fix: admin rpc endpoint selector bug fix (#6641) by @kylemumma
+- ref(admin): Allow merge function in FROM clause (#6643) by @evanh
+- fix: Actual Rust support in bump-version (#6640) by @untitaker
+- fix 0006_sorting_key_change migration (#6633) by @MeredithAnya
+- chore: Bump Arroyo 2.19.2 (#6639) by @ayirr7
+- chore: Bump Arroyo to 2.19.1 (#6632) by @ayirr7
+- chore(devservices): Bumping the version of devservices to latest (#6629) by @IanWoodard
+- feat(eap-api): support in conditions in TraceItemFilter (#6623) by @kylemumma
+- Revert "ref(ci): Disable self-hosted e2e CI due to resource constraints" (#6622) by @hubertdeng123
+- feat(devservices): Use https for repo links (#6627) by @hubertdeng123
+- chore: Bump rust-arroyo to published crate (#6614) by @untitaker
+- feat(label): adding label to container (#6628) by @IanWoodard
+- consumer: Add flag to configure DLQ buffer limit (#6626) by @ayirr7
+- feat(runtime_config): A way to add static descriptions to config items (#6624) by @untitaker
+- fix(admin): add example RPC call for the endpoints missing it (#6615) by @kylemumma
+- feat(eap-api): Use signs in count, average, and sum calculations (#6613) by @davidtsuk
+- feat(devservices): Add healthchecks to clickhouse and snuba (#6616) by @hubertdeng123
+- feat(memory): Add script to debug consumer OOM issues (#6585) by @nikhars
+- ref(ci): Disable self-hosted e2e CI due to resource constraints (#6620) by @hubertdeng123
+- ref(admin): Allow clusterAllReplicas in system queries (#6619) by @evanh
+- ref(profiling): start the profile_chunks consumer when ENABLE_PROFILES_CONSUMER is true (#6607) by @viglia
+
+_Plus 11 more_
+
 ## 24.11.1
 
 ### Various fixes & improvements

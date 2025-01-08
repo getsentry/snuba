@@ -3,15 +3,15 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
-use rust_arroyo::backends::kafka::config::KafkaConfig;
-use rust_arroyo::backends::kafka::producer::KafkaProducer;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::metrics;
-use rust_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
+use sentry_arroyo::backends::kafka::config::KafkaConfig;
+use sentry_arroyo::backends::kafka::producer::KafkaProducer;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::metrics;
+use sentry_arroyo::processing::dlq::{DlqLimit, DlqPolicy, KafkaDlqProducer};
 
-use rust_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
-use rust_arroyo::processing::StreamProcessor;
-use rust_arroyo::types::Topic;
+use sentry_arroyo::processing::strategies::run_task_in_threads::ConcurrencyConfig;
+use sentry_arroyo::processing::StreamProcessor;
+use sentry_arroyo::types::Topic;
 
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -45,8 +45,8 @@ pub fn consumer(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
-    max_bytes_before_external_group_by: Option<usize>,
-) {
+    max_dlq_buffer_length: Option<usize>,
+) -> usize {
     py.allow_threads(|| {
         consumer_impl(
             consumer_group,
@@ -63,10 +63,10 @@ pub fn consumer(
             health_check_file,
             stop_at_timestamp,
             batch_write_timeout_ms,
-            max_bytes_before_external_group_by,
             mutations_mode,
+            max_dlq_buffer_length,
         )
-    });
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -85,8 +85,8 @@ pub fn consumer_impl(
     health_check_file: Option<&str>,
     stop_at_timestamp: Option<i64>,
     batch_write_timeout_ms: Option<u64>,
-    max_bytes_before_external_group_by: Option<usize>,
     mutations_mode: bool,
+    max_dlq_buffer_length: Option<usize>,
 ) -> usize {
     setup_logging();
 
@@ -206,7 +206,7 @@ pub fn consumer_impl(
                 max_invalid_ratio: None,
                 max_consecutive_count: None,
             },
-            None,
+            max_dlq_buffer_length,
         )
     });
 
@@ -243,20 +243,11 @@ pub fn consumer_impl(
     let processor = if mutations_mode {
         let mut_factory = MutConsumerStrategyFactory {
             storage_config: first_storage,
-            env_config,
-            logical_topic_name,
             max_batch_size,
             max_batch_time,
             processing_concurrency: ConcurrencyConfig::new(concurrency),
             clickhouse_concurrency: ConcurrencyConfig::new(clickhouse_concurrency),
-            async_inserts,
-            python_max_queue_depth,
-            use_rust_processor,
             health_check_file: health_check_file.map(ToOwned::to_owned),
-            enforce_schema,
-            physical_consumer_group: consumer_group.to_owned(),
-            physical_topic_name: Topic::new(&consumer_config.raw_topic.physical_topic_name),
-            accountant_topic_config: consumer_config.accountant_topic,
             batch_write_timeout,
         };
 
@@ -284,7 +275,6 @@ pub fn consumer_impl(
             accountant_topic_config: consumer_config.accountant_topic,
             stop_at_timestamp,
             batch_write_timeout,
-            max_bytes_before_external_group_by,
         };
 
         StreamProcessor::with_kafka(config, factory, topic, dlq_policy)

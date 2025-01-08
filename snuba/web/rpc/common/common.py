@@ -14,7 +14,15 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 from snuba.query import Query
 from snuba.query.conditions import combine_and_conditions, combine_or_conditions
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import and_cond, column, in_cond, literal, literals_array, or_cond
+from snuba.query.dsl import (
+    and_cond,
+    column,
+    in_cond,
+    literal,
+    literals_array,
+    not_cond,
+    or_cond,
+)
 from snuba.query.expressions import Expression, FunctionCall, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
@@ -221,7 +229,9 @@ def apply_virtual_columns(
                 f.CAST(attribute_expression, "String"),
                 literals_array(None, [literal(k) for k in context.value_map.keys()]),
                 literals_array(None, [literal(v) for v in context.value_map.values()]),
-                literal("unknown"),
+                literal(
+                    context.default_value if context.default_value != "" else "unknown"
+                ),
                 alias=context.to_column_name,
             )
 
@@ -267,12 +277,33 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
                 "comparison does not have a right hand side"
             )
 
-        v_expression = {
-            "val_bool": literal(v.val_bool),
-            "val_str": literal(v.val_str),
-            "val_float": literal(v.val_float),
-            "val_int": literal(v.val_int),
-        }[value_type]
+        match value_type:
+            case "val_bool":
+                v_expression: Expression = literal(v.val_bool)
+            case "val_str":
+                v_expression = literal(v.val_str)
+            case "val_float":
+                v_expression = literal(v.val_float)
+            case "val_int":
+                v_expression = literal(v.val_int)
+            case "val_null":
+                v_expression = literal(None)
+            case "val_str_array":
+                v_expression = literals_array(
+                    None, list(map(lambda x: literal(x), v.val_str_array.values))
+                )
+            case "val_int_array":
+                v_expression = literals_array(
+                    None, list(map(lambda x: literal(x), v.val_int_array.values))
+                )
+            case "val_float_array":
+                v_expression = literals_array(
+                    None, list(map(lambda x: literal(x), v.val_float_array.values))
+                )
+            case default:
+                raise NotImplementedError(
+                    f"translation of AttributeValue type {default} is not implemented"
+                )
 
         if op == ComparisonFilter.OP_EQUALS:
             return f.equals(k_expression, v_expression)
@@ -298,6 +329,10 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             return f.greater(k_expression, v_expression)
         if op == ComparisonFilter.OP_GREATER_THAN_OR_EQUALS:
             return f.greaterOrEquals(k_expression, v_expression)
+        if op == ComparisonFilter.OP_IN:
+            return in_cond(k_expression, v_expression)
+        if op == ComparisonFilter.OP_NOT_IN:
+            return not_cond(in_cond(k_expression, v_expression))
 
         raise BadSnubaRPCRequestException(
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
