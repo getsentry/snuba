@@ -52,20 +52,20 @@ pub fn deserialize_message(
 }
 
 #[derive(Debug, Deserialize)]
-struct UptimeMonitorCheckMessage {
+struct UptimeMonitorCheckMessage<'a> {
     // TODO: add these to the message
     organization_id: u64,
     project_id: u64,
     retention_days: u16,
-    region_slug: Option<String>,
-    environment: Option<String>,
+    region_slug: Option<&'a str>,
+    environment: Option<&'a str>,
     subscription_id: Uuid,
     guid: Uuid,
     scheduled_check_time_ms: f64,
     actual_check_time_ms: f64,
     duration_ms: u64,
-    status: String,
-    status_reason: Option<CheckStatusReason>,
+    status: &'a str,
+    status_reason: Option<CheckStatusReason<'a>>,
     trace_id: Uuid,
     request_info: Option<RequestInfo>,
 }
@@ -75,28 +75,28 @@ pub struct RequestInfo {
 }
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub struct CheckStatusReason {
+pub struct CheckStatusReason<'a> {
     /// The type of the status reason
     #[serde(rename = "type")]
-    pub ty: String,
+    pub ty: &'a str,
 
     /// A human readable description of the status reason
     pub description: String,
 }
 
 #[derive(Debug, Default, Serialize)]
-pub struct UptimeMonitorCheckRow {
+pub struct UptimeMonitorCheckRow<'a> {
     organization_id: u64,
     project_id: u64,
-    environment: Option<String>,
+    environment: Option<&'a str>,
     uptime_subscription_id: Uuid,
     uptime_check_id: Uuid,
     scheduled_check_time: f64,
     timestamp: f64,
     duration: u64,
-    region_slug: String,
-    check_status: String,
-    check_status_reason: Option<String>,
+    region_slug: &'a str,
+    check_status: &'a str,
+    check_status_reason: Option<&'a str>,
     http_status_code: Option<u16>,
     trace_id: Uuid,
     retention_days: u16,
@@ -139,7 +139,7 @@ mod tests {
 
         assert_eq!(monitor_row.organization_id, 1);
         assert_eq!(monitor_row.project_id, 1);
-        assert_eq!(monitor_row.environment, Some("prod".to_string()));
+        assert_eq!(monitor_row.environment, Some("prod"));
         assert_eq!(
             monitor_row.uptime_subscription_id,
             Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()
@@ -147,11 +147,8 @@ mod tests {
         assert_eq!(monitor_row.duration, 100);
         assert_eq!(monitor_row.timestamp, 1702659277.0);
         assert_eq!(monitor_row.region_slug, "global".to_string());
-        assert_eq!(&monitor_row.check_status, "ok");
-        assert_eq!(
-            monitor_row.check_status_reason,
-            Some("Request successful".to_string())
-        );
+        assert_eq!(monitor_row.check_status, "ok");
+        assert_eq!(monitor_row.check_status_reason, Some("Request successful"));
         assert_eq!(monitor_row.http_status_code, Some(200));
         assert_eq!(monitor_row.retention_days, 30);
         assert_eq!(monitor_row.partition, 0);
