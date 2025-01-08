@@ -27,13 +27,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.aggregation import (
-    ExtrapolationContext,
-    aggregation_to_expression,
-    get_average_sample_rate_column,
-    get_confidence_interval_column,
-    get_count_column,
-)
 from snuba.web.rpc.common.common import (
     apply_virtual_columns,
     attribute_key_to_expression,
@@ -47,10 +40,15 @@ from snuba.web.rpc.common.debug_info import (
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
+    ExtrapolationContext,
+    aggregation_to_expression,
+    get_average_sample_rate_column,
+    get_confidence_interval_column,
+    get_count_column,
+)
 
 _DEFAULT_ROW_LIMIT = 10_000
-
-_GROUP_BY_DISALLOWED_COLUMNS = ["timestamp"]
 
 
 def _convert_order_by(
