@@ -7,7 +7,7 @@ from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
 
-table_names = [
+migration_meta = [
     ("errors_local", StorageSetKey.EVENTS, OperationTarget.LOCAL),
     ("errors_dist", StorageSetKey.EVENTS, OperationTarget.DISTRIBUTED),
     ("errors_dist_ro", StorageSetKey.EVENTS_RO, OperationTarget.DISTRIBUTED),
@@ -26,7 +26,7 @@ class Migration(migration.ClickhouseNodeMigration):
 
 def forward_ops() -> Iterator[operations.SqlOperation]:
     # Add local and dist columns for the three tables.
-    for table_name, storage_set, target in table_names:
+    for table_name, storage_set, target in migration_meta:
         yield from [
             operations.AddColumn(
                 storage_set=storage_set,
@@ -72,7 +72,7 @@ def backward_ops() -> Iterator[operations.SqlOperation]:
         target=OperationTarget.LOCAL,
     )
 
-    for table_name, storage_set, target in table_names:
+    for table_name, storage_set, target in reversed(migration_meta):
         yield from [
             operations.DropColumn(
                 storage_set=storage_set,
