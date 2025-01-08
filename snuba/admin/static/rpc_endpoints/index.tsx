@@ -41,9 +41,16 @@ function RpcEndpoints() {
       abortControllerRef.current.abort();
     }
 
-    setSelectedEndpoint(value);
-    const selectedEndpointData = getEndpointData(endpoints, value || '');
-    setSelectedVersion(selectedEndpointData?.version || null);
+    if (value == null) {
+      setSelectedEndpoint(null);
+      setSelectedVersion(null);
+    } else {
+      // underscore splits the key between endpointname_version
+      const split = value.lastIndexOf('_');
+      setSelectedEndpoint(value.substring(0, value.lastIndexOf('_')));
+      setSelectedVersion(value.substring(split + 1, value.length));
+    }
+
     setRequestBody('');
     setResponse(null);
     setDebugMode(false);
@@ -122,6 +129,7 @@ function RpcEndpoints() {
       <EndpointSelector
         endpoints={endpoints}
         selectedEndpoint={selectedEndpoint}
+        selectedVersion={selectedVersion}
         handleEndpointSelect={handleEndpointSelect}
       />
       <Space h="md" />

@@ -352,7 +352,12 @@ def test_query_trace_bad_query(admin_api: FlaskClient) -> None:
     )
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert "Exception: Missing columns" in data["error"]["message"]
+    # error message is different in CH versions 23.8 and 24.3
+    assert (
+        "Exception: Unknown expression or function identifier"
+        in data["error"]["message"]
+        or "Exception: Missing columns" in data["error"]["message"]
+    )
     assert "clickhouse" == data["error"]["type"]
 
 

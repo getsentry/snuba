@@ -12,6 +12,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
@@ -20,14 +21,21 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
 from snuba.web.rpc import RPCEndpoint
-from snuba.web.rpc.common.common import (
+from snuba.web.rpc.common.aggregation import (
+    ExtrapolationContext,
     aggregation_to_expression,
+    get_average_sample_rate_column,
+    get_confidence_interval_column,
+    get_count_column,
+)
+from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
@@ -47,6 +55,7 @@ _VALID_GRANULARITY_SECS = set(
         2 * 60,
         5 * 60,
         10 * 60,
+        15 * 60,
         30 * 60,  # minutes
         1 * 3600,
         3 * 3600,
@@ -55,7 +64,8 @@ _VALID_GRANULARITY_SECS = set(
     ]
 )
 
-_MAX_BUCKETS_IN_REQUEST = 1000
+# MAX 5 minute granularity over 7 days
+_MAX_BUCKETS_IN_REQUEST = 2016
 
 
 def _convert_result_timeseries(
@@ -135,7 +145,7 @@ def _convert_result_timeseries(
 
         for col_name, col_value in row.items():
             if col_name in group_by_labels:
-                group_by_map[col_name] = col_value
+                group_by_map[col_name] = str(col_value)
 
         group_by_key = "|".join([f"{k},{v}" for k, v in group_by_map.items()])
         for col_name in aggregation_labels:
@@ -160,9 +170,27 @@ def _convert_result_timeseries(
             if not row_data:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
             else:
-                timeseries.data_points.append(
-                    DataPoint(data=row_data[timeseries.label], data_present=True)
+                extrapolation_context = ExtrapolationContext.from_row(
+                    timeseries.label, row_data
                 )
+                if (
+                    # This isn't quite right but all non extrapolated aggregates
+                    # are assumed to be present.
+                    not extrapolation_context.is_extrapolated
+                    # This checks if the extrapolated aggregate is present by
+                    # inspecting the sample count
+                    or extrapolation_context.extrapolated_data_present
+                ):
+                    timeseries.data_points.append(
+                        DataPoint(
+                            data=row_data[timeseries.label],
+                            data_present=True,
+                            avg_sampling_rate=extrapolation_context.average_sample_rate,
+                            reliability=extrapolation_context.reliability,
+                        )
+                    )
+                else:
+                    timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
 
 
@@ -181,6 +209,33 @@ def _build_query(request: TimeSeriesRequest) -> Query:
         for aggregation in request.aggregations
     ]
 
+    extrapolation_columns = []
+    for aggregation in request.aggregations:
+        if (
+            aggregation.extrapolation_mode
+            == ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED
+        ):
+            confidence_interval_column = get_confidence_interval_column(aggregation)
+            if confidence_interval_column is not None:
+                extrapolation_columns.append(
+                    SelectedExpression(
+                        name=confidence_interval_column.alias,
+                        expression=confidence_interval_column,
+                    )
+                )
+
+            average_sample_rate_column = get_average_sample_rate_column(aggregation)
+            count_column = get_count_column(aggregation)
+            extrapolation_columns.append(
+                SelectedExpression(
+                    name=average_sample_rate_column.alias,
+                    expression=average_sample_rate_column,
+                )
+            )
+            extrapolation_columns.append(
+                SelectedExpression(name=count_column.alias, expression=count_column)
+            )
+
     groupby_columns = [
         SelectedExpression(
             name=attr_key.name, expression=attribute_key_to_expression(attr_key)
@@ -191,19 +246,48 @@ def _build_query(request: TimeSeriesRequest) -> Query:
     res = Query(
         from_clause=entity,
         selected_columns=[
-            SelectedExpression(name="time", expression=column("time", alias="time")),
+            # buckets time by granularity according to the start time of the request.
+            # time_slot = start_time + (((timestamp - start_time) // granularity) * granularity)
+            # Example:
+            #   start_time = 1001
+            #   end_time = 1901
+            #   granularity = 300
+            #   timestamps = [1201, 1002, 1302, 1400, 1700]
+            #   buckets = [1001, 1301, 1601] # end time not included because it would be filtered out by the request
+            SelectedExpression(
+                name="time",
+                expression=f.toDateTime(
+                    f.plus(
+                        request.meta.start_timestamp.seconds,
+                        f.multiply(
+                            f.intDiv(
+                                f.minus(
+                                    f.toUnixTimestamp(column("timestamp")),
+                                    request.meta.start_timestamp.seconds,
+                                ),
+                                request.granularity_secs,
+                            ),
+                            request.granularity_secs,
+                        ),
+                    ),
+                    alias="time_slot",
+                ),
+            ),
             *aggregation_columns,
             *groupby_columns,
+            *extrapolation_columns,
         ],
         granularity=request.granularity_secs,
         condition=base_conditions_and(
             request.meta, trace_item_filters_to_expression(request.filter)
         ),
         groupby=[
-            column("time"),
+            column("time_slot"),
             *[attribute_key_to_expression(attr_key) for attr_key in request.group_by],
         ],
-        order_by=[OrderBy(expression=column("time"), direction=OrderByDirection.ASC)],
+        order_by=[
+            OrderBy(expression=column("time_slot"), direction=OrderByDirection.ASC)
+        ],
     )
     treeify_or_and_conditions(res)
     return res

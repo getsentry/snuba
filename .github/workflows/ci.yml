@@ -14,7 +14,7 @@ jobs:
     outputs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
     steps:
-      - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e # v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v2
 
       - name: Check for backend file changes
         uses: getsentry/paths-filter@66f7f1844185eb7fb6738ea4ea59d74bb99199e5 # v2
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - name: Internal github app token
         id: token
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - name: Run linter
         run: |
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - uses: actions/setup-python@v5
         with:
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         name: Checkout code
       - uses: actions/setup-python@v5
         with:
@@ -135,7 +135,7 @@ jobs:
       branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -154,7 +154,6 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v6
-        if: github.repository_owner == 'getsentry'
         with:
           context: .
           # push: true
@@ -169,8 +168,9 @@ jobs:
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
           # cache-to is re-implemented using the next step, to run conditionally for contributors
+          outputs: type=docker,dest=/tmp/snuba-ci.tar
 
-      - name: Publish images for cache
+      - name: Publish snuba-ci image to registry
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
         # outside contributors won't be able to push to the docker registry
         # ignore the failures in this step
@@ -183,6 +183,18 @@ jobs:
             # The latest tag should only be published on `master`
             docker push ghcr.io/getsentry/snuba-ci:latest
           fi
+
+      - name: Publish snuba-ci image to artifacts
+      # we publish to github artifacts separately so that third-party
+      # contributions also work, as all the test jobs need this image.
+      # otherwise third-party contributors would have to provide a working,
+      # authenticated GHCR, which seems impossible to ensure in the general
+      # case.
+        uses: actions/upload-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp/snuba-ci.tar
+
 
   tests:
     needs: [linting, snuba-image]
@@ -200,11 +212,18 @@ jobs:
           ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Docker set up
         run: |
@@ -246,7 +265,7 @@ jobs:
     name: Front end tests for snuba admin
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         name: Checkout code
       - uses: volta-cli/action@v4
       - name: Set up and run tests through yarn
@@ -270,14 +289,21 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Checkout sentry
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           repository: getsentry/sentry
           path: sentry
@@ -339,6 +365,8 @@ jobs:
               tests/sentry/search/events \
               tests/sentry/event_manager \
               tests/sentry/api/endpoints/test_organization_profiling_functions.py \
+              tests/sentry/integrations/slack/test_unfurl.py \
+              tests/snuba/api/endpoints/test_organization_events_stats_span_indexed.py \
               tests/snuba/api/endpoints/test_organization_events_stats_mep.py \
               tests/sentry/sentry_metrics/querying \
               tests/snuba/test_snql_snuba.py \
@@ -363,15 +391,23 @@ jobs:
         version:
           [
             "23.8.11.29.altinitystable",
+            "24.3.5.47.altinitystable",
           ]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Docker set up
         run: |
@@ -392,7 +428,7 @@ jobs:
 
     steps:
       - name: Checkout Snuba
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Run Sentry self-hosted e2e CI
         uses: getsentry/action-self-hosted-e2e-tests@main
         with:
@@ -406,7 +442,7 @@ jobs:
     runs-on: ubuntu-20.04
     if: ${{ (github.ref_name == 'master') }}
     steps:
-      - uses: actions/checkout@v3 # v3.1.0
+      - uses: actions/checkout@v4 # v3.1.0
       - name: Pull the test image
         id: image_pull
         env:

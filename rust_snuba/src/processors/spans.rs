@@ -3,12 +3,12 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::DateTime;
-use rust_arroyo::timer;
 use schemars::JsonSchema;
+use sentry_arroyo::timer;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 use serde_json::Value;
 
 use crate::config::ProcessorConfig;

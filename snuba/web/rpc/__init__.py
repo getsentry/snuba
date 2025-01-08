@@ -1,6 +1,7 @@
 import os
 from typing import Generic, List, Tuple, Type, TypeVar, cast, final
 
+import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
@@ -67,6 +68,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
 
     @final
     def execute(self, in_msg: Tin) -> Tout:
+        scope = sentry_sdk.get_current_scope()
+        scope.set_transaction_name(self.config_key())
+        span = scope.span
+        if span is not None:
+            span.description = self.config_key()
         self.__before_execute(in_msg)
         error = None
         try:
@@ -153,6 +159,7 @@ def run_rpc_handler(
     except (RPCRequestException, QueryException) as e:
         return convert_rpc_exception_to_proto(e)
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         return convert_rpc_exception_to_proto(
             RPCRequestException(
                 status_code=500,

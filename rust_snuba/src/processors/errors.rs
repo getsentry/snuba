@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::config::ProcessorConfig;
 use crate::processors::utils::{enforce_retention, StringToIntDatetime};
@@ -132,8 +132,6 @@ struct ErrorData {
     #[serde(default, alias = "sentry.interfaces.Exception")]
     exception: Option<Exception>,
     #[serde(default)]
-    hierarchical_hashes: Vec<String>,
-    #[serde(default)]
     location: Option<String>,
     #[serde(default)]
     modules: Option<BTreeMap<String, Option<String>>>,
@@ -179,6 +177,8 @@ struct TraceContext {
     span_id: Option<String>,
     #[serde(default)]
     trace_id: Option<Uuid>,
+    #[serde(default)]
+    parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
 }
@@ -350,7 +350,6 @@ struct ErrorRow {
     #[serde(rename = "exception_stacks.value")]
     exception_stacks_value: Vec<Option<String>>,
     group_id: u64,
-    hierarchical_hashes: Vec<Uuid>,
     http_method: Option<String>,
     http_referer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -419,12 +418,6 @@ impl ErrorRow {
 
         // Hashes
         let primary_hash = to_uuid(from.primary_hash);
-        let hierarchical_hashes: Vec<Uuid> = from
-            .data
-            .hierarchical_hashes
-            .into_iter()
-            .map(to_uuid)
-            .collect();
 
         // SDK Integrations
         let from_sdk = from.data.sdk.unwrap_or_default();
@@ -454,7 +447,7 @@ impl ErrorRow {
             .into_iter()
             .flatten()
         {
-            if key == "Referrer" {
+            if key == "Referer" || key == "Referrer" {
                 http_referer = value.0;
                 break;
             }
@@ -558,6 +551,11 @@ impl ErrorRow {
         if let Some(trace_id) = from_trace_context.trace_id {
             contexts_keys.push("trace.trace_id".to_owned());
             contexts_values.push(trace_id.simple().to_string());
+        }
+
+        if let Some(parent_span_id) = from_trace_context.parent_span_id {
+            contexts_keys.push("trace.parent_span_id".to_owned());
+            contexts_values.push(parent_span_id.to_string());
         }
 
         // Conditionally overwrite replay_id if it was provided on the contexts object.
@@ -671,7 +669,6 @@ impl ErrorRow {
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
             group_id: from.group_id,
-            hierarchical_hashes,
             http_method: from_request.method.0,
             http_referer,
             ip_address_v4,

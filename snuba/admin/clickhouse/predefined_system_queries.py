@@ -24,13 +24,32 @@ class CurrentMerges(SystemQuery):
 
 
 class CurrentMutations(SystemQuery):
-    """Currently executing merges"""
+    """Currently executing mutations"""
 
     sql = """
     SELECT
-        command
+        command,
+        parts_to_do_names,
+        parts_to_do
     FROM system.mutations
     WHERE is_done = 0
+    """
+
+
+class Mutations(SystemQuery):
+    """Both current and past mutations"""
+
+    sql = """
+    SELECT
+        table,
+        mutation_id,
+        command,
+        create_time,
+        parts_to_do,
+        is_done,
+        latest_fail_time,
+        latest_fail_reason
+    FROM system.mutations
     """
 
 
@@ -251,4 +270,22 @@ class AsyncInsertFlushErrors(SystemQuery):
     GROUP BY status, exception
     ORDER BY
         flush DESC
+    """
+
+
+class DistributedDDLQueue(SystemQuery):
+    """
+    Queries executed with ON CLUSTER parameter, most relevant
+    to lightweight delete queries.
+    """
+
+    sql = """
+    SELECT
+        initiator_host,
+        host,
+        cluster,
+        query,
+        query_create_time,
+        query_duration_ms
+    FROM system.distributed_ddl_queue
     """

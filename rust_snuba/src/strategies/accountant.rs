@@ -4,10 +4,10 @@ use sentry_usage_accountant::{KafkaConfig, KafkaProducer, UsageAccountant, Usage
 use std::time::Duration;
 
 use crate::types::BytesInsertBatch;
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::Message;
+use sentry_arroyo::types::Message;
 
 pub struct CogsAccountant {
     accountant: UsageAccountant<KafkaProducer>,

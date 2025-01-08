@@ -13,8 +13,8 @@ use crate::{
     KafkaMessageMetadata, ProcessorConfig,
 };
 
-use rust_arroyo::backends::kafka::types::{Headers, KafkaPayload};
-use rust_arroyo::{counter, timer};
+use sentry_arroyo::backends::kafka::types::{Headers, KafkaPayload};
+use sentry_arroyo::{counter, timer};
 use zstd::stream::decode_all;
 
 use super::utils::enforce_retention;
@@ -1018,7 +1018,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1077,7 +1077,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1136,7 +1136,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1230,7 +1230,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_set_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1287,7 +1287,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_set_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1446,7 +1446,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_counter_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1503,7 +1503,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_counter_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1560,7 +1560,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_counter_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1575,7 +1575,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_set_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1632,7 +1632,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_counter_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1647,7 +1647,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1706,7 +1706,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1765,7 +1765,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1824,7 +1824,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1883,7 +1883,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_distribution_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1898,7 +1898,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_gauge_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -1959,7 +1959,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_gauge_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -2020,7 +2020,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_gauge_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -2082,7 +2082,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_gauge_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
@@ -2097,7 +2097,7 @@ mod tests {
         let result = test_processor_with_payload(
             &(process_set_message
                 as fn(
-                    rust_arroyo::backends::kafka::types::KafkaPayload,
+                    sentry_arroyo::backends::kafka::types::KafkaPayload,
                     crate::types::KafkaMessageMetadata,
                     &crate::ProcessorConfig,
                 )
