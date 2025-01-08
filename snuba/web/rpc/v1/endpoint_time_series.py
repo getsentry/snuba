@@ -33,7 +33,6 @@ _VALID_GRANULARITY_SECS = set(
 _MAX_BUCKETS_IN_REQUEST = 2016
 
 
-
 def _enforce_no_duplicate_labels(request: TimeSeriesRequest) -> None:
     labels = set()
 
