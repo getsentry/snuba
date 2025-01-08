@@ -45,7 +45,6 @@ class MigrationGroup(Enum):
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     PROFILE_CHUNKS = "profile_chunks"
-    UPTIME_RESULTS = "uptime_monitor_results"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -62,7 +61,6 @@ OPTIONAL_GROUPS = {
     MigrationGroup.SEARCH_ISSUES,
     MigrationGroup.GROUP_ATTRIBUTES,
     MigrationGroup.PROFILE_CHUNKS,
-    MigrationGroup.UPTIME_RESULTS,
 }
 
 

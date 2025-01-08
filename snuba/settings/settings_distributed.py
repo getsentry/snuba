@@ -35,7 +35,6 @@ CLUSTERS = [
             "group_attributes",
             "generic_metrics_gauges",
             "profile_chunks",
-            "uptime_monitor_checks",
         },
         "single_node": False,
         "cluster_name": "cluster_one_sh",
