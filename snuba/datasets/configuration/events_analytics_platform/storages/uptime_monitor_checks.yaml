@@ -4,7 +4,7 @@ name: uptime_monitor_checks
 storage:
   key: events_analytics_platform
   set_key: events_analytics_platform
-readiness_state: limited
+readiness_state: experimental
 schema:
   columns:
     [
