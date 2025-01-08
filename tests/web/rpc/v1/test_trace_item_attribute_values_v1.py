@@ -145,7 +145,7 @@ class TestTraceItemAttributes(BaseApiTest):
             done += at_a_time
         assert expected_values == []
 
-    def test_filter_offset_is_not_implemented_right_now(self) -> None:
+    def test_page_token_filter_offset(self) -> None:
         expected_values = [
             "blah",
             "derpderp",
@@ -170,6 +170,7 @@ class TestTraceItemAttributes(BaseApiTest):
             )
             res = AttributeValuesRequest().execute(req)
             page_token = res.page_token
+            assert res.page_token.WhichOneof("value") == "filter_offset"
             assert res.values == expected_values[:at_a_time]
             expected_values = expected_values[at_a_time:]
             done += at_a_time
