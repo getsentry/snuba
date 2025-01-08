@@ -5,6 +5,7 @@ import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName
 
 from snuba import environment
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -23,6 +24,20 @@ from snuba.web.rpc.common.exceptions import (
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
+
+
+class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
+    @classmethod
+    def config_key(cls) -> str:
+        return f"{cls.__name__}__{cls.trace_item_name}"
+
+    @classmethod
+    def trace_item_name(cls) -> TraceItemName:
+        raise NotImplementedError
+
+    @final
+    def resolve(self, in_msg: Tin) -> Tout:
+        raise NotImplementedError
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -45,6 +60,9 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
         return f"{cls.__name__}__{cls.version()}"
+
+    def get_resolver(self) -> TraceItemDataResolver[Tin, Tout]:
+        raise NotImplementedError
 
     @property
     def metrics(self) -> MetricsWrapper:
