@@ -55,7 +55,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.MergeTree(
-                    order_by="(organization_id, project_id, toDateTime(timestamp), message)",
+                    order_by="(organization_id, project_id, toDateTime(timestamp))",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
