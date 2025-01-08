@@ -8,11 +8,10 @@ from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
 
 table_names = [
-    ("errors_local", StorageSetKey.EVENTS),
-    ("errors_dist", StorageSetKey.EVENTS),
-    ("errors_dist_ro", StorageSetKey.EVENTS_RO),
+    ("errors_local", StorageSetKey.EVENTS, OperationTarget.LOCAL),
+    ("errors_dist", StorageSetKey.EVENTS, OperationTarget.DISTRIBUTED),
+    ("errors_dist_ro", StorageSetKey.EVENTS_RO, OperationTarget.DISTRIBUTED),
 ]
-targets = [OperationTarget.LOCAL, OperationTarget.DISTRIBUTED]
 
 
 class Migration(migration.ClickhouseNodeMigration):
@@ -27,32 +26,31 @@ class Migration(migration.ClickhouseNodeMigration):
 
 def forward_ops() -> Iterator[operations.SqlOperation]:
     # Add local and dist columns for the three tables.
-    for target in targets:
-        for table_name, storage_set in table_names:
-            yield from [
-                operations.AddColumn(
-                    storage_set=storage_set,
-                    table_name=table_name,
-                    column=Column(
-                        "features", Nested([("key", String()), ("value", String())])
-                    ),
-                    after="_tags_hash_map",
-                    target=target,
+    for table_name, storage_set, target in table_names:
+        yield from [
+            operations.AddColumn(
+                storage_set=storage_set,
+                table_name=table_name,
+                column=Column(
+                    "features", Nested([("key", String()), ("value", String())])
                 ),
-                operations.AddColumn(
-                    storage_set=storage_set,
-                    table_name=table_name,
-                    column=Column(
-                        "_features_hash_map",
-                        Array(
-                            UInt(64),
-                            Modifiers(materialized=FEATURES_HASH_MAP_COLUMN),
-                        ),
+                after="_tags_hash_map",
+                target=target,
+            ),
+            operations.AddColumn(
+                storage_set=storage_set,
+                table_name=table_name,
+                column=Column(
+                    "_features_hash_map",
+                    Array(
+                        UInt(64),
+                        Modifiers(materialized=FEATURES_HASH_MAP_COLUMN),
                     ),
-                    after="features.value",
-                    target=target,
                 ),
-            ]
+                after="features.value",
+                target=target,
+            ),
+        ]
 
     # Add index to the local table.
     yield operations.AddIndex(
@@ -74,19 +72,18 @@ def backward_ops() -> Iterator[operations.SqlOperation]:
         target=OperationTarget.LOCAL,
     )
 
-    for target in targets:
-        for table_name, storage_set in table_names:
-            yield from [
-                operations.DropColumn(
-                    storage_set=storage_set,
-                    table_name=table_name,
-                    column_name="_features_hash_map",
-                    target=target,
-                ),
-                operations.DropColumn(
-                    storage_set=storage_set,
-                    table_name=table_name,
-                    column_name="features",
-                    target=target,
-                ),
-            ]
+    for table_name, storage_set, target in table_names:
+        yield from [
+            operations.DropColumn(
+                storage_set=storage_set,
+                table_name=table_name,
+                column_name="_features_hash_map",
+                target=target,
+            ),
+            operations.DropColumn(
+                storage_set=storage_set,
+                table_name=table_name,
+                column_name="features",
+                target=target,
+            ),
+        ]
