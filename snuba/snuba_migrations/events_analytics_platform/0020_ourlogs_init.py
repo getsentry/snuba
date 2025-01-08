@@ -15,10 +15,13 @@ num_attr_buckets = 20
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
     Column("project_id", UInt(64)),
-    Column("message", String()),
-    Column("timestamp", DateTime64(9)),  # nanosecond precision (otel)
     Column("trace_id", UUID(modifiers=Modifiers(nullable=True))),
+    Column("span_id", UInt(64)),  # optional
+    Column("severity_text", String()),
+    Column("severity_number", UInt(8)),
     Column("retention_days", UInt(16)),
+    Column("timestamp", DateTime64(9)),  # nanosecond precision
+    Column("body", String(modifiers=Modifiers(codecs=["ZSTD(1)"]))),
 ]
 
 columns.extend(
