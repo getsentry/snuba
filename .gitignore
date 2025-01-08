@@ -12,6 +12,7 @@ snuba.egg-info/
 node_modules
 .vscode/*.log
 snuba/admin/dist/bundle.js*
+snuba/admin/dist/bundle.css*
 tmp/
 gocd/templates/vendor/
 gocd/generated-pipelines/

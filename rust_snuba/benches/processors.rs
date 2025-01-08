@@ -98,7 +98,6 @@ fn create_factory(
         },
         stop_at_timestamp: None,
         batch_write_timeout: None,
-        max_bytes_before_external_group_by: None,
     };
     Box::new(factory)
 }

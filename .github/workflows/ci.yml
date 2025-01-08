@@ -154,7 +154,6 @@ jobs:
 
       - name: Build snuba docker image for CI
         uses: docker/build-push-action@v6
-        if: github.repository_owner == 'getsentry'
         with:
           context: .
           # push: true
@@ -169,8 +168,14 @@ jobs:
             type=registry,ref=ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
             type=registry,ref=ghcr.io/getsentry/snuba-ci:latest
           # cache-to is re-implemented using the next step, to run conditionally for contributors
+          outputs: type=docker,dest=/tmp/snuba-ci.tar
 
-      - name: Publish images for cache
+      - name: Load snuba-ci image
+        run: |
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
+
+      - name: Publish snuba-ci image to registry
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
         # outside contributors won't be able to push to the docker registry
         # ignore the failures in this step
@@ -183,6 +188,18 @@ jobs:
             # The latest tag should only be published on `master`
             docker push ghcr.io/getsentry/snuba-ci:latest
           fi
+
+      - name: Publish snuba-ci image to artifacts
+      # we publish to github artifacts separately so that third-party
+      # contributions also work, as all the test jobs need this image.
+      # otherwise third-party contributors would have to provide a working,
+      # authenticated GHCR, which seems impossible to ensure in the general
+      # case.
+        uses: actions/upload-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp/snuba-ci.tar
+
 
   tests:
     needs: [linting, snuba-image]
@@ -202,9 +219,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Docker set up
         run: |
@@ -272,9 +296,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Checkout sentry
         uses: actions/checkout@v4
@@ -372,9 +403,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Registry login
+      - name: Download snuba-ci image from artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: snuba-ci
+          path: /tmp
+
+      - name: Load snuba-ci image
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker load --input /tmp/snuba-ci.tar
+          docker image ls -a
 
       - name: Docker set up
         run: |
