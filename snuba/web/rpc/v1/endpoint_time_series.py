@@ -12,13 +12,13 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
-from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
 from snuba.query.dsl import Functions as f
@@ -26,19 +26,16 @@ from snuba.query.dsl import column
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
-from snuba.web.query import run_query
-from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.common import (
     attribute_key_to_expression,
     base_conditions_and,
     trace_item_filters_to_expression,
     treeify_or_and_conditions,
 )
-from snuba.web.rpc.common.debug_info import (
-    extract_response_meta,
-    setup_trace_query_settings,
-)
+from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     ExtrapolationContext,
     aggregation_to_expression,
@@ -122,6 +119,13 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
     def response_class(cls) -> Type[TimeSeriesResponse]:
         return TimeSeriesResponse
 
+    def get_resolver(
+        self, trace_item_name: TraceItemName.ValueType
+    ) -> TraceItemDataResolver[TimeSeriesRequest, TimeSeriesResponse]:
+        return ResolverTimeSeries.get_from_trace_item_name(trace_item_name)(
+            timer=self._timer, metrics_backend=self._metrics_backend
+        )
+
     def _execute(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         # TODO: Move this to base
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
@@ -129,22 +133,9 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
-        snuba_request = _build_snuba_request(in_msg)
-        res = run_query(
-            dataset=PluggableDataset(name="eap", all_entities=[]),
-            request=snuba_request,
-            timer=self._timer,
-        )
-        response_meta = extract_response_meta(
-            in_msg.meta.request_id,
-            in_msg.meta.debug,
-            [res],
-            [self._timer],
-        )
-
-        return TimeSeriesResponse(
-            result_timeseries=list(
-                _convert_result_timeseries(in_msg, res.result.get("data", []))
-            ),
-            meta=response_meta,
-        )
+        # NOTE: EAP spans was the first TraceItem, we didn't enforce a trace item name originally so we default to it
+        # for backwards compatibility
+        if in_msg.meta.trace_item_name == TraceItemName.TRACE_ITEM_NAME_UNSPECIFIED:
+            in_msg.meta.trace_item_name = TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+        resolver = self.get_resolver(in_msg.meta.trace_item_name)
+        return resolver.resolve(in_msg)
