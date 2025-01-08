@@ -46,7 +46,7 @@ class ExtrapolationContext(ABC):
     sample_count: int
 
     @property
-    def extrapolated_data_present(self) -> bool:
+    def data_present(self) -> bool:
         return self.sample_count > 0
 
     @property
@@ -108,16 +108,12 @@ class ExtrapolationContext(ABC):
             elif custom_column_information.custom_column_id == "count":
                 sample_count = col_value
 
-        if (
-            confidence_interval is None
-            or average_sample_rate is None
-            or sample_count is None
-        ):
+        if confidence_interval is None:
             return GenericExtrapolationContext(
                 value=value,
                 confidence_interval=None,
                 average_sample_rate=0,
-                sample_count=0,
+                sample_count=sample_count if sample_count is not None else 0,
             )
 
         if is_percentile:
@@ -150,7 +146,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if not self.is_extrapolated or not self.extrapolated_data_present:
+        if not self.is_extrapolated or not self.data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         relative_confidence = (
@@ -183,7 +179,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if not self.is_extrapolated or not self.extrapolated_data_present:
+        if not self.is_extrapolated or not self.data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(

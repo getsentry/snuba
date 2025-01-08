@@ -87,7 +87,7 @@ def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
         "column_name",
         "average_sample_rate",
         "reliability",
-        "extrapolated_data_present",
+        "data_present",
         "is_extrapolated",
     ),
     [
@@ -185,13 +185,13 @@ def test_get_extrapolation_meta(
     column_name: str,
     average_sample_rate: float,
     reliability: Reliability.ValueType,
-    extrapolated_data_present: bool,
+    data_present: bool,
     is_extrapolated: bool,
 ) -> None:
     extrapolation_context = ExtrapolationContext.from_row(column_name, row_data)
     assert extrapolation_context.average_sample_rate == average_sample_rate
     assert extrapolation_context.reliability == reliability
-    assert extrapolation_context.extrapolated_data_present == extrapolated_data_present
+    assert extrapolation_context.data_present == data_present
     assert extrapolation_context.is_extrapolated == is_extrapolated
 
 
