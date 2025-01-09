@@ -1372,7 +1372,7 @@ def execute_job(job_id: str) -> Response:
     job_status = None
     try:
         job_status = run_job(job_specs[job_id])
-    except BaseException as e:
+    except Exception as e:
         return make_response(
             jsonify(
                 {
