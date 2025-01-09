@@ -371,8 +371,9 @@ def _get_possible_percentiles_expression(
         aggregation, {"granularity": str(granularity), "width": str(width)}
     )
     alias_dict = {"alias": alias} if alias else {}
-    return cf.quantilesTDigest(*possible_percentiles)(
+    return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
+        sampling_weight_column,
         **alias_dict,
     )
 
