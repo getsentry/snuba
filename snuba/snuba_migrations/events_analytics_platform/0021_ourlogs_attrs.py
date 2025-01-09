@@ -10,7 +10,6 @@ from snuba.utils.schemas import DateTime64, Float, Int, Map
 storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 local_table_name = "ourlogs_2_local"
 dist_table_name = "ourlogs_2_dist"
-num_attr_buckets = 20
 
 columns: List[Column[Modifiers]] = [
     Column("organization_id", UInt(64)),
