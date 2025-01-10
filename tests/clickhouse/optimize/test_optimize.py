@@ -128,7 +128,7 @@ class TestOptimize:
         database = cluster.get_database()
 
         # no data, 0 partitions to optimize
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert partitions == []
@@ -138,21 +138,21 @@ class TestOptimize:
 
         # 1 event, 0 unoptimized partitions
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert partitions == []
 
         # 2 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
 
         # 3 events in the same part, 1 unoptimized part
         write_processed_messages(storage, [create_event_row_for_date(base)])
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert [(p.date, p.retention_days) for p in partitions] == [(base_monday, 90)]
@@ -168,7 +168,7 @@ class TestOptimize:
         write_processed_messages(
             storage, [create_event_row_for_date(a_month_earlier_monday)]
         )
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert sorted([(p.date, p.retention_days) for p in partitions]) == sorted(
@@ -182,7 +182,7 @@ class TestOptimize:
         assert [
             (p.date, p.retention_days)
             for p in list(
-                optimize.get_partitions_to_optimize(
+                optimize.get_partitions_from_clickhouse(
                     clickhouse, storage, database, table, before=base
                 )
             )
@@ -210,7 +210,7 @@ class TestOptimize:
             )
 
         # all partitions should be optimized
-        partitions = optimize.get_partitions_to_optimize(
+        partitions = optimize.get_partitions_from_clickhouse(
             clickhouse, storage, database, table
         )
         assert partitions == []
