@@ -46,7 +46,7 @@ class ExtrapolationContext(ABC):
     sample_count: int
 
     @property
-    def extrapolated_data_present(self) -> bool:
+    def is_data_present(self) -> bool:
         return self.sample_count > 0
 
     @property
@@ -67,8 +67,8 @@ class ExtrapolationContext(ABC):
         value = row_data[column_label]
 
         confidence_interval = None
-        average_sample_rate = None
-        sample_count = None
+        average_sample_rate = 0
+        sample_count = 0
 
         percentile = 0.0
         granularity = 0.0
@@ -108,18 +108,6 @@ class ExtrapolationContext(ABC):
             elif custom_column_information.custom_column_id == "count":
                 sample_count = col_value
 
-        if (
-            confidence_interval is None
-            or average_sample_rate is None
-            or sample_count is None
-        ):
-            return GenericExtrapolationContext(
-                value=value,
-                confidence_interval=None,
-                average_sample_rate=0,
-                sample_count=0,
-            )
-
         if is_percentile:
             return PercentileExtrapolationContext(
                 value=value,
@@ -150,7 +138,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if not self.is_extrapolated or not self.extrapolated_data_present:
+        if not self.is_extrapolated or not self.is_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         relative_confidence = (
@@ -183,7 +171,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if not self.is_extrapolated or not self.extrapolated_data_present:
+        if not self.is_extrapolated or not self.is_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(
@@ -383,8 +371,9 @@ def _get_possible_percentiles_expression(
         aggregation, {"granularity": str(granularity), "width": str(width)}
     )
     alias_dict = {"alias": alias} if alias else {}
-    return cf.quantilesTDigest(*possible_percentiles)(
+    return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
+        sampling_weight_column,
         **alias_dict,
     )
 

@@ -626,6 +626,54 @@ class TestTimeSeriesApi(BaseApiTest):
         assert len(ts.data_points) == 1
         assert ts.data_points[0].data == 300
 
+    def test_with_non_existent_attribute(self) -> None:
+        store_timeseries(
+            BASE_TIME,
+            1,
+            3600,
+            metrics=[
+                DummyMetric("test_metric", get_value=lambda x: 1),
+            ],
+        )
+
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_SUM,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="non_existent_metric"
+                    ),
+                    label="sum",
+                    extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                ),
+            ],
+            granularity_secs=300,
+        )
+
+        response = EndpointTimeSeries().execute(message)
+        expected_buckets = [
+            Timestamp(seconds=int(BASE_TIME.timestamp()) + secs)
+            for secs in range(0, 60 * 30, 300)
+        ]
+
+        assert response.result_timeseries == [
+            TimeSeries(
+                label="sum",
+                buckets=expected_buckets,
+                data_points=[
+                    DataPoint(data_present=False) for _ in range(len(expected_buckets))
+                ],
+            )
+        ]
+
 
 class TestUtils:
     def test_no_duplicate_labels(self) -> None:

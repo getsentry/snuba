@@ -390,3 +390,18 @@ def base_conditions_and(meta: RequestMeta, *other_exprs: Expression) -> Expressi
         ),
         *other_exprs,
     )
+
+
+def convert_filter_offset(filter_offset: TraceItemFilter) -> Expression:
+    if not filter_offset.HasField("comparison_filter"):
+        raise TypeError("filter_offset needs to be a comparison filter")
+    if filter_offset.comparison_filter.op != ComparisonFilter.OP_GREATER_THAN:
+        raise TypeError("filter_offset must use the greater than comparison")
+
+    k_expression = column(filter_offset.comparison_filter.key.name)
+    v = filter_offset.comparison_filter.value
+    value_type = v.WhichOneof("value")
+    if value_type != "val_str":
+        raise BadSnubaRPCRequestException("please provide a string for filter offset")
+
+    return f.greater(k_expression, literal(v.val_str))

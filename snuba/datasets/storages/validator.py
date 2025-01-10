@@ -29,7 +29,10 @@ class StorageValidator:
         )
         if storage_readiness_state > group_readiness_state:
             raise IncompatibleReadinessStates(
-                f"The storage={storage_set_key} readiness state is greater than the corresponding migration group's readiness state."
+                (
+                    f"The storage={storage_set_key} readiness state is greater than the corresponding migration group's readiness state.",
+                    f"storage_readiness_state={storage_readiness_state}, group_readiness_state={group_readiness_state}",
+                )
             )
 
 
