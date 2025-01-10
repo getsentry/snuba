@@ -1,0 +1,30 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"organization_id\": 69,\n  \"project_id\": 1,\n  \"trace_id\": \"3c8c20d5-0a54-4a1c-ba10-f76f574d856f\",\n  \"trace_flags\": 255,\n  \"span_id\": \"11002233AABBCCDD\",\n  \"severity_text\": \"WARNING\",\n  \"severity_number\": 1,\n  \"retention_days\": 90,\n  \"timestamp_nanos\": 1715868485371000,\n  \"observed_timestamp_nanos\": 1715868485371000,\n  \"body\": \"hello world!\",\n  \"attributes\": {\n    \"some.user.tag\": {\n      \"string_value\": \"hello\"\n    },\n    \"another.user.tag\": {\n      \"int_value\": 10\n    },\n    \"double.user.tag\": {\n      \"double_value\": -10.59\n    },\n    \"bool.user.tag\": {\n      \"bool_value\": true\n    }\n  }\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "attr_bool": {
+      "bool.user.tag": true
+    },
+    "attr_double": {
+      "double.user.tag": -10.59
+    },
+    "attr_int": {
+      "another.user.tag": 10
+    },
+    "attr_string": {
+      "some.user.tag": "hello"
+    },
+    "body": "hello world!",
+    "organization_id": 69,
+    "project_id": 1,
+    "retention_days": 90,
+    "severity_number": 1,
+    "severity_text": "WARNING",
+    "span_id": 1225016703947885789,
+    "timestamp": 1715868485371000,
+    "trace_id": "3c8c20d5-0a54-4a1c-ba10-f76f574d856f"
+  }
+]

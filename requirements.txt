@@ -13,7 +13,7 @@ google-cloud-storage==2.18.0
 googleapis-common-protos==1.63.2
 google-api-core==2.19.1
 honcho==1.1.0
-pyjwt==2.10.1
+python-jose[cryptography]==3.3.0
 jsonschema==4.23.0
 fastjsonschema==2.16.2
 packaging==24.1
@@ -28,7 +28,7 @@ python-dateutil==2.8.2
 python-rapidjson==1.8
 redis==4.5.4
 sentry-arroyo==2.19.4
-sentry-kafka-schemas==0.1.126
+sentry-kafka-schemas==0.1.129
 sentry-protos==0.1.41
 sentry-redis-tools==0.3.0
 sentry-relay==0.9.4
