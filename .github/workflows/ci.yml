@@ -436,7 +436,7 @@ jobs:
       - name: Checkout Snuba
         uses: actions/checkout@v4
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/self-hosted@master
+        uses: getsentry/self-hosted@byk/fix/fix-action
         with:
           project_name: snuba
           image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
