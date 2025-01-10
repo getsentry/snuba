@@ -13,6 +13,7 @@ jobs:
     # Map a step output to a job output
     outputs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
+      devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v2
 
@@ -486,3 +487,15 @@ jobs:
           # finally, nightly
           docker tag ${IMAGE_URL} getsentry/snuba:nightly
           docker push getsentry/snuba:nightly
+
+  validate-devservices-config:
+    runs-on: ubuntu-24.04
+    needs: files-changed
+    if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
+    steps:
+    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      name: Checkout repository
+    - uses: getsentry/action-validate-devservices-config@6477ef1e9c96e456bfad726006e731f89fcd81db
+      name: Validate devservices config
+      with:
+        requirements-file-path: requirements.txt
