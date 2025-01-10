@@ -386,7 +386,7 @@ class ErrorEvent:
         if self.features:
             for feature in self.features:
                 expected_result["features.key"].append(feature["key"])
-                expected_result["features.value"].append(str(feature["value"]))
+                expected_result["features.value"].append(str(feature["value"]).lower())
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)

@@ -161,7 +161,7 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
-    #[serde(default)]
+    #[serde(default, rename = "flags")]
     features: Option<FeatureContextEnum>,
     #[serde(default)]
     replay: Option<ReplayContext>,
@@ -189,7 +189,7 @@ struct TraceContext {
 #[serde(untagged)]
 enum FeatureContextEnum {
     Typed(FeatureContext),
-    Untyped(()),
+    Untyped(Value),
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
