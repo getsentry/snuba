@@ -7,7 +7,7 @@ expression: diff
         path: ".<anyOf:0>.2.data.contexts.<anyOf:0>",
         change: PropertyAdd {
             lhs_additional_properties: true,
-            added: "features",
+            added: "flags",
         },
     },
     Change {
