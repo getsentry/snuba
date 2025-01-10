@@ -222,9 +222,6 @@ def is_system_command(sql_query: str) -> bool:
     to_match = [SYSTEM_COMMAND_RE, KILL_COMMAND_RE, SYSTEM_DROP_COMMAND_RE]
     for pattern in to_match:
         matches |= bool(pattern.match(sql_query))
-    # smatch = SYSTEM_COMMAND_RE.match(sql_query)
-    # kmatch = KILL_COMMAND_RE.match(sql_query)
-    # return True if smatch or kmatch else False
     return matches
 
 
