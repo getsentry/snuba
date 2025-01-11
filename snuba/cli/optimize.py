@@ -40,6 +40,12 @@ from snuba.redis import RedisClientKey, get_redis_client
     default=1,
     help="Default parallel threads",
 )
+@click.option(
+    "--divide-partitions",
+    type=click.IntRange(1, 2),
+    default=0,
+    help="Divide partitions into N groups",
+)
 def optimize(
     *,
     clickhouse_host: Optional[str],
@@ -47,6 +53,7 @@ def optimize(
     storage_name: str,
     default_parallel_threads: int,
     log_level: Optional[str] = None,
+    divide_partitions: int,
 ) -> None:
     from datetime import datetime
 
@@ -124,6 +131,7 @@ def optimize(
         clickhouse_host=clickhouse_host,
         tracker=tracker,
         before=today,
+        divide_partitions_count=divide_partitions,
     )
 
     tracker.delete_all_states()
