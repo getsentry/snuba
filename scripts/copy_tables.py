@@ -21,7 +21,7 @@ def _get_client(
 
 
 def get_regex_match(curr_create_table_statement: str) -> str:
-    match = re.search(r"'(\/clickhouse/.*)'", curr_create_table_statement)
+    match = re.search(r"'(\/clickhouse\/.*?)'", curr_create_table_statement)
     assert match is not None
     return match.group(1)
 
