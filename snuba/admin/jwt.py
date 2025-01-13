@@ -33,7 +33,6 @@ def validate_assertion(assertion: str) -> AdminUser:
 
     If not, an exception will be raised
     """
-
     info = jwt.decode(
         assertion,
         _certs(),
