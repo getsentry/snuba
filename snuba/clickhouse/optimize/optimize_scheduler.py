@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import MutableSequence, Sequence
 
 from snuba import settings
@@ -42,7 +42,7 @@ class OptimizeScheduler:
 
     def __init__(self, default_parallel_threads: int) -> None:
         self.__default_parallel_threads = default_parallel_threads
-        self.__last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+        self.__last_midnight = (datetime.now(UTC) + timedelta(minutes=10)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         self.__parallel_start_time = self.__last_midnight + timedelta(
@@ -95,7 +95,8 @@ class OptimizeScheduler:
         reached.
         """
         num_threads = get_num_threads(self.__default_parallel_threads)
-        current_time = datetime.now()
+        current_time = datetime.now(UTC)
+
         if current_time >= self.__full_job_end_time:
             raise OptimizedSchedulerTimeout(
                 f"Optimize job cutoff time exceeded "

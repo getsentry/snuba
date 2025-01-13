@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Callable, Mapping
 from unittest.mock import Mock, patch
 
@@ -24,8 +24,9 @@ from tests.helpers import write_processed_messages
 
 redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 
-last_midnight = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-
+last_midnight = (
+    datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+)
 
 test_data = [
     pytest.param(
