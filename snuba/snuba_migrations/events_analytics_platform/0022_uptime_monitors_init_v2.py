@@ -5,7 +5,7 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations, table_engines
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget, SqlOperation
-from snuba.utils.schemas import DateTime64
+from snuba.utils.schemas import DateTime, DateTime64
 
 storage_set = StorageSetKey.EVENTS_ANALYTICS_PLATFORM
 table_prefix = "uptime_monitor_checks_v2"
@@ -18,7 +18,7 @@ columns: List[Column[Modifiers]] = [
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("uptime_subscription_id", UUID()),
     Column("uptime_check_id", UUID()),
-    Column("scheduled_check_time", DateTime64(3)),  # millisecond precision
+    Column("scheduled_check_time", DateTime()),
     Column("timestamp", DateTime64(3)),  # millisecond precision
     Column("duration_ms", UInt(64)),
     Column("region", String(Modifiers(low_cardinality=True))),
@@ -40,8 +40,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(organization_id, project_id, toDateTime(scheduled_check_time), trace_id, uptime_check_id)",
-                    partition_by="(retention_days, toMonday(timestamp))",
+                    order_by="(organization_id, project_id, scheduled_check_time, trace_id, uptime_check_id)",
+                    partition_by="(retention_days, toMonday(scheduled_check_time))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
                     ttl="toDateTime(timestamp) + toIntervalDay(retention_days)",
