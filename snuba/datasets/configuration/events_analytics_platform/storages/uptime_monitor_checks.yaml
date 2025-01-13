@@ -23,8 +23,8 @@ schema:
       { name: trace_id, type: UUID },
       { name: retention_days, type: UInt, args: { size: 16 } },
     ]
-  local_table_name: uptime_monitor_checks_local
-  dist_table_name: uptime_monitor_checks_dist
+  local_table_name: uptime_monitor_checks_v2_local
+  dist_table_name: uptime_monitor_checks_v2_dist
 
 
 mandatory_condition_checkers:
