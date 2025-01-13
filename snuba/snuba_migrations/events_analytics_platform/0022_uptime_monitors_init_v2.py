@@ -17,6 +17,7 @@ columns: List[Column[Modifiers]] = [
     Column("project_id", UInt(64)),
     Column("environment", String(Modifiers(nullable=True, low_cardinality=True))),
     Column("uptime_subscription_id", UUID()),
+    Column("uptime_check_id", UUID()),
     Column("scheduled_check_time", DateTime64(3)),  # millisecond precision
     Column("timestamp", DateTime64(3)),  # millisecond precision
     Column("duration_ms", UInt(64)),
@@ -39,7 +40,7 @@ class Migration(migration.ClickhouseNodeMigration):
                 table_name=local_table_name,
                 columns=columns,
                 engine=table_engines.ReplacingMergeTree(
-                    order_by="(organization_id, project_id, toDateTime(scheduled_check_time), trace_id)",
+                    order_by="(organization_id, project_id, toDateTime(scheduled_check_time), trace_id, uptime_check_id)",
                     partition_by="(retention_days, toMonday(timestamp))",
                     settings={"index_granularity": "8192"},
                     storage_set=storage_set,
