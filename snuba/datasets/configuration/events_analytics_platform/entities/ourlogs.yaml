@@ -13,7 +13,7 @@ schema:
     { name: retention_days, type: UInt, args: { size: 16 } },
     { name: timestamp, type: DateTime64, args: { precision: 9 } },
     { name: body, type: String },
-    { name: attr_str, type: Map, args: { key: { type: String }, value: { type: String } } },
+    { name: attr_string, type: Map, args: { key: { type: String }, value: { type: String } } },
     { name: attr_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
     { name: attr_double, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
     { name: attr_bool, type: Map, args: { key: { type: String }, value: { type: UInt, args: { size: 8 } } } },
