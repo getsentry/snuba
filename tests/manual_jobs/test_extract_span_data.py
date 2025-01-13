@@ -122,6 +122,7 @@ def test_extract_span_data() -> None:
                     "limit": 1000000,
                     "output_file_path": "scrubbed_spans_data.csv.gz",
                     "gcp_bucket_name": "test-bucket",
+                    "allowed_keys": ["sentry.span.op"],
                 },
             )
         )

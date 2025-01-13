@@ -20,6 +20,7 @@ class ExtractSpanData(Job):
             "limit",
             "gcp_bucket_name",
             "output_file_path",
+            "allowed_keys",
         ]
         for param in required_params:
             assert param in params
@@ -31,6 +32,7 @@ class ExtractSpanData(Job):
         self._limit = params["limit"]
         self._gcp_bucket_name = params["gcp_bucket_name"]
         self._output_file_path = params["output_file_path"]
+        self._allowed_keys = params["allowed_keys"]
 
     def _generate_spans_query(self) -> str:
         # Columns that should not be scrubbed
@@ -79,16 +81,25 @@ class ExtractSpanData(Job):
 
         all_columns = base_columns + map_columns
 
+        # We scrub all strings except for the allowed keys.
+        # To perform the scrubbing, we generate a salt based on the orgnization_id using sipHash128Reference (we use a different hash function for the salt so that we don't end up storing the salt).
+        # We then concatenate the salt with the value we are hashing and hash the result with BLAKE3.
         scrubbed_columns = []
         for col in all_columns:
-            if col in unscrubbed_columns or col.startswith("attr_num"):
+            if col in unscrubbed_columns:
                 scrubbed_columns.append(col)
+            elif col.startswith("attr_num"):
+                scrubbed_columns.append(
+                    f"mapApply((k, v) -> (if(k in {self._allowed_keys}, k, BLAKE3(concat(sipHash128Reference(organization_id), k))), v), {col}) AS {col}_scrubbed"
+                )
             elif col.startswith("attr_str"):
                 scrubbed_columns.append(
-                    f"mapApply((k, v) -> (k, cityHash64(v)), {col}) AS {col}_scrubbed"
+                    f"mapApply((k, v) -> (if(k in {self._allowed_keys}, k, BLAKE3(concat(sipHash128Reference(organization_id), k))), BLAKE3(concat(sipHash128Reference(organization_id), v))), {col}) AS {col}_scrubbed"
                 )
             else:
-                scrubbed_columns.append(f"cityHash64({col}) AS {col}_scrubbed")
+                scrubbed_columns.append(
+                    f"BLAKE3(concat(salt, {col})) AS {col}_scrubbed"
+                )
 
         query = f"""
         SELECT
