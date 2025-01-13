@@ -19,6 +19,7 @@ ENTITY_KEYS = [
     EntityKey.SPANS_STR_ATTRS,
     EntityKey.GROUPASSIGNEE,
     EntityKey.GROUPEDMESSAGE,
+    EntityKey.OURLOGS,
     EntityKey.OUTCOMES,
     EntityKey.OUTCOMES_RAW,
     EntityKey.SEARCH_ISSUES,
