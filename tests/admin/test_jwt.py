@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
-from typing import Generator, MagicMock
-from unittest.mock import patch
+from typing import Generator
+from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
