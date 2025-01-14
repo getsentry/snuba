@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Optional
 
 import click
@@ -43,7 +43,7 @@ from snuba.redis import RedisClientKey, get_redis_client
 @click.option(
     "--divide-partitions",
     type=click.IntRange(1, 2),
-    default=0,
+    default=1,
     help="Divide partitions into N groups",
 )
 def optimize(
@@ -70,7 +70,7 @@ def optimize(
 
     (clickhouse_user, clickhouse_password) = storage.get_cluster().get_credentials()
 
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     database = storage.get_cluster().get_database()
 
