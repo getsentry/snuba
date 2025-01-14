@@ -178,6 +178,32 @@ def get_partitions_from_clickhouse(
     table: str,
     before: Optional[datetime] = None,
 ) -> Sequence[util.Part]:
+    """
+    Get the partitions from ClickHouse that are active and would benefit from OPTIMIZE
+    by querying the system.parts table. This filters as little as possible,
+    but only returns partitions that contain more than 1 active part. It does not,
+    for example, consider logic like `should_optimize_partition_today`.
+
+    It validates:
+    - The specified table exists.
+    - In a table using the Replicated*MergeTree engine family, the client is connected
+      to a replica with leader status (ClickHouse is a multi-leader system and
+      most nodes should set `is_leader = 1` during normal operation). If the pool
+      isn't connected to a leader, then it can't apply OPTIMIZE.
+
+    Arguments:
+        clickhouse: The ClickHouse connection pool to use.
+        storage: The storage definition to locate table partitions.
+        database: The ClickHouse database to query.
+        table: The storage table to get the partitions from.
+        before: (optional) The cutoff time, after which partitions should not be considered.
+            If omitted, all partitions are considered.
+
+    Returns:
+        A list of partitions that are active and would benefit from OPTIMIZE, that are
+        older than `before` (if provided). The list is ordered primarily by active parts
+        count in order to give preference to "less optimized" partitions.
+    """
     response = clickhouse.execute(
         """
         SELECT engine
