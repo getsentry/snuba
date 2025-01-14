@@ -144,7 +144,6 @@ function QueryDisplay(props: {
 
   function handleQueryError(error: any) {
     const lines = error.error.split("\n");
-    debugger;
     if (lines.length > 1) {
       setQueryError({
         title: lines[0],
