@@ -422,6 +422,12 @@ def _hash_partition(partition_name: str) -> int:
     return int(sha1.hexdigest(), 16)
 
 
+def _days_since_epoch(current_time: Optional[datetime] = None) -> int:
+    if current_time is None:
+        current_time = datetime.now(UTC)
+    return int(current_time.timestamp() / 86400)
+
+
 def should_optimize_partition_today(
     partition_name: str, divide_partitions_count: int
 ) -> bool:
@@ -434,5 +440,5 @@ def should_optimize_partition_today(
 
     return (
         _hash_partition(partition_name) % divide_partitions_count
-        == datetime.now().timetuple().tm_yday % divide_partitions_count
+        == _days_since_epoch() % divide_partitions_count
     )
