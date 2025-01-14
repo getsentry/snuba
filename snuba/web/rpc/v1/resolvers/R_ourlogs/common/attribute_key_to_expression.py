@@ -14,6 +14,7 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.span_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "sentry.severity_text": AttributeKey.Type.TYPE_STRING,
     "sentry.severity_number": AttributeKey.Type.TYPE_INT,
+    "sentry.body": AttributeKey.Type.TYPE_STRING,
 }
 
 TIMESTAMP_COLUMNS: Final[Set[str]] = {
