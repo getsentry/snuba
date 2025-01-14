@@ -118,6 +118,17 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 *COMMON_RUST_CONSUMER_DEV_OPTIONS,
             ],
         ),
+        (
+            "ourlogs-consumer",
+            [
+                "snuba",
+                "rust-consumer",
+                "--storage=ourlogs",
+                "--consumer-group=ourlogs_group",
+                "--use-rust-processor",
+                *COMMON_RUST_CONSUMER_DEV_OPTIONS,
+            ],
+        ),
     ]
 
     if settings.SEPARATE_SCHEDULER_EXECUTOR_SUBSCRIPTIONS_DEV:
