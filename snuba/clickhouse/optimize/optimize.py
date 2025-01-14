@@ -419,7 +419,7 @@ def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bo
 def _hash_partition(partition_name: str) -> int:
     sha1 = hashlib.sha1()
     sha1.update(partition_name.encode())
-    return int(sha1.hexdigest(), 16) % 4294967295
+    return int(sha1.hexdigest(), 16)
 
 
 def should_optimize_partition_today(

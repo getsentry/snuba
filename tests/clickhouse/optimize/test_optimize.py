@@ -402,20 +402,21 @@ def test_should_optimize_partition_today_two_divisions() -> None:
     # we know we can trust that each group gets optimized once every 2 days
     #
     # Keep the "time" constant so that we get consistent results
+    day_0_partitions = ["2025-01-01", "2025-01-03", "2025-01-04"]
+    day_1_partitions = ["2025-01-02", "2025-01-05"]
+
     with time_machine.travel(datetime(2025, 1, 13).astimezone(UTC), tick=False):
-        assert not should_optimize_partition_today("2025-01-01", 2)
-        assert should_optimize_partition_today("2025-01-02", 2)
-        assert not should_optimize_partition_today("2025-01-03", 2)
-        assert not should_optimize_partition_today("2025-01-04", 2)
-        assert should_optimize_partition_today("2025-01-05", 2)
+        for day in day_0_partitions:
+            assert should_optimize_partition_today(day, 2)
+        for day in day_1_partitions:
+            assert not should_optimize_partition_today(day, 2)
 
     # Inverse of above
     with time_machine.travel(datetime(2025, 1, 14).astimezone(UTC), tick=False):
-        assert should_optimize_partition_today("2025-01-01", 2)
-        assert not should_optimize_partition_today("2025-01-02", 2)
-        assert should_optimize_partition_today("2025-01-03", 2)
-        assert should_optimize_partition_today("2025-01-04", 2)
-        assert not should_optimize_partition_today("2025-01-05", 2)
+        for day in day_1_partitions:
+            assert should_optimize_partition_today(day, 2)
+        for day in day_0_partitions:
+            assert not should_optimize_partition_today(day, 2)
 
 
 def test_should_optimize_partition_today_one_division() -> None:
