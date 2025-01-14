@@ -143,17 +143,27 @@ function QueryDisplay(props: {
   }
 
   function handleQueryError(error: any) {
-    const lines = error.error.split("\n");
-    if (lines.length > 1) {
-      setQueryError({
-        title: lines[0],
-        body: lines.slice(1).join("\n"),
-      })
-    } else {
-      setQueryError({
-        title: error,
-        body: ""
-      });
+    try {
+      // this block assumes that the error is an object with an error property,
+      // if its not it will be caught by the catch block
+      const lines = error.error.split("\n");
+      if (lines.length > 1) {
+        setQueryError({
+          title: lines[0],
+          body: lines.slice(1).join("\n"),
+        })
+      } else {
+        setQueryError({
+          title: "Error",
+          body: lines[0]
+        });
+      }
+    } catch (e) {
+      if (typeof error === "object") {
+        setQueryError({ title: "Error", body: JSON.stringify(error) });
+      } else {
+        setQueryError({ title: "Error", body: error.toString() });
+      }
     }
   }
 
