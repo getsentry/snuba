@@ -506,7 +506,7 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
-        # confidence interval = Z * \sqrt{\frac{N * (\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N})}{n * (N-1) c* (N-1)}}
+        # confidence interval = Z * \sqrt{\frac{\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N}}{n * N}}
         #          ┌────────────────────────────┐
         #          │              ₙ
         #          │              ⎲
