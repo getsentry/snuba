@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from functools import wraps
 from typing import (
@@ -115,7 +115,9 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
 
     if date_str and retention_days:
         return Part(
-            part_str, datetime.strptime(date_str, "%Y-%m-%d"), int(retention_days)
+            part_str,
+            datetime.strptime(date_str, "%Y-%m-%d").astimezone(UTC),
+            int(retention_days),
         )
 
     else:
