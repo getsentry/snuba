@@ -93,6 +93,19 @@ function QueryDisplay(props: {
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
         setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
+      })
+      .catch((error) => {
+        const errorResult: QueryResult = {
+          input_query: `${query.sql} (${query.storage},${query.host}:${query.port})`,
+          timestamp: Math.floor(new Date().getTime() / 1000),
+          column_names: ["Error"],
+          rows: [[error.message || "An unknown error occurred"]],
+          trace_output: error.trace_output,
+          error: error.message || "An unknown error occurred",
+        };
+        setRecentHistory(HISTORY_KEY, errorResult);
+        setQueryResultHistory((prevHistory) => [errorResult, ...prevHistory]);
+        throw error;
       });
   }
 
