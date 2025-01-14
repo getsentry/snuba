@@ -82,12 +82,12 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
     "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.duration_ms": AttributeKey.Type.TYPE_DOUBLE,
+    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_DOUBLE,
     "sentry.retention_days": AttributeKey.Type.TYPE_INT,
     "sentry.name": AttributeKey.Type.TYPE_STRING,
-    "sentry.sampling_weight": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.sampling_factor": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.sampling_weight": AttributeKey.Type.TYPE_DOUBLE,
+    "sentry.sampling_factor": AttributeKey.Type.TYPE_DOUBLE,
     "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
@@ -101,6 +101,7 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+    print("typeeeeee", attr_key)
     def _build_label_mapping_key(attr_key: AttributeKey) -> str:
         return attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
 
@@ -124,7 +125,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
             return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
-        if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+        if attr_key.type == AttributeKey.Type.TYPE_DOUBLE:
+            print("timestamp_columnsssss", f.CAST(
+                column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
+            ))
             return f.CAST(
                 column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
             )
@@ -144,7 +148,10 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return SubscriptableReference(
             alias=alias, column=column("attr_str"), key=literal(attr_key.name)
         )
-    if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+    if attr_key.type == AttributeKey.Type.TYPE_DOUBLE:
+        print("subscriptableeeee", SubscriptableReference(
+            alias=alias, column=column("attr_num"), key=literal(attr_key.name)
+        ))
         return SubscriptableReference(
             alias=alias, column=column("attr_num"), key=literal(attr_key.name)
         )

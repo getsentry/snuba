@@ -158,6 +158,8 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
         setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
     )
 
+    print("beforebuildquery")
+
     return SnubaRequest(
         id=uuid.UUID(request.meta.request_id),
         original_body=MessageToDict(request),
@@ -193,6 +195,8 @@ def _convert_results(
                 converters[column.label] = lambda x: AttributeValue(val_int=int(x))
             elif column.key.type == AttributeKey.TYPE_FLOAT:
                 converters[column.label] = lambda x: AttributeValue(val_float=float(x))
+            elif column.key.type == AttributeKey.TYPE_DOUBLE:
+                converters[column.label] = lambda x: AttributeValue(val_double=double(x))
         elif column.HasField("aggregation"):
             converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         else:
@@ -237,12 +241,15 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        print("resolve1")
         snuba_request = _build_snuba_request(in_msg)
+        print("resolve2")
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        print("isthissuccessful")
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,

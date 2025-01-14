@@ -96,12 +96,20 @@ class EndpointTraceItemTable(
         _validate_select_and_groupby(in_msg)
         _validate_order_by(in_msg)
 
+        print("111111")
+
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
+
+        print("222222")
         # NOTE: EAP spans was the first TraceItem, we didn't enforce a trace item name originally so we default to it
         # for backwards compatibility
-        if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
-            in_msg.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
-        resolver = self.get_resolver(in_msg.meta.trace_item_type)
+        if in_msg.meta.trace_item_name == TraceItemName.TRACE_ITEM_NAME_UNSPECIFIED:
+            in_msg.meta.trace_item_name = TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+        print("3333333")
+        resolver = self.get_resolver(in_msg.meta.trace_item_name)
+        print(resolver)
+        print("in_msg.meta.trace_item_nameeee", in_msg.meta.trace_item_name)
+        print("44444")
         return resolver.resolve(in_msg)
