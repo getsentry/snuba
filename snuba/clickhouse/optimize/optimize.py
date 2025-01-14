@@ -96,7 +96,7 @@ def run_optimize_cron_job(
     clickhouse_host: str,
     tracker: OptimizedPartitionTracker,
     before: Optional[datetime] = None,
-    divide_partitions_count: int = 0,
+    divide_partitions_count: int = 1,
 ) -> int:
     """
     The sophisticated form of running an optimize final on a storage.
@@ -435,7 +435,7 @@ def should_optimize_partition_today(
     Determines if a partition should be optimized today based on the partition name
     and the current day of year.
     """
-    if divide_partitions_count <= 0:
+    if divide_partitions_count <= 1:
         return True
 
     return (
