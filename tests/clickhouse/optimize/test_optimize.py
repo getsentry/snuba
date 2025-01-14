@@ -12,6 +12,7 @@ from snuba.clickhouse.optimize import optimize
 from snuba.clickhouse.optimize.optimize import (
     _get_metrics_tags,
     optimize_partition_runner,
+    should_optimize_partition_today,
 )
 from snuba.clickhouse.optimize.optimize_scheduler import OptimizedSchedulerTimeout
 from snuba.clickhouse.optimize.optimize_tracker import OptimizedPartitionTracker
@@ -392,3 +393,34 @@ def test_optimize_partitions_raises_exception_with_cutoff_time() -> None:
 
     tracker.delete_all_states()
     settings.OPTIMIZE_JOB_CUTOFF_TIME = prev_job_cutoff_time
+
+
+def test_should_optimize_partition_today_two_divisions() -> None:
+    # There's no semantic importance to which partitions should
+    # be optimized, but we want to make sure some land in group 0 and
+    # some land in group 1, and that the results are consistent so that
+    # we know we can trust that each group gets optimized once every 2 days
+    #
+    # Keep the "time" constant so that we get consistent results
+    with time_machine.travel(datetime(2025, 1, 13).astimezone(UTC), tick=False):
+        assert not should_optimize_partition_today("2025-01-01", 2)
+        assert should_optimize_partition_today("2025-01-02", 2)
+        assert not should_optimize_partition_today("2025-01-03", 2)
+        assert not should_optimize_partition_today("2025-01-04", 2)
+        assert should_optimize_partition_today("2025-01-05", 2)
+
+    # Inverse of above
+    with time_machine.travel(datetime(2025, 1, 14).astimezone(UTC), tick=False):
+        assert should_optimize_partition_today("2025-01-01", 2)
+        assert not should_optimize_partition_today("2025-01-02", 2)
+        assert should_optimize_partition_today("2025-01-03", 2)
+        assert should_optimize_partition_today("2025-01-04", 2)
+        assert not should_optimize_partition_today("2025-01-05", 2)
+
+
+def test_should_optimize_partition_today_one_division() -> None:
+    # Tests that all partitions are optimized if there is only one division
+    assert should_optimize_partition_today("2025-01-01", 1)
+    assert should_optimize_partition_today("2025-01-02", 1)
+    assert should_optimize_partition_today("2025-01-03", 1)
+    assert should_optimize_partition_today("2025-01-04", 1)
