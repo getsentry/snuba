@@ -24,6 +24,9 @@ _QUERYLOG_CLUSTER = cluster.ClickhouseCluster(
     password="",
     database="default",
     http_port=420,
+    secure=False,
+    ca_certs=None,
+    verify=False,
     storage_sets={
         "querylog",
     },
@@ -37,6 +40,9 @@ _EVENTS_CLUSTER = cluster.ClickhouseCluster(
     password="",
     database="default",
     http_port=420,
+    secure=False,
+    ca_certs=None,
+    verify=False,
     storage_sets={
         "events",
     },
@@ -50,6 +56,9 @@ _REST_CLUSTER = cluster.ClickhouseCluster(
     password="",
     database="default",
     http_port=420,
+    secure=False,
+    ca_certs=None,
+    verify=False,
     storage_sets=_REMAINING_STORAGE_SET_KEYS,
     single_node=True,
 )
