@@ -17,6 +17,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
+    TraceItemName,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -153,6 +154,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -191,6 +193,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -238,6 +241,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 or_filter=OrFilter(
@@ -320,6 +324,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -415,6 +420,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -463,6 +469,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -545,6 +552,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             columns=[
                 Column(
@@ -585,6 +593,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -639,6 +648,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -710,6 +720,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             columns=[
                 Column(
@@ -741,6 +752,7 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=ts,
                 referrer="something",
                 cogs_category="something",
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             columns=[
                 Column(
@@ -782,6 +794,7 @@ class TestTraceItemTable(BaseApiTest):
                 "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
+                "traceItemName": "TRACE_ITEM_NAME_EAP_SPANS",
             },
             "columns": [
                 {
@@ -972,6 +985,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             columns=[
                 Column(
@@ -1004,6 +1018,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
             ),
             columns=[
                 Column(

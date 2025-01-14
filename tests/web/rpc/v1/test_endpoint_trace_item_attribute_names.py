@@ -266,6 +266,7 @@ class TestTraceItemAttributeNames(BaseApiTest):
             )
             res = EndpointTraceItemAttributeNames().execute(req)
             page_token = res.page_token
+            assert res.page_token.WhichOneof("value") == "filter_offset"
             assert res.attributes == expected_attributes[:at_a_time]
             expected_attributes = expected_attributes[at_a_time:]
             done += at_a_time

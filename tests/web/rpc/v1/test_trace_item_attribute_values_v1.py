@@ -7,9 +7,8 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
-from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -146,16 +145,36 @@ class TestTraceItemAttributes(BaseApiTest):
             done += at_a_time
         assert expected_values == []
 
-    def test_filter_offset_is_not_implemented_right_now(self) -> None:
-        req = TraceItemAttributeValuesRequest(
-            meta=COMMON_META,
-            limit=6,
-            key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
-            value_substring_match="",
-            page_token=PageToken(filter_offset=TraceItemFilter()),
-        )
-        with pytest.raises(NotImplementedError):
-            AttributeValuesRequest().execute(req)
+    def test_page_token_filter_offset(self) -> None:
+        expected_values = [
+            "blah",
+            "derpderp",
+            "durp",
+            "herp",
+            "herpderp",
+            "some_last_value",
+        ]
+        total_number_of_values = len(expected_values)
+
+        # grab 2 at a time until we get them all
+        done = 0
+        page_token = None
+        at_a_time = 2
+        while done < total_number_of_values:
+            req = TraceItemAttributeValuesRequest(
+                meta=COMMON_META,
+                limit=at_a_time,
+                key=AttributeKey(name="tag1", type=AttributeKey.TYPE_STRING),
+                value_substring_match="",
+                page_token=page_token,
+            )
+            res = AttributeValuesRequest().execute(req)
+            page_token = res.page_token
+            assert res.page_token.WhichOneof("value") == "filter_offset"
+            assert res.values == expected_values[:at_a_time]
+            expected_values = expected_values[at_a_time:]
+            done += at_a_time
+        assert expected_values == []
 
     def test_with_value_substring_match(self, setup_teardown: Any) -> None:
         message = TraceItemAttributeValuesRequest(
@@ -166,3 +185,22 @@ class TestTraceItemAttributes(BaseApiTest):
         )
         response = AttributeValuesRequest().execute(message)
         assert response.values == ["derpderp", "herp", "herpderp"]
+
+    def test_empty_results(self) -> None:
+        req = TraceItemAttributeValuesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(
+                    seconds=int((BASE_TIME - timedelta(days=1)).timestamp())
+                ),
+                end_timestamp=Timestamp(
+                    seconds=int((BASE_TIME + timedelta(days=1)).timestamp())
+                ),
+            ),
+            value_substring_match="this_definitely_doesnt_exist_93710",
+        )
+        res = AttributeValuesRequest().execute(req)
+        assert res.values == []
