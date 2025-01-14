@@ -2,9 +2,9 @@ from typing import Final, Mapping, Set
 
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
-from snuba.query import Expression, SubscriptableReference
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
+from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 # These are the columns which aren't stored in attr_ in clickhouse
