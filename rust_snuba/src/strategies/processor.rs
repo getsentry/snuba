@@ -80,7 +80,7 @@ pub fn make_rust_processor(
 
     Box::new(RunTaskInThreads::new(
         next_step,
-        Box::new(task_runner),
+        task_runner,
         concurrency,
         Some("process_message"),
     ))
@@ -154,7 +154,7 @@ pub fn make_rust_processor_with_replacements(
 
     Box::new(RunTaskInThreads::new(
         next_step,
-        Box::new(task_runner),
+        task_runner,
         concurrency,
         Some("process_message"),
     ))

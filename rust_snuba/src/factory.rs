@@ -212,10 +212,10 @@ impl ProcessingStrategyFactory<KafkaPayload> for ConsumerStrategyFactory {
                         self.python_max_queue_depth,
                     )
                     .unwrap(),
-                    Box::new(SchemaValidator {
+                    SchemaValidator {
                         schema,
                         enforce_schema: self.enforce_schema,
-                    }),
+                    },
                     &self.processing_concurrency,
                     Some("validate_schema"),
                 ))

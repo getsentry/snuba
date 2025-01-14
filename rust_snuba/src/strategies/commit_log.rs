@@ -158,13 +158,7 @@ where
     ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ProduceMessage::new(
-                producer,
-                destination,
-                topic,
-                consumer_group,
-                skip_produce,
-            )),
+            ProduceMessage::new(producer, destination, topic, consumer_group, skip_produce),
             concurrency,
             Some("produce_commit_log"),
         );
