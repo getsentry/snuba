@@ -97,6 +97,19 @@ function QueryDisplay(props: {
 
   }
 
+  function handleQueryError(error: any) {
+    const errorResult: QueryResult = {
+      input_query: `${query.sql} (${query.storage},${query.host}:${query.port})`,
+      timestamp: Math.floor(new Date().getTime() / 1000),
+      column_names: ["Error"],
+      rows: [[JSON.stringify(error)]],
+      trace_output: error.trace_output,
+      error: error.message || "An unknown error occurred",
+    };
+    setRecentHistory(HISTORY_KEY, errorResult);
+    setQueryResultHistory((prevHistory) => [errorResult, ...prevHistory]);
+  }
+
   function copyText(text: string) {
     window.navigator.clipboard.writeText(text);
   }
@@ -170,18 +183,7 @@ function QueryDisplay(props: {
           <div>
             <ExecuteButton
               onClick={executeQuery}
-              onError={(error) => {
-                const errorResult: QueryResult = {
-                  input_query: `${query.sql} (${query.storage},${query.host}:${query.port})`,
-                  timestamp: Math.floor(new Date().getTime() / 1000),
-                  column_names: ["Error"],
-                  rows: [[JSON.stringify(error)]],
-                  trace_output: error.trace_output,
-                  error: error.message || "An unknown error occurred",
-                };
-                setRecentHistory(HISTORY_KEY, errorResult);
-                setQueryResultHistory((prevHistory) => [errorResult, ...prevHistory]);
-              }}
+              onError={handleQueryError}
               disabled={
                 !query.storage || !query.host || !query.port || !query.sql
               }
