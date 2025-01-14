@@ -39,3 +39,15 @@ updates:
       interval: "weekly"
       day: "sunday"
     open-pull-requests-limit: 10
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      timezone: America/Los_Angeles
+      time: '9:30'
+    groups:
+      sentry-dependencies:
+        patterns:
+          - 'sentry-sdk'
+          - 'sentry-arroyo'
