@@ -4,7 +4,7 @@ import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
 
-import { SelectItem, Switch } from "@mantine/core";
+import { SelectItem, Switch, Alert } from "@mantine/core";
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
@@ -36,6 +36,12 @@ function QueryDisplay(props: {
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
     getRecentHistory(HISTORY_KEY)
   );
+
+  type QueryError = {
+    title: string;
+    body: string;
+  }
+  const [queryError, setQueryError] = useState<QueryError | null>(null);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -90,6 +96,7 @@ function QueryDisplay(props: {
     return props.api
       .executeSystemQuery(query as QueryRequest)
       .then((result) => {
+        setQueryError(null);  // clear any previous error
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
         setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
@@ -125,6 +132,30 @@ function QueryDisplay(props: {
       return hosts;
     }
     return [];
+  }
+
+  function getErrorDomElement() {
+    if (queryError !== null) {
+      const bodyDOM = queryError.body.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+      return <Alert title={queryError.title} color="red">{bodyDOM}</Alert>;
+    }
+    return "";
+  }
+
+  function handleQueryError(error: any) {
+    const lines = error.error.split("\n");
+    debugger;
+    if (lines.length > 1) {
+      setQueryError({
+        title: lines[0],
+        body: lines.slice(1).join("\n"),
+      })
+    } else {
+      setQueryError({
+        title: error,
+        body: ""
+      });
+    }
   }
 
   return (
@@ -168,6 +199,7 @@ function QueryDisplay(props: {
           </div>
           <div>
             <ExecuteButton
+              onError={handleQueryError}
               onClick={executeQuery}
               disabled={
                 !query.storage || !query.host || !query.port || !query.sql
@@ -176,6 +208,9 @@ function QueryDisplay(props: {
           </div>
         </div>
       </form>
+      <div>
+        {getErrorDomElement()}
+      </div>
       <div>
         <h2>Query results</h2>
         {queryResultHistory.map((queryResult, idx) => {

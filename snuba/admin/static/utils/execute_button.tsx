@@ -4,7 +4,7 @@ import { Button } from "@mantine/core";
 function ExecuteButton(props: {
   disabled: boolean;
   onClick: () => Promise<any>;
-  onError?: (error: any) => any;
+  onError?: (error: any) => any;  // TODO: we should make the type of error we return more specific
   label?: string;
 }) {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
