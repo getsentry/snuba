@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
 )
 from sentry_protos.snuba.v1.error_pb2 import Error
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -139,6 +139,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 referrer="something",
                 start_timestamp=tstart,
                 end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -187,6 +188,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -259,6 +261,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -339,6 +342,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -392,6 +396,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -469,6 +474,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
                 debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
