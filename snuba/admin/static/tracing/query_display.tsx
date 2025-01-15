@@ -107,10 +107,24 @@ function QueryDisplay(props: {
             options={storages}
           />
         </div>
-        <ExecuteButton
-          onClick={executeQuery}
-          disabled={!query.storage || !query.sql}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Switch
+            checked={query.gather_profile_events ?? true}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+              setQuery((prevQuery) => ({
+                ...prevQuery,
+                gather_profile_events: evt.currentTarget.checked,
+              }))
+            }
+            onLabel="PROFILE"
+            offLabel="NO PROFILE"
+            size="md"
+          />
+          <ExecuteButton
+            onClick={executeQuery}
+            disabled={!query.storage || !query.sql}
+          />
+        </div>
       </div>
       <div>
         <h2>Query results</h2>
