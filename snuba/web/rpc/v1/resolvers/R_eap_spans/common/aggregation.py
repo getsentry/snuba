@@ -16,7 +16,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import column
 from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
@@ -548,7 +548,9 @@ def get_confidence_interval_column(
                             get_field_existence_expression(aggregation),
                             alias=f"{alias}_N",
                         ),
-                        f.minus(column(f"{alias}_N"), literal(1)),
+                        f.sumIf(
+                            sign_column, get_field_existence_expression(aggregation)
+                        ),
                     ),
                 )
             ),

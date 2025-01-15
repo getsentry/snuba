@@ -474,14 +474,14 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
 
     def test_avg_unreliable(self) -> None:
         # store a test metric with a value of 1, every second for an hour
-        granularity_secs = 60
+        granularity_secs = 120
         query_duration = 3600
         store_timeseries(
             BASE_TIME,
             1,
             3600,
             # for each time interval we distribute the values from -55 to 64 to keep the avg close to 0
-            metrics=[DummyMetric("test_metric", get_value=lambda x: (x % 60) - 55)],
+            metrics=[DummyMetric("test_metric", get_value=lambda x: (x % 120) - 55)],
             measurements=[
                 DummyMeasurement(
                     "client_sample_rate",
@@ -522,7 +522,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=-25.5,  # (-55 + -54 + ... + -4) / 60 = -25.5
+                        data=4.5,  # (-55 + -54 + ... + 64) / 60 = 4.5
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
