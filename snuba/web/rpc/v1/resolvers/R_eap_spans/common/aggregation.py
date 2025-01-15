@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Dict, List, Optional
 
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    AggregationComparisonFilter,
+    AggregationFilter,
+)
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     ExtrapolationMode,
@@ -16,7 +20,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column
+from snuba.query.dsl import and_cond, column, or_cond
 from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
@@ -648,3 +652,44 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         )
 
     return agg_func_expr
+
+
+def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expression:
+    op_to_expr = {
+        AggregationComparisonFilter.OP_LESS_THAN: f.less,
+        AggregationComparisonFilter.OP_GREATER_THAN: f.greater,
+        AggregationComparisonFilter.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
+        AggregationComparisonFilter.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
+        AggregationComparisonFilter.OP_EQUALS: f.equals,
+        AggregationComparisonFilter.OP_NOT_EQUALS: f.notEquals,
+    }
+
+    match agg_filter.WhichOneof("value"):
+        case "comparison_filter":
+            op_expr = op_to_expr.get(agg_filter.comparison_filter.op)
+            if op_expr is None:
+                raise BadSnubaRPCRequestException(
+                    f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
+                )
+            return op_expr(
+                aggregation_to_expression(agg_filter.comparison_filter.aggregation),
+                agg_filter.comparison_filter.val,
+            )
+        case "and_filter":
+            return and_cond(
+                *(
+                    aggregation_filter_to_expression(x)
+                    for x in agg_filter.and_filter.filters
+                )
+            )
+        case "or_filter":
+            return or_cond(
+                *(
+                    aggregation_filter_to_expression(x)
+                    for x in agg_filter.and_filter.filters
+                )
+            )
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported aggregation filter type: {default}"
+            )

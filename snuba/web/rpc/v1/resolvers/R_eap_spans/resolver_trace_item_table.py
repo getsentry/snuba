@@ -42,6 +42,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
 from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     ExtrapolationContext,
+    aggregation_filter_to_expression,
     aggregation_to_expression,
     get_average_sample_rate_column,
     get_confidence_interval_column,
@@ -147,6 +148,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+        having=aggregation_filter_to_expression(request.aggregation_filter),
     )
     treeify_or_and_conditions(res)
     apply_virtual_columns(res, request.virtual_column_contexts)
