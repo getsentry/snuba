@@ -100,9 +100,9 @@ class EndpointTimeSeries(RPCEndpoint[TimeSeriesRequest, TimeSeriesResponse]):
         )
         _enforce_no_duplicate_labels(in_msg)
         _validate_time_buckets(in_msg)
-        # NOTE: EAP spans was the first TraceItem, we didn't enforce a trace item name originally so we default to it
-        # for backwards compatibility
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
-            in_msg.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
+            )
         resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)
