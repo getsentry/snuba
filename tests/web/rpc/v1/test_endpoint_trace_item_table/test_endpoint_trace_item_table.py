@@ -1072,7 +1072,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -1164,7 +1164,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -1327,7 +1327,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
