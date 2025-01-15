@@ -103,5 +103,5 @@ class EndpointTraceItemTable(
         # for backwards compatibility
         if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
             in_msg.meta.trace_item_type = TraceItemType.TRACE_ITEM_TYPE_SPAN
-        resolver = self.get_resolver(in_msg.meta.trace_item_name)
+        resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

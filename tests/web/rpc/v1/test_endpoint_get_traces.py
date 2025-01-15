@@ -295,7 +295,7 @@ class TestGetTraces(BaseApiTest):
             ),
             filters=[
                 GetTracesRequest.TraceFilter(
-                    item_name=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     filter=TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
@@ -383,7 +383,7 @@ class TestGetTraces(BaseApiTest):
             ],
             filters=[
                 GetTracesRequest.TraceFilter(
-                    item_name=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     filter=TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(

@@ -218,7 +218,7 @@ def _select_supported_filters(
         return next(
             f.filter
             for f in filters
-            if f.item_name == TraceItemType.TRACE_ITEM_TYPE_SPAN
+            if f.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
         )
     except StopIteration:
         raise BadSnubaRPCRequestException("Only one span filter is supported.")
