@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.endpoint_get_traces_pb2 import (
     GetTracesResponse,
     TraceAttribute,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemName
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import TraceItemFilter
 
@@ -218,7 +218,7 @@ def _select_supported_filters(
         return next(
             f.filter
             for f in filters
-            if f.item_name == TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+            if f.item_type == TraceItemType.TRACE_ITEM_TYPE_SPAN
         )
     except StopIteration:
         raise BadSnubaRPCRequestException("Only one span filter is supported.")

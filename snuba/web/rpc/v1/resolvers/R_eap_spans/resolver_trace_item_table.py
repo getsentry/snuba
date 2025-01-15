@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemName
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
@@ -233,8 +233,8 @@ def _get_page_token(
 
 class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
     @classmethod
-    def trace_item_name(cls) -> TraceItemName.ValueType:
-        return TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
