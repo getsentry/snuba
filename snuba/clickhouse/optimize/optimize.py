@@ -131,7 +131,7 @@ def run_optimize_cron_job(
             clickhouse, storage, database, table, before
         )
 
-        if divide_partitions_count > 0:
+        if divide_partitions_count > 1:
             partitions = [
                 partition
                 for partition in partitions
