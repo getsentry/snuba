@@ -30,7 +30,7 @@ pub fn deserialize_message(payload: &[u8]) -> anyhow::Result<(Vec<UptimeMonitorC
         scheduled_check_time: monitor_message.scheduled_check_time_ms,
         timestamp: monitor_message.actual_check_time_ms,
         duration_ms: monitor_message.duration_ms,
-        region_slug: monitor_message.region_slug.unwrap_or_default(),
+        region: monitor_message.region.unwrap_or_default(),
         check_status: monitor_message.status,
         check_status_reason: monitor_message
             .status_reason
@@ -52,7 +52,7 @@ struct UptimeMonitorCheckMessage<'a> {
     organization_id: u64,
     project_id: u64,
     retention_days: u16,
-    region_slug: Option<&'a str>,
+    region: Option<&'a str>,
     environment: Option<&'a str>,
     subscription_id: Uuid,
     guid: Uuid,
@@ -89,7 +89,7 @@ pub struct UptimeMonitorCheckRow<'a> {
     scheduled_check_time: u64,
     timestamp: u64,
     duration_ms: u64,
-    region_slug: &'a str,
+    region: &'a str,
     check_status: &'a str,
     check_status_reason: &'a str,
     http_status_code: Option<u16>,
@@ -107,7 +107,7 @@ mod tests {
             "organization_id": 1,
             "project_id": 1,
             "retention_days": 30,
-            "region_slug": "global",
+            "region": "global",
             "environment": "prod",
             "subscription_id": "123e4567-e89b-12d3-a456-426614174000",
             "guid": "550e8400-e29b-41d4-a716-446655440000",
@@ -139,7 +139,7 @@ mod tests {
         );
         assert_eq!(monitor_row.duration_ms, 100);
         assert_eq!(monitor_row.timestamp, 1702659277);
-        assert_eq!(monitor_row.region_slug, "global".to_string());
+        assert_eq!(monitor_row.region, "global".to_string());
         assert_eq!(monitor_row.check_status, "ok");
         assert_eq!(monitor_row.check_status_reason, "Request successful");
         assert_eq!(monitor_row.http_status_code, Some(200));

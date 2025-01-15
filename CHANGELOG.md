@@ -1,5 +1,49 @@
 # Changelog
 
+## 25.1.0
+
+### Various fixes & improvements
+
+- fix: snuba admin system query error messaging (#6763) by @kylemumma
+- feat: Add SSL/TLS support for ClickHouse connections (#6459) by @patsevanton
+- fix(settings): specify VALID_RETENTION_DAYS for self-hosted (#6756) by @aldy505
+- chore(deps): Bump Python to 3.11.11 (#6719) by @beninabox
+- Bump arroyo version (#6766) by @volokluev
+- feat(ourlogs): Add entity/storage configs & dev worker (#6759) by @colin-sentry
+- fix(optimize): make tests and optimize use UTC timestamps (#6760) by @onewland
+- meta: Bump new development version (1fe61a9d)
+
+## 24.12.2
+
+### Various fixes & improvements
+
+- ref(uptime): use new v2 table in storage (#6761) by @JoshFerge
+- ref(uptime): use region instead of region_slug (#6762) by @JoshFerge
+- ref(uptime): rebuild uptime storage table (#6758) by @JoshFerge
+- chore(eap): write script to send scrubbed data into a gcs bucket (#6698) by @davidtsuk
+- fix(scripts): Grab everything in the path (#6750) by @phacops
+- feat(profiling): process environment value for profile_chunks and add the column to the storage definition (#6738) by @viglia
+- ci: Switch e2e test to self-hosted repo (#6746) by @BYK
+- feat(ourlogs): Add a kafka consumer (#6743) by @colin-sentry
+- Revert "deps: replace python-jose with pyjwt (#6739)" (96d5c2bd) by @getsentry-bot
+- fix(uptime): add snapshot test for corrected typo (#6744) by @JoshFerge
+- feat(sudo): allow dropping of replica in sudo tool (#6742) by @volokluev
+- chore(codeowners): add crons team to uptime files (#6741) by @JoshFerge
+- deps: replace python-jose with pyjwt (#6739) by @mdtro
+- fix(uptime): align rust consumer with clickhouse schema (#6740) by @JoshFerge
+- feat(devservices): Support no workers option for containerized version of snuba (#6737) by @hubertdeng123
+- feat(devservices): Add devservices ci validation job (#6716) by @hubertdeng123
+- chore(uptime): move uptime storage to partial (#6736) by @JoshFerge
+- feat(profiling): add environment column to the profile_chunks table (#6722) by @viglia
+- feat(EAP): Trace Item resolvers (#6732) by @volokluev
+- feat(ourlogs): Simplify the buckets for logs (#6735) by @colin-sentry
+- Revert "chore(eap-spans): Take advantage of parallel reads (#6579)" (f8900d8c) by @getsentry-bot
+- Implement filter offset for attribute values API (#6667) by @xurui-c
+- fix(eap): use TDigestWeighted instead of TDigest for perncetile confidence calculation (#6734) by @shellmayr
+- fix(storage): correctly name storage key (#6733) by @JoshFerge
+
+_Plus 28 more_
+
 ## 24.12.1
 
 ### Various fixes & improvements

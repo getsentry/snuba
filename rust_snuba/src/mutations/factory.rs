@@ -46,7 +46,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
 
         let next_step = RunTaskInThreads::new(
             next_step,
-            Box::new(ClickhouseWriter::new(
+            ClickhouseWriter::new(
                 &self.storage_config.clickhouse_cluster.host,
                 self.storage_config.clickhouse_cluster.http_port,
                 &self.storage_config.clickhouse_table_name,
@@ -54,7 +54,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
                 &self.storage_config.clickhouse_cluster.user,
                 &self.storage_config.clickhouse_cluster.password,
                 self.batch_write_timeout,
-            )),
+            ),
             &self.clickhouse_concurrency,
             Some("clickhouse"),
         );
@@ -87,7 +87,7 @@ impl ProcessingStrategyFactory<KafkaPayload> for MutConsumerStrategyFactory {
 
         let next_step = RunTaskInThreads::new(
             next_step,
-            Box::new(MutationParser),
+            MutationParser,
             &self.processing_concurrency,
             Some("parse"),
         );

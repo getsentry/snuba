@@ -12,7 +12,7 @@ expression: snapshot_payload
     "http_status_code": 500,
     "organization_id": 123,
     "project_id": 456,
-    "region_slug": "us-east-1",
+    "region": "",
     "retention_days": 90,
     "scheduled_check_time": 1717614062978,
     "timestamp": 1717614068008,

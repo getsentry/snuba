@@ -17,7 +17,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
-    TraceItemName,
+    TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -154,7 +154,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -193,7 +193,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -241,7 +241,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 or_filter=OrFilter(
@@ -324,7 +324,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -420,7 +420,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -469,7 +469,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -552,7 +552,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -593,7 +593,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -648,7 +648,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -720,7 +720,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -752,7 +752,7 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=ts,
                 referrer="something",
                 cogs_category="something",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -794,7 +794,7 @@ class TestTraceItemTable(BaseApiTest):
                 "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
-                "traceItemName": "TRACE_ITEM_NAME_EAP_SPANS",
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
             "columns": [
                 {
@@ -985,7 +985,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -1018,7 +1018,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(

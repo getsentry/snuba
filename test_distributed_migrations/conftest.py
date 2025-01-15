@@ -58,6 +58,9 @@ def pytest_configure() -> None:
             distributed_cluster_name=cluster_node["distributed_cluster_name"]
             if "distributed_cluster_name" in cluster_node
             else None,
+            secure=cluster_node.get("secure", False),
+            ca_certs=cluster_node.get("ca_certs", None),
+            verify=cluster_node.get("verify", False),
         )
 
         database_name = cluster_node["database"]
