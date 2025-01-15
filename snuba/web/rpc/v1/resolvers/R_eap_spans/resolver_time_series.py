@@ -11,7 +11,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import ExtrapolationMode
 
 from snuba.attribution.appid import AppID
@@ -292,8 +292,8 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
 
 class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
     @classmethod
-    def trace_item_name(cls) -> TraceItemName.ValueType:
-        return TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
         snuba_request = _build_snuba_request(in_msg)
