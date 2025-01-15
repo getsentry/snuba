@@ -194,6 +194,11 @@ schema:
                   type: UInt,
                   args: { schema_modifiers: [nullable], size: 16 },
                 },
+                {
+                  name: sourcemapped,
+                  type: UInt,
+                  args: { schema_modifiers: [nullable], size: 8 },
+                },
               ],
           },
       },
