@@ -596,6 +596,7 @@ class TestTimeSeriesApi(BaseApiTest):
                     seconds=int(BASE_TIME.timestamp()) + query_duration
                 ),
                 debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -647,6 +648,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration + 1)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -682,6 +684,7 @@ class TestTimeSeriesApi(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp() + 60 * 30)),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -723,6 +726,7 @@ class TestUtils:
                 referrer="something",
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 debug=True,
             ),
             aggregations=[
@@ -767,6 +771,7 @@ class TestUtils:
                 start_timestamp=Timestamp(seconds=int(start_ts.timestamp())),
                 end_timestamp=Timestamp(seconds=int(end_ts.timestamp())),
                 debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -792,6 +797,7 @@ class TestUtils:
                 start_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp())),
                 end_timestamp=Timestamp(seconds=int(BASE_TIME.timestamp()) + 65),
                 debug=True,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
