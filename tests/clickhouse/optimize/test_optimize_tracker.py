@@ -144,7 +144,7 @@ def test_run_optimize_with_partition_tracker() -> None:
             time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
         )
 
-    partitions = optimize.get_partitions_to_optimize(
+    partitions = optimize.get_partitions_from_clickhouse(
         clickhouse_pool, storage, database, table
     )
 
@@ -238,7 +238,7 @@ def test_run_optimize_with_ongoing_merges() -> None:
             time=int((datetime.now() - timedelta(weeks=week)).timestamp()),
         )
 
-    partitions = optimize.get_partitions_to_optimize(
+    partitions = optimize.get_partitions_from_clickhouse(
         clickhouse_pool, storage, database, table
     )
 

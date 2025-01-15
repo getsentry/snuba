@@ -23,6 +23,8 @@ def test_optimize_cli() -> None:
             "2",
             "--storage",
             "errors",
+            "--divide-partitions",
+            "2",
         ],
     )
     assert result.exit_code == 0, result.output
