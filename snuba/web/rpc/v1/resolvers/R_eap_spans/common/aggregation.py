@@ -686,7 +686,7 @@ def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expressio
             return or_cond(
                 *(
                     aggregation_filter_to_expression(x)
-                    for x in agg_filter.and_filter.filters
+                    for x in agg_filter.or_filter.filters
                 )
             )
         case default:
