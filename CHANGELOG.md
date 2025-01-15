@@ -1,5 +1,18 @@
 # Changelog
 
+## 25.1.0
+
+### Various fixes & improvements
+
+- fix: snuba admin system query error messaging (#6763) by @kylemumma
+- feat: Add SSL/TLS support for ClickHouse connections (#6459) by @patsevanton
+- fix(settings): specify VALID_RETENTION_DAYS for self-hosted (#6756) by @aldy505
+- chore(deps): Bump Python to 3.11.11 (#6719) by @beninabox
+- Bump arroyo version (#6766) by @volokluev
+- feat(ourlogs): Add entity/storage configs & dev worker (#6759) by @colin-sentry
+- fix(optimize): make tests and optimize use UTC timestamps (#6760) by @onewland
+- meta: Bump new development version (1fe61a9d)
+
 ## 24.12.2
 
 ### Various fixes & improvements
