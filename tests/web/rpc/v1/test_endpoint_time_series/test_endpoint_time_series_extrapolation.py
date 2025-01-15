@@ -473,7 +473,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_avg_unreliable(self) -> None:
-        # store a a test metric with a value of 1, every second for an hour
+        # store a test metric with a value of 1, every second for an hour
         granularity_secs = 120
         query_duration = 3600
         store_timeseries(
