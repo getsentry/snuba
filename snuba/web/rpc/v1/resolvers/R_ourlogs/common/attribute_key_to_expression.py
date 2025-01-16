@@ -43,12 +43,12 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
             return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
-        if attr_key.type == AttributeKey.Type.TYPE_DOUBLE:
+        if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
             return f.CAST(
                 column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
             )
         raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as a string, double, or integer, got {attr_key.type}"
+            f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
@@ -63,7 +63,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return SubscriptableReference(
             alias=alias, column=column("attr_string"), key=literal(attr_key.name)
         )
-    if attr_key.type == AttributeKey.Type.TYPE_DOUBLE:
+    if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
         return SubscriptableReference(
             alias=alias, column=column("attr_double"), key=literal(attr_key.name)
         )
