@@ -196,3 +196,6 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def get_asynchronous(self) -> bool:
         return False
+
+    def get_apply_default_subscriptable_mapping(self) -> bool:
+        return True
