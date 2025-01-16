@@ -49,6 +49,7 @@ def gen_message(
     timestamp = dt.timestamp()
     if not is_segment:
         timestamp += random.random()
+    timestamp = round(timestamp, 6)
     return {
         "description": span_name,
         "duration_ms": 152,
