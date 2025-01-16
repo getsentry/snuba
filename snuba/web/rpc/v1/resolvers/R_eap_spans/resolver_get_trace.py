@@ -161,10 +161,6 @@ def _convert_results(
 
 class ResolverGetTraceEAPSpans(ResolverGetTrace):
     @classmethod
-    def trace_item_name(cls) -> TraceItemName.ValueType:
-        return TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
-
-    @classmethod
     def trace_item_type(cls) -> TraceItemType.ValueType:
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
