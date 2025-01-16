@@ -1,5 +1,9 @@
 import os
 
+from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
+    GetTraceRequest,
+    GetTraceResponse,
+)
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeriesRequest,
     TimeSeriesResponse,
@@ -14,11 +18,6 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
-    GetTraceRequest,
-    GetTraceResponse,
-)
-
 
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web.rpc import TraceItemDataResolver
