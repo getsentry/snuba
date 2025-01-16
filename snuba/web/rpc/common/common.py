@@ -82,12 +82,12 @@ NORMALIZED_COLUMNS: Final[Mapping[str, AttributeKey.Type.ValueType]] = {
     "sentry.segment_id": AttributeKey.Type.TYPE_STRING,  # this is converted by a processor on the storage
     "sentry.segment_name": AttributeKey.Type.TYPE_STRING,
     "sentry.is_segment": AttributeKey.Type.TYPE_BOOLEAN,
-    "sentry.duration_ms": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.duration_ms": AttributeKey.Type.TYPE_DOUBLE,
+    "sentry.exclusive_time_ms": AttributeKey.Type.TYPE_DOUBLE,
     "sentry.retention_days": AttributeKey.Type.TYPE_INT,
     "sentry.name": AttributeKey.Type.TYPE_STRING,
-    "sentry.sampling_weight": AttributeKey.Type.TYPE_FLOAT,
-    "sentry.sampling_factor": AttributeKey.Type.TYPE_FLOAT,
+    "sentry.sampling_weight": AttributeKey.Type.TYPE_DOUBLE,
+    "sentry.sampling_factor": AttributeKey.Type.TYPE_DOUBLE,
     "sentry.timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.start_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
     "sentry.end_timestamp": AttributeKey.Type.TYPE_UNSPECIFIED,
@@ -136,11 +136,11 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
-        # the second if statement allows Sentry to send TYPE_DOUBLE to Snuba when Snuba still has to be backward compatible with TYPE_FLOATS
+        # the second if statement allows Sentry to send TYPE_FLOAT to Snuba when Snuba still has to be backward compatible with TYPE_FLOATS
         print("attr_keyyy", attr_key.name, attr_key.type)
         if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type or (
-            attr_key.type == AttributeKey.Type.TYPE_DOUBLE
-            and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_FLOAT
+            attr_key.type == AttributeKey.Type.TYPE_FLOAT
+            and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_DOUBLE
         ):
             return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
         raise BadSnubaRPCRequestException(

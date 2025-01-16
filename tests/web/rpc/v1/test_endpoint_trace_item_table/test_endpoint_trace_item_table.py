@@ -555,6 +555,39 @@ class TestTraceItemTable(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
+
+        print("responseee", response.column_values)
+
+        print(
+            "RESULTSSS",
+            [
+                TraceItemColumnValues(
+                    attribute_name="location",
+                    results=[
+                        AttributeValue(val_str="backend"),
+                        AttributeValue(val_str="frontend"),
+                        AttributeValue(val_str="mobile"),
+                    ],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="max(my.float.field)",
+                    results=[
+                        AttributeValue(val_double=101.2),
+                        AttributeValue(val_double=101.2),
+                        AttributeValue(val_double=101.2),
+                    ],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="avg(my.float.field)",
+                    results=[
+                        AttributeValue(val_double=101.2),
+                        AttributeValue(val_double=101.2),
+                        AttributeValue(val_double=101.2),
+                    ],
+                ),
+            ],
+        )
+
         assert response.column_values == [
             TraceItemColumnValues(
                 attribute_name="location",
