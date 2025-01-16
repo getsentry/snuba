@@ -31,7 +31,7 @@ from tests.helpers import write_raw_unprocessed_events
 def gen_log_message(
     dt: datetime, tags: Mapping[str, Union[int, float, str, bool]], body: str
 ) -> MutableMapping[str, Any]:
-    attributes = {}
+    attributes: MutableMapping[str, Any] = {}
     for k, v in tags.items():
         if isinstance(v, bool):
             attributes[k] = {

@@ -4,7 +4,6 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
     TraceItemFilter,
 )
 
-from snuba.query.dsl import Expression
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import (
     and_cond,
@@ -15,6 +14,7 @@ from snuba.query.dsl import (
     not_cond,
     or_cond,
 )
+from snuba.query.expressions import Expression
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
