@@ -14,6 +14,11 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
+from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
+    GetTraceRequest,
+    GetTraceResponse,
+)
+
 
 from snuba.utils.registered_class import import_submodules_in_directory
 from snuba.web.rpc import TraceItemDataResolver
@@ -51,6 +56,17 @@ class ResolverAttributeValues(
     @classmethod
     def endpoint_name(cls) -> str:
         return "AttributeValues"
+
+
+class ResolverGetTrace(
+    TraceItemDataResolver[
+        GetTraceRequest,
+        GetTraceResponse,
+    ]
+):
+    @classmethod
+    def endpoint_name(cls) -> str:
+        return "GetTrace"
 
 
 # TODO: Traces, subscriptions

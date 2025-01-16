@@ -237,7 +237,6 @@ def _build_snuba_request(request: TraceItemTableRequest) -> SnubaRequest:
 def _convert_results(
     request: TraceItemTableRequest, data: Iterable[Dict[str, Any]]
 ) -> list[TraceItemColumnValues]:
-
     converters: Dict[str, Callable[[Any], AttributeValue]] = {}
 
     for column in request.columns:

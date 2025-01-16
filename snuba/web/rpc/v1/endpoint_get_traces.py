@@ -152,7 +152,8 @@ def _build_snuba_request(request: GetTracesRequest, query: Query) -> SnubaReques
 
 
 def _convert_results(
-    request: GetTracesRequest, data: Iterable[Dict[str, Any]]
+    request: GetTracesRequest,
+    data: Iterable[Dict[str, Any]],
 ) -> list[GetTracesResponse.Trace]:
     res: list[GetTracesResponse.Trace] = []
     column_ordering = {
