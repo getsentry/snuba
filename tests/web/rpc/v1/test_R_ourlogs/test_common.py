@@ -1,8 +1,7 @@
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
-from snuba.query import SubscriptableReference
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import SubscriptableReference, column, literal
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
 )

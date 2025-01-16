@@ -134,33 +134,32 @@ def gen_span_message(
 def gen_log_message(
     dt: datetime, tags: Mapping[str, Union[int, float, str, bool]], body: str
 ) -> MutableMapping[str, Any]:
-    log_message = {
+    attributes = {}
+    for k, v in tags.items():
+        if isinstance(v, bool):
+            attributes[k] = {
+                "bool_value": v,
+            }
+        elif isinstance(v, int):
+            attributes[k] = {
+                "int_value": v,
+            }
+        elif isinstance(v, float):
+            attributes[k] = {"double_value": v}
+        elif isinstance(v, float):
+            attributes[k] = {
+                "double_value": v,
+            }
+
+    return {
         "organization_id": 1,
         "project_id": 1,
         "retention_days": 90,
         "timestamp_nanos": int(dt.timestamp() * 1e9),
         "observed_timestamp_nanos": int(dt.timestamp() * 1e9),
         "body": body,
-        "attributes": {},
+        "attributes": attributes,
     }
-
-    for k, v in tags.items():
-        if isinstance(v, bool):
-            log_message["attributes"][k] = {
-                "bool_value": v,
-            }
-        elif isinstance(v, int):
-            log_message["attributes"][k] = {
-                "int_value": v,
-            }
-        elif isinstance(v, float):
-            log_message["attributes"][k] = {"double_value": v}
-        elif isinstance(v, float):
-            log_message["attributes"][k] = {
-                "double_value": v,
-            }
-
-    return log_message
 
 
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
