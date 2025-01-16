@@ -100,7 +100,7 @@ def gen_message(
             "transaction.op": "http.server",
             "user": "ip:127.0.0.1",
         },
-        "span_id": uuid.uuid4().hex[:16],
+        "span_id": f"00{uuid.uuid4().hex[:14]}",
         "tags": {
             "http.status_code": "200",
             "relay_endpoint_version": "3",

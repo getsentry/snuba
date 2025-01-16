@@ -105,7 +105,7 @@ query_processors:
   - processor: UUIDColumnProcessor
     args:
       columns: [transaction_id, trace_id, profile_id]
-  - processor: HexIntColumnProcessor
+  - processor: HexInt64ColumnProcessor
     args:
       columns: [span_id, parent_span_id, segment_id]
   - processor: PrewhereProcessor
