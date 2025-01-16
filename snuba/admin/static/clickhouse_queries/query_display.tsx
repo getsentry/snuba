@@ -13,6 +13,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { Collapse as MantineCollapse, Group, Text } from '@mantine/core';
+import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 
 import {
   ClickhouseNodeData,
@@ -38,6 +40,9 @@ function QueryDisplay(props: {
   );
 
   const [queryError, setQueryError] = useState<Error | null>(null);
+
+  // this is used to collapse the stack trace in error messages
+  const [collapseOpened, setCollapseOpened] = useState(false);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -132,8 +137,32 @@ function QueryDisplay(props: {
 
   function getErrorDomElement() {
     if (queryError !== null) {
-      const bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-      return <Alert title={queryError.name} color="red">{bodyDOM}</Alert>;
+      let title: string;
+      let bodyDOM;
+      if (queryError.name === "Error" && queryError.message.includes("Stack trace:")) {
+        // this puts the stack trace in a collapsible section
+        const split = queryError.message.indexOf("Stack trace:")
+        title = queryError.message.slice(0, split)
+
+        const stackTrace = queryError.message.slice(split + "Stack trace:".length)
+          .split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+        bodyDOM = <div>
+          <Group spacing="xs" onClick={() => setCollapseOpened((o) => !o)} style={{ cursor: 'pointer' }}>
+            {collapseOpened ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
+            <Text weight={500}>Stack Trace</Text>
+          </Group>
+
+          <MantineCollapse in={collapseOpened}>
+            <Text mt="sm">
+              {stackTrace}
+            </Text>
+          </MantineCollapse>
+        </div>
+      } else {
+        title = queryError.name
+        bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+      }
+      return <Alert title={title} color="red">{bodyDOM}</Alert>;
     }
     return "";
   }
