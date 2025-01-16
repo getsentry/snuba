@@ -943,6 +943,7 @@ class TestTraceItemTable(BaseApiTest):
                 "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
             "columns": [
                 {
