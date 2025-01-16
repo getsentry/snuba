@@ -294,6 +294,8 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
                 v_expression = literal(v.val_str)
             case "val_float":
                 v_expression = literal(v.val_float)
+            case "val_double":
+                v_expression = literal(v.val_double)
             case "val_int":
                 v_expression = literal(v.val_int)
             case "val_null":
@@ -309,6 +311,10 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             case "val_float_array":
                 v_expression = literals_array(
                     None, list(map(lambda x: literal(x), v.val_float_array.values))
+                )
+            case "val_double_array":
+                v_expression = literals_array(
+                    None, list(map(lambda x: literal(x), v.val_double_array.values))
                 )
             case default:
                 raise NotImplementedError(

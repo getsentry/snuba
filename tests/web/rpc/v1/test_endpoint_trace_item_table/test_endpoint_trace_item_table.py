@@ -249,21 +249,21 @@ class TestTraceItemTable(BaseApiTest):
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT,
+                                    type=AttributeKey.TYPE_DOUBLE,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
-                                value=AttributeValue(val_float=101),
+                                value=AttributeValue(val_double=101),
                             ),
                         ),
                         TraceItemFilter(
                             comparison_filter=ComparisonFilter(
                                 key=AttributeKey(
-                                    type=AttributeKey.TYPE_FLOAT,
+                                    type=AttributeKey.TYPE_DOUBLE,
                                     name="eap.measurement",
                                 ),
                                 op=ComparisonFilter.OP_GREATER_THAN,
-                                value=AttributeValue(val_float=999),
+                                value=AttributeValue(val_double=999),
                             ),
                         ),
                     ]
@@ -486,7 +486,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_MAX,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
                         ),
                         label="max(my.float.field)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -496,7 +496,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
                         ),
                         label="avg(my.float.field)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -526,17 +526,17 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="max(my.float.field)",
                 results=[
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="avg(my.float.field)",
                 results=[
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
                 ],
             ),
         ]
@@ -562,7 +562,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_MAX,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
                         ),
                         label="max(my.float.field)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -610,7 +610,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
+                            type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -624,7 +624,7 @@ class TestTraceItemTable(BaseApiTest):
                         aggregation=AttributeAggregation(
                             aggregate=Function.FUNCTION_MAX,
                             key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                                type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
                             ),
                             label="max(my.float.field)",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -665,7 +665,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
+                            type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
                         ),
                         label="avg(eap.measurment)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -679,7 +679,7 @@ class TestTraceItemTable(BaseApiTest):
                         aggregation=AttributeAggregation(
                             aggregate=Function.FUNCTION_AVG,
                             key=AttributeKey(
-                                type=AttributeKey.TYPE_FLOAT, name="eap.measurement"
+                                type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
                             ),
                             label="avg(eap.measurment)",
                             extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -690,7 +690,7 @@ class TestTraceItemTable(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        measurements = [v.val_float for v in response.column_values[1].results]
+        measurements = [v.val_double for v in response.column_values[1].results]
         assert sorted(measurements) == measurements
 
     def test_aggregation_on_attribute_column(self) -> None:
@@ -727,7 +727,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
                         ),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -738,7 +738,7 @@ class TestTraceItemTable(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        measurement_avg = [v.val_float for v in response.column_values[0].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
     def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
@@ -763,7 +763,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"
                         ),
                     ),
                     label="count()",
@@ -1049,7 +1049,7 @@ class TestUtils:
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
                         ),
                         label="avg(custom_measurement)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -1059,7 +1059,7 @@ class TestUtils:
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
                         ),
                         label="avg(custom_measurement_2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
