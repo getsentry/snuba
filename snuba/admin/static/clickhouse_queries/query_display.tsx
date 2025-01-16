@@ -37,11 +37,7 @@ function QueryDisplay(props: {
     getRecentHistory(HISTORY_KEY)
   );
 
-  type QueryError = {
-    title: string;
-    body: string;
-  }
-  const [queryError, setQueryError] = useState<QueryError | null>(null);
+  const [queryError, setQueryError] = useState<Error | null>(null);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -136,35 +132,14 @@ function QueryDisplay(props: {
 
   function getErrorDomElement() {
     if (queryError !== null) {
-      const bodyDOM = queryError.body.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-      return <Alert title={queryError.title} color="red">{bodyDOM}</Alert>;
+      const bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+      return <Alert title={queryError.name} color="red">{bodyDOM}</Alert>;
     }
     return "";
   }
 
-  function handleQueryError(error: any) {
-    try {
-      // this block assumes that the error is an object with an error property,
-      // if its not it will be caught by the catch block
-      const lines = error.error.split("\n");
-      if (lines.length > 1) {
-        setQueryError({
-          title: lines[0],
-          body: lines.slice(1).join("\n"),
-        })
-      } else {
-        setQueryError({
-          title: "Error",
-          body: lines[0]
-        });
-      }
-    } catch (e) {
-      if (typeof error === "object") {
-        setQueryError({ title: "Error", body: JSON.stringify(error) });
-      } else {
-        setQueryError({ title: "Error", body: error.toString() });
-      }
-    }
+  function handleQueryError(error: Error) {
+    setQueryError(error);
   }
 
   return (

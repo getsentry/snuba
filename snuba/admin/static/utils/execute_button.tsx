@@ -4,26 +4,29 @@ import { Button } from "@mantine/core";
 function ExecuteButton(props: {
   disabled: boolean;
   onClick: () => Promise<any>;
-  onError?: (error: any) => any;  // TODO: we should make the type of error we return more specific
+  onError?: (error: Error) => any;
   label?: string;
 }) {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
 
   let label = props.label || "Execute Query";
 
-  const defaultError = (err: any) => {
-    console.log("ERROR ", err);
-    let errmsg = err.toString();
-    if (typeof err === 'object' &&
-      err !== null &&
-      err.hasOwnProperty("error") &&
-      err.error.hasOwnProperty("message")) {
-      errmsg = err.error.message;
-    }
-    window.alert("An error occurred: " + errmsg)
-
+  const defaultError = (err: Error) => {
+    window.alert("An error occurred: " + err.message)
   };
   let errorCallback = props.onError || defaultError;
+
+  function _convertAnyToError(err: any): Error {
+    if (err instanceof Error) {
+      return err;
+    } else if (typeof err === 'object' && Object.keys(err).length == 1) {
+      return _convertAnyToError(err[Object.keys(err)[0]]);
+    } else if (typeof err === 'object') {
+      return new Error(JSON.stringify(err));
+    } else {
+      return new Error(err.toString());
+    }
+  }
 
   function executeQuery() {
     if (isExecuting) {
@@ -33,7 +36,9 @@ function ExecuteButton(props: {
     props
       .onClick()
       .catch((err: any) => {
-        errorCallback(err);
+        console.error("Error: ", err);
+        // convert error to Error object for easier handling
+        errorCallback(_convertAnyToError((err)));
       })
       .finally(() => {
         setIsExecuting(false);
