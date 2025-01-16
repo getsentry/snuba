@@ -3,26 +3,22 @@ from typing import Any, Dict, Iterable
 
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
-
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName, TraceItemType
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
-    AttributeKey,
-    AttributeValue,
-)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.attribution.appid import AppID
-from snuba.query.dsl import Functions as f
 from snuba.attribution.attribution_info import AttributionInfo
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
-from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import and_cond, column, equals, literal
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest

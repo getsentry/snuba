@@ -1,17 +1,15 @@
 import uuid
 from typing import Type
 
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
+from snuba.web.rpc.common.debug_info import extract_response_meta
 from snuba.web.rpc.v1.resolvers import ResolverGetTrace
-from snuba.web.rpc.common.debug_info import (
-    extract_response_meta,
-)
 
 
 class EndpointGetTrace(RPCEndpoint[GetTraceRequest, GetTraceResponse]):
