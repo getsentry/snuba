@@ -386,8 +386,8 @@ class ErrorEvent:
 
         if self.features:
             for feature in self.features:
-                expected_result["features.key"].append(feature["key"])
-                expected_result["features.value"].append(json.dumps(feature["value"]))
+                expected_result["features.key"].append(feature["flag"])
+                expected_result["features.value"].append(json.dumps(feature["result"]))
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
@@ -864,7 +864,7 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
-            features=[{"key": "abc", "value": True}],
+            features=[{"flag": "abc", "result": True}],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
