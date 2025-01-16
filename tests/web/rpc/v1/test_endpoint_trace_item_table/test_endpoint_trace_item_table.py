@@ -1303,6 +1303,8 @@ class TestTraceItemTable(BaseApiTest):
     def test_bad_aggregation_filter(self, setup_teardown: Any) -> None:
         """
         This test ensures that an error is raised when the aggregation filter is invalid.
+        It tests a case where AttributeAggregation is set improperly.
+        And it tests a case where an and filter has only one filter.
         """
         # first I write new messages with different value of kylestags,
         # theres a different number of messages for each tag so that
@@ -1366,6 +1368,31 @@ class TestTraceItemTable(BaseApiTest):
                     val=350,
                 )
             ),
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+        # now do an and filter has only one filter
+        message.aggregation_filter.CopyFrom(
+            AggregationFilter(
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_FLOAT,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_LESS_THAN,
+                                val=350,
+                            )
+                        ),
+                    ]
+                )
+            )
         )
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
