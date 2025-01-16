@@ -7,7 +7,7 @@ from sentry_protos.snuba.v1.endpoint_get_trace_pb2 import (
     GetTraceRequest,
     GetTraceResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName, TraceItemType
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.attribution.appid import AppID
@@ -112,14 +112,15 @@ def _build_snuba_request(request: GetTraceRequest) -> SnubaRequest:
 
 def _convert_results(
     data: Iterable[Dict[str, Any]],
-) -> list[GetTraceResponse.ItemGroup]:
-    items: list[GetTraceResponse.ItemGroup] = []
+) -> list[GetTraceResponse.Item]:
+    items: list[GetTraceResponse.Item] = []
 
     for row in data:
         attributes: list[GetTraceResponse.Item.Attribute] = []
         id = row.pop("id")
-        dt = row.pop("timestamp")
-        timestamp = Timestamp().FromDatetime(dt)
+        timestamp = Timestamp()
+
+        timestamp.FromDatetime(row.pop("timestamp"))
 
         for key, value in row.items():
             if isinstance(value, int):

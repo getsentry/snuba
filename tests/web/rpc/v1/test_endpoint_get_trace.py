@@ -1,8 +1,6 @@
 import random
 import uuid
-from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from operator import itemgetter
 from typing import Any, Mapping
 
 import pytest
@@ -18,7 +16,6 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     ResponseMeta,
     TraceItemType,
 )
-from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
@@ -189,6 +186,12 @@ class TestGetTrace(BaseApiTest):
             ],
         )
         response = EndpointGetTrace().execute(message)
+        timestamps: list[Timestamp] = []
+        for span in _SPANS:
+            timestamp = Timestamp()
+            timestamp.FromNanoseconds(int(span["start_timestamp_precise"] * 1e6) * 1000)
+            timestamps.append(timestamp)
+
         expected_response = GetTraceResponse(
             meta=ResponseMeta(request_id=_REQUEST_ID),
             trace_id=_TRACE_ID,
@@ -198,11 +201,9 @@ class TestGetTrace(BaseApiTest):
                     items=[
                         GetTraceResponse.Item(
                             id=span["span_id"],
-                            timestamp=Timestamp().FromNanoseconds(
-                                int(span["start_timestamp_precise"] * 1e9)
-                            ),
+                            timestamp=timestamp,
                         )
-                        for span in _SPANS
+                        for timestamp, span in zip(timestamps, _SPANS)
                     ],
                 ),
             ],
