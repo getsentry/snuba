@@ -289,3 +289,32 @@ class DistributedDDLQueue(SystemQuery):
         query_duration_ms
     FROM system.distributed_ddl_queue
     """
+
+
+class IndexSizes(SystemQuery):
+    sql = """
+    with table_sizes as (
+        select
+            table,
+            sum(column_data_compressed_bytes) dcb,
+            sum(column_data_uncompressed_bytes) dub
+        from system.parts_columns
+        where (active = 1)
+        group by
+            table
+    )
+    select
+        table,
+        name,
+        type,
+        expr,
+        granularity,
+        formatReadableSize(data_compressed_bytes as dcb) size,
+        formatReadableSize(data_uncompressed_bytes as dub) usize,
+        round(dcb / table_sizes.dcb * 100, 3) compressed_table_size_percent,
+        round(dub / table_sizes.dub * 100, 3) uncompressed_table_size_percent,
+        marks
+    from system.data_skipping_indices dsi
+    join table_sizes on table_sizes.table = dsi.table
+    order by usize desc
+    """
