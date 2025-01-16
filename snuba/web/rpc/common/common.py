@@ -101,6 +101,8 @@ TIMESTAMP_COLUMNS: Final[Set[str]] = {
 
 
 def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
+    print("typeeeeee", attr_key)
+
     def _build_label_mapping_key(attr_key: AttributeKey) -> str:
         return attr_key.name + "_" + AttributeKey.Type.Name(attr_key.type)
 
@@ -124,7 +126,14 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             )
         if attr_key.type == AttributeKey.Type.TYPE_INT:
             return f.CAST(column(attr_key.name[len("sentry.") :]), "Int64", alias=alias)
-        if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+        if (
+            attr_key.type == AttributeKey.Type.TYPE_FLOAT
+            or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+        ):
+            print(
+                "timestamp_columnsssss",
+                f.CAST(column(attr_key.name[len("sentry.") :]), "Float64", alias=alias),
+            )
             return f.CAST(
                 column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
             )
@@ -133,7 +142,11 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
-        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type:
+        # the second if statement is saying if Sentry sends Snuba TYPE_FLOATS when Snuba already supports TYPE_DOUBLE. This is needed for backward compatibility
+        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type or (
+            attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+            and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_FLOAT
+        ):
             return column(attr_key.name[len("sentry.") :], alias=attr_key.name)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
@@ -144,7 +157,16 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         return SubscriptableReference(
             alias=alias, column=column("attr_str"), key=literal(attr_key.name)
         )
-    if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
+    if (
+        attr_key.type == AttributeKey.Type.TYPE_FLOAT
+        or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
+    ):
+        print(
+            "subscriptableeeee",
+            SubscriptableReference(
+                alias=alias, column=column("attr_num"), key=literal(attr_key.name)
+            ),
+        )
         return SubscriptableReference(
             alias=alias, column=column("attr_num"), key=literal(attr_key.name)
         )
