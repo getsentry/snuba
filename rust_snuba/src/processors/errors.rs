@@ -201,8 +201,8 @@ struct FeatureContext {
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FeatureContextItem {
-    key: Unicodify,
-    value: Unicodify,
+    flag: Unicodify,
+    result: Unicodify,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -594,12 +594,12 @@ impl ErrorRow {
         let mut features_value = Vec::new();
 
         if let Some(FeatureContextEnum::Typed(ctx)) = from_context.features {
-            ctx.values.into_iter().for_each(|i| {
-                if let (Some(k), Some(v)) = (i.key.0, i.value.0) {
+            for item in ctx.values {
+                if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
                     features_key.push(k);
                     features_value.push(v);
                 }
-            })
+            }
         };
 
         // Stacktrace.
