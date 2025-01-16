@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba.clickhouse.columns import Column, UInt
+from snuba.clickhouse.columns import Array, Column, UInt
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
@@ -21,7 +21,8 @@ class Migration(migration.ClickhouseNodeMigration):
                 storage_set=self.storage_set_key,
                 table_name=table_name,
                 column=Column(
-                    "exception_frames.sourcemapped", UInt(8, Modifiers(nullable=True))
+                    "exception_frames.sourcemapped",
+                    Array(UInt(8, Modifiers(nullable=True))),
                 ),
                 after="exception_frames.stack_level",
                 target=target,
