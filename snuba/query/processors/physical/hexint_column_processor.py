@@ -96,7 +96,13 @@ class HexInt64ColumnProcessor(BaseTypeConverter):
                             FunctionCall(
                                 None,
                                 "hex",
-                                (Column(None, None, exp.column_name)),
+                                (
+                                    Column(
+                                        None,
+                                        None,
+                                        exp.column_name,
+                                    ),
+                                ),
                             ),
                             Literal(None, 16),
                             Literal(None, "0"),
