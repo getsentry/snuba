@@ -1096,9 +1096,18 @@ class TestTraceItemTable(BaseApiTest):
         spans_storage = get_storage(StorageKey("eap_spans"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val1"})
+                for i in range(3)
+            ]
+            + [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val2"})
+                for i in range(12)
+            ]
+            + [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val3"})
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -1188,9 +1197,18 @@ class TestTraceItemTable(BaseApiTest):
         spans_storage = get_storage(StorageKey("eap_spans"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val1"})
+                for i in range(3)
+            ]
+            + [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val2"})
+                for i in range(12)
+            ]
+            + [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val3"})
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -1353,9 +1371,18 @@ class TestTraceItemTable(BaseApiTest):
         spans_storage = get_storage(StorageKey("eap_spans"))
         msg_timestamp = BASE_TIME - timedelta(minutes=1)
         messages = (
-            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
-            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+            [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val1"})
+                for i in range(3)
+            ]
+            + [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val2"})
+                for i in range(12)
+            ]
+            + [
+                gen_span_message(msg_timestamp, tags={"kylestag": "val3"})
+                for i in range(30)
+            ]
         )
         write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
