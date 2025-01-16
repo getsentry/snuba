@@ -16,7 +16,7 @@ function ExecuteButton(props: {
   };
   let errorCallback = props.onError || defaultError;
 
-  function _convertAnyToError(err: any) {
+  function _convertAnyToError(err: any): Error {
     if (err instanceof Error) {
       return err;
     } else if (typeof err === 'object' && Object.keys(err).length == 1) {
