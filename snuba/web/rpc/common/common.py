@@ -137,6 +137,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     if attr_key.name in NORMALIZED_COLUMNS:
         # the second if statement allows Sentry to send TYPE_DOUBLE to Snuba when Snuba still has to be backward compatible with TYPE_FLOATS
+        print("attr_keyyy", attr_key.name, attr_key.type)
         if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type or (
             attr_key.type == AttributeKey.Type.TYPE_DOUBLE
             and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_FLOAT

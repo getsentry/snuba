@@ -242,6 +242,7 @@ def _convert_results(
 
     for column in request.columns:
         if column.HasField("key"):
+            print("columnnnnkey", column, column.key, column.key.type)
             if column.key.type == AttributeKey.TYPE_BOOLEAN:
                 converters[column.label] = lambda x: AttributeValue(val_bool=bool(x))
             elif column.key.type == AttributeKey.TYPE_STRING:
@@ -253,14 +254,19 @@ def _convert_results(
             elif column.key.type == AttributeKey.TYPE_DOUBLE:
                 converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         elif column.HasField("aggregation"):
-            if column.key.type == AttributeKey.TYPE_FLOAT:
+            print("columnnn", column)
+            print("columnnnn.key", column.key)
+            print("columnnn.key.type", column.key.type)
+            if column.aggregation.key.type == AttributeKey.TYPE_FLOAT:
                 converters[column.label] = lambda x: AttributeValue(val_float=float(x))
-            if column.key.type == AttributeKey.TYPE_DOUBLE:
+            if column.aggregation.key.type == AttributeKey.TYPE_DOUBLE:
                 converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         else:
             raise BadSnubaRPCRequestException(
                 "column is neither an attribute or aggregation"
             )
+
+        print("covertersss", converters)
 
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
@@ -299,13 +305,16 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
         return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
+        print("in_msgggg", in_msg)
         snuba_request = _build_snuba_request(in_msg)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,
             timer=self._timer,
         )
+        print("ressss", res)
         column_values = _convert_results(in_msg, res.result.get("data", []))
+        print("column_valuesss", column_values)
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
             in_msg.meta.debug,
