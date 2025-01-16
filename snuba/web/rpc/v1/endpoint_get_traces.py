@@ -44,6 +44,13 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 _DEFAULT_ROW_LIMIT = 10_000
 _BUFFER_WINDOW = 2 * 3600  # 2 hours
 
+
+def _convert_key_to_support_doubles_and_floats_for_backward_compat(
+    key: TraceAttribute.Key.ValueType,
+) -> TraceAttribute.Key.ValueType:
+    return TraceAttribute.Key.ValueType(-1 * key)
+
+
 _ATTRIBUTES: dict[
     TraceAttribute.Key.ValueType,
     tuple[str, AttributeKey.Type.ValueType],
@@ -69,6 +76,16 @@ _ATTRIBUTES: dict[
         AttributeKey.Type.TYPE_STRING,
     ),
 }
+# for every AttributeKey of TYPE_FLOAT a user may add during the backward compat period, this adds the TYPE_DOUBLE equivalent
+_attributes_backward_compat = dict()
+for k in _ATTRIBUTES:
+    v = _ATTRIBUTES[k]
+    if v[1] == AttributeKey.Type.TYPE_FLOAT:
+        _attributes_backward_compat[
+            _convert_key_to_support_doubles_and_floats_for_backward_compat(k)
+        ] = (v[0], AttributeKey.Type.TYPE_DOUBLE)
+_ATTRIBUTES.update(_attributes_backward_compat)
+
 _TYPES_TO_CLICKHOUSE: dict[
     AttributeKey.Type.ValueType,
     tuple[str, Callable[[Any], AttributeValue]],
@@ -84,6 +101,10 @@ _TYPES_TO_CLICKHOUSE: dict[
     AttributeKey.Type.TYPE_FLOAT: (
         "Float64",
         lambda x: AttributeValue(val_float=float(x)),
+    ),
+    AttributeKey.Type.TYPE_DOUBLE: (
+        "Float64",
+        lambda x: AttributeValue(val_double=float(x)),
     ),
 }
 
@@ -102,11 +123,19 @@ def _attribute_to_expression(
             alias=_ATTRIBUTES[trace_attribute.key][0],
         )
     if trace_attribute.key == TraceAttribute.Key.KEY_START_TIMESTAMP:
-        attribute = _ATTRIBUTES[trace_attribute.key]
+        attribute = (
+            _ATTRIBUTES[
+                _convert_key_to_support_doubles_and_floats_for_backward_compat(
+                    trace_attribute.key
+                )
+            ]
+            if trace_attribute.type == AttributeKey.Type.TYPE_DOUBLE
+            else _ATTRIBUTES[trace_attribute.key]
+        )
         return f.cast(
             f.min(column("start_timestamp")),
             _TYPES_TO_CLICKHOUSE[attribute[1]][0],
-            alias=_ATTRIBUTES[trace_attribute.key][0],
+            alias=attribute[0],
         )
     if trace_attribute.key == TraceAttribute.Key.KEY_ROOT_SPAN_NAME:
         # TODO: Change to return the root span name instead of the trace's first span's name.
@@ -116,7 +145,15 @@ def _attribute_to_expression(
             alias=_ATTRIBUTES[trace_attribute.key][0],
         )
     if trace_attribute.key in _ATTRIBUTES:
-        attribute = _ATTRIBUTES[trace_attribute.key]
+        attribute = (
+            _ATTRIBUTES[
+                _convert_key_to_support_doubles_and_floats_for_backward_compat(
+                    trace_attribute.key
+                )
+            ]
+            if trace_attribute.type == AttributeKey.Type.TYPE_DOUBLE
+            else _ATTRIBUTES[trace_attribute.key]
+        )
         return f.cast(
             column(attribute[0]),
             _TYPES_TO_CLICKHOUSE[attribute[1]][0],
@@ -165,8 +202,15 @@ def _convert_results(
             TraceAttribute,
         ] = defaultdict(TraceAttribute)
         for attribute in request.attributes:
-            value = row[_ATTRIBUTES[attribute.key][0]]
-            type = _ATTRIBUTES[attribute.key][1]
+            backward_compat_attribute_key = (
+                _convert_key_to_support_doubles_and_floats_for_backward_compat(
+                    attribute.key
+                )
+                if attribute.type == AttributeKey.Type.TYPE_DOUBLE
+                else attribute.key
+            )
+            value = row[_ATTRIBUTES[backward_compat_attribute_key][0]]
+            type = _ATTRIBUTES[backward_compat_attribute_key][1]
             values[attribute.key] = TraceAttribute(
                 key=attribute.key,
                 value=_TYPES_TO_CLICKHOUSE[type][1](value),
