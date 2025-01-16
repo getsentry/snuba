@@ -161,6 +161,8 @@ type GenericContext = BTreeMap<String, ContextStringify>;
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct Contexts {
+    #[serde(default, rename = "flags")]
+    features: Option<FeatureContextEnum>,
     #[serde(default)]
     replay: Option<ReplayContext>,
     #[serde(default)]
@@ -181,6 +183,26 @@ struct TraceContext {
     parent_span_id: Option<String>,
     #[serde(flatten)]
     other: GenericContext,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(untagged)]
+enum FeatureContextEnum {
+    Typed(FeatureContext),
+    #[allow(warnings)]
+    Untyped(Value),
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FeatureContext {
+    #[serde(default)]
+    values: Vec<FeatureContextItem>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+struct FeatureContextItem {
+    key: Unicodify,
+    value: Unicodify,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -384,6 +406,10 @@ struct ErrorRow {
     tags_key: Vec<String>,
     #[serde(rename = "tags.value")]
     tags_value: Vec<String>,
+    #[serde(rename = "features.key")]
+    features_key: Vec<String>,
+    #[serde(rename = "features.value")]
+    features_value: Vec<String>,
     timestamp: u32,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -563,6 +589,19 @@ impl ErrorRow {
             replay_id = Some(rid)
         }
 
+        // Split feature keys and values into two vectors if the context could be parsed.
+        let mut features_key = Vec::new();
+        let mut features_value = Vec::new();
+
+        if let Some(FeatureContextEnum::Typed(ctx)) = from_context.features {
+            ctx.values.into_iter().for_each(|i| {
+                if let (Some(k), Some(v)) = (i.key.0, i.value.0) {
+                    features_key.push(k);
+                    features_value.push(v);
+                }
+            })
+        };
+
         // Stacktrace.
 
         let exceptions = from
@@ -668,6 +707,8 @@ impl ErrorRow {
             exception_stacks_mechanism_type: stack_mechanism_types,
             exception_stacks_type: stack_types,
             exception_stacks_value: stack_values,
+            features_key,
+            features_value,
             group_id: from.group_id,
             http_method: from_request.method.0,
             http_referer,
