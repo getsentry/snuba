@@ -327,12 +327,13 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          snuba: false
-          kafka: true
-          clickhouse: true
+          use-new-devservices: true
+          mode: minimal
 
       - name: Start snuba
         run: |
+          # TODO(hubertdeng123): New devservices doesn't support running sentry without snuba yet
+          docker stop snuba-snuba-1
           docker run -d --rm \
             -p 127.0.0.1:1218:1218 \
             -e PYTHONUNBUFFERED=1 \
