@@ -22,19 +22,19 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.common import (
-    apply_virtual_columns,
-    attribute_key_to_expression,
-    base_conditions_and,
-    trace_item_filters_to_expression,
-    treeify_or_and_conditions,
-)
+from snuba.web.rpc.common.common import base_conditions_and, treeify_or_and_conditions
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
 )
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTraceItemTable
+from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
+    attribute_key_to_expression,
+)
+from snuba.web.rpc.v1.resolvers.R_ourlogs.common.trace_item_filters_to_expression import (
+    trace_item_filters_to_expression,
+)
 
 _DEFAULT_ROW_LIMIT = 10_000
 
@@ -97,7 +97,6 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
     )
     treeify_or_and_conditions(res)
-    apply_virtual_columns(res, request.virtual_column_contexts)
     return res
 
 
@@ -180,6 +179,7 @@ class ResolverTraceItemTableOurlogs(ResolverTraceItemTable):
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)
+        print(snuba_request)
         res = run_query(
             dataset=PluggableDataset(name="eap", all_entities=[]),
             request=snuba_request,

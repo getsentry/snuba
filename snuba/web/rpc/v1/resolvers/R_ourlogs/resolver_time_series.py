@@ -4,6 +4,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 
 
@@ -13,4 +14,4 @@ class ResolverTimeSeriesOurlogs(ResolverTimeSeries):
         return TraceItemType.TRACE_ITEM_TYPE_LOG
 
     def resolve(self, in_msg: TimeSeriesRequest) -> TimeSeriesResponse:
-        raise NotImplementedError("aggregation is not supported for logs")
+        raise BadSnubaRPCRequestException("aggregation is not supported for logs")

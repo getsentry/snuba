@@ -1,7 +1,7 @@
 import random
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Mapping, MutableMapping, Union
 
 import pytest
 from google.protobuf.json_format import MessageToDict, ParseDict
@@ -52,7 +52,7 @@ _RELEASE_TAG = "backend@24.7.0.dev0+c45b49caed1e5fcbf70097ab3f434b487c359b6b"
 _SERVER_NAME = "D23CXQ4GK2.local"
 
 
-def gen_message(
+def gen_span_message(
     dt: datetime,
     measurements: dict[str, dict[str, float]] | None = None,
     tags: dict[str, str] | None = None,
@@ -131,17 +131,69 @@ def gen_message(
     }
 
 
+def gen_log_message(
+    dt: datetime, tags: Mapping[str, Union[int, float, str, bool]], body: str
+) -> MutableMapping[str, Any]:
+    log_message = {
+        "organization_id": 1,
+        "project_id": 1,
+        "retention_days": 90,
+        "timestamp_nanos": int(dt.timestamp() * 1e9),
+        "observed_timestamp_nanos": int(dt.timestamp() * 1e9),
+        "body": body,
+        "attributes": {},
+    }
+
+    for k, v in tags.items():
+        if isinstance(v, bool):
+            log_message["attributes"][k] = {
+                "bool_value": v,
+            }
+        elif isinstance(v, int):
+            log_message["attributes"][k] = {
+                "int_value": v,
+            }
+        elif isinstance(v, float):
+            log_message["attributes"][k] = {"double_value": v}
+        elif isinstance(v, float):
+            log_message["attributes"][k] = {
+                "double_value": v,
+            }
+
+    return log_message
+
+
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
     minutes=180
 )
 
 
 @pytest.fixture(autouse=False)
-def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
+def setup_spans_in_db(clickhouse_db: None, redis_db: None) -> None:
     spans_storage = get_storage(StorageKey("eap_spans"))
     start = BASE_TIME
-    messages = [gen_message(start - timedelta(minutes=i)) for i in range(120)]
+    messages = [gen_span_message(start - timedelta(minutes=i)) for i in range(120)]
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+
+@pytest.fixture(autouse=False)
+def setup_logs_in_db(clickhouse_db: None, redis_db: None) -> None:
+    logs_storage = get_storage(StorageKey("ourlogs"))
+    messages = []
+    for i in range(120):
+        messages.append(
+            gen_log_message(
+                dt=BASE_TIME - timedelta(minutes=i),
+                body=f"hello world {i}",
+                tags={
+                    "bool_tag": i % 2 == 0,
+                    "int_tag": i,
+                    "double_tag": float(i) / 2.0,
+                    "str_tag": f"num: {i}",
+                },
+            )
+        )
+    write_raw_unprocessed_events(logs_storage, messages)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -222,7 +274,7 @@ class TestTraceItemTable(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 400, error_proto
 
-    def test_with_data(self, setup_teardown: Any) -> None:
+    def test_with_spans_data(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -270,7 +322,70 @@ class TestTraceItemTable(BaseApiTest):
         )
         assert response == expected_response
 
-    def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
+    def test_with_logs_data(self, setup_logs_in_db: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            filter=TraceItemFilter(
+                comparison_filter=ComparisonFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_BOOLEAN, name="bool_tag"
+                    ),  # this is true for every other log
+                    value=AttributeValue(val_bool=True),
+                    op=ComparisonFilter.OP_EQUALS,
+                ),
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.body")
+                ),
+                Column(
+                    key=AttributeKey(type=AttributeKey.Type.TYPE_INT, name="int_tag")
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_INT, name="int_tag")
+                    )
+                )
+            ],
+            limit=20,
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="sentry.body",
+                    results=[
+                        AttributeValue(val_str=f"hello world {i}")
+                        for i in range(2, 41, 2)
+                    ],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="int_tag",
+                    results=[AttributeValue(val_int=i) for i in range(2, 41, 2)],
+                ),
+            ],
+            page_token=PageToken(offset=20),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+        )
+        print(response)
+        print(expected_response)
+        assert response == expected_response
+
+    def test_booleans_and_number_compares(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -352,7 +467,7 @@ class TestTraceItemTable(BaseApiTest):
         )
         assert response == expected_response
 
-    def test_with_virtual_columns(self, setup_teardown: Any) -> None:
+    def test_with_virtual_columns(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         limit = 5
@@ -450,7 +565,7 @@ class TestTraceItemTable(BaseApiTest):
             MessageToDict(expected_response),
         )
 
-    def test_order_by_virtual_columns(self, setup_teardown: Any) -> None:
+    def test_order_by_virtual_columns(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -499,7 +614,7 @@ class TestTraceItemTable(BaseApiTest):
         result_colors = [c.val_str for c in response.column_values[0].results]
         assert sorted(result_colors) == result_colors
 
-    def test_table_with_aggregates(self, setup_teardown: Any) -> None:
+    def test_table_with_aggregates(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -582,7 +697,7 @@ class TestTraceItemTable(BaseApiTest):
             ),
         ]
 
-    def test_table_with_columns_not_in_groupby(self, setup_teardown: Any) -> None:
+    def test_table_with_columns_not_in_groupby(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -678,7 +793,7 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_order_by_aggregation(self, setup_teardown: Any) -> None:
+    def test_order_by_aggregation(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -741,13 +856,14 @@ class TestTraceItemTable(BaseApiTest):
         measurement = {"custom_measurement": {"value": measurement_val}}
         tags = {"custom_tag": "blah"}
         messages_w_measurement = [
-            gen_message(
+            gen_span_message(
                 start - timedelta(minutes=i), measurements=measurement, tags=tags
             )
             for i in range(120)
         ]
         messages_no_measurement = [
-            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
+            gen_span_message(start - timedelta(minutes=i), tags=tags)
+            for i in range(120)
         ]
         write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
 
@@ -782,7 +898,7 @@ class TestTraceItemTable(BaseApiTest):
         measurement_avg = [v.val_float for v in response.column_values[0].results][0]
         assert measurement_avg == 420
 
-    def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
+    def test_different_column_label_and_attr_name(self, setup_spans_in_db: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
         message = TraceItemTableRequest(
@@ -816,7 +932,7 @@ class TestTraceItemTable(BaseApiTest):
         assert response.column_values[0].attribute_name == "description"
         assert response.column_values[1].attribute_name == "count()"
 
-    def test_cast_bug(self, setup_teardown: Any) -> None:
+    def test_cast_bug(self, setup_spans_in_db: Any) -> None:
         """
         This test was added because the following request was causing a bug. The test was added when the bug was fixed.
 
@@ -1016,7 +1132,9 @@ class TestTraceItemTable(BaseApiTest):
         assert result.column_values[3].attribute_name == "tags[foo]"
         assert result.column_values[3].results[0].val_str == "five"
 
-    def test_table_with_disallowed_group_by_columns(self, setup_teardown: Any) -> None:
+    def test_table_with_disallowed_group_by_columns(
+        self, setup_spans_in_db: Any
+    ) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -1048,7 +1166,7 @@ class TestTraceItemTable(BaseApiTest):
             EndpointTraceItemTable().execute(message)
 
     def test_table_with_group_by_columns_without_aggregation(
-        self, setup_teardown: Any
+        self, setup_spans_in_db: Any
     ) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())

@@ -4,7 +4,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import Expression, SubscriptableReference
+from snuba.query.expressions import Expression
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 
 # These are the columns which aren't stored in attr_ in clickhouse
@@ -60,21 +60,17 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
 
     # End of special handling, just send to the appropriate bucket
     if attr_key.type == AttributeKey.Type.TYPE_STRING:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_string"), key=literal(attr_key.name)
+        return f.arrayElement(
+            column("attr_string"), literal(attr_key.name), alias=alias
         )
     if attr_key.type == AttributeKey.Type.TYPE_FLOAT:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_double"), key=literal(attr_key.name)
+        return f.arrayElement(
+            column("attr_double"), literal(attr_key.name), alias=alias
         )
     if attr_key.type == AttributeKey.Type.TYPE_INT:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_int"), key=literal(attr_key.name)
-        )
+        return f.arrayElement(column("attr_int"), literal(attr_key.name), alias=alias)
     if attr_key.type == AttributeKey.Type.TYPE_BOOLEAN:
-        return SubscriptableReference(
-            alias=alias, column=column("attr_bool"), key=literal(attr_key.name)
-        )
+        return f.arrayElement(column("attr_bool"), literal(attr_key.name), alias=alias)
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
     )
