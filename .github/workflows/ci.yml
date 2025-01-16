@@ -334,6 +334,7 @@ jobs:
         run: |
           # TODO(hubertdeng123): New devservices doesn't support running sentry without snuba yet
           docker stop snuba-snuba-1
+          docker rm snuba-snuba-1
           docker run -d --rm \
             -p 127.0.0.1:1218:1218 \
             -e PYTHONUNBUFFERED=1 \
