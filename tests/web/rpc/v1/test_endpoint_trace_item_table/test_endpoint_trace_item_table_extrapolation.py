@@ -208,15 +208,15 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        measurement_sum = [v.val_float for v in response.column_values[0].results][0]
-        measurement_avg = [v.val_float for v in response.column_values[1].results][0]
+        measurement_sum = [v.val_double for v in response.column_values[0].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[1].results][0]
         measurement_count_custom_measurement = [
-            v.val_float for v in response.column_values[2].results
+            v.val_double for v in response.column_values[2].results
         ][0]
         measurement_count_duration = [
-            v.val_float for v in response.column_values[3].results
+            v.val_double for v in response.column_values[3].results
         ][0]
-        measurement_p90 = [v.val_float for v in response.column_values[4].results][0]
+        measurement_p90 = [v.val_double for v in response.column_values[4].results][0]
         assert measurement_sum == 98  # weighted sum - 0*1 + 1*2 + 2*4 + 3*8 + 4*16
         assert (
             abs(measurement_avg - 3.16129032) < 0.000001
@@ -279,7 +279,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        measurement_count = [v.val_float for v in response.column_values[0].results][0]
+        measurement_count = [v.val_double for v in response.column_values[0].results][0]
         measurement_reliability = [v for v in response.column_values[0].reliabilities][
             0
         ]
@@ -383,7 +383,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         measurement_tags = [v.val_str for v in response.column_values[0].results]
         assert measurement_tags == ["foo", "bar"]
 
-        measurement_sums = [v.val_float for v in response.column_values[1].results]
+        measurement_sums = [v.val_double for v in response.column_values[1].results]
         measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
         assert measurement_sums == [sum(range(5)), 0]
         assert measurement_reliabilities == [
@@ -391,7 +391,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
-        measurement_avgs = [v.val_float for v in response.column_values[2].results]
+        measurement_avgs = [v.val_double for v in response.column_values[2].results]
         measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
         assert len(measurement_avgs) == 2
         assert measurement_avgs[0] == sum(range(5)) / 5
@@ -401,7 +401,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
-        measurement_counts = [v.val_float for v in response.column_values[3].results]
+        measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
         assert measurement_counts == [5, 0]
         assert measurement_reliabilities == [
@@ -409,7 +409,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
             Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
-        measurement_p90s = [v.val_float for v in response.column_values[4].results]
+        measurement_p90s = [v.val_double for v in response.column_values[4].results]
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
         assert len(measurement_p90s) == 2
         assert measurement_p90s[0] == 4

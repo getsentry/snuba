@@ -253,7 +253,10 @@ def _convert_results(
             elif column.key.type == AttributeKey.TYPE_DOUBLE:
                 converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         elif column.HasField("aggregation"):
-            converters[column.label] = lambda x: AttributeValue(val_float=float(x))
+            if column.key.type == AttributeKey.TYPE_FLOAT:
+                converters[column.label] = lambda x: AttributeValue(val_float=float(x))
+            if column.key.type == AttributeKey.TYPE_DOUBLE:
+                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         else:
             raise BadSnubaRPCRequestException(
                 "column is neither an attribute or aggregation"
