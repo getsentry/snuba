@@ -12,7 +12,7 @@ from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
 
 from snuba.query.dsl import Functions as f
 from snuba.query.dsl import column, literal
-from snuba.query.expressions import FunctionCall, SubscriptableReference
+from snuba.query.expressions import FunctionCall
 from snuba.web.rpc.v1.resolvers.R_ourlogs.common.attribute_key_to_expression import (
     attribute_key_to_expression,
 )
@@ -75,10 +75,10 @@ class TestOurlogsExpressionConverters:
                     type=typ,
                     name="z",
                 ),
-            ) == SubscriptableReference(
-                alias=f"z_{AttributeKey.Type.Name(typ)}",
-                column=column(col),
-                key=literal("z"),
+            ) == FunctionCall(
+                f"z_{AttributeKey.Type.Name(typ)}",
+                "arrayElement",
+                (column(col), literal("z")),
             )
 
     def test_trace_item_filters_to_expression(self) -> None:
