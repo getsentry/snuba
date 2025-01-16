@@ -289,3 +289,19 @@ class DistributedDDLQueue(SystemQuery):
         query_duration_ms
     FROM system.distributed_ddl_queue
     """
+
+
+class IndexSizes(SystemQuery):
+    sql = """
+    select
+        table,
+        name,
+        type,
+        expr,
+        granularity,
+        formatReadableSize(data_compressed_bytes) size,
+        formatReadableSize(data_uncompressed_bytes) usize,
+        marks
+    from system.data_skipping_indices
+    order by usize desc
+    """
