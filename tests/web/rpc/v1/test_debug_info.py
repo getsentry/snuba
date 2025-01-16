@@ -7,7 +7,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
 
@@ -36,6 +36,7 @@ class TestDebugInfo:
                 end_timestamp=ts,
                 request_id=request_id,
                 debug=debug,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(

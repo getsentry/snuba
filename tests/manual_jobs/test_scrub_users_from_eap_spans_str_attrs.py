@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_attributes_pb2 import (
     TraceItemAttributeValuesRequest,
     TraceItemAttributeValuesResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 
 from snuba.datasets.storages.factory import get_storage
@@ -254,6 +254,7 @@ COMMON_META = RequestMeta(
     referrer="something",
     start_timestamp=START_TS,
     end_timestamp=END_TS,
+    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
 )
 
 

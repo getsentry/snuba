@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.endpoint_create_subscription_pb2 import (
 )
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import TimeSeriesRequest
 from sentry_protos.snuba.v1.error_pb2 import Error
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -41,6 +41,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -67,6 +68,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -93,6 +95,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -127,6 +130,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 group_by=[
                     AttributeKey(type=AttributeKey.TYPE_STRING, name="device.class")
@@ -156,6 +160,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(
@@ -195,6 +200,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
                     organization_id=1,
                     cogs_category="something",
                     referrer="something",
+                    trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                 ),
                 aggregations=[
                     AttributeAggregation(

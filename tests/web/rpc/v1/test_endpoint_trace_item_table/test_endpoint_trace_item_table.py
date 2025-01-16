@@ -181,6 +181,43 @@ class TestTraceItemTable(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
 
+    def test_errors_without_type(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                )
+            ],
+            limit=10,
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemTable/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -906,6 +943,7 @@ class TestTraceItemTable(BaseApiTest):
                 "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
             "columns": [
                 {
