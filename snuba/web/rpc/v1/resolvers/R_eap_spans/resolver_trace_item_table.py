@@ -196,7 +196,7 @@ def _convert_results(
             elif column.key.type == AttributeKey.TYPE_FLOAT:
                 converters[column.label] = lambda x: AttributeValue(val_float=float(x))
             elif column.key.type == AttributeKey.TYPE_DOUBLE:
-                converters[column.label] = lambda x: AttributeValue(val_double=double(x))
+                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         elif column.HasField("aggregation"):
             converters[column.label] = lambda x: AttributeValue(val_float=float(x))
         else:
