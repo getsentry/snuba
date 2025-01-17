@@ -118,7 +118,6 @@ def _convert_results(
     for row in data:
         attributes: list[GetTraceResponse.Item.Attribute] = []
         id = row.pop("id")
-        print("id", id)
         timestamp = Timestamp()
 
         timestamp.FromDatetime(row.pop("timestamp"))

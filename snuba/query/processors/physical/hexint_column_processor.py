@@ -17,11 +17,12 @@ from snuba.query.processors.physical.type_converters import (
 class HexIntColumnProcessor(BaseTypeConverter):
     def __init__(self, columns: Set[str]) -> None:
         super().__init__(columns, optimize_ordering=True)
+        self._size = 16
 
     def _translate_literal(self, exp: Literal) -> Literal:
         try:
             assert isinstance(exp.value, str)
-            return Literal(alias=exp.alias, value=int(exp.value, 16))
+            return Literal(alias=exp.alias, value=int(exp.value, self._size))
         except (AssertionError, ValueError):
             raise ColumnTypeError("Invalid hexint", should_report=False)
 
@@ -29,16 +30,23 @@ class HexIntColumnProcessor(BaseTypeConverter):
         if isinstance(exp, Column) and exp.column_name in self.columns:
             return FunctionCall(
                 exp.alias,
-                "lower",
+                "leftPad",
                 (
                     FunctionCall(
                         None,
-                        "hex",
-                        (Column(None, None, exp.column_name),),
+                        "lower",
+                        (
+                            FunctionCall(
+                                None,
+                                "hex",
+                                (Column(None, None, exp.column_name),),
+                            ),
+                        ),
                     ),
+                    Literal(None, self._size),
+                    Literal(None, "0"),
                 ),
             )
-
         return exp
 
 
@@ -66,48 +74,6 @@ class HexIntArrayColumnProcessor(BaseTypeConverter):
                         ),
                     ),
                     Column(None, None, exp.column_name),
-                ),
-            )
-
-        return exp
-
-
-class HexInt64ColumnProcessor(BaseTypeConverter):
-    def __init__(self, columns: Set[str]) -> None:
-        super().__init__(columns, optimize_ordering=True)
-
-    def _translate_literal(self, exp: Literal) -> Literal:
-        try:
-            assert isinstance(exp.value, str)
-            return Literal(alias=exp.alias, value=int(exp.value, 16))
-        except (AssertionError, ValueError):
-            raise ColumnTypeError("Invalid hexint", should_report=False)
-
-    def _process_expressions(self, exp: Expression) -> Expression:
-        if isinstance(exp, Column) and exp.column_name in self.columns:
-            return FunctionCall(
-                exp.alias,
-                "lower",
-                (
-                    FunctionCall(
-                        None,
-                        "leftPad",
-                        (
-                            FunctionCall(
-                                None,
-                                "hex",
-                                (
-                                    Column(
-                                        None,
-                                        None,
-                                        exp.column_name,
-                                    ),
-                                ),
-                            ),
-                            Literal(None, 16),
-                            Literal(None, "0"),
-                        ),
-                    ),
                 ),
             )
 
