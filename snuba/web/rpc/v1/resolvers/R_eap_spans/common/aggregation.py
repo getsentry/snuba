@@ -37,6 +37,8 @@ CONFIDENCE_INTERVAL_THRESHOLD = 1.5
 
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
+_FLOATING_POINT_PRECISION = 8
+
 
 @dataclass(frozen=True)
 class ExtrapolationContext(ABC):
@@ -613,7 +615,9 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
     alias_dict = {"alias": alias} if alias else {}
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
         Function.FUNCTION_SUM: f.round(
-            f.sum(f.multiply(field, sign_column)), 8, **alias_dict
+            f.sum(f.multiply(field, sign_column)),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
         ),
         Function.FUNCTION_AVERAGE: f.divide(
             f.sum(f.multiply(field, sign_column)),
@@ -630,7 +634,9 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
         Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
         Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
-        Function.FUNCTION_AVG: f.round(f.avg(field), 8, **alias_dict),
+        Function.FUNCTION_AVG: f.round(
+            f.avg(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
         Function.FUNCTION_MAX: f.max(field, **alias_dict),
         Function.FUNCTION_MIN: f.min(field, **alias_dict),
         Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
