@@ -557,37 +557,37 @@ class TestTraceItemTable(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
 
-        print("responseee", response.column_values)
-
-        print(
-            "RESULTSSS",
-            [
-                TraceItemColumnValues(
-                    attribute_name="location",
-                    results=[
-                        AttributeValue(val_str="backend"),
-                        AttributeValue(val_str="frontend"),
-                        AttributeValue(val_str="mobile"),
-                    ],
-                ),
-                TraceItemColumnValues(
-                    attribute_name="max(my.float.field)",
-                    results=[
-                        AttributeValue(val_double=101.2),
-                        AttributeValue(val_double=101.2),
-                        AttributeValue(val_double=101.2),
-                    ],
-                ),
-                TraceItemColumnValues(
-                    attribute_name="avg(my.float.field)",
-                    results=[
-                        AttributeValue(val_double=101.2),
-                        AttributeValue(val_double=101.2),
-                        AttributeValue(val_double=101.2),
-                    ],
-                ),
-            ],
-        )
+        # print("responseee", response.column_values)
+        #
+        # print(
+        #     "RESULTSSS",
+        #     [
+        #         TraceItemColumnValues(
+        #             attribute_name="location",
+        #             results=[
+        #                 AttributeValue(val_str="backend"),
+        #                 AttributeValue(val_str="frontend"),
+        #                 AttributeValue(val_str="mobile"),
+        #             ],
+        #         ),
+        #         TraceItemColumnValues(
+        #             attribute_name="max(my.float.field)",
+        #             results=[
+        #                 AttributeValue(val_double=101.2),
+        #                 AttributeValue(val_double=101.2),
+        #                 AttributeValue(val_double=101.2),
+        #             ],
+        #         ),
+        #         TraceItemColumnValues(
+        #             attribute_name="avg(my.float.field)",
+        #             results=[
+        #                 AttributeValue(val_double=101.2),
+        #                 AttributeValue(val_double=101.2),
+        #                 AttributeValue(val_double=101.2),
+        #             ],
+        #         ),
+        #     ],
+        # )
 
         assert response.column_values == [
             TraceItemColumnValues(
@@ -1159,7 +1159,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
                         ),
                         label="sum(my.float.field)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -1179,7 +1179,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
                         ),
                         label="this-doesnt-matter-and-can-be-left-out",
                     ),
@@ -1200,8 +1200,8 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(my.float.field)",
                 results=[
-                    AttributeValue(val_float=1214.4),
-                    AttributeValue(val_float=3036),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
                 ],
             ),
         ]
@@ -1311,8 +1311,8 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(my.float.field)",
                 results=[
-                    AttributeValue(val_float=1214.4),
-                    AttributeValue(val_float=3036),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
                 ],
             ),
         ]
@@ -1365,9 +1365,9 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(my.float.field)",
                 results=[
-                    AttributeValue(val_float=303.6),
-                    AttributeValue(val_float=1214.4),
-                    AttributeValue(val_float=3036),
+                    AttributeValue(val_double=303.6),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
                 ],
             ),
         ]

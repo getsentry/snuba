@@ -612,7 +612,9 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum(f.multiply(field, sign_column), **alias_dict),
+        Function.FUNCTION_SUM: f.round(
+            f.sum(f.multiply(field, sign_column)), 8, **alias_dict
+        ),
         Function.FUNCTION_AVERAGE: f.divide(
             f.sum(f.multiply(field, sign_column)),
             f.sumIf(sign_column, get_field_existence_expression(aggregation)),
@@ -628,7 +630,7 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
         Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
         Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
-        Function.FUNCTION_AVG: f.round(f.avg(field), 9, **alias_dict),
+        Function.FUNCTION_AVG: f.round(f.avg(field), 8, **alias_dict),
         Function.FUNCTION_MAX: f.max(field, **alias_dict),
         Function.FUNCTION_MIN: f.min(field, **alias_dict),
         Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),

@@ -16,7 +16,6 @@ class CalculatedAverageProcessor(LogicalQueryProcessor):
     """
 
     def process_query(self, query: Query, query_settings: QuerySettings) -> None:
-        print("huh_process_query")
         # use a matcher to find something like avg(value)
         matcher = FunctionCallMatch(
             Or([String("avg"), String("avgIf")]),
@@ -25,7 +24,6 @@ class CalculatedAverageProcessor(LogicalQueryProcessor):
         )
 
         def transform_expression(exp: Expression) -> Expression:
-            print("huh_transform_expression")
             match = matcher.match(exp)
             if isinstance(exp, FunctionCall) and match is not None:
                 suffix = "If" if exp.function_name == "avgIf" else ""
