@@ -76,6 +76,7 @@ pub struct StorageConfig {
     pub clickhouse_table_name: String,
     pub clickhouse_cluster: ClickhouseConfig,
     pub message_processor: MessageProcessorConfig,
+    pub writer_options: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]

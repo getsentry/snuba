@@ -393,6 +393,8 @@ replacer_processor:
       contexts: []
     state_name: errors
     storage_key_str: errors
+writer_options:
+  input_format_skip_unknown_fields: 1
 stream_loader:
   processor: ErrorsProcessor
   default_topic: events

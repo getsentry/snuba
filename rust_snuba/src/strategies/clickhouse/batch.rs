@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_ENCODING, CONNECTION};
 use reqwest::{Client, ClientBuilder};
 use sentry_arroyo::gauge;
@@ -43,6 +45,7 @@ impl BatchFactory {
         clickhouse_password: &str,
         async_inserts: bool,
         batch_write_timeout: Option<Duration>,
+        writer_options: &HashMap<String, String>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
         headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
@@ -68,6 +71,9 @@ impl BatchFactory {
             if async_inserts_allowed == Some("1".to_string()) {
                 query_params.push_str("&async_insert=1&wait_for_async_insert=1");
             }
+        }
+        for (key, value) in writer_options {
+            query_params.push_str(&format!("&{key}={value}"));
         }
 
         let url = format!("http://{hostname}:{http_port}?{query_params}");
@@ -268,6 +274,7 @@ mod tests {
             "",
             false,
             None,
+            &HashMap::new(),
         );
 
         let mut batch = factory.new_batch();
@@ -303,6 +310,48 @@ mod tests {
             "",
             true,
             None,
+            &HashMap::new(),
+        );
+
+        let mut batch = factory.new_batch();
+
+        batch
+            .write_rows(&RowData::from_encoded_rows(vec![
+                br#"{"hello": "world"}"#.to_vec()
+            ]))
+            .unwrap();
+
+        concurrency.handle().block_on(batch.finish()).unwrap();
+
+        mock.assert();
+    }
+
+    #[test]
+    fn test_write_skip_unknown_fields() {
+        crate::testutils::initialize_python();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST)
+                .query_param("input_format_skip_unknown_fields", "1");
+            then.status(200).body("hi");
+        });
+
+        let concurrency = ConcurrencyConfig::new(1);
+        let writer_options = HashMap::from([(
+            "input_format_skip_unknown_fields".to_string(),
+            "1".to_string(),
+        )]);
+        let factory = BatchFactory::new(
+            &server.host(),
+            server.port(),
+            "testtable",
+            "testdb",
+            &concurrency,
+            "default",
+            "",
+            true,
+            None,
+            &writer_options,
         );
 
         let mut batch = factory.new_batch();
@@ -337,6 +386,7 @@ mod tests {
             "",
             false,
             None,
+            &HashMap::new(),
         );
 
         let mut batch = factory.new_batch();
@@ -369,6 +419,7 @@ mod tests {
             "",
             false,
             None,
+            &HashMap::new(),
         );
 
         let mut batch = factory.new_batch();
@@ -405,6 +456,7 @@ mod tests {
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
             Some(Duration::from_millis(0)),
+            &HashMap::new(),
         );
 
         let mut batch = factory.new_batch();
@@ -439,6 +491,7 @@ mod tests {
             true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
+            &HashMap::new(),
         );
 
         let mut batch = factory.new_batch();
