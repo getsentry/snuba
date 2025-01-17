@@ -148,8 +148,10 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             )
         elif column.HasField("aggregation"):
             function_expr = aggregation_to_expression(column.aggregation)
+            print("function_expr_1", function_expr)
             # aggregation label may not be set and the column label takes priority anyways.
             function_expr = replace(function_expr, alias=column.label)
+            print("function_expr_2", function_expr)
             selected_columns.append(
                 SelectedExpression(name=column.label, expression=function_expr)
             )
@@ -186,7 +188,7 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             raise BadSnubaRPCRequestException(
                 "Column is neither an aggregate or an attribute"
             )
-
+    print("selected_columnsss", selected_columns)
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,

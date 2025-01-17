@@ -32,6 +32,7 @@ class OptionalAttributeAggregationTransformer(LogicalQueryProcessor):
         aggregation_names: list[str],
         curried_aggregation_names: list[str],
     ):
+        print("huh_OptionalAttributeAggregationTransformer")
         self._attribute_column_names = attribute_column_names
         self._aggregation_names = aggregation_names
         self._curried_aggregation_names = curried_aggregation_names

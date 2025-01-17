@@ -45,6 +45,7 @@ class FindConditionalAggregateFunctionsVisitor(
     """
 
     def __init__(self) -> None:
+        print("huh_FindConditionalAggregateFunctionsVisitor")
         self._matches: list[FunctionCall | CurriedFunctionCall] = []
 
     def visit_literal(self, exp: Literal) -> list[FunctionCall | CurriedFunctionCall]:
@@ -100,6 +101,7 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
     """
 
     def process_query(self, query: LogicalQuery, query_settings: QuerySettings) -> None:
+        print("huh_FilterInSelectOptimizer")
         try:
             new_condition = self.get_select_filter(query)
         except Exception:
@@ -115,6 +117,7 @@ class FilterInSelectOptimizer(LogicalQueryProcessor):
         self,
         query: LogicalQuery | CompositeQuery[QueryEntity],
     ) -> FunctionCall | None:
+        print("huh_get_select_filter")
         """
         Given a query, grabs all the conditions from conditional aggregates and lifts into
         one condition.

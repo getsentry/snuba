@@ -187,7 +187,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"
                         ),
                         label="count(sentry.duration_ms)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,

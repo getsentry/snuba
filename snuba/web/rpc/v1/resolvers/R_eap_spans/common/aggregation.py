@@ -628,7 +628,7 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
         Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
         Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
         Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
-        Function.FUNCTION_AVG: f.avg(field, **alias_dict),
+        Function.FUNCTION_AVG: f.round(f.avg(field), 9, **alias_dict),
         Function.FUNCTION_MAX: f.max(field, **alias_dict),
         Function.FUNCTION_MIN: f.min(field, **alias_dict),
         Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),

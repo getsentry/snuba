@@ -502,6 +502,7 @@ class TestTraceItemTable(BaseApiTest):
     def test_table_with_aggregates(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        # breakpoint()
         message = TraceItemTableRequest(
             meta=RequestMeta(
                 project_ids=[1, 2, 3],
