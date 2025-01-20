@@ -36,7 +36,7 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     // an event was dropped because of an error when sending it (eg: 400 response)
     "send_error",
     // an SDK internal buffer (eg. breadcrumbs buffer) overflowed
-    "buffer_overflow"
+    "buffer_overflow",
 ];
 
 pub fn process_message(
