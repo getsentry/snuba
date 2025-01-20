@@ -2,8 +2,8 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::StringToIntDatetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
-use sentry_arroyo::backends::kafka::types::KafkaPayload;
-use sentry_arroyo::counter;
+use rust_arroyo::backends::kafka::types::KafkaPayload;
+use rust_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -36,7 +36,7 @@ const CLIENT_DISCARD_REASONS: &[&str] = &[
     // an event was dropped because of an error when sending it (eg: 400 response)
     "send_error",
     // an SDK internal buffer (eg. breadcrumbs buffer) overflowed
-    "buffer_overflow",
+    "buffer_overflow"
 ];
 
 pub fn process_message(
@@ -99,7 +99,7 @@ struct Outcome {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use sentry_arroyo::backends::kafka::types::KafkaPayload;
+    use rust_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
 
     #[test]
