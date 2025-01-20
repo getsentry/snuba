@@ -31,7 +31,7 @@ sentry-arroyo==2.19.4
 sentry-kafka-schemas==0.1.129
 sentry-protos==0.1.49
 sentry-redis-tools==0.3.0
-sentry-relay==0.9.4
+sentry-relay==0.9.5
 sentry-sdk==2.18.0
 simplejson==3.17.6
 snuba-sdk==3.0.39
