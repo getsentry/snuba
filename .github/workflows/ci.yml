@@ -441,7 +441,7 @@ jobs:
         uses: getsentry/self-hosted@master
         with:
           project_name: snuba
-          image_url: ghcr.io/getsentry/snuba-ci:6735a520f439ad50e2c35201ee9267c21e803d70
+          image_url: needs.snuba-image.outputs.image_tag
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   publish-to-dockerhub:
