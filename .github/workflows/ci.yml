@@ -134,6 +134,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
+      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -185,6 +186,7 @@ jobs:
           # Useful to speed up CI
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+          echo 'image_tag=ghcr.io/getsentry/snuba-ci:${{ github.sha }}' >> "$GITHUB_OUTPUT"
           if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
             # The latest tag should only be published on `master`
             docker push ghcr.io/getsentry/snuba-ci:latest
@@ -439,7 +441,7 @@ jobs:
         uses: getsentry/self-hosted@master
         with:
           project_name: snuba
-          image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
+          image_url: ghcr.io/getsentry/snuba-ci:6735a520f439ad50e2c35201ee9267c21e803d70
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   publish-to-dockerhub:
