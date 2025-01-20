@@ -466,7 +466,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 buckets=expected_buckets,
                 data_points=[
                     DataPoint(
-                        data=expected_sum,  # metric * number of events / sample rate
+                        data=expected_sum,
                         data_present=True,
                         reliability=Reliability.RELIABILITY_LOW,
                         avg_sampling_rate=0.0001,
