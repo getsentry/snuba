@@ -308,7 +308,10 @@ class HTTPBatchWriter(BatchWriter[bytes]):
         self.__pool: HTTPSConnectionPool | HTTPConnectionPool
         if secure:
             self.__pool = HTTPSConnectionPool(
-                host, port, ca_certs=ca_certs, cert_reqs='REQUIRED' if verify else 'CERT_NONE'
+                host,
+                port,
+                ca_certs=ca_certs,
+                cert_reqs="REQUIRED" if verify else "CERT_NONE",
             )
         else:
             self.__pool = HTTPConnectionPool(host, port)
