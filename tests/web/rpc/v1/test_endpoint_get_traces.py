@@ -479,24 +479,8 @@ class TestGetTraces(BaseApiTest):
             ),
             attributes=[
                 TraceAttribute(
-                    key=TraceAttribute.Key.KEY_TRACE_ID,
-                    type=AttributeKey.TYPE_STRING,
-                ),
-                TraceAttribute(
                     key=TraceAttribute.Key.KEY_START_TIMESTAMP,
                     type=AttributeKey.TYPE_DOUBLE,
-                ),
-                TraceAttribute(
-                    key=TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT,
-                    type=AttributeKey.TYPE_INT,
-                ),
-                TraceAttribute(
-                    key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
-                    type=AttributeKey.TYPE_INT,
-                ),
-                TraceAttribute(
-                    key=TraceAttribute.Key.KEY_ROOT_SPAN_NAME,
-                    type=AttributeKey.TYPE_STRING,
                 ),
             ],
             filters=[
@@ -521,40 +505,12 @@ class TestGetTraces(BaseApiTest):
                 GetTracesResponse.Trace(
                     attributes=[
                         TraceAttribute(
-                            key=TraceAttribute.Key.KEY_TRACE_ID,
-                            type=AttributeKey.TYPE_STRING,
-                            value=AttributeValue(
-                                val_str=trace_id_per_start_timestamp[start_timestamp],
-                            ),
-                        ),
-                        TraceAttribute(
                             key=TraceAttribute.Key.KEY_START_TIMESTAMP,
                             type=AttributeKey.TYPE_DOUBLE,
                             value=AttributeValue(
                                 val_double=start_timestamp_per_trace_id[
                                     trace_id_per_start_timestamp[start_timestamp]
                                 ],
-                            ),
-                        ),
-                        TraceAttribute(
-                            key=TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT,
-                            type=AttributeKey.TYPE_INT,
-                            value=AttributeValue(
-                                val_int=_SPAN_COUNT // len(_TRACE_IDS),
-                            ),
-                        ),
-                        TraceAttribute(
-                            key=TraceAttribute.Key.KEY_FILTERED_ITEM_COUNT,
-                            type=AttributeKey.TYPE_INT,
-                            value=AttributeValue(
-                                val_int=(_SPAN_COUNT // len(_TRACE_IDS)) - 1,
-                            ),
-                        ),
-                        TraceAttribute(
-                            key=TraceAttribute.Key.KEY_ROOT_SPAN_NAME,
-                            type=AttributeKey.TYPE_STRING,
-                            value=AttributeValue(
-                                val_str="root",
                             ),
                         ),
                     ],
