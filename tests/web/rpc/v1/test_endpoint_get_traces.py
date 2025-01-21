@@ -413,9 +413,9 @@ class TestGetTraces(BaseApiTest):
                         ),
                         TraceAttribute(
                             key=TraceAttribute.Key.KEY_START_TIMESTAMP,
-                            type=AttributeKey.TYPE_FLOAT,
+                            type=AttributeKey.TYPE_DOUBLE,
                             value=AttributeValue(
-                                val_float=start_timestamp_per_trace_id[
+                                val_double=start_timestamp_per_trace_id[
                                     trace_id_per_start_timestamp[start_timestamp]
                                 ],
                             ),
