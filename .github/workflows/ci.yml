@@ -178,6 +178,7 @@ jobs:
           docker image ls -a
 
       - name: Publish snuba-ci image to registry
+        id: publish
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
         # outside contributors won't be able to push to the docker registry
         # ignore the failures in this step
