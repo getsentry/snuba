@@ -75,7 +75,6 @@ impl BatchFactory {
         for (key, value) in writer_options {
             query_params.push_str(&format!("&{key}={value}"));
         }
-        println!("query_params: {}", query_params);
 
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
