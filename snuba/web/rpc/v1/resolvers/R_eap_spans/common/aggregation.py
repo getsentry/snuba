@@ -475,34 +475,56 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
-        # confidence interval = Z * \sqrt{-log{(\frac{\sum_{i=1}^n \frac{1}{w_i}}{n})} * \sum_{i=1}^n x_i^2w_i^2 - x_i^2w_i}
-        #        ┌──────────────────────────────┐
-        #        │      ₙ
-        #        │      ⎲  1
-        #    ╲   │      ⎳  ──     ₙ
-        #     ╲  │     ⁱ⁼¹ wᵢ     ⎲   2 2    2
-        # Z *   ╲ │-log(──────) *  ⎳  xᵢwᵢ - xᵢwᵢ
-        #       ╲│       n       ⁱ⁼¹
+        # confidence interval = N * Z * \sqrt{\frac{\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N}}{n * N}}
+        #              ┌────────────────────────────┐
+        #              │              ₙ
+        #              │              ⎲
+        #              │  ₙ         ( ⎳  wᵢxᵢ)²
+        #         ╲    │  ⎲     2    ⁱ⁼¹
+        #          ╲   │( ⎳  wᵢxᵢ - ───────────)
+        #           ╲  │     ⁱ⁼¹         N
+        # N * Z *    ╲ │────────────────────────────
+        #             ╲│              n * N
         Function.FUNCTION_SUM: f.multiply(
-            z_value,
-            f.sqrt(
-                f.multiply(
-                    f.negate(f.log(get_average_sample_rate_column(aggregation))),
-                    f.sumIf(
+            column(f"{alias}_N"),
+            f.multiply(
+                z_value,
+                f.sqrt(
+                    f.divide(
                         f.minus(
-                            f.multiply(
-                                f.multiply(field, field),
+                            f.sumIf(
                                 f.multiply(
-                                    sampling_weight_column, sampling_weight_column
+                                    sampling_weight_column,
+                                    f.multiply(field, field),
                                 ),
+                                get_field_existence_expression(aggregation),
                             ),
-                            f.multiply(
-                                f.multiply(field, field), sampling_weight_column
+                            f.divide(
+                                f.multiply(
+                                    f.sumIf(
+                                        f.multiply(sampling_weight_column, field),
+                                        get_field_existence_expression(aggregation),
+                                    ),
+                                    f.sumIf(
+                                        f.multiply(sampling_weight_column, field),
+                                        get_field_existence_expression(aggregation),
+                                    ),
+                                ),
+                                column(f"{alias}_N"),
                             ),
                         ),
-                        get_field_existence_expression(aggregation),
-                    ),
-                )
+                        f.multiply(
+                            f.sumIf(
+                                sampling_weight_column,
+                                get_field_existence_expression(aggregation),
+                                alias=f"{alias}_N",
+                            ),
+                            f.sumIf(
+                                sign_column, get_field_existence_expression(aggregation)
+                            ),
+                        ),
+                    )
+                ),
             ),
             **alias_dict,
         ),
