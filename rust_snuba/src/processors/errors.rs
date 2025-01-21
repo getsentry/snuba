@@ -589,12 +589,10 @@ impl ErrorRow {
 
         if let Some(ctx) = from_context.flags {
             if let Some(values) = ctx.values {
-                for value in values {
-                    if let Some(item) = value {
-                        if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
-                            flags_key.push(k);
-                            flags_value.push(v);
-                        }
+                for item in values.into_iter().flatten() {
+                    if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                        flags_key.push(k);
+                        flags_value.push(v);
                     }
                 }
             }
