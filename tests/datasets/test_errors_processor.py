@@ -36,7 +36,7 @@ class ErrorEvent:
     trace_sampled: bool | None
     environment: str
     replay_id: uuid.UUID | None
-    features: list[Mapping[str, Any]] | None
+    flags: list[Mapping[str, Any]]
     received_timestamp: datetime
     errors: Sequence[Mapping[str, Any]] | None
 
@@ -137,7 +137,7 @@ class ErrorEvent:
                     ]
                 },
                 "contexts": {
-                    "flags": {"values": self.features},
+                    "flags": {"values": self.flags},
                     "runtime": {
                         "version": "3.7.6",
                         "type": "runtime",
@@ -380,14 +380,14 @@ class ErrorEvent:
             "modules.version": ["1.13.2", "0.2.0", "0.6.0"],
             "transaction_name": "",
             "num_processing_errors": len(self.errors) if self.errors is not None else 0,
-            "features.key": [],
-            "features.value": [],
+            "flags.key": [],
+            "flags.value": [],
         }
 
-        if self.features:
-            for feature in self.features:
-                expected_result["features.key"].append(feature["flag"])
-                expected_result["features.value"].append(json.dumps(feature["result"]))
+        if self.flags:
+            for flag in self.flags:
+                expected_result["flags.key"].append(flag["flag"])
+                expected_result["flags.value"].append(json.dumps(flag["result"]))
 
         if self.replay_id:
             expected_result["replay_id"] = str(self.replay_id)
@@ -433,7 +433,7 @@ class TestErrorsProcessor:
                 "subdivision": "fake_subdivision",
             },
             errors=None,
-            features=None,
+            flags=[],
         )
 
     def test_errors_basic(self) -> None:
@@ -476,7 +476,7 @@ class TestErrorsProcessor:
             },
             replay_id=uuid.uuid4(),
             errors=None,
-            features=None,
+            flags=[],
         )
 
         payload = message.serialize()
@@ -515,7 +515,7 @@ class TestErrorsProcessor:
             },
             replay_id=None,
             errors=None,
-            features=None,
+            flags=[],
         )
         replay_id = uuid.uuid4()
         payload = message.serialize()
@@ -561,7 +561,7 @@ class TestErrorsProcessor:
             },
             replay_id=replay_id,
             errors=None,
-            features=None,
+            flags=[],
         )
 
         payload = message.serialize()
@@ -605,7 +605,7 @@ class TestErrorsProcessor:
             },
             replay_id=None,
             errors=None,
-            features=None,
+            flags=[],
         )
         invalid_replay_id = "imnotavaliduuid"
         payload = message.serialize()
@@ -664,7 +664,7 @@ class TestErrorsProcessor:
                 ]
             },
             errors=None,
-            features=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -719,7 +719,7 @@ class TestErrorsProcessor:
                 ]
             },
             errors=None,
-            features=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -760,7 +760,7 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=None,
-            features=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -812,7 +812,7 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
-            features=None,
+            flags=[],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
@@ -864,7 +864,7 @@ class TestErrorsProcessor:
             replay_id=None,
             threads=None,
             errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
-            features=[{"flag": "abc", "result": True}],
+            flags=[{"flag": "abc", "result": True}],
         )
         payload = message.serialize()
         meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
