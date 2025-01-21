@@ -1,6 +1,8 @@
 .. image:: https://github.com/getsentry/snuba/raw/master/snuba/admin/dist/snuba.svg
     :width: 280
 
+   test
+
 Snuba is a service that provides a rich data model on top of Clickhouse
 together with a fast ingestion consumer and a query optimizer.
 
