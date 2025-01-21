@@ -289,7 +289,7 @@ def resolve_storage_config(
             python_class_name=processor.__class__.__name__,
             python_module=processor.__class__.__module__,
         ),
-        writer_options=writer_options or {},
+        writer_options=dict(writer_options or {}),
     )
 
 
