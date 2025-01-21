@@ -2,7 +2,7 @@ from typing import Iterator, Sequence
 
 from snuba.clickhouse.columns import Array, Column, Nested, String, UInt
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.storages.tags_hash_map import FEATURES_HASH_MAP_COLUMN
+from snuba.datasets.storages.tags_hash_map import FLAGS_HASH_MAP_COLUMN
 from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 from snuba.migrations.operations import OperationTarget
@@ -32,7 +32,7 @@ def forward_ops() -> Iterator[operations.SqlOperation]:
                 storage_set=storage_set,
                 table_name=table_name,
                 column=Column(
-                    "features", Nested([("key", String()), ("value", String())])
+                    "flags", Nested([("key", String()), ("value", String())])
                 ),
                 after="_tags_hash_map",
                 target=target,
@@ -41,13 +41,13 @@ def forward_ops() -> Iterator[operations.SqlOperation]:
                 storage_set=storage_set,
                 table_name=table_name,
                 column=Column(
-                    "_features_hash_map",
+                    "_flags_hash_map",
                     Array(
                         UInt(64),
-                        Modifiers(materialized=FEATURES_HASH_MAP_COLUMN),
+                        Modifiers(materialized=FLAGS_HASH_MAP_COLUMN),
                     ),
                 ),
-                after="features.value",
+                after="flags.value",
                 target=target,
             ),
         ]
@@ -56,8 +56,8 @@ def forward_ops() -> Iterator[operations.SqlOperation]:
     yield operations.AddIndex(
         storage_set=StorageSetKey.EVENTS,
         table_name="errors_local",
-        index_name="bf_features_hash_map",
-        index_expression="_features_hash_map",
+        index_name="bf_flags_hash_map",
+        index_expression="_flags_hash_map",
         index_type="bloom_filter",
         granularity=1,
         target=OperationTarget.LOCAL,
@@ -68,7 +68,7 @@ def backward_ops() -> Iterator[operations.SqlOperation]:
     yield operations.DropIndex(
         StorageSetKey.EVENTS,
         "errors_local",
-        "bf_features_hash_map",
+        "bf_flags_hash_map",
         target=OperationTarget.LOCAL,
     )
 
@@ -77,13 +77,13 @@ def backward_ops() -> Iterator[operations.SqlOperation]:
             operations.DropColumn(
                 storage_set=storage_set,
                 table_name=table_name,
-                column_name="_features_hash_map",
+                column_name="_flags_hash_map",
                 target=target,
             ),
             operations.DropColumn(
                 storage_set=storage_set,
                 table_name=table_name,
-                column_name="features",
+                column_name="flags",
                 target=target,
             ),
         ]

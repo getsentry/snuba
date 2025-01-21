@@ -16,10 +16,10 @@ CONTEXTS_HASH_MAP_COLUMN = (
     "contexts.key, contexts.value)"
 )
 
-FEATURES_HASH_MAP_COLUMN = (
+FLAGS_HASH_MAP_COLUMN = (
     "arrayMap((k, v) -> cityHash64(concat("
     "replaceRegexpAll(k, '(\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'), '=', v)), "
-    "features.key, features.value)"
+    "flags.key, flags.value)"
 )
 
 # There an issue in Clickhouse where the arrayMap function passes
