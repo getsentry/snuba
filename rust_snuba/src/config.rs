@@ -118,7 +118,7 @@ impl Default for EnvConfig {
             dogstatsd_port: None,
             default_retention_days: 90,
             lower_retention_days: 30,
-            valid_retention_days: [30, 90].iter().cloned().collect(),
+            valid_retention_days: [30, 60, 90].iter().cloned().collect(),
             record_cogs: false,
             ddm_metrics_sample_rate: 0.0,
             project_stacktrace_blacklist: Vec::new(),

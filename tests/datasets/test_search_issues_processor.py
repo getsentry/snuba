@@ -480,6 +480,6 @@ def test_data_source(
     #
     request = json_to_snql(query_body, "search_issues")
     request.validate()
-    query, _ = parse_snql_query(str(request.query), dataset)
+    query = parse_snql_query(str(request.query), dataset)
 
     assert query.get_from_clause().key == EntityKey.SEARCH_ISSUES

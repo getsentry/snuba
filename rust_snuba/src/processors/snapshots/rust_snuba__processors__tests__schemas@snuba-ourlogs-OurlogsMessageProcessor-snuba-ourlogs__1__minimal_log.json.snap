@@ -1,0 +1,22 @@
+---
+source: src/processors/mod.rs
+description: "{\n  \"organization_id\": 69,\n  \"project_id\": 1,\n  \"received\": 1715868485.381,\n  \"retention_days\": 90,\n  \"timestamp_nanos\": 1715868485371000,\n  \"observed_timestamp_nanos\": 1715868485371000,\n  \"body\": \"hello world!\"\n}\n"
+expression: snapshot_payload
+---
+[
+  {
+    "attr_bool": {},
+    "attr_double": {},
+    "attr_int": {},
+    "attr_string": {},
+    "body": "hello world!",
+    "organization_id": 69,
+    "project_id": 1,
+    "retention_days": 90,
+    "severity_number": 0,
+    "severity_text": "INFO",
+    "span_id": 0,
+    "timestamp": 1715868485371000,
+    "trace_id": "00000000-0000-0000-0000-000000000000"
+  }
+]

@@ -106,6 +106,8 @@ class Query(DataSource, ABC):
         totals: bool = False,
         granularity: Optional[int] = None,
         experiments: Optional[MutableMapping[str, AnyType]] = None,
+        on_cluster: Optional[Expression] = None,
+        is_delete: bool = False,
     ):
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
@@ -119,6 +121,8 @@ class Query(DataSource, ABC):
         self.__totals = totals
         self.__granularity = granularity
         self.__experiments = experiments or {}
+        self.__on_cluster = on_cluster
+        self.__is_delete = is_delete
 
     def get_columns(self) -> ColumnSet:
         """
@@ -236,6 +240,12 @@ class Query(DataSource, ABC):
 
     def get_experiment_value(self, name: str) -> AnyType:
         return self.__experiments.get(name)
+
+    def is_delete(self) -> bool:
+        return self.__is_delete
+
+    def get_on_cluster(self) -> Optional[Expression]:
+        return self.__on_cluster
 
     @abstractmethod
     def _get_expressions_impl(self) -> Iterable[Expression]:
@@ -513,6 +523,8 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
         offset: int = 0,
         totals: bool = False,
         granularity: Optional[int] = None,
+        is_delete: bool = False,
+        on_cluster: Optional[Expression] = None,
     ):
         super().__init__(
             selected_columns=selected_columns,
@@ -526,6 +538,8 @@ class ProcessableQuery(Query, ABC, Generic[TSimpleDataSource]):
             offset=offset,
             totals=totals,
             granularity=granularity,
+            is_delete=is_delete,
+            on_cluster=on_cluster,
         )
         self.__from_clause = from_clause
 

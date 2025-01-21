@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import SchemaModifiers as Modifiers
 from snuba.clickhouse.columns import UInt
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import (
     LimitBy,
     OrderBy,
@@ -216,7 +217,7 @@ TEST_JOIN = [
     ),
     pytest.param(
         ClickhouseQuery(
-            Table("events", columns),
+            Table("events", columns, storage_key=StorageKey("doesntmatter")),
             selected_columns=[
                 SelectedExpression(
                     "tags[promoted_tag]",

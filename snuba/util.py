@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from functools import wraps
 from typing import (
@@ -90,17 +90,17 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
         cache_key = ",".join([segment.value for segment in format])
 
         PARTSEGMENT_RE = {
-            PartSegment.DATE: "('(?P<date>\d{4}-\d{2}-\d{2})')",
-            PartSegment.RETENTION_DAYS: "(?P<retention_days>\d+)",
+            PartSegment.DATE: r"('(?P<date>\d{4}-\d{2}-\d{2})')",
+            PartSegment.RETENTION_DAYS: r"(?P<retention_days>\d+)",
         }
 
-        SEP = ",\s*"
+        SEP = r",\s*"
 
         try:
             return re_cache[cache_key]
         except KeyError:
             re_cache[cache_key] = re.compile(
-                f"\({SEP.join([PARTSEGMENT_RE[s] for s in partition_format])}\)"
+                rf"\({SEP.join([PARTSEGMENT_RE[s] for s in partition_format])}\)"
             )
 
         return re_cache[cache_key]
@@ -115,7 +115,9 @@ def decode_part_str(part_str: str, partition_format: Sequence[PartSegment]) -> P
 
     if date_str and retention_days:
         return Part(
-            part_str, datetime.strptime(date_str, "%Y-%m-%d"), int(retention_days)
+            part_str,
+            datetime.strptime(date_str, "%Y-%m-%d").astimezone(UTC),
+            int(retention_days),
         )
 
     else:

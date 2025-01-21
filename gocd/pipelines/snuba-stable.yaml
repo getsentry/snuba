@@ -46,9 +46,9 @@ pipelines:
                                     /devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
                                     ${GO_REVISION_SNUBA_REPO} \
                                     sentryio \
-                                    "us.gcr.io/sentryio/snuba"
+                                    "us-central1-docker.pkg.dev/sentryio/snuba/image"
                               - script: |
-                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba"` && \
+                                    deploy_sha=`snuba/scripts/fetch_service_refs.py --pipeline "deploy-snuba-s4s"` && \
                                     snuba/scripts/check-migrations.py --to $deploy_sha --workdir snuba
             - deploy-canary:
                   fetch_materials: true
@@ -71,7 +71,7 @@ pipelines:
                                     /devinfra/scripts/k8s/k8stunnel \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba,is_canary=true" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
                                     --container-name="consumer" \
                                     --container-name="errors-consumer" \
@@ -102,7 +102,7 @@ pipelines:
                                     --container-name="transactions-subscriptions-scheduler" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba,is_canary=true" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize" \
@@ -127,7 +127,7 @@ pipelines:
                                     /devinfra/scripts/k8s/k8stunnel \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
                                     --container-name="api" \
                                     --container-name="consumer" \
                                     --container-name="errors-consumer" \
@@ -158,7 +158,7 @@ pipelines:
                                     --container-name="transactions-subscriptions-scheduler" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize" \

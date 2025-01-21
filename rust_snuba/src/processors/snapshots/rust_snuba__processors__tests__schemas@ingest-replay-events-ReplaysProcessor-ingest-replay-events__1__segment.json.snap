@@ -65,6 +65,7 @@ expression: snapshot_payload
     "user_email": "test@test.com",
     "user_id": "",
     "user_name": "",
+    "viewed_by_id": 0,
     "warning_id": "00000000-0000-0000-0000-000000000000"
   }
 ]

@@ -26,21 +26,25 @@
   },
 
   "[javascript]": {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
   },
 
   "[javascriptreact]": {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
   },
 
   "[typescript]": {
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2
   },
 
   "[typescriptreact]": {
     "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.tabSize": 2
   },
 
   "[less]": {
@@ -56,15 +60,11 @@
     "editor.formatOnSave": true
   },
 
-  "python.linting.mypyEnabled": true,
-  "python.linting.mypyArgs": ["--strict"],
-  "python.linting.flake8Enabled": true,
-  "python.formatting.provider": "black",
-  // https://github.com/DonJayamanne/pythonVSCode/issues/992
-  "python.pythonPath": ".venv/bin/python",
+  "python.defaultInterpreterPath": ".venv/bin/python",
   // test discovery is sluggish and the UI around running
   // tests is often in your way and misclicked
   "python.testing.pytestEnabled": true,
-  "python.testing.unittestEnabled": true,
-  "python.testing.pytestArgs": ["tests"]
+  "python.testing.pytestArgs": ["tests"],
+  "python.analysis.autoImportCompletions": true,
+  "mypy-type-checker.args": ["--strict"]
 }

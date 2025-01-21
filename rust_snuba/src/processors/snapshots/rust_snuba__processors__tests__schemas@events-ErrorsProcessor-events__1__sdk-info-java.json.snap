@@ -26,7 +26,6 @@ expression: snapshot_payload
     "exception_stacks.type": [],
     "exception_stacks.value": [],
     "group_id": 123123,
-    "hierarchical_hashes": [],
     "http_method": null,
     "http_referer": null,
     "level": null,

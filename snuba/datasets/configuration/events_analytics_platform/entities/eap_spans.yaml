@@ -1,0 +1,103 @@
+version: v1
+kind: entity
+name: eap_spans
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: service, type: String },
+    { name: trace_id, type: UUID },
+    { name: span_id, type: UInt, args: { size: 64 } },
+    { name: parent_span_id, type: UInt, args: { size: 64 } },
+    { name: segment_id, type: UInt, args: { size: 64 } },
+    { name: segment_name, type: String },
+    { name: is_segment, type: UInt, args: { size: 8 } },
+    { name: time, type: DateTime }, # virtual column, used by TimeSeriesProcessor
+    { name: timestamp, type: DateTime }, # virtual column, mapped to _sort_timestamp
+    { name: start_timestamp, type: DateTime64, args: { precision: 6 } },
+    { name: end_timestamp, type: DateTime64, args: { precision: 6 } },
+    { name: duration_ms, type: Float, args: { size: 64 } },
+    { name: exclusive_time_ms, type: Float, args: { size: 64 } },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: name, type: String },
+    { name: sampling_factor, type: Float, args: { size: 64 } },
+    { name: sampling_weight, type: UInt, args: { size: 64 } },
+    { name: sign, type: Int, args: { size: 8 } },
+    { name: attr_str, type: Map, args: { key: { type: String }, value: { type: String } } },
+    { name: attr_num, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
+  ]
+
+storages:
+  - storage: eap_spans
+    is_writable: true
+    translation_mappers:
+      columns:
+        - mapper: ColumnToColumn
+          args:
+            from_table_name: null
+            from_col_name: timestamp
+            to_table_name: null
+            to_col_name: _sort_timestamp
+        - mapper: ColumnToMilliseconds
+          args:
+            from_col_name: duration_ms
+            to_col_name: duration_micro
+        - mapper: ColumnToMilliseconds
+          args:
+            from_col_name: exclusive_time_ms
+            to_col_name: exclusive_time_micro
+
+      subscriptables:
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attr_str
+            to_col_table: null
+            to_col_name: attr_str
+        - mapper: SubscriptableHashBucketMapper
+          args:
+            from_column_table: null
+            from_column_name: attr_num
+            to_col_table: null
+            to_col_name: attr_num
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - start_timestamp
+        - end_timestamp
+  - processor: OptionalAttributeAggregationTransformer
+    args:
+      attribute_column_names:
+        - attr_num
+      aggregation_names:
+        - sum
+        - count
+        - avg
+        - avgWeighted
+        - max
+        - min
+        - uniq
+      curried_aggregation_names:
+        - quantile
+        - quantileTDigestWeighted
+  - processor: HashBucketFunctionTransformer
+    args:
+      hash_bucket_names:
+        - attr_str
+        - attr_num
+
+validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [organization_id]
+
+required_time_column: timestamp

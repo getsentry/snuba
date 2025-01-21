@@ -1,0 +1,59 @@
+version: v1
+kind: entity
+name: ourlogs
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: trace_id, type: UUID },
+    { name: span_id, type: UInt, args: { size: 64 } },
+    { name: severity_text, type: String },
+    { name: severity_number, type: UInt, args: { size: 8 } },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+    { name: timestamp, type: DateTime64, args: { precision: 9 } },
+    { name: body, type: String },
+    { name: attr_string, type: Map, args: { key: { type: String }, value: { type: String } } },
+    { name: attr_int, type: Map, args: { key: { type: String }, value: { type: Int, args: { size: 64 } } } },
+    { name: attr_double, type: Map, args: { key: { type: String }, value: { type: Float, args: { size: 64 } } } },
+    { name: attr_bool, type: Map, args: { key: { type: String }, value: { type: UInt, args: { size: 8 } } } },
+  ]
+
+storages:
+  - storage: ourlogs
+    is_writable: true
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - timestamp
+  - processor: OptionalAttributeAggregationTransformer
+    args:
+      attribute_column_names:
+        - attr_int
+        - attr_double
+      aggregation_names:
+        - sum
+        - count
+        - avg
+        - avgWeighted
+        - max
+        - min
+        - uniq
+      curried_aggregation_names:
+        - quantile
+        - quantileTDigestWeighted
+
+validate_data_model: error
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [organization_id]
+
+required_time_column: timestamp

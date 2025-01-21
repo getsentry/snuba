@@ -11,7 +11,7 @@ from snuba.clusters.cluster import (
     get_cluster,
 )
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.datasets.plans.splitters import QuerySplitStrategy
+from snuba.datasets.deletion_settings import DeletionSettings
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import WritableTableSchema, WriteFormat
@@ -41,10 +41,12 @@ class Storage(ABC):
         storage_set_key: StorageSetKey,
         schema: Schema,
         readiness_state: ReadinessState,
+        required_time_column: Optional[str] = None,
     ):
         self.__storage_set_key = storage_set_key
         self.__schema = schema
         self.__readiness_state = readiness_state
+        self.__required_time_column = required_time_column
 
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
@@ -57,6 +59,10 @@ class Storage(ABC):
 
     def get_readiness_state(self) -> ReadinessState:
         return self.__readiness_state
+
+    @property
+    def required_time_column(self) -> str | None:
+        return self.__required_time_column
 
 
 class ReadableStorage(Storage):
@@ -80,15 +86,6 @@ class ReadableStorage(Storage):
         """
         raise NotImplementedError
 
-    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
-        """
-        If this storage supports splitting queries as optimizations, they are provided here.
-        These are optimizations, the query plan builder may decide to override the storage
-        and to skip the splitters. So correctness of the query must not depend on these
-        strategies to be applied.
-        """
-        return []
-
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         """
         Returns a list of expression patterns that need to always be
@@ -98,6 +95,10 @@ class ReadableStorage(Storage):
         sending the query to Clickhouse.
         """
         return []
+
+    @abstractmethod
+    def get_storage_key(self) -> StorageKey:
+        raise NotImplementedError
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return [DEFAULT_PASSTHROUGH_POLICY]
@@ -130,16 +131,26 @@ class ReadableTableStorage(ReadableStorage):
         schema: Schema,
         readiness_state: ReadinessState,
         query_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
-        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
+        deletion_settings: Optional[DeletionSettings] = None,
+        deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
+        delete_allocation_policies: Optional[list[AllocationPolicy]] = None,
+        required_time_column: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         self.__query_processors = query_processors or []
-        self.__query_splitters = query_splitters or []
+        self.__deletion_settings = deletion_settings or DeletionSettings(0, [], [], 0)
+        self.__deletion_processors = deletion_processors or []
         self.__mandatory_condition_checkers = mandatory_condition_checkers or []
         self.__allocation_policies = allocation_policies or []
-        super().__init__(storage_set_key, schema, readiness_state)
+        self.__delete_allocation_policies = delete_allocation_policies or []
+        super().__init__(
+            storage_set_key,
+            schema,
+            readiness_state,
+            required_time_column=required_time_column,
+        )
 
     def get_storage_key(self) -> StorageKey:
         return self.__storage_key
@@ -147,14 +158,20 @@ class ReadableTableStorage(ReadableStorage):
     def get_query_processors(self) -> Sequence[ClickhouseQueryProcessor]:
         return self.__query_processors
 
-    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
-        return self.__query_splitters
-
     def get_mandatory_condition_checkers(self) -> Sequence[ConditionChecker]:
         return self.__mandatory_condition_checkers
 
     def get_allocation_policies(self) -> list[AllocationPolicy]:
         return self.__allocation_policies or super().get_allocation_policies()
+
+    def get_delete_allocation_policies(self) -> list[AllocationPolicy]:
+        return self.__delete_allocation_policies
+
+    def get_deletion_settings(self) -> DeletionSettings:
+        return self.__deletion_settings
+
+    def get_deletion_processors(self) -> Sequence[ClickhouseQueryProcessor]:
+        return self.__deletion_processors
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -166,13 +183,16 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         schema: Schema,
         query_processors: Sequence[ClickhouseQueryProcessor],
         stream_loader: KafkaStreamLoader,
-        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         mandatory_condition_checkers: Optional[Sequence[ConditionChecker]] = None,
         allocation_policies: Optional[list[AllocationPolicy]] = None,
+        delete_allocation_policies: Optional[list[AllocationPolicy]] = None,
         replacer_processor: Optional[ReplacerProcessor[Any]] = None,
+        deletion_settings: Optional[DeletionSettings] = None,
+        deletion_processors: Optional[Sequence[ClickhouseQueryProcessor]] = None,
         writer_options: ClickhouseWriterOptions = None,
         write_format: WriteFormat = WriteFormat.JSON,
         ignore_write_errors: bool = False,
+        required_time_column: Optional[str] = None,
     ) -> None:
         self.__storage_key = storage_key
         super().__init__(
@@ -181,9 +201,12 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
             schema,
             readiness_state,
             query_processors,
-            query_splitters,
+            deletion_settings,
+            deletion_processors,
             mandatory_condition_checkers,
             allocation_policies,
+            delete_allocation_policies,
+            required_time_column=required_time_column,
         )
         assert isinstance(schema, WritableTableSchema)
         self.__table_writer = TableWriter(

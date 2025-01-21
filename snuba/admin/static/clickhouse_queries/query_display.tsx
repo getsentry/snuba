@@ -2,13 +2,20 @@ import React, { useEffect, useState } from "react";
 import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
+import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
+import { SelectItem, Switch, Alert } from "@mantine/core";
 import { Prism } from "@mantine/prism";
 import { RichTextEditor } from "@mantine/tiptap";
 import { useEditor } from "@tiptap/react";
 import HardBreak from "@tiptap/extension-hard-break";
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
+import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
+import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { Collapse as MantineCollapse, Group, Text } from '@mantine/core';
+import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 
 import {
   ClickhouseNodeData,
@@ -19,16 +26,24 @@ import {
 
 type QueryState = Partial<QueryRequest>;
 
+const HISTORY_KEY = "clickhouse_queries";
 function QueryDisplay(props: {
   api: Client;
   resultDataPopulator: (queryResult: QueryResult) => JSX.Element;
   predefinedQueryOptions: Array<PredefinedQuery>;
 }) {
   const [nodeData, setNodeData] = useState<ClickhouseNodeData[]>([]);
-  const [query, setQuery] = useState<QueryState>({});
+  const [query, setQuery] = useState<QueryState>({
+    storage: getParamFromStorage("storage"),
+  });
   const [queryResultHistory, setQueryResultHistory] = useState<QueryResult[]>(
-    []
+    getRecentHistory(HISTORY_KEY)
   );
+
+  const [queryError, setQueryError] = useState<Error | null>(null);
+
+  // this is used to collapse the stack trace in error messages
+  const [collapseOpened, setCollapseOpened] = useState(false);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -45,6 +60,15 @@ function QueryDisplay(props: {
       return {
         ...prevQuery,
         storage: storage,
+      };
+    });
+  }
+
+  function setSudo(value: boolean) {
+    setQuery((prevQuery) => {
+      return {
+        ...prevQuery,
+        sudo: value,
       };
     });
   }
@@ -71,65 +95,105 @@ function QueryDisplay(props: {
   }
 
   function executeQuery() {
-    props.api
+    return props.api
       .executeSystemQuery(query as QueryRequest)
       .then((result) => {
+        setQueryError(null);  // clear any previous error
         result.input_query = `${query.sql} (${query.storage},${query.host}:${query.port})`;
+        setRecentHistory(HISTORY_KEY, result);
         setQueryResultHistory((prevHistory) => [result, ...prevHistory]);
-      })
-      .catch((err) => {
-        console.log("ERROR", err);
-        window.alert("An error occurred: " + err.error);
       });
   }
 
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
-  }
-
-  function getHosts(nodeData: ClickhouseNodeData[]): JSX.Element[] {
+  function getHosts(nodeData: ClickhouseNodeData[]): SelectItem[] {
     let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
     // populate the hosts entries marking distributed hosts that are not also local
     if (node_info) {
-      let local_hosts = node_info.local_nodes.map((node) => (
-        <option
-          key={`${node.host}:${node.port}`}
-          value={`${node.host}:${node.port}`}
-        >
-          {node.host}:{node.port}
-        </option>
-      ));
+      let local_hosts = node_info.local_nodes.map((node) => ({
+        value: `${node.host}:${node.port}`,
+        label: `${node.host}:${node.port}`,
+      }));
       let dist_hosts = node_info.dist_nodes
         .filter((node) => !node_info.local_nodes.includes(node))
-        .map((node) => (
-          <option
-            key={`${node.host}:${node.port} dist`}
-            value={`${node.host}:${node.port}`}
-          >
-            {node.host}:{node.port} (distributed)
-          </option>
-        ));
+        .map((node) => ({
+          value: `${node.host}:${node.port}`,
+          label: `${node.host}:${node.port} (distributed)`,
+        }));
       let hosts = local_hosts.concat(dist_hosts);
       let query_node = node_info.query_node;
       if (query_node) {
-        hosts.push(
-          <option
-            key={`${query_node.host}:${query_node.port} query`}
-            value={`${query_node.host}:${query_node.port}`}
-          >
-            {query_node.host}:{query_node.port} (query node)
-          </option>
-        );
+        hosts.push({
+          value: `${query_node.host}:${query_node.port}`,
+          label: `${query_node.host}:${query_node.port} (query node)`,
+        });
       }
       return hosts;
     }
     return [];
   }
 
+  function getErrorDomElement() {
+    if (queryError !== null) {
+      let title: string;
+      let bodyDOM;
+      if (queryError.name === "Error" && queryError.message.includes("Stack trace:")) {
+        // this puts the stack trace in a collapsible section
+        const split = queryError.message.indexOf("Stack trace:")
+        title = queryError.message.slice(0, split)
+
+        const stackTrace = queryError.message.slice(split + "Stack trace:".length)
+          .split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+        bodyDOM = <div>
+          <Group spacing="xs" onClick={() => setCollapseOpened((o) => !o)} style={{ cursor: 'pointer' }}>
+            {collapseOpened ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
+            <Text weight={500}>Stack Trace</Text>
+          </Group>
+
+          <MantineCollapse in={collapseOpened}>
+            <Text mt="sm">
+              {stackTrace}
+            </Text>
+          </MantineCollapse>
+        </div>
+      } else {
+        title = queryError.name
+        bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+      }
+      return <Alert title={title} color="red">{bodyDOM}</Alert>;
+    }
+    return "";
+  }
+
+  function handleQueryError(error: Error) {
+    setQueryError(error);
+  }
+
+  function convertResultsToCSV(queryResult: QueryResult) {
+    let output = queryResult.column_names.join(",");
+    for (const row of queryResult.rows) {
+      const escaped = row.map((v) =>
+        typeof v == "string" && v.includes(",") ? '"' + v + '"' : v
+      );
+      output = output + "\n" + escaped.join(",");
+    }
+    return output;
+  }
+
   return (
     <div>
-      <form>
+      <form style={query.sudo ? sudoForm : standardForm}>
         <h2>Construct a ClickHouse System Query</h2>
+        <div>
+          <Switch
+            checked={query.sudo}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+              setSudo(evt.currentTarget.checked)
+            }
+            onLabel="Sudo mode"
+            offLabel="User mode"
+            size="xl"
+          />
+        </div>
         <QueryEditor
           onQueryUpdate={(sql) => {
             updateQuerySql(sql);
@@ -138,50 +202,36 @@ function QueryDisplay(props: {
         />
         <div style={executeActionsStyle}>
           <div>
-            <select
+            <CustomSelect
               value={query.storage || ""}
-              onChange={(evt) => selectStorage(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a storage
-              </option>
-              {nodeData.map((storage) => (
-                <option key={storage.storage_name} value={storage.storage_name}>
-                  {storage.storage_name}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={selectStorage}
+              name="storage"
+              options={nodeData.map((storage) => storage.storage_name)}
+            />
+            <CustomSelect
               disabled={!query.storage}
               value={
                 query.host && query.port ? `${query.host}:${query.port}` : ""
               }
-              onChange={(evt) => selectHost(evt.target.value)}
-              style={selectStyle}
-            >
-              <option disabled value="">
-                Select a host
-              </option>
-              {getHosts(nodeData)}
-            </select>
+              onChange={selectHost}
+              name="Host"
+              options={getHosts(nodeData)}
+            />
           </div>
           <div>
-            <button
-              onClick={(evt) => {
-                evt.preventDefault();
-                executeQuery();
-              }}
-              style={executeButtonStyle}
+            <ExecuteButton
+              onError={handleQueryError}
+              onClick={executeQuery}
               disabled={
                 !query.storage || !query.host || !query.port || !query.sql
               }
-            >
-              Execute query
-            </button>
+            />
           </div>
         </div>
       </form>
+      <div>
+        {getErrorDomElement()}
+      </div>
       <div>
         <h2>Query results</h2>
         {queryResultHistory.map((queryResult, idx) => {
@@ -189,14 +239,11 @@ function QueryDisplay(props: {
             return (
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
-                <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(JSON.stringify(queryResult))}
-                  >
-                    Copy to clipboard
-                  </button>
-                </p>
+                <QueryResultCopier
+                  rawInput={queryResult.trace_output || ""}
+                  jsonInput={JSON.stringify(queryResult)}
+                  csvInput={convertResultsToCSV(queryResult)}
+                />
                 {props.resultDataPopulator(queryResult)}
               </div>
             );
@@ -204,12 +251,11 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
+              <QueryResultCopier
+                rawInput={queryResult.trace_output || ""}
+                jsonInput={JSON.stringify(queryResult)}
+                csvInput={convertResultsToCSV(queryResult)}
+              />
               {props.resultDataPopulator(queryResult)}
             </Collapse>
           );
@@ -218,6 +264,12 @@ function QueryDisplay(props: {
     </div>
   );
 }
+
+const sudoForm = {
+  border: "8px solid red",
+};
+
+const standardForm = {};
 
 const executeActionsStyle = {
   display: "flex",
@@ -278,4 +330,5 @@ const queryDescription = {
   fontSize: 16,
   padding: "10px 5px",
 };
+
 export default QueryDisplay;

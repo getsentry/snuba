@@ -115,7 +115,7 @@ def test_query_storage_selector(
     use_readable: bool,
     expected_storage: Storage,
 ) -> None:
-    query, _ = parse_snql_query(str(snql_query), dataset)
+    query = parse_snql_query(str(snql_query), dataset)
     assert isinstance(query, Query)
 
     if use_readable:
@@ -127,7 +127,7 @@ def test_query_storage_selector(
 
 
 def test_assert_raises() -> None:
-    query, _ = parse_snql_query(
+    query = parse_snql_query(
         """
         MATCH (events)
         SELECT event_id

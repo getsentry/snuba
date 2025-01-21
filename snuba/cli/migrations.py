@@ -1,16 +1,16 @@
 import os
+import re
 from typing import Optional, Sequence
 
 import click
 
+import snuba.migrations.autogeneration as autogeneration
 from snuba.clusters.cluster import CLUSTERS, ClickhouseNodeType
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
-from snuba.datasets.storages.factory import get_all_storage_keys
 from snuba.environment import setup_logging
 from snuba.migrations.connect import (
     check_clickhouse_connections,
-    check_for_inactive_replicas,
     get_clickhouse_clusters_for_migration_group,
     get_clusters_for_readiness_states,
 )
@@ -35,10 +35,10 @@ def list() -> None:
     setup_logging()
     check_clickhouse_connections(CLUSTERS)
     runner = Runner()
-    for group, group_migrations in runner.show_all():
+    for group, group_migrations in runner.show_all(include_nonexistent=True):
         readiness_state = get_group_readiness_state(group)
         click.echo(f"{group.value} (readiness_state: {readiness_state.value})")
-        for migration_id, status, blocking in group_migrations:
+        for migration_id, status, blocking, existing in group_migrations:
             symbol = {
                 Status.COMPLETED: "X",
                 Status.NOT_STARTED: " ",
@@ -51,7 +51,11 @@ def list() -> None:
             if status != Status.COMPLETED and blocking:
                 blocking_text = " (blocking)"
 
-            click.echo(f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}")
+            existing_text = "" if existing else " (this migration no longer exists)"
+
+            click.echo(
+                f"[{symbol}]  {migration_id}{in_progress_text}{blocking_text}{existing_text}"
+            )
 
         click.echo()
 
@@ -101,7 +105,6 @@ def migrate(
         else CLUSTERS
     )
     check_clickhouse_connections(clusters_to_check)
-    check_for_inactive_replicas(get_all_storage_keys(readiness_states=readiness_states))
     runner = Runner()
 
     try:
@@ -155,14 +158,10 @@ def run(
     """
     setup_logging(log_level)
     migration_group = MigrationGroup(group)
-    readiness_state = get_group_readiness_state(migration_group)
     if not dry_run:
         # just check the connection for the migration that's being run
         check_clickhouse_connections(
             get_clickhouse_clusters_for_migration_group(migration_group)
-        )
-        check_for_inactive_replicas(
-            get_all_storage_keys(readiness_states=[readiness_state])
         )
 
     runner = Runner()
@@ -215,14 +214,10 @@ def reverse(
     --fake marks a migration as reversed without doing anything.
     """
     migration_group = MigrationGroup(group)
-    readiness_state = get_group_readiness_state(migration_group)
     setup_logging(log_level)
     if not dry_run:
         check_clickhouse_connections(
             get_clickhouse_clusters_for_migration_group(migration_group)
-        )
-        check_for_inactive_replicas(
-            get_all_storage_keys(readiness_states=[readiness_state])
         )
     runner = Runner()
     migration_key = MigrationKey(migration_group, migration_id)
@@ -268,9 +263,6 @@ def reverse_in_progress(
     """
     setup_logging(log_level)
     migration_group = MigrationGroup(group) if group else None
-    readiness_state = (
-        get_group_readiness_state(migration_group) if migration_group else None
-    )
     if not dry_run:
         clusters_to_check = (
             CLUSTERS
@@ -278,11 +270,6 @@ def reverse_in_progress(
             else get_clickhouse_clusters_for_migration_group(migration_group)
         )
         check_clickhouse_connections(clusters_to_check)
-        check_for_inactive_replicas(
-            get_all_storage_keys(
-                readiness_states=[readiness_state] if readiness_state else None
-            )
-        )
     runner = Runner()
 
     if dry_run:
@@ -331,12 +318,33 @@ def reverse_in_progress(
     required=True,
     default=os.environ.get("CLICKHOUSE_DATABASE", "default"),
 )
+@click.option(
+    "--secure",
+    type=bool,
+    default=False,
+    help="If true, an encrypted connection will be used",
+)
+@click.option(
+    "--ca-certs",
+    type=str,
+    default=None,
+    help="An optional path to certificates directory.",
+)
+@click.option(
+    "--verify",
+    type=bool,
+    default=False,
+    help="Verify ClickHouse SSL cert.",
+)
 def add_node(
     node_type: str,
     storage_set_names: Sequence[str],
     host_name: str,
     port: int,
     database: str,
+    secure: bool,
+    ca_certs: Optional[str],
+    verify: Optional[bool],
 ) -> None:
     """
     Runs all migrations on a brand new ClickHouse node. This should be performed
@@ -377,4 +385,36 @@ def add_node(
         user=user,
         password=password,
         database=database,
+        secure=secure,
+        ca_certs=ca_certs,
+        verify=verify,
     )
+
+
+@migrations.command()
+@click.argument("storage_path", type=str)
+@click.option("--name", type=str, help="optional name for the migration")
+def generate(storage_path: str, name: Optional[str] = None) -> None:
+    """
+    Given a path to user-modified storage.yaml definition (inside snuba/datasets/configuration/*/storages/*.yaml),
+    and an optional name for the migration,
+    generates a snuba migration based on the schema modifications to the storage.yaml.
+
+    Currently only column addition is supported.
+
+    The migration is generated based on the diff between HEAD and working dir. Therefore modifications to the
+    storage should be uncommitted in the working dir.
+
+    The generated migration will be written into the local directory. The user is responsible for making
+    the commit, PR, and merging.
+
+    see MIGRATIONS.md in the root folder for more info
+    """
+    expected_pattern = r"(.+/)?snuba/datasets/configuration/.*/storages/.*\.(yml|yaml)"
+    if not re.fullmatch(expected_pattern, storage_path):
+        raise click.ClickException(
+            f"Storage path {storage_path} does not match expected pattern {expected_pattern}"
+        )
+
+    path = autogeneration.generate(storage_path, migration_name=name)
+    click.echo(f"Migration successfully generated at {path}")

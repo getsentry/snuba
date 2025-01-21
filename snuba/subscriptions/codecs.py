@@ -1,19 +1,24 @@
+import base64
 import json
 from datetime import datetime
 from typing import cast
 
 import rapidjson
 from arroyo.backends.kafka import KafkaPayload
+from google.protobuf.message import Message as ProtobufMessage
 from sentry_kafka_schemas.schema_types import events_subscription_results_v1
 
 from snuba.datasets.entities.entity_key import EntityKey
 from snuba.query.exceptions import InvalidQueryException
 from snuba.subscriptions.data import (
+    RPCSubscriptionData,
     ScheduledSubscriptionTask,
+    SnQLSubscriptionData,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
     SubscriptionTaskResult,
+    SubscriptionType,
     SubscriptionWithMetadata,
 )
 from snuba.utils.codecs import Codec, Encoder
@@ -32,7 +37,10 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         except json.JSONDecodeError:
             raise InvalidQueryException("Invalid JSON")
 
-        return SubscriptionData.from_dict(data, self.entity_key)
+        if data.get("subscription_type") == SubscriptionType.RPC.value:
+            return RPCSubscriptionData.from_dict(data, self.entity_key)
+
+        return SnQLSubscriptionData.from_dict(data, self.entity_key)
 
 
 class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult]):
@@ -41,11 +49,22 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
         subscription_id = str(subscription.identifier)
         request, result = value.result
 
+        if isinstance(request, ProtobufMessage):
+            original_body = {
+                "request": base64.b64encode(request.SerializeToString()).decode(
+                    "utf-8"
+                ),
+                "request_name": request.__class__.__name__,
+                "request_version": request.__class__.__module__.split(".", 3)[2],
+            }
+        else:
+            original_body = {**request.original_body}
+
         data: events_subscription_results_v1.SubscriptionResult = {
             "version": 3,
             "payload": {
                 "subscription_id": subscription_id,
-                "request": {**request.original_body},
+                "request": original_body,
                 "result": {
                     "data": result["data"],
                     "meta": result["meta"],
@@ -65,7 +84,7 @@ class SubscriptionTaskResultEncoder(Encoder[KafkaPayload, SubscriptionTaskResult
 class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscriptionTask]):
     """
     Encodes/decodes a scheduled subscription to Kafka payload.
-    Does not support non SnQL subscriptions.
+    Supports SnQL and RPC subscriptions.
     """
 
     def encode(self, value: ScheduledSubscriptionTask) -> KafkaPayload:
@@ -97,15 +116,20 @@ class SubscriptionScheduledTaskEncoder(Codec[KafkaPayload, ScheduledSubscription
 
         entity_key = EntityKey(scheduled_subscription_dict["entity"])
 
+        data = scheduled_subscription_dict["task"]["data"]
+        subscription: SubscriptionData
+        if data.get("subscription_type") == SubscriptionType.RPC.value:
+            subscription = RPCSubscriptionData.from_dict(data, entity_key)
+        else:
+            subscription = SnQLSubscriptionData.from_dict(data, entity_key)
+
         return ScheduledSubscriptionTask(
             datetime.fromisoformat(scheduled_subscription_dict["timestamp"]),
             SubscriptionWithMetadata(
                 entity_key,
                 Subscription(
                     SubscriptionIdentifier.from_string(subscription_identifier),
-                    SubscriptionData.from_dict(
-                        scheduled_subscription_dict["task"]["data"], entity_key
-                    ),
+                    subscription,
                 ),
                 scheduled_subscription_dict["tick_upper_offset"],
             ),

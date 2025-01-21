@@ -29,13 +29,13 @@ from snuba.datasets.entities.factory import get_entity, get_entity_name
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.reader import Result
-from snuba.request import Request
 from snuba.subscriptions.codecs import (
     SubscriptionScheduledTaskEncoder,
     SubscriptionTaskResultEncoder,
 )
 from snuba.subscriptions.data import (
     ScheduledSubscriptionTask,
+    SubscriptionRequest,
     SubscriptionTaskResult,
     SubscriptionTaskResultFuture,
 )
@@ -46,7 +46,6 @@ from snuba.utils.streams.configuration_builder import build_kafka_consumer_confi
 from snuba.utils.streams.topics import Topic as SnubaTopic
 from snuba.web import QueryException
 from snuba.web.constants import NON_RETRYABLE_CLICKHOUSE_ERROR_CODES
-from snuba.web.query import parse_and_run_query
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +254,7 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
 
     def __execute_query(
         self, task: ScheduledSubscriptionTask, tick_upper_offset: int
-    ) -> Tuple[Request, Result]:
+    ) -> Tuple[SubscriptionRequest, Result]:
         # Measure the amount of time that took between the task's scheduled
         # time and it beginning to execute.
         self.__metrics.timing(
@@ -274,9 +273,9 @@ class ExecuteQuery(ProcessingStrategy[KafkaPayload]):
                 "subscriptions_executor",
             )
 
-            result = parse_and_run_query(
+            result = task.task.subscription.data.run_query(
                 self.__dataset,
-                request,
+                request,  # type: ignore
                 timer,
                 robust=True,
                 concurrent_queries_gauge=self.__concurrent_clickhouse_gauge,

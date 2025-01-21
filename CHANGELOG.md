@@ -1,5 +1,552 @@
 # Changelog
 
+## 25.1.0
+
+### Various fixes & improvements
+
+- fix: snuba admin system query error messaging (#6763) by @kylemumma
+- feat: Add SSL/TLS support for ClickHouse connections (#6459) by @patsevanton
+- fix(settings): specify VALID_RETENTION_DAYS for self-hosted (#6756) by @aldy505
+- chore(deps): Bump Python to 3.11.11 (#6719) by @beninabox
+- Bump arroyo version (#6766) by @volokluev
+- feat(ourlogs): Add entity/storage configs & dev worker (#6759) by @colin-sentry
+- fix(optimize): make tests and optimize use UTC timestamps (#6760) by @onewland
+- meta: Bump new development version (1fe61a9d)
+
+## 24.12.2
+
+### Various fixes & improvements
+
+- ref(uptime): use new v2 table in storage (#6761) by @JoshFerge
+- ref(uptime): use region instead of region_slug (#6762) by @JoshFerge
+- ref(uptime): rebuild uptime storage table (#6758) by @JoshFerge
+- chore(eap): write script to send scrubbed data into a gcs bucket (#6698) by @davidtsuk
+- fix(scripts): Grab everything in the path (#6750) by @phacops
+- feat(profiling): process environment value for profile_chunks and add the column to the storage definition (#6738) by @viglia
+- ci: Switch e2e test to self-hosted repo (#6746) by @BYK
+- feat(ourlogs): Add a kafka consumer (#6743) by @colin-sentry
+- Revert "deps: replace python-jose with pyjwt (#6739)" (96d5c2bd) by @getsentry-bot
+- fix(uptime): add snapshot test for corrected typo (#6744) by @JoshFerge
+- feat(sudo): allow dropping of replica in sudo tool (#6742) by @volokluev
+- chore(codeowners): add crons team to uptime files (#6741) by @JoshFerge
+- deps: replace python-jose with pyjwt (#6739) by @mdtro
+- fix(uptime): align rust consumer with clickhouse schema (#6740) by @JoshFerge
+- feat(devservices): Support no workers option for containerized version of snuba (#6737) by @hubertdeng123
+- feat(devservices): Add devservices ci validation job (#6716) by @hubertdeng123
+- chore(uptime): move uptime storage to partial (#6736) by @JoshFerge
+- feat(profiling): add environment column to the profile_chunks table (#6722) by @viglia
+- feat(EAP): Trace Item resolvers (#6732) by @volokluev
+- feat(ourlogs): Simplify the buckets for logs (#6735) by @colin-sentry
+- Revert "chore(eap-spans): Take advantage of parallel reads (#6579)" (f8900d8c) by @getsentry-bot
+- Implement filter offset for attribute values API (#6667) by @xurui-c
+- fix(eap): use TDigestWeighted instead of TDigest for perncetile confidence calculation (#6734) by @shellmayr
+- fix(storage): correctly name storage key (#6733) by @JoshFerge
+
+_Plus 28 more_
+
+## 24.12.1
+
+### Various fixes & improvements
+
+- Revert "fix(eap-spans): Add an index on project_id (#6695)" (9f5c3f57) by @getsentry-bot
+- fix(eap-spans): Add an index on project_id (#6695) by @phacops
+- 984: scrub eap_spans_str_attrs (#6694) by @kylemumma
+- fix(inc984): scrub the correct bucket for sentry.user (#6693) by @xurui-c
+- fix(inc984): scrub the correct bucket for sentry.user.ip (#6692) by @volokluev
+- inc984: scrub `user` from eap_spans (#6691) by @xurui-c
+- inc984: scrub `user` from spans (#6689) by @xurui-c
+- fix(rust): Honor exit code (#6674) by @untitaker
+- ref(admin): lw delete related system queries (#6685) by @MeredithAnya
+- chore: Bump rust-toolchain (#6688) by @untitaker
+- chore(devservices): Bumping the version of devservices to latest (#6682) by @IanWoodard
+- fix(devservices): Add orchestrator devservices label to clickhouse (#6687) by @hubertdeng123
+- fix(eap): Fix divide by 0 errors caused when the sample count is 0 (#6681) by @davidtsuk
+- meta: Bump new development version (44657332)
+- ref(lw-deletes): add project_id killswitch and some logging (#6677) by @MeredithAnya
+- docs: update CH supported versions (#6683) by @MeredithAnya
+- feat(inc-984): Cleanup EAP spans  (#6676) by @xurui-c
+- fix(admin): Allow special characters in SYSTEM/OPTIMIZE queries (#6680) by @evanh
+- feat(eap): Use weighted average instead of simple average for calculating average sampling rate (#6678) by @davidtsuk
+- ref(lw-deletes): concurrent allocation policy requires org id (#6679) by @MeredithAnya
+
+## 24.12.0
+
+### Various fixes & improvements
+
+- feat(inc-984): store project ids list in dictionary in scrub job (#6675) by @volokluev
+- ref(lw-deletes): enforce ratelimiter (#6644) by @MeredithAnya
+- fix(admin): Allow KILL MUTATION commands in sudo mode (#6672) by @evanh
+- fix(inc984): align start/end timestamp to partition boundaries (#6670) by @volokluev
+- chore(deps): bump relay from 0.9.2 to 0.9.4 (#6660) by @jjbayer
+- feat(inc984): make mutation condition simpler (#6669) by @volokluev
+- chore: Bump Arroyo to 2.19.5 (#6666) by @ayirr7
+- ref: bump sentry-arroyo to 2.19.4 (#6663) by @getsentry-bot
+- fix(eap-alerts): Fix subscriptions referrer for eap alerts (#6662) by @shruthilayaj
+- chore(api): Do not log healthcheck error if downfile exists (#6635) by @untitaker
+- feat(eap): add additional validation for group by  (#6659) by @davidtsuk
+- feat(eap): add default value to virtual column (#6657) by @davidtsuk
+- ref: bump sentry-arroyo to 2.19.3 (#6656) by @getsentry-bot
+- Implement filter offset for attribute keys API (#6618) by @xurui-c
+- feat: make sentry RPC instrumentation more specific to the endpoint (#6654) by @kylemumma
+- fix(consumers): Respect 60 day retention days period (#6631) by @volokluev
+- feat: add missing example in admin rpc tool (#6647) by @kylemumma
+- hotfix(inc-984): Add manual job to scrub IPs from spans (#6649) by @volokluev
+- feat: support 15 minute granularity on eap time series RPC (#6645) by @kylemumma
+- fix(eap): Fix divide by 0 bug (#6653) by @davidtsuk
+- fix: run sentry tests when RPC changes (#6652) by @colin-sentry
+- meta: Bump new development version (60ff5441)
+- chore(eap-spans): Take advantage of parallel reads (#6579) by @phacops
+
+## 24.11.2
+
+### Various fixes & improvements
+
+- feat(eap): Bump max timeseries buckets (#6630) by @volokluev
+- fix(scripts): Automatically create local tables before MV (#6648) by @untitaker
+- feat(eap): Implement confidence intervals for percentiles (#6634) by @davidtsuk
+- fix: admin rpc endpoint selector bug fix (#6641) by @kylemumma
+- ref(admin): Allow merge function in FROM clause (#6643) by @evanh
+- fix: Actual Rust support in bump-version (#6640) by @untitaker
+- fix 0006_sorting_key_change migration (#6633) by @MeredithAnya
+- chore: Bump Arroyo 2.19.2 (#6639) by @ayirr7
+- chore: Bump Arroyo to 2.19.1 (#6632) by @ayirr7
+- chore(devservices): Bumping the version of devservices to latest (#6629) by @IanWoodard
+- feat(eap-api): support in conditions in TraceItemFilter (#6623) by @kylemumma
+- Revert "ref(ci): Disable self-hosted e2e CI due to resource constraints" (#6622) by @hubertdeng123
+- feat(devservices): Use https for repo links (#6627) by @hubertdeng123
+- chore: Bump rust-arroyo to published crate (#6614) by @untitaker
+- feat(label): adding label to container (#6628) by @IanWoodard
+- consumer: Add flag to configure DLQ buffer limit (#6626) by @ayirr7
+- feat(runtime_config): A way to add static descriptions to config items (#6624) by @untitaker
+- fix(admin): add example RPC call for the endpoints missing it (#6615) by @kylemumma
+- feat(eap-api): Use signs in count, average, and sum calculations (#6613) by @davidtsuk
+- feat(devservices): Add healthchecks to clickhouse and snuba (#6616) by @hubertdeng123
+- feat(memory): Add script to debug consumer OOM issues (#6585) by @nikhars
+- ref(ci): Disable self-hosted e2e CI due to resource constraints (#6620) by @hubertdeng123
+- ref(admin): Allow clusterAllReplicas in system queries (#6619) by @evanh
+- ref(profiling): start the profile_chunks consumer when ENABLE_PROFILES_CONSUMER is true (#6607) by @viglia
+
+_Plus 11 more_
+
+## 24.11.1
+
+### Various fixes & improvements
+
+- ref(clickhouse-24.3): allow_suspicious_primary_key for eap migration (#6602) by @MeredithAnya
+- chore(devservices): Bumping the version of devservices to latest (#6596) by @IanWoodard
+- feat(consumers): Quantized rebalancing in Rust (#6595) by @untitaker
+- chore(metrics-summaries): Remove metrics summaries consumer code (#6590) by @phacops
+- feat(eap): Extract profile id for eap spans (#6597) by @Zylphrex
+- fix(codeowners): Code owners for eap processor (#6598) by @Zylphrex
+- fix(eap): fix bug where we pass non str group by mapping to timeseries (#6593) by @davidtsuk
+- fix(eap-api): delimeter for alias (#6592) by @xurui-c
+- feat(eap): Add confidence interval calculations for count (#6568) by @davidtsuk
+- RPC handles same name attributes (#6581) by @xurui-c
+- log(optimize): after optimize, log how long it took w/partition (#6591) by @onewland
+- feat(devservices): Add restart settings and use external devservices network (#6587) by @hubertdeng123
+- chore(deps): bump actions/checkout from 2 to 4 (#6554) by @onkar
+- chore(devservices): Bumping the version of devservices to latest (#6582) by @IanWoodard
+- chore(ci): Upgrade ClickHouse to v23.8 for CI (#6584) by @phacops
+- feat(subscriptions): Add a create subscription rpc endpoint (#6571) by @shruthilayaj
+- fix(script): Wait for futures when producing to kafka (#6583) by @nikhars
+- fix: convert max_batch_time seconds (#6580) by @MeredithAnya
+- fix: dont set group.instance.id incorrectly (#6578) by @MeredithAnya
+- chore(eap-spans): Increase the number of replicas to scan in parallel (#6577) by @phacops
+- V1 RPC of TraceItemAttributeValues (#6563) by @xurui-c
+- meta: Bump new development version (9b923342)
+- build(deps): bump types-python-dateutil from 2.8.19 to 2.8.19.14 (#6557) by @onkar
+- build(deps-dev): bump webpack-cli from 4.10.0 to 5.1.4 in /snuba/admin (#6558) by @onkar
+
+_Plus 4 more_
+
+## 24.11.0
+
+### Various fixes & improvements
+
+- feat(consumers): rust consumers quantized rebalance (#6561) by @volokluev
+- chore(deps): bump docker/setup-buildx-action from 2 to 3 (#6553) by @onkar
+- ref(deletes): add lw-deletions-search-issues-consumer to deploy.sh (#6567) by @MeredithAnya
+- fix(admin): ignore gather_profile_events for certain storages (#6566) by @MeredithAnya
+- chore(deps): bump getsentry/action-github-app-token from 2.0.0 to 3.0.0 (#6549) by @onkar
+- ref(deletes): add use_bulk_deletes runtime config (#6560) by @MeredithAnya
+- feat(devservices): Only expose ports to localhost (#6565) by @hubertdeng123
+- chore(deps): bump types-pyyaml from 6.0.11 to 6.0.12.20240808 (#6552) by @onkar
+- chore(deps): bump getsentry/action-migrations from 1.0.8 to 1.2.2 (#6556) by @onkar
+- feat(eap): Add support for extrapolation (#6536) by @davidtsuk
+- feat(devservices): Bump devservices version (#6507) by @hubertdeng123
+- chore(eap-spans): Remove unused tables (#6544) by @phacops
+- chore(eap-spans): Switch test to use new spans table (#6550) by @phacops
+- [CapMan visibility] rejected queries are ran with 0 threads (#6545) by @xurui-c
+- fix: ENABLE_LW_DELETIONS_CONSUMER default to False (#6546) by @MeredithAnya
+- ref(deletes): bulk delete consumer (#6510) by @MeredithAnya
+- chore(deps): bump packaging from 21.3 to 24.1 (#6540) by @onkar
+- chore(deps): bump progressbar2 from 4.0.0 to 4.2.0 (#6534) by @onkar
+- chore(deps): bump jsonschema from 4.16.0 to 4.23.0 (#6539) by @onkar
+- chore(deps): bump google-github-actions/auth from 1 to 2 (#6541) by @onkar
+- build(deps): bump sentry-usage-accountant from 0.0.10 to 0.0.11 (#6542) by @onkar
+- build(deps): bump actions/setup-node from 3 to 4 (#6543) by @onkar
+- Fix sampling weight calculation (#6537) by @davidtsuk
+- chore(deps): bump types-setuptools from 65.3.0 to 74.1.0.20240907 (#6526) by @onkar
+
+_Plus 102 more_
+
+## 24.10.0
+
+### Various fixes & improvements
+
+- ref(functions): refactor functions processor and storage (#6411) by @viglia
+- fix(eap): remove flask stuff from rpc (#6410) by @volokluev
+- fix(admin): Handle NaN in admin results (#6412) by @evanh
+- fix(database-clusters): Use a lock when creating connection (#6407) by @davidtsuk
+- feat(rpc): handle exceptions by returning a proto and non-200 (#6402) by @colin-sentry
+- ref(eap): Clean up the mutations interface (#6344) by @untitaker
+- feat(admin): Show data in clickhouse tracing tool (#6406) by @untitaker
+- feat(database-clusters): Use a ThreadPoolExecutor to speed up node fetching (#6405) by @davidtsuk
+- feat(profiling): add new columns to the raw_functions table (#6398) by @viglia
+- fix(database-clusters): Remove Query Node column (#6404) by @davidtsuk
+- feat(eap): Port TraceItemTable endpoint to v1 (#6401) by @volokluev
+- feat: Add EAP span subscriptions for devserver (#6399) by @shruthilayaj
+- ref(deletes): increase max rows to 100000 (#6400) by @MeredithAnya
+- Revert "feat: Add EAP span subscriptions for devserver (#6396)" (ff049323) by @getsentry-bot
+- feat: Add EAP span subscriptions for devserver (#6396) by @shruthilayaj
+- feat(eap): record rpc endpoint success and timing (#6392) by @volokluev
+- feat(job-runner) view logs in custom jobs admin page (#6394) by @onewland
+- feat(job-runner): persist logs in Redis for easier viewing in snuba admin (#6387) by @onewland
+- fix(devservices): Fixing devservices config (#6393) by @IanWoodard
+- fix(database-clusters): Use host name instead of address when fetching system settings (#6391) by @davidtsuk
+- fix: better error message in admin system query (#6390) by @kylemumma
+- feat(database-clusters): Add server settings for each node and additional data (#6386) by @davidtsuk
+- feat(job-runner): run job from snuba admin (#6385) by @onewland
+- feat(capman): remove legacy cap on threads (#6389) by @volokluev
+
+_Plus 73 more_
+
+## 24.9.0
+
+### Various fixes & improvements
+
+- Update migrations list command to show migrations that no longer exist in the codebase (#6299) by @davidtsuk
+- metric(consumer): Add a metric to track the size of individual spans (#6300) by @ayirr7
+- feat(rpc): Update tags list rpc (#6301) by @Zylphrex
+- feat(eap): add virtual column support (#6292) by @volokluev
+- tweak(eap): Allow more memory usage for eap spans (#6298) by @volokluev
+- ref(doc): add documentation for the ReadinessState enum (#6295) by @viglia
+- feat(eap): Start ingesting data into sample_weight_2 column (#6290) by @colin-sentry
+- Update docker entrypoint to run heaptrack  (#6273) by @ayirr7
+- fix(eap): Switch to sampling_weight_2 in entity (#6287) by @colin-sentry
+- bug(query): Run entity validators in composite query pipeline (#6285) by @enochtangg
+- feat(eap): make mapContains work with EAP dataset (#6284) by @colin-sentry
+- feat(job-runner): create a new `snuba jobs` command (#6281) by @xurui-c
+- feat(eap): Shard meta tables by trace ID (#6286) by @colin-sentry
+- fix(eap): Make span_id be returned as a string correctly (#6283) by @colin-sentry
+- feat(job-runner): scaffolding for job manifest testing (#6282) by @onewland
+- bug(admin): Fix invalid query error alerting in snuba admin (#6280) by @enochtangg
+- Fixing Snuba Admin trace UI error. (#6278) by @nachivrn
+- feat(eap): Add a processor that allows you to do mapKeys on attr_str (#6277) by @colin-sentry
+- cleanup(capman): remove legacy table rate limits (#6274) by @volokluev
+- Fixing Snuba Admin trace UI error. (#6276) by @nachivrn
+- hackweek(snuba-admin): MQL query tool (#6235) by @enochtangg
+- feat(eap): Endpoint to get the tags available for a project (#6270) by @colin-sentry
+- feat(sudo): issue slack notifications when sudo mode is used (#6271) by @volokluev
+- chore(eap): Add entities and storages for EAP span meta tables (#6269) by @colin-sentry
+
+_Plus 60 more_
+
+## 24.8.0
+
+### Various fixes & improvements
+
+- switch readiness state to limited to skip migrations and unblock CI (#6210) by @volokluev
+- fix: Add DropIndices back as it was removed after a revert (#6209) by @phacops
+- fix(eap): fix number migration collision (#6208) by @volokluev
+- Revert "fix(eap-spans): Drop ineffective indices to speed up insertion (#6206)" (68826531) by @getsentry-bot
+- ref(snuba-deletes) don't run delete queries when 0 rows need to be deleted (#6199) by @xurui-c
+- fix(eap-spans): Drop ineffective indices to speed up insertion (#6206) by @phacops
+- ref(eap): Remove materialized view (#6205) by @evanh
+- fix: deletes api, change success response format, fix admin bug (#6197) by @kylemumma
+- feat(eap): stub API for aggregate bucket request (#6204) by @volokluev
+- ref(eap): Change sampling_weight to a UInt (#6190) by @evanh
+- feat(eap): Aggregate request protobuf endpoint  (#6202) by @volokluev
+- feat(eap): Add the TimeSeriesProcessor to entities/eap_spans (#6195) by @colin-sentry
+- feat(EAP) Add Make directive that creates proper import paths (#6196) by @colin-sentry
+- fix(capman): sets the correct throttle policy in query result metadata when multiple throttle policies present (#6192) by @xurui-c
+- feat(generic-metrics): Bump materialization_version for generic metrics (#6194) by @john-z-yang
+- feat: make deletes endpoint compatible with snuba SDK (#6193) by @kylemumma
+- Change CODEOWNERS for EAP team (#6187) by @colin-sentry
+- feat(generic-metrics): Forward sampling information from consumer to clickhouse (#6177) by @john-z-yang
+- Increase the default throttle/warning threshold for allocation policies (#6189) by @xurui-c
+- fix(eap): Use arrayElement directly to fix alias issues with HashBucketMapper (#6188) by @colin-sentry
+- fix: Migrations ended up with the same number (#6183) by @evanh
+- ref(snuba-deletes): introduce delete allocation policies (#6180) by @MeredithAnya
+- feat(eap): Add an example endpoint that uses protobuf over http (#6173) by @colin-sentry
+- feat(generic-metrics): Add migrations to allow sampling for distributions (#6172) by @enochtangg
+
+_Plus 40 more_
+
+## 24.7.1
+
+### Various fixes & improvements
+
+- feat(cleanup): remove complicated readthrough cache (#6130) by @volokluev
+- fix(transactions): Select transactions entity when using profiler id (#6133) by @Zylphrex
+- Revert "Add processor for new spans schema (#6123)" (d60b3e6f) by @getsentry-bot
+- Revert "Define the models for the new Events Analytics Platform (#6126)" (b1376d69) by @getsentry-bot
+- Add processor for new spans schema (#6123) by @colin-sentry
+- Define the models for the new Events Analytics Platform (#6126) by @colin-sentry
+- code (#6129) by @xurui-c
+- fix: wait on system.mutations between hosts during migration execution (#6121) by @kylemumma
+- feat(transactions): Make profiler queryable (#6122) by @Zylphrex
+- bug(mql): Fix MQL totals queries (#6125) by @enochtangg
+- chore: update some readmes related to migrations and autogen (#6076) by @kylemumma
+- ref(lwdeletes): create parse_and_run_query function (#6120) by @volokluev
+- feat(profiling): Write profiler_id to transactions table (#6111) by @Zylphrex
+- Give telemetry experience team access to cardinality analyzer (#6115) by @vgrozdanic
+- Add an inner join relationship for search_issues and group_attributes (#6119) by @snigdhas
+- support max_bytes_before_external_group_by ClickHouse insert flag (#6118) by @onewland
+- fix(mql): Nested filter conditions (#6117) by @john-z-yang
+- code (#6114) by @xurui-c
+- code (#6113) by @xurui-c
+- chore: cleanup SEARCH_ISSUES_TMP storage set (#6110) by @kylemumma
+- code (#6105) by @xurui-c
+- chore: make snuba co-owners of datasets again (#6104) by @kylemumma
+- fix: LowCardinality column bug w/ aliases (#6108) by @MeredithAnya
+- meta: Bump new development version (5dc9763c)
+
+_Plus 2 more_
+
+## 24.7.0
+
+### Various fixes & improvements
+
+- feat(mql): MQL JOIN subquery generator (#6101) by @enochtangg
+- feat(metrics): add wildcard support to MQL parser (#5972) by @shellmayr
+- Revert "feat(profiling): Add profiler id column to transactions (#6099)" (f941b5e7) by @getsentry-bot
+- feat(profiling): Add profiler id column to transactions (#6099) by @Zylphrex
+- feat: create search_issues_dist_v2 on same query node as group_attributes (#6087) by @kylemumma
+- feat(replays): Set platform as empty string if platform is not provided (#6098) by @cmanallen
+- feat(mql): Add test for formula queries with curried aggregate (#6080) by @john-z-yang
+- feat(mql): Arbitrary nested column aggregates (#6096) by @john-z-yang
+- dev(rate-limits): bump backfill query allocation to 30 per s (#6074) by @JoshFerge
+- ref(snuba-deletes): Skeleton for DeletionProcessor (#6095) by @xurui-c
+- ref(snuba-deletes): add DeletionSettings (#6092) by @MeredithAnya
+- fix: move an import that may be causing issue with sentry devservice (#6090) by @kylemumma
+- Revert "code (#6088)" (#6089) by @kneeyo1
+- fix(capman): emit the bytes scanned metric from db_query (#6075) by @volokluev
+- code (#6088) by @xurui-c
+- feat(mql): Support groupby parsing for formula join queries (#6077) by @enochtangg
+- Revert "code (#6081)" (ba3e5ed3) by @getsentry-bot
+- code (#6081) by @xurui-c
+- Add clickhouse override settings (#6085) by @cmanallen
+- chore: new temporary storage set (#6079) by @kylemumma
+- feat(replays): Add materialization YAML definitions (#6071) by @cmanallen
+- fix(devenv): Auto-install cargo watch (#6078) by @untitaker
+- feat: autogenerate addcolumn migrations (#6053) by @kylemumma
+- test(mql): Add tests for formula queries with scalar values (#6073) by @john-z-yang
+
+_Plus 29 more_
+
+## 24.6.0
+
+### Various fixes & improvements
+
+- chore(on-call): Properly handling query validation errors (#6019) by @enochtangg
+- update CH version used in CI (#6027) by @volokluev
+- code (#6026) by @xurui-c
+- code (#6024) by @xurui-c
+- doc(rs): some docs for the ClickHouse batch module (#6020) by @onewland
+- chore(gocd): Bumping gocd-jsonnet version (#6021) by @IanWoodard
+- [CapMan] change default throttle values (#6022) by @xurui-c
+- [CapMan] Add throttling to ReferrerGuardRail policy (#6014) by @xurui-c
+- feat(issue-search): Add group_first_release_id to GroupAttributes processor (#5987) by @snigdhas
+- Fixing the metric increment for cache hit/miss and (#6018) by @nachivrn
+- ref(ci): update clickhouse versions (#6016) by @MeredithAnya
+- update docs for snuba storage queries (#6013) by @enochtangg
+- In the Snuba Admin Production queries UI (#6015) by @nachivrn
+- SNS-2737: Making changes for a simple readthrough cache without queuing (#5992) by @nachivrn
+- chore(profiles-chunks): Add missing consumer to deployment list (#6001) by @rgibert
+- fix(gocd): Updating canary checks to happen after the deploy goes out (#6004) by @IanWoodard
+- ref(admin): Add a system query for data skipping indexes (#6008) by @evanh
+- feat(issue-search): Add group_first_release_id to the GroupAttributes table (#5986) by @snigdhas
+- ref: sentry-kafka-schemas 0.1.90 (#6007) by @lynnagara
+- ref(async-inserts): add clickhouse-concurrency cli arg (#5999) by @MeredithAnya
+- fix: snuba admin queries check (#6005) by @MeredithAnya
+- add tags[environment] to discover low cardinality processor (#5997) by @enochtangg
+- meta: Bump new development version (9dac11b7)
+
+## 24.5.1
+
+### Various fixes & improvements
+
+- chore(gocd): Bumping gocd-jsonnet version (#6000) by @IanWoodard
+- ref(async-inserts): Add system queries (#5998) by @MeredithAnya
+- Include metrics for the number of queries resulting in cache hits, misses, and waits associated with datasets. (#5991) by @nachivrn
+- fix(meta) Change the view to use LEFT ARRAY JOIN (#5975) by @evanh
+- Revert "add option to print full payload on invalid message (#5979)" (#5981) by @john-z-yang
+- fix(error): Skip lineno deserialization on failure (#5983) by @john-z-yang
+- feat(generic-metrics): Add gauges subscriptions consumers to Snuba deployment (#5980) by @ayirr7
+- add option to print full payload on invalid message (#5979) by @john-z-yang
+- chore: retire use_new_combine_conditions feature flag (#5977) by @kylemumma
+- ref(subscriptions): Add query-based exception handling in scheduler  (#5976) by @ayirr7
+- SNS 2645 - Surface allocation policy decisions in production queries tool (#5970) by @nachivrn
+- remove logging (#5978) by @xurui-c
+- fix(admin): Allow LEFT ARRAY JOIN in the admin tool (#5974) by @evanh
+- feat(replays): Add migration for distributed materialization (#5951) by @cmanallen
+- ref(async-inserts): allow async inserts as an option (#5955) by @MeredithAnya
+- allow one replacement project to be skipped (#5965) by @xurui-c
+- Debugging bucket timer (#5963) by @xurui-c
+- feat(generic-metrics): Add logic in distributions processor to drop percentiles (#5911) by @ayirr7
+- feat(generic-metrics): Add migrations for opt-in disabled percentiles (#5910) by @ayirr7
+- fix(clickhouse): Remove unecessary logging (#5958) by @nikhars
+- logging (#5959) by @xurui-c
+- feat(metrics): add metric_stats use case to generic metrics meta tables (#5954) by @shellmayr
+- number of projects skipped (#5952) by @xurui-c
+- fix(snuba-admin): Add quotes around ColumnSizeOnDisk's table value (#5953) by @phacops
+
+_Plus 28 more_
+
+## 24.5.0
+
+### Various fixes & improvements
+
+- ref(rust-consumer): join-timeout per-step (#5918) by @untitaker
+- ref: Bump arroyo (#5917) by @untitaker
+- ref(api): parse pipeline tests, mql after treeify #5894 (#5894) by @kylemumma
+- one more auto-offset-reset earliest (#5909) by @lynnagara
+- fix: Temporarily remove check for coupled migrations and code changes (#5903) by @ayirr7
+- ref: bump sentry-kafka-schemas to 0.1.82 (#5906) by @getsentry-bot
+- fix(CI): Make timestamp relative for metrics summaries test  (#5904) by @ayirr7
+- feat(generic-metrics): Retry adding gauges subscriptions topics + configs (#5892) by @ayirr7
+- ref(api): parse pipeline tests, snql pipeline before treeify (#5886) by @kylemumma
+- sessions: drop the clickhouse tables (#5882) by @lynnagara
+- feat: Add support for DateTime64 column type (#5896) by @phacops
+- fix: dlq-consumer should default to auto-offset-reset earliest (#5893) by @lynnagara
+- fix(capman): make allocation policies work with joins (#5887) by @volokluev
+- ref(devexp): Make entities optional in dataset config (#5879) by @enochtangg
+- ref(api): parse pipeline tests, mql pipeline before treeify (#5885) by @kylemumma
+- bump snuba-sdk to 2.0.34 (#5884) by @enochtangg
+- chore(self-hosted): Remove dependency on snuba-image build step during e2e action (#5891) by @hubertdeng123
+- remove skip-write flag (#5846) by @john-z-yang
+- feat(devexp): Add required_time_column to storage (#5889) by @volokluev
+- feat(spans): Add indexes for tag columns (#5871) by @phacops
+- feat(generic-metrics): Add zstd decompression to generic metrics processor (#5845) by @ayirr7
+- snuba devserver fix? (#5873) by @MeredithAnya
+- update CLICKHOUSE_SERVER_MIN_VERSION and CLICKHOUSE_SERVER_MAX_VERSION (#5853) by @MeredithAnya
+- fix: Handle tag columns in low cardinality processor (#5875) by @evanh
+
+_Plus 35 more_
+
+## 24.4.2
+
+### Various fixes & improvements
+
+- feat(generic-metrics): Add success metric around Base64 message processing (#5830) by @ayirr7
+- chore(deps): bump python and node (#5829) by @mdtro
+- ref: remove pushing to legacy gcr (#5819) by @asottile-sentry
+- Enables Clickhouse Authorization (#5818) by @xurui-c
+- remove ConditionSimplifierProcessor (#5820) by @volokluev
+- chore(dev-exp): Remove old pipeline code (#5821) by @enochtangg
+- Revert "feat(generic-metrics): Add support for subscriptions to gauges (#5736)" (d0c50931) by @getsentry-bot
+- feat(generic-metrics): Add Base64 decoding to Snuba processors (#5761) by @ayirr7
+- feat(generic-metrics): Add support for subscriptions to gauges (#5736) by @ayirr7
+- add a metric for how many queries are waiting for readthrough cache (#5817) by @volokluev
+- ref: use artifact registry (#5816) by @asottile-sentry
+- feat(meta): Create distributions meta tables (#5748) by @evanh
+- chore: Bump Kafka schema version to 0.1.71 (#5814) by @ayirr7
+- Remove unnecessary test (#5812) by @ayirr7
+- feat(meta): Create gauges meta tables (#5749) by @evanh
+- Revert "Revert "ref: dual-write docker image to artifact registry (#5798)"" (#5813) by @volokluev
+- fix: Don't log this every time, it clogs the logs up (#5799) by @evanh
+- feat(devexp): Split entity and storage processing for composite queries (#5785) by @enochtangg
+- feat(meta) Create sets meta tables (#5747) by @evanh
+- Emit a metric when replacements are skipped (#5809) by @xurui-c
+- Revert "ref: dual-write docker image to artifact registry (#5798)" (b69f85f5) by @getsentry-bot
+- ref: dual-write docker image to artifact registry (#5798) by @asottile-sentry
+- fix(meta) Rename counter tables for consistency (#5797) by @evanh
+- fix(22.8) don't use ifnull for cardinality casting (#5807) by @volokluev
+
+_Plus 14 more_
+
+## 24.4.1
+
+### Various fixes & improvements
+
+- feat(replays): add migration for replay_id in discover (#5790) by @JoshFerge
+- feat: replacer defaults to auto.offset.reset=earliest (#5772) by @lynnagara
+- feat(migrations): add discover local (#5788) by @dbanda
+- fix(spans): Let null domain be null (#5780) by @phacops
+- feat(meta): Adjust partitioning/settings of counters meta tables (#5784) by @evanh
+- Revert "feat(replays): add replay_id column to merged discover table (#5777)" (2f1509fc) by @getsentry-bot
+- fix: fix mypy --strict vscode (#5781) by @kylemumma
+- feat(replays): add replay_id column to merged discover table (#5777) by @JoshFerge
+- ref: Rust consumer should not skip writes by default (#5778) by @lynnagara
+- chore(on-call): Add CrossOrgQueryAllocationPolicy to errors (#5774) by @enochtangg
+- inc-715: rust consumer can stop processing messages at specific timestamp (#5779) by @lynnagara
+- meta: Bump new development version (2248bb55)
+- fix(meta): Remove experimental meta tables (#5733) by @evanh
+- ref(card-an): Allow the new meta tables in the cardinality analyzer (#5769) by @evanh
+
+## 24.4.0
+
+### Various fixes & improvements
+
+- chore(on-call): Add metric for concurrent queries by referrer that violate policy (#5767) by @enochtangg
+- ref: make auto.offset.reset=earliest everywhere (#5765) by @lynnagara
+- feat(trace): Add trace id to transactions (#5768) by @wmak
+- fix(spans): Move span id above trace id in the prewhere (#5766) by @wmak
+- feat(meta): Add record meta column to gauges (#5760) by @evanh
+- feat(meta): Add record meta column to distributions (#5759) by @evanh
+- feat(meta): Add record_meta column to sets (#5735) by @evanh
+- ref: bump sentry-kafka-schemas to 0.1.68 (#5764) by @getsentry-bot
+- chore(capman): set default bytes scanned limit for rejecting policy (#5755) by @volokluev
+- ref(ch-upgrades): create dist tables functionality (#5737) by @MeredithAnya
+- perf(metrics): Use kafka header optimization (#5756) by @nikhars
+- feat(meta): Add updated versions of meta tables for counters (#5734) by @evanh
+- chore(rust): Update dependencies (#5751) by @nikhars
+- chore: update sdk version (#5754) by @kylemumma
+- fix: Fix default auto-offset-reset value (#5753) by @lynnagara
+- lower max query size to 128KiB (#5750) by @enochtangg
+- clean up old simple pipeline (#5732) by @enochtangg
+- feat(capman): Long term rejection allocation policy (#5718) by @volokluev
+- ref(fetcher): --tables optional now (#5730) by @MeredithAnya
+- fix: parser, bug in pushdown filter (#5731) by @kylemumma
+- feat(generic-metrics): Add a killswitch to processor (#5617) by @ayirr7
+- feat(replays): Replace python processor with a rust-based processor (#5380) by @cmanallen
+- feat(replay): add ReplayViewedEvent to replay processor (#5712) by @aliu3ntry
+- chore(deps): bump h2 from 0.3.22 to 0.3.26 in /rust_snuba (#5727) by @dependabot
+
+_Plus 52 more_
+
+## 24.3.0
+
+### Various fixes & improvements
+
+- Unrevert: feat: Remove query splitters from the API  (#5581) by @evanh
+- feat: Add use_case_id index to generic metrics (#5655) by @evanh
+- ref(ci): Remove deleted test file (#5656) by @evanh
+- fix vscode debugger (#5652) by @kylemumma
+- chore: Upgrade snuba-sdk to 2.0.31 (#5647) by @iambriccardo
+- fix(gocd): put snuba cmd into $SNUBA_CMD (#5654) by @MeredithAnya
+- enable canary health check (#5649) by @enochtangg
+- Revert "fix(CapMan): Allocation Policies causing potentially timeout errors on ST (#4403)" (703042e1) by @getsentry-bot
+- fix(gocd): add SNUBA_CMD_TYPE (#5648) by @MeredithAnya
+- Allows empty `trace_id` (#5637) by @xurui-c
+- fix: Fix bump version for rust (#5643) by @lynnagara
+- feat(generic-metrics): Add metrics around encoding format type in processor (#5627) by @ayirr7
+- feat: filter by metric_id in select logical query optimizer (#5610) by @kylemumma
+- fix(gocd): fix unbound variable (#5641) by @MeredithAnya
+- ref: bump sentry-kafka-schemas to 0.1.60 (#5642) by @getsentry-bot
+- add canary health check to gocd pipeline (#5638) by @enochtangg
+- ref(codecov) Try out the failed test feature in Codecov (#5635) by @evanh
+- feat(spans): Enable spans storage in ST and self-hosted (#5629) by @phacops
+- fix: Fix a bug in HexIntColumnProcessor that skipped array conditions (#5640) by @evanh
+- ref(gocd): use shared script query-fetcher (#5639) by @MeredithAnya
+- ref(gocd): add comparer pipeline, consolidate script? (#5636) by @MeredithAnya
+- feat(spans): Set the migration group as complete to run migrations everywhere (#5634) by @phacops
+- feat(admin): Absolute imports in snuba-admin (#5630) by @volokluev
+- the default value of trace_id will be a randomly generated uuid inste… (#5628) by @xurui-c
+
+_Plus 72 more_
+
 ## 24.2.0
 
 ### Various fixes & improvements

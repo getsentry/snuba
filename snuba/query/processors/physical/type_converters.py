@@ -83,8 +83,11 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
             (
                 col,
                 Param(
-                    "tuple",
-                    FunctionCallMatch(String("tuple"), all_parameters=LiteralMatch()),
+                    "literals",
+                    FunctionCallMatch(
+                        Or([String("array"), String("tuple")]),
+                        all_parameters=LiteralMatch(),
+                    ),
                 ),
             ),
         )
@@ -150,20 +153,21 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
         in_condition_match = self.__in_condition_matcher.match(exp)
 
         if in_condition_match is not None:
-            tuple_func = in_condition_match.expression("tuple")
-            assert isinstance(tuple_func, FunctionCall)
+            collection_func = in_condition_match.expression("literals")
+            assert isinstance(collection_func, FunctionCall)
 
-            params = tuple_func.parameters
+            params = collection_func.parameters
             for param in params:
                 assert isinstance(param, Literal)
 
-            new_tuple_func = FunctionCall(
-                tuple_func.alias,
-                tuple_func.function_name,
-                parameters=tuple(
+            wrapper = tuple if collection_func.function_name == "tuple" else list
+            new_collection_func = FunctionCall(
+                collection_func.alias,
+                collection_func.function_name,
+                parameters=wrapper(
                     [
                         self._translate_literal(assert_literal(lit))
-                        for lit in tuple_func.parameters
+                        for lit in collection_func.parameters
                     ]
                 ),
             )
@@ -172,7 +176,7 @@ class BaseTypeConverter(ClickhouseQueryProcessor, ABC):
                 in_condition_match.string("operator"),
                 (
                     self.__strip_column_alias(in_condition_match.expression("col")),
-                    new_tuple_func,
+                    new_collection_func,
                 ),
             )
 

@@ -6,6 +6,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_profiler import generate_profile
 from snuba.clickhouse.translators.snuba.mappers import build_mapping_expr
+from snuba.datasets.storages.storage_key import StorageKey
 from snuba.query import SelectedExpression
 from snuba.query.composite import CompositeQuery
 from snuba.query.conditions import (
@@ -26,7 +27,7 @@ from tests.query.joins.join_structures import (
 test_cases = [
     pytest.param(
         ClickhouseQuery(
-            Table("events", ColumnSet([])),
+            Table("events", ColumnSet([]), storage_key=StorageKey("dontmatter")),
             selected_columns=[
                 SelectedExpression("column2", Column("column2", None, "column2")),
                 SelectedExpression(
@@ -89,7 +90,7 @@ test_cases = [
     ),
     pytest.param(
         ClickhouseQuery(
-            Table("events", ColumnSet([])),
+            Table("events", ColumnSet([]), storage_key=StorageKey("dontmatter")),
             selected_columns=[
                 SelectedExpression("column2", Column("column2", None, "column2")),
             ],

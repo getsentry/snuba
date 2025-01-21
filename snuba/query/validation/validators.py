@@ -16,7 +16,6 @@ from snuba.clickhouse.translators.snuba.mappers import (
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
-from snuba.datasets.entities.entity_data_model import EntityColumnSet
 from snuba.environment import metrics as environment_metrics
 from snuba.query import Query
 from snuba.query.conditions import (
@@ -26,7 +25,6 @@ from snuba.query.conditions import (
     build_match,
     get_first_level_and_conditions,
 )
-from snuba.query.data_source.simple import Entity as SimpleEntity
 from snuba.query.exceptions import InvalidExpressionException, InvalidQueryException
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.expressions import SubscriptableReference as SubscriptableReferenceExpr
@@ -94,8 +92,15 @@ class EntityRequiredColumnValidator(QueryValidator):
     This validator checks if the Query contains filters by all of the required columns.
     """
 
-    def __init__(self, required_filter_columns: Sequence[str]) -> None:
+    def __init__(
+        self,
+        required_filter_columns: Sequence[str],
+        required_str_columns: Sequence[str] | None = None,
+    ) -> None:
         self.required_columns = set(required_filter_columns)
+        self.required_str_columns = (
+            set(required_str_columns) if required_str_columns else set()
+        )
 
     def validate(self, query: Query, alias: Optional[str] = None) -> None:
         condition = query.get_condition()
@@ -106,6 +111,15 @@ class EntityRequiredColumnValidator(QueryValidator):
             for col in self.required_columns:
                 match = build_match(
                     col=col, ops=[ConditionFunctions.EQ], param_type=int, alias=alias
+                )
+                found = any(match.match(cond) for cond in top_level)
+                if not found:
+                    missing.add(col)
+
+        if self.required_str_columns:
+            for col in self.required_str_columns:
+                match = build_match(
+                    col=col, ops=[ConditionFunctions.EQ], param_type=str, alias=alias
                 )
                 found = any(match.match(cond) for cond in top_level)
                 if not found:
@@ -124,7 +138,7 @@ class EntityContainsColumnsValidator(QueryValidator):
 
     def __init__(
         self,
-        entity_data_model: EntityColumnSet,
+        entity_data_model: ColumnSet,
         mappers: list[TranslationMappers],
         validation_mode: ColumnValidationMode,
     ) -> None:
@@ -154,25 +168,16 @@ class EntityContainsColumnsValidator(QueryValidator):
             return
 
         query_columns = query.get_all_ast_referenced_columns()
-
-        missing = set()
-        for column in query_columns:
-            if (
-                column.table_name == alias
-                and column.column_name not in self.entity_data_model
-                and column.column_name not in self.mapped_columns
-            ):
-                missing.add(column.column_name)
+        missing = {
+            column.column_name
+            for column in query_columns
+            if column.table_name == alias
+            and column.column_name not in self.entity_data_model
+            and column.column_name not in self.mapped_columns
+        }
 
         if missing:
-            prefix = ""
-            if isinstance(entity := query.get_from_clause(), SimpleEntity):
-                prefix = f"Entity {entity.key.value}: "
-            error_message = (
-                f"{prefix}query columns ({', '.join(missing)}) do not exist"
-                if len(missing) > 1
-                else f"{prefix}Query column '{missing.pop()}' does not exist"
-            )
+            error_message = f"Tag keys ({', '.join(missing)}) not resolved"
             if self.validation_mode == ColumnValidationMode.ERROR:
                 raise InvalidQueryException(error_message)
             elif self.validation_mode == ColumnValidationMode.WARN:

@@ -55,4 +55,3 @@ query_processors:
   - processor: ArrayJoinKeyValueOptimizer
     args:
       column_name: tags
-  - processor: TableRateLimit

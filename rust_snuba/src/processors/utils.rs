@@ -39,10 +39,3 @@ pub struct StringToIntDatetime(
     #[schemars(with = "String")]
     pub u32,
 );
-
-pub fn from_slice<'a, T: Deserialize<'a>>(
-    payload: &'a [u8],
-) -> Result<T, serde_path_to_error::Error<serde_json::Error>> {
-    let jd = &mut serde_json::Deserializer::from_slice(payload);
-    serde_path_to_error::deserialize(jd)
-}

@@ -1,9 +1,13 @@
+import concurrent
+import hashlib
 import multiprocessing
 import os
 import threading
 import time
-from datetime import datetime, timedelta
-from typing import Mapping, MutableSequence, Optional, Sequence
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
+from typing import Any, Mapping, Optional, Sequence
 
 import structlog
 from structlog.types import EventDict, WrappedLogger
@@ -15,7 +19,7 @@ from snuba.clickhouse.optimize.optimize_tracker import (
     NoOptimizedStateException,
     OptimizedPartitionTracker,
 )
-from snuba.clickhouse.optimize.util import MergeInfo
+from snuba.clickhouse.optimize.util import MergeInfo, get_num_threads
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storage import ReadableTableStorage
 from snuba.settings import (
@@ -69,7 +73,7 @@ def run_optimize(
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
 
-    partitions = get_partitions_to_optimize(
+    partitions = get_partitions_from_clickhouse(
         clickhouse, storage, database, table, before
     )
     partition_names = [partition.name for partition in partitions]
@@ -88,25 +92,27 @@ def run_optimize_cron_job(
     clickhouse: ClickhousePool,
     storage: ReadableTableStorage,
     database: str,
-    parallel: int,
+    default_parallel_threads: int,
     clickhouse_host: str,
     tracker: OptimizedPartitionTracker,
     before: Optional[datetime] = None,
+    divide_partitions_count: int = 1,
 ) -> int:
     """
     The sophisticated form of running an optimize final on a storage.
 
-    The sophistication include:
+    The sophistication includes:
     1. Being able to run multiple optimize final jobs concurrently.
     2. Being able to set time boundaries for different phases of optimization.
     3. Being able to work with stateful optimization states.
+    4. Splitting partitions up into `divide_partitions_count` groups so that each
+       optimize cron job only optimizes a subset of partitions.
     """
     start = time.time()
     schema = storage.get_schema()
     assert isinstance(schema, TableSchema)
     table = schema.get_local_table_name()
     database = storage.get_cluster().get_database()
-    optimize_scheduler = OptimizeScheduler(parallel=parallel)
 
     # if theres a merge in progress wait for it to finish
     while is_busy_merging(clickhouse, database, table):
@@ -121,9 +127,19 @@ def run_optimize_cron_job(
     except NoOptimizedStateException:
         # We don't have any recorded state of partitions needing optimization
         # for today. So we need to build it.
-        partitions = get_partitions_to_optimize(
+        partitions = get_partitions_from_clickhouse(
             clickhouse, storage, database, table, before
         )
+
+        if divide_partitions_count > 1:
+            partitions = [
+                partition
+                for partition in partitions
+                if should_optimize_partition_today(
+                    partition.name, divide_partitions_count
+                )
+            ]
+
         if len(partitions) == 0:
             logger.info("No partitions need optimization")
             return 0
@@ -143,7 +159,7 @@ def run_optimize_cron_job(
         table=table,
         partitions=list(partitions_to_optimize),
         tracker=tracker,
-        scheduler=optimize_scheduler,
+        default_parallel_threads=default_parallel_threads,
         clickhouse_host=clickhouse_host,
     )
 
@@ -155,13 +171,39 @@ def run_optimize_cron_job(
     return len(partitions_to_optimize)
 
 
-def get_partitions_to_optimize(
+def get_partitions_from_clickhouse(
     clickhouse: ClickhousePool,
     storage: ReadableTableStorage,
     database: str,
     table: str,
     before: Optional[datetime] = None,
 ) -> Sequence[util.Part]:
+    """
+    Get the partitions from ClickHouse that are active and would benefit from OPTIMIZE
+    by querying the system.parts table. This filters as little as possible,
+    but only returns partitions that contain more than 1 active part. It does not,
+    for example, consider logic like `should_optimize_partition_today`.
+
+    It validates:
+    - The specified table exists.
+    - In a table using the Replicated*MergeTree engine family, the client is connected
+      to a replica with leader status (ClickHouse is a multi-leader system and
+      most nodes should set `is_leader = 1` during normal operation). If the pool
+      isn't connected to a leader, then it can't apply OPTIMIZE.
+
+    Arguments:
+        clickhouse: The ClickHouse connection pool to use.
+        storage: The storage definition to locate table partitions.
+        database: The ClickHouse database to query.
+        table: The storage table to get the partitions from.
+        before: (optional) The cutoff time, after which partitions should not be considered.
+            If omitted, all partitions are considered.
+
+    Returns:
+        A list of partitions that are active and would benefit from OPTIMIZE, that are
+        older than `before` (if provided). The list is ordered primarily by active parts
+        count in order to give preference to "less optimized" partitions.
+    """
     response = clickhouse.execute(
         """
         SELECT engine
@@ -272,7 +314,7 @@ def optimize_partition_runner(
     database: str,
     table: str,
     partitions: Sequence[str],
-    scheduler: OptimizeScheduler,
+    default_parallel_threads: int,
     tracker: OptimizedPartitionTracker,
     clickhouse_host: str,
 ) -> None:
@@ -286,48 +328,48 @@ def optimize_partition_runner(
     1. There are no more partitions which need optimization.
     2. The final cutoff time is reached. In this case, the scheduler will
     raise an exception which would be propagated to the caller.
+
+    Details of execution flow:
+    1. start by reading configured_num_threads from the Snuba Admin runtime config
+    2. dispatches configured_num_threads threads to optimize configured_num_threads partitions (1 partition per thread)
+    3. as soon as one thread finishes, check configured_num_threads from runtime config again
+    4. if configured_num_threads > number of currently active threads, dispatch more threads
     """
-    remaining_partitions = partitions
-    while remaining_partitions:
-        schedule = scheduler.get_next_schedule(remaining_partitions)
-        num_threads = len(schedule.partitions)
-        logger.info(
-            f"Running schedule with cutoff time: "
-            f"{schedule.cutoff_time} with {num_threads} threads"
-        )
-        threads: MutableSequence[threading.Thread] = []
-        for i in range(0, num_threads):
-            threads.append(
-                threading.Thread(
-                    target=optimize_partitions,
-                    args=(
+    scheduler = OptimizeScheduler(default_parallel_threads=default_parallel_threads)
+
+    with ThreadPoolExecutor(max_workers=32) as executor:
+        pending_futures: set[Future[Any]] = set()
+
+        partitions_to_optimize = deque(partitions)
+        while partitions_to_optimize:
+            configured_num_threads = get_num_threads(default_parallel_threads)
+            schedule = scheduler.get_next_schedule(partitions_to_optimize)
+            logger.info(
+                f"Running schedule with cutoff time: "
+                f"{schedule.cutoff_time} with {configured_num_threads} threads"
+            )
+
+            while (
+                partitions_to_optimize and len(pending_futures) < configured_num_threads
+            ):
+                pending_futures.add(
+                    executor.submit(
+                        optimize_partitions,
                         clickhouse,
                         database,
                         table,
-                        schedule.partitions[i],
+                        [partitions_to_optimize.popleft()],
                         schedule.cutoff_time,
                         tracker,
                         clickhouse_host,
-                        schedule.start_time_jitter_minutes[i]
-                        if schedule.start_time_jitter_minutes
-                        else None,
-                    ),
+                    )
                 )
+
+            completed_futures, pending_futures = concurrent.futures.wait(
+                pending_futures, return_when=concurrent.futures.FIRST_COMPLETED
             )
-
-            threads[i].start()
-
-        # Wait for all threads to finish. They would finish either because all
-        # work is done or because a cutoff time was reached. We won't know the
-        # reason why the threads finished.
-        for i in range(0, num_threads):
-            threads[i].join()
-
-        # If there are still partitions needing optimization then move on to the
-        # next bucket with the partitions which still need optimization.
-        remaining_partitions = list(tracker.get_partitions_to_optimize())
-        if len(remaining_partitions) == 0:
-            return
+            for future in completed_futures:
+                future.result()
 
 
 def optimize_partitions(
@@ -338,22 +380,14 @@ def optimize_partitions(
     cutoff_time: Optional[datetime] = None,
     tracker: Optional[OptimizedPartitionTracker] = None,
     clickhouse_host: Optional[str] = None,
-    start_jitter: Optional[int] = None,
 ) -> None:
     query_template = """\
         OPTIMIZE TABLE %(database)s.%(table)s
         PARTITION %(partition)s FINAL
     """
 
-    if start_jitter is not None:
-        logger.info(
-            f"{threading.current_thread().name}: Jittering start time by"
-            f" {start_jitter} minutes"
-        )
-        time.sleep(start_jitter * 60)
-
     for partition in partitions:
-        if cutoff_time is not None and datetime.now() > cutoff_time:
+        if cutoff_time is not None and datetime.now(UTC) > cutoff_time:
             logger.info(
                 f"Optimize job is running past provided cutoff time"
                 f" {cutoff_time}. Cancelling.",
@@ -379,11 +413,13 @@ def optimize_partitions(
 
         start = time.time()
         clickhouse.execute(query, retryable=False)
+        duration = time.time() - start
         metrics.timing(
             "optimized_part",
-            time.time() - start,
+            duration,
             tags=_get_metrics_tags(table, clickhouse_host),
         )
+        logger.info(f"Optimized partition: {partition} in {duration}s")
 
 
 def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bool:
@@ -404,3 +440,31 @@ def is_busy_merging(clickhouse: ClickhousePool, database: str, table: str) -> bo
             return True
 
     return False
+
+
+def _hash_partition(partition_name: str) -> int:
+    sha1 = hashlib.sha1()
+    sha1.update(partition_name.encode())
+    return int(sha1.hexdigest(), 16)
+
+
+def _days_since_epoch(current_time: Optional[datetime] = None) -> int:
+    if current_time is None:
+        current_time = datetime.now(UTC)
+    return int(current_time.timestamp() / 86400)
+
+
+def should_optimize_partition_today(
+    partition_name: str, divide_partitions_count: int
+) -> bool:
+    """
+    Determines if a partition should be optimized today based on the partition name
+    and the current day of year.
+    """
+    if divide_partitions_count <= 1:
+        return True
+
+    return (
+        _hash_partition(partition_name) % divide_partitions_count
+        == _days_since_epoch() % divide_partitions_count
+    )

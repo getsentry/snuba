@@ -104,11 +104,6 @@ schema:
       { name: deleted, type: UInt, args: { size: 8 } },
       { name: group_id, type: UInt, args: { size: 64 } },
       { name: primary_hash, type: UUID },
-      {
-        name: hierarchical_hashes,
-        type: Array,
-        args: { inner_type: { type: UUID } },
-      },
       { name: received, type: DateTime },
       { name: message, type: String },
       { name: title, type: String },
@@ -240,12 +235,37 @@ schema:
     - date
   not_deleted_mandatory_condition: deleted
 allocation_policies:
+  - name: ReferrerGuardRailPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
   - name: ConcurrentRateLimitAllocationPolicy
     args:
       required_tenant_types:
         - organization_id
         - referrer
         - project_id
+  - name: BytesScannedRejectingPolicy
+    args:
+      required_tenant_types:
+        - organization_id
+        - project_id
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+  - name: CrossOrgQueryAllocationPolicy
+    args:
+      required_tenant_types:
+        - referrer
+      default_config_overrides:
+        is_enforced: 1
+        is_active: 1
+      cross_org_referrer_limits:
+        getsentry.tasks.backfill_grouping_records:
+          max_threads: 2
+          concurrent_limit: 4
   - name: BytesScannedWindowAllocationPolicy
     args:
       required_tenant_types:
@@ -254,12 +274,6 @@ allocation_policies:
       default_config_overrides:
         throttled_thread_number: 1
         org_limit_bytes_scanned: 10000000
-  - name: ReferrerGuardRailPolicy
-    args:
-      required_tenant_types:
-        - referrer
-      default_config_overrides:
-        is_enforced: 0
 query_processors:
   - processor: UniqInSelectAndHavingProcessor
   - processor: TupleUnaliaser
@@ -283,18 +297,11 @@ query_processors:
   - processor: UserColumnProcessor
   - processor: UUIDColumnProcessor
     args:
-      columns: !!set
-        event_id: null
-        primary_hash: null
-        trace_id: null
+      columns: [event_id, primary_hash, trace_id, replay_id]
   - processor: HexIntColumnProcessor
     args:
       columns: !!set
         span_id: null
-  - processor: UUIDArrayColumnProcessor
-    args:
-      columns: !!set
-        hierarchical_hashes: null
   - processor: SliceOfMapOptimizer
   - processor: EventsBooleanContextsProcessor
   - processor: TypeConditionOptimizer
@@ -322,16 +329,6 @@ query_processors:
         - message
         - environment
         - project_id
-  - processor: TableRateLimit
-query_splitters:
-  - splitter: ColumnSplitQueryStrategy
-    args:
-      id_column: event_id
-      project_column: project_id
-      timestamp_column: timestamp
-  - splitter: TimeSplitQueryStrategy
-    args:
-      timestamp_col: timestamp
 mandatory_condition_checkers:
   - condition: ProjectIdEnforcer
 replacer_processor:

@@ -6,11 +6,11 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::processing::strategies::run_task::RunTask;
-use rust_arroyo::processing::strategies::ProcessingStrategy;
-use rust_arroyo::types::{Message, Partition, Topic};
 use rust_snuba::{MessageProcessorConfig, Noop, PythonTransformStep};
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::processing::strategies::run_task::RunTask;
+use sentry_arroyo::processing::strategies::ProcessingStrategy;
+use sentry_arroyo::types::{Message, Partition, Topic};
 use serde_json::json;
 
 fn main() {
@@ -20,9 +20,9 @@ fn main() {
     let output2 = output.clone();
 
     let step = RunTask::new(
-        move |_| {
+        move |message| {
             output2.fetch_add(1, Ordering::Relaxed);
-            Ok(())
+            Ok(message)
         },
         step,
     );
@@ -51,7 +51,6 @@ fn main() {
 
     println!("join");
 
-    step.close();
     step.join(None).unwrap();
 
     println!("{}", output.load(Ordering::Relaxed))

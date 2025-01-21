@@ -9,6 +9,7 @@ from snuba.clickhouse.translators.snuba.mappers import (
     ColumnToLiteral,
     ColumnToMapping,
     FunctionNameMapper,
+    SubscriptableHashBucketMapper,
     SubscriptableMapper,
 )
 from snuba.clickhouse.translators.snuba.mapping import (
@@ -23,6 +24,8 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.utils import constants
+from snuba.utils.hashes import fnv_1a
 
 
 def test_column_translation() -> None:
@@ -119,6 +122,26 @@ def test_tag_translation() -> None:
                 "indexOf",
                 (Column(None, None, "tags.key"), Literal(None, "release")),
             ),
+        ),
+    )
+
+
+def test_hash_bucket_tag_translation() -> None:
+    translated = SubscriptableHashBucketMapper(None, "tags", None, "tags").attempt_map(
+        SubscriptableReference(
+            "tags[release]", Column(None, None, "tags"), Literal(None, "release")
+        ),
+        SnubaClickhouseMappingTranslator(TranslationMappers()),
+    )
+
+    assert translated == FunctionCall(
+        "tags[release]",
+        "arrayElement",
+        (
+            Column(
+                None, None, f"tags_{fnv_1a(b'release') % constants.ATTRIBUTE_BUCKETS}"
+            ),
+            Literal(None, "release"),
         ),
     )
 

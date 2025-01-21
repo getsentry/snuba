@@ -41,10 +41,9 @@ def test_simple() -> None:
     )
 
     request = Request(
-        id=uuid.UUID("a" * 32).hex,
+        id=uuid.UUID("a" * 32),
         original_body=request_body,
         query=query,
-        snql_anonymized="",
         query_settings=HTTPQuerySettings(referrer="search"),
         attribution_info=AttributionInfo(
             get_app_id("default"),
@@ -97,7 +96,7 @@ def test_simple() -> None:
             )
         ],
         projects={2},
-        snql_anonymized=request.snql_anonymized,
+        snql_anonymized="",
         entity=EntityKey.EVENTS.value,
     ).to_dict()
 
@@ -148,7 +147,8 @@ def test_simple() -> None:
                 "clickhouse_queries.where_mapping_columns": [["tags"]],
                 "clickhouse_queries.groupby_columns": [[]],
                 "clickhouse_queries.array_join_columns": [[]],
-                "clickhouse_queries.bytes_scanned": [1337],
+                "clickhouse_queries.bytes_scanned": [0],
+                "clickhouse_queries.bytes": [1337],
             }
         ],
         None,

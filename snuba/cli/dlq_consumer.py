@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 )
 @click.option(
     "--auto-offset-reset",
-    default="error",
+    default="earliest",
     type=click.Choice(["error", "earliest", "latest"]),
     help="Kafka consumer auto offset reset.",
 )

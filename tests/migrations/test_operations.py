@@ -15,6 +15,7 @@ from snuba.migrations.operations import (
     CreateTable,
     DropColumn,
     DropIndex,
+    DropIndices,
     DropTable,
     InsertIntoSelect,
     ModifyColumn,
@@ -168,6 +169,33 @@ def test_drop_index() -> None:
     assert (
         DropIndex(StorageSetKey.EVENTS, "test_table", "index_1").format_sql()
         == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1;"
+    )
+
+
+def test_drop_index_async() -> None:
+    assert (
+        DropIndex(
+            StorageSetKey.EVENTS, "test_table", "index_1", run_async=True
+        ).format_sql()
+        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1 SETTINGS mutations_sync=0;"
+    )
+
+
+def test_drop_indices() -> None:
+    assert (
+        DropIndices(
+            StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"]
+        ).format_sql()
+        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1, DROP INDEX IF EXISTS index_2;"
+    )
+
+
+def test_drop_indices_async() -> None:
+    assert (
+        DropIndices(
+            StorageSetKey.EVENTS, "test_table", ["index_1", "index_2"], run_async=True
+        ).format_sql()
+        == "ALTER TABLE test_table DROP INDEX IF EXISTS index_1, DROP INDEX IF EXISTS index_2 SETTINGS mutations_sync=0, alter_sync=0;"
     )
 
 

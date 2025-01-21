@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from typing import List, Mapping, MutableMapping, NamedTuple, Optional, Sequence, Tuple
@@ -16,7 +17,11 @@ from snuba.clusters.cluster import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
-from snuba.migrations.connect import get_column_states
+from snuba.migrations.connect import (
+    check_for_inactive_replicas,
+    get_clickhouse_clusters_for_migration_group,
+    get_column_states,
+)
 from snuba.migrations.context import Context
 from snuba.migrations.errors import (
     InvalidMigrationState,
@@ -64,16 +69,19 @@ class MigrationDetails(NamedTuple):
     migration_id: str
     status: Status
     blocking: bool
+    exists: bool
 
 
 class Runner:
     def __init__(self) -> None:
-        migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
+        self.__migrations_cluster = get_cluster(StorageSetKey.MIGRATIONS)
         self.__table_name = (
-            LOCAL_TABLE_NAME if migrations_cluster.is_single_node() else DIST_TABLE_NAME
+            LOCAL_TABLE_NAME
+            if self.__migrations_cluster.is_single_node()
+            else DIST_TABLE_NAME
         )
 
-        self.__connection = migrations_cluster.get_query_connection(
+        self.__connection = self.__migrations_cluster.get_query_connection(
             ClickhouseClientSettings.MIGRATE
         )
 
@@ -115,8 +123,23 @@ class Runner:
 
         return Status.NOT_STARTED, None
 
+    def force_overwrite_status(
+        self, group: MigrationGroup, migration_id: str, new_status: Status
+    ) -> None:
+        """Sometimes a migration gets blocked or times out for whatever reason.
+        This function is used to overwrite the state in the snuba table keeping
+        track of migration so we can try again"""
+        local_node = self.__migrations_cluster.get_local_nodes()[0]
+        local_node_connection = self.__migrations_cluster.get_node_connection(
+            ClickhouseClientSettings.MIGRATE, local_node
+        )
+
+        local_node_connection.execute(
+            f"ALTER TABLE {LOCAL_TABLE_NAME} UPDATE status='{new_status.value}' WHERE migration_id='{migration_id}'"
+        )
+
     def show_all(
-        self, groups: Optional[Sequence[str]] = None
+        self, groups: Optional[Sequence[str]] = None, include_nonexistent: bool = False
     ) -> List[Tuple[MigrationGroup, List[MigrationDetails]]]:
         """
         Returns the list of migrations and their statuses for each group.
@@ -131,6 +154,9 @@ class Runner:
             migration_groups = get_active_migration_groups()
 
         migration_status = self._get_migration_status(migration_groups)
+        clickhouse_group_migrations = defaultdict(set)
+        for group, migration_id in migration_status.keys():
+            clickhouse_group_migrations[group].add(migration_id)
 
         def get_status(migration_key: MigrationKey) -> Status:
             return migration_status.get(migration_key, Status.NOT_STARTED)
@@ -139,14 +165,30 @@ class Runner:
             group_migrations: List[MigrationDetails] = []
             group_loader = get_group_loader(group)
 
-            for migration_id in group_loader.get_migrations():
+            migration_ids = group_loader.get_migrations()
+            for migration_id in migration_ids:
                 migration_key = MigrationKey(group, migration_id)
                 migration = group_loader.load_migration(migration_id)
                 group_migrations.append(
                     MigrationDetails(
-                        migration_id, get_status(migration_key), migration.blocking
+                        migration_id,
+                        get_status(migration_key),
+                        migration.blocking,
+                        True,
                     )
                 )
+
+            if include_nonexistent:
+                non_existing_migrations = clickhouse_group_migrations.get(
+                    group, set()
+                ).difference(set(migration_ids))
+                for migration_id in non_existing_migrations:
+                    migration_key = MigrationKey(group, migration_id)
+                    group_migrations.append(
+                        MigrationDetails(
+                            migration_id, get_status(migration_key), False, False
+                        )
+                    )
 
             migrations.append((group, group_migrations))
 
@@ -282,6 +324,11 @@ class Runner:
     ) -> None:
         migration_id = migration_key.migration_id
 
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
+
         context = Context(
             migration_id,
             logger,
@@ -390,6 +437,11 @@ class Runner:
         self, migration_key: MigrationKey, *, dry_run: bool = False
     ) -> None:
         migration_id = migration_key.migration_id
+
+        if not dry_run:
+            check_for_inactive_replicas(
+                get_clickhouse_clusters_for_migration_group(migration_key.group)
+            )
 
         context = Context(
             migration_id,
@@ -520,6 +572,9 @@ class Runner:
         user: str,
         password: str,
         database: str,
+        secure: bool = False,
+        ca_certs: Optional[str] = None,
+        verify: Optional[bool] = False,
     ) -> None:
         client_settings = ClickhouseClientSettings.MIGRATE.value
         clickhouse = ClickhousePool(
@@ -528,6 +583,9 @@ class Runner:
             user,
             password,
             database,
+            secure,
+            ca_certs,
+            verify,
             client_settings=client_settings.settings,
             send_receive_timeout=client_settings.timeout,
         )

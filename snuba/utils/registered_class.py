@@ -45,6 +45,9 @@ class _ClassRegistry:
     def all_classes(self) -> Sequence["RegisteredClass"]:
         return list(self.__mapping.values())
 
+    def all_names(self) -> Sequence[str]:
+        return list(self.__mapping.keys())
+
 
 class RegisteredClass(ABCMeta):
     """Metaclass for making classes that can be looked up by name
@@ -101,6 +104,9 @@ class RegisteredClass(ABCMeta):
             cast(Type[Any], rclass)
             for rclass in getattr(self, "_registry").all_classes()
         ]
+
+    def all_names(self) -> Sequence[str]:
+        return list(getattr(self, "_registry").all_names())
 
 
 TModule = object

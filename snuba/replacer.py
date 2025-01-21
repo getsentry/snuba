@@ -37,8 +37,11 @@ from snuba.clusters.cluster import (
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
-from snuba.redis import RedisClientKey, get_redis_client
 from snuba.replacers.errors_replacer import Replacement as ErrorReplacement
+from snuba.replacers.replacements_and_expiry import (
+    redis_client,
+    set_config_auto_replacements_bypass_projects,
+)
 from snuba.replacers.replacer_processor import (
     Replacement,
     ReplacementMessage,
@@ -52,7 +55,6 @@ from snuba.utils.rate_limiter import RateLimiter
 logger = logging.getLogger("snuba.replacer")
 
 executor = ThreadPoolExecutor()
-redis_client = get_redis_client(RedisClientKey.REPLACEMENTS_STORE)
 NODES_REFRESH_PERIOD = 10
 
 RESET_CHECK_CONFIG = "consumer_groups_to_reset_offset_check"
@@ -589,6 +591,7 @@ class ReplacerWorker:
         projects_exceeding_limit = (
             self.__processing_time_counter.get_projects_exceeding_limit()
         )
+        set_config_auto_replacements_bypass_projects(projects_exceeding_limit, end_time)
         logger.info(
             "projects_exceeding_limit = {}".format(
                 ",".join(str(project_id) for project_id in projects_exceeding_limit)

@@ -9,7 +9,7 @@ Exploring the Snuba data model
 ==============================
 
 In order to architect a Snuba query, the first step is being able to
-know which Dataset you should query, which Entities you should select
+know which Dataset you should query, which Entities you should select,
 and what the schema of each Entity is.
 
 For an introduction about Datasets and Entities, see the :doc:`/architecture/datamodel`
@@ -97,6 +97,24 @@ The query is represented as a ``Query`` object like::
         limit=Limit(10),
         offset=Offset(0),
         granularity=Granularity(3600),
+    )
+
+For simpler datasets, there may not exist an entity. In this case, we can
+query the storage directly like::
+
+    query = Query(
+        dataset="profiles",
+        match=Storage("profile_chunks"),
+        select=[
+            Column("chunk_id"),
+        ],
+        where=[
+            Condition(Column("start_timestamp"), Op.GT, datetime.datetime(2021, 1, 1)),
+            Condition(Column("end_timestamp"), Op.LT, datetime.datetime(2021, 1, 2)),
+            Condition(Column("project_id"), Op.IN, Function("tuple", [1, 2, 3])),
+        ],
+        limit=Limit(10),
+        offset=Offset(0),
     )
 
 More details on how to build a query are in the sdk documentation.

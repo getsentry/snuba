@@ -1,14 +1,14 @@
 use crate::types::BytesInsertBatch;
 use chrono::{DateTime, Utc};
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::backends::Producer;
-use rust_arroyo::processing::strategies::run_task_in_threads::{
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::Producer;
+use sentry_arroyo::processing::strategies::run_task_in_threads::{
     ConcurrencyConfig, RunTaskError, RunTaskFunc, RunTaskInThreads, TaskRunner,
 };
-use rust_arroyo::processing::strategies::{
+use sentry_arroyo::processing::strategies::{
     CommitRequest, ProcessingStrategy, StrategyError, SubmitError,
 };
-use rust_arroyo::types::{Message, Topic, TopicOrPartition};
+use sentry_arroyo::types::{Message, Topic, TopicOrPartition};
 use serde::{Deserialize, Serialize};
 use std::str;
 use std::sync::Arc;
@@ -92,11 +92,11 @@ impl ProduceMessage {
     }
 }
 
-impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMessage {
+impl TaskRunner<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error> for ProduceMessage {
     fn get_task(
         &self,
-        message: Message<BytesInsertBatch>,
-    ) -> RunTaskFunc<BytesInsertBatch, anyhow::Error> {
+        message: Message<BytesInsertBatch<()>>,
+    ) -> RunTaskFunc<BytesInsertBatch<()>, anyhow::Error> {
         let producer = self.producer.clone();
         let destination: TopicOrPartition = self.destination.into();
         let topic = self.topic;
@@ -139,12 +139,15 @@ impl TaskRunner<BytesInsertBatch, BytesInsertBatch, anyhow::Error> for ProduceMe
     }
 }
 
-pub struct ProduceCommitLog {
-    inner: RunTaskInThreads<BytesInsertBatch, BytesInsertBatch, anyhow::Error>,
+pub struct ProduceCommitLog<N> {
+    inner: RunTaskInThreads<BytesInsertBatch<()>, BytesInsertBatch<()>, anyhow::Error, N>,
 }
 
-impl ProduceCommitLog {
-    pub fn new<N>(
+impl<N> ProduceCommitLog<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>> + 'static,
+{
+    pub fn new(
         next_step: N,
         producer: Arc<dyn Producer<KafkaPayload> + 'static>,
         destination: Topic,
@@ -152,19 +155,10 @@ impl ProduceCommitLog {
         consumer_group: String,
         concurrency: &ConcurrencyConfig,
         skip_produce: bool,
-    ) -> Self
-    where
-        N: ProcessingStrategy<BytesInsertBatch> + 'static,
-    {
+    ) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ProduceMessage::new(
-                producer,
-                destination,
-                topic,
-                consumer_group,
-                skip_produce,
-            )),
+            ProduceMessage::new(producer, destination, topic, consumer_group, skip_produce),
             concurrency,
             Some("produce_commit_log"),
         );
@@ -173,20 +167,19 @@ impl ProduceCommitLog {
     }
 }
 
-impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
+impl<N> ProcessingStrategy<BytesInsertBatch<()>> for ProduceCommitLog<N>
+where
+    N: ProcessingStrategy<BytesInsertBatch<()>>,
+{
     fn poll(&mut self) -> Result<Option<CommitRequest>, StrategyError> {
         self.inner.poll()
     }
 
     fn submit(
         &mut self,
-        message: Message<BytesInsertBatch>,
-    ) -> Result<(), SubmitError<BytesInsertBatch>> {
+        message: Message<BytesInsertBatch<()>>,
+    ) -> Result<(), SubmitError<BytesInsertBatch<()>>> {
         self.inner.submit(message)
-    }
-
-    fn close(&mut self) {
-        self.inner.close();
     }
 
     fn terminate(&mut self) {
@@ -200,13 +193,12 @@ impl ProcessingStrategy<BytesInsertBatch> for ProduceCommitLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets, RowData};
+    use crate::types::{CogsData, CommitLogEntry, CommitLogOffsets};
 
     use super::*;
     use crate::testutils::TestStrategy;
-    use chrono::NaiveDateTime;
-    use rust_arroyo::backends::ProducerError;
-    use rust_arroyo::types::Topic;
+    use sentry_arroyo::backends::ProducerError;
+    use sentry_arroyo::types::Topic;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 
@@ -230,10 +222,8 @@ mod tests {
 
             let time_millis = (d.orig_message_ts * 1000.0) as i64;
 
-            let orig_message_ts = DateTime::from_naive_utc_and_offset(
-                NaiveDateTime::from_timestamp_millis(time_millis).unwrap_or(NaiveDateTime::MIN),
-                Utc,
-            );
+            let orig_message_ts =
+                DateTime::<Utc>::from_timestamp_millis(time_millis).unwrap_or_default();
 
             Ok(Commit {
                 topic,
@@ -291,8 +281,8 @@ mod tests {
 
         let payloads = vec![
             BytesInsertBatch::new(
-                RowData::default(),
-                Utc::now(),
+                (),
+                Some(Utc::now()),
                 None,
                 None,
                 CommitLogOffsets(BTreeMap::from([(
@@ -306,8 +296,8 @@ mod tests {
                 CogsData::default(),
             ),
             BytesInsertBatch::new(
-                RowData::default(),
-                Utc::now(),
+                (),
+                Some(Utc::now()),
                 None,
                 None,
                 CommitLogOffsets(BTreeMap::from([
@@ -356,7 +346,6 @@ mod tests {
             strategy.poll().unwrap();
         }
 
-        strategy.close();
         strategy.join(None).unwrap();
 
         let produced = produced_payloads.lock().unwrap();

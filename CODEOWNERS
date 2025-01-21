@@ -1,18 +1,39 @@
 # Use owners-snuba by default
 * @getsentry/owners-snuba
 
+# datasets
+/snuba/datasets/configuration/issues                      @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/group_attributes            @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/groupedmessage              @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/groupassignee               @getsentry/issues @getsentry/owners-snuba
+/snuba/datasets/configuration/spans                       @getsentry/performance @getsentry/owners-snuba
+/snuba/datasets/configuration/transactions                @getsentry/performance @getsentry/owners-snuba
+/snuba/datasets/configuration/functions                   @getsentry/profiling @getsentry/owners-snuba
+/snuba/datasets/configuration/profiles                    @getsentry/profiling @getsentry/owners-snuba
+/snuba/datasets/configuration/replays                     @getsentry/replay-backend @getsentry/owners-snuba
+/snuba/datasets/configuration/metrics                     @getsentry/telemetry-experience @getsentry/owners-snuba
+/snuba/datasets/configuration/events_analytics_platform   @getsentry/events-analytics-platform @getsentry/owners-snuba
+snuba/datasets/configuration/events_analytics_platform/storages/uptime_monitor_checks.yaml @getsentry/crons
 # rust_snuba
-/rust_snuba @getsentry/owners-snuba @getsentry/processing
+/rust_snuba @getsentry/owners-snuba
+/rust_snuba/src/processors/replays.rs @getsentry/replay-backend
+/rust_snuba/src/processors/uptime_monitor_checks.rs @getsentry/crons
+
+# EAP-related
+/snuba/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
+/tests/web/rpc @getsentry/events-analytics-platform @getsentry/owners-snuba
+/snuba/snuba_migrations/events_analytics_platform @getsentry/events-analytics-platform @getsentry/owners-snuba
+/rust_snuba/src/processors/eap_spans.rs @getsentry/events-analytics-platform @getsentry/owners-snuba
 
 # Legal
 /LICENSE.md  @getsentry/owners-legal
 
 # Build & Releases
-/.github/workflows/release.yml  @getsentry/releases
-/.craft.yml                     @getsentry/releases
-/docker-compose.gcb.yml         @getsentry/releases
-/docker-compose.yml             @getsentry/releases
-/docker_entrypoint.sh           @getsentry/releases
-/cloudbuild.yaml                @getsentry/releases
-/scripts/bump-version.sh        @getsentry/releases
-/scripts/post-release.sh        @getsentry/releases
+/.github/workflows/release.yml  @getsentry/release-approvers
+/.craft.yml                     @getsentry/release-approvers
+/docker-compose.gcb.yml         @getsentry/owners-snuba
+/docker-compose.yml             @getsentry/release-approvers
+/docker_entrypoint.sh           @getsentry/release-approvers
+/cloudbuild.yaml                @getsentry/release-approvers
+/scripts/bump-version.sh        @getsentry/release-approvers
+/scripts/post-release.sh        @getsentry/release-approvers

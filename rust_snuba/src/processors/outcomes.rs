@@ -2,8 +2,8 @@ use crate::config::ProcessorConfig;
 use crate::processors::utils::StringToIntDatetime;
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 use anyhow::Context;
-use rust_arroyo::backends::kafka::types::KafkaPayload;
-use rust_arroyo::counter;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::counter;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -99,7 +99,7 @@ struct Outcome {
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use rust_arroyo::backends::kafka::types::KafkaPayload;
+    use sentry_arroyo::backends::kafka::types::KafkaPayload;
     use std::time::SystemTime;
 
     #[test]

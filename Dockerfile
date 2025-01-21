@@ -1,6 +1,6 @@
-ARG PYTHON_VERSION=3.11.6
+ARG PYTHON_VERSION=3.11.11
 
-FROM python:${PYTHON_VERSION}-slim-bookworm as build_base
+FROM python:${PYTHON_VERSION}-slim-bookworm AS build_base
 WORKDIR /usr/src/snuba
 
 ENV PIP_NO_CACHE_DIR=off \
@@ -30,6 +30,8 @@ RUN set -ex; \
     runtimeDeps=' \
         curl \
         libjemalloc2 \
+        gdb \
+        heaptrack \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps $runtimeDeps --no-install-recommends; \
@@ -100,7 +102,7 @@ RUN set -ex; \
 
 # Install nodejs and yarn and build the admin UI
 FROM build_base AS build_admin_ui
-ENV NODE_VERSION=19
+ENV NODE_VERSION=20
 
 COPY ./snuba/admin ./snuba/admin
 RUN set -ex; \
@@ -148,7 +150,7 @@ EXPOSE 1218 1219
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
 CMD [ "api" ]
 
-FROM application_base as application
+FROM application_base AS application
 USER 0
 RUN set -ex; \
     apt-get purge -y --auto-remove $(cat /tmp/build-deps.txt); \

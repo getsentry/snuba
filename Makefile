@@ -42,7 +42,7 @@ api-tests:
 	SNUBA_SETTINGS=test pytest -vv tests/*_api.py
 
 backend-typing:
-	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query|tests/test_split.py'
+	mypy snuba tests scripts --strict --config-file mypy.ini --exclude 'tests/datasets|tests/query'
 
 install-python-dependencies:
 	pip uninstall -qqy uwsgi  # pip doesn't do well with swapping drop-ins
@@ -89,6 +89,7 @@ generate-config-docs:
 	python3 -m snuba.datasets.configuration.generate_config_docs
 
 watch-rust-snuba:
+	which cargo-watch || cargo install cargo-watch
 	. scripts/rust-envvars && \
 		cd rust_snuba/ && cargo watch -s 'maturin develop'
 .PHONY: watch-rust-snuba

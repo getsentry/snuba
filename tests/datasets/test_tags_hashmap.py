@@ -1,12 +1,13 @@
 import pytest
 
-from snuba.clickhouse.query import Query
-from snuba.datasets.entities.entity_key import EntityKey
-from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.factory import get_dataset
+from snuba.pipeline.query_pipeline import QueryPipelineResult
+from snuba.pipeline.stages.query_processing import (
+    EntityProcessingStage,
+    StorageProcessingStage,
+)
 from snuba.query.expressions import Column, FunctionCall, NoopVisitor
-from snuba.query.query_settings import HTTPQuerySettings, QuerySettings
-from snuba.reader import Reader
+from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import build_request, parse_snql_query
 from snuba.utils.metrics.timer import Timer
@@ -14,7 +15,6 @@ from snuba.utils.metrics.timer import Timer
 
 @pytest.mark.clickhouse_db
 def test_tags_hashmap_optimization() -> None:
-    entity = get_entity(EntityKey.DISCOVER)
     dataset_name = "discover"
     query_str = """
     MATCH (discover)
@@ -50,32 +50,31 @@ def test_tags_hashmap_optimization() -> None:
         Timer(name="bloop"),
         "some_referrer",
     )
-    # --------------------------------------------------------------------
 
-    def query_verifier(
-        clickhouse_query: Query,
-        query_settings: QuerySettings,
-        reader: Reader,
-        cluster_name: str,
-    ) -> None:
-        class ConditionVisitor(NoopVisitor):
-            def __init__(self) -> None:
-                self.found_hashmap_condition = False
+    pipeline_result = EntityProcessingStage().execute(
+        QueryPipelineResult(
+            data=request,
+            query_settings=request.query_settings,
+            timer=Timer(name="bloop"),
+            error=None,
+        )
+    )
+    clickhouse_query = StorageProcessingStage().execute(pipeline_result).data
 
-            def visit_function_call(self, exp: FunctionCall) -> None:
-                assert exp.function_name != "arrayElement"
-                if (
-                    exp.function_name == "has"
-                    and isinstance(exp.parameters[0], Column)
-                    and exp.parameters[0].column_name == "_tags_hash_map"
-                ):
-                    self.found_hashmap_condition = True
-                return super().visit_function_call(exp)
+    class ConditionVisitor(NoopVisitor):
+        def __init__(self) -> None:
+            self.found_hashmap_condition = False
 
-        visitor = ConditionVisitor()
-        clickhouse_query.get_condition().accept(visitor)
-        assert visitor.found_hashmap_condition
+        def visit_function_call(self, exp: FunctionCall) -> None:
+            assert exp.function_name != "arrayElement"
+            if (
+                exp.function_name == "has"
+                and isinstance(exp.parameters[0], Column)
+                and exp.parameters[0].column_name == "_tags_hash_map"
+            ):
+                self.found_hashmap_condition = True
+            return super().visit_function_call(exp)
 
-    entity.get_query_pipeline_builder().build_execution_pipeline(
-        request, query_verifier
-    ).execute()
+    visitor = ConditionVisitor()
+    clickhouse_query.get_condition().accept(visitor)
+    assert visitor.found_hashmap_condition

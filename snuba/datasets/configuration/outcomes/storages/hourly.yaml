@@ -51,6 +51,5 @@ query_processors:
       prewhere_candidates:
         - project_id
         - org_id
-  - processor: TableRateLimit
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer

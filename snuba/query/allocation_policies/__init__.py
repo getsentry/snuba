@@ -25,6 +25,13 @@ CAPMAN_HASH = "capman"
 IS_ACTIVE = "is_active"
 IS_ENFORCED = "is_enforced"
 MAX_THREADS = "max_threads"
+NO_UNITS = "no_units"
+NO_SUGGESTION = "no_suggestion"
+CROSS_ORG_SUGGESTION = "cross org queries do not have limits"
+PASS_THROUGH_REFERRERS_SUGGESTION = (
+    "subscriptions currently do not undergo rate limiting in any way"
+)
+MAX_THRESHOLD = int(1e12)
 
 
 @dataclass(frozen=True)
@@ -96,6 +103,12 @@ class QuotaAllowance:
     # about what caused that action. Not currently well typed
     # because I don't know what exactly should go in it yet
     explanation: dict[str, JsonSerializable]
+    is_throttled: bool
+    throttle_threshold: int
+    rejection_threshold: int
+    quota_used: int
+    quota_unit: str
+    suggestion: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -112,6 +125,12 @@ class QuotaAllowance:
             self.can_run == other.can_run
             and self.max_threads == other.max_threads
             and self.explanation == other.explanation
+            and self.is_throttled == other.is_throttled
+            and self.throttle_threshold == other.throttle_threshold
+            and self.rejection_threshold == other.rejection_threshold
+            and self.quota_used == other.quota_used
+            and self.quota_unit == other.quota_unit
+            and self.suggestion == other.suggestion
         )
 
 
@@ -139,11 +158,12 @@ class AllocationPolicyViolations(SerializableException):
     """
 
     def __str__(self) -> str:
-        return f"{self.message}, details: {self.violations}"
+        return f"{self.message}, info: {{'details': {self.violations}, 'summary': {self.summary}}}"
 
     @property
     def violations(self) -> dict[str, dict[str, Any]]:
-        return {k: v for k, v in self.quota_allowance.items() if v["can_run"] == False}
+        details = cast(dict[str, Any], self.quota_allowance.get("details"))
+        return {k: v for k, v in details.items() if v["can_run"] == False}
 
     @property
     def quota_allowance(self) -> dict[str, dict[str, Any]]:
@@ -151,16 +171,18 @@ class AllocationPolicyViolations(SerializableException):
             dict[str, dict[str, Any]], self.extra_data.get("quota_allowances", {})
         )
 
+    @property
+    def summary(self) -> dict[str, Any]:
+        return self.quota_allowance.get("summary", {})
+
     @classmethod
     def from_args(
-        cls, quota_allowances: dict[str, QuotaAllowance]
+        cls,
+        quota_allowances: dict[str, Any],
     ) -> "AllocationPolicyViolations":
         return cls(
             "Query on could not be run due to allocation policies",
-            quota_allowances={
-                key: quota_allowance.to_dict()
-                for key, quota_allowance in quota_allowances.items()
-            },
+            quota_allowances=quota_allowances,
         )
 
 
@@ -417,10 +439,7 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
 
     @property
     def is_enforced(self) -> bool:
-        return (
-            bool(self.get_config_value(IS_ENFORCED))
-            and settings.ENFORCE_BYTES_SCANNED_WINDOW_POLICY
-        )
+        return bool(self.get_config_value(IS_ENFORCED))
 
     @property
     def max_threads(self) -> int:
@@ -734,11 +753,31 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> QuotaAllowance:
         try:
             if not self.is_active:
-                allowance = QuotaAllowance(True, self.max_threads, {})
+                allowance = QuotaAllowance(
+                    can_run=True,
+                    max_threads=self.max_threads,
+                    explanation={},
+                    is_throttled=False,
+                    throttle_threshold=MAX_THRESHOLD,
+                    rejection_threshold=MAX_THRESHOLD,
+                    quota_used=0,
+                    quota_unit=NO_UNITS,
+                    suggestion=NO_SUGGESTION,
+                )
             else:
                 allowance = self._get_quota_allowance(tenant_ids, query_id)
         except InvalidTenantsForAllocationPolicy as e:
-            allowance = QuotaAllowance(False, 0, cast(dict[str, Any], e.to_dict()))
+            allowance = QuotaAllowance(
+                can_run=False,
+                max_threads=0,
+                explanation=cast(dict[str, Any], e.to_dict()),
+                is_throttled=False,
+                throttle_threshold=0,
+                rejection_threshold=0,
+                quota_used=0,
+                quota_unit=NO_UNITS,
+                suggestion=NO_SUGGESTION,
+            )
         except Exception:
             logger.exception(
                 "Allocation policy failed to get quota allowance, this is a bug, fix it"
@@ -762,7 +801,17 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
                 },
             )
         if not self.is_enforced:
-            return QuotaAllowance(True, self.max_threads, {})
+            return QuotaAllowance(
+                can_run=True,
+                max_threads=self.max_threads,
+                explanation={},
+                is_throttled=allowance.is_throttled,
+                throttle_threshold=allowance.throttle_threshold,
+                rejection_threshold=allowance.rejection_threshold,
+                quota_used=allowance.quota_used,
+                quota_unit=allowance.quota_unit,
+                suggestion=allowance.suggestion,
+            )
         # make sure we always know which storage key we rejected a query from
         allowance.explanation["storage_key"] = str(self._storage_key)
         return allowance
@@ -802,6 +851,10 @@ class AllocationPolicy(ABC, metaclass=RegisteredClass):
     ) -> None:
         pass
 
+    @property
+    def storage_key(self) -> StorageKey:
+        return self._storage_key
+
 
 class PassthroughPolicy(AllocationPolicy):
     def _additional_config_definitions(self) -> list[AllocationPolicyConfig]:
@@ -811,7 +864,15 @@ class PassthroughPolicy(AllocationPolicy):
         self, tenant_ids: dict[str, str | int], query_id: str
     ) -> QuotaAllowance:
         return QuotaAllowance(
-            can_run=True, max_threads=self.max_threads, explanation={}
+            can_run=True,
+            max_threads=self.max_threads,
+            explanation={},
+            is_throttled=False,
+            throttle_threshold=MAX_THRESHOLD,
+            rejection_threshold=MAX_THRESHOLD,
+            quota_used=0,
+            quota_unit=NO_UNITS,
+            suggestion=NO_SUGGESTION,
         )
 
     def _update_quota_balance(

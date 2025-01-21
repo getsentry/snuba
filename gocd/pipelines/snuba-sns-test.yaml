@@ -87,9 +87,11 @@ pipelines:
                                     --container-name="transactions-subscriptions-executor" \
                                     --container-name="transactions-subscriptions-scheduler" \
                                     --container-name="spans-consumer" \
+                                    --container-name="eap-spans-consumer" \
+                                    --container-name="eap-mutations-consumer" \
                                     && /devinfra/scripts/k8s/k8s-deploy.py \
                                     --label-selector="service=snuba" \
-                                    --image="us.gcr.io/sentryio/snuba:${GO_REVISION_SNUBA_REPO}" \
+                                    --image="us-central1-docker.pkg.dev/sentryio/snuba/image:${GO_REVISION_SNUBA_REPO}" \
                                     --type="cronjob" \
                                     --container-name="cleanup" \
                                     --container-name="optimize"

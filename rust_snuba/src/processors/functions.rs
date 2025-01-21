@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use rust_arroyo::backends::kafka::types::KafkaPayload;
+use sentry_arroyo::backends::kafka::types::KafkaPayload;
 
 use crate::types::{InsertBatch, KafkaMessageMetadata};
 
@@ -32,6 +32,10 @@ pub fn process_message(
                 retention_days: msg.retention_days,
                 timestamp: msg.timestamp,
                 transaction_name: &msg.transaction_name,
+                start_timestamp: msg.start_timestamp.map(|t| (t * 1e6) as u64),
+                end_timestamp: msg.end_timestamp.map(|t| (t * 1e6) as u64),
+                profiling_type: msg.profiling_type.as_deref(),
+                materialization_version: msg.materialization_version.unwrap_or_default(),
 
                 // Function metadata
                 fingerprint: from.fingerprint,
@@ -39,6 +43,7 @@ pub fn process_message(
                 package: &from.package,
                 name: &from.function,
                 is_application: from.in_app as u8,
+                thread_id: from.thread_id.clone().unwrap_or_default(),
 
                 ..Default::default()
             }
@@ -55,6 +60,8 @@ struct InputFunction {
     in_app: bool,
     package: String,
     self_times_ns: Vec<u64>,
+    #[serde(default)]
+    thread_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -70,7 +77,15 @@ struct InputMessage {
     release: Option<String>,
     retention_days: u32,
     timestamp: u64,
+    #[serde(default)]
+    start_timestamp: Option<f64>,
+    #[serde(default)]
+    end_timestamp: Option<f64>,
     transaction_name: String,
+    #[serde(default)]
+    profiling_type: Option<String>,
+    #[serde(default)]
+    materialization_version: Option<u8>,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -88,7 +103,11 @@ struct Function<'a> {
     release: Option<&'a str>,
     retention_days: u32,
     timestamp: u64,
+    start_timestamp: Option<u64>,
+    end_timestamp: Option<u64>,
     transaction_name: &'a str,
+    thread_id: String,
+    profiling_type: Option<&'a str>,
 
     // Deprecated fields
     browser_name: &'a str,

@@ -113,20 +113,22 @@ class SimpleAPITest(BaseApiTest):
                                             self.base_time + timedelta(minutes=tick)
                                         ).timetuple()
                                     ),
-                                    "tags": {
-                                        # Sentry
-                                        "environment": self.environments[
-                                            (tock * p) % len(self.environments)
-                                        ],
-                                        "sentry:release": str(tick),
-                                        "sentry:dist": "dist1",
-                                        "os.name": "windows",
-                                        "os.rooted": 1,
-                                        # User
-                                        "foo": "baz",
-                                        "foo.bar": "qux",
-                                        "os_name": "linux",
-                                    },
+                                    "tags": list(
+                                        {
+                                            # Sentry
+                                            "environment": self.environments[
+                                                (tock * p) % len(self.environments)
+                                            ],
+                                            "sentry:release": str(tick),
+                                            "sentry:dist": "dist1",
+                                            "os.name": "windows",
+                                            "os.rooted": 1,
+                                            # User
+                                            "foo": "baz",
+                                            "foo.bar": "qux",
+                                            "os_name": "linux",
+                                        }.items()
+                                    ),
                                     "exception": {
                                         "values": [
                                             {
@@ -623,7 +625,7 @@ class TestApi(SimpleAPITest):
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
                             "received": calendar.timegm(self.base_time.timetuple()),
-                            "tags": {},
+                            "tags": [],
                             "exception": {
                                 "values": [
                                     {
@@ -1932,31 +1934,6 @@ class TestApi(SimpleAPITest):
         )
         assert "deleted = 0" in result["sql"] or "equals(deleted, 0)" in result["sql"]
 
-    def test_hierarchical_hashes_array_slice(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "granularity": 3600,
-                    "selected_columns": [["arraySlice", ["hierarchical_hashes", 0, 2]]],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        result = json.loads(response.data)
-
-        val = (
-            "SELECT (arrayMap(x -> replaceAll(toString(x), '-', ''), "
-            "arraySlice(hierarchical_hashes, 0, 2)) AS `_snuba_arraySlice(hierarchical_hashes, 0, 2)`)"
-        )
-        assert result["sql"].startswith(val)
-
     def test_backslashes_in_query(self) -> None:
         response = self.post(
             json.dumps(
@@ -1981,31 +1958,6 @@ class TestApi(SimpleAPITest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"times_seen": 0}]
-
-    def test_hierarchical_hashes_array_join(self) -> None:
-        response = self.post(
-            json.dumps(
-                {
-                    "project": 1,
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "granularity": 3600,
-                    "selected_columns": [["arrayJoin", ["hierarchical_hashes"]]],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                }
-            ),
-        )
-
-        assert response.status_code == 200
-        result = json.loads(response.data)
-
-        val = (
-            "SELECT (arrayJoin((arrayMap(x -> replaceAll(toString(x), '-', ''), "
-            "hierarchical_hashes) AS _snuba_hierarchical_hashes)) AS `_snuba_arrayJoin(hierarchical_hashes)`)"
-        )
-        assert result["sql"].startswith(val)
 
     def test_test_endpoints(self) -> None:
         project_id = 73
@@ -2109,75 +2061,37 @@ class TestApi(SimpleAPITest):
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock: MagicMock) -> None:
-        for use_split, expected_query_count in [(0, 1), (1, 2)]:
-            state.set_config("use_split", use_split)
-            record_query_mock.reset_mock()
-            result = json.loads(
-                self.post(
-                    json.dumps(
-                        {
-                            "project": 1,
-                            "tenant_ids": {"referrer": "test", "organization_id": 1234},
-                            "selected_columns": [
-                                "event_id",
-                                "title",
-                                "transaction",
-                                "tags[a]",
-                                "tags[b]",
-                                "message",
-                                "project_id",
-                            ],
-                            "limit": 5,
-                            "from_date": self.base_time.isoformat(),
-                            "to_date": (
-                                self.base_time + timedelta(minutes=self.minutes)
-                            ).isoformat(),
-                        }
-                    ),
-                ).data
-            )
-
-            assert len(result["data"]) == 5
-            assert record_query_mock.call_count == 1
-            metadata = record_query_mock.call_args[0][0]
-            assert metadata["dataset"] == "events"
-            assert metadata["request"]["referrer"] == "test"
-            assert len(metadata["query_list"]) == expected_query_count
-
-    @patch("snuba.web.query._run_query_pipeline")
-    def test_error_handler(self, pipeline_mock: MagicMock) -> None:
-        from redis.exceptions import ClusterDownError
-
-        pipeline_mock.side_effect = ClusterDownError("stuff")
-        response = self.post(
-            json.dumps(
-                {
-                    "conditions": [
-                        ["project_id", "IN", [1]],
-                        ["group_id", "IN", [self.group_ids[0]]],
-                    ],
-                    "from_date": self.base_time.isoformat(),
-                    "to_date": (
-                        self.base_time + timedelta(minutes=self.minutes)
-                    ).isoformat(),
-                    "limit": 1,
-                    "offset": 0,
-                    "orderby": ["-timestamp", "-event_id"],
-                    "project": [1],
-                    "tenant_ids": {"referrer": "r", "organization_id": 1234},
-                    "selected_columns": [
-                        "event_id",
-                        "group_id",
-                        "project_id",
-                        "timestamp",
-                    ],
-                }
-            ),
+        record_query_mock.reset_mock()
+        result = json.loads(
+            self.post(
+                json.dumps(
+                    {
+                        "project": 1,
+                        "tenant_ids": {"referrer": "test", "organization_id": 1234},
+                        "selected_columns": [
+                            "event_id",
+                            "title",
+                            "transaction",
+                            "tags[a]",
+                            "tags[b]",
+                            "message",
+                            "project_id",
+                        ],
+                        "limit": 5,
+                        "from_date": self.base_time.isoformat(),
+                        "to_date": (
+                            self.base_time + timedelta(minutes=self.minutes)
+                        ).isoformat(),
+                    }
+                ),
+            ).data
         )
-        assert response.status_code == 500
-        data = json.loads(response.data)
-        assert data["error"]["type"] == "internal_server_error"
-        assert data["error"]["message"] == "stuff"
+
+        assert len(result["data"]) == 5
+        assert record_query_mock.call_count == 1
+        metadata = record_query_mock.call_args[0][0]
+        assert metadata["dataset"] == "events"
+        assert metadata["request"]["referrer"] == "test"
 
 
 @pytest.mark.clickhouse_db

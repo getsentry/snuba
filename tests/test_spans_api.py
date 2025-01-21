@@ -44,8 +44,8 @@ class TestSpansApi(BaseApiTest):
         self.skew = timedelta(minutes=self.minutes)
         self.trace_id = "7400045b25c443b885914600aa83ad04"
 
-        self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+        self.base_time = datetime.now().replace(
+            minute=0, second=0, microsecond=3, tzinfo=timezone.utc
         ) - timedelta(minutes=self.minutes)
         self.storage = get_writable_storage(StorageKey.SPANS)
         state.set_config("log_bad_span_message_percentage", 1)
@@ -73,6 +73,9 @@ class TestSpansApi(BaseApiTest):
                 # project N sends an event every Nth minute
                 if tock % p == 0:
                     span_id = f"8841662216cc598b{tock}"[-16:]
+                    start_timestamp = self.base_time + timedelta(minutes=tick)
+                    duration = timedelta(minutes=tick)
+                    end_timestamp = start_timestamp + duration
                     processed = (
                         self.storage.get_table_writer()
                         .get_stream_loader()
@@ -80,21 +83,17 @@ class TestSpansApi(BaseApiTest):
                         .process_message(
                             {
                                 "project_id": p,
+                                "organization_id": 1,
                                 "event_id": uuid.uuid4().hex,
                                 "deleted": 0,
                                 "is_segment": False,
-                                "duration_ms": int(
-                                    1000 * timedelta(minutes=tick).total_seconds()
-                                ),
+                                "duration_ms": int(1000 * duration.total_seconds()),
                                 "start_timestamp_ms": int(
-                                    1000
-                                    * datetime.timestamp(
-                                        self.base_time + timedelta(minutes=tick)
-                                    )
+                                    1000 * start_timestamp.timestamp(),
                                 ),
-                                "received": datetime.timestamp(
-                                    self.base_time + timedelta(minutes=tick)
-                                ),
+                                "start_timestamp_precise": start_timestamp.timestamp(),
+                                "end_timestamp_precise": end_timestamp.timestamp(),
+                                "received": start_timestamp.timestamp(),
                                 "exclusive_time_ms": int(1000 * 0.1234),
                                 "trace_id": self.trace_id,
                                 "span_id": span_id,
