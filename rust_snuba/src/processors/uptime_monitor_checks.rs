@@ -29,7 +29,7 @@ pub fn deserialize_message(payload: &[u8]) -> anyhow::Result<(Vec<UptimeMonitorC
         uptime_check_id: monitor_message.guid,
         scheduled_check_time: monitor_message.scheduled_check_time_ms,
         timestamp: monitor_message.actual_check_time_ms,
-        duration_ms: monitor_message.duration_ms,
+        duration_ms: monitor_message.duration_ms.unwrap_or(0),
         region: monitor_message.region.unwrap_or_default(),
         check_status: monitor_message.status,
         check_status_reason: monitor_message
@@ -58,7 +58,7 @@ struct UptimeMonitorCheckMessage<'a> {
     guid: Uuid,
     scheduled_check_time_ms: u64,
     actual_check_time_ms: u64,
-    duration_ms: u64,
+    duration_ms: Option<u64>,
     status: &'a str,
     status_reason: Option<CheckStatusReason<'a>>,
     trace_id: Uuid,
@@ -138,6 +138,52 @@ mod tests {
             Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()
         );
         assert_eq!(monitor_row.duration_ms, 100);
+        assert_eq!(monitor_row.timestamp, 1702659277);
+        assert_eq!(monitor_row.region, "global".to_string());
+        assert_eq!(monitor_row.check_status, "ok");
+        assert_eq!(monitor_row.check_status_reason, "Request successful");
+        assert_eq!(monitor_row.http_status_code, Some(200));
+        assert_eq!(monitor_row.retention_days, 30);
+        assert_eq!(timestamp, 1702659277.0);
+    }
+
+    #[test]
+    fn test_parse_monitor_checkin_null_duration() {
+        let data = r#"{
+            "organization_id": 1,
+            "project_id": 1,
+            "retention_days": 30,
+            "region": "global",
+            "environment": "prod",
+            "subscription_id": "123e4567-e89b-12d3-a456-426614174000",
+            "guid": "550e8400-e29b-41d4-a716-446655440000",
+            "scheduled_check_time_ms": 1702659277,
+            "actual_check_time_ms": 1702659277,
+            "duration_ms": null,
+            "status": "ok",
+            "status_reason": {
+                "type": "Request successful",
+                "description": "Request successful"
+            },
+            "http_status_code": 200,
+            "trace_id": "550e8400-e29b-41d4-a716-446655440000",
+            "request_info": {
+                "request_type": "GET",
+                "http_status_code": 200
+            }
+        }"#;
+
+        let (rows, timestamp) = deserialize_message(data.as_bytes()).unwrap();
+        let monitor_row = rows.first().unwrap();
+
+        assert_eq!(monitor_row.organization_id, 1);
+        assert_eq!(monitor_row.project_id, 1);
+        assert_eq!(monitor_row.environment, Some("prod"));
+        assert_eq!(
+            monitor_row.uptime_subscription_id,
+            Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()
+        );
+        assert_eq!(monitor_row.duration_ms, 0); // Duration should default to 0 when null
         assert_eq!(monitor_row.timestamp, 1702659277);
         assert_eq!(monitor_row.region, "global".to_string());
         assert_eq!(monitor_row.check_status, "ok");
