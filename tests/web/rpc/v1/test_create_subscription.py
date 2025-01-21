@@ -25,7 +25,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 from tests.web.rpc.v1.test_endpoint_time_series.test_endpoint_time_series import (
     DummyMetric,
-    store_timeseries,
+    store_spans_timeseries,
 )
 
 END_TIME = datetime.utcnow().replace(tzinfo=UTC)
@@ -186,7 +186,7 @@ TESTS_INVALID_RPC_SUBSCRIPTIONS = [
 @pytest.mark.redis_db
 class TestCreateSubscriptionApi(BaseApiTest):
     def test_create_valid_subscription(self) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             START_TIME,
             1,
             3600,
@@ -251,7 +251,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test_create_invalid_subscription(
         self, create_subscription: CreateSubscriptionRequestProto, error_message: str
     ) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             START_TIME,
             1,
             3600,

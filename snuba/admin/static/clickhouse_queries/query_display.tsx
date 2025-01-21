@@ -3,6 +3,7 @@ import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 import { SelectItem, Switch, Alert } from "@mantine/core";
 import { Prism } from "@mantine/prism";
@@ -13,6 +14,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
+import { Collapse as MantineCollapse, Group, Text } from '@mantine/core';
+import { IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 
 import {
   ClickhouseNodeData,
@@ -38,6 +41,9 @@ function QueryDisplay(props: {
   );
 
   const [queryError, setQueryError] = useState<Error | null>(null);
+
+  // this is used to collapse the stack trace in error messages
+  const [collapseOpened, setCollapseOpened] = useState(false);
 
   useEffect(() => {
     props.api.getClickhouseNodes().then((res) => {
@@ -99,10 +105,6 @@ function QueryDisplay(props: {
       });
   }
 
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
-  }
-
   function getHosts(nodeData: ClickhouseNodeData[]): SelectItem[] {
     let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
     // populate the hosts entries marking distributed hosts that are not also local
@@ -132,14 +134,49 @@ function QueryDisplay(props: {
 
   function getErrorDomElement() {
     if (queryError !== null) {
-      const bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
-      return <Alert title={queryError.name} color="red">{bodyDOM}</Alert>;
+      let title: string;
+      let bodyDOM;
+      if (queryError.name === "Error" && queryError.message.includes("Stack trace:")) {
+        // this puts the stack trace in a collapsible section
+        const split = queryError.message.indexOf("Stack trace:")
+        title = queryError.message.slice(0, split)
+
+        const stackTrace = queryError.message.slice(split + "Stack trace:".length)
+          .split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+        bodyDOM = <div>
+          <Group spacing="xs" onClick={() => setCollapseOpened((o) => !o)} style={{ cursor: 'pointer' }}>
+            {collapseOpened ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
+            <Text weight={500}>Stack Trace</Text>
+          </Group>
+
+          <MantineCollapse in={collapseOpened}>
+            <Text mt="sm">
+              {stackTrace}
+            </Text>
+          </MantineCollapse>
+        </div>
+      } else {
+        title = queryError.name
+        bodyDOM = queryError.message.split("\n").map((line) => <React.Fragment>{line}< br /></React.Fragment>)
+      }
+      return <Alert title={title} color="red">{bodyDOM}</Alert>;
     }
     return "";
   }
 
   function handleQueryError(error: Error) {
     setQueryError(error);
+  }
+
+  function convertResultsToCSV(queryResult: QueryResult) {
+    let output = queryResult.column_names.join(",");
+    for (const row of queryResult.rows) {
+      const escaped = row.map((v) =>
+        typeof v == "string" && v.includes(",") ? '"' + v + '"' : v
+      );
+      output = output + "\n" + escaped.join(",");
+    }
+    return output;
   }
 
   return (
@@ -202,14 +239,11 @@ function QueryDisplay(props: {
             return (
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
-                <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(JSON.stringify(queryResult))}
-                  >
-                    Copy to clipboard
-                  </button>
-                </p>
+                <QueryResultCopier
+                  rawInput={queryResult.trace_output || ""}
+                  jsonInput={JSON.stringify(queryResult)}
+                  csvInput={convertResultsToCSV(queryResult)}
+                />
                 {props.resultDataPopulator(queryResult)}
               </div>
             );
@@ -217,12 +251,11 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
+              <QueryResultCopier
+                rawInput={queryResult.trace_output || ""}
+                jsonInput={JSON.stringify(queryResult)}
+                csvInput={convertResultsToCSV(queryResult)}
+              />
               {props.resultDataPopulator(queryResult)}
             </Collapse>
           );

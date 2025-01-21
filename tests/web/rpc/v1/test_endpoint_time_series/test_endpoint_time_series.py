@@ -37,7 +37,7 @@ from tests.base import BaseApiTest
 from tests.helpers import write_raw_unprocessed_events
 
 
-def gen_message(
+def gen_span_message(
     dt: datetime, tags: dict[str, str], numerical_attributes: dict[str, float]
 ) -> MutableMapping[str, Any]:
     return {
@@ -107,7 +107,7 @@ class DummyMetric:
     get_value: Callable[[SecsFromSeriesStart], float]
 
 
-def store_timeseries(
+def store_spans_timeseries(
     start_datetime: datetime,
     period_secs: int,
     len_secs: int,
@@ -119,7 +119,7 @@ def store_timeseries(
     for secs in range(0, len_secs, period_secs):
         dt = start_datetime + timedelta(seconds=secs)
         numerical_attributes = {m.name: m.get_value(secs) for m in metrics}
-        messages.append(gen_message(dt, tags, numerical_attributes))
+        messages.append(gen_span_message(dt, tags, numerical_attributes))
     spans_storage = get_storage(StorageKey("eap_spans"))
     write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
 
@@ -167,7 +167,7 @@ class TestTimeSeriesApi(BaseApiTest):
             error.ParseFromString(response.data)
             assert response.status_code == 200, (error.message, error.details)
 
-    def test_errors_without_type(self) -> None:
+    def test_fails_without_type(self) -> None:
         ts = Timestamp()
         ts.GetCurrentTime()
         tstart = Timestamp(seconds=ts.seconds - 3600)
@@ -197,13 +197,46 @@ class TestTimeSeriesApi(BaseApiTest):
         error = Error()
         if response.status_code != 200:
             error.ParseFromString(response.data)
-        assert response.status_code == 400, error
+        assert response.status_code == 400, (error.message, error.details)
+
+    def test_fails_for_logs(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        tstart = Timestamp(seconds=ts.seconds - 3600)
+        message = TimeSeriesRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=tstart,
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_LOG,
+            ),
+            aggregations=[
+                AttributeAggregation(
+                    aggregate=Function.FUNCTION_COUNT,
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_FLOAT, name="sentry.duration"
+                    ),
+                    label="count",
+                ),
+            ],
+            granularity_secs=60,
+        )
+        response = self.app.post(
+            "/rpc/EndpointTimeSeries/v1", data=message.SerializeToString()
+        )
+        error = Error()
+        if response.status_code != 200:
+            error.ParseFromString(response.data)
+        assert response.status_code == 400, (error.message, error.details)
 
     def test_sum(self) -> None:
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
         query_duration = 60 * 30
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -263,21 +296,21 @@ class TestTimeSeriesApi(BaseApiTest):
         ]
 
     def test_with_group_by(self) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 1)],
             tags={"consumer_group": "a", "environment": "prod"},
         )
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
             metrics=[DummyMetric("test_metric", get_value=lambda x: 10)],
             tags={"consumer_group": "z", "environment": "prod"},
         )
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -356,7 +389,7 @@ class TestTimeSeriesApi(BaseApiTest):
         )
 
     def test_with_non_string_group_by(self) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -411,7 +444,7 @@ class TestTimeSeriesApi(BaseApiTest):
     def test_with_no_data_present(self) -> None:
         granularity_secs = 300
         query_duration = 60 * 30
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1800,
             3600,
@@ -479,7 +512,7 @@ class TestTimeSeriesApi(BaseApiTest):
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
         query_duration = 60 * 30
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -487,7 +520,7 @@ class TestTimeSeriesApi(BaseApiTest):
             tags={"customer": "bob"},
         )
 
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -578,7 +611,7 @@ class TestTimeSeriesApi(BaseApiTest):
         query_offset = 5
         query_duration = 1800 + query_offset
         granularity_secs = 300
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -631,7 +664,7 @@ class TestTimeSeriesApi(BaseApiTest):
         # store a a test metric with a value of 1, every second of one hour
         granularity_secs = 300
         query_duration = 300
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
@@ -667,7 +700,7 @@ class TestTimeSeriesApi(BaseApiTest):
         assert ts.data_points[0].data == 300
 
     def test_with_non_existent_attribute(self) -> None:
-        store_timeseries(
+        store_spans_timeseries(
             BASE_TIME,
             1,
             3600,
