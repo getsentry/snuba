@@ -50,7 +50,7 @@ schema:
         },
     },
     {
-      name: features,
+      name: flags,
       type: Nested,
       args:
         {
@@ -59,7 +59,7 @@ schema:
         },
     },
     {
-      name: _features_hash_map,
+      name: _flags_hash_map,
       type: Array,
       args:
         {
@@ -318,15 +318,15 @@ storages:
         - mapper: ColumnToFunctionOnColumn
           args:
             from_table_name: null
-            from_col_name: features_key
+            from_col_name: flags_key
             to_function_name: arrayJoin
-            to_function_column: features.key
+            to_function_column: flags.key
         - mapper: ColumnToFunctionOnColumn
           args:
             from_table_name: null
-            from_col_name: features_value
+            from_col_name: flags_value
             to_function_name: arrayJoin
-            to_function_column: features.value
+            to_function_column: flags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -347,9 +347,9 @@ storages:
         - mapper: SubscriptableMapper
           args:
             from_column_table: null
-            from_column_name: features
+            from_column_name: flags
             to_nested_col_table: null
-            to_nested_col_name: features
+            to_nested_col_name: flags
             value_subcolumn_name: value
             nullable: false
   - storage: errors
@@ -449,15 +449,15 @@ storages:
         - mapper: ColumnToFunctionOnColumn
           args:
             from_table_name: null
-            from_col_name: features_key
+            from_col_name: flags_key
             to_function_name: arrayJoin
-            to_function_column: features.key
+            to_function_column: flags.key
         - mapper: ColumnToFunctionOnColumn
           args:
             from_table_name: null
-            from_col_name: features_value
+            from_col_name: flags_value
             to_function_name: arrayJoin
-            to_function_column: features.value
+            to_function_column: flags.value
       subscriptables:
         - mapper: SubscriptableMapper
           args:
@@ -478,9 +478,9 @@ storages:
         - mapper: SubscriptableMapper
           args:
             from_column_table: null
-            from_column_name: features
+            from_column_name: flags
             to_nested_col_table: null
-            to_nested_col_name: features
+            to_nested_col_name: flags
             value_subcolumn_name: value
             nullable: false
 storage_selector:

@@ -77,7 +77,7 @@ schema:
           },
       },
       {
-        name: features,
+        name: flags,
         type: Nested,
         args:
           {
@@ -86,7 +86,7 @@ schema:
           },
       },
       {
-        name: _features_hash_map,
+        name: _flags_hash_map,
         type: Array,
         args:
           {
@@ -326,9 +326,9 @@ query_processors:
       killswitch: events_tags_hash_map_enabled
   - processor: MappingOptimizer
     args:
-      column_name: features
-      hash_map_name: _features_hash_map
-      killswitch: events_features_hash_map_enabled
+      column_name: flags
+      hash_map_name: _flags_hash_map
+      killswitch: events_flags_hash_map_enabled
   - processor: EmptyTagConditionProcessor
     args:
       column_name: tags.key
@@ -337,7 +337,7 @@ query_processors:
       column_name: tags
   - processor: ArrayJoinKeyValueOptimizer
     args:
-      column_name: features
+      column_name: flags
   - processor: PrewhereProcessor
     args:
       omit_if_final:
