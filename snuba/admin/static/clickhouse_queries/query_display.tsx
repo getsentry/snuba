@@ -3,6 +3,7 @@ import Client from "SnubaAdmin/api_client";
 import { Collapse } from "SnubaAdmin/collapse";
 import QueryEditor from "SnubaAdmin/query_editor";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 
 import { SelectItem, Switch, Alert } from "@mantine/core";
 import { Prism } from "@mantine/prism";
@@ -104,10 +105,6 @@ function QueryDisplay(props: {
       });
   }
 
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
-  }
-
   function getHosts(nodeData: ClickhouseNodeData[]): SelectItem[] {
     let node_info = nodeData.find((el) => el.storage_name === query.storage)!;
     // populate the hosts entries marking distributed hosts that are not also local
@@ -171,6 +168,17 @@ function QueryDisplay(props: {
     setQueryError(error);
   }
 
+  function convertResultsToCSV(queryResult: QueryResult) {
+    let output = queryResult.column_names.join(",");
+    for (const row of queryResult.rows) {
+      const escaped = row.map((v) =>
+        typeof v == "string" && v.includes(",") ? '"' + v + '"' : v
+      );
+      output = output + "\n" + escaped.join(",");
+    }
+    return output;
+  }
+
   return (
     <div>
       <form style={query.sudo ? sudoForm : standardForm}>
@@ -231,14 +239,11 @@ function QueryDisplay(props: {
             return (
               <div key={idx}>
                 <p>{queryResult.input_query}</p>
-                <p>
-                  <button
-                    style={executeButtonStyle}
-                    onClick={() => copyText(JSON.stringify(queryResult))}
-                  >
-                    Copy to clipboard
-                  </button>
-                </p>
+                <QueryResultCopier
+                  rawInput={queryResult.trace_output || ""}
+                  jsonInput={JSON.stringify(queryResult)}
+                  csvInput={convertResultsToCSV(queryResult)}
+                />
                 {props.resultDataPopulator(queryResult)}
               </div>
             );
@@ -246,12 +251,11 @@ function QueryDisplay(props: {
 
           return (
             <Collapse key={idx} text={queryResult.input_query}>
-              <button
-                style={executeButtonStyle}
-                onClick={() => copyText(JSON.stringify(queryResult))}
-              >
-                Copy to clipboard
-              </button>
+              <QueryResultCopier
+                rawInput={queryResult.trace_output || ""}
+                jsonInput={JSON.stringify(queryResult)}
+                csvInput={convertResultsToCSV(queryResult)}
+              />
               {props.resultDataPopulator(queryResult)}
             </Collapse>
           );
