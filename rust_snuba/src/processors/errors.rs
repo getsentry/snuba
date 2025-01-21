@@ -188,12 +188,14 @@ struct TraceContext {
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FlagContext {
     #[serde(default)]
-    values: Vec<FlagContextItem>,
+    values: Option<Vec<Option<FlagContextItem>>>,
 }
 
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 struct FlagContextItem {
+    #[serde(default)]
     flag: Unicodify,
+    #[serde(default)]
     result: Unicodify,
 }
 
@@ -586,10 +588,14 @@ impl ErrorRow {
         let mut flags_value = Vec::new();
 
         if let Some(ctx) = from_context.flags {
-            for item in ctx.values {
-                if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
-                    flags_key.push(k);
-                    flags_value.push(v);
+            if let Some(values) = ctx.values {
+                for value in values {
+                    if let Some(item) = value {
+                        if let (Some(k), Some(v)) = (item.flag.0, item.result.0) {
+                            flags_key.push(k);
+                            flags_value.push(v);
+                        }
+                    }
                 }
             }
         };

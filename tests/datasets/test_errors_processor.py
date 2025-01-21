@@ -886,3 +886,73 @@ class TestErrorsProcessor:
         assert self.processor.process_message(payload, meta) == InsertBatch(
             [result], ANY
         )
+
+    def test_errors_with_malformed_flags(self) -> None:
+        timestamp, recieved = self.__get_timestamps()
+        message = ErrorEvent(
+            event_id=str(uuid.UUID("dcb9d002cac548c795d1c9adbfc68040")),
+            organization_id=1,
+            project_id=2,
+            group_id=100,
+            platform="python",
+            message="",
+            trace_id=str(uuid.uuid4()),
+            trace_sampled=False,
+            timestamp=timestamp,
+            received_timestamp=recieved,
+            release="1.0.0",
+            dist="dist",
+            environment="prod",
+            email="foo@bar.com",
+            ip_address="127.0.0.1",
+            user_id="myself",
+            username="me",
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+                "subdivision": "fake_subdivision",
+            },
+            replay_id=None,
+            threads=None,
+            errors=[{"type": "one"}, {"type": "two"}, {"type": "three"}],
+            flags=[],
+        )
+        payload = message.serialize()
+        meta = KafkaMessageMetadata(offset=2, partition=2, timestamp=timestamp)
+
+        # Assert malformed context type is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"key": "value"}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert malformed values type is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": None}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert malformed item type is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [None]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert incorrect item contents is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [{"key": "value"}]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert missing "result" key means the whole item is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [{"flag": "value"}]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
+
+        # Assert missing "flag" key means the whole item is ignored.
+        payload[2]["data"]["contexts"]["flags"] = {"values": [{"result": "value"}]}
+        result = self.processor.process_message(payload, meta)
+        assert result.rows[0]["flags.key"] == []
+        assert result.rows[0]["flags.value"] == []
