@@ -9,7 +9,6 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::runtime_config::get_str_config;
 use crate::types::RowData;
 
 const CLICKHOUSE_HTTP_CHUNK_SIZE_BYTES: usize = 1_000_000;
@@ -41,7 +40,6 @@ impl BatchFactory {
         concurrency: &ConcurrencyConfig,
         clickhouse_user: &str,
         clickhouse_password: &str,
-        async_inserts: bool,
         batch_write_timeout: Option<Duration>,
     ) -> Self {
         let mut headers = HeaderMap::with_capacity(5);
@@ -62,13 +60,6 @@ impl BatchFactory {
 
         let mut query_params = String::new();
         query_params.push_str("load_balancing=in_order&insert_distributed_sync=1");
-
-        if async_inserts {
-            let async_inserts_allowed = get_str_config("async_inserts_allowed").ok().flatten();
-            if async_inserts_allowed == Some("1".to_string()) {
-                query_params.push_str("&async_insert=1&wait_for_async_insert=1");
-            }
-        }
 
         let url = format!("http://{hostname}:{http_port}?{query_params}");
         let query = format!("INSERT INTO {table} FORMAT JSONEachRow");
