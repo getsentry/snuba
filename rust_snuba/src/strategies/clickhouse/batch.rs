@@ -257,7 +257,6 @@ mod tests {
             &concurrency,
             "default",
             "",
-            false,
             None,
         );
 
@@ -292,7 +291,6 @@ mod tests {
             &concurrency,
             "default",
             "",
-            true,
             None,
         );
 
@@ -326,7 +324,6 @@ mod tests {
             &concurrency,
             "default",
             "",
-            false,
             None,
         );
 
@@ -358,7 +355,6 @@ mod tests {
             &concurrency,
             "default",
             "",
-            false,
             None,
         );
 
@@ -392,7 +388,6 @@ mod tests {
             &concurrency,
             "default",
             "",
-            true,
             // pass in an unreasonably short timeout
             // which prevents the client request from reaching Clickhouse
             Some(Duration::from_millis(0)),
@@ -427,7 +422,6 @@ mod tests {
             &concurrency,
             "default",
             "",
-            true,
             // pass in a reasonable timeout
             Some(Duration::from_millis(1000)),
         );
