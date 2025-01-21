@@ -496,7 +496,14 @@ def clickhouse_trace_query() -> Response:
 
         query_trace = run_query_and_get_trace(storage, raw_sql)
 
-        gather_profile_events(query_trace, storage)
+        if req.get("gather_profile_events", True):
+            try:
+                gather_profile_events(query_trace, storage)
+            except Exception:
+                logger.warning(
+                    "Error gathering profile events, returning trace anyway",
+                    exc_info=True,
+                )
         return make_response(jsonify(asdict(query_trace)), 200)
     except InvalidCustomQuery as err:
         return make_response(
@@ -1372,7 +1379,7 @@ def execute_job(job_id: str) -> Response:
     job_status = None
     try:
         job_status = run_job(job_specs[job_id])
-    except BaseException as e:
+    except Exception as e:
         return make_response(
             jsonify(
                 {

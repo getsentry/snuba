@@ -5,6 +5,7 @@ import sentry_sdk
 from google.protobuf.message import DecodeError
 from google.protobuf.message import Message as ProtobufMessage
 from sentry_protos.snuba.v1.error_pb2 import Error as ErrorProto
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba import environment
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -23,6 +24,42 @@ from snuba.web.rpc.common.exceptions import (
 
 Tin = TypeVar("Tin", bound=ProtobufMessage)
 Tout = TypeVar("Tout", bound=ProtobufMessage)
+
+
+class TraceItemDataResolver(Generic[Tin, Tout], metaclass=RegisteredClass):
+    def __init__(
+        self, timer: Timer | None = None, metrics_backend: MetricsBackend | None = None
+    ) -> None:
+        self._timer = timer or Timer("endpoint_timing")
+        self._metrics_backend = metrics_backend or environment.metrics
+
+    @classmethod
+    def config_key(cls) -> str:
+        return f"{cls.endpoint_name()}__{cls.trace_item_type()}"
+
+    @classmethod
+    def endpoint_name(cls) -> str:
+        if cls.__name__ == "TraceItemDataResolver":
+            return cls.__name__
+        raise NotImplementedError
+
+    @classmethod
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED
+
+    @classmethod
+    def get_from_trace_item_type(
+        cls, trace_item_type: TraceItemType.ValueType
+    ) -> "Type[TraceItemDataResolver[Tin, Tout]]":
+        return cast(
+            Type["TraceItemDataResolver[Tin, Tout]"],
+            getattr(cls, "_registry").get_class_from_name(
+                f"{cls.endpoint_name()}__{trace_item_type}"
+            ),
+        )
+
+    def resolve(self, in_msg: Tin) -> Tout:
+        raise NotImplementedError
 
 
 class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
@@ -45,6 +82,11 @@ class RPCEndpoint(Generic[Tin, Tout], metaclass=RegisteredClass):
     @classmethod
     def config_key(cls) -> str:
         return f"{cls.__name__}__{cls.version()}"
+
+    def get_resolver(
+        self, trace_item_type: TraceItemType.ValueType
+    ) -> TraceItemDataResolver[Tin, Tout]:
+        raise NotImplementedError
 
     @property
     def metrics(self) -> MetricsWrapper:

@@ -9,7 +9,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     Reliability,
 )
 
-from snuba.web.rpc.common.aggregation import (
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     CUSTOM_COLUMN_PREFIX,
     CustomColumnInformation,
     ExtrapolationContext,
@@ -87,7 +87,7 @@ def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
         "column_name",
         "average_sample_rate",
         "reliability",
-        "extrapolated_data_present",
+        "is_data_present",
         "is_extrapolated",
     ),
     [
@@ -180,18 +180,18 @@ def test_get_confidence_interval_column_for_non_extrapolatable_column() -> None:
         ),
     ],
 )
-def test_get_extrapolation_meta(
+def test_get_extrapolation_context(
     row_data: dict[str, Any],
     column_name: str,
     average_sample_rate: float,
     reliability: Reliability.ValueType,
-    extrapolated_data_present: bool,
+    is_data_present: bool,
     is_extrapolated: bool,
 ) -> None:
     extrapolation_context = ExtrapolationContext.from_row(column_name, row_data)
     assert extrapolation_context.average_sample_rate == average_sample_rate
     assert extrapolation_context.reliability == reliability
-    assert extrapolation_context.extrapolated_data_present == extrapolated_data_present
+    assert extrapolation_context.is_data_present == is_data_present
     assert extrapolation_context.is_extrapolated == is_extrapolated
 
 

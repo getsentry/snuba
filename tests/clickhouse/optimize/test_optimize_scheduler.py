@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Sequence
 
 import pytest
@@ -132,7 +132,7 @@ def test_subdivide_partitions(
     )
 
 
-last_midnight = (datetime.now() + timedelta(minutes=10)).replace(
+last_midnight = (datetime.now(UTC) + timedelta(minutes=10)).replace(
     hour=0, minute=0, second=0, microsecond=0
 )
 

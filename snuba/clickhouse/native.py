@@ -81,6 +81,9 @@ class ClickhousePool(object):
         user: str,
         password: str,
         database: str,
+        secure: bool = False,
+        ca_certs: Optional[str] = None,
+        verify: Optional[bool] = False,
         connect_timeout: int = 1,
         send_receive_timeout: Optional[int] = 300,
         max_pool_size: int = settings.CLICKHOUSE_MAX_POOL_SIZE,
@@ -91,6 +94,9 @@ class ClickhousePool(object):
         self.user = user
         self.password = password
         self.database = database
+        self.secure = secure
+        self.ca_certs = ca_certs
+        self.verify = verify
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
@@ -380,6 +386,9 @@ class ClickhousePool(object):
             user=self.user,
             password=self.password,
             database=self.database,
+            secure=self.secure,
+            ca_certs=self.ca_certs,
+            verify=self.verify,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
             settings=self.client_settings,

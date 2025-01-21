@@ -15,6 +15,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
+    TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
@@ -211,6 +212,7 @@ def _generate_request(
             start_timestamp=Timestamp(seconds=hour_ago),
             end_timestamp=ts,
             request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+            trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
         ),
         filter=TraceItemFilter(
             exists_filter=ExistsFilter(

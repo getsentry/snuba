@@ -55,7 +55,9 @@ services:
     ports:
       - 127.0.0.1:1218:1218
       - 127.0.0.1:1219:1219
-    command: [devserver]
+    command:
+      - devserver
+      - --${SNUBA_NO_WORKERS:+no-workers}
     healthcheck:
       test: curl -f http://localhost:1218/health_envoy
       interval: 5s

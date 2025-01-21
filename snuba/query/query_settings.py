@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, MutableMapping, Optional
+from typing import Any, MutableMapping, Optional
 
 from snuba.state.quota import ResourceQuota
-from snuba.state.rate_limit import RateLimitParameters
 
 
 class QuerySettings(ABC):
@@ -60,6 +59,10 @@ class QuerySettings(ABC):
     def get_asynchronous(self) -> bool:
         pass
 
+    @abstractmethod
+    def get_apply_default_subscriptable_mapping(self) -> bool:
+        pass
+
 
 # TODO: I don't like that there are two different classes for the same thing
 # this could probably be replaces with a `source` attribute on the class
@@ -80,6 +83,7 @@ class HTTPQuerySettings(QuerySettings):
         legacy: bool = False,
         referrer: str = "unknown",
         asynchronous: bool = False,
+        apply_default_subscriptable_mapping: bool = True,
     ) -> None:
         super().__init__()
         self.__turbo = turbo
@@ -87,11 +91,11 @@ class HTTPQuerySettings(QuerySettings):
         self.__debug = debug
         self.__dry_run = dry_run
         self.__legacy = legacy
-        self.__rate_limit_params: List[RateLimitParameters] = []
         self.__resource_quota: Optional[ResourceQuota] = None
         self.__clickhouse_settings: MutableMapping[str, Any] = {}
         self.referrer = referrer
         self.__asynchronous = asynchronous
+        self.__apply_default_subscriptable_mapping = apply_default_subscriptable_mapping
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -125,6 +129,9 @@ class HTTPQuerySettings(QuerySettings):
 
     def get_asynchronous(self) -> bool:
         return self.__asynchronous
+
+    def get_apply_default_subscriptable_mapping(self) -> bool:
+        return self.__apply_default_subscriptable_mapping
 
 
 class SubscriptionQuerySettings(QuerySettings):
@@ -189,3 +196,6 @@ class SubscriptionQuerySettings(QuerySettings):
 
     def get_asynchronous(self) -> bool:
         return False
+
+    def get_apply_default_subscriptable_mapping(self) -> bool:
+        return True

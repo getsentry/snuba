@@ -16,7 +16,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import column
 from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
@@ -46,7 +46,7 @@ class ExtrapolationContext(ABC):
     sample_count: int
 
     @property
-    def extrapolated_data_present(self) -> bool:
+    def is_data_present(self) -> bool:
         return self.sample_count > 0
 
     @property
@@ -67,8 +67,8 @@ class ExtrapolationContext(ABC):
         value = row_data[column_label]
 
         confidence_interval = None
-        average_sample_rate = None
-        sample_count = None
+        average_sample_rate = 0
+        sample_count = 0
 
         percentile = 0.0
         granularity = 0.0
@@ -108,18 +108,6 @@ class ExtrapolationContext(ABC):
             elif custom_column_information.custom_column_id == "count":
                 sample_count = col_value
 
-        if (
-            confidence_interval is None
-            or average_sample_rate is None
-            or sample_count is None
-        ):
-            return GenericExtrapolationContext(
-                value=value,
-                confidence_interval=None,
-                average_sample_rate=0,
-                sample_count=0,
-            )
-
         if is_percentile:
             return PercentileExtrapolationContext(
                 value=value,
@@ -150,7 +138,7 @@ class GenericExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if not self.is_extrapolated or not self.extrapolated_data_present:
+        if not self.is_extrapolated or not self.is_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         relative_confidence = (
@@ -183,7 +171,7 @@ class PercentileExtrapolationContext(ExtrapolationContext):
 
     @cached_property
     def reliability(self) -> Reliability.ValueType:
-        if not self.is_extrapolated or not self.extrapolated_data_present:
+        if not self.is_extrapolated or not self.is_data_present:
             return Reliability.RELIABILITY_UNSPECIFIED
 
         lower_bound, upper_bound = _calculate_approximate_ci_percentile_levels(
@@ -383,8 +371,9 @@ def _get_possible_percentiles_expression(
         aggregation, {"granularity": str(granularity), "width": str(width)}
     )
     alias_dict = {"alias": alias} if alias else {}
-    return cf.quantilesTDigest(*possible_percentiles)(
+    return cf.quantilesTDigestWeighted(*possible_percentiles)(
         field,
+        sampling_weight_column,
         **alias_dict,
     )
 
@@ -517,54 +506,50 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
-        # confidence interval = Z * \sqrt{\frac{N * (\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N})}{n * (N-1) c* (N-1)}}
+        # confidence interval = Z * \sqrt{\frac{\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N}}{n * N}}
         #          ┌────────────────────────────┐
-        #          │                  ₙ
-        #          │                  ⎲
-        #          │      ₙ         ( ⎳  wᵢxᵢ)²
-        #     ╲    │      ⎲     2    ⁱ⁼¹
-        #      ╲   │N * ( ⎳  wᵢxᵢ - ───────────)
-        #       ╲  │     ⁱ⁼¹             N
+        #          │              ₙ
+        #          │              ⎲
+        #          │  ₙ         ( ⎳  wᵢxᵢ)²
+        #     ╲    │  ⎲     2    ⁱ⁼¹
+        #      ╲   │( ⎳  wᵢxᵢ - ───────────)
+        #       ╲  │     ⁱ⁼¹         N
         # Z *    ╲ │────────────────────────────
-        #         ╲│     n * (N-1) c* (N-1)
+        #         ╲│              n * N
         Function.FUNCTION_AVG: f.multiply(
             z_value,
             f.sqrt(
                 f.divide(
+                    f.minus(
+                        f.sumIf(
+                            f.multiply(
+                                sampling_weight_column,
+                                f.multiply(field, field),
+                            ),
+                            get_field_existence_expression(aggregation),
+                        ),
+                        f.divide(
+                            f.multiply(
+                                f.sumIf(
+                                    f.multiply(sampling_weight_column, field),
+                                    get_field_existence_expression(aggregation),
+                                ),
+                                f.sumIf(
+                                    f.multiply(sampling_weight_column, field),
+                                    get_field_existence_expression(aggregation),
+                                ),
+                            ),
+                            column(f"{alias}_N"),
+                        ),
+                    ),
                     f.multiply(
                         f.sumIf(
                             sampling_weight_column,
                             get_field_existence_expression(aggregation),
                             alias=f"{alias}_N",
                         ),
-                        f.minus(
-                            f.sumIf(
-                                f.multiply(
-                                    sampling_weight_column,
-                                    f.multiply(field, field),
-                                ),
-                                get_field_existence_expression(aggregation),
-                            ),
-                            f.divide(
-                                f.multiply(
-                                    f.sumIf(
-                                        f.multiply(sampling_weight_column, field),
-                                        get_field_existence_expression(aggregation),
-                                    ),
-                                    f.sumIf(
-                                        f.multiply(sampling_weight_column, field),
-                                        get_field_existence_expression(aggregation),
-                                    ),
-                                ),
-                                column(f"{alias}_N"),
-                            ),
-                        ),
-                    ),
-                    f.multiply(
-                        column(_get_count_column_alias(aggregation)),
-                        f.multiply(
-                            f.minus(column(f"{alias}_N"), literal(1)),
-                            f.minus(column(f"{alias}_N"), literal(1)),
+                        f.sumIf(
+                            sign_column, get_field_existence_expression(aggregation)
                         ),
                     ),
                 )

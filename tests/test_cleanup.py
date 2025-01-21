@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Callable, Optional
 from unittest.mock import MagicMock, patch
 
@@ -65,11 +65,11 @@ class TestCleanup:
     ) -> None:
         def to_monday(d: datetime) -> datetime:
             rounded = d - timedelta(days=d.weekday())
-            return datetime(rounded.year, rounded.month, rounded.day)
+            return datetime(rounded.year, rounded.month, rounded.day).astimezone(UTC)
 
         # In prod the dates have hours/seconds etc.
         # use future dates to avoid hitting TTLs
-        base = datetime(2100, 1, 3, 1, 14, 35)  # a sunday
+        base = datetime(2100, 1, 3, 1, 14, 35).astimezone(UTC)  # a sunday
 
         current_time.return_value = base
 
@@ -192,7 +192,7 @@ class TestCleanup:
 
         def to_monday(d: datetime) -> datetime:
             rounded = d - timedelta(days=d.weekday())
-            return datetime(rounded.year, rounded.month, rounded.day)
+            return datetime(rounded.year, rounded.month, rounded.day).astimezone(UTC)
 
         storage = get_writable_storage(storage_key)
         clickhouse = storage.get_cluster().get_query_connection(
@@ -206,12 +206,12 @@ class TestCleanup:
         assert parts == []
 
         # Pick a time a few minutes after midnight
-        base = datetime(2022, 1, 29, 0, 4, 37)
+        base = datetime(2022, 1, 29, 0, 4, 37).astimezone(UTC)
         current_time.return_value = base
 
         # Insert an event that is outside retention, but its last day is just inside retention
         # Note that without rounding the base time to midnight, base - retention > last_day(timestamp)
-        timestamp = datetime(2021, 10, 25)
+        timestamp = datetime(2021, 10, 25).astimezone(UTC)
         write_processed_messages(storage, [create_event_row_for_date(timestamp, 90)])
         parts = cleanup.get_active_partitions(clickhouse, storage, database, table)
 

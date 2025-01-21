@@ -120,7 +120,6 @@ query_processors:
         max_rows_to_group_by: 1000000
         group_by_overflow_mode: any
         max_parallel_replicas: 3
-        allow_experimental_parallel_reading_from_replicas: 1
 
 mandatory_condition_checkers:
   - condition: OrgIdEnforcer
