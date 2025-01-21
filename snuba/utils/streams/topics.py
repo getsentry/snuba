@@ -69,6 +69,7 @@ class Topic(Enum):
     SUBSCRIPTION_SCHEDULED_EAP_SPANS = "scheduled-subscriptions-eap-spans"
     SUBSCRIPTION_RESULTS_EAP_SPANS = "eap-spans-subscription-results"
     EAP_MUTATIONS = "snuba-eap-mutations"
+    OURLOGS = "snuba-ourlogs"
 
     LW_DELETIONS_GENERIC_EVENTS = "snuba-lw-deletions-generic-events"
 

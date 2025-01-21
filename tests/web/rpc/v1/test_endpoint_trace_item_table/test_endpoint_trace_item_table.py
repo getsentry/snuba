@@ -7,6 +7,10 @@ import pytest
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    AggregationAndFilter,
+    AggregationComparisonFilter,
+    AggregationFilter,
+    AggregationOrFilter,
     Column,
     TraceItemColumnValues,
     TraceItemTableRequest,
@@ -17,7 +21,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
-    TraceItemName,
+    TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
@@ -154,7 +158,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=ts,
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -181,6 +185,43 @@ class TestTraceItemTable(BaseApiTest):
             error_proto.ParseFromString(response.data)
         assert response.status_code == 200, error_proto
 
+    def test_errors_without_type(self) -> None:
+        ts = Timestamp()
+        ts.GetCurrentTime()
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=ts,
+                end_timestamp=ts,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="color")
+                )
+            ),
+            columns=[
+                Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location"))
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                )
+            ],
+            limit=10,
+        )
+        response = self.app.post(
+            "/rpc/EndpointTraceItemTable/v1", data=message.SerializeToString()
+        )
+        error_proto = ErrorProto()
+        if response.status_code != 200:
+            error_proto.ParseFromString(response.data)
+        assert response.status_code == 400, error_proto
+
     def test_with_data(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
@@ -193,7 +234,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -241,7 +282,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 or_filter=OrFilter(
@@ -324,7 +365,7 @@ class TestTraceItemTable(BaseApiTest):
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
                 request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -420,7 +461,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -469,7 +510,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -552,7 +593,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -593,7 +634,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -648,7 +689,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             filter=TraceItemFilter(
                 exists_filter=ExistsFilter(
@@ -720,7 +761,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -752,7 +793,7 @@ class TestTraceItemTable(BaseApiTest):
                 end_timestamp=ts,
                 referrer="something",
                 cogs_category="something",
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -794,7 +835,7 @@ class TestTraceItemTable(BaseApiTest):
                 "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
-                "traceItemName": "TRACE_ITEM_NAME_EAP_SPANS",
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
             "columns": [
                 {
@@ -906,6 +947,7 @@ class TestTraceItemTable(BaseApiTest):
                 "projectIds": ["1"],
                 "startTimestamp": hour_ago.ToJsonString(),
                 "endTimestamp": ts.ToJsonString(),
+                "traceItemType": "TRACE_ITEM_TYPE_SPAN",
             },
             "columns": [
                 {
@@ -985,7 +1027,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -1018,7 +1060,7 @@ class TestTraceItemTable(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
-                trace_item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -1036,6 +1078,359 @@ class TestTraceItemTable(BaseApiTest):
                 ),
             ],
             limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_aggregation_filter_basic(self, setup_teardown: Any) -> None:
+        """
+        This test ensures that aggregates are properly filtered out
+        when using an aggregation filter `val > 350`.
+        """
+        # first I write new messages with different value of kylestags,
+        # theres a different number of messages for each tag so that
+        # each will have a different sum value when i do aggregate
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = (
+            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+        )
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
+                        label="sum(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
+                        label="this-doesnt-matter-and-can-be-left-out",
+                    ),
+                    op=AggregationComparisonFilter.OP_GREATER_THAN,
+                    val=350,
+                )
+            ),
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(val_float=1214.4),
+                    AttributeValue(val_float=3036),
+                ],
+            ),
+        ]
+
+    def test_aggregation_filter_and_or(self, setup_teardown: Any) -> None:
+        """
+        This test ensures that aggregates are properly filtered out
+        when using an aggregation filter `val > 350 and val > 350`.
+
+        It also tests `val > 350 or val < 350`.
+        """
+        # first I write new messages with different value of kylestags,
+        # theres a different number of messages for each tag so that
+        # each will have a different sum value when i do aggregate
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = (
+            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+        )
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        base_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
+                        label="sum(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(  # same filter on both sides of the and
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_FLOAT,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=350,
+                            )
+                        ),
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_FLOAT,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=350,
+                            )
+                        ),
+                    ]
+                )
+            ),
+        )
+        response = EndpointTraceItemTable().execute(base_message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(val_float=1214.4),
+                    AttributeValue(val_float=3036),
+                ],
+            ),
+        ]
+
+        # now try with an or filter
+        base_message.aggregation_filter.CopyFrom(
+            AggregationFilter(
+                or_filter=AggregationOrFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_FLOAT,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=350,
+                            )
+                        ),
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_FLOAT,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_LESS_THAN,
+                                val=350,
+                            )
+                        ),
+                    ]
+                )
+            )
+        )
+        response = EndpointTraceItemTable().execute(base_message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val1"),
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(val_float=303.6),
+                    AttributeValue(val_float=1214.4),
+                    AttributeValue(val_float=3036),
+                ],
+            ),
+        ]
+
+    def test_bad_aggregation_filter(self, setup_teardown: Any) -> None:
+        """
+        This test ensures that an error is raised when the aggregation filter is invalid.
+        It tests a case where AttributeAggregation is set improperly.
+        And it tests a case where an and filter has only one filter.
+        """
+        # first I write new messages with different value of kylestags,
+        # theres a different number of messages for each tag so that
+        # each will have a different sum value when i do aggregate
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = (
+            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+        )
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="my.float.field"
+                        ),
+                        label="sum(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    aggregation=AttributeAggregation(
+                        label="sum(my.float.field)",
+                    ),
+                    op=AggregationComparisonFilter.OP_GREATER_THAN,
+                    val=350,
+                )
+            ),
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+        # now do an and filter has only one filter
+        message.aggregation_filter.CopyFrom(
+            AggregationFilter(
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_FLOAT,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_LESS_THAN,
+                                val=350,
+                            )
+                        ),
+                    ]
+                )
+            )
         )
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)

@@ -74,7 +74,7 @@ where
     pub fn new(next_step: N, concurrency: &ConcurrencyConfig) -> Self {
         let inner = RunTaskInThreads::new(
             next_step,
-            Box::new(ClickhouseWriter::new()),
+            ClickhouseWriter::new(),
             concurrency,
             Some("clickhouse"),
         );

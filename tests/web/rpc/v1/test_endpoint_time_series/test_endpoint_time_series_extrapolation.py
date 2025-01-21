@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
     TimeSeries,
     TimeSeriesRequest,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -154,6 +154,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -269,6 +270,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -325,6 +327,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -379,6 +382,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -438,6 +442,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -473,7 +478,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
         ]
 
     def test_avg_unreliable(self) -> None:
-        # store a a test metric with a value of 1, every second for an hour
+        # store a test metric with a value of 1, every second for an hour
         granularity_secs = 120
         query_duration = 3600
         store_timeseries(
@@ -500,6 +505,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -559,6 +565,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(
@@ -618,6 +625,7 @@ class TestTimeSeriesApiWithExtrapolation(BaseApiTest):
                 end_timestamp=Timestamp(
                     seconds=int(BASE_TIME.timestamp() + query_duration)
                 ),
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             aggregations=[
                 AttributeAggregation(

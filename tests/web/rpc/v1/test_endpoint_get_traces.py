@@ -18,7 +18,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
     PageToken,
     RequestMeta,
     ResponseMeta,
-    TraceItemName,
+    TraceItemType,
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
@@ -295,7 +295,7 @@ class TestGetTraces(BaseApiTest):
             ),
             filters=[
                 GetTracesRequest.TraceFilter(
-                    item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     filter=TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(
@@ -383,7 +383,7 @@ class TestGetTraces(BaseApiTest):
             ],
             filters=[
                 GetTracesRequest.TraceFilter(
-                    item_name=TraceItemName.TRACE_ITEM_NAME_EAP_SPANS,
+                    item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
                     filter=TraceItemFilter(
                         comparison_filter=ComparisonFilter(
                             key=AttributeKey(

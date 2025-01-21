@@ -13,18 +13,18 @@ schema:
       { name: environment, type: String, args: { schema_modifiers: [nullable, low_cardinality] } },
       { name: uptime_subscription_id, type: UUID },
       { name: uptime_check_id, type: UUID },
-      { name: scheduled_check_time, type: DateTime64, args: { precision: 3 } },
+      { name: scheduled_check_time, type: DateTime },
       { name: timestamp, type: DateTime64, args: { precision: 3 } },
       { name: duration_ms, type: UInt, args: { size: 64 } },
-      { name: region_slug, type: String, args: { schema_modifiers: [low_cardinality] } },
+      { name: region, type: String, args: { schema_modifiers: [low_cardinality] } },
       { name: check_status, type: String, args: { schema_modifiers: [low_cardinality] } },
       { name: check_status_reason, type: String, args: { schema_modifiers: [low_cardinality] } },
       { name: http_status_code, type: UInt, args: { size: 16, schema_modifiers: [nullable] } },
       { name: trace_id, type: UUID },
       { name: retention_days, type: UInt, args: { size: 16 } },
     ]
-  local_table_name: uptime_monitor_checks_local
-  dist_table_name: uptime_monitor_checks_dist
+  local_table_name: uptime_monitor_checks_v2_local
+  dist_table_name: uptime_monitor_checks_v2_dist
 
 
 mandatory_condition_checkers:

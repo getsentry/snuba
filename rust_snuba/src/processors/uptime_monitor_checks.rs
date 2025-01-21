@@ -9,21 +9,16 @@ use crate::types::{InsertBatch, KafkaMessageMetadata};
 
 pub fn process_message(
     payload: KafkaPayload,
-    metadata: KafkaMessageMetadata,
+    _metadata: KafkaMessageMetadata,
     _config: &ProcessorConfig,
 ) -> anyhow::Result<InsertBatch> {
     let payload_bytes = payload.payload().context("Expected payload")?;
-    let (rows, origin_timestamp) =
-        deserialize_message(payload_bytes, metadata.partition, metadata.offset)?;
+    let (rows, origin_timestamp) = deserialize_message(payload_bytes)?;
 
     InsertBatch::from_rows(rows, DateTime::from_timestamp(origin_timestamp as i64, 0))
 }
 
-pub fn deserialize_message(
-    payload: &[u8],
-    partition: u16,
-    offset: u64,
-) -> anyhow::Result<(Vec<UptimeMonitorCheckRow>, f64)> {
+pub fn deserialize_message(payload: &[u8]) -> anyhow::Result<(Vec<UptimeMonitorCheckRow>, f64)> {
     let monitor_message: UptimeMonitorCheckMessage = serde_json::from_slice(payload)?;
 
     let rows = vec![UptimeMonitorCheckRow {
@@ -34,21 +29,21 @@ pub fn deserialize_message(
         uptime_check_id: monitor_message.guid,
         scheduled_check_time: monitor_message.scheduled_check_time_ms,
         timestamp: monitor_message.actual_check_time_ms,
-        duration: monitor_message.duration_ms,
-        region_slug: monitor_message.region_slug.unwrap_or_default(),
+        duration_ms: monitor_message.duration_ms,
+        region: monitor_message.region.unwrap_or_default(),
         check_status: monitor_message.status,
-        check_status_reason: monitor_message.status_reason.map(|r| r.ty),
+        check_status_reason: monitor_message
+            .status_reason
+            .map(|r| r.ty)
+            .unwrap_or_default(),
         http_status_code: monitor_message
             .request_info
             .unwrap_or_default()
             .http_status_code,
         trace_id: monitor_message.trace_id,
         retention_days: monitor_message.retention_days,
-        partition,
-        offset,
     }];
-
-    Ok((rows, monitor_message.actual_check_time_ms))
+    Ok((rows, monitor_message.actual_check_time_ms as f64))
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,12 +52,12 @@ struct UptimeMonitorCheckMessage<'a> {
     organization_id: u64,
     project_id: u64,
     retention_days: u16,
-    region_slug: Option<&'a str>,
+    region: Option<&'a str>,
     environment: Option<&'a str>,
     subscription_id: Uuid,
     guid: Uuid,
-    scheduled_check_time_ms: f64,
-    actual_check_time_ms: f64,
+    scheduled_check_time_ms: u64,
+    actual_check_time_ms: u64,
     duration_ms: u64,
     status: &'a str,
     status_reason: Option<CheckStatusReason<'a>>,
@@ -91,17 +86,15 @@ pub struct UptimeMonitorCheckRow<'a> {
     environment: Option<&'a str>,
     uptime_subscription_id: Uuid,
     uptime_check_id: Uuid,
-    scheduled_check_time: f64,
-    timestamp: f64,
-    duration: u64,
-    region_slug: &'a str,
+    scheduled_check_time: u64,
+    timestamp: u64,
+    duration_ms: u64,
+    region: &'a str,
     check_status: &'a str,
-    check_status_reason: Option<&'a str>,
+    check_status_reason: &'a str,
     http_status_code: Option<u16>,
     trace_id: Uuid,
     retention_days: u16,
-    partition: u16,
-    offset: u64,
 }
 
 #[cfg(test)]
@@ -114,7 +107,7 @@ mod tests {
             "organization_id": 1,
             "project_id": 1,
             "retention_days": 30,
-            "region_slug": "global",
+            "region": "global",
             "environment": "prod",
             "subscription_id": "123e4567-e89b-12d3-a456-426614174000",
             "guid": "550e8400-e29b-41d4-a716-446655440000",
@@ -134,7 +127,7 @@ mod tests {
             }
         }"#;
 
-        let (rows, timestamp) = deserialize_message(data.as_bytes(), 0, 0).unwrap();
+        let (rows, timestamp) = deserialize_message(data.as_bytes()).unwrap();
         let monitor_row = rows.first().unwrap();
 
         assert_eq!(monitor_row.organization_id, 1);
@@ -144,15 +137,13 @@ mod tests {
             monitor_row.uptime_subscription_id,
             Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()
         );
-        assert_eq!(monitor_row.duration, 100);
-        assert_eq!(monitor_row.timestamp, 1702659277.0);
-        assert_eq!(monitor_row.region_slug, "global".to_string());
+        assert_eq!(monitor_row.duration_ms, 100);
+        assert_eq!(monitor_row.timestamp, 1702659277);
+        assert_eq!(monitor_row.region, "global".to_string());
         assert_eq!(monitor_row.check_status, "ok");
-        assert_eq!(monitor_row.check_status_reason, Some("Request successful"));
+        assert_eq!(monitor_row.check_status_reason, "Request successful");
         assert_eq!(monitor_row.http_status_code, Some(200));
         assert_eq!(monitor_row.retention_days, 30);
-        assert_eq!(monitor_row.partition, 0);
-        assert_eq!(monitor_row.offset, 0);
         assert_eq!(timestamp, 1702659277.0);
     }
 }

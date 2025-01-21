@@ -5,11 +5,13 @@ from typing import Any, Callable, Dict, Iterable, Sequence
 
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
+    AggregationComparisonFilter,
+    AggregationFilter,
     TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemName
+from sentry_protos.snuba.v1.request_common_pb2 import PageToken, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeKey,
     AttributeValue,
@@ -23,6 +25,9 @@ from snuba.datasets.entities.factory import get_entity
 from snuba.datasets.pluggable_dataset import PluggableDataset
 from snuba.query import OrderBy, OrderByDirection, SelectedExpression
 from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import Functions as f
+from snuba.query.dsl import and_cond, or_cond
+from snuba.query.expressions import Expression
 from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
@@ -49,6 +54,55 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
 )
 
 _DEFAULT_ROW_LIMIT = 10_000
+
+
+def aggregation_filter_to_expression(agg_filter: AggregationFilter) -> Expression:
+    op_to_expr = {
+        AggregationComparisonFilter.OP_LESS_THAN: f.less,
+        AggregationComparisonFilter.OP_GREATER_THAN: f.greater,
+        AggregationComparisonFilter.OP_LESS_THAN_OR_EQUALS: f.lessOrEquals,
+        AggregationComparisonFilter.OP_GREATER_THAN_OR_EQUALS: f.greaterOrEquals,
+        AggregationComparisonFilter.OP_EQUALS: f.equals,
+        AggregationComparisonFilter.OP_NOT_EQUALS: f.notEquals,
+    }
+
+    match agg_filter.WhichOneof("value"):
+        case "comparison_filter":
+            op_expr = op_to_expr.get(agg_filter.comparison_filter.op)
+            if op_expr is None:
+                raise BadSnubaRPCRequestException(
+                    f"Unsupported aggregation filter op: {AggregationComparisonFilter.Op.Name(agg_filter.comparison_filter.op)}"
+                )
+            return op_expr(
+                aggregation_to_expression(agg_filter.comparison_filter.aggregation),
+                agg_filter.comparison_filter.val,
+            )
+        case "and_filter":
+            if len(agg_filter.and_filter.filters) < 2:
+                raise BadSnubaRPCRequestException(
+                    f"AND filter must have at least two filters, only got {len(agg_filter.and_filter.filters)}"
+                )
+            return and_cond(
+                *(
+                    aggregation_filter_to_expression(x)
+                    for x in agg_filter.and_filter.filters
+                )
+            )
+        case "or_filter":
+            if len(agg_filter.or_filter.filters) < 2:
+                raise BadSnubaRPCRequestException(
+                    f"OR filter must have at least two filters, only got {len(agg_filter.or_filter.filters)}"
+                )
+            return or_cond(
+                *(
+                    aggregation_filter_to_expression(x)
+                    for x in agg_filter.or_filter.filters
+                )
+            )
+        case default:
+            raise BadSnubaRPCRequestException(
+                f"Unsupported aggregation filter type: {default}"
+            )
 
 
 def _convert_order_by(
@@ -147,6 +201,9 @@ def _build_query(request: TraceItemTableRequest) -> Query:
         # protobuf sets limit to 0 by default if it is not set,
         # give it a default value that will actually return data
         limit=request.limit if request.limit > 0 else _DEFAULT_ROW_LIMIT,
+        having=aggregation_filter_to_expression(request.aggregation_filter)
+        if request.HasField("aggregation_filter")
+        else None,
     )
     treeify_or_and_conditions(res)
     apply_virtual_columns(res, request.virtual_column_contexts)
@@ -233,8 +290,8 @@ def _get_page_token(
 
 class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
     @classmethod
-    def trace_item_name(cls) -> TraceItemName.ValueType:
-        return TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
+    def trace_item_type(cls) -> TraceItemType.ValueType:
+        return TraceItemType.TRACE_ITEM_TYPE_SPAN
 
     def resolve(self, in_msg: TraceItemTableRequest) -> TraceItemTableResponse:
         snuba_request = _build_snuba_request(in_msg)

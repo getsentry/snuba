@@ -13,6 +13,7 @@ jobs:
     # Map a step output to a job output
     outputs:
       api_changes: ${{ steps.changes.outputs.api_changes }}
+      devservices_changes: ${{ steps.changes.outputs.devservices_changes }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v2
 
@@ -133,6 +134,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       branch: ${{ steps.branch.outputs.branch }}
+      image_tag: ${{ steps.publish.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -176,6 +178,7 @@ jobs:
           docker image ls -a
 
       - name: Publish snuba-ci image to registry
+        id: publish
         if: steps.branch.outputs.branch == 'master' || github.event.pull_request.head.repo.full_name == github.repository
         # outside contributors won't be able to push to the docker registry
         # ignore the failures in this step
@@ -184,6 +187,7 @@ jobs:
           # Useful to speed up CI
           docker push ghcr.io/getsentry/snuba-ci:${{ steps.branch.outputs.branch }}
           docker push ghcr.io/getsentry/snuba-ci:${{ github.sha }}
+          echo 'image_tag=ghcr.io/getsentry/snuba-ci:${{ github.sha }}' >> "$GITHUB_OUTPUT"
           if [ "${{ steps.branch.outputs.branch }}" == 'master' ]; then
             # The latest tag should only be published on `master`
             docker push ghcr.io/getsentry/snuba-ci:latest
@@ -326,28 +330,30 @@ jobs:
         uses: ./.github/actions/setup-sentry
         with:
           workdir: sentry
-          snuba: false
-          kafka: true
-          clickhouse: true
+          use-new-devservices: true
+          mode: minimal
 
       - name: Start snuba
         run: |
+          # TODO(hubertdeng123): New devservices doesn't support running sentry without snuba yet, remove this when it does
+          docker stop snuba-snuba-1
+          docker rm snuba-snuba-1
           docker run -d --rm \
             -p 127.0.0.1:1218:1218 \
             -e PYTHONUNBUFFERED=1 \
             -e SNUBA_SETTINGS=docker \
             -e DEBUG=1 \
-            -e DEFAULT_BROKERS=sentry_kafka:9092 \
-            -e CLICKHOUSE_HOST=sentry_clickhouse \
+            -e DEFAULT_BROKERS=kafka:9092 \
+            -e CLICKHOUSE_HOST=clickhouse \
             -e CLICKHOUSE_PORT=9000 \
             -e CLICKHOUSE_HTTP_PORT=8123 \
-            -e REDIS_HOST=sentry_redis \
+            -e REDIS_HOST=redis \
             -e REDIS_PORT=6379 \
             -e REDIS_DB=1 \
-            --name sentry_snuba \
-            --network sentry \
+            --name snuba-snuba-1 \
+            --network devservices \
             ghcr.io/getsentry/snuba-ci:${{ github.sha }}
-          docker exec sentry_snuba snuba migrations migrate --force
+          docker exec snuba-snuba-1 snuba migrations migrate --force
 
       - name: Run snuba tests
         if: needs.files-changed.outputs.api_changes == 'false'
@@ -395,7 +401,6 @@ jobs:
       matrix:
         version:
           [
-            "23.8.11.29.altinitystable",
             "24.3.5.47.altinitystable",
           ]
 
@@ -428,19 +433,17 @@ jobs:
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
   self-hosted-end-to-end:
+    needs: snuba-image
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout Snuba
-        uses: actions/checkout@v4
       - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/action-self-hosted-e2e-tests@main
+        uses: getsentry/self-hosted@master
         with:
           project_name: snuba
-          docker_repo: getsentry/snuba
-          image_url: us-central1-docker.pkg.dev/sentryio/snuba/image:${{ github.event.pull_request.head.sha || github.sha }}
-          docker_password: ${{ secrets.DOCKER_HUB_RW_TOKEN }}
+          image_url: ${{ needs.snuba-image.outputs.image_tag }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   publish-to-dockerhub:
     name: Publish Snuba to DockerHub
@@ -486,3 +489,15 @@ jobs:
           # finally, nightly
           docker tag ${IMAGE_URL} getsentry/snuba:nightly
           docker push getsentry/snuba:nightly
+
+  validate-devservices-config:
+    runs-on: ubuntu-24.04
+    needs: files-changed
+    if: ${{ needs.files-changed.outputs.devservices_changes == 'true' }}
+    steps:
+    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      name: Checkout repository
+    - uses: getsentry/action-validate-devservices-config@6477ef1e9c96e456bfad726006e731f89fcd81db
+      name: Validate devservices config
+      with:
+        requirements-file-path: requirements.txt

@@ -6,7 +6,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import TraceItemName
+from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
@@ -81,9 +81,9 @@ class EndpointTraceItemTable(
         return TraceItemTableRequest
 
     def get_resolver(
-        self, trace_item_name: TraceItemName.ValueType
+        self, trace_item_type: TraceItemType.ValueType
     ) -> TraceItemDataResolver[TraceItemTableRequest, TraceItemTableResponse]:
-        return ResolverTraceItemTable.get_from_trace_item_name(trace_item_name)(
+        return ResolverTraceItemTable.get_from_trace_item_type(trace_item_type)(
             timer=self._timer, metrics_backend=self._metrics_backend
         )
 
@@ -99,9 +99,9 @@ class EndpointTraceItemTable(
         in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
             uuid.uuid4()
         )
-        # NOTE: EAP spans was the first TraceItem, we didn't enforce a trace item name originally so we default to it
-        # for backwards compatibility
-        if in_msg.meta.trace_item_name == TraceItemName.TRACE_ITEM_NAME_UNSPECIFIED:
-            in_msg.meta.trace_item_name = TraceItemName.TRACE_ITEM_NAME_EAP_SPANS
-        resolver = self.get_resolver(in_msg.meta.trace_item_name)
+        if in_msg.meta.trace_item_type == TraceItemType.TRACE_ITEM_TYPE_UNSPECIFIED:
+            raise BadSnubaRPCRequestException(
+                "This endpoint requires meta.trace_item_type to be set (are you requesting spans? logs?)"
+            )
+        resolver = self.get_resolver(in_msg.meta.trace_item_type)
         return resolver.resolve(in_msg)

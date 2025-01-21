@@ -16,7 +16,7 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
 
 from snuba.query.dsl import CurriedFunctions as cf
 from snuba.query.dsl import Functions as f
-from snuba.query.dsl import column, literal
+from snuba.query.dsl import column
 from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
@@ -506,54 +506,50 @@ def get_confidence_interval_column(
             ),
             **alias_dict,
         ),
-        # confidence interval = Z * \sqrt{\frac{N * (\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N})}{n * (N-1) c* (N-1)}}
+        # confidence interval = Z * \sqrt{\frac{\sum_{i=1}^n w_ix_i^2 - \frac{(\sum_{i=1}^n w_ix_i)^2}{N}}{n * N}}
         #          ┌────────────────────────────┐
-        #          │                  ₙ
-        #          │                  ⎲
-        #          │      ₙ         ( ⎳  wᵢxᵢ)²
-        #     ╲    │      ⎲     2    ⁱ⁼¹
-        #      ╲   │N * ( ⎳  wᵢxᵢ - ───────────)
-        #       ╲  │     ⁱ⁼¹             N
+        #          │              ₙ
+        #          │              ⎲
+        #          │  ₙ         ( ⎳  wᵢxᵢ)²
+        #     ╲    │  ⎲     2    ⁱ⁼¹
+        #      ╲   │( ⎳  wᵢxᵢ - ───────────)
+        #       ╲  │     ⁱ⁼¹         N
         # Z *    ╲ │────────────────────────────
-        #         ╲│     n * (N-1) c* (N-1)
+        #         ╲│              n * N
         Function.FUNCTION_AVG: f.multiply(
             z_value,
             f.sqrt(
                 f.divide(
+                    f.minus(
+                        f.sumIf(
+                            f.multiply(
+                                sampling_weight_column,
+                                f.multiply(field, field),
+                            ),
+                            get_field_existence_expression(aggregation),
+                        ),
+                        f.divide(
+                            f.multiply(
+                                f.sumIf(
+                                    f.multiply(sampling_weight_column, field),
+                                    get_field_existence_expression(aggregation),
+                                ),
+                                f.sumIf(
+                                    f.multiply(sampling_weight_column, field),
+                                    get_field_existence_expression(aggregation),
+                                ),
+                            ),
+                            column(f"{alias}_N"),
+                        ),
+                    ),
                     f.multiply(
                         f.sumIf(
                             sampling_weight_column,
                             get_field_existence_expression(aggregation),
                             alias=f"{alias}_N",
                         ),
-                        f.minus(
-                            f.sumIf(
-                                f.multiply(
-                                    sampling_weight_column,
-                                    f.multiply(field, field),
-                                ),
-                                get_field_existence_expression(aggregation),
-                            ),
-                            f.divide(
-                                f.multiply(
-                                    f.sumIf(
-                                        f.multiply(sampling_weight_column, field),
-                                        get_field_existence_expression(aggregation),
-                                    ),
-                                    f.sumIf(
-                                        f.multiply(sampling_weight_column, field),
-                                        get_field_existence_expression(aggregation),
-                                    ),
-                                ),
-                                column(f"{alias}_N"),
-                            ),
-                        ),
-                    ),
-                    f.multiply(
-                        column(_get_count_column_alias(aggregation)),
-                        f.multiply(
-                            f.minus(column(f"{alias}_N"), literal(1)),
-                            f.minus(column(f"{alias}_N"), literal(1)),
+                        f.sumIf(
+                            sign_column, get_field_existence_expression(aggregation)
                         ),
                     ),
                 )
