@@ -160,11 +160,8 @@ mod tests {
             "scheduled_check_time_ms": 1702659277,
             "actual_check_time_ms": 1702659277,
             "duration_ms": null,
-            "status": "ok",
-            "status_reason": {
-                "type": "Request successful",
-                "description": "Request successful"
-            },
+            "status": "missed_window",
+            "status_reason": null,
             "http_status_code": 200,
             "trace_id": "550e8400-e29b-41d4-a716-446655440000",
             "request_info": {
@@ -186,8 +183,8 @@ mod tests {
         assert_eq!(monitor_row.duration_ms, 0); // Duration should default to 0 when null
         assert_eq!(monitor_row.timestamp, 1702659277);
         assert_eq!(monitor_row.region, "global".to_string());
-        assert_eq!(monitor_row.check_status, "ok");
-        assert_eq!(monitor_row.check_status_reason, "Request successful");
+        assert_eq!(monitor_row.check_status, "missed_window");
+        assert_eq!(monitor_row.check_status_reason, "");
         assert_eq!(monitor_row.http_status_code, Some(200));
         assert_eq!(monitor_row.retention_days, 30);
         assert_eq!(timestamp, 1702659277.0);
