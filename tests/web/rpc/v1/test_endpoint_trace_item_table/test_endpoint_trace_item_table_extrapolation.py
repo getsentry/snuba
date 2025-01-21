@@ -10,7 +10,7 @@ from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
     Column,
     TraceItemTableRequest,
 )
-from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta
+from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     AttributeAggregation,
     AttributeKey,
@@ -150,6 +150,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -260,6 +261,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(
@@ -318,6 +320,7 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
                 referrer="something",
                 start_timestamp=Timestamp(seconds=hour_ago),
                 end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
             ),
             columns=[
                 Column(key=AttributeKey(type=AttributeKey.TYPE_STRING, name="key")),

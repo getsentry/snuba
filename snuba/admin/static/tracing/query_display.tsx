@@ -12,6 +12,7 @@ import Client from "SnubaAdmin/api_client";
 import QueryEditor from "SnubaAdmin/query_editor";
 import { Table } from "SnubaAdmin/table";
 import ExecuteButton from "SnubaAdmin/utils/execute_button";
+import QueryResultCopier from "SnubaAdmin/utils/query_result_copier";
 import { getRecentHistory, setRecentHistory } from "SnubaAdmin/query_history";
 import { CustomSelect, getParamFromStorage } from "SnubaAdmin/select";
 import { TracingRequest, TracingResult, PredefinedQuery } from "./types";
@@ -83,11 +84,6 @@ function QueryDisplay(props: {
         storage: storage,
       };
     });
-    console.log(query);
-  }
-
-  function copyText(text: string) {
-    window.navigator.clipboard.writeText(text);
   }
 
   return (
@@ -107,10 +103,24 @@ function QueryDisplay(props: {
             options={storages}
           />
         </div>
-        <ExecuteButton
-          onClick={executeQuery}
-          disabled={!query.storage || !query.sql}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Switch
+            checked={query.gather_profile_events ?? true}
+            onChange={(evt: React.ChangeEvent<HTMLInputElement>) =>
+              setQuery((prevQuery) => ({
+                ...prevQuery,
+                gather_profile_events: evt.currentTarget.checked,
+              }))
+            }
+            onLabel="PROFILE"
+            offLabel="NO PROFILE"
+            size="md"
+          />
+          <ExecuteButton
+            onClick={executeQuery}
+            disabled={!query.storage || !query.sql}
+          />
+        </div>
       </div>
       <div>
         <h2>Query results</h2>
@@ -128,16 +138,10 @@ function QueryDisplay(props: {
           headerData={["Response"]}
           rowData={queryResultHistory.map((queryResult) => [
             <Stack>
-              <Group>
-                <Button
-                  onClick={() => copyText(queryResult.trace_output || "")}
-                >
-                  Copy to clipboard (Raw)
-                </Button>
-                <Button onClick={() => copyText(JSON.stringify(queryResult))}>
-                  Copy to clipboard (JSON)
-                </Button>
-              </Group>
+              <QueryResultCopier
+                rawInput={queryResult.trace_output || ""}
+                jsonInput={JSON.stringify(queryResult)}
+              />
               <Title order={3}>Tracing Data</Title>
               {props.resultDataPopulator(queryResult, showFormatted)}
               <Accordion chevronPosition="left">

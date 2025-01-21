@@ -3269,9 +3269,9 @@ dependencies = [
 
 [[package]]
 name = "sentry-kafka-schemas"
-version = "0.1.126"
+version = "0.1.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2276e32e800bfdb487bdf2124ce9fb665994a3e394b419283a8b7f8020ac9c6"
+checksum = "790627715d4ea0e58e252dcb657a44146fde401b5520bbbc3b6500764ef71c86"
 dependencies = [
  "jsonschema",
  "prettyplease",
@@ -3326,9 +3326,9 @@ dependencies = [
 
 [[package]]
 name = "sentry_arroyo"
-version = "2.19.5"
+version = "2.19.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d03985a340e70b0360d89727cd55fad4f065b6dcd13a41fbe69e4dca41bcbc1"
+checksum = "a8f89b9ff0e83e2493b9f76a5f6565ecbd4f5599aeb035d4ec3ed2ba3247b53e"
 dependencies = [
  "chrono",
  "coarsetime",
