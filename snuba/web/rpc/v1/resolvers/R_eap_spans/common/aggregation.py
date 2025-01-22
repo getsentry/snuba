@@ -37,6 +37,8 @@ CONFIDENCE_INTERVAL_THRESHOLD = 1.5
 
 CUSTOM_COLUMN_PREFIX = "__snuba_custom_column__"
 
+_FLOATING_POINT_PRECISION = 9
+
 
 @dataclass(frozen=True)
 class ExtrapolationContext(ABC):
@@ -634,10 +636,17 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
     alias = aggregation.label if aggregation.label else None
     alias_dict = {"alias": alias} if alias else {}
     function_map: dict[Function.ValueType, CurriedFunctionCall | FunctionCall] = {
-        Function.FUNCTION_SUM: f.sum(f.multiply(field, sign_column), **alias_dict),
-        Function.FUNCTION_AVERAGE: f.divide(
+        Function.FUNCTION_SUM: f.round(
             f.sum(f.multiply(field, sign_column)),
-            f.sumIf(sign_column, get_field_existence_expression(aggregation)),
+            _FLOATING_POINT_PRECISION,
+            **alias_dict,
+        ),
+        Function.FUNCTION_AVERAGE: f.round(
+            f.divide(
+                f.sum(f.multiply(field, sign_column)),
+                f.sumIf(sign_column, get_field_existence_expression(aggregation)),
+            ),
+            _FLOATING_POINT_PRECISION,
             **alias_dict,
         ),
         Function.FUNCTION_COUNT: f.sumIf(
@@ -645,12 +654,24 @@ def aggregation_to_expression(aggregation: AttributeAggregation) -> Expression:
             get_field_existence_expression(aggregation),
             **alias_dict,
         ),
-        Function.FUNCTION_P50: cf.quantile(0.5)(field, **alias_dict),
-        Function.FUNCTION_P75: cf.quantile(0.75)(field, **alias_dict),
-        Function.FUNCTION_P90: cf.quantile(0.9)(field, **alias_dict),
-        Function.FUNCTION_P95: cf.quantile(0.95)(field, **alias_dict),
-        Function.FUNCTION_P99: cf.quantile(0.99)(field, **alias_dict),
-        Function.FUNCTION_AVG: f.avg(field, **alias_dict),
+        Function.FUNCTION_P50: f.round(
+            cf.quantile(0.5)(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
+        Function.FUNCTION_P75: f.round(
+            cf.quantile(0.75)(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
+        Function.FUNCTION_P90: f.round(
+            cf.quantile(0.9)(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
+        Function.FUNCTION_P95: f.round(
+            cf.quantile(0.95)(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
+        Function.FUNCTION_P99: f.round(
+            cf.quantile(0.99)(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
+        Function.FUNCTION_AVG: f.round(
+            f.avg(field), _FLOATING_POINT_PRECISION, **alias_dict
+        ),
         Function.FUNCTION_MAX: f.max(field, **alias_dict),
         Function.FUNCTION_MIN: f.min(field, **alias_dict),
         Function.FUNCTION_UNIQ: f.uniq(field, **alias_dict),
