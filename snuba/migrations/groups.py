@@ -45,6 +45,7 @@ class MigrationGroup(Enum):
     EVENTS_ANALYTICS_PLATFORM = "events_analytics_platform"
     GROUP_ATTRIBUTES = "group_attributes"
     PROFILE_CHUNKS = "profile_chunks"
+    CDC = "cdc"
 
 
 # Migration groups are mandatory by default. Specific groups can
@@ -81,6 +82,11 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         loader=SystemLoader(),
         storage_sets_keys={StorageSetKey.MIGRATIONS},
         readiness_state=ReadinessState.COMPLETE,
+    ),
+    MigrationGroup.CDC: _MigrationGroup(
+        loader=SystemLoader(),
+        storage_sets_keys={StorageSetKey.CDC},
+        readiness_state=ReadinessState.DEPRECATE,
     ),
     MigrationGroup.EVENTS: _MigrationGroup(
         loader=EventsLoader(),
