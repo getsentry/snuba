@@ -4,6 +4,7 @@ from typing import Dict, Set
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.readiness_state import ReadinessState
 from snuba.migrations.group_loader import (
+    CDCLoader,
     DiscoverLoader,
     EventsAnalyticsPlatformLoader,
     EventsLoader,
@@ -84,7 +85,7 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         readiness_state=ReadinessState.COMPLETE,
     ),
     MigrationGroup.CDC: _MigrationGroup(
-        loader=SystemLoader(),
+        loader=CDCLoader(),
         storage_sets_keys={StorageSetKey.CDC},
         readiness_state=ReadinessState.DEPRECATE,
     ),
