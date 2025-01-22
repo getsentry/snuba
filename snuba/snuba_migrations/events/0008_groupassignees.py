@@ -1,8 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import Column, DateTime, UInt
-from snuba.clusters.storage_sets import StorageSetKey
-from snuba.migrations import migration, operations, table_engines
+from snuba.migrations import migration, operations
 from snuba.migrations.columns import MigrationModifiers as Modifiers
 
 columns: Sequence[Column[Modifiers]] = [
@@ -17,50 +16,18 @@ columns: Sequence[Column[Modifiers]] = [
     Column("team_id", UInt(64, Modifiers(nullable=True))),
 ]
 
-
+# NOTE: CDC storage deprecated
 class Migration(migration.ClickhouseNodeMigrationLegacy):
     blocking = False
 
     def forwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.CreateTable(
-                storage_set=StorageSetKey.CDC,
-                table_name="groupassignee_local",
-                columns=columns,
-                engine=table_engines.ReplacingMergeTree(
-                    storage_set=StorageSetKey.CDC,
-                    version_column="offset",
-                    order_by="(project_id, group_id)",
-                    unsharded=True,
-                ),
-            )
-        ]
+        return []
 
     def backwards_local(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.CDC,
-                table_name="groupassignee_local",
-            )
-        ]
+        return []
 
     def forwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.CreateTable(
-                storage_set=StorageSetKey.CDC,
-                table_name="groupassignee_dist",
-                columns=columns,
-                engine=table_engines.Distributed(
-                    local_table_name="groupassignee_local",
-                    sharding_key=None,
-                ),
-            )
-        ]
+        return []
 
     def backwards_dist(self) -> Sequence[operations.SqlOperation]:
-        return [
-            operations.DropTable(
-                storage_set=StorageSetKey.CDC,
-                table_name="groupassignee_dist",
-            )
-        ]
+        return []
