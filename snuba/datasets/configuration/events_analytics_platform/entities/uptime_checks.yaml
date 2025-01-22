@@ -1,0 +1,45 @@
+version: v1
+kind: entity
+name: uptime_checks
+
+schema:
+  [
+    { name: organization_id, type: UInt, args: { size: 64 } },
+    { name: project_id, type: UInt, args: { size: 64 } },
+    { name: environment, type: String, args: { schema_modifiers: [nullable, low_cardinality] } },
+    { name: uptime_subscription_id, type: UUID },
+    { name: uptime_check_id, type: UUID },
+    { name: scheduled_check_time, type: DateTime },
+    { name: timestamp, type: DateTime64, args: { precision: 3 } },
+    { name: duration_ms, type: UInt, args: { size: 64 } },
+    { name: region, type: String, args: { schema_modifiers: [low_cardinality] } },
+    { name: check_status, type: String, args: { schema_modifiers: [low_cardinality] } },
+    { name: check_status_reason, type: String, args: { schema_modifiers: [low_cardinality] } },
+    { name: http_status_code, type: UInt, args: { size: 16, schema_modifiers: [nullable] } },
+    { name: trace_id, type: UUID },
+    { name: retention_days, type: UInt, args: { size: 16 } },
+  ]
+
+storages:
+  - storage: uptime_monitor_checks
+    is_writable: true
+
+storage_selector:
+  selector: DefaultQueryStorageSelector
+
+query_processors:
+  - processor: TimeSeriesProcessor
+    args:
+      time_group_columns:
+        time: timestamp
+      time_parse_columns:
+        - timestamo
+        - scheduled_check_time
+
+validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
+validators:
+  - validator: EntityRequiredColumnValidator
+    args:
+      required_filter_columns: [organization_id]
+
+required_time_column: timestamp
