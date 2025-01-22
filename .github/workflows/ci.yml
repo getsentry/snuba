@@ -432,19 +432,6 @@ jobs:
         run: |
           curl -Os https://uploader.codecov.io/latest/linux/codecov && chmod +x codecov && ./codecov -t ${CODECOV_TOKEN}
 
-  self-hosted-end-to-end:
-    needs: snuba-image
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Run Sentry self-hosted e2e CI
-        uses: getsentry/self-hosted@master
-        with:
-          project_name: snuba
-          image_url: ${{ needs.snuba-image.outputs.image_tag }}
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
   validate-devservices-config:
     runs-on: ubuntu-24.04
     needs: files-changed

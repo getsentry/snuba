@@ -29,11 +29,12 @@ jobs:
       - name: Docker Login
         run: docker login --username '${{ github.actor }}' --password '${{ secrets.GITHUB_TOKEN }}' ghcr.io
 
+      - run: docker buildx create --driver docker-container --use
+      
       - name: build versioned image
         run: |
           set -euxo pipefail
           docker buildx build \
-              --build-arg TARGETARCH=${{ matrix.arch }} \
               --platform linux/${{ matrix.arch }} \
               --tag "$IMG_VERSIONED" \
               --target application \
@@ -80,9 +81,7 @@ jobs:
           IMAGE_URL: ghcr.io/getsentry/snuba:${{ github.sha }}
         shell: bash
         run: |
-          echo "We poll for the Docker image that the GCB/GHA build produces until it succeeds or this job times out."
-          echo "Polling for $IMAGE_URL"
-          timeout 20m bash -c 'until docker pull "$IMAGE_URL" 2>/dev/null; do sleep 10; done'
+          docker pull "$IMAGE_URL"
       - name: Get short SHA for docker tag
         id: short_sha
         shell: bash
@@ -112,3 +111,16 @@ jobs:
           # finally, nightly
           docker tag ${IMAGE_URL} getsentry/snuba:nightly
           docker push getsentry/snuba:nightly
+
+  self-hosted-end-to-end:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Run Sentry self-hosted e2e CI
+        uses: getsentry/self-hosted@master
+        with:
+          project_name: snuba
+          image_url: ${{ needs.build.outputs.image_tag }}
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
