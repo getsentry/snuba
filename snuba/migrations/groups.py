@@ -87,7 +87,6 @@ _REGISTERED_MIGRATION_GROUPS: Dict[MigrationGroup, _MigrationGroup] = {
         storage_sets_keys={
             StorageSetKey.EVENTS,
             StorageSetKey.EVENTS_RO,
-            StorageSetKey.CDC,
         },
         readiness_state=ReadinessState.COMPLETE,
     ),
