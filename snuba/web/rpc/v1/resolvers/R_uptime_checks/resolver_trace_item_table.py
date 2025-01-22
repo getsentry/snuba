@@ -219,8 +219,6 @@ def _convert_results(
                 "column is neither an attribute or aggregation"
             )
 
-    print(data)
-
     res: defaultdict[str, TraceItemColumnValues] = defaultdict(TraceItemColumnValues)
     for row in data:
         for column_name, value in row.items():
@@ -259,7 +257,6 @@ class ResolverTraceItemTableUptimeChecks(ResolverTraceItemTable):
             request=snuba_request,
             timer=self._timer,
         )
-        print(res)
         column_values = _convert_results(in_msg, res.result.get("data", []))
         response_meta = extract_response_meta(
             in_msg.meta.request_id,
