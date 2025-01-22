@@ -270,7 +270,9 @@ class TestTraceItemTable(BaseApiTest):
         )
         assert response == expected_response
 
-    def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
+    def test_booleans_and_number_compares_backward_compat(
+        self, setup_teardown: Any
+    ) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -305,6 +307,88 @@ class TestTraceItemTable(BaseApiTest):
                                 ),
                                 op=ComparisonFilter.OP_GREATER_THAN,
                                 value=AttributeValue(val_float=999),
+                            ),
+                        ),
+                    ]
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_BOOLEAN, name="sentry.is_segment"
+                    )
+                ),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                    )
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_STRING, name="sentry.span_id"
+                        )
+                    )
+                )
+            ],
+            limit=61,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        expected_response = TraceItemTableResponse(
+            column_values=[
+                TraceItemColumnValues(
+                    attribute_name="sentry.is_segment",
+                    results=[AttributeValue(val_bool=True) for _ in range(60)],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="sentry.span_id",
+                    results=[
+                        AttributeValue(val_str="123456781234567d") for _ in range(60)
+                    ],
+                ),
+            ],
+            page_token=PageToken(offset=60),
+            meta=ResponseMeta(request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480"),
+        )
+        assert response == expected_response
+
+    def test_booleans_and_number_compares(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                request_id="be3123b3-2e5d-4eb9-bb48-f38eaa9e8480",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                or_filter=OrFilter(
+                    filters=[
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="eap.measurement",
+                                ),
+                                op=ComparisonFilter.OP_LESS_THAN_OR_EQUALS,
+                                value=AttributeValue(val_double=101),
+                            ),
+                        ),
+                        TraceItemFilter(
+                            comparison_filter=ComparisonFilter(
+                                key=AttributeKey(
+                                    type=AttributeKey.TYPE_DOUBLE,
+                                    name="eap.measurement",
+                                ),
+                                op=ComparisonFilter.OP_GREATER_THAN,
+                                value=AttributeValue(val_double=999),
                             ),
                         ),
                     ]
@@ -499,7 +583,7 @@ class TestTraceItemTable(BaseApiTest):
         result_colors = [c.val_str for c in response.column_values[0].results]
         assert sorted(result_colors) == result_colors
 
-    def test_table_with_aggregates(self, setup_teardown: Any) -> None:
+    def test_table_with_aggregates_backward_compat(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -567,22 +651,108 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="max(my.float.field)",
                 results=[
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
                 ],
             ),
             TraceItemColumnValues(
                 attribute_name="avg(my.float.field)",
                 results=[
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
-                    AttributeValue(val_float=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
                 ],
             ),
         ]
 
-    def test_table_with_columns_not_in_groupby(self, setup_teardown: Any) -> None:
+    def test_table_with_aggregates(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_MAX,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="avg(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="location",
+                results=[
+                    AttributeValue(val_str="backend"),
+                    AttributeValue(val_str="frontend"),
+                    AttributeValue(val_str="mobile"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="max(my.float.field)",
+                results=[
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="avg(my.float.field)",
+                results=[
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                    AttributeValue(val_double=101.2),
+                ],
+            ),
+        ]
+
+    def test_table_with_columns_not_in_groupby_backward_compat(
+        self, setup_teardown: Any
+    ) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -623,7 +793,48 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_order_by_non_selected(self) -> None:
+    def test_table_with_columns_not_in_groupby(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_MAX,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="max(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            group_by=[],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_order_by_non_selected_backward_compat(self) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -678,7 +889,62 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_order_by_aggregation(self, setup_teardown: Any) -> None:
+    def test_order_by_non_selected(self) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
+                        ),
+                        label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        aggregation=AttributeAggregation(
+                            aggregate=Function.FUNCTION_MAX,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                            ),
+                            label="max(my.float.field)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        )
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        with pytest.raises(BadSnubaRPCRequestException):
+            EndpointTraceItemTable().execute(message)
+
+    def test_order_by_aggregation_backward_compat(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
         hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
         message = TraceItemTableRequest(
@@ -731,10 +997,66 @@ class TestTraceItemTable(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        measurements = [v.val_float for v in response.column_values[1].results]
+        measurements = [v.val_double for v in response.column_values[1].results]
         assert sorted(measurements) == measurements
 
-    def test_aggregation_on_attribute_column(self) -> None:
+    def test_order_by_aggregation(self, setup_teardown: Any) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_STRING, name="sentry.category"
+                    )
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="location")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
+                        ),
+                        label="avg(eap.measurment)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="location")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        aggregation=AttributeAggregation(
+                            aggregate=Function.FUNCTION_AVG,
+                            key=AttributeKey(
+                                type=AttributeKey.TYPE_DOUBLE, name="eap.measurement"
+                            ),
+                            label="avg(eap.measurment)",
+                            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                        )
+                    )
+                ),
+            ],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        measurements = [v.val_double for v in response.column_values[1].results]
+        assert sorted(measurements) == measurements
+
+    def test_aggregation_on_attribute_column_backward_compat(self) -> None:
         spans_storage = get_storage(StorageKey("eap_spans"))
         start = BASE_TIME
         measurement_val = 420.0
@@ -779,8 +1101,92 @@ class TestTraceItemTable(BaseApiTest):
             limit=5,
         )
         response = EndpointTraceItemTable().execute(message)
-        measurement_avg = [v.val_float for v in response.column_values[0].results][0]
+        measurement_avg = [v.val_double for v in response.column_values[0].results][0]
         assert measurement_avg == 420
+
+    def test_aggregation_on_attribute_column(self) -> None:
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        start = BASE_TIME
+        measurement_val = 420.0
+        measurement = {"custom_measurement": {"value": measurement_val}}
+        tags = {"custom_tag": "blah"}
+        messages_w_measurement = [
+            gen_message(
+                start - timedelta(minutes=i), measurements=measurement, tags=tags
+            )
+            for i in range(120)
+        ]
+        messages_no_measurement = [
+            gen_message(start - timedelta(minutes=i), tags=tags) for i in range(120)
+        ]
+        write_raw_unprocessed_events(spans_storage, messages_w_measurement + messages_no_measurement)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        response = EndpointTraceItemTable().execute(message)
+        measurement_avg = [v.val_double for v in response.column_values[0].results][0]
+        assert measurement_avg == 420
+
+    def test_different_column_label_and_attr_name_backward_compat(
+        self, setup_teardown: Any
+    ) -> None:
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = Timestamp(seconds=int((BASE_TIME - timedelta(hours=1)).timestamp()))
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                organization_id=1,
+                project_ids=[1],
+                start_timestamp=hour_ago,
+                end_timestamp=ts,
+                referrer="something",
+                cogs_category="something",
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(name="sentry.name", type=AttributeKey.TYPE_STRING),
+                    label="description",
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_COUNT,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                        ),
+                    ),
+                    label="count()",
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="sentry.name")],
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values[0].attribute_name == "description"
+        assert response.column_values[1].attribute_name == "count()"
 
     def test_different_column_label_and_attr_name(self, setup_teardown: Any) -> None:
         ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
@@ -804,7 +1210,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_COUNT,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"
+                            type=AttributeKey.TYPE_DOUBLE, name="sentry.duration_ms"
                         ),
                     ),
                     label="count()",
@@ -1082,7 +1488,9 @@ class TestTraceItemTable(BaseApiTest):
         with pytest.raises(BadSnubaRPCRequestException):
             EndpointTraceItemTable().execute(message)
 
-    def test_aggregation_filter_basic(self, setup_teardown: Any) -> None:
+    def test_aggregation_filter_basic_backward_compat(
+        self, setup_teardown: Any
+    ) -> None:
         """
         This test ensures that aggregates are properly filtered out
         when using an aggregation filter `val > 350`.
@@ -1166,13 +1574,105 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(my.float.field)",
                 results=[
-                    AttributeValue(val_float=1214.4),
-                    AttributeValue(val_float=3036),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
                 ],
             ),
         ]
 
-    def test_aggregation_filter_and_or(self, setup_teardown: Any) -> None:
+    def test_aggregation_filter_basic(self, setup_teardown: Any) -> None:
+        """
+        This test ensures that aggregates are properly filtered out
+        when using an aggregation filter `val > 350`.
+        """
+        # first I write new messages with different value of kylestags,
+        # theres a different number of messages for each tag so that
+        # each will have a different sum value when i do aggregate
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = (
+            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+        )
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="sum(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(
+                comparison_filter=AggregationComparisonFilter(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="this-doesnt-matter-and-can-be-left-out",
+                    ),
+                    op=AggregationComparisonFilter.OP_GREATER_THAN,
+                    val=350,
+                )
+            ),
+        )
+        response = EndpointTraceItemTable().execute(message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
+                ],
+            ),
+        ]
+
+    def test_aggregation_filter_and_or_backward_compat(
+        self, setup_teardown: Any
+    ) -> None:
         """
         This test ensures that aggregates are properly filtered out
         when using an aggregation filter `val > 350 and val > 350`.
@@ -1277,8 +1777,8 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(my.float.field)",
                 results=[
-                    AttributeValue(val_float=1214.4),
-                    AttributeValue(val_float=3036),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
                 ],
             ),
         ]
@@ -1331,9 +1831,175 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(my.float.field)",
                 results=[
-                    AttributeValue(val_float=303.6),
-                    AttributeValue(val_float=1214.4),
-                    AttributeValue(val_float=3036),
+                    AttributeValue(val_double=303.6),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
+                ],
+            ),
+        ]
+
+    def test_aggregation_filter_and_or(self, setup_teardown: Any) -> None:
+        """
+        This test ensures that aggregates are properly filtered out
+        when using an aggregation filter `val > 350 and val > 350`.
+
+        It also tests `val > 350 or val < 350`.
+        """
+        # first I write new messages with different value of kylestags,
+        # theres a different number of messages for each tag so that
+        # each will have a different sum value when i do aggregate
+        spans_storage = get_storage(StorageKey("eap_spans"))
+        msg_timestamp = BASE_TIME - timedelta(minutes=1)
+        messages = (
+            [gen_message(msg_timestamp, tags={"kylestag": "val1"}) for i in range(3)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val2"}) for i in range(12)]
+            + [gen_message(msg_timestamp, tags={"kylestag": "val3"}) for i in range(30)]
+        )
+        write_raw_unprocessed_events(spans_storage, messages)  # type: ignore
+
+        ts = Timestamp(seconds=int(BASE_TIME.timestamp()))
+        hour_ago = int((BASE_TIME - timedelta(hours=1)).timestamp())
+
+        base_message = TraceItemTableRequest(
+            meta=RequestMeta(
+                project_ids=[1, 2, 3],
+                organization_id=1,
+                cogs_category="something",
+                referrer="something",
+                start_timestamp=Timestamp(seconds=hour_ago),
+                end_timestamp=ts,
+                trace_item_type=TraceItemType.TRACE_ITEM_TYPE_SPAN,
+            ),
+            filter=TraceItemFilter(
+                exists_filter=ExistsFilter(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                )
+            ),
+            columns=[
+                Column(
+                    key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_SUM,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="my.float.field"
+                        ),
+                        label="sum(my.float.field)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                ),
+            ],
+            group_by=[AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(type=AttributeKey.TYPE_STRING, name="kylestag")
+                    )
+                ),
+            ],
+            aggregation_filter=AggregationFilter(  # same filter on both sides of the and
+                and_filter=AggregationAndFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=350,
+                            )
+                        ),
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=350,
+                            )
+                        ),
+                    ]
+                )
+            ),
+        )
+        response = EndpointTraceItemTable().execute(base_message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
+                ],
+            ),
+        ]
+
+        # now try with an or filter
+        base_message.aggregation_filter.CopyFrom(
+            AggregationFilter(
+                or_filter=AggregationOrFilter(
+                    filters=[
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_GREATER_THAN,
+                                val=350,
+                            )
+                        ),
+                        AggregationFilter(
+                            comparison_filter=AggregationComparisonFilter(
+                                aggregation=AttributeAggregation(
+                                    aggregate=Function.FUNCTION_SUM,
+                                    key=AttributeKey(
+                                        type=AttributeKey.TYPE_DOUBLE,
+                                        name="my.float.field",
+                                    ),
+                                ),
+                                op=AggregationComparisonFilter.OP_LESS_THAN,
+                                val=350,
+                            )
+                        ),
+                    ]
+                )
+            )
+        )
+        response = EndpointTraceItemTable().execute(base_message)
+        assert response.column_values == [
+            TraceItemColumnValues(
+                attribute_name="kylestag",
+                results=[
+                    AttributeValue(val_str="val1"),
+                    AttributeValue(val_str="val2"),
+                    AttributeValue(val_str="val3"),
+                ],
+            ),
+            TraceItemColumnValues(
+                attribute_name="sum(my.float.field)",
+                results=[
+                    AttributeValue(val_double=303.6),
+                    AttributeValue(val_double=1214.4),
+                    AttributeValue(val_double=3036),
                 ],
             ),
         ]
@@ -1437,7 +2103,7 @@ class TestTraceItemTable(BaseApiTest):
 
 
 class TestUtils:
-    def test_apply_labels_to_columns(self) -> None:
+    def test_apply_labels_to_columns_backward_compat(self) -> None:
         message = TraceItemTableRequest(
             columns=[
                 Column(
@@ -1455,6 +2121,38 @@ class TestUtils:
                         aggregate=Function.FUNCTION_AVG,
                         key=AttributeKey(
                             type=AttributeKey.TYPE_FLOAT, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement_2)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    ),
+                    label=None,  # type: ignore
+                ),
+            ],
+            order_by=[],
+            limit=5,
+        )
+        _apply_labels_to_columns(message)
+        assert message.columns[0].label == "avg(custom_measurement)"
+        assert message.columns[1].label == "avg(custom_measurement_2)"
+
+    def test_apply_labels_to_columns(self) -> None:
+        message = TraceItemTableRequest(
+            columns=[
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
+                        ),
+                        label="avg(custom_measurement)",
+                        extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
+                    )
+                ),
+                Column(
+                    aggregation=AttributeAggregation(
+                        aggregate=Function.FUNCTION_AVG,
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_DOUBLE, name="custom_measurement"
                         ),
                         label="avg(custom_measurement_2)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
