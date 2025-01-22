@@ -121,9 +121,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
             attr_key.type == AttributeKey.Type.TYPE_FLOAT
             or attr_key.type == AttributeKey.Type.TYPE_DOUBLE
         ):
-            return f.CAST(
-                column(attr_key.name[len("sentry.") :]), "Float64", alias=alias
-            )
+            return f.CAST(column(attr_key.name), "Float64", alias=alias)
         raise BadSnubaRPCRequestException(
             f"Attribute {attr_key.name} must be requested as a string, float, or integer, got {attr_key.type}"
         )
