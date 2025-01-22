@@ -2,11 +2,11 @@ import uuid
 from typing import Type
 
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    Column,
     TraceItemTableRequest,
     TraceItemTableResponse,
 )
 from sentry_protos.snuba.v1.request_common_pb2 import TraceItemType
+from sentry_protos.snuba.v1.trace_item_table_column_pb2 import Column
 
 from snuba.web.rpc import RPCEndpoint, TraceItemDataResolver
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException

@@ -3,13 +3,11 @@ from datetime import datetime, timedelta
 
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
-from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    Column,
-    TraceItemTableRequest,
-)
+from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import TraceItemTableRequest
 from sentry_protos.snuba.v1.request_common_pb2 import RequestMeta, TraceItemType
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
+from sentry_protos.snuba.v1.trace_item_table_column_pb2 import Column
 
 from snuba.web.rpc.common.debug_info import setup_trace_query_settings
 from snuba.web.rpc.v1.endpoint_trace_item_table import EndpointTraceItemTable

@@ -6,7 +6,6 @@ from typing import Any, Mapping
 import pytest
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    Column,
     TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -19,6 +18,7 @@ from sentry_protos.snuba.v1.request_common_pb2 import (
 )
 from sentry_protos.snuba.v1.trace_item_attribute_pb2 import AttributeKey, AttributeValue
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import ExistsFilter, TraceItemFilter
+from sentry_protos.snuba.v1.trace_item_table_column_pb2 import Column
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey

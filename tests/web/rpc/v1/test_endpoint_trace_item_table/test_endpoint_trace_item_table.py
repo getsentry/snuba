@@ -7,11 +7,6 @@ import pytest
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
-    AggregationAndFilter,
-    AggregationComparisonFilter,
-    AggregationFilter,
-    AggregationOrFilter,
-    Column,
     TraceItemColumnValues,
     TraceItemTableRequest,
     TraceItemTableResponse,
@@ -32,11 +27,16 @@ from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
     VirtualColumnContext,
 )
 from sentry_protos.snuba.v1.trace_item_filter_pb2 import (
+    AggregationAndFilter,
+    AggregationComparisonFilter,
+    AggregationFilter,
+    AggregationOrFilter,
     ComparisonFilter,
     ExistsFilter,
     OrFilter,
     TraceItemFilter,
 )
+from sentry_protos.snuba.v1.trace_item_table_column_pb2 import Column
 
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.storage_key import StorageKey
