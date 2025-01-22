@@ -27,7 +27,7 @@ pub fn deserialize_message(payload: &[u8]) -> anyhow::Result<(Vec<UptimeMonitorC
         environment: monitor_message.environment,
         uptime_subscription_id: monitor_message.subscription_id,
         uptime_check_id: monitor_message.guid,
-        scheduled_check_time: monitor_message.scheduled_check_time_ms,
+        scheduled_check_time: monitor_message.scheduled_check_time_ms / 1e3 as u64,
         timestamp: monitor_message.actual_check_time_ms,
         duration_ms: monitor_message.duration_ms.unwrap_or(0),
         region: monitor_message.region.unwrap_or_default(),

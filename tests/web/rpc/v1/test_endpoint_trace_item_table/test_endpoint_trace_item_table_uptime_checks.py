@@ -60,13 +60,13 @@ def gen_message(
 BASE_TIME = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(
     hours=1,
 )
+_UPTIME_CHECKS = [gen_message(BASE_TIME - timedelta(minutes=i)) for i in range(200)]
 
 
 @pytest.fixture(autouse=False)
 def setup_teardown(clickhouse_db: None, redis_db: None) -> None:
     uptime_checks_storage = get_storage(StorageKey("uptime_monitor_checks"))
-    messages = [gen_message(BASE_TIME - timedelta(minutes=i)) for i in range(200)]
-    write_raw_unprocessed_events(uptime_checks_storage, messages)  # type: ignore
+    write_raw_unprocessed_events(uptime_checks_storage, _UPTIME_CHECKS)  # type: ignore
 
 
 @pytest.mark.clickhouse_db
@@ -127,20 +127,46 @@ class TestTraceItemTable(BaseApiTest):
                         name="trace_id",
                     )
                 ),
+                Column(
+                    key=AttributeKey(
+                        type=AttributeKey.TYPE_INT,
+                        name="scheduled_check_time",
+                    )
+                ),
+            ],
+            order_by=[
+                TraceItemTableRequest.OrderBy(
+                    column=Column(
+                        key=AttributeKey(
+                            type=AttributeKey.TYPE_INT,
+                            name="scheduled_check_time",
+                        )
+                    ),
+                ),
             ],
             limit=10,
         )
         response = EndpointTraceItemTable().execute(message)
+        checks = list(
+            sorted(_UPTIME_CHECKS, key=lambda c: c["scheduled_check_time_ms"])
+        )[:10]
 
         expected_response = TraceItemTableResponse(
             column_values=[
                 TraceItemColumnValues(
                     attribute_name="region",
-                    results=[AttributeValue(val_str="global") for _ in range(10)],
+                    results=[AttributeValue(val_str=c["region"]) for c in checks],
                 ),
                 TraceItemColumnValues(
                     attribute_name="trace_id",
-                    results=[AttributeValue(val_str=_TRACE_ID) for _ in range(10)],
+                    results=[AttributeValue(val_str=c["trace_id"]) for c in checks],
+                ),
+                TraceItemColumnValues(
+                    attribute_name="scheduled_check_time",
+                    results=[
+                        AttributeValue(val_int=int(c["scheduled_check_time_ms"] / 1e3))
+                        for c in checks
+                    ],
                 ),
             ],
             page_token=PageToken(offset=10),
