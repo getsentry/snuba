@@ -24,22 +24,16 @@ storages:
   - storage: uptime_monitor_checks
     is_writable: true
 
+query_processors: []
+
 storage_selector:
   selector: DefaultQueryStorageSelector
 
-query_processors:
-  - processor: TimeSeriesProcessor
-    args:
-      time_group_columns:
-        time: timestamp
-      time_parse_columns:
-        - timestamo
-        - scheduled_check_time
-
 validate_data_model: do_nothing # in order to reference aliased columns, we shouldn't validate columns purely based on the entity schema
+
 validators:
   - validator: EntityRequiredColumnValidator
     args:
-      required_filter_columns: [organization_id]
+      required_filter_columns: [organization_id, project_id]
 
-required_time_column: timestamp
+required_time_column: scheduled_check_time
