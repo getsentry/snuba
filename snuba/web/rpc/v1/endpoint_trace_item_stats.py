@@ -1,0 +1,229 @@
+import uuid
+from collections import OrderedDict
+from typing import Any, Dict, Iterable, Tuple, Type
+
+from google.protobuf.json_format import MessageToDict
+from sentry_protos.snuba.v1.endpoint_trace_item_stats_pb2 import (
+    TraceItemStats,
+    TraceItemStatsRequest,
+    TraceItemStatsResponse,
+)
+from sentry_protos.snuba.v1.trace_item_attribute_pb2 import (
+    AttributeAggregation,
+    AttributeKey,
+    ExtrapolationMode,
+    Function,
+)
+
+from snuba.attribution.appid import AppID
+from snuba.attribution.attribution_info import AttributionInfo
+from snuba.datasets.entities.entity_key import EntityKey
+from snuba.datasets.entities.factory import get_entity
+from snuba.datasets.pluggable_dataset import PluggableDataset
+from snuba.query import LimitBy, OrderBy, OrderByDirection, SelectedExpression
+from snuba.query.data_source.simple import Entity
+from snuba.query.dsl import arrayJoin, column, tupleElement
+from snuba.query.expressions import FunctionCall, Literal
+from snuba.query.logical import Query
+from snuba.query.query_settings import HTTPQuerySettings
+from snuba.request import Request as SnubaRequest
+from snuba.utils.constants import ATTRIBUTE_BUCKETS
+from snuba.web.query import run_query
+from snuba.web.rpc import RPCEndpoint
+from snuba.web.rpc.common.common import (
+    base_conditions_and,
+    trace_item_filters_to_expression,
+    treeify_or_and_conditions,
+)
+from snuba.web.rpc.common.debug_info import (
+    extract_response_meta,
+    setup_trace_query_settings,
+)
+from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.endpoint_get_traces import _DEFAULT_ROW_LIMIT
+from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
+    aggregation_to_expression,
+)
+
+MAX_LIMIT_KEYS_BY = 50
+DEFAULT_LIMIT_KEYS_BY = 5
+
+
+def _transform_results(
+    aggregation: AttributeAggregation,
+    results: Iterable[Dict[str, Any]],
+) -> Iterable[TraceItemStats]:
+    res: OrderedDict[Tuple[str, str], TraceItemStats] = OrderedDict()
+
+    label = aggregation.label
+
+    for row in results:
+        attr_key = row["attr_key"]
+        attr_value = row["attr_value"]
+        default = TraceItemStats(
+            attribute_key=attr_key,
+            aggregation=label,
+            attribute_type=TraceItemStats.AttributeType.STRING,
+        )
+        res.setdefault((attr_key, label), default).data.append(
+            TraceItemStats.AttributeResults(label=attr_value, value=row[label])
+        )
+
+    return list(res.values())
+
+
+def _build_snuba_request(request: TraceItemStatsRequest, query: Query) -> SnubaRequest:
+    query_settings = (
+        setup_trace_query_settings() if request.meta.debug else HTTPQuerySettings()
+    )
+
+    return SnubaRequest(
+        id=uuid.UUID(request.meta.request_id),
+        original_body=MessageToDict(request),
+        query=query,
+        query_settings=query_settings,
+        attribution_info=AttributionInfo(
+            referrer=request.meta.referrer,
+            team="eap",
+            feature="eap",
+            tenant_ids={
+                "organization_id": request.meta.organization_id,
+                "referrer": request.meta.referrer,
+            },
+            app_id=AppID("eap"),
+            parent_api="eap_attribute_stats",
+        ),
+    )
+
+
+def _build_query(in_msg: TraceItemStatsRequest, aggregation: AttributeAggregation):
+    entity = Entity(
+        key=EntityKey("eap_spans"),
+        schema=get_entity(EntityKey("eap_spans")).get_data_model(),
+        sample=None,
+    )
+
+    # TODO: Add this use case to hash_bucket_functions.py?
+    # TODO: Support arrayjoin_optimizer?
+    concat_attr_maps = FunctionCall(
+        alias="attr_str_concat",
+        function_name="mapConcat",
+        parameters=tuple(column(f"attr_str_{i}") for i in range(ATTRIBUTE_BUCKETS)),
+    )
+    attrs_string_keys = tupleElement(
+        "attr_key", arrayJoin("attr_str", concat_attr_maps), Literal(None, 1)
+    )
+    attrs_string_values = tupleElement(
+        "attr_value",
+        arrayJoin("attr_str", concat_attr_maps),
+        Literal(None, 2),
+    )
+
+    selected_columns = [
+        SelectedExpression(
+            name="attr_key",
+            expression=attrs_string_keys,
+        ),
+        SelectedExpression(
+            name="attr_value",
+            expression=attrs_string_values,
+        ),
+        SelectedExpression(
+            name=aggregation.label,
+            expression=aggregation_to_expression(aggregation),
+        ),
+    ]
+
+    trace_item_filters_expression = trace_item_filters_to_expression(in_msg.filter)
+
+    query = Query(
+        from_clause=entity,
+        selected_columns=selected_columns,
+        condition=base_conditions_and(
+            in_msg.meta,
+            trace_item_filters_expression,
+        ),
+        order_by=[
+            OrderBy(
+                direction=OrderByDirection.DESC,
+                expression=aggregation_to_expression(aggregation),
+            ),
+        ],
+        groupby=[
+            attrs_string_keys,
+            attrs_string_values,
+        ],
+        limitby=LimitBy(
+            limit=in_msg.limit_keys_by,
+            columns=[attrs_string_keys],
+        ),
+        limit=in_msg.limit if in_msg.limit > 0 else _DEFAULT_ROW_LIMIT,
+    )
+
+    return query
+
+
+def _validate_limit_keys_by(in_msg: TraceItemStatsRequest):
+    if in_msg.limit_keys_by > MAX_LIMIT_KEYS_BY:
+        raise BadSnubaRPCRequestException(
+            f"Max allowd limit keys by is {MAX_LIMIT_KEYS_BY}."
+        )
+
+
+class EndpointTraceItemStats(
+    RPCEndpoint[TraceItemStatsRequest, TraceItemStatsResponse]
+):
+    @classmethod
+    def version(cls) -> str:
+        return "v1"
+
+    @classmethod
+    def request_class(cls) -> Type[TraceItemStatsRequest]:
+        return TraceItemStatsRequest
+
+    @classmethod
+    def response_class(cls) -> Type[TraceItemStatsResponse]:
+        return TraceItemStatsResponse
+
+    def _execute(self, in_msg: TraceItemStatsRequest) -> TraceItemStatsResponse:
+
+        in_msg.meta.request_id = getattr(in_msg.meta, "request_id", None) or str(
+            uuid.uuid4()
+        )
+        _validate_limit_keys_by(in_msg)
+
+        # Hardcoding the aggregation for now to keep the endpoint simple - although
+        # this can easily be ported over to TraceItemStatsRequest. I don't want to
+        # do that yet, since if we expose aggregations, we'll probably want to expose
+        # OrderBy also and I'm not entirely sure of all the ways we expect to use this
+        # endpoint right now. Both things should be easy to add if we want to.
+        aggregation = AttributeAggregation(
+            aggregate=Function.FUNCTION_COUNT,
+            key=AttributeKey(type=AttributeKey.TYPE_FLOAT, name="sentry.duration_ms"),
+            label="count(span.duration)",
+            extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_SAMPLE_WEIGHTED,
+        )
+
+        query = _build_query(in_msg, aggregation)
+        treeify_or_and_conditions(query)
+        snuba_request = _build_snuba_request(in_msg, query)
+
+        results = run_query(
+            dataset=PluggableDataset(name="eap", all_entities=[]),
+            request=snuba_request,
+            timer=self._timer,
+        )
+
+        stats = _transform_results(aggregation, results.result.get("data", []))
+
+        response_meta = extract_response_meta(
+            in_msg.meta.request_id,
+            in_msg.meta.debug,
+            [],
+            [self._timer],
+        )
+
+        return TraceItemStatsResponse(
+            stats=stats,
+            meta=response_meta,
+        )
