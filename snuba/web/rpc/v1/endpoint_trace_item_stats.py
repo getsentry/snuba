@@ -53,6 +53,23 @@ def _transform_results(
     aggregation: AttributeAggregation,
     results: Iterable[Dict[str, Any]],
 ) -> Iterable[TraceItemStats]:
+
+    # Maintain the order of keys, so it is in descending order
+    # of most prevelant key-value pair. Say the following data
+    # is returned:
+    # data = [
+    #   ('sdk.name', 'python', 100),
+    #   ('server_name', 'DW9H09PDFM.local', 80),
+    #   ('sdk.name', 'javascript', 50),
+    #   ('messaging.system', 'redis', 20)
+    # ]
+    #
+    # the order returned will be
+    # [
+    #   {"attribute_key": "sdk.name", "data": [{"label":"python", "value": 100}, {"label":"javascript", "value": 50}]},
+    #   {"attribute_key": "server_name", "data": [{"label":"DW9H09PDFM.local", "value": 90}]},
+    #   {"attribute_key": "messaging.system", "data": [{"label":"redis", "value": 20}]},
+    # ]
     res: OrderedDict[Tuple[str, str], TraceItemStats] = OrderedDict()
 
     label = aggregation.label
