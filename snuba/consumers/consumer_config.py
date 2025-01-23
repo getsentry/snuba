@@ -33,7 +33,6 @@ class StorageConfig:
     clickhouse_table_name: str
     clickhouse_cluster: ClickhouseClusterConfig
     message_processor: MessageProcessorConfig
-    writer_options: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -172,8 +171,7 @@ def resolve_consumer_config(
 
     validate_storages([*storages.values()])
 
-    table_writer = storages[storage_names[0]].get_table_writer()
-    stream_loader = table_writer.get_stream_loader()
+    stream_loader = storages[storage_names[0]].get_table_writer().get_stream_loader()
     default_topic_spec = stream_loader.get_default_topic_spec()
 
     resolved_raw_topic = _resolve_topic_config(
@@ -275,9 +273,7 @@ def resolve_storage_config(
         database=cluster.get_database(),
     )
 
-    table_writer = storage.get_table_writer()
-    processor = table_writer.get_stream_loader().get_processor()
-    writer_options = table_writer.get_writer_options()
+    processor = storage.get_table_writer().get_stream_loader().get_processor()
 
     table_schema = storage.get_schema()
     assert isinstance(table_schema, TableSchema)
@@ -289,7 +285,6 @@ def resolve_storage_config(
             python_class_name=processor.__class__.__name__,
             python_module=processor.__class__.__module__,
         ),
-        writer_options=dict(writer_options or {}),
     )
 
 

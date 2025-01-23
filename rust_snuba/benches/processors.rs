@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -63,7 +62,6 @@ fn create_factory(
             python_class_name: python_class_name.into(),
             python_module: "test".into(),
         },
-        writer_options: HashMap::new(),
     };
 
     let processing_concurrency =
