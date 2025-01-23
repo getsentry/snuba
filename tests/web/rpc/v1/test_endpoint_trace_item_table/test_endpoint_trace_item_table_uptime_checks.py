@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
+from operator import itemgetter
 from typing import Any, Mapping
 
 import pytest
@@ -148,7 +149,7 @@ class TestTraceItemTable(BaseApiTest):
         )
         response = EndpointTraceItemTable().execute(message)
         checks = list(
-            sorted(_UPTIME_CHECKS, key=lambda c: c["scheduled_check_time_ms"])
+            sorted(_UPTIME_CHECKS, key=itemgetter("scheduled_check_time_ms"))
         )[:10]
 
         expected_response = TraceItemTableResponse(
