@@ -166,7 +166,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
         response = EndpointTraceItemStats().execute(message)
         expected_sdk_name_stats = TraceItemStats(
             attribute_key="sentry.sdk.name",
-            attribute_type=TraceItemStats.AttributeType.STRING,
+            attribute_type=TraceItemStats.AttributeType.ATTRIBUTE_TYPE_STRING,
             aggregation="count(span.duration)",
             data=[
                 TraceItemStats.AttributeResults(label="sentry.python.django", value=120)
@@ -177,7 +177,7 @@ class TestTraceItemAttributesStats(BaseApiTest):
 
         expected_low_cardinality_stat = TraceItemStats(
             attribute_key="low_cardinality",
-            attribute_type=TraceItemStats.AttributeType.STRING,
+            attribute_type=TraceItemStats.AttributeType.ATTRIBUTE_TYPE_STRING,
             aggregation="count(span.duration)",
             data=[
                 TraceItemStats.AttributeResults(label="0", value=40),

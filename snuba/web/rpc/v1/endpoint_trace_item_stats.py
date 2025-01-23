@@ -63,7 +63,7 @@ def _transform_results(
         default = TraceItemStats(
             attribute_key=attr_key,
             aggregation=label,
-            attribute_type=TraceItemStats.AttributeType.STRING,
+            attribute_type=TraceItemStats.AttributeType.ATTRIBUTE_TYPE_STRING,
         )
         res.setdefault((attr_key, label), default).data.append(
             TraceItemStats.AttributeResults(label=attr_value, value=row[label])
