@@ -44,6 +44,7 @@ from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
 _DEFAULT_ROW_LIMIT = 10_000
 _BUFFER_WINDOW = 2 * 3600  # 2 hours
 
+
 _ATTRIBUTES: dict[
     TraceAttribute.Key.ValueType,
     tuple[str, AttributeKey.Type.ValueType],
@@ -58,7 +59,7 @@ _ATTRIBUTES: dict[
     ),
     TraceAttribute.Key.KEY_START_TIMESTAMP: (
         "trace_start_timestamp",
-        AttributeKey.Type.TYPE_FLOAT,
+        AttributeKey.Type.TYPE_DOUBLE,
     ),
     TraceAttribute.Key.KEY_TOTAL_ITEM_COUNT: (
         "total_item_count",
@@ -69,6 +70,8 @@ _ATTRIBUTES: dict[
         AttributeKey.Type.TYPE_STRING,
     ),
 }
+
+
 _TYPES_TO_CLICKHOUSE: dict[
     AttributeKey.Type.ValueType,
     tuple[str, Callable[[Any], AttributeValue]],
@@ -84,6 +87,10 @@ _TYPES_TO_CLICKHOUSE: dict[
     AttributeKey.Type.TYPE_FLOAT: (
         "Float64",
         lambda x: AttributeValue(val_float=float(x)),
+    ),
+    AttributeKey.Type.TYPE_DOUBLE: (
+        "Float64",
+        lambda x: AttributeValue(val_double=float(x)),
     ),
 }
 

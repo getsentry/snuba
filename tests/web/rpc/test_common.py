@@ -43,6 +43,14 @@ class TestCommon:
             ) == f.CAST(
                 column(col[len("sentry.") :]), "Float64", alias=col + "_TYPE_FLOAT"
             )
+            assert attribute_key_to_expression(
+                AttributeKey(
+                    type=AttributeKey.TYPE_DOUBLE,
+                    name=col,
+                ),
+            ) == f.CAST(
+                column(col[len("sentry.") :]), "Float64", alias=col + "_TYPE_DOUBLE"
+            )
 
     def test_normalized_col(self) -> None:
         for col in [
@@ -69,6 +77,12 @@ class TestCommon:
             AttributeKey(type=AttributeKey.TYPE_FLOAT, name="derp"),
         ) == SubscriptableReference(
             alias="derp_TYPE_FLOAT", column=column("attr_num"), key=literal("derp")
+        )
+
+        assert attribute_key_to_expression(
+            AttributeKey(type=AttributeKey.TYPE_DOUBLE, name="derp"),
+        ) == SubscriptableReference(
+            alias="derp_TYPE_DOUBLE", column=column("attr_num"), key=literal("derp")
         )
 
         assert attribute_key_to_expression(

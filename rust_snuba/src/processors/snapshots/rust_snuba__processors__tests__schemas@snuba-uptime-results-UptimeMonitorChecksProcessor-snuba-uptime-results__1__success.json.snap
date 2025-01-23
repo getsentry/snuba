@@ -14,7 +14,7 @@ expression: snapshot_payload
     "project_id": 456,
     "region": "",
     "retention_days": 90,
-    "scheduled_check_time": 1717614062978,
+    "scheduled_check_time": 1717614062,
     "timestamp": 1717614068008,
     "trace_id": "947efba0-2dac-463b-9c1d-886a44bafc94",
     "uptime_check_id": "54afc7ed-9c53-4914-8191-9c931f75bae1",

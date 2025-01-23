@@ -55,6 +55,7 @@ def convert_to_snuba_request(req: TraceItemAttributeNamesRequest) -> SnubaReques
         )
     elif req.type in (
         AttributeKey.Type.TYPE_FLOAT,
+        AttributeKey.Type.TYPE_DOUBLE,
         AttributeKey.Type.TYPE_INT,
         AttributeKey.Type.TYPE_BOOLEAN,
     ):

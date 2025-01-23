@@ -89,6 +89,17 @@ class SystemLoader(DirectoryLoader):
         super().__init__("snuba.migrations.system_migrations")
 
 
+class CDCLoader(GroupLoader):
+    def get_migrations(self) -> Sequence[str]:
+        """
+        CDC is deprecated
+        """
+        return []
+
+    def load_migration(self, migration_id: str) -> Migration:
+        raise MigrationDoesNotExist("CDC is deprecated")
+
+
 class EventsLoader(DirectoryLoader):
     def __init__(self) -> None:
         super().__init__("snuba.snuba_migrations.events")

@@ -186,7 +186,6 @@ def _build_query(request: TraceItemTableRequest) -> Query:
             raise BadSnubaRPCRequestException(
                 "Column is neither an aggregate or an attribute"
             )
-
     res = Query(
         from_clause=entity,
         selected_columns=selected_columns,
@@ -250,8 +249,10 @@ def _convert_results(
                 converters[column.label] = lambda x: AttributeValue(val_int=int(x))
             elif column.key.type == AttributeKey.TYPE_FLOAT:
                 converters[column.label] = lambda x: AttributeValue(val_float=float(x))
+            elif column.key.type == AttributeKey.TYPE_DOUBLE:
+                converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         elif column.HasField("aggregation"):
-            converters[column.label] = lambda x: AttributeValue(val_float=float(x))
+            converters[column.label] = lambda x: AttributeValue(val_double=float(x))
         else:
             raise BadSnubaRPCRequestException(
                 "column is neither an attribute or aggregation"
