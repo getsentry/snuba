@@ -82,7 +82,6 @@ fn create_factory(
         clickhouse_concurrency,
         commitlog_concurrency,
         replacements_concurrency,
-        async_inserts: false,
         python_max_queue_depth: None,
         use_rust_processor: true,
         health_check_file: None,
