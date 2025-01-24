@@ -158,6 +158,7 @@ def _convert_result_timeseries(
                             data=row_data[timeseries.label],
                             data_present=True,
                             avg_sampling_rate=extrapolation_context.average_sample_rate,
+                            sample_count=extrapolation_context.sample_count,
                             reliability=extrapolation_context.reliability,
                         )
                     )
