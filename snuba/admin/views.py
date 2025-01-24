@@ -1405,7 +1405,7 @@ def clickhouse_node_info() -> Response:
         node_info = get_node_info()
         return make_response(jsonify(node_info), 200)
     except Exception as e:
-        make_response(jsonify({"error": str(e)}), 500)
+        return make_response(jsonify({"error": str(e)}), 500)
 
 
 @application.route("/clickhouse_system_settings")
