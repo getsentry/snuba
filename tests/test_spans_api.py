@@ -278,9 +278,7 @@ class TestSpansApi(BaseApiTest):
         )
         data = json.loads(response.data)
         assert response.status_code == 200, response.data
-        assert data["sql"].startswith(
-            "SELECT (lower(hex(group_raw)) AS _snuba_group_raw)"
-        )
+        assert data["meta"][0]["type"] == "String"
 
     def test_sentry_tags_column_can_be_accessed(self) -> None:
         """
