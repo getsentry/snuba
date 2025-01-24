@@ -183,7 +183,6 @@ def execute_query(
         robust=robust,
     )
 
-
     print("readerrrr", reader)
 
     print("resultttt", result)

@@ -3,6 +3,8 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, Iterable
 
+import sentry_sdk
+from clickhouse_driver.errors import Error
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 from sentry_protos.snuba.v1.endpoint_time_series_pb2 import (
@@ -48,12 +50,8 @@ from snuba.web.rpc.v1.resolvers.R_eap_spans.common.aggregation import (
     get_confidence_interval_column,
     get_count_column,
 )
-from clickhouse_driver.errors import Error
-import sentry_sdk
-
 
 metrics = MetricsWrapper(environment.metrics, "endpoint_trace_item_table")
-
 
 
 def _convert_result_timeseries(
@@ -313,7 +311,10 @@ class ResolverTimeSeriesEAPSpans(ResolverTimeSeries):
                 timer=self._timer,
             )
         except Error as e:
-            if e.code == 241 or "DB::Exception: Memory limit (for query) exceeded" in e.message:
+            if (
+                e.code == 241
+                or "DB::Exception: Memory limit (for query) exceeded" in e.message
+            ):
                 metrics.increment("endpoint_trace_item_table_OOM")
                 sentry_sdk.capture_exception(e)
             raise BadSnubaRPCRequestException(e.message)

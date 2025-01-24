@@ -17,6 +17,7 @@ class BadSnubaRPCRequestException(RPCRequestException):
     def __init__(self, message: str):
         super().__init__(400, message)
 
+
 class OOMException(RPCRequestException):
     def __init__(self, message: str):
         super().__init__(241, message)

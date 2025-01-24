@@ -2,8 +2,8 @@ import uuid
 from collections import defaultdict
 from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, Sequence
-import sentry_sdk
 
+import sentry_sdk
 from clickhouse_driver.errors import Error
 from google.protobuf.json_format import MessageToDict
 from sentry_protos.snuba.v1.endpoint_trace_item_table_pb2 import (
@@ -309,7 +309,10 @@ class ResolverTraceItemTableEAPSpans(ResolverTraceItemTable):
                 timer=self._timer,
             )
         except Error as e:
-            if e.code == 241 or "DB::Exception: Memory limit (for query) exceeded" in e.message:
+            if (
+                e.code == 241
+                or "DB::Exception: Memory limit (for query) exceeded" in e.message
+            ):
                 metrics.increment("endpoint_trace_item_table_OOM")
                 sentry_sdk.capture_exception(e)
             raise BadSnubaRPCRequestException(e.message)
