@@ -2252,7 +2252,7 @@ class TestTraceItemTable(BaseApiTest):
                     aggregation=AttributeAggregation(
                         aggregate=Function.FUNCTION_SUM,
                         key=AttributeKey(
-                            type=AttributeKey.TYPE_FLOAT, name="wing.count"
+                            type=AttributeKey.TYPE_DOUBLE, name="wing.count"
                         ),
                         label="sum(wing.count)",
                         extrapolation_mode=ExtrapolationMode.EXTRAPOLATION_MODE_NONE,
@@ -2283,8 +2283,8 @@ class TestTraceItemTable(BaseApiTest):
             TraceItemColumnValues(
                 attribute_name="sum(wing.count)",
                 results=[
-                    AttributeValue(val_float=20),
-                    AttributeValue(val_float=10),
+                    AttributeValue(val_double=20),
+                    AttributeValue(val_double=10),
                 ],
             ),
         ]
