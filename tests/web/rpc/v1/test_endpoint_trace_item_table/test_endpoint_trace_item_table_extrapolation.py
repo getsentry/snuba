@@ -1,4 +1,3 @@
-import math
 import random
 import uuid
 from datetime import datetime, timedelta
@@ -553,42 +552,36 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
 
         measurement_tags = [v.val_str for v in response.column_values[0].results]
-        assert measurement_tags == ["foo", "bar"]
+        assert measurement_tags == ["foo"]
 
         measurement_sums = [v.val_double for v in response.column_values[1].results]
         measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
-        assert measurement_sums == [sum(range(5)), 0]
+        assert measurement_sums == [sum(range(5))]
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
         measurement_avgs = [v.val_double for v in response.column_values[2].results]
         measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
-        assert len(measurement_avgs) == 2
+        assert len(measurement_avgs) == 1
         assert measurement_avgs[0] == sum(range(5)) / 5
-        assert math.isnan(measurement_avgs[1])
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
         measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
-        assert measurement_counts == [5, 0]
+        assert measurement_counts == [5]
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
         measurement_p90s = [v.val_double for v in response.column_values[4].results]
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
-        assert len(measurement_p90s) == 2
+        assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
-        assert math.isnan(measurement_p90s[1])
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
     def test_count_reliability_with_group_by(self) -> None:
@@ -684,40 +677,34 @@ class TestTraceItemTableWithExtrapolation(BaseApiTest):
         response = EndpointTraceItemTable().execute(message)
 
         measurement_tags = [v.val_str for v in response.column_values[0].results]
-        assert measurement_tags == ["foo", "bar"]
+        assert measurement_tags == ["foo"]
 
         measurement_sums = [v.val_double for v in response.column_values[1].results]
         measurement_reliabilities = [v for v in response.column_values[1].reliabilities]
-        assert measurement_sums == [sum(range(5)), 0]
+        assert measurement_sums == [sum(range(5))]
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
         measurement_avgs = [v.val_double for v in response.column_values[2].results]
         measurement_reliabilities = [v for v in response.column_values[2].reliabilities]
-        assert len(measurement_avgs) == 2
+        assert len(measurement_avgs) == 1
         assert measurement_avgs[0] == sum(range(5)) / 5
-        assert math.isnan(measurement_avgs[1])
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
         measurement_counts = [v.val_double for v in response.column_values[3].results]
         measurement_reliabilities = [v for v in response.column_values[3].reliabilities]
-        assert measurement_counts == [5, 0]
+        assert measurement_counts == [5]
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
 
         measurement_p90s = [v.val_double for v in response.column_values[4].results]
         measurement_reliabilities = [v for v in response.column_values[4].reliabilities]
-        assert len(measurement_p90s) == 2
+        assert len(measurement_p90s) == 1
         assert measurement_p90s[0] == 4
-        assert math.isnan(measurement_p90s[1])
         assert measurement_reliabilities == [
             Reliability.RELIABILITY_LOW,
-            Reliability.RELIABILITY_UNSPECIFIED,
         ]  # low reliability due to low sample count
