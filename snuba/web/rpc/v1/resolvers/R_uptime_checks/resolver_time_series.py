@@ -26,12 +26,6 @@ from snuba.query.logical import Query
 from snuba.query.query_settings import HTTPQuerySettings
 from snuba.request import Request as SnubaRequest
 from snuba.web.query import run_query
-from snuba.web.rpc.common.common import (
-    attribute_key_to_expression,
-    base_conditions_and,
-    trace_item_filters_to_expression,
-    treeify_or_and_conditions,
-)
 from snuba.web.rpc.common.debug_info import (
     extract_response_meta,
     setup_trace_query_settings,
@@ -40,6 +34,12 @@ from snuba.web.rpc.v1.resolvers import ResolverTimeSeries
 from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.aggregation import (
     aggregation_to_expression,
     get_count_column,
+)
+from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
+    attribute_key_to_expression,
+    base_conditions_and,
+    trace_item_filters_to_expression,
+    treeify_or_and_conditions,
 )
 
 
@@ -142,7 +142,14 @@ def _convert_result_timeseries(
             row_data = result_timeseries_timestamp_to_row.get(timeseries_key, {}).get(
                 bucket.seconds
             )
-            if not row_data:
+            if row_data:
+                timeseries.data_points.append(
+                    DataPoint(
+                        data=row_data[timeseries.label],
+                        data_present=True,
+                    )
+                )
+            else:
                 timeseries.data_points.append(DataPoint(data=0, data_present=False))
     return result_timeseries.values()
 
@@ -194,7 +201,7 @@ def _build_query(request: TimeSeriesRequest) -> Query:
                         f.multiply(
                             f.intDiv(
                                 f.minus(
-                                    f.toUnixTimestamp(column("timestamp")),
+                                    f.toUnixTimestamp(column("scheduled_check_time")),
                                     request.meta.start_timestamp.seconds,
                                 ),
                                 request.granularity_secs,
@@ -244,7 +251,7 @@ def _build_snuba_request(request: TimeSeriesRequest) -> SnubaRequest:
                 "referrer": request.meta.referrer,
             },
             app_id=AppID("eap"),
-            parent_api="eap_span_samples",
+            parent_api="uptime_check_samples",
         ),
     )
 

@@ -13,8 +13,10 @@ from snuba.query.expressions import (
     FunctionCall,
     SubscriptableReference,
 )
-from snuba.web.rpc.common.common import attribute_key_to_expression
 from snuba.web.rpc.common.exceptions import BadSnubaRPCRequestException
+from snuba.web.rpc.v1.resolvers.R_uptime_checks.common.common import (
+    attribute_key_to_expression,
+)
 
 _FLOATING_POINT_PRECISION = 9
 

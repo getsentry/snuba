@@ -127,15 +127,7 @@ def attribute_key_to_expression(attr_key: AttributeKey) -> Expression:
         )
 
     if attr_key.name in NORMALIZED_COLUMNS:
-        # the second if statement allows Sentry to send TYPE_FLOAT to Snuba when Snuba still has to be backward compatible with TYPE_FLOATS
-        if NORMALIZED_COLUMNS[attr_key.name] == attr_key.type or (
-            attr_key.type == AttributeKey.Type.TYPE_FLOAT
-            and NORMALIZED_COLUMNS[attr_key.name] == AttributeKey.Type.TYPE_DOUBLE
-        ):
-            return column(attr_key.name, alias=attr_key.name)
-        raise BadSnubaRPCRequestException(
-            f"Attribute {attr_key.name} must be requested as {NORMALIZED_COLUMNS[attr_key.name]}, got {attr_key.type}"
-        )
+        return column(attr_key.name, alias=attr_key.name)
 
     raise BadSnubaRPCRequestException(
         f"Attribute {attr_key.name} had an unknown or unset type: {attr_key.type}"
@@ -315,14 +307,11 @@ def trace_item_filters_to_expression(item_filter: TraceItemFilter) -> Expression
             f"Invalid string comparison, unknown op: {item_filter.comparison_filter}"
         )
 
+    print(item_filter)
+
     if item_filter.HasField("exists_filter"):
         k = item_filter.exists_filter.key
-        if k.name in NORMALIZED_COLUMNS.keys():
-            return f.isNotNull(column(k.name))
-        if k.type == AttributeKey.Type.TYPE_STRING:
-            return f.mapContains(column("attr_str"), literal(k.name))
-        else:
-            return f.mapContains(column("attr_num"), literal(k.name))
+        return f.isNotNull(column(k.name))
 
     return literal(True)
 
