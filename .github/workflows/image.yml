@@ -21,15 +21,23 @@ jobs:
       run: |
         set -euxo pipefail
 
+        args=()
+
         if [ ${{ github.event_name }} = 'push' ]; then
-          args=(
+          args+=(
             --tag ghcr.io/getsentry/snuba:latest
             --tag ghcr.io/getsentry/snuba:amd64-latest
             --cache-to type=registry,ref=ghcr.io/getsentry/snuba:buildcache,mode=max
             --push
           )
-        else
-          args=()
+        fi
+
+        if [ ${{ github.event.pull_request.head.repo.full_name }} = ${{ github.repository }} ]; then
+          # TODO: we should use github artifacts to send images between jobs, like in ci.yml
+          # otherwise third-party PRs will break
+          args+=(
+            --push
+          )
         fi
 
         docker buildx build \
